@@ -1,0 +1,43 @@
+# macOS
+.DS_Store
+
+# Xcode / Swift
+DerivedData/
+.derivedData/
+build/
+*.xcuserstate
+xcuserdata/
+.swiftpm/
+.build/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local databases and runtime data
+*.sqlite
+*.sqlite3
+*.db
+.local/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# IDE
+.idea/
+.vscode/
+
