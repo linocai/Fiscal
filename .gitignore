@@ -36,8 +36,8 @@ venv/
 *.log
 *.tmp
 *.bak
+.learnings/
 
 # IDE
 .idea/
 .vscode/
-

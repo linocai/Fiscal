@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:#E7EBF1;font-family:-apple-system,"SF Pro Text","SF Pro Display","PingFang SC","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;color:#1C2026}
+a{color:#2E68D6;text-decoration:none}a:hover{color:#1E52B8}
+::-webkit-scrollbar{width:0;height:0;display:none}
+*{scrollbar-width:none;-ms-overflow-style:none}
+@keyframes fUp{from{transform:translateY(101%)}to{transform:translateY(0)}}
+@keyframes fFade{from{opacity:0}to{opacity:1}}
+@keyframes fPop{from{opacity:0;transform:scale(.86)}to{opacity:1;transform:scale(1)}}
+@keyframes fSheen{0%{transform:translateX(-120%)}100%{transform:translateX(220%)}}
+@keyframes fPulse{0%,100%{opacity:.35}50%{opacity:1}}
+@keyframes fToast{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes fSpin{to{transform:rotate(360deg)}}
+@keyframes fSlide{from{transform:translateX(26px);opacity:0}to{transform:translateX(0);opacity:1}}
+</style>
+</helmet>
+<div style="min-height:100vh;width:100%;background:radial-gradient(1100px 640px at 16% -8%,rgba(110,145,205,.26),transparent 60%),radial-gradient(920px 640px at 98% 2%,rgba(150,180,216,.2),transparent 55%),radial-gradient(760px 520px at 60% 120%,rgba(130,160,205,.14),transparent 60%),linear-gradient(168deg,#EEF1F6 0%,#E4E9F0 54%,#E9ECF2 100%);display:flex;flex-direction:column;align-items:center;padding:22px 20px 64px;gap:16px">
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:9px">
+    <div style="display:inline-flex;align-items:center;gap:3px;padding:4px;border-radius:14px;background:rgba(255,255,255,.55);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:.5px solid rgba(255,255,255,.7);box-shadow:0 1px 2px rgba(20,30,50,.05),0 6px 20px rgba(20,30,50,.07)">
+      <div onClick="{{ h.goIOS }}" style="padding:7px 20px;border-radius:11px;font-size:13.5px;font-weight:640;cursor:pointer;background:{{ sw.iosBg }};color:{{ sw.iosColor }};box-shadow:{{ sw.iosShadow }};white-space:nowrap;transition:all .18s">iOS</div>
+      <div onClick="{{ h.goMac }}" style="padding:7px 20px;border-radius:11px;font-size:13.5px;font-weight:640;cursor:pointer;background:{{ sw.macBg }};color:{{ sw.macColor }};box-shadow:{{ sw.macShadow }};white-space:nowrap;transition:all .18s">macOS</div>
+    </div>
+    <div style="font-size:11.5px;color:#7A8494;letter-spacing:.2px">Fiscal · 财务原型 · OS 26 · 两端共享同一账本</div>
+  </div>
+
+  <sc-if value="{{ isIOS }}" hint-placeholder-val="{{ true }}">
+  <div style="position:relative;width:390px;height:844px;border-radius:54px;background:#0A0C10;box-shadow:0 44px 92px rgba(28,38,68,.30),0 0 0 1px rgba(0,0,0,.22),inset 0 0 0 2px rgba(255,255,255,.04);flex:none">
+    <div style="position:absolute;inset:11px;border-radius:43px;overflow:hidden;background:#EEF1F6">
+
+      <div style="position:absolute;inset:0;overflow-y:auto;overflow-x:hidden">
+        <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:56px 16px 128px">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:8px 2px 16px">
+            <div>
+              <div style="font-size:12.5px;color:#8A94A3;font-weight:640;letter-spacing:.3px">2026 年 7 月 · 本月</div>
+              <div style="font-size:32px;font-weight:740;letter-spacing:-.7px;color:#1C2026;margin-top:1px">总览</div>
+            </div>
+            <div onClick="{{ h.openAIPending }}" style="position:relative;width:40px;height:40px;border-radius:20px;background:rgba(255,255,255,.62);backdrop-filter:blur(22px) saturate(200%);-webkit-backdrop-filter:blur(22px) saturate(200%);border:.5px solid rgba(255,255,255,.78);box-shadow:0 2px 10px rgba(20,30,50,.1),inset 0 1px 1px rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;cursor:pointer">{{ icons.sparkles }}<span style="position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#D24B4E;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1.5px solid #EEF1F6">1</span></div>
+            
+          </div>
+
+          <div style="background:#fff;border-radius:22px;padding:18px 18px 17px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06)">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:13.5px;color:#5C6675;font-weight:620">本月消费</span>
+              <span style="font-size:12px;color:#98A2B0">7月1日–14日 · 消费口径</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:9px;margin-top:8px">
+              <span style="font-size:36px;font-weight:760;letter-spacing:-1.2px;color:#1C2026;font-variant-numeric:tabular-nums">{{ monthSpendText }}</span>
+              <span style="font-size:12px;color:#8A94A3">较上月 ↓ 8.2%</span>
+            </div>
+            <div style="margin-top:17px;display:flex;flex-direction:column;gap:11px">
+              <sc-for list="{{ catBreak }}" as="c" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:11px">
+                  <span style="width:40px;font-size:12.5px;color:#5C6675;flex:none">{{ c.name }}</span>
+                  <div style="flex:1;height:7px;border-radius:4px;background:rgba(60,70,90,.07);overflow:hidden"><div style="height:100%;width:{{ c.barPct }}%;background:{{ c.color }};border-radius:4px"></div></div>
+                  <span style="width:78px;text-align:right;font-size:12.5px;color:#1C2026;font-variant-numeric:tabular-nums;flex:none">{{ c.amtText }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="background:#fff;border-radius:20px;margin-top:12px;padding:16px 16px 8px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06)">
+            <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13.5px;color:#5C6675;font-weight:620">可用余额</span><span onClick="{{ h.toMore }}" style="font-size:12.5px;color:{{ accent }};font-weight:580;cursor:pointer">账户</span></div>
+            <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px"><span style="font-size:33px;font-weight:750;letter-spacing:-1px;color:#1C2026;font-variant-numeric:tabular-nums">{{ iosAvailText }}</span><span style="font-size:12px;color:#8A94A3">净资产 {{ iosNetWorthText }}</span></div>
+            <div style="margin-top:12px"><sc-for list="{{ iosAcctList }}" as="a" hint-placeholder-count="3"><div style="position:relative;display:flex;align-items:center;gap:11px;padding:10px 0"><sc-if value="{{ a.notFirst }}"><div style="position:absolute;top:0;left:0;right:0;height:.5px;background:rgba(60,70,90,.08)"></div></sc-if><div style="width:32px;height:32px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ a.iconBg }}">{{ a.icon }}</div><div style="flex:1;min-width:0"><div style="font-size:14px;color:#1C2026;font-weight:560">{{ a.short }}</div><div style="font-size:11.5px;color:#8A94A3;margin-top:1px">{{ a.meta }}</div></div><span style="font-size:15px;font-weight:680;color:{{ a.amtColor }};font-variant-numeric:tabular-nums">{{ a.amtText }}</span></div></sc-for></div>
+          </div>
+
+          <div onClick="{{ h.toCashflow }}" style="background:#fff;border-radius:18px;margin-top:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);cursor:pointer">
+            <div style="width:38px;height:38px;border-radius:11px;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(46,142,147,.12)">{{ icons.flow }}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14.5px;font-weight:640;color:#1C2026">本月现金流</div>
+              <div style="font-size:12px;color:#8A94A3;margin-top:2px">流入 {{ inflowText }} · 流出 {{ outflowText }}</div>
+            </div>
+            <div style="font-size:17px;font-weight:720;color:{{ netCashColor }};font-variant-numeric:tabular-nums">{{ netCashText }}</div>
+            {{ icons.chevR }}
+          </div>
+
+          <sc-if value="{{ hasUncat }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:12px;padding:12px 15px;border-radius:16px;background:rgba(194,137,43,.09);border:.5px solid rgba(194,137,43,.22);display:flex;align-items:center;gap:11px;cursor:pointer">
+            <div style="width:30px;height:30px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(194,137,43,.16)">{{ icons.questionAmber }}</div>
+            <div style="flex:1;font-size:13px;color:#8A6D2A;line-height:1.35"><b style="font-weight:700">{{ uncat }} 笔待归类</b> · 未计入消费统计</div>
+            <span style="font-size:13px;font-weight:640;color:#C2892B">去处理</span>
+          </div>
+          </sc-if>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:22px 4px 11px">
+            <span style="font-size:16px;font-weight:700;color:#1C2026;letter-spacing:-.3px">最近流水</span>
+            <span onClick="{{ h.toTxns }}" style="font-size:13.5px;color:{{ accent }};font-weight:580;cursor:pointer">全部</span>
+          </div>
+          <div style="background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06)">
+            <sc-for list="{{ recentItems }}" as="t" hint-placeholder-count="4">
+              <div onClick="{{ t.onClick }}" style="position:relative;display:flex;align-items:center;gap:12px;padding:11px 15px;cursor:pointer">
+                <sc-if value="{{ t.notFirst }}"><div style="position:absolute;top:0;left:62px;right:0;height:.5px;background:rgba(60,70,90,.09)"></div></sc-if>
+                <div style="width:36px;height:36px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ t.iconBg }}">{{ t.icon }}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:15px;font-weight:600;color:#1C2026;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.title }}</div>
+                  <div style="font-size:12px;color:#8A94A3;margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span>{{ t.sub }}</span><sc-for list="{{ t.tags }}" as="g" hint-placeholder-count="0"><span style="font-size:10px;font-weight:640;color:{{ g.color }};background:{{ g.bg }};padding:1px 6px;border-radius:6px">{{ g.label }}</span></sc-for></div>
+                </div>
+                <div style="font-size:15px;font-weight:680;font-variant-numeric:tabular-nums;letter-spacing:-.2px;color:{{ t.color }};flex:none">{{ t.amountText }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isTxns }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:56px 0 128px">
+          <div style="padding:8px 16px 4px">
+            <div style="font-size:32px;font-weight:740;letter-spacing:-.7px;color:#1C2026">流水</div>
+          </div>
+          <div style="display:flex;gap:8px;padding:12px 16px 6px;overflow-x:auto">
+            <sc-for list="{{ filterChips }}" as="fc" hint-placeholder-count="4">
+              <div onClick="{{ fc.onClick }}" style="flex:none;padding:7px 15px;border-radius:11px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;background:{{ fc.bg }};color:{{ fc.fg }};border:.5px solid {{ fc.bd }}">{{ fc.label }}</div>
+            </sc-for>
+          </div>
+          <div style="padding:8px 16px 0">
+            <sc-for list="{{ txnGroups }}" as="grp" hint-placeholder-count="3">
+              <div style="font-size:12.5px;color:#8A94A3;font-weight:620;padding:14px 4px 8px;letter-spacing:.2px">{{ grp.label }}</div>
+              <div style="background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(30,40,70,.04),0 5px 14px rgba(30,40,70,.045);border:.5px solid rgba(60,70,90,.06)">
+                <sc-for list="{{ grp.items }}" as="t" hint-placeholder-count="3">
+                  <div onClick="{{ t.onClick }}" style="position:relative;display:flex;align-items:center;gap:12px;padding:11px 15px;cursor:pointer">
+                    <sc-if value="{{ t.notFirst }}"><div style="position:absolute;top:0;left:62px;right:0;height:.5px;background:rgba(60,70,90,.09)"></div></sc-if>
+                    <div style="width:36px;height:36px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ t.iconBg }}">{{ t.icon }}</div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:15px;font-weight:600;color:#1C2026;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.title }}</div>
+                      <div style="font-size:12px;color:#8A94A3;margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span>{{ t.sub }}</span><sc-for list="{{ t.tags }}" as="g" hint-placeholder-count="0"><span style="font-size:10px;font-weight:640;color:{{ g.color }};background:{{ g.bg }};padding:1px 6px;border-radius:6px">{{ g.label }}</span></sc-for></div>
+                    </div>
+                    <div style="font-size:15px;font-weight:680;font-variant-numeric:tabular-nums;letter-spacing:-.2px;color:{{ t.color }};flex:none">{{ t.amountText }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isCashflow }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:56px 16px 128px">
+          <div style="font-size:32px;font-weight:740;letter-spacing:-.7px;color:#1C2026;padding:8px 2px 14px">现金流</div>
+          <div style="background:#fff;border-radius:20px;padding:18px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06)"><div style="font-size:13px;color:#5C6675;font-weight:620">未来 30 天净现金流</div><div style="font-size:34px;font-weight:750;letter-spacing:-1px;color:{{ cashflow.netColor }};font-variant-numeric:tabular-nums;margin-top:6px">{{ cashflow.netText }}</div><div style="display:flex;gap:26px;margin-top:14px"><div><div style="font-size:11.5px;color:#8A94A3">预计流入</div><div style="font-size:17px;font-weight:700;color:#1F9E6A;font-variant-numeric:tabular-nums;margin-top:2px">{{ cashflow.inflowText }}</div></div><div><div style="font-size:11.5px;color:#8A94A3">预计流出</div><div style="font-size:17px;font-weight:700;color:#D24B4E;font-variant-numeric:tabular-nums;margin-top:2px">{{ cashflow.outflowText }}</div></div></div></div>
+          <div style="font-size:16px;font-weight:700;color:#1C2026;letter-spacing:-.3px;padding:22px 4px 11px">未来将要发生</div>
+          <div style="background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06)"><sc-for list="{{ cashflow.rows }}" as="c" hint-placeholder-count="5"><div style="position:relative;display:flex;align-items:center;gap:12px;padding:12px 15px"><sc-if value="{{ c.notFirst }}"><div style="position:absolute;top:0;left:60px;right:0;height:.5px;background:rgba(60,70,90,.09)"></div></sc-if><div style="width:36px;height:36px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ c.iconBg }}">{{ c.icon }}</div><div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:600;color:#1C2026;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.title }}</div><div style="font-size:12px;color:#8A94A3;margin-top:2px">{{ c.dateText }} · {{ c.note }}</div></div><div style="font-size:15px;font-weight:680;color:{{ c.color }};font-variant-numeric:tabular-nums;flex:none">{{ c.amountText }}</div></div></sc-for></div>
+        </div>
+        </sc-if>
+        <sc-if value="{{ isMore }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:56px 16px 128px">
+          <div style="font-size:32px;font-weight:740;letter-spacing:-.7px;color:#1C2026;padding:8px 2px 16px">更多</div>
+          <div style="background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06)"><sc-for list="{{ moreItems }}" as="m" hint-placeholder-count="6"><div onClick="{{ m.onClick }}" style="position:relative;display:flex;align-items:center;gap:13px;padding:13px 16px;cursor:pointer"><sc-if value="{{ m.notFirst }}"><div style="position:absolute;top:0;left:60px;right:0;height:.5px;background:rgba(60,70,90,.09)"></div></sc-if><div style="width:32px;height:32px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ m.iconBg }}">{{ m.icon }}</div><span style="flex:1;font-size:15.5px;color:#1C2026;font-weight:560">{{ m.label }}</span><span style="font-size:13px;color:#98A2B0">{{ m.detail }}</span><sc-if value="{{ m.badge }}" hint-placeholder-val="{{ true }}"><span style="min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#D24B4E;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ m.badge }}</span></sc-if>{{ icons.chevR }}</div></sc-for></div>
+          <div style="background:#fff;border-radius:20px;margin-top:16px;padding:16px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);display:flex;align-items:center;gap:12px"><div style="width:8px;height:8px;border-radius:50%;background:#1F9E6A;box-shadow:0 0 0 3px rgba(31,158,106,.16);flex:none"></div><div style="flex:1"><div style="font-size:13.5px;color:#1C2026;font-weight:560">云端优先 · 已同步</div><div style="font-size:11.5px;color:#8A94A3;margin-top:1px">数据保存在个人 VPS · 仅本设备密钥访问</div></div></div>
+        </div>
+        </sc-if>
+      </div>
+
+      <div style="position:absolute;top:0;left:0;right:0;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 30px 0 34px;z-index:52;pointer-events:none">
+        <span style="font-size:15.5px;font-weight:640;color:#1C2026;letter-spacing:-.2px">9:41</span>
+        <div style="display:flex;align-items:center;gap:7px">
+          <svg width="18" height="12" viewBox="0 0 19 12"><rect x="0" y="7.5" width="3.2" height="4.5" rx="0.7" fill="#1C2026"/><rect x="4.8" y="5" width="3.2" height="7" rx="0.7" fill="#1C2026"/><rect x="9.6" y="2.5" width="3.2" height="9.5" rx="0.7" fill="#1C2026"/><rect x="14.4" y="0" width="3.2" height="12" rx="0.7" fill="#1C2026"/></svg>
+          <svg width="16" height="12" viewBox="0 0 17 12"><path d="M8.5 3.2C10.8 3.2 12.9 4.1 14.4 5.6L15.5 4.5C13.7 2.7 11.2 1.5 8.5 1.5C5.8 1.5 3.3 2.7 1.5 4.5L2.6 5.6C4.1 4.1 6.2 3.2 8.5 3.2Z" fill="#1C2026"/><path d="M8.5 6.8C9.9 6.8 11.1 7.3 12 8.2L13.1 7.1C11.8 5.9 10.2 5.1 8.5 5.1C6.8 5.1 5.2 5.9 3.9 7.1L5 8.2C5.9 7.3 7.1 6.8 8.5 6.8Z" fill="#1C2026"/><circle cx="8.5" cy="10.5" r="1.5" fill="#1C2026"/></svg>
+          <svg width="26" height="13" viewBox="0 0 27 13"><rect x="0.5" y="0.5" width="23" height="12" rx="3.5" stroke="#1C2026" stroke-opacity="0.35" fill="none"/><rect x="2" y="2" width="18" height="9" rx="2" fill="#1C2026"/><path d="M25 4.5V8.5C25.8 8.2 26.5 7.2 26.5 6.5C26.5 5.8 25.8 4.8 25 4.5Z" fill="#1C2026" fill-opacity="0.4"/></svg>
+        </div>
+      </div>
+      <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#0A0C10;z-index:52"></div>
+
+      <div style="position:absolute;left:0;right:0;bottom:0;z-index:35;display:flex;justify-content:center;padding:0 0 26px;pointer-events:none">
+        <div style="pointer-events:auto;display:flex;align-items:center;padding:8px 12px;border-radius:31px;background:{{ T.glassBg }};backdrop-filter:{{ T.glassBlur }};-webkit-backdrop-filter:{{ T.glassBlur }};border:.5px solid rgba(255,255,255,.8);box-shadow:0 1px 2px rgba(20,30,50,.06),0 14px 40px rgba(20,30,50,.17),inset 0 1px 1.5px rgba(255,255,255,.95),inset 0 -1.5px 2px rgba(255,255,255,.4)">
+          <sc-for list="{{ tabsLeft }}" as="tb" hint-placeholder-count="2">
+            <div onClick="{{ tb.onClick }}" style="width:56px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0;cursor:pointer">{{ tb.icon }}<span style="font-size:10px;font-weight:{{ tb.labelWeight }};color:{{ tb.labelColor }}">{{ tb.label }}</span></div>
+          </sc-for>
+          <div onClick="{{ h.openRecord }}" style="width:60px;display:flex;justify-content:center;cursor:pointer"><div style="width:52px;height:52px;border-radius:16px;background:linear-gradient(158deg,{{ accent }},{{ T.accentDark }});display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(46,104,214,.42);border:1px solid rgba(255,255,255,.32)">{{ icons.plus }}</div></div>
+          <sc-for list="{{ tabsRight }}" as="tb" hint-placeholder-count="2">
+            <div onClick="{{ tb.onClick }}" style="width:56px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0;cursor:pointer">{{ tb.icon }}<span style="font-size:10px;font-weight:{{ tb.labelWeight }};color:{{ tb.labelColor }}">{{ tb.label }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:138px;height:5px;border-radius:3px;background:rgba(20,26,40,.26);z-index:46;pointer-events:none"></div>
+
+      <sc-if value="{{ iosStackOpen }}" hint-placeholder-val="{{ true }}">
+      <div style="position:absolute;inset:0;z-index:45;background:#EEF1F6;animation:fSlide .32s cubic-bezier(.32,.72,0,1)">
+        <div style="position:absolute;inset:0;overflow-y:auto;padding:100px 16px 128px">
+          <sc-if value="{{ stkAccounts }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);padding:18px"><div style="font-size:13px;color:#5C6675;font-weight:620">可用余额</div><div style="display:flex;align-items:baseline;gap:10px;margin-top:6px"><span style="font-size:34px;font-weight:750;letter-spacing:-1px;color:#1C2026;font-variant-numeric:tabular-nums">{{ iosAvailText }}</span><span style="font-size:12px;color:#8A94A3">净资产 {{ iosNetWorthText }}</span></div></div>
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);overflow:hidden;margin-top:12px"><sc-for list="{{ iosAcctList }}" as="a" hint-placeholder-count="3"><div style="position:relative;display:flex;align-items:center;gap:12px;padding:13px 16px"><sc-if value="{{ a.notFirst }}"><div style="position:absolute;top:0;left:60px;right:0;height:.5px;background:rgba(60,70,90,.09)"></div></sc-if><div style="width:36px;height:36px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ a.iconBg }}">{{ a.icon }}</div><div style="flex:1;min-width:0"><div style="font-size:14.5px;color:#1C2026;font-weight:580">{{ a.short }}</div><div style="font-size:11.5px;color:#8A94A3;margin-top:1px">{{ a.meta }}</div></div><span style="font-size:16px;font-weight:680;color:{{ a.amtColor }};font-variant-numeric:tabular-nums">{{ a.amtText }}</span></div></sc-for></div>
+          </sc-if>
+          <sc-if value="{{ stkCredit }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);overflow:hidden"><div style="padding:16px 18px;display:flex;align-items:center;gap:11px;border-bottom:.5px solid rgba(60,70,90,.07)"><div style="width:38px;height:38px;border-radius:11px;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(194,137,43,.14)">{{ icons.cardAmber }}</div><div style="flex:1"><div style="font-size:14.5px;font-weight:700;color:#1C2026">招商银行 信用卡</div><div style="font-size:12px;color:#8A94A3;margin-top:1px">•••• 8809 · 本期账单</div></div><span style="font-size:11px;font-weight:640;color:#C2892B;background:rgba(194,137,43,.12);padding:4px 9px;border-radius:8px">待还款</span></div><div style="padding:16px 18px"><div style="font-size:12px;color:#8A94A3">本期应还</div><div style="font-size:30px;font-weight:740;letter-spacing:-.8px;color:#C2892B;font-variant-numeric:tabular-nums;margin-top:2px">{{ credit.cmb.due }}</div><div style="font-size:12px;color:#5C6675;margin-top:6px">账单周期 {{ credit.cmb.cycle }} · 还款日 07-22</div><div style="display:flex;gap:10px;margin-top:14px"><div style="flex:1;height:40px;border-radius:12px;background:#C2892B;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:660;color:#fff;cursor:pointer">去还款</div><div style="height:40px;padding:0 18px;border-radius:12px;background:rgba(60,70,90,.07);display:flex;align-items:center;font-size:14px;font-weight:600;color:#5C6675;cursor:pointer">部分还款</div></div></div><div style="padding:12px 18px 6px;font-size:12.5px;font-weight:680;color:#1C2026;border-top:.5px solid rgba(60,70,90,.07)">本期消费明细</div><sc-for list="{{ credit.cmb.cycleTxns }}" as="t" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:11px;padding:9px 18px;border-top:.5px solid rgba(60,70,90,.05)"><div style="width:30px;height:30px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ t.iconBg }}">{{ t.iconSm }}</div><div style="flex:1;min-width:0"><div style="font-size:13.5px;color:#1C2026;font-weight:560">{{ t.title }}</div><div style="font-size:11px;color:#8A94A3">{{ t.catName }}</div></div><span style="font-size:13.5px;font-weight:640;color:#D24B4E;font-variant-numeric:tabular-nums">{{ t.amountText }}</span></div></sc-for></div>
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);margin-top:12px;padding:16px 18px"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:14px;font-weight:700;color:#1C2026">分期计划</span><span style="font-size:11.5px;color:#8A94A3">1 / 6 期</span></div><div style="font-size:13px;color:#5C6675;margin-top:8px">{{ credit.install.name }}</div><div style="display:flex;align-items:baseline;gap:8px;margin-top:3px"><span style="font-size:22px;font-weight:720;color:#1C2026;font-variant-numeric:tabular-nums">{{ credit.install.per }}</span><span style="font-size:12px;color:#8A94A3">/ 期</span></div><div style="height:6px;border-radius:3px;background:rgba(60,70,90,.08);overflow:hidden;margin-top:10px"><div style="height:100%;width:17%;background:#C2892B;border-radius:3px"></div></div><div style="display:flex;justify-content:space-between;margin-top:7px;font-size:11.5px;color:#8A94A3"><span>总额 {{ credit.install.total }}</span><span>剩余 {{ credit.install.remain }}</span></div></div>
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);margin-top:12px;padding:16px 18px"><div style="display:flex;align-items:center;gap:11px"><div style="width:34px;height:34px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(194,137,43,.14)">{{ icons.cardAmberSm }}</div><div style="flex:1"><div style="font-size:13.5px;font-weight:680;color:#1C2026">中信 信用卡</div><div style="font-size:11.5px;color:#8A94A3">•••• 3352</div></div><span style="font-size:12.5px;font-weight:640;color:#1F9E6A">已结清</span></div></div>
+          </sc-if>
+          <sc-if value="{{ stkReimb }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);overflow:hidden"><div style="padding:16px 18px;display:flex;align-items:center;gap:11px;border-bottom:.5px solid rgba(60,70,90,.07)"><div style="width:38px;height:38px;border-radius:11px;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(46,142,147,.13)">{{ icons.receiptTeal }}</div><div style="flex:1"><div style="font-size:14.5px;font-weight:700;color:#1C2026">差旅报销单 · 7月</div><div style="font-size:12px;color:#8A94A3;margin-top:1px">3 笔垫付 · 公司</div></div><span style="font-size:11px;font-weight:640;color:#C2892B;background:rgba(194,137,43,.12);padding:4px 9px;border-radius:8px">部分到账</span></div><div style="padding:16px 18px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div><div style="font-size:11.5px;color:#8A94A3">应报销</div><div style="font-size:18px;font-weight:730;color:#1C2026;font-variant-numeric:tabular-nums;margin-top:2px">{{ reimb.claimTotal }}</div></div><div><div style="font-size:11.5px;color:#8A94A3">已回款</div><div style="font-size:18px;font-weight:730;color:#1F9E6A;font-variant-numeric:tabular-nums;margin-top:2px">{{ reimb.received }}</div></div><div><div style="font-size:11.5px;color:#8A94A3">待回款</div><div style="font-size:18px;font-weight:730;color:#2E8E93;font-variant-numeric:tabular-nums;margin-top:2px">{{ reimb.pending }}</div></div></div><div style="padding:0 18px 14px"><div style="height:7px;border-radius:4px;background:rgba(60,70,90,.08);overflow:hidden"><div style="height:100%;width:67%;background:#1F9E6A;border-radius:4px"></div></div></div></div>
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);overflow:hidden;margin-top:12px"><div style="padding:14px 16px 8px;font-size:13px;font-weight:680;color:#1C2026">关联垫付</div><sc-for list="{{ reimb.advances }}" as="a" hint-placeholder-count="3"><div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-top:.5px solid rgba(60,70,90,.06)"><div><div style="font-size:14px;color:#1C2026;font-weight:560">{{ a.name }}</div><div style="font-size:11.5px;color:#8A94A3">{{ a.date }}</div></div><span style="font-size:14px;font-weight:600;color:#1C2026;font-variant-numeric:tabular-nums">{{ a.amt }}</span></div></sc-for></div>
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);overflow:hidden;margin-top:12px"><div style="padding:14px 16px 8px;font-size:13px;font-weight:680;color:#1C2026">回款记录</div><sc-for list="{{ reimb.repayments }}" as="r" hint-placeholder-count="1"><div style="display:flex;align-items:center;gap:11px;padding:11px 16px;border-top:.5px solid rgba(60,70,90,.06)"><div style="width:32px;height:32px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(31,158,106,.12)">{{ icons.uturnGreen }}</div><div style="flex:1"><div style="font-size:13.5px;color:#1C2026;font-weight:560">{{ r.acct }}</div><div style="font-size:11.5px;color:#8A94A3">{{ r.date }} · {{ r.note }}</div></div><span style="font-size:14px;font-weight:660;color:#1F9E6A;font-variant-numeric:tabular-nums">+{{ r.amt }}</span></div></sc-for><div style="padding:11px 16px 14px;border-top:.5px solid rgba(60,70,90,.06);font-size:11.5px;color:#8A94A3">下一笔预计 <span style="color:#2E8E93;font-weight:600">{{ reimb.pending }}</span> 待公司结算</div></div>
+          </sc-if>
+          <sc-if value="{{ stkSpend }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);padding:18px"><div style="font-size:13px;color:#5C6675;font-weight:620">本月消费 · 消费口径</div><div style="font-size:34px;font-weight:750;letter-spacing:-1px;color:#1C2026;font-variant-numeric:tabular-nums;margin-top:6px">{{ report.spendTotal }}</div><div style="display:flex;gap:26px;margin-top:14px"><div><div style="font-size:11.5px;color:#8A94A3">扣除报销后</div><div style="font-size:17px;font-weight:700;color:#2E8E93;font-variant-numeric:tabular-nums;margin-top:2px">{{ report.netSpend }}</div></div><div><div style="font-size:11.5px;color:#8A94A3">待回款报销</div><div style="font-size:17px;font-weight:700;color:#2E8E93;font-variant-numeric:tabular-nums;margin-top:2px">{{ report.reimbCut }}</div></div></div></div>
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);padding:18px;margin-top:12px"><div style="font-size:14px;font-weight:680;color:#1C2026;margin-bottom:14px">分类构成</div><div style="display:flex;flex-direction:column;gap:11px"><sc-for list="{{ report.repCats }}" as="c" hint-placeholder-count="6"><div style="display:flex;align-items:center;gap:11px"><span style="width:40px;font-size:12.5px;color:#5C6675;flex:none">{{ c.name }}</span><div style="flex:1;height:7px;border-radius:4px;background:rgba(60,70,90,.07);overflow:hidden"><div style="height:100%;width:{{ c.barPct }}%;background:{{ c.color }};border-radius:4px"></div></div><span style="width:80px;text-align:right;font-size:12.5px;color:#1C2026;font-variant-numeric:tabular-nums;flex:none">{{ c.amtText }}</span></div></sc-for></div></div>
+          </sc-if>
+          <sc-if value="{{ stkDebt }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);padding:18px"><div style="font-size:13px;color:#5C6675;font-weight:620">当前信用负债</div><div style="font-size:34px;font-weight:750;letter-spacing:-1px;color:#C2892B;font-variant-numeric:tabular-nums;margin-top:6px">{{ report.debtNow }}</div><div style="margin-top:6px"><sc-for list="{{ report.cycles }}" as="c" hint-placeholder-count="2"><div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-top:.5px solid rgba(60,70,90,.06)"><div><div style="font-size:13.5px;color:#1C2026;font-weight:560">{{ c.acct }}</div><div style="font-size:11.5px;color:#8A94A3">还款日 {{ c.date }}</div></div><div style="text-align:right"><div style="font-size:14px;font-weight:660;color:{{ c.color }};font-variant-numeric:tabular-nums">{{ c.due }}</div><div style="font-size:11px;color:{{ c.color }}">{{ c.status }}</div></div></div></sc-for></div></div>
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);padding:18px;margin-top:12px"><div style="font-size:14px;font-weight:680;color:#1C2026">分期 · 未来应还</div><div style="font-size:11.5px;color:#8A94A3;margin:3px 0 6px">京东数码 · 剩余 5 期</div><sc-for list="{{ report.future }}" as="p" hint-placeholder-count="4"><div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:.5px solid rgba(60,70,90,.06)"><span style="font-size:13.5px;color:#5C6675">{{ p.label }}</span><span style="font-size:13.5px;font-weight:600;color:#C2892B;font-variant-numeric:tabular-nums">{{ p.amt }}</span></div></sc-for></div>
+          </sc-if>
+          <sc-if value="{{ stkCats }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);overflow:hidden"><sc-for list="{{ iosCatList }}" as="c" hint-placeholder-count="8"><div style="position:relative;display:flex;align-items:center;gap:12px;padding:12px 16px"><sc-if value="{{ c.notFirst }}"><div style="position:absolute;top:0;left:56px;right:0;height:.5px;background:rgba(60,70,90,.09)"></div></sc-if><div style="width:34px;height:34px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ c.iconBg }}">{{ c.icon }}</div><span style="flex:1;font-size:14.5px;color:#1C2026;font-weight:560">{{ c.name }}</span><span style="font-size:11.5px;font-weight:600;color:{{ c.dirColor }}">{{ c.dirLabel }}</span></div></sc-for></div>
+            <div style="margin-top:12px;display:flex;align-items:center;justify-content:center;gap:6px;height:48px;border-radius:16px;background:{{ T.accentSoft }};border:.5px solid {{ T.accentBd }};font-size:14.5px;font-weight:640;color:{{ accent }};cursor:pointer">{{ icons.plusA }}新建分类</div>
+          </sc-if>
+          <sc-if value="{{ stkSettings }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:12.5px;font-weight:700;color:#8A94A3;letter-spacing:.3px;padding:0 4px 8px">账户与同步</div>
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 16px"><div style="flex:1"><div style="font-size:14px;color:#1C2026;font-weight:560">端到端加密</div><div style="font-size:11.5px;color:#8A94A3;margin-top:1px">数据仅本设备密钥可解密</div></div><div onClick="{{ macSettings.enc.onClick }}" style="width:42px;height:26px;border-radius:13px;flex:none;background:{{ macSettings.enc.track }};display:flex;align-items:center;padding:2px;justify-content:{{ macSettings.enc.justify }};cursor:pointer;transition:background .2s"><div style="width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(20,30,50,.25)"></div></div></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-top:.5px solid rgba(60,70,90,.07)"><span style="flex:1;font-size:14px;color:#1C2026;font-weight:560">同步方式</span><span style="font-size:13px;color:#8A94A3">个人 VPS · Shanghai</span></div>
+            </div>
+            <div style="font-size:12.5px;font-weight:700;color:#8A94A3;letter-spacing:.3px;padding:18px 4px 8px">记账偏好</div>
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px"><span style="flex:1;font-size:14px;color:#1C2026;font-weight:560">默认类型</span><div style="display:inline-flex;gap:6px"><sc-for list="{{ macSettings.typeSeg }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.onClick }}" style="padding:6px 13px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};border:.5px solid {{ o.bd }};font-variant-numeric:tabular-nums">{{ o.label }}</div></sc-for></div></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-top:.5px solid rgba(60,70,90,.07)"><div style="flex:1"><div style="font-size:14px;color:#1C2026;font-weight:560">保存后停留在记一笔</div><div style="font-size:11.5px;color:#8A94A3;margin-top:1px">连续记账不自动关闭</div></div><div onClick="{{ macSettings.stay.onClick }}" style="width:42px;height:26px;border-radius:13px;flex:none;background:{{ macSettings.stay.track }};display:flex;align-items:center;padding:2px;justify-content:{{ macSettings.stay.justify }};cursor:pointer;transition:background .2s"><div style="width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(20,30,50,.25)"></div></div></div>
+            </div>
+            <div style="font-size:12.5px;font-weight:700;color:#8A94A3;letter-spacing:.3px;padding:18px 4px 8px">AI 自动记账</div>
+            <div style="background:#fff;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,70,.05),0 6px 16px rgba(30,40,70,.05);border:.5px solid rgba(60,70,90,.06);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px"><div style="flex:1"><div style="font-size:14px;color:#1C2026;font-weight:560">启用自动记账</div><div style="font-size:11.5px;color:#8A94A3;margin-top:1px">高置信、低金额自动入账</div></div><div onClick="{{ macSettings.auto.onClick }}" style="width:42px;height:26px;border-radius:13px;flex:none;background:{{ macSettings.auto.track }};display:flex;align-items:center;padding:2px;justify-content:{{ macSettings.auto.justify }};cursor:pointer;transition:background .2s"><div style="width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(20,30,50,.25)"></div></div></div>
+              <sc-if value="{{ macSettings.autoOn }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:.5px solid rgba(60,70,90,.07)"><span style="flex:1;font-size:14px;color:#1C2026;font-weight:560">自动记账上限</span><div style="display:inline-flex;gap:6px"><sc-for list="{{ macSettings.capSeg }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.onClick }}" style="padding:6px 13px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};border:.5px solid {{ o.bd }};font-variant-numeric:tabular-nums">{{ o.label }}</div></sc-for></div></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:.5px solid rgba(60,70,90,.07)"><span style="flex:1;font-size:14px;color:#1C2026;font-weight:560">最低置信度</span><div style="display:inline-flex;gap:6px"><sc-for list="{{ macSettings.confSeg }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.onClick }}" style="padding:6px 13px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};border:.5px solid {{ o.bd }};font-variant-numeric:tabular-nums">{{ o.label }}</div></sc-for></div></div>
+              </sc-if>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:.5px solid rgba(60,70,90,.07)"><div style="flex:1"><div style="font-size:14px;color:#1C2026;font-weight:560">识别来源 · 截图 OCR</div></div><div onClick="{{ macSettings.ocr.onClick }}" style="width:42px;height:26px;border-radius:13px;flex:none;background:{{ macSettings.ocr.track }};display:flex;align-items:center;padding:2px;justify-content:{{ macSettings.ocr.justify }};cursor:pointer;transition:background .2s"><div style="width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(20,30,50,.25)"></div></div></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:.5px solid rgba(60,70,90,.07)"><div style="flex:1"><div style="font-size:14px;color:#1C2026;font-weight:560">识别来源 · 快捷指令文本</div></div><div onClick="{{ macSettings.sc.onClick }}" style="width:42px;height:26px;border-radius:13px;flex:none;background:{{ macSettings.sc.track }};display:flex;align-items:center;padding:2px;justify-content:{{ macSettings.sc.justify }};cursor:pointer;transition:background .2s"><div style="width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(20,30,50,.25)"></div></div></div>
+              <div style="padding:11px 16px 13px;border-top:.5px solid rgba(60,70,90,.07);font-size:11.5px;color:#98A2B0;line-height:1.5">低于上限或置信度的提案将进入「AI 待确认」等待人工确认。</div>
+            </div>
+          </sc-if>
+        </div>
+        <div style="position:absolute;top:0;left:0;right:0;height:92px;display:flex;align-items:flex-end;padding:0 10px 10px;background:rgba(238,241,246,.82);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:.5px solid rgba(60,70,90,.08);z-index:5"><div onClick="{{ h.iosBack }}" style="display:flex;align-items:center;gap:1px;cursor:pointer">{{ icons.chevL }}<span style="font-size:15.5px;font-weight:560;color:{{ accent }}">更多</span></div><span style="position:absolute;left:50%;bottom:12px;transform:translateX(-50%);font-size:16px;font-weight:700;color:#1C2026">{{ iosStackTitle }}</span></div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ recordOpen }}" hint-placeholder-val="{{ true }}">
+      <div style="position:absolute;inset:0;z-index:60">
+        <div onClick="{{ h.closeRecord }}" style="position:absolute;inset:0;background:rgba(16,22,38,.36);animation:fFade .22s ease"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:92%;background:#EFF2F6;border-radius:28px 28px 0 0;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 -12px 44px rgba(16,24,44,.24);animation:fUp .34s cubic-bezier(.32,.72,0,1)">
+          <div style="display:flex;justify-content:center;padding:9px 0 3px"><div style="width:38px;height:5px;border-radius:3px;background:rgba(60,70,90,.22)"></div></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 18px 10px">
+            <span onClick="{{ h.closeRecord }}" style="font-size:15px;color:#8A94A3;cursor:pointer">取消</span>
+            <span style="font-size:16px;font-weight:700;color:#1C2026">记一笔</span>
+            <span onClick="{{ h.submitRecord }}" style="font-size:15px;font-weight:680;color:{{ accent }};cursor:pointer">保存</span>
+          </div>
+          <div style="display:flex;gap:7px;padding:2px 18px 10px;overflow-x:auto">
+            <sc-for list="{{ recordTypes }}" as="rt" hint-placeholder-count="5"><div onClick="{{ rt.onClick }}" style="flex:none;padding:7px 15px;border-radius:11px;font-size:13.5px;font-weight:620;white-space:nowrap;cursor:pointer;background:{{ rt.bg }};color:{{ rt.fg }}">{{ rt.label }}</div></sc-for>
+          </div>
+          <div style="text-align:center;padding:14px 18px 10px">
+            <div style="font-size:12.5px;color:#8A94A3">金额（CNY）</div>
+            <div style="font-size:46px;font-weight:750;letter-spacing:-1.6px;color:{{ formAmountColor }};font-variant-numeric:tabular-nums;margin-top:1px">¥{{ formAmountText }}</div>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:2px 18px 10px">
+            <div onClick="{{ h.scanFromRecord }}" style="display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:14px;background:{{ T.accentSoft }};border:.5px solid {{ T.accentBd }};cursor:pointer;margin-bottom:14px"><div style="width:34px;height:34px;border-radius:10px;flex:none;background:#fff;display:flex;align-items:center;justify-content:center">{{ icons.scan }}</div><div style="flex:1"><div style="font-size:14px;font-weight:660;color:#1C2026">拍照 / 截图识别</div><div style="font-size:11.5px;color:#5C6675;margin-top:1px">OCR + AI 解析，满足条件自动记账</div></div>{{ icons.chevRA }}</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+              <sc-for list="{{ recordCats }}" as="rc" hint-placeholder-count="8"><div onClick="{{ rc.onClick }}" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:11px 4px;border-radius:15px;cursor:pointer;background:{{ rc.bg }};border:.5px solid {{ rc.bd }}"><div style="width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:{{ rc.chipBg }}">{{ rc.icon }}</div><span style="font-size:11px;color:{{ rc.fg }};font-weight:580">{{ rc.name }}</span></div></sc-for>
+            </div>
+            <div style="background:#fff;border-radius:16px;margin-top:14px;overflow:hidden;border:.5px solid rgba(60,70,90,.07)">
+              <div style="position:relative;display:flex;align-items:center;padding:13px 15px"><span style="width:56px;font-size:14.5px;color:#5C6675">账户</span><span style="flex:1;font-size:14.5px;color:#1C2026;font-weight:560">{{ formAccount }}</span>{{ icons.chevR }}</div>
+              <div style="position:relative;display:flex;align-items:center;padding:13px 15px"><div style="position:absolute;top:0;left:15px;right:0;height:.5px;background:rgba(60,70,90,.08)"></div><span style="width:56px;font-size:14.5px;color:#5C6675">日期</span><span style="flex:1;font-size:14.5px;color:#1C2026;font-weight:560">今天 · 07-14</span>{{ icons.chevR }}</div>
+              <div style="position:relative;display:flex;align-items:center;padding:13px 15px"><div style="position:absolute;top:0;left:15px;right:0;height:.5px;background:rgba(60,70,90,.08)"></div><span style="width:56px;font-size:14.5px;color:#5C6675">备注</span><span style="flex:1;font-size:14.5px;color:#98A2B0">添加备注…</span></div>
+              <div onClick="{{ toggleReimb }}" style="position:relative;display:flex;align-items:center;padding:13px 15px;cursor:pointer"><div style="position:absolute;top:0;left:15px;right:0;height:.5px;background:rgba(60,70,90,.08)"></div><span style="flex:1;font-size:14.5px;color:#1C2026">标记为可报销</span><div style="width:46px;height:28px;border-radius:15px;background:{{ reimbTrack }};display:flex;align-items:center;justify-content:{{ reimbJustify }};padding:2px;transition:all .18s"><div style="width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2)"></div></div></div>
+            </div>
+          </div>
+          <div style="background:rgba(255,255,255,.66);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);padding:9px 8px 12px;border-top:.5px solid rgba(60,70,90,.08)">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+              <sc-for list="{{ keypad }}" as="kp" hint-placeholder-count="12"><div onClick="{{ kp.onTap }}" style="height:46px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;color:#1C2026;cursor:pointer;box-shadow:0 1px 1.5px rgba(20,30,50,.1)">{{ kp.label }}</div></sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ aiOpen }}" hint-placeholder-val="{{ true }}">
+      <div style="position:absolute;inset:0;z-index:62">
+        <div onClick="{{ h.aiClose }}" style="position:absolute;inset:0;background:rgba(16,22,38,.44);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);animation:fFade .22s ease"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;max-height:94%;background:#EFF2F6;border-radius:28px 28px 0 0;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 -12px 44px rgba(16,24,44,.26);animation:fUp .34s cubic-bezier(.32,.72,0,1)">
+          <div style="display:flex;justify-content:center;padding:9px 0 3px"><div style="width:38px;height:5px;border-radius:3px;background:rgba(60,70,90,.22)"></div></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 18px 12px">
+            <div style="display:flex;align-items:center;gap:7px">{{ icons.sparkles }}<span style="font-size:16px;font-weight:700;color:#1C2026">AI 记账</span></div>
+            <div onClick="{{ h.aiClose }}" style="width:30px;height:30px;border-radius:50%;background:rgba(60,70,90,.08);display:flex;align-items:center;justify-content:center;cursor:pointer">{{ icons.x }}</div>
+          </div>
+
+          <sc-if value="{{ aiScanning }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:6px 18px 34px">
+            <div style="font-size:12.5px;color:#8A94A3;padding:0 2px 10px">识别来源 · 相册截图</div>
+            <div style="position:relative;background:#fff;border-radius:18px;overflow:hidden;border:.5px solid rgba(60,70,90,.08);box-shadow:0 6px 18px rgba(30,40,70,.06)">
+              <div style="display:flex;align-items:center;gap:11px;padding:15px 16px;background:linear-gradient(180deg,#FBFCFE,#F5F7FA)">
+                <div style="width:40px;height:40px;border-radius:11px;background:#FF6B2C;display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;font-weight:800">美</div>
+                <div style="flex:1"><div style="font-size:14.5px;font-weight:680;color:#1C2026">美团外卖</div><div style="font-size:12px;color:#8A94A3;margin-top:1px">订单已完成 · 19:24</div></div>
+              </div>
+              <div style="padding:2px 16px 16px;font-size:13px;color:#3A4250;line-height:1.7">商家：楼下小馆<br>实付金额：<b style="color:#1C2026">¥45.80</b><br>支付方式：招商银行储蓄卡 (6621)<br>下单时间：2026-07-14 19:24</div>
+              <div style="position:absolute;top:0;bottom:0;width:44%;background:linear-gradient(100deg,transparent,rgba(46,104,214,.16),transparent);animation:fSheen 1.25s ease-in-out infinite"></div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;gap:9px;padding:24px 0 4px">
+              <div style="width:15px;height:15px;border-radius:50%;border:2px solid rgba(46,104,214,.25);border-top-color:{{ accent }};animation:fSpin .8s linear infinite"></div>
+              <span style="font-size:14px;color:#5C6675;font-weight:560">正在识别并解析…</span>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ aiProposalStep }}" hint-placeholder-val="{{ true }}">
+          <div style="overflow-y:auto;padding:2px 18px 26px">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(60,70,90,.05);border-radius:13px;margin-bottom:14px">
+              <div style="width:30px;height:30px;border-radius:8px;background:#FF6B2C;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:800">美</div>
+              <div style="flex:1;font-size:12.5px;color:#5C6675;line-height:1.4">来自截图 · 美团外卖<br><span style="color:#98A2B0">实付 ¥45.80 · 招行储蓄卡</span></div>
+              {{ icons.checkA }}
+            </div>
+            <div style="font-size:13px;font-weight:680;color:#1C2026;padding:0 2px 9px">AI 记账提案</div>
+            <div style="background:#fff;border-radius:16px;overflow:hidden;border:.5px solid rgba(60,70,90,.07)">
+              <div style="position:relative;display:flex;align-items:center;padding:13px 15px"><span style="width:64px;font-size:13.5px;color:#8A94A3">类型</span><span style="flex:1;font-size:14.5px;color:#1C2026;font-weight:580">支出</span></div>
+              <div style="position:relative;display:flex;align-items:center;padding:13px 15px"><div style="position:absolute;top:0;left:15px;right:0;height:.5px;background:rgba(60,70,90,.08)"></div><span style="width:64px;font-size:13.5px;color:#8A94A3">金额</span><span style="flex:1;font-size:16px;color:#D24B4E;font-weight:720;font-variant-numeric:tabular-nums">-¥{{ prop.amountText }}</span></div>
+              <div style="position:relative;display:flex;align-items:center;padding:13px 15px"><div style="position:absolute;top:0;left:15px;right:0;height:.5px;background:rgba(60,70,90,.08)"></div><span style="width:64px;font-size:13.5px;color:#8A94A3">分类</span><div style="flex:1;display:flex;align-items:center;gap:8px"><div style="width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:{{ prop.iconBg }}">{{ prop.icon }}</div><span style="font-size:14.5px;color:#1C2026;font-weight:560">{{ prop.catName }}</span></div><span style="font-size:11.5px;color:#8A94A3">可改</span></div>
+              <div style="position:relative;display:flex;align-items:center;padding:13px 15px"><div style="position:absolute;top:0;left:15px;right:0;height:.5px;background:rgba(60,70,90,.08)"></div><span style="width:64px;font-size:13.5px;color:#8A94A3">账户</span><span style="flex:1;font-size:14.5px;color:#1C2026;font-weight:560">{{ prop.accountName }}</span></div>
+              <div style="position:relative;display:flex;align-items:center;padding:13px 15px"><div style="position:absolute;top:0;left:15px;right:0;height:.5px;background:rgba(60,70,90,.08)"></div><span style="width:64px;font-size:13.5px;color:#8A94A3">日期</span><span style="flex:1;font-size:14.5px;color:#1C2026;font-weight:560">{{ prop.dateText }}</span></div>
+              <div style="position:relative;display:flex;align-items:center;padding:13px 15px"><div style="position:absolute;top:0;left:15px;right:0;height:.5px;background:rgba(60,70,90,.08)"></div><span style="width:64px;font-size:13.5px;color:#8A94A3">商户</span><span style="flex:1;font-size:14.5px;color:#1C2026;font-weight:560">{{ prop.merchant }}</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;margin-top:12px;padding:11px 14px;background:rgba(31,158,106,.09);border:.5px solid rgba(31,158,106,.2);border-radius:13px">{{ icons.shieldOk }}<div style="flex:1;font-size:12px;color:#1B7A53;line-height:1.4">字段完整 · 置信度 {{ prop.confidencePct }}%（高）· 低风险 &lt; ¥1,000<br><b style="font-weight:700">满足自动记账条件</b></div></div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+              <div onClick="{{ h.aiClose }}" style="flex:1;height:50px;border-radius:15px;background:rgba(60,70,90,.08);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:640;color:#3A4250;cursor:pointer">编辑</div>
+              <div onClick="{{ h.aiConfirm }}" style="flex:1.8;height:50px;border-radius:15px;background:linear-gradient(158deg,{{ accent }},{{ T.accentDark }});display:flex;align-items:center;justify-content:center;gap:7px;font-size:15px;font-weight:680;color:#fff;cursor:pointer;box-shadow:0 6px 16px rgba(46,104,214,.34)">{{ icons.check }}确认记账</div>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ aiDone }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:14px 18px 34px;text-align:center">
+            <sc-if value="{{ aiUndone }}" hint-placeholder-val="{{ true }}">
+            <div style="animation:fPop .3s ease"><div style="width:64px;height:64px;border-radius:50%;background:rgba(60,70,90,.1);display:flex;align-items:center;justify-content:center;margin:8px auto 14px">{{ icons.xGray }}</div><div style="font-size:18px;font-weight:700;color:#1C2026">已撤销</div><div style="font-size:13px;color:#8A94A3;margin-top:5px">该笔未写入账本</div></div>
+            </sc-if>
+            <sc-if value="{{ notUndone }}" hint-placeholder-val="{{ true }}">
+            <div style="animation:fPop .3s ease">
+              <div style="width:64px;height:64px;border-radius:50%;background:rgba(31,158,106,.13);display:flex;align-items:center;justify-content:center;margin:8px auto 14px">{{ icons.checkBig }}</div>
+              <div style="font-size:18px;font-weight:720;color:#1C2026">已自动记账</div>
+              <div style="font-size:14px;color:#5C6675;margin-top:6px">支出 <b style="color:#D24B4E">¥{{ prop.amountText }}</b> · {{ prop.catName }} · {{ prop.accountName }}</div>
+              <div style="font-size:12px;color:#98A2B0;margin-top:4px">已写入统一账本 · 来源 AI · 可在流水中编辑</div>
+              <div onClick="{{ h.aiUndo }}" style="display:inline-flex;align-items:center;gap:7px;margin-top:20px;height:44px;padding:0 22px;border-radius:14px;background:#fff;border:.5px solid rgba(60,70,90,.14);font-size:14.5px;font-weight:640;color:#3A4250;cursor:pointer;box-shadow:0 1px 3px rgba(20,30,50,.06)">{{ icons.undoGray }}撤销这笔</div>
+              <div style="font-size:11.5px;color:#B0B8C4;margin-top:12px">几秒后自动关闭</div>
+            </div>
+            </sc-if>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+      </sc-if>
+
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isMac }}" hint-placeholder-val="{{ true }}">
+  <div style="width:940px;height:700px;border-radius:16px;overflow:hidden;position:relative;background:#F4F6F9;box-shadow:0 32px 84px rgba(28,38,68,.32),0 0 0 1px rgba(0,0,0,.16);display:flex;flex:none">
+    <div style="width:110px;flex:none;position:relative;display:flex;flex-direction:column;align-items:center;background:{{ T.macGlass }};backdrop-filter:blur(50px) saturate(200%);-webkit-backdrop-filter:blur(50px) saturate(200%);border-right:.5px solid rgba(255,255,255,.5)">
+      <div style="width:100%;display:flex;gap:8px;padding:15px 0 0 15px"><div style="width:12px;height:12px;border-radius:50%;background:#FF6159;border:.5px solid rgba(0,0,0,.08)"></div><div style="width:12px;height:12px;border-radius:50%;background:#FFBD2E;border:.5px solid rgba(0,0,0,.08)"></div><div style="width:12px;height:12px;border-radius:50%;background:#28C840;border:.5px solid rgba(0,0,0,.08)"></div></div>
+      <div style="margin-top:15px;width:38px;height:38px;border-radius:12px;background:linear-gradient(158deg,{{ accent }},{{ T.accentDark }});display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;font-weight:800;box-shadow:0 5px 14px {{ T.accentBd }}">F</div>
+      <div style="flex:1;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 0">
+        <sc-for list="{{ macNav }}" as="n" hint-placeholder-count="8">
+          <div onClick="{{ n.onClick }}" style="position:relative;width:86px;padding:9px 0 8px;border-radius:18px;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;background:{{ n.bg }};box-shadow:{{ n.glow }};transition:all .16s">{{ n.icon }}<span style="font-size:10px;font-weight:{{ n.weight }};color:{{ n.color }};white-space:nowrap;letter-spacing:.1px">{{ n.label }}</span><sc-if value="{{ n.badge }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;top:6px;right:15px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#D24B4E;color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1.5px solid rgba(233,238,246,.95)">{{ n.badge }}</span></sc-if></div>
+        </sc-for>
+      </div>
+      <div style="padding:0 0 16px;display:flex;flex-direction:column;align-items:center;gap:5px"><div style="width:7px;height:7px;border-radius:50%;background:#1F9E6A;box-shadow:0 0 0 3px rgba(31,158,106,.16)"></div><span style="font-size:9.5px;color:#8A94A3;letter-spacing:.2px">已同步</span></div>
+    </div>
+
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0;background:#F4F6F9">
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:.5px solid rgba(60,70,90,.08);background:rgba(248,250,252,.72);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%)">
+        <span style="font-size:15px;font-weight:720;color:#1C2026;letter-spacing:-.2px">{{ macTitle }}</span>
+        <div style="flex:1"></div>
+        <div style="display:flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:9px;background:#fff;border:.5px solid rgba(60,70,90,.1);width:220px">{{ icons.searchMac }}<span style="font-size:13px;color:#98A2B0">搜索流水…</span></div>
+      </div>
+
+      <div style="flex:1;overflow-y:auto">
+        <sc-if value="{{ macIsOverview }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:20px 22px 28px">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+            <div style="background:#fff;border-radius:14px;padding:15px 16px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04)"><div style="font-size:12px;color:#5C6675;font-weight:620">本月消费</div><div style="font-size:26px;font-weight:730;letter-spacing:-.6px;color:#1C2026;margin-top:6px;font-variant-numeric:tabular-nums">{{ monthSpendText }}</div><div style="font-size:11.5px;color:#8A94A3;margin-top:4px">消费口径 · 较上月 ↓8.2%</div></div>
+            <div style="background:#fff;border-radius:14px;padding:15px 16px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04)"><div style="font-size:12px;color:#5C6675;font-weight:620">现金流净额</div><div style="font-size:26px;font-weight:730;letter-spacing:-.6px;color:{{ netCashColor }};margin-top:6px;font-variant-numeric:tabular-nums">{{ netCashText }}</div><div style="font-size:11.5px;color:#8A94A3;margin-top:4px">流入 {{ inflowText }}</div></div>
+            <div style="background:#fff;border-radius:14px;padding:15px 16px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04)"><div style="font-size:12px;color:#5C6675;font-weight:620">信用应还</div><div style="font-size:26px;font-weight:730;letter-spacing:-.6px;color:#C2892B;margin-top:6px;font-variant-numeric:tabular-nums">{{ creditDueText }}</div><div style="font-size:11.5px;color:#8A94A3;margin-top:4px">招行 · 还款日 07-22</div></div>
+            <div style="background:#fff;border-radius:14px;padding:15px 16px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04)"><div style="font-size:12px;color:#5C6675;font-weight:620">报销待回款</div><div style="font-size:26px;font-weight:730;letter-spacing:-.6px;color:#2E8E93;margin-top:6px;font-variant-numeric:tabular-nums">{{ reimbPendingText }}</div><div style="font-size:11.5px;color:#8A94A3;margin-top:4px">差旅报销单 · 部分到账</div></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:16px;margin-top:18px">
+            <div style="background:#fff;border-radius:14px;overflow:hidden;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04)">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:.5px solid rgba(60,70,90,.08)"><span style="font-size:13.5px;font-weight:700;color:#1C2026">最近流水</span><span onClick="{{ h.macToTxns }}" style="font-size:12px;color:{{ accent }};cursor:pointer">在「流水」中查看全部</span></div>
+              <div style="display:grid;grid-template-columns:50px 1fr 54px 78px 78px;gap:8px;padding:8px 16px;font-size:11px;color:#8A94A3;font-weight:640;border-bottom:.5px solid rgba(60,70,90,.06)"><span>日期</span><span>摘要</span><span>分类</span><span>账户</span><span style="text-align:right">金额</span></div>
+              <sc-for list="{{ macRecent }}" as="t" hint-placeholder-count="8">
+                <div onClick="{{ t.onClick }}" style="display:grid;grid-template-columns:50px 1fr 54px 78px 78px;gap:8px;align-items:center;padding:8px 16px;cursor:pointer;border-top:{{ t.macSep }}">
+                  <span style="font-size:12px;color:#8A94A3;font-variant-numeric:tabular-nums">{{ t.dateShort }}</span>
+                  <div style="display:flex;align-items:center;gap:9px;min-width:0"><div style="width:26px;height:26px;border-radius:7px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ t.iconBg }}">{{ t.iconSm }}</div><span style="font-size:13px;color:#1C2026;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.title }}</span></div>
+                  <span style="font-size:12.5px;color:#5C6675">{{ t.catName }}</span>
+                  <span style="font-size:12.5px;color:#5C6675;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.acctShort }}</span>
+                  <span style="font-size:13px;font-weight:660;text-align:right;color:{{ t.color }};font-variant-numeric:tabular-nums">{{ t.amountText }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div style="background:#fff;border-radius:14px;overflow:hidden;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04)">
+                <div style="padding:13px 16px;border-bottom:.5px solid rgba(60,70,90,.08);font-size:13.5px;font-weight:700;color:#1C2026">账户概览</div>
+                <sc-for list="{{ acctDisp }}" as="a" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-top:{{ a.sep }}"><div style="width:28px;height:28px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ a.iconBg }}">{{ a.icon }}</div><div style="flex:1;min-width:0"><div style="font-size:12.5px;color:#1C2026;font-weight:580">{{ a.short }}</div><div style="font-size:11px;color:#8A94A3;margin-top:1px">{{ a.metaText }}</div></div><span style="font-size:13px;font-weight:680;color:{{ a.amtColor }};font-variant-numeric:tabular-nums">{{ a.balanceText2 }}</span></div>
+                </sc-for>
+              </div>
+              <div style="background:#fff;border-radius:14px;overflow:hidden;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04)">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:.5px solid rgba(60,70,90,.08)"><span style="font-size:13.5px;font-weight:700;color:#1C2026">现金流</span><span onClick="{{ h.macToCashflow }}" style="font-size:12px;color:{{ accent }};cursor:pointer">查看全部</span></div>
+                <sc-for list="{{ macCashflowMini }}" as="c" hint-placeholder-count="2"><div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:{{ c.sep }}"><div style="width:28px;height:28px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ c.iconBg }}">{{ c.icon }}</div><div style="flex:1;min-width:0"><div style="font-size:12.5px;color:#1C2026;font-weight:560;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.title }}</div><div style="font-size:11px;color:#8A94A3;margin-top:1px">{{ c.dateText }}</div></div><span style="font-size:13px;font-weight:660;color:{{ c.color }};font-variant-numeric:tabular-nums">{{ c.amountText }}</span></div></sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ macIsTxns }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;height:100%;min-height:0">
+          <div style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0">
+            <div style="display:flex;align-items:center;gap:6px;padding:12px 20px;border-bottom:.5px solid rgba(60,70,90,.08)">
+              <sc-for list="{{ macFilterChips }}" as="fc" hint-placeholder-count="6"><div onClick="{{ fc.onClick }}" style="padding:5px 10px;border-radius:8px;font-size:12.5px;font-weight:600;white-space:nowrap;cursor:pointer;background:{{ fc.bg }};color:{{ fc.fg }};border:.5px solid {{ fc.bd }}">{{ fc.label }}</div></sc-for>
+              <div style="flex:1"></div><span style="font-size:12px;color:#8A94A3;white-space:nowrap;flex:none">共 {{ macCount }} 笔</span>
+            </div>
+            <div style="flex:1;overflow-y:auto;min-height:0">
+              <div style="display:grid;grid-template-columns:50px 1fr 56px 80px 84px;gap:10px;padding:9px 20px;font-size:11px;color:#8A94A3;font-weight:640;border-bottom:.5px solid rgba(60,70,90,.08);position:sticky;top:0;background:#F4F6F9;z-index:1"><span>日期</span><span>摘要</span><span>分类</span><span>账户</span><span style="text-align:right">金额</span></div>
+              <sc-for list="{{ macTxnRows }}" as="t" hint-placeholder-count="12">
+                <div onClick="{{ t.onClick }}" style="display:grid;grid-template-columns:50px 1fr 56px 80px 84px;gap:10px;align-items:center;padding:9px 20px;cursor:pointer;background:{{ t.rowBg }};border-top:{{ t.sep }}">
+                  <span style="font-size:12px;color:#8A94A3;font-variant-numeric:tabular-nums">{{ t.dateShort }}</span>
+                  <div style="display:flex;align-items:center;gap:9px;min-width:0"><div style="width:26px;height:26px;border-radius:7px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ t.iconBg }}">{{ t.iconSm }}</div><span style="font-size:13px;color:#1C2026;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.title }}</span></div>
+                  <span style="font-size:12.5px;color:#5C6675">{{ t.catName }}</span>
+                  <span style="font-size:12.5px;color:#5C6675;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.acctShort }}</span>
+                  <span style="font-size:13px;font-weight:660;text-align:right;color:{{ t.color }};font-variant-numeric:tabular-nums">{{ t.amountText }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="width:256px;flex:none;border-left:.5px solid rgba(60,70,90,.08);background:#fff;overflow-y:auto;min-height:0;padding:22px 20px">
+            <div style="display:flex;align-items:center;gap:12px"><div style="width:44px;height:44px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ macSel.iconBg }}">{{ macSel.icon }}</div><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:680;color:#1C2026;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ macSel.title }}</div><div style="font-size:12px;color:#8A94A3;margin-top:1px">{{ macSel.source }}</div></div></div>
+            <div style="font-size:30px;font-weight:740;letter-spacing:-.8px;color:{{ macSel.color }};font-variant-numeric:tabular-nums;margin:16px 0 6px">{{ macSel.amountText }}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"><sc-for list="{{ macSel.tags }}" as="g" hint-placeholder-count="0"><span style="font-size:11px;font-weight:640;color:{{ g.color }};background:{{ g.bg }};padding:2px 8px;border-radius:7px">{{ g.label }}</span></sc-for></div>
+            <div style="border-top:.5px solid rgba(60,70,90,.08)">
+              <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:.5px solid rgba(60,70,90,.06)"><span style="font-size:13px;color:#8A94A3">类型</span><span style="font-size:13px;color:#1C2026;font-weight:560">{{ macSel.typeLabel }}</span></div>
+              <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:.5px solid rgba(60,70,90,.06)"><span style="font-size:13px;color:#8A94A3">分类</span><span style="font-size:13px;color:#1C2026;font-weight:560">{{ macSel.catName }}</span></div>
+              <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:.5px solid rgba(60,70,90,.06)"><span style="font-size:13px;color:#8A94A3">账户</span><span style="font-size:13px;color:#1C2026;font-weight:560">{{ macSel.acctShort }}</span></div>
+              <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:.5px solid rgba(60,70,90,.06)"><span style="font-size:13px;color:#8A94A3">日期</span><span style="font-size:13px;color:#1C2026;font-weight:560">{{ macSel.dateFull }}</span></div>
+            </div>
+            <sc-if value="{{ macSel.relation }}" hint-placeholder-val="{{ true }}"><div style="margin-top:14px;padding:11px 13px;background:{{ T.accentSoft }};border-radius:11px;font-size:12px;color:#3A4250;line-height:1.45">{{ macSel.relation }}</div></sc-if>
+            <div style="display:flex;gap:8px;margin-top:18px"><div style="flex:1;height:38px;border-radius:10px;background:{{ accent }};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:640;color:#fff;cursor:pointer">编辑</div><div style="height:38px;padding:0 15px;border-radius:10px;background:rgba(60,70,90,.07);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#5C6675;cursor:pointer">删除</div></div>
+          </div>
+        </div>
+        </sc-if>
+        <sc-if value="{{ macIsAccounts }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:20px 22px 28px">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px">
+            <div style="background:#fff;border-radius:14px;padding:15px 16px;border:.5px solid rgba(60,70,90,.08)"><div style="font-size:12px;color:#5C6675;font-weight:620">总资产</div><div style="font-size:24px;font-weight:730;letter-spacing:-.5px;color:#2E68D6;margin-top:6px;font-variant-numeric:tabular-nums">{{ totalAssetsText }}</div><div style="font-size:11.5px;color:#8A94A3;margin-top:4px">储蓄 + 现金</div></div>
+            <div style="background:#fff;border-radius:14px;padding:15px 16px;border:.5px solid rgba(60,70,90,.08)"><div style="font-size:12px;color:#5C6675;font-weight:620">总负债</div><div style="font-size:24px;font-weight:730;letter-spacing:-.5px;color:#C2892B;margin-top:6px;font-variant-numeric:tabular-nums">{{ totalDebtText }}</div><div style="font-size:11.5px;color:#8A94A3;margin-top:4px">信用卡已用</div></div>
+            <div style="background:#fff;border-radius:14px;padding:15px 16px;border:.5px solid rgba(60,70,90,.08)"><div style="font-size:12px;color:#5C6675;font-weight:620">净值</div><div style="font-size:24px;font-weight:730;letter-spacing:-.5px;color:#1C2026;margin-top:6px;font-variant-numeric:tabular-nums">{{ netWorthText }}</div><div style="font-size:11.5px;color:#8A94A3;margin-top:4px">资产 - 负债</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <sc-for list="{{ acctCards }}" as="a" hint-placeholder-count="4">
+              <div style="background:#fff;border-radius:16px;padding:18px 20px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04)">
+                <div style="display:flex;align-items:center;gap:12px"><div style="width:44px;height:44px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ a.iconWrapBg }}">{{ a.icon }}</div><div style="flex:1"><div style="font-size:14.5px;font-weight:680;color:#1C2026">{{ a.short }}</div><div style="font-size:12px;color:#8A94A3;margin-top:1px">{{ a.tail }}</div></div></div>
+                <div style="font-size:12px;color:#8A94A3;margin-top:16px">{{ a.balanceLabel }}</div>
+                <div style="font-size:26px;font-weight:730;letter-spacing:-.6px;color:{{ a.balColor }};font-variant-numeric:tabular-nums;margin-top:2px">{{ a.balanceText }}</div>
+                <sc-if value="{{ a.credit }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top:14px">
+                    <div style="display:flex;justify-content:space-between;font-size:11.5px;color:#8A94A3;margin-bottom:5px"><span>额度 {{ a.limitText }}</span><span>已用 {{ a.usePct }}%</span></div>
+                    <div style="height:6px;border-radius:3px;background:rgba(60,70,90,.08);overflow:hidden"><div style="height:100%;width:{{ a.usePct }}%;background:#C2892B;border-radius:3px"></div></div>
+                    <div style="display:flex;gap:22px;margin-top:14px">
+                      <div><div style="font-size:11px;color:#8A94A3">本期应还</div><div style="font-size:15px;font-weight:700;color:#C2892B;font-variant-numeric:tabular-nums;margin-top:2px">{{ a.dueText }}</div></div>
+                      <div><div style="font-size:11px;color:#8A94A3">还款日</div><div style="font-size:15px;font-weight:600;color:#1C2026;margin-top:2px">{{ a.dueDate }}</div></div>
+                      <div><div style="font-size:11px;color:#8A94A3">账单日</div><div style="font-size:15px;font-weight:600;color:#1C2026;margin-top:2px">{{ a.stmtDate }}</div></div>
+                    </div>
+                    <sc-if value="{{ a.hasInstall }}" hint-placeholder-val="{{ true }}"><div style="margin-top:14px;padding:9px 12px;background:rgba(194,137,43,.09);border-radius:10px;font-size:12px;color:#8A6D2A">分期中 · 京东数码 · 6 期 · 每期 ¥566.50</div></sc-if>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        </sc-if>
+        <sc-if value="{{ macIsCashflow }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:20px 22px 28px"><div style="display:grid;grid-template-columns:1.55fr 1fr;gap:16px;align-items:start">
+          <div style="background:#fff;border-radius:16px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04);overflow:hidden">
+            <div style="padding:16px 20px 14px;border-bottom:.5px solid rgba(60,70,90,.07)"><div style="font-size:14.5px;font-weight:700;color:#1C2026">未来现金流</div><div style="font-size:12px;color:#8A94A3;margin-top:2px">预计将要入账与出账 · 按时间排序</div></div>
+            <sc-for list="{{ cashflow.rows }}" as="c" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:12px;padding:13px 20px;border-top:{{ c.sep }}"><div style="width:36px;height:36px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ c.iconBg }}">{{ c.icon }}</div><div style="flex:1;min-width:0"><div style="font-size:13.5px;color:#1C2026;font-weight:580">{{ c.title }}</div><div style="font-size:11.5px;color:#8A94A3;margin-top:2px">{{ c.dateText }} · {{ c.note }}</div></div><span style="font-size:11px;font-weight:640;color:{{ c.dirColor }};background:{{ c.dirBg }};padding:3px 9px;border-radius:7px">{{ c.dirLabel }}</span><span style="width:96px;text-align:right;font-size:14px;font-weight:680;color:{{ c.color }};font-variant-numeric:tabular-nums">{{ c.amountText }}</span></div></sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="background:#fff;border-radius:16px;padding:18px 20px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04)"><div style="font-size:12.5px;color:#5C6675;font-weight:620">未来 30 天净现金流</div><div style="font-size:32px;font-weight:740;letter-spacing:-.8px;color:{{ cashflow.netColor }};font-variant-numeric:tabular-nums;margin-top:4px">{{ cashflow.netText }}</div><div style="display:flex;gap:24px;margin-top:16px"><div><div style="font-size:11.5px;color:#8A94A3">预计流入</div><div style="font-size:18px;font-weight:700;color:#1F9E6A;font-variant-numeric:tabular-nums;margin-top:2px">{{ cashflow.inflowText }}</div></div><div><div style="font-size:11.5px;color:#8A94A3">预计流出</div><div style="font-size:18px;font-weight:700;color:#D24B4E;font-variant-numeric:tabular-nums;margin-top:2px">{{ cashflow.outflowText }}</div></div></div></div>
+            <div style="background:#fff;border-radius:16px;padding:18px 20px;border:.5px solid rgba(60,70,90,.08)"><div style="font-size:13.5px;font-weight:700;color:#1C2026">关于现金流</div><div style="font-size:12px;color:#8A94A3;margin-top:8px;line-height:1.6">现金流是未来将要入账与出账的钱：信用卡还款、分期扣款、报销回款、工资与固定支出。信用卡额度与账单在「账户」中查看。</div></div>
+          </div>
+        </div></div>
+        </sc-if>
+        <sc-if value="{{ macIsReimb }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:20px 22px 28px"><div style="display:grid;grid-template-columns:1.55fr 1fr;gap:16px;align-items:start">
+          <div style="background:#fff;border-radius:16px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04);overflow:hidden">
+            <div style="padding:18px 20px;display:flex;align-items:center;gap:12px;border-bottom:.5px solid rgba(60,70,90,.07)"><div style="width:40px;height:40px;border-radius:11px;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(46,142,147,.13)">{{ icons.receiptTeal }}</div><div style="flex:1"><div style="font-size:14.5px;font-weight:700;color:#1C2026">差旅报销单 · 7月</div><div style="font-size:12px;color:#8A94A3;margin-top:1px">关联 3 笔垫付 · 1 个付款主体</div></div><span style="font-size:11.5px;font-weight:640;color:#C2892B;background:rgba(194,137,43,.12);padding:4px 10px;border-radius:8px">部分到账</span></div>
+            <div style="padding:18px 20px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px"><div><div style="font-size:11.5px;color:#8A94A3">应报销</div><div style="font-size:20px;font-weight:730;color:#1C2026;font-variant-numeric:tabular-nums;margin-top:3px">{{ reimb.claimTotal }}</div></div><div><div style="font-size:11.5px;color:#8A94A3">已回款</div><div style="font-size:20px;font-weight:730;color:#1F9E6A;font-variant-numeric:tabular-nums;margin-top:3px">{{ reimb.received }}</div></div><div><div style="font-size:11.5px;color:#8A94A3">待回款</div><div style="font-size:20px;font-weight:730;color:#2E8E93;font-variant-numeric:tabular-nums;margin-top:3px">{{ reimb.pending }}</div></div></div>
+            <div style="padding:0 20px 14px"><div style="height:7px;border-radius:4px;background:rgba(60,70,90,.08);overflow:hidden"><div style="height:100%;width:67%;background:#1F9E6A;border-radius:4px"></div></div><div style="font-size:11px;color:#8A94A3;margin-top:5px">已回款 67%</div></div>
+            <div style="padding:12px 20px 4px;font-size:12.5px;font-weight:680;color:#1C2026;border-top:.5px solid rgba(60,70,90,.07)">付款主体</div>
+            <div style="padding:0 20px 12px"><div style="display:grid;grid-template-columns:1fr 78px 78px 72px;gap:8px;padding:6px 0;font-size:11px;color:#8A94A3;font-weight:600"><span>主体</span><span style="text-align:right">应付</span><span style="text-align:right">已到账</span><span style="text-align:right">待回</span></div><sc-for list="{{ reimb.payers }}" as="p" hint-placeholder-count="1"><div style="display:grid;grid-template-columns:1fr 78px 78px 72px;gap:8px;align-items:center;padding:8px 0;border-top:.5px solid rgba(60,70,90,.06)"><span style="font-size:12.5px;color:#1C2026;font-weight:560">{{ p.name }}</span><span style="font-size:12px;text-align:right;color:#1C2026;font-variant-numeric:tabular-nums">{{ p.due }}</span><span style="font-size:12px;text-align:right;color:#1F9E6A;font-variant-numeric:tabular-nums">{{ p.recv }}</span><span style="font-size:12px;text-align:right;color:#2E8E93;font-variant-numeric:tabular-nums">{{ p.pend }}</span></div></sc-for></div>
+            <div style="padding:12px 20px 4px;font-size:12.5px;font-weight:680;color:#1C2026;border-top:.5px solid rgba(60,70,90,.07)">关联垫付</div>
+            <sc-for list="{{ reimb.advances }}" as="a" hint-placeholder-count="3"><div style="display:flex;align-items:center;justify-content:space-between;padding:9px 20px;border-top:.5px solid rgba(60,70,90,.05)"><div><div style="font-size:13px;color:#1C2026;font-weight:560">{{ a.name }}</div><div style="font-size:11px;color:#8A94A3">{{ a.date }}</div></div><span style="font-size:13px;font-weight:600;color:#1C2026;font-variant-numeric:tabular-nums">{{ a.amt }}</span></div></sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="background:#fff;border-radius:16px;padding:18px 20px;border:.5px solid rgba(60,70,90,.08)"><div style="font-size:13.5px;font-weight:700;color:#1C2026">回款记录</div><sc-for list="{{ reimb.repayments }}" as="r" hint-placeholder-count="1"><div style="display:flex;align-items:center;gap:11px;margin-top:12px"><div style="width:32px;height:32px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(31,158,106,.12)">{{ icons.uturnGreen }}</div><div style="flex:1"><div style="font-size:13px;color:#1C2026;font-weight:560">{{ r.acct }}</div><div style="font-size:11px;color:#8A94A3">{{ r.date }} · {{ r.note }}</div></div><span style="font-size:13.5px;font-weight:660;color:#1F9E6A;font-variant-numeric:tabular-nums">+{{ r.amt }}</span></div></sc-for><div style="margin-top:14px;padding-top:12px;border-top:.5px solid rgba(60,70,90,.07);font-size:12px;color:#8A94A3">下一笔预计 <span style="color:#2E8E93;font-weight:600">{{ reimb.pending }}</span> 待公司结算</div></div>
+            <div style="background:#fff;border-radius:16px;padding:18px 20px;border:.5px solid rgba(60,70,90,.08)"><div style="font-size:13.5px;font-weight:700;color:#1C2026">支出口径</div><div style="display:flex;justify-content:space-between;margin-top:12px"><span style="font-size:12.5px;color:#5C6675">原始消费</span><span style="font-size:13px;color:#1C2026;font-variant-numeric:tabular-nums">{{ reimb.claimTotal }}</span></div><div style="display:flex;justify-content:space-between;margin-top:8px"><span style="font-size:12.5px;color:#5C6675">扣除报销后</span><span style="font-size:13px;font-weight:700;color:#2E8E93;font-variant-numeric:tabular-nums">{{ reimb.netExpense }}</span></div><div style="font-size:11px;color:#98A2B0;margin-top:10px;line-height:1.5">个人净支出仅计未回款部分，报销回款不重复计为收入。</div></div>
+          </div>
+        </div></div>
+        </sc-if>
+        <sc-if value="{{ macIsReports }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:20px 22px 28px">
+          <div style="display:inline-flex;align-items:center;gap:2px;padding:3px;border-radius:10px;background:rgba(60,70,90,.07);margin-bottom:18px"><sc-for list="{{ reportTabs }}" as="rt" hint-placeholder-count="3"><div onClick="{{ rt.onClick }}" style="padding:6px 18px;border-radius:8px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;background:{{ rt.bg }};color:{{ rt.fg }};box-shadow:{{ rt.sh }}">{{ rt.label }}</div></sc-for></div>
+          <sc-if value="{{ repIsSpend }}" hint-placeholder-val="{{ true }}"><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+            <div style="background:#fff;border-radius:16px;padding:20px;border:.5px solid rgba(60,70,90,.08)"><div style="font-size:12.5px;color:#5C6675;font-weight:620">本月消费 · 消费口径</div><div style="font-size:32px;font-weight:740;letter-spacing:-.8px;color:#1C2026;font-variant-numeric:tabular-nums;margin-top:6px">{{ report.spendTotal }}</div><div style="display:flex;gap:24px;margin-top:16px"><div><div style="font-size:11.5px;color:#8A94A3">扣除报销后净支出</div><div style="font-size:18px;font-weight:700;color:#2E8E93;font-variant-numeric:tabular-nums;margin-top:2px">{{ report.netSpend }}</div></div><div><div style="font-size:11.5px;color:#8A94A3">待回款报销</div><div style="font-size:18px;font-weight:700;color:#2E8E93;font-variant-numeric:tabular-nums;margin-top:2px">{{ report.reimbCut }}</div></div></div><div style="font-size:11px;color:#98A2B0;margin-top:14px;line-height:1.5">信用卡消费计入消费，还款不重复计入；转账不计收支。</div></div>
+            <div style="background:#fff;border-radius:16px;padding:20px;border:.5px solid rgba(60,70,90,.08)"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><span style="font-size:13px;font-weight:700;color:#1C2026">分类构成</span><span style="font-size:11.5px;color:#8A94A3">点击查看明细</span></div><div style="display:flex;flex-direction:column;gap:11px"><sc-for list="{{ report.repCats }}" as="c" hint-placeholder-count="6"><div style="display:flex;align-items:center;gap:11px"><span style="width:38px;font-size:12.5px;color:#5C6675;flex:none">{{ c.name }}</span><div style="flex:1;height:7px;border-radius:4px;background:rgba(60,70,90,.07);overflow:hidden"><div style="height:100%;width:{{ c.barPct }}%;background:{{ c.color }};border-radius:4px"></div></div><span style="width:82px;text-align:right;font-size:12px;color:#1C2026;font-variant-numeric:tabular-nums;flex:none">{{ c.amtText }}</span></div></sc-for></div></div>
+          </div></sc-if>
+          <sc-if value="{{ repIsCash }}" hint-placeholder-val="{{ true }}"><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+            <div style="background:#fff;border-radius:16px;padding:20px;border:.5px solid rgba(60,70,90,.08)"><div style="font-size:12.5px;color:#5C6675;font-weight:620">本月现金流净额</div><div style="font-size:32px;font-weight:740;letter-spacing:-.8px;color:{{ report.netCashColor }};font-variant-numeric:tabular-nums;margin-top:6px">{{ report.netCash }}</div><div style="display:flex;gap:24px;margin-top:16px"><div><div style="font-size:11.5px;color:#8A94A3">流入</div><div style="font-size:18px;font-weight:700;color:#1F9E6A;font-variant-numeric:tabular-nums;margin-top:2px">{{ report.inflow }}</div></div><div><div style="font-size:11.5px;color:#8A94A3">流出</div><div style="font-size:18px;font-weight:700;color:#D24B4E;font-variant-numeric:tabular-nums;margin-top:2px">{{ report.outflow }}</div></div></div><div style="font-size:11px;color:#98A2B0;margin-top:14px;line-height:1.5">现金流反映现金/银行账户实际进出；信用卡还款计入流出。</div></div>
+            <div style="background:#fff;border-radius:16px;padding:20px;border:.5px solid rgba(60,70,90,.08)"><div style="font-size:13px;font-weight:700;color:#1C2026;margin-bottom:14px">按账户</div><div style="display:grid;grid-template-columns:1fr 90px 90px;gap:8px;font-size:11px;color:#8A94A3;font-weight:600;padding-bottom:6px"><span>账户</span><span style="text-align:right">流入</span><span style="text-align:right">流出</span></div><sc-for list="{{ report.cashAccts }}" as="a" hint-placeholder-count="2"><div style="display:grid;grid-template-columns:1fr 90px 90px;gap:8px;align-items:center;padding:9px 0;border-top:.5px solid rgba(60,70,90,.06)"><span style="font-size:12.5px;color:#1C2026;font-weight:560">{{ a.name }}</span><span style="font-size:12.5px;text-align:right;color:#1F9E6A;font-variant-numeric:tabular-nums">{{ a.in }}</span><span style="font-size:12.5px;text-align:right;color:#D24B4E;font-variant-numeric:tabular-nums">{{ a.out }}</span></div></sc-for></div>
+          </div></sc-if>
+          <sc-if value="{{ repIsDebt }}" hint-placeholder-val="{{ true }}"><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+            <div style="background:#fff;border-radius:16px;padding:20px;border:.5px solid rgba(60,70,90,.08)"><div style="font-size:12.5px;color:#5C6675;font-weight:620">当前信用负债</div><div style="font-size:32px;font-weight:740;letter-spacing:-.8px;color:#C2892B;font-variant-numeric:tabular-nums;margin-top:6px">{{ report.debtNow }}</div><div style="margin-top:16px;font-size:12.5px;font-weight:680;color:#1C2026">各账期应还</div><sc-for list="{{ report.cycles }}" as="c" hint-placeholder-count="2"><div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:.5px solid rgba(60,70,90,.06)"><div><div style="font-size:12.5px;color:#1C2026;font-weight:560">{{ c.acct }}</div><div style="font-size:11px;color:#8A94A3;white-space:nowrap">还款日 {{ c.date }}</div></div><div style="text-align:right"><div style="font-size:13.5px;font-weight:660;color:{{ c.color }};font-variant-numeric:tabular-nums">{{ c.due }}</div><div style="font-size:11px;color:{{ c.color }}">{{ c.status }}</div></div></div></sc-for></div>
+            <div style="background:#fff;border-radius:16px;padding:20px;border:.5px solid rgba(60,70,90,.08)"><div style="font-size:13px;font-weight:700;color:#1C2026;margin-bottom:6px">分期 · 未来应还</div><div style="font-size:11.5px;color:#8A94A3;margin-bottom:12px">京东 · 数码配件 · 剩余 5 期</div><sc-for list="{{ report.future }}" as="p" hint-placeholder-count="4"><div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-top:.5px solid rgba(60,70,90,.06)"><span style="font-size:12.5px;color:#5C6675">{{ p.label }}</span><span style="font-size:13px;font-weight:600;color:#C2892B;font-variant-numeric:tabular-nums">{{ p.amt }}</span></div></sc-for></div>
+          </div></sc-if>
+        </div>
+        </sc-if>
+        <sc-if value="{{ macIsAI }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:20px 22px 28px"><div style="max-width:640px">
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:2px"><span style="font-size:16px;font-weight:720;color:#1C2026">AI 待确认</span><span style="font-size:12.5px;color:#8A94A3">2 笔提案 · 从截图 / 文本解析，确认后写入统一账本</span></div>
+          <div style="display:flex;flex-direction:column;gap:14px;margin-top:16px"><sc-for list="{{ aiPend }}" as="p" hint-placeholder-count="2">
+            <div style="background:#fff;border-radius:16px;padding:18px 20px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04)">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="font-size:11px;font-weight:600;color:#5C6675;background:rgba(60,70,90,.08);padding:3px 9px;border-radius:7px">{{ p.source }}</span><div style="flex:1"></div><span style="font-size:11.5px;color:{{ p.confColor }};font-weight:600">置信度 {{ p.conf }}%</span></div>
+              <div style="display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;background:{{ p.iconBg }}">{{ p.icon }}</div><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:680;color:#1C2026">{{ p.merchant }}</div><div style="font-size:12.5px;color:#8A94A3;margin-top:2px">{{ p.type }} · {{ p.cat }} · {{ p.acct }} · {{ p.date }}</div></div><div style="font-size:20px;font-weight:730;color:#D24B4E;font-variant-numeric:tabular-nums">-{{ p.amountText }}</div></div>
+              <sc-if value="{{ p.warn }}" hint-placeholder-val="{{ true }}"><div style="margin-top:12px;padding:9px 12px;background:rgba(194,137,43,.09);border-radius:10px;font-size:12px;color:#8A6D2A">{{ p.warn }}</div></sc-if>
+              <sc-if value="{{ p.auto }}" hint-placeholder-val="{{ true }}"><div style="margin-top:12px;padding:9px 12px;background:rgba(31,158,106,.09);border-radius:10px;font-size:12px;color:#1B7A53">满足自动记账条件 · 低风险 &lt; ¥1,000</div></sc-if>
+              <div style="display:flex;gap:8px;margin-top:14px"><div style="flex:1;height:38px;border-radius:10px;background:{{ accent }};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:640;color:#fff;cursor:pointer">确认记账</div><div style="height:38px;padding:0 16px;border-radius:10px;background:rgba(60,70,90,.07);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#5C6675;cursor:pointer">编辑</div><div style="height:38px;padding:0 16px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#98A2B0;cursor:pointer">忽略</div></div>
+            </div>
+          </sc-for></div>
+        </div></div>
+        </sc-if>
+        <sc-if value="{{ macIsSettings }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:20px 22px 28px"><div style="max-width:660px;display:flex;flex-direction:column;gap:22px">
+          <div>
+            <div style="font-size:12.5px;font-weight:700;color:#8A94A3;letter-spacing:.3px;padding:0 4px 8px">账户与同步</div>
+            <div style="background:#fff;border-radius:14px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:13px;padding:16px 18px"><div style="width:44px;height:44px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;background:linear-gradient(158deg,{{ accent }},{{ T.accentDark }})">{{ icons.walletW }}</div><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:700;color:#1C2026">个人账本</div><div style="font-size:12px;color:#8A94A3;margin-top:1px">本地加密 · 单人使用</div></div><span style="font-size:11.5px;font-weight:640;color:#1F9E6A;background:rgba(31,158,106,.12);padding:4px 10px;border-radius:8px">云端优先</span></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:.5px solid rgba(60,70,90,.07);cursor:pointer"><span style="flex:1;font-size:13.5px;color:#1C2026;font-weight:560">同步方式</span><span style="font-size:13px;color:#8A94A3">个人 VPS · Shanghai</span>{{ icons.chevR }}</div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:.5px solid rgba(60,70,90,.07)"><span style="flex:1;font-size:13.5px;color:#1C2026;font-weight:560">同步状态</span><div style="display:flex;align-items:center;gap:7px"><div style="width:7px;height:7px;border-radius:50%;background:#1F9E6A;box-shadow:0 0 0 3px rgba(31,158,106,.16)"></div><span style="font-size:13px;color:#5C6675">已同步 · 刚刚</span></div></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:.5px solid rgba(60,70,90,.07)"><div style="flex:1"><div style="font-size:13.5px;color:#1C2026;font-weight:560">端到端加密</div><div style="font-size:11.5px;color:#8A94A3;margin-top:1px">数据仅本设备密钥可解密</div></div><div onClick="{{ macSettings.enc.onClick }}" style="width:42px;height:26px;border-radius:13px;flex:none;background:{{ macSettings.enc.track }};display:flex;align-items:center;padding:2px;justify-content:{{ macSettings.enc.justify }};cursor:pointer;transition:background .2s"><div style="width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(20,30,50,.25)"></div></div></div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12.5px;font-weight:700;color:#8A94A3;letter-spacing:.3px;padding:0 4px 8px">记账偏好</div>
+            <div style="background:#fff;border-radius:14px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;cursor:pointer"><span style="flex:1;font-size:13.5px;color:#1C2026;font-weight:560">默认账户</span><span style="font-size:13px;color:#8A94A3">招行储蓄卡</span>{{ icons.chevR }}</div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-top:.5px solid rgba(60,70,90,.07)"><span style="flex:1;font-size:13.5px;color:#1C2026;font-weight:560">默认类型</span><div style="display:inline-flex;gap:6px"><sc-for list="{{ macSettings.typeSeg }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.onClick }}" style="padding:6px 16px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};border:.5px solid {{ o.bd }}">{{ o.label }}</div></sc-for></div></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:.5px solid rgba(60,70,90,.07);cursor:pointer"><span style="flex:1;font-size:13.5px;color:#1C2026;font-weight:560">记账币种</span><span style="font-size:13px;color:#8A94A3">人民币 CNY · ¥</span>{{ icons.chevR }}</div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:.5px solid rgba(60,70,90,.07)"><div style="flex:1"><div style="font-size:13.5px;color:#1C2026;font-weight:560">保存后停留在记一笔</div><div style="font-size:11.5px;color:#8A94A3;margin-top:1px">连续记账不自动关闭面板</div></div><div onClick="{{ macSettings.stay.onClick }}" style="width:42px;height:26px;border-radius:13px;flex:none;background:{{ macSettings.stay.track }};display:flex;align-items:center;padding:2px;justify-content:{{ macSettings.stay.justify }};cursor:pointer;transition:background .2s"><div style="width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(20,30,50,.25)"></div></div></div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12.5px;font-weight:700;color:#8A94A3;letter-spacing:.3px;padding:0 4px 8px">AI 自动记账</div>
+            <div style="background:#fff;border-radius:14px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px"><div style="flex:1"><div style="font-size:13.5px;color:#1C2026;font-weight:560">启用自动记账</div><div style="font-size:11.5px;color:#8A94A3;margin-top:1px">高置信、低金额的提案自动写入账本</div></div><div onClick="{{ macSettings.auto.onClick }}" style="width:42px;height:26px;border-radius:13px;flex:none;background:{{ macSettings.auto.track }};display:flex;align-items:center;padding:2px;justify-content:{{ macSettings.auto.justify }};cursor:pointer;transition:background .2s"><div style="width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(20,30,50,.25)"></div></div></div>
+              <sc-if value="{{ macSettings.autoOn }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-top:.5px solid rgba(60,70,90,.07)"><span style="flex:1;font-size:13.5px;color:#1C2026;font-weight:560">自动记账上限</span><div style="display:inline-flex;gap:6px"><sc-for list="{{ macSettings.capSeg }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.onClick }}" style="padding:6px 13px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};border:.5px solid {{ o.bd }};font-variant-numeric:tabular-nums">{{ o.label }}</div></sc-for></div></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-top:.5px solid rgba(60,70,90,.07)"><span style="flex:1;font-size:13.5px;color:#1C2026;font-weight:560">最低置信度</span><div style="display:inline-flex;gap:6px"><sc-for list="{{ macSettings.confSeg }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.onClick }}" style="padding:6px 13px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};border:.5px solid {{ o.bd }};font-variant-numeric:tabular-nums">{{ o.label }}</div></sc-for></div></div>
+              </sc-if>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:.5px solid rgba(60,70,90,.07)"><div style="flex:1"><div style="font-size:13.5px;color:#1C2026;font-weight:560">识别来源 · 截图 OCR</div><div style="font-size:11.5px;color:#8A94A3;margin-top:1px">从相册截图解析消费</div></div><div onClick="{{ macSettings.ocr.onClick }}" style="width:42px;height:26px;border-radius:13px;flex:none;background:{{ macSettings.ocr.track }};display:flex;align-items:center;padding:2px;justify-content:{{ macSettings.ocr.justify }};cursor:pointer;transition:background .2s"><div style="width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(20,30,50,.25)"></div></div></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:.5px solid rgba(60,70,90,.07)"><div style="flex:1"><div style="font-size:13.5px;color:#1C2026;font-weight:560">识别来源 · 快捷指令文本</div><div style="font-size:11.5px;color:#8A94A3;margin-top:1px">iOS 快捷指令推送文本解析</div></div><div onClick="{{ macSettings.sc.onClick }}" style="width:42px;height:26px;border-radius:13px;flex:none;background:{{ macSettings.sc.track }};display:flex;align-items:center;padding:2px;justify-content:{{ macSettings.sc.justify }};cursor:pointer;transition:background .2s"><div style="width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(20,30,50,.25)"></div></div></div>
+              <div style="padding:11px 18px 13px;border-top:.5px solid rgba(60,70,90,.07);font-size:11.5px;color:#98A2B0;line-height:1.5">低于上限或置信度的提案将进入「AI 待确认」，等待人工确认后入账。</div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12.5px;font-weight:700;color:#8A94A3;letter-spacing:.3px;padding:0 4px 8px">分类与统计</div>
+            <div style="background:#fff;border-radius:14px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;cursor:pointer"><span style="flex:1;font-size:13.5px;color:#1C2026;font-weight:560">管理分类</span><span style="font-size:13px;color:#8A94A3">11 个分类</span>{{ icons.chevR }}</div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:.5px solid rgba(60,70,90,.07);cursor:pointer"><span style="flex:1;font-size:13.5px;color:#1C2026;font-weight:560">统计口径</span><span style="font-size:13px;color:#8A94A3">消费 · 现金流 · 负债</span>{{ icons.chevR }}</div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12.5px;font-weight:700;color:#8A94A3;letter-spacing:.3px;padding:0 4px 8px">数据</div>
+            <div style="background:#fff;border-radius:14px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;cursor:pointer"><span style="flex:1;font-size:13.5px;color:#1C2026;font-weight:560">导出流水 CSV</span>{{ icons.chevR }}</div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:.5px solid rgba(60,70,90,.07);cursor:pointer"><span style="flex:1;font-size:13.5px;color:#1C2026;font-weight:560">导出账单 PDF</span>{{ icons.chevR }}</div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:.5px solid rgba(60,70,90,.07);cursor:pointer"><span style="flex:1;font-size:13.5px;color:#5C6675;font-weight:560">清空本地缓存</span><span style="font-size:12.5px;color:#98A2B0">2.4 MB</span></div>
+            </div>
+            <div style="margin-top:12px;background:#fff;border-radius:14px;border:.5px solid rgba(60,70,90,.08);box-shadow:0 1px 2px rgba(30,40,70,.04);display:flex;align-items:center;gap:12px;padding:13px 18px;cursor:pointer"><span style="flex:1;font-size:13.5px;color:#D24B4E;font-weight:600">退出登录</span></div>
+          </div>
+        </div></div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ true }}">
+    <div style="position:fixed;left:50%;bottom:34px;z-index:90;display:flex;align-items:center;gap:9px;padding:12px 20px;border-radius:15px;background:rgba(20,26,40,.9);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 12px 34px rgba(16,24,44,.3);animation:fToast .28s ease">{{ icons.checkToast }}<span style="font-size:14px;font-weight:580;color:#fff">{{ toast.text }}</span></div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#2E68D6&quot;,&quot;options&quot;:[&quot;#2E68D6&quot;,&quot;#3C7C8C&quot;,&quot;#4C6EAE&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;主题&quot;},&quot;glassLevel&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;适中&quot;,&quot;options&quot;:[&quot;克制&quot;,&quot;适中&quot;,&quot;明显&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;主题&quot;}}">
+class Component extends DCLogic {
+  state = {
+    platform:'ios', iosTab:'overview', recordOpen:false, filterType:'all', iosStack:null,
+    aiOpen:false, aiStep:0, aiUndone:false, toast:null,
+    macSection:'overview', macPeriod:'month', macSelected:'t1', macFilterType:'all', macReportView:'spend', iosReportView:'spend',
+    settings:{ encrypt:true, stayAfterSave:true, autoAI:true, aiCap:1000, aiConf:90, srcOCR:true, srcShortcut:true, defaultType:'expense' },
+    txns:null, form:null, addedId:null,
+  };
+
+  constructor(props){ super(props); this.state.txns=this.seedTxns(); this.state.form=this.blankForm(); }
+  componentWillUnmount(){ clearTimeout(this._tt); clearTimeout(this._aiT); }
+
+  blankForm(){ return {type:'expense', amount:'', accountId:'cmb_debit', catId:'diner', note:'', reimbursable:false}; }
+
+  accounts=[
+    {id:'cmb_debit', short:'招行储蓄卡', name:'招商银行 储蓄卡', kind:'debit', balance:38642.15, tail:'6621'},
+    {id:'cash', short:'现金', name:'现金', kind:'cash', balance:520.00},
+    {id:'cmb_credit', short:'招行信用卡', name:'招商银行 信用卡', kind:'credit', used:6842.30, limit:50000, due:6842.30, tail:'8809'},
+    {id:'citic_credit', short:'中信信用卡', name:'中信 信用卡', kind:'credit', used:2180.00, limit:30000, due:0, tail:'3352'},
+  ];
+  cats={
+    diner:{name:'餐饮', glyph:'fork', color:'#C0784A', dir:'out'},
+    transit:{name:'交通', glyph:'car', color:'#4E85B8', dir:'out'},
+    shopping:{name:'购物', glyph:'bag', color:'#9B78B5', dir:'out'},
+    housing:{name:'居住', glyph:'house', color:'#4F9A86', dir:'out'},
+    fun:{name:'娱乐', glyph:'film', color:'#BE6E8C', dir:'out'},
+    medical:{name:'医疗', glyph:'cross', color:'#C05A5A', dir:'out'},
+    telecom:{name:'通讯', glyph:'bubble', color:'#5F84B0', dir:'out'},
+    digital:{name:'数码', glyph:'monitor', color:'#77809F', dir:'out'},
+    salary:{name:'工资', glyph:'briefcase', color:'#3E9C74', dir:'in'},
+    reimb:{name:'报销回款', glyph:'uturn', color:'#2E8E93', dir:'in'},
+  };
+  P={
+    sparkles:'<path d="M12 3.2l1.7 4.6 4.6 1.7-4.6 1.7L12 15.8l-1.7-4.6L5.7 9.5l4.6-1.7z"/><path d="M18.6 13.8l.85 2.15 2.15.85-2.15.85-.85 2.15-.85-2.15L15.6 16.8l2.15-.85z"/>',
+    chevronR:'<path d="M9 5.5l6.5 6.5L9 18.5"/>',
+    chevronL:'<path d="M15 5.5L8.5 12 15 18.5"/>',
+    bell:'<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"/><path d="M10 19.5a2 2 0 0 0 4 0"/>',
+    house:'<path d="M3.5 11.5L12 4.5l8.5 7"/><path d="M5.8 9.8V19.5h12.4V9.8"/>',
+    list:'<path d="M9 6.5h11M9 12h11M9 17.5h11"/><path d="M4.6 6.5h1.5M4.6 12h1.5M4.6 17.5h1.5"/>',
+    plus:'<path d="M12 5.5v13M5.5 12h13"/>',
+    chart:'<path d="M4 20h16"/><path d="M6.5 20v-7M12 20V5.5M17.5 20v-4.5"/>',
+    ellipsis:'<circle cx="5.5" cy="12" r="1.6" fill="CUR" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="CUR" stroke="none"/><circle cx="18.5" cy="12" r="1.6" fill="CUR" stroke="none"/>',
+    camera:'<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.3-2h7.4L18 7h1a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z"/><circle cx="12" cy="13" r="3.4"/>',
+    funnel:'<path d="M4 5.5h16l-6.2 7.4v4.8l-3.6 1.8v-6.6z"/>',
+    search:'<circle cx="11" cy="11" r="6.4"/><path d="M15.8 15.8l4 4"/>',
+    check:'<path d="M4.5 12.5l4.8 4.8L19.5 7"/>',
+    xmark:'<path d="M6 6l12 12M18 6L6 18"/>',
+    undo:'<path d="M20 14.5A6.5 6.5 0 0 0 13.5 8H5"/><path d="M8.5 4.5L4.5 8l4 3.5"/>',
+    gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+    flow:'<path d="M8 20V5"/><path d="M4.8 8.2L8 5l3.2 3.2"/><path d="M16 4v15"/><path d="M12.8 15.8L16 19l3.2-3.2"/>',
+    wallet:'<rect x="3.5" y="6" width="17" height="13" rx="2.6"/><path d="M15 12.5h3.6"/><path d="M3.5 9.8h11.5"/>',
+    card:'<rect x="3" y="6" width="18" height="12.5" rx="2.6"/><path d="M3 10.2h18"/>',
+    receipt:'<path d="M6 3.5h12v17l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3-2 1.3z"/><path d="M9 8h6M9 11.5h6"/>',
+    doc:'<path d="M7 3.5h7l4 4V20.5H7z"/><path d="M13.5 3.5V8h4.5"/>',
+    scan:'<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M4 12h16"/>',
+    shield:'<path d="M12 3.5l7 2.5v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9v-5z"/><path d="M8.8 12l2.2 2.2 4.2-4.4"/>',
+    fork:'<path d="M6.5 3.5v4.6a1.8 1.8 0 0 0 3.6 0V3.5"/><path d="M8.3 8v12.5"/><path d="M15.5 3.5c1.7 0 2.8 3 2.8 6.4 0 2.2-1.2 3-2.8 3.2V20.5"/>',
+    car:'<path d="M4 14l1.8-5.4A2 2 0 0 1 7.7 7.2h8.6a2 2 0 0 1 1.9 1.4L20 14v3.6H4z"/><circle cx="7.6" cy="17.6" r="1.4"/><circle cx="16.4" cy="17.6" r="1.4"/>',
+    bag:'<path d="M6.2 8h11.6l-1 12H7.2z"/><path d="M9 8V6.6a3 3 0 0 1 6 0V8"/>',
+    film:'<circle cx="12" cy="12" r="8.4"/><path d="M10.4 8.6l5.4 3.4-5.4 3.4z" fill="CUR" stroke="none"/>',
+    cross:'<path d="M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6z"/>',
+    bubble:'<path d="M4.5 7.5A2.5 2.5 0 0 1 7 5h10a2.5 2.5 0 0 1 2.5 2.5v6A2.5 2.5 0 0 1 17 16H9l-4 3.5V16H7A2.5 2.5 0 0 1 4.5 13.5z"/>',
+    monitor:'<rect x="3.5" y="5" width="17" height="11" rx="2"/><path d="M9 20h6M12 16v4"/>',
+    briefcase:'<rect x="3.5" y="8" width="17" height="11" rx="2.2"/><path d="M8.5 8V6.6A2 2 0 0 1 10.5 4.6h3A2 2 0 0 1 15.5 6.6V8"/><path d="M3.5 12.6h17"/>',
+    uturn:'<path d="M20 15.5v-1.5a5 5 0 0 0-5-5H5"/><path d="M8.5 5.5l-4 3.5 4 3.5"/>',
+    question:'<circle cx="12" cy="12" r="8.4"/><path d="M9.4 9.6a2.7 2.7 0 0 1 5.2 1c0 1.8-2.6 2.1-2.6 3.9"/><circle cx="12" cy="17" r="0.6" fill="CUR" stroke="none"/>',
+  };
+
+  num(n){ return Math.abs(Number(n)).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  money(n){ return '¥'+this.num(n); }
+  tint(hex,a){ const h=hex.replace('#',''); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); return 'rgba('+r+','+g+','+b+','+a+')'; }
+  shade(hex,d){ const h=hex.replace('#',''); let r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); const c=x=>Math.max(0,Math.min(255,x+d)); const t=x=>('0'+c(x).toString(16)).slice(-2); return '#'+t(r)+t(g)+t(b); }
+  ic(name,o){ o=o||{}; const color=o.color||'currentColor'; const html=(this.P[name]||'').replace(/CUR/g,color); return React.createElement('svg',{width:o.size||22,height:o.size||22,viewBox:'0 0 24 24',fill:'none',stroke:color,strokeWidth:o.sw||1.75,strokeLinecap:'round',strokeLinejoin:'round',style:{display:'block',flex:'none'},dangerouslySetInnerHTML:{__html:html}}); }
+  acct(id){ return this.accounts.find(a=>a.id===id); }
+
+  seedTxns(){ const mk=(id,date,day,title,catId,accountId,type,amount,flags,source)=>({id,date,day,title,catId,accountId,type,amount,flags:flags||{},source:source||'manual'});
+    return [
+      mk('t1','2026-07-14','今天','午餐 · 公司楼下','diner','cmb_debit','expense',38.00),
+      mk('t2','2026-07-14','今天','瑞幸咖啡','diner','cmb_credit','credit',19.90,{credit:true}),
+      mk('t3','2026-07-13','昨天','滴滴出行','transit','cmb_debit','expense',26.50),
+      mk('t4','2026-07-13','昨天','团队聚餐','diner','cmb_credit','credit',488.00,{credit:true,reimbursable:true}),
+      mk('t5','2026-07-12','7月12日','京东 · 数码配件','digital','cmb_credit','credit',3299.00,{credit:true,installment:true}),
+      mk('t6','2026-07-11','7月11日','星巴克','diner','cash','expense',42.00),
+      mk('t7','2026-07-11','7月11日','地铁','transit','cmb_debit','expense',7.00),
+      mk('t8','2026-07-10','7月10日','房租 · 7月','housing','cmb_debit','expense',5800.00),
+      mk('t9','2026-07-09','7月9日','工资 · 6月','salary','cmb_debit','income',21500.00),
+      mk('t10','2026-07-08','7月8日','盒马 · 超市','shopping','cmb_credit','credit',213.40,{credit:true}),
+      mk('t11','2026-07-07','7月7日','电影票','fun','citic_credit','credit',88.00,{credit:true}),
+      mk('t12','2026-07-06','7月6日','转账 · 取现到现金','none','cmb_debit','transfer',500.00,{}),
+      mk('t13','2026-07-05','7月5日','话费充值','telecom','cmb_debit','expense',100.00),
+      mk('t14','2026-07-04','7月4日','药店','medical','cmb_debit','expense',68.50),
+      mk('t15','2026-07-03','7月3日','信用卡还款 · 招行6月账单','none','cmb_debit','repayment',4200.00,{}),
+      mk('t16','2026-07-02','7月2日','报销回款 · 差旅(部分)','reimb','cmb_debit','refund',1200.00),
+      mk('t17','2026-07-01','7月1日','未知商户','none','cmb_debit','expense',156.00,{uncategorized:true}),
+    ];
+  }
+
+  disp(t){
+    const neg=['expense','credit','repayment','transfer'].indexOf(t.type)>=0;
+    const color=(t.type==='income'||t.type==='refund')?'#1F9E6A':(t.type==='transfer'||t.type==='repayment')?'#5C6675':'#D24B4E';
+    const cat=t.catId&&this.cats[t.catId];
+    const catName=cat?cat.name:(t.flags.uncategorized?'待归类':t.type==='transfer'?'转账':t.type==='repayment'?'还款':'—');
+    const cColor=cat?cat.color:(t.flags.uncategorized?'#C2892B':'#8A94A3');
+    const glyph=cat?cat.glyph:(t.flags.uncategorized?'question':t.type==='transfer'?'uturn':t.type==='repayment'?'card':'doc');
+    const acct=this.acct(t.accountId);
+    const tags=[];
+    if(t.flags.credit)tags.push({label:'信用',color:'#5C6675',bg:'rgba(92,102,117,.1)'});
+    if(t.flags.installment)tags.push({label:'分期 6期',color:'#C2892B',bg:'rgba(194,137,43,.12)'});
+    if(t.flags.reimbursable)tags.push({label:'可报销',color:'#2E8E93',bg:'rgba(46,142,147,.12)'});
+    if(t.flags.uncategorized)tags.push({label:'待归类',color:'#C2892B',bg:'rgba(194,137,43,.14)'});
+    if(t.source==='ai'||t.source==='ocr')tags.push({label:'AI',color:this._accent,bg:this.tint(this._accent,.12)});
+    return {id:t.id, title:t.title, sub:catName+' · '+(acct?acct.short:''), catName, acctShort:acct?acct.short:'',
+      amountText:(neg?'-':'+')+this.money(t.amount), color,
+      icon:this.ic(glyph,{color:cColor,size:19,sw:1.75}), iconSm:this.ic(glyph,{color:cColor,size:14,sw:1.8}), iconBg:this.tint(cColor,.13),
+      tags, typeLabel:({expense:'支出',income:'收入',transfer:'转账',credit:'信用消费',repayment:'还款',refund:'报销回款'})[t.type], type:t.type, onClick:()=>this.setState({macSelected:t.id})};
+  }
+
+  aiProposal(){ return {merchant:'美团外卖 · 晚餐', amount:45.80, amountText:this.num(45.80), catId:'diner', catName:'餐饮', accountId:'cmb_debit', accountName:'招行储蓄卡', dateText:'2026-07-14 今天', confidencePct:96}; }
+
+  tapKey(k){ this.setState(s=>{ let a=s.form.amount||''; if(k==='del'){a=a.slice(0,-1);} else if(k==='.'){ if(a.indexOf('.')<0)a=(a===''?'0':a)+'.'; } else { const dot=a.indexOf('.'); if(dot>=0&&a.length-dot>2)return {}; if(a.replace('.','').length>=9)return {}; a=(a==='0')?k:a+k; } return {form:Object.assign({},s.form,{amount:a})}; }); }
+  setForm(k,v){ this.setState(s=>({form:Object.assign({},s.form,{[k]:v})})); }
+
+  submitRecord(){ const f=this.state.form; if(!f.amount||Number(f.amount)<=0){ this.setState({toast:{text:'请输入金额'}}); clearTimeout(this._tt); this._tt=setTimeout(()=>this.setState({toast:null}),1800); return; }
+    const cat=this.cats[f.catId]; const id='m'+Date.now();
+    const t={id,date:'2026-07-14',day:'今天',title:f.note||(cat?cat.name:'新记录'),catId:(f.type==='income'||f.type==='refund')?'salary':f.catId,accountId:f.accountId,type:f.type,amount:Number(f.amount),flags:f.reimbursable?{reimbursable:true}:{},source:'manual'};
+    this.setState(s=>({txns:[t].concat(s.txns), recordOpen:false, form:this.blankForm(), toast:{text:'已记一笔 · '+this.money(t.amount)}}));
+    clearTimeout(this._tt); this._tt=setTimeout(()=>this.setState({toast:null}),2400);
+  }
+
+  startAI(){ this.setState({aiOpen:true, aiStep:1, aiUndone:false}); clearTimeout(this._aiT); this._aiT=setTimeout(()=>this.setState(s=>s.aiOpen?{aiStep:2}:{}),1750); }
+  aiConfirm(){ const p=this.aiProposal(); const id='ai'+Date.now(); const t={id,date:'2026-07-14',day:'今天',title:p.merchant,catId:p.catId,accountId:p.accountId,type:'expense',amount:p.amount,flags:{},source:'ai'};
+    this.setState(s=>({txns:[t].concat(s.txns), addedId:id, aiStep:3})); clearTimeout(this._aiT); this._aiT=setTimeout(()=>this.setState(s=>s.aiStep===3?{aiOpen:false,aiStep:0}:{}),4600); }
+  aiUndo(){ this.setState(s=>({txns:s.txns.filter(t=>t.id!==s.addedId), addedId:null, aiUndone:true})); clearTimeout(this._aiT); this._aiT=setTimeout(()=>this.setState({aiOpen:false,aiStep:0,aiUndone:false}),1500); }
+
+  renderVals(){
+    const accent=this.props.accent||'#2E68D6'; this._accent=accent;
+    const gmap={'克制':{a:.58,b:24},'适中':{a:.5,b:32},'明显':{a:.42,b:40}};
+    const gl=gmap[this.props.glassLevel]||gmap['适中'];
+    const T={accent, accentDark:this.shade(accent,-26), accentSoft:this.tint(accent,.12), accentBd:this.tint(accent,.24),
+      glassBg:'rgba(255,255,255,'+gl.a+')', glassBlur:'blur('+gl.b+'px) saturate(200%)',
+      macGlass:'rgba(226,233,246,'+(gl.a*0.9).toFixed(2)+')'};
+    const txns=this.state.txns;
+    const isJuly=t=>t.date>='2026-07-01'&&t.date<='2026-07-31';
+    const sum=a=>a.reduce((s,x)=>s+x.amount,0);
+    const monthSpend=sum(txns.filter(t=>isJuly(t)&&(t.type==='expense'||t.type==='credit')&&!t.flags.uncategorized));
+    const inflow=sum(txns.filter(t=>isJuly(t)&&(t.type==='income'||t.type==='refund')));
+    const outflow=sum(txns.filter(t=>isJuly(t)&&((t.type==='expense'&&this.acct(t.accountId).kind!=='credit')||t.type==='repayment')));
+    const netCash=inflow-outflow;
+    const creditDue=this.accounts.filter(a=>a.kind==='credit').reduce((s,a)=>s+(a.due||0),0);
+    const uncat=txns.filter(t=>t.flags.uncategorized).length;
+
+    const all=txns.map(t=>this.disp(t));
+    const recentItems=all.slice(0,4).map((d,i)=>Object.assign({},d,{notFirst:i>0}));
+
+    // category breakdown
+    const cadd={}; txns.filter(t=>isJuly(t)&&(t.type==='expense'||t.type==='credit')&&t.catId&&this.cats[t.catId]).forEach(t=>{cadd[t.catId]=(cadd[t.catId]||0)+t.amount;});
+    let catBreak=Object.keys(cadd).map(k=>({name:this.cats[k].name,color:this.cats[k].color,amt:cadd[k]})).sort((a,b)=>b.amt-a.amt).slice(0,4);
+    const maxCat=catBreak.length?catBreak[0].amt:1;
+    catBreak.forEach(c=>{c.barPct=Math.max(6,Math.round(c.amt/maxCat*100)); c.amtText=this.money(c.amt);});
+
+    // iOS txns filter+group
+    const ft=this.state.filterType;
+    const passf=t=> ft==='all'?true: ft==='expense'?(t.type==='expense'||t.type==='credit'): ft==='income'?(t.type==='income'||t.type==='refund'): (t.type==='transfer'||t.type==='repayment');
+    const groups=[]; const seen={};
+    txns.filter(passf).forEach(t=>{ if(!seen[t.day]){seen[t.day]={label:t.day,items:[]}; groups.push(seen[t.day]);} seen[t.day].items.push(this.disp(t)); });
+    groups.forEach(g=>g.items.forEach((it,i)=>{it.notFirst=i>0;}));
+    const chip=(k,l)=>{ const on=ft===k; return {label:l, onClick:()=>this.setState({filterType:k}), bg:on?accent:'#fff', fg:on?'#fff':'#5C6675', bd:on?accent:'rgba(60,70,90,.1)'}; };
+    const filterChips=[chip('all','全部'),chip('expense','支出'),chip('income','收入'),chip('transfer','转账/还款')];
+
+    // tabs
+    const mkTab=(key,label,glyph)=>{ const on=this.state.iosTab===key; return {label, onClick:()=>this.setState({iosTab:key}), icon:this.ic(glyph,{size:25,color:on?accent:'#9098A4',sw:on?2:1.7}), labelColor:on?accent:'#9098A4', labelWeight:on?'660':'520'}; };
+    const tabsLeft=[mkTab('overview','总览','house'),mkTab('txns','流水','list')];
+    const tabsRight=[mkTab('cashflow','现金流','flow'),mkTab('more','更多','ellipsis')];
+
+    // mac nav
+    const secTitle={overview:'总览',txns:'流水',accounts:'账户',cashflow:'现金流',reimb:'报销',reports:'报表',ai:'AI 待确认',settings:'设置'};
+    const mkNav=(key,label,glyph,badge)=>{ const on=this.state.macSection===key; return {label,badge, onClick:()=>this.setState({macSection:key}), icon:this.ic(glyph,{size:22,color:on?'#fff':'#6B7484',sw:on?2:1.75}), bg:on?('linear-gradient(158deg,'+accent+','+this.shade(accent,-26)+')'):'transparent', glow:on?('0 7px 16px '+this.tint(accent,.42)+',inset 0 1px 1px rgba(255,255,255,.45)'):'none', color:on?'#fff':'#6B7484', weight:on?'680':'560'}; };
+    const macNav=[mkNav('overview','总览','house'),mkNav('txns','流水','list'),mkNav('accounts','账户','wallet'),mkNav('cashflow','现金流','flow'),mkNav('reimb','报销','receipt'),mkNav('reports','报表','chart'),mkNav('ai','AI 待确认','sparkles',1),mkNav('settings','设置','gear')];
+    const macRecent=all.slice(0,8).map((d,i)=>{ const t=txns.find(x=>x.id===d.id); return Object.assign({},d,{dateShort:(t.date||'').slice(5).replace('-','/'), macSep:i>0?'.5px solid rgba(60,70,90,.06)':'none'}); });
+    const acctDisp=this.accounts.map((a,i)=>{ const credit=a.kind==='credit'; return {short:a.short, icon:this.ic(credit?'card':'wallet',{size:15,color:credit?'#C2892B':accent}), iconBg:this.tint(credit?'#C2892B':accent,.12), metaText:credit?('已用 / 额度'+this.money(a.limit)):(a.kind==='cash'?'现金账户':'储蓄 · 尾号'+a.tail), amtColor:credit?'#C2892B':'#2E68D6', balanceText2:(credit?'-':'')+this.money(credit?a.used:a.balance), sep:i>0?'.5px solid rgba(60,70,90,.07)':'none'}; });
+    const mkPeriod=(k,l)=>{ const on=this.state.macPeriod===k; return {label:l, onClick:()=>this.setState({macPeriod:k}), bg:on?'#fff':'transparent', fg:on?'#1C2026':'#5C6675', sh:on?'0 1px 2px rgba(20,30,50,.14)':'none'}; };
+    const macPeriods=[mkPeriod('month','本月'),mkPeriod('q','近3月'),mkPeriod('year','本年')];
+    const mft=this.state.macFilterType;
+    const mpass=t=> mft==='all'?true: mft==='expense'?(t.type==='expense'||t.type==='credit'): mft==='income'?(t.type==='income'||t.type==='refund'): mft==='credit'?t.type==='credit': mft==='repay'?t.type==='repayment': (t.type==='transfer'||t.type==='repayment');
+    const macList=txns.filter(mpass);
+    const macChip=(k,l)=>{ const on=mft===k; return {label:l, onClick:()=>this.setState({macFilterType:k}), bg:on?accent:'#fff', fg:on?'#fff':'#5C6675', bd:on?accent:'rgba(60,70,90,.12)'}; };
+    const macFilterChips=[macChip('all','全部'),macChip('expense','支出'),macChip('income','收入'),macChip('credit','信用消费'),macChip('repay','还款'),macChip('transfer','转账')];
+    const macTxnRows=macList.map((t,i)=>{ const d=this.disp(t); const on=this.state.macSelected===t.id; return Object.assign({},d,{dateShort:(t.date||'').slice(5).replace('-','/'), rowBg:on?this.tint(accent,.1):'transparent', sep:i>0?'.5px solid rgba(60,70,90,.06)':'none', onClick:()=>this.setState({macSelected:t.id})}); });
+    const macCount=macList.length;
+    const selT=txns.find(t=>t.id===this.state.macSelected)||txns[0];
+    const selD=this.disp(selT); const selCat=selT.catId&&this.cats[selT.catId];
+    const selRel=selT.flags.installment?'关联分期计划 · 6 期 · 每期 ¥566.50': selT.flags.credit?'计入招行信用卡本期账单（07-04 出账）': selT.type==='repayment'?'关联招行信用卡 · 6 月账期': selT.flags.reimbursable?'可加入报销单 · 差旅': selT.type==='refund'?'关联差旅报销单回款':'';
+    const macSel={ title:selT.title, amountText:selD.amountText, color:selD.color, typeLabel:selD.typeLabel, catName:selD.catName, acctShort:selD.acctShort, icon:this.ic(selCat?selCat.glyph:(selT.flags.uncategorized?'question':selT.type==='transfer'?'uturn':selT.type==='repayment'?'card':'doc'),{size:22,color:selCat?selCat.color:'#8A94A3'}), iconBg:selD.iconBg, dateFull:selT.date, tags:selD.tags, relation:selRel, source:selT.source==='ai'?'AI 自动记账':selT.source==='ocr'?'截图 OCR':'手工录入' };
+    const totalAssets=this.accounts.filter(a=>a.kind!=='credit').reduce((s,a)=>s+a.balance,0);
+    const totalDebt=this.accounts.filter(a=>a.kind==='credit').reduce((s,a)=>s+a.used,0);
+    const iosAcctList=this.accounts.map((a,i)=>{ const credit=a.kind==='credit'; return {short:a.short, icon:this.ic(credit?'card':'wallet',{size:16,color:credit?'#C2892B':accent}), iconBg:this.tint(credit?'#C2892B':accent,.12), meta:credit?('额度 '+this.money(a.limit)):(a.kind==='cash'?'现金':'尾号 '+a.tail), amtColor:credit?'#C2892B':'#1C2026', amtText:(credit?'-':'')+this.money(credit?a.used:a.balance), notFirst:i>0}; });
+    const iosAvailText=this.money(totalAssets), iosNetWorthText=this.money(totalAssets-totalDebt);
+    const acctCards=this.accounts.map(a=>{ const credit=a.kind==='credit'; return {short:a.short, tail:a.tail?('•••• '+a.tail):(a.kind==='cash'?'现金':''), credit, icon:this.ic(credit?'card':'wallet',{size:22,color:credit?'#C2892B':'#fff'}), iconWrapBg:credit?this.tint('#C2892B',.14):('linear-gradient(158deg,'+accent+','+this.shade(accent,-26)+')'), balColor:credit?'#C2892B':'#2E68D6', balanceLabel:credit?'本期已用':'可用余额', balanceText:this.money(credit?a.used:a.balance), limitText:credit?this.money(a.limit):'', usePct:credit?Math.round(a.used/a.limit*100):0, dueText:credit?(a.due>0?this.money(a.due):'—'):'', dueDate:credit?(a.id==='cmb_credit'?'07-22':'07-27'):'', stmtDate:credit?(a.id==='cmb_credit'?'每月4日':'每月9日'):'', hasInstall:a.id==='cmb_credit' }; });
+    const cmbA=this.acct('cmb_credit'), citicA=this.acct('citic_credit');
+    const cmbCycleTxns=txns.filter(t=>t.accountId==='cmb_credit'&&t.type==='credit').map(t=>this.disp(t));
+    const credit={ cmb:{ due:this.money(cmbA.due), limit:this.money(cmbA.limit), used:this.money(cmbA.used), cycle:'06-04 ~ 07-03', cycleTxns:cmbCycleTxns },
+      citic:{ used:this.money(citicA.used), limit:this.money(citicA.limit) },
+      install:{ name:'京东 · 数码配件', total:this.money(3299), per:this.money(566.50), remain:this.money(566.50*5) } };
+    const reimb={ claimTotal:this.money(1801), received:this.money(1200), pending:this.money(601), netExpense:this.money(601),
+      advances:[{name:'团队聚餐',date:'07-13',amt:this.money(488)},{name:'高铁票 · 往返',date:'07-05',amt:this.money(553)},{name:'酒店 · 2 晚',date:'07-05',amt:this.money(760)}],
+      payers:[{name:'公司 · 财务',due:this.money(1801),recv:this.money(1200),pend:this.money(601)}],
+      repayments:[{date:'07-02',amt:this.money(1200),acct:'招行储蓄卡',note:'首笔到账'}] };
+    const rv=this.state.macReportView;
+    const reportTabs=[['spend','消费'],['cash','现金流'],['debt','负债']].map(x=>({label:x[1],onClick:()=>this.setState({macReportView:x[0]}),bg:rv===x[0]?'#fff':'transparent',fg:rv===x[0]?'#1C2026':'#5C6675',sh:rv===x[0]?'0 1px 2px rgba(20,30,50,.14)':'none'}));
+    const cadd2={}; txns.filter(t=>isJuly(t)&&(t.type==='expense'||t.type==='credit')&&t.catId&&this.cats[t.catId]).forEach(t=>{cadd2[t.catId]=(cadd2[t.catId]||0)+t.amount;});
+    let repCats=Object.keys(cadd2).map(k=>({name:this.cats[k].name,color:this.cats[k].color,amt:cadd2[k],amtText:this.money(cadd2[k])})).sort((a,b)=>b.amt-a.amt);
+    const repMax=repCats.length?repCats[0].amt:1; repCats.forEach(c=>{c.barPct=Math.max(4,Math.round(c.amt/repMax*100));});
+    const report={ spendTotal:this.money(monthSpend), netSpend:this.money(Math.max(0,monthSpend-601)), reimbCut:this.money(601), repCats,
+      inflow:this.money(inflow), outflow:this.money(outflow), netCash:(netCash>=0?'+':'-')+this.money(netCash), netCashColor:netCash>=0?'#1F9E6A':'#D24B4E',
+      cashAccts:[{name:'招行储蓄卡',in:this.money(22700),out:this.money(10740)},{name:'现金',in:this.money(500),out:this.money(42)}],
+      debtNow:this.money(creditDue), cycles:[{acct:'招行信用卡',due:this.money(6842.30),date:'07-22',status:'未还',color:'#C2892B'},{acct:'中信信用卡',due:'—',date:'07-27',status:'已结清',color:'#1F9E6A'}],
+      future:[{label:'8 月',amt:this.money(566.50)},{label:'9 月',amt:this.money(566.50)},{label:'10 月',amt:this.money(566.50)},{label:'11 - 12 月',amt:this.money(566.50*2)}] };
+    const cfList=[
+      {title:'报销回款 · 差旅报销单', dateText:'预计 07-18', d:'2026-07-18', note:'待公司结算', amt:601, dir:'in', glyph:'uturn', color:'#2E8E93'},
+      {title:'招行信用卡还款', dateText:'07-22', d:'2026-07-22', note:'本期账单', amt:6842.30, dir:'out', glyph:'card', color:'#C2892B'},
+      {title:'工资 · 8月', dateText:'08-09', d:'2026-08-09', note:'月薪入账', amt:21500, dir:'in', glyph:'briefcase', color:'#3E9C74'},
+      {title:'京东分期 · 数码配件（2/6 期）', dateText:'08-10', d:'2026-08-10', note:'每月自动扣款', amt:566.50, dir:'out', glyph:'monitor', color:'#77809F'},
+      {title:'房租 · 8月', dateText:'08-10', d:'2026-08-10', note:'每月固定支出', amt:5800, dir:'out', glyph:'house', color:'#4F9A86'},
+    ].sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
+    const cfIn=cfList.filter(x=>x.dir==='in').reduce((s,x)=>s+x.amt,0), cfOut=cfList.filter(x=>x.dir==='out').reduce((s,x)=>s+x.amt,0), cfNet=cfIn-cfOut;
+    const cashflowRows=cfList.map((x,i)=>({title:x.title, dateText:x.dateText, note:x.note, dirLabel:x.dir==='in'?'流入':'流出', dirColor:x.dir==='in'?'#1F9E6A':'#D24B4E', dirBg:x.dir==='in'?'rgba(31,158,106,.1)':'rgba(210,75,78,.1)', amountText:(x.dir==='in'?'+':'-')+this.money(x.amt), color:x.dir==='in'?'#1F9E6A':'#D24B4E', icon:this.ic(x.glyph,{size:17,color:x.color}), iconBg:this.tint(x.color,.13), sep:i>0?'.5px solid rgba(60,70,90,.06)':'none', notFirst:i>0}));
+    const cashflow={ rows:cashflowRows, inflowText:this.money(cfIn), outflowText:this.money(cfOut), netText:(cfNet>=0?'+':'-')+this.money(cfNet), netColor:cfNet>=0?'#1F9E6A':'#D24B4E' };
+    const macCashflowMini=cashflowRows.slice(0,2);
+    const st=this.state.settings, setS=(k,v)=>this.setState(x=>({settings:Object.assign({},x.settings,{[k]:v})}));
+    const mkTog=k=>({onClick:()=>setS(k,!st[k]), track:st[k]?'#1F9E6A':'rgba(60,70,90,.22)', justify:st[k]?'flex-end':'flex-start'});
+    const mkSeg=(k,opts)=>opts.map(o=>({label:o.l, onClick:()=>setS(k,o.v), bg:st[k]===o.v?accent:'#fff', fg:st[k]===o.v?'#fff':'#5C6675', bd:st[k]===o.v?accent:'rgba(60,70,90,.14)'}));
+    const macSettings={ enc:mkTog('encrypt'), stay:mkTog('stayAfterSave'), auto:mkTog('autoAI'), ocr:mkTog('srcOCR'), sc:mkTog('srcShortcut'), autoOn:st.autoAI,
+      capSeg:mkSeg('aiCap',[{l:'¥500',v:500},{l:'¥1,000',v:1000},{l:'¥2,000',v:2000}]),
+      confSeg:mkSeg('aiConf',[{l:'85%',v:85},{l:'90%',v:90},{l:'95%',v:95}]),
+      typeSeg:mkSeg('defaultType',[{l:'支出',v:'expense'},{l:'收入',v:'income'}]) };
+    const irv=this.state.iosReportView;
+    const iosReportTabs=[['spend','消费'],['cash','现金流'],['debt','负债']].map(x=>({label:x[1],onClick:()=>this.setState({iosReportView:x[0]}),bg:irv===x[0]?'#fff':'transparent',fg:irv===x[0]?'#1C2026':'#5C6675',sh:irv===x[0]?'0 1px 3px rgba(20,30,50,.14)':'none'}));
+    const moreItems=[{label:'账户',glyph:'wallet',c:this._accent,detail:'4 个账户',key:'accounts'},{label:'信用账期与分期',glyph:'card',c:'#C2892B',detail:'招行待还',key:'credit'},{label:'报销',glyph:'receipt',c:'#2E8E93',detail:'待回款 '+this.money(601),key:'reimb'},{label:'消费报表',glyph:'chart',c:'#4E85B8',detail:this.money(monthSpend),key:'spend'},{label:'负债报表',glyph:'chart',c:'#C2892B',detail:'待还 '+this.money(creditDue),key:'debt'},{label:'AI 待确认',glyph:'sparkles',c:this._accent,detail:'',badge:1,key:'ai'},{label:'分类设置',glyph:'list',c:'#9B78B5',detail:'',key:'cats'},{label:'其他设置',glyph:'gear',c:'#6B7484',detail:'',key:'settings'}].map((m,i)=>Object.assign({},m,{icon:this.ic(m.glyph,{size:17,color:'#fff',sw:1.9}),iconBg:m.c,notFirst:i>0,onClick:m.key==='ai'?(()=>this.setState({aiOpen:true,aiStep:2,aiUndone:false})):(()=>this.setState({iosStack:m.key}))}));
+    const iosCatList=Object.keys(this.cats).map((id,i)=>{ const c=this.cats[id]; return {name:c.name, icon:this.ic(c.glyph,{size:17,color:c.color}), iconBg:this.tint(c.color,.14), dirLabel:c.dir==='in'?'收入':'支出', dirColor:c.dir==='in'?'#1F9E6A':'#8A94A3', notFirst:i>0}; });
+    const aiPend=[{merchant:'美团外卖 · 晚餐',amountText:this.money(45.80),type:'支出',cat:'餐饮',catColor:'#C0784A',catGlyph:'fork',acct:'招行储蓄卡',date:'07-14',conf:96,auto:true,source:'截图 OCR'},{merchant:'高德打车',amountText:this.money(33.00),type:'支出',cat:'交通',catColor:'#4E85B8',catGlyph:'car',acct:'招行储蓄卡',date:'07-14',conf:74,auto:false,source:'快捷指令 · 文本',warn:'分类「交通」置信度不足 · 请确认后记账'}].map(p=>Object.assign({},p,{icon:this.ic(p.catGlyph,{size:17,color:p.catColor}),iconBg:this.tint(p.catColor,.14),confColor:p.conf>=90?'#1F9E6A':'#C2892B'}));
+
+    // record sheet
+    const f=this.state.form;
+    const rtInfo={expense:'支出',income:'收入',transfer:'转账',credit:'信用消费',repayment:'还款'};
+    const recordTypes=Object.keys(rtInfo).map(k=>{ const on=f.type===k; return {label:rtInfo[k], onClick:()=>this.setForm('type',k), bg:on?accent:'rgba(60,70,90,.06)', fg:on?'#fff':'#5C6675'}; });
+    const recordCats=Object.keys(this.cats).filter(id=>this.cats[id].dir==='out').map(id=>{ const c=this.cats[id]; const on=f.catId===id; return {name:c.name, onClick:()=>this.setForm('catId',id), bg:on?this.tint(c.color,.1):'#fff', bd:on?this.tint(c.color,.4):'rgba(60,70,90,.06)', chipBg:on?c.color:this.tint(c.color,.15), fg:on?'#1C2026':'#5C6675', icon:this.ic(c.glyph,{size:18,color:on?'#fff':c.color})}; });
+    const keypad=['1','2','3','4','5','6','7','8','9','.','0','del'].map(k=>({label:k==='del'?'⌫':k, onTap:()=>this.tapKey(k)}));
+    const fac=(f.type==='income'||f.type==='refund')?'#1F9E6A':(f.type==='transfer'||f.type==='repayment')?'#1C2026':'#D24B4E';
+
+    const prop=this.aiProposal(); prop.icon=this.ic(this.cats[prop.catId].glyph,{color:this.cats[prop.catId].color,size:15}); prop.iconBg=this.tint(this.cats[prop.catId].color,.14);
+
+    const icons={
+      sparkles:this.ic('sparkles',{size:18,color:accent,sw:1.5}), flow:this.ic('flow',{size:19,color:'#2E8E93',sw:1.8}), walletW:this.ic('wallet',{size:20,color:'#fff',sw:1.8}),
+      sparklesSm:this.ic('sparkles',{size:15,color:accent,sw:1.5}),
+      chevR:this.ic('chevronR',{size:15,color:'#C2CAD6'}),
+      receipt:this.ic('receipt',{size:19,color:'#2E8E93'}),
+      questionAmber:this.ic('question',{size:17,color:'#C2892B'}),
+      questionSm:this.ic('question',{size:15,color:'#C2892B'}),
+      x:this.ic('xmark',{size:15,color:'#8A94A3',sw:2}),
+      xGray:this.ic('xmark',{size:28,color:'#8A94A3',sw:2}),
+      plus:this.ic('plus',{size:25,color:'#fff',sw:2.3}),
+      check:this.ic('check',{size:17,color:'#fff',sw:2.3}),
+      checkA:this.ic('check',{size:16,color:'#1F9E6A',sw:2.4}),
+      checkBig:this.ic('check',{size:32,color:'#1F9E6A',sw:2.4}),
+      checkToast:this.ic('check',{size:16,color:'#4ADE80',sw:2.4}),
+      shieldOk:this.ic('shield',{size:18,color:'#1F9E6A',sw:1.6}),
+      undoGray:this.ic('undo',{size:16,color:'#5C6675',sw:1.9}),
+      searchMac:this.ic('search',{size:14,color:'#98A2B0'}), scan:this.ic('scan',{size:19,color:accent,sw:1.8}), chevRA:this.ic('chevronR',{size:15,color:accent}), camera:this.ic('camera',{size:20,color:accent}), cardAmber:this.ic('card',{size:20,color:'#C2892B'}), cardAmberSm:this.ic('card',{size:17,color:'#C2892B'}), receiptTeal:this.ic('receipt',{size:20,color:'#2E8E93'}), uturnGreen:this.ic('uturn',{size:17,color:'#1F9E6A'}), chevL:this.ic('chevronL',{size:20,color:accent,sw:2}), plusA:this.ic('plus',{size:17,color:accent,sw:2.2}),
+    };
+    const reimbOn=f.reimbursable;
+
+    return {
+      isIOS:this.state.platform==='ios', isMac:this.state.platform==='mac',
+      T, accent, icons,
+      sw:{ iosBg:this.state.platform==='ios'?'#fff':'transparent', iosColor:this.state.platform==='ios'?'#1C2026':'#5C6675', iosShadow:this.state.platform==='ios'?'0 1px 3px rgba(20,30,50,.16)':'none',
+           macBg:this.state.platform==='mac'?'#fff':'transparent', macColor:this.state.platform==='mac'?'#1C2026':'#5C6675', macShadow:this.state.platform==='mac'?'0 1px 3px rgba(20,30,50,.16)':'none' },
+      monthSpendText:this.money(monthSpend), inflowText:this.money(inflow), outflowText:this.money(outflow),
+      netCashText:(netCash>=0?'+':'-')+this.money(netCash), netCashColor:netCash>=0?'#1F9E6A':'#D24B4E',
+      creditDueText:this.money(creditDue), reimbPendingText:this.money(601.00), uncat, hasUncat:uncat>0,
+      recentItems, txnGroups:groups, catBreak, filterChips,
+      tabsLeft, tabsRight,
+      isOverview:this.state.iosTab==='overview', isTxns:this.state.iosTab==='txns', isCashflow:this.state.iosTab==='cashflow', isMore:this.state.iosTab==='more',
+      macNav, macRecent, acctDisp, macPeriods, macTitle:secTitle[this.state.macSection],
+      macFilterChips, macTxnRows, macCount, macSel, acctCards, totalAssetsText:this.money(totalAssets), totalDebtText:this.money(totalDebt), netWorthText:this.money(totalAssets-totalDebt),
+      macIsOverview:this.state.macSection==='overview', macIsTxns:this.state.macSection==='txns', macIsAccounts:this.state.macSection==='accounts',
+      macIsSettings:this.state.macSection==='settings', macSettings, macIsAI:this.state.macSection==='ai', iosReportTabs, iosRepIsSpend:irv==='spend', iosRepIsCash:irv==='cash', iosRepIsDebt:irv==='debt', moreItems, aiPend, iosAcctList, iosAvailText, iosNetWorthText, iosCatList,
+      iosStackOpen:!!this.state.iosStack, iosStackTitle:({accounts:'账户',credit:'信用账期与分期',reimb:'报销',spend:'消费报表',debt:'负债报表',cats:'分类设置',settings:'设置'})[this.state.iosStack]||'', stkAccounts:this.state.iosStack==='accounts', stkCredit:this.state.iosStack==='credit', stkReimb:this.state.iosStack==='reimb', stkSpend:this.state.iosStack==='spend', stkDebt:this.state.iosStack==='debt', stkCats:this.state.iosStack==='cats', stkSettings:this.state.iosStack==='settings', macIsCashflow:this.state.macSection==='cashflow', cashflow, macCashflowMini, macIsReimb:this.state.macSection==='reimb', macIsReports:this.state.macSection==='reports', repIsSpend:rv==='spend', repIsCash:rv==='cash', repIsDebt:rv==='debt', credit, reimb, report, reportTabs,
+      recordOpen:this.state.recordOpen, recordTypes, recordCats, keypad,
+      formAmountText:f.amount?this.num(Number(f.amount)):'0.00', formAmountColor:fac, formAccount:this.acct(f.accountId).short,
+      toggleReimb:()=>this.setForm('reimbursable',!reimbOn), reimbTrack:reimbOn?'#1F9E6A':'rgba(60,70,90,.18)', reimbJustify:reimbOn?'flex-end':'flex-start',
+      aiOpen:this.state.aiOpen, aiScanning:this.state.aiStep===1, aiProposalStep:this.state.aiStep===2, aiDone:this.state.aiStep===3, aiUndone:this.state.aiUndone, notUndone:!this.state.aiUndone, prop,
+      toast:this.state.toast, hasToast:!!this.state.toast,
+      h:{ goIOS:()=>this.setState({platform:'ios'}), goMac:()=>this.setState({platform:'mac'}),
+          openRecord:()=>this.setState({recordOpen:true, form:this.blankForm()}), closeRecord:()=>this.setState({recordOpen:false}), submitRecord:()=>this.submitRecord(),
+          toTxns:()=>this.setState({iosTab:'txns'}), toMore:()=>this.setState({iosTab:'more'}), toCashflow:()=>this.setState({iosTab:'cashflow'}), iosBack:()=>this.setState({iosStack:null}), macToTxns:()=>this.setState({macSection:'txns'}), macGoAI:()=>this.setState({macSection:'ai'}), macToCashflow:()=>this.setState({macSection:'cashflow'}),
+          openAIPending:()=>this.setState({aiOpen:true,aiStep:2,aiUndone:false}), startAI:()=>this.startAI(), scanFromRecord:()=>{ this.setState({recordOpen:false}); this.startAI(); }, aiClose:()=>this.setState({aiOpen:false,aiStep:0}), aiConfirm:()=>this.aiConfirm(), aiUndo:()=>this.aiUndo() },
+    };
+  }
+}
+</script>
+</body>
+</html>
