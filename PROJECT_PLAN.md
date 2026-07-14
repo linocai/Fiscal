@@ -2,7 +2,7 @@
 
 > 计划版本：v0.2（施工权威版）
 > 日期：2026-07-14
-> 状态：产品、视觉方向与 P1–P12 施工节奏已确认；下一步从 P1 开工
+> 状态：产品、视觉方向与 P1–P12 施工节奏已确认；P1 工程与视觉基线已实现，正在验收收口
 > 旧项目参考：`/Users/linotsai/Lino/LinoFinance`
 > 前端视觉合同：`design_handoff_fiscal_app/Fiscal Prototype.dc.html` 与同目录 `README.md`
 
@@ -500,6 +500,9 @@ AI 输出结构化数据，不直接写数据库。至少包含：
 以下作为 P1 的默认技术基线；若施工期出现有证据的重大阻碍，必须先回写本文件说明原因，再变更选型：
 
 - 前端采用原生 SwiftUI 多平台工程，iOS/macOS 共用领域层、数据层、Feature Model、设计 token 与基础组件，平台分别实现必要的壳层和布局。
+- 最低部署版本固定为 iOS 26 与 macOS 26。本项目仅供用户本人使用，不为旧系统做向下兼容、availability 分支或 back-deployment 包袱。
+- Swift 使用施工时当前 Xcode 正式版所提供的最新稳定工具链与语言模式；当前已验证基线为 Xcode 26.6、Swift 6.3.3，并启用 Swift 6 严格并发检查。
+- 客户端优先采用当前原生能力，包括 SwiftUI App 生命周期、Observation、Swift Concurrency（async/await、Task、actor）、Swift Testing 和现代 Foundation API。除非有明确系统限制，不回退到 Combine/ObservableObject、回调式异步或仅为旧系统存在的实现方式。
 - 后端采用 FastAPI、SQLAlchemy、Alembic 与 PostgreSQL。
 - 数据采用云端优先架构，部署在个人 VPS；服务端数据库是唯一正式真相源。
 - 自建后端统一承载账本 API、跨端数据同步和 AI Provider 调用。
@@ -548,7 +551,7 @@ AI 输出结构化数据，不直接写数据库。至少包含：
 
 前端：
 
-- SwiftUI iOS/macOS 多平台工程。
+- 最低部署版本为 iOS 26/macOS 26 的 SwiftUI 多平台工程，使用当前最新稳定 Swift 语言模式与原生 API，不建设旧系统兼容层。
 - 共享 API Client、Repository、错误处理与 Keychain 基建。
 - 从视觉合同提炼颜色、字体、间距、圆角、阴影、语义色和基础组件。
 - 建立 iOS Tab Shell 与 macOS Sidebar Shell。
@@ -804,6 +807,7 @@ Back Tap
 10. **AI 自动执行阈值**：照抄旧项目现行规则，即低风险、金额不超过 1000 CNY 且必要 ID/字段完整时可自动执行。
 11. **前端方向**：`design_handoff_fiscal_app/` 是正式视觉合同；允许继续增加功能，但最终原生成品必须保持该原型建立的观感和跨端设计语言。
 12. **总体施工**：前后端由同一施工主线承建，按 P1–P12 纵向切片推进；每期包含后端、共享层、iOS、macOS、联调、截图和验收，不采用前后端长期分离施工。
+13. **Apple 平台与 Swift 基线**：最低部署版本固定为 iOS 26 与 macOS 26；使用施工时最新正式 Xcode/Swift 稳定工具链和现代原生 API，不承担旧系统兼容成本。当前验证工具链为 Xcode 26.6、Swift 6.3.3。
 
 尚未完全拍板的附件范围、离线行为、设备密钥生命周期和迁移选择规则，分别在首次产生真实依赖的 Phase 内形成 decision gate，不阻塞 P1 开工。
 
@@ -816,7 +820,8 @@ Back Tap
 - 已完成：v0.1 产品边界及首轮 10 项关键决策。
 - 已完成：前端高保真原型与交付说明，确认为正式视觉合同。
 - 已完成：v0.2 P1–P12 总体施工节奏与关键验收节点。
-- 尚未开始：正式工程初始化、数据模型定稿、代码实现和 VPS 环境建设。
-- 当前施工位置：P1 尚未开始。
+- 已完成：P1 仓库结构、后端骨架、Apple 双端骨架、基础设施定义、系统状态联调与双端静态总览基线。
+- 当前施工位置：P1 验收收口；后端与 Apple 构建门禁已通过，真实 iOS 客户端已连通本地 API。
+- 外部阻塞：Docker Hub TLS 超时暂时阻止真实 PostgreSQL 容器与 API 镜像构建验证；VPS 发布仍需目标主机、DNS 与凭据。
 - 新对话恢复顺序：先读本文件与 `design_handoff_fiscal_app/README.md`，再检查 `git status`。
-- 下一步：执行 P1“工程地基与视觉基线”，先完成仓库结构、技术骨架和双端静态总览基线，不提前进入 P2 业务功能。
+- 下一步：用户审核 `docs/qa/p1/screenshots/` 中的 iOS/macOS 视觉基线；网络恢复后补跑真实 PostgreSQL 与容器镜像验证，通过后关闭 P1，不提前进入 P2 业务功能。

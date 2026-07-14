@@ -1,0 +1,878 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0593A52F50EF56D7F4AD9CF5 /* MacOverviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30AD3A2039A614D2F2543AE1 /* MacOverviewScreen.swift */; };
+		0DB3D38B493F1B22A954DEC2 /* OverviewSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 185A49CF04897A7803A09434 /* OverviewSnapshot.swift */; };
+		0E59ACB97BECD3181F51A92F /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */; };
+		15BB0F18A42867A3156A607C /* FiscalDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1164C772E643D0CF6996CB1 /* FiscalDesign.swift */; };
+		1AA79C712F4EE4661527C1B0 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; };
+		2C2CEBA165280B41950328E6 /* MacOverviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30AD3A2039A614D2F2543AE1 /* MacOverviewScreen.swift */; };
+		351A8469BB5904E68E5069DF /* OverviewFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AB6841587AA8B69AFF3A00A /* OverviewFixtures.swift */; };
+		3A2A0B10963D95C372BD4924 /* SystemStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = F05017C6B56940B011F6E23E /* SystemStatus.swift */; };
+		42CF6FAB3A19861566479BE9 /* MoneyFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCB93673B1BC323E17CA866A /* MoneyFormat.swift */; };
+		6297712DE1515836BCC6E29E /* SystemStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = F05017C6B56940B011F6E23E /* SystemStatus.swift */; };
+		762C619FE720543408DACD69 /* MacRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 255F8031C4F10F48F933A838 /* MacRootView.swift */; };
+		7A3542E65018766E4BA525A2 /* SharedOverviewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8C3E571ECB6E946D838BB2 /* SharedOverviewComponents.swift */; };
+		8E8037BF67BFD62CDA4033EA /* FiscalmacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E8B677BF8165F1CF2AA217F /* FiscalmacOSApp.swift */; };
+		946C85A339DB616A6ECDDC29 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E2FF91C44F1DCC211426631D /* FiscalKit.framework */; };
+		956D11991AADEFD598358E95 /* OverviewFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AB6841587AA8B69AFF3A00A /* OverviewFixtures.swift */; };
+		981CC9DC6BC9DF96A0EDE71B /* IOSOverviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7078C368BF50D6FDB597E7B3 /* IOSOverviewScreen.swift */; };
+		9E05E23319E13CE50F8BC00A /* ConnectionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E38857D295F340534E49F652 /* ConnectionModel.swift */; };
+		A306C34BEC185CD5FE479DF0 /* MoneyFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCB93673B1BC323E17CA866A /* MoneyFormat.swift */; };
+		AEB258C3DF48989FDDC59B2B /* OverviewSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 185A49CF04897A7803A09434 /* OverviewSnapshot.swift */; };
+		B456FF5781B7A73DE7AEFF19 /* FiscalKitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 804F88664C4025B50AD0FC75 /* FiscalKitTests.swift */; };
+		B4F38F2E63F4D88D9C40F60D /* FiscalDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1164C772E643D0CF6996CB1 /* FiscalDesign.swift */; };
+		B6DE74EF3CF5E14A638D02F9 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */; };
+		BAD009742B2AE146F55E918A /* IOSOverviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7078C368BF50D6FDB597E7B3 /* IOSOverviewScreen.swift */; };
+		BDBC32BC1071C2E175D1E539 /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */; };
+		BE17976A44A851276CF80AFD /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05A497A70BFC7C3E143FE00A /* APIConfiguration.swift */; };
+		BF28273EB1C825AED3B34E8B /* FiscalKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E2FF91C44F1DCC211426631D /* FiscalKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C448FE553D4EDD301055D712 /* FiscaliOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29540C1D2948FC97337C271B /* FiscaliOSApp.swift */; };
+		CE4D4DDA94380519D6AA4DD2 /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05A497A70BFC7C3E143FE00A /* APIConfiguration.swift */; };
+		D049B3275D9D8CF1DF91BC4B /* ConnectionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E38857D295F340534E49F652 /* ConnectionModel.swift */; };
+		E0691180982BF60F9F6547EA /* FiscalKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E3046B16C01C9457A052EF11 /* IOSRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2144E087E40C5B7FEF232A /* IOSRootView.swift */; };
+		E7AFE36F01F57CCED68F06B4 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; };
+		F75284CCBBC1D7F4D2CED316 /* SharedOverviewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8C3E571ECB6E946D838BB2 /* SharedOverviewComponents.swift */; };
+		F75E5694540328D93F6A9CBE /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */; };
+		FF78DA87D1AF9E9E552C13D2 /* FiscalKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1A7E0860F5A05C40CBCAC705 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DADC49572FB901351DC0BBED /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B72B8EC053FAD83C228BFEA5;
+			remoteInfo = FiscalKit_iOS;
+		};
+		76644735BD468C16311DEB9B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DADC49572FB901351DC0BBED /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EFD2231970AF74FED6F35D80;
+			remoteInfo = FiscalKit_macOS;
+		};
+		D0715A5F168D936695DEAC3A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DADC49572FB901351DC0BBED /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EFD2231970AF74FED6F35D80;
+			remoteInfo = FiscalKit_macOS;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		92079675CD5CB8AD3C824F1A /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				BF28273EB1C825AED3B34E8B /* FiscalKit.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A5E5D7A291086571FB534A01 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				E0691180982BF60F9F6547EA /* FiscalKit.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C4985D202321DB1034149B26 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				FF78DA87D1AF9E9E552C13D2 /* FiscalKit.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		05A497A70BFC7C3E143FE00A /* APIConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfiguration.swift; sourceTree = "<group>"; };
+		185A49CF04897A7803A09434 /* OverviewSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewSnapshot.swift; sourceTree = "<group>"; };
+		22D6DBE46DB3991049438550 /* FiscaliOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FiscaliOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		255F8031C4F10F48F933A838 /* MacRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacRootView.swift; sourceTree = "<group>"; };
+		29540C1D2948FC97337C271B /* FiscaliOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscaliOSApp.swift; sourceTree = "<group>"; };
+		2E8B677BF8165F1CF2AA217F /* FiscalmacOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalmacOSApp.swift; sourceTree = "<group>"; };
+		30AD3A2039A614D2F2543AE1 /* MacOverviewScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOverviewScreen.swift; sourceTree = "<group>"; };
+		500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTokenStore.swift; sourceTree = "<group>"; };
+		5F8C3E571ECB6E946D838BB2 /* SharedOverviewComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedOverviewComponents.swift; sourceTree = "<group>"; };
+		7078C368BF50D6FDB597E7B3 /* IOSOverviewScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSOverviewScreen.swift; sourceTree = "<group>"; };
+		804F88664C4025B50AD0FC75 /* FiscalKitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalKitTests.swift; sourceTree = "<group>"; };
+		9AB6841587AA8B69AFF3A00A /* OverviewFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewFixtures.swift; sourceTree = "<group>"; };
+		A48D8B5171D3A1FF7724A9BA /* FiscalmacOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FiscalmacOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A501B4150DAFA4ABFE586271 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		AC2144E087E40C5B7FEF232A /* IOSRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSRootView.swift; sourceTree = "<group>"; };
+		C1164C772E643D0CF6996CB1 /* FiscalDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalDesign.swift; sourceTree = "<group>"; };
+		D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
+		E0D63863F934E27294B1542B /* FiscalKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FiscalKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E2FF91C44F1DCC211426631D /* FiscalKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FiscalKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		E38857D295F340534E49F652 /* ConnectionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionModel.swift; sourceTree = "<group>"; };
+		E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FiscalKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F05017C6B56940B011F6E23E /* SystemStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemStatus.swift; sourceTree = "<group>"; };
+		F41296659AE4F2333D274669 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		FCB93673B1BC323E17CA866A /* MoneyFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyFormat.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		69957A6D62DD07061A9F33EF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				946C85A339DB616A6ECDDC29 /* FiscalKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A54E17FAA07370E49DD17FA0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E7AFE36F01F57CCED68F06B4 /* FiscalKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B5B6BF6E602E7A77BD6561A9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1AA79C712F4EE4661527C1B0 /* FiscalKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1864FBD94BF1F5733EFEF4F1 /* API */ = {
+			isa = PBXGroup;
+			children = (
+				05A497A70BFC7C3E143FE00A /* APIConfiguration.swift */,
+				F05017C6B56940B011F6E23E /* SystemStatus.swift */,
+			);
+			path = API;
+			sourceTree = "<group>";
+		};
+		286CDCC43FF0C2D12F56091A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				22D6DBE46DB3991049438550 /* FiscaliOS.app */,
+				E2FF91C44F1DCC211426631D /* FiscalKit.framework */,
+				E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */,
+				E0D63863F934E27294B1542B /* FiscalKitTests.xctest */,
+				A48D8B5171D3A1FF7724A9BA /* FiscalmacOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		4610971F7E42E6C9632D3CE8 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				E38857D295F340534E49F652 /* ConnectionModel.swift */,
+				7078C368BF50D6FDB597E7B3 /* IOSOverviewScreen.swift */,
+				30AD3A2039A614D2F2543AE1 /* MacOverviewScreen.swift */,
+				D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */,
+				5F8C3E571ECB6E946D838BB2 /* SharedOverviewComponents.swift */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		5000667DE0E3F9057CC13AE3 /* macOS */ = {
+			isa = PBXGroup;
+			children = (
+				2E8B677BF8165F1CF2AA217F /* FiscalmacOSApp.swift */,
+				F41296659AE4F2333D274669 /* Info.plist */,
+				255F8031C4F10F48F933A838 /* MacRootView.swift */,
+			);
+			name = macOS;
+			path = Apps/macOS;
+			sourceTree = "<group>";
+		};
+		6C5CCED46039A5A1166E8E9D /* FiscalKit */ = {
+			isa = PBXGroup;
+			children = (
+				1864FBD94BF1F5733EFEF4F1 /* API */,
+				B019E870A7FB30C0EF905056 /* Data */,
+				6DDA295B757DF6D2B4D59C86 /* DesignSystem */,
+				E77069FBBA168A46776D69E7 /* Domain */,
+				4610971F7E42E6C9632D3CE8 /* Features */,
+				BDC5EC5BE853C7FCA7D8967C /* PreviewSupport */,
+			);
+			name = FiscalKit;
+			path = Sources/FiscalKit;
+			sourceTree = "<group>";
+		};
+		6DDA295B757DF6D2B4D59C86 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				C1164C772E643D0CF6996CB1 /* FiscalDesign.swift */,
+				FCB93673B1BC323E17CA866A /* MoneyFormat.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		7DB5746800CA4D78339A007B = {
+			isa = PBXGroup;
+			children = (
+				6C5CCED46039A5A1166E8E9D /* FiscalKit */,
+				8A358C15C8D1F7DE1E1928B4 /* FiscalKitTests */,
+				B16237A5BE4D2E3B11484E9C /* iOS */,
+				5000667DE0E3F9057CC13AE3 /* macOS */,
+				286CDCC43FF0C2D12F56091A /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		8A358C15C8D1F7DE1E1928B4 /* FiscalKitTests */ = {
+			isa = PBXGroup;
+			children = (
+				804F88664C4025B50AD0FC75 /* FiscalKitTests.swift */,
+			);
+			name = FiscalKitTests;
+			path = Tests/FiscalKitTests;
+			sourceTree = "<group>";
+		};
+		B019E870A7FB30C0EF905056 /* Data */ = {
+			isa = PBXGroup;
+			children = (
+				500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */,
+			);
+			path = Data;
+			sourceTree = "<group>";
+		};
+		B16237A5BE4D2E3B11484E9C /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				29540C1D2948FC97337C271B /* FiscaliOSApp.swift */,
+				A501B4150DAFA4ABFE586271 /* Info.plist */,
+				AC2144E087E40C5B7FEF232A /* IOSRootView.swift */,
+			);
+			name = iOS;
+			path = Apps/iOS;
+			sourceTree = "<group>";
+		};
+		BDC5EC5BE853C7FCA7D8967C /* PreviewSupport */ = {
+			isa = PBXGroup;
+			children = (
+				9AB6841587AA8B69AFF3A00A /* OverviewFixtures.swift */,
+			);
+			path = PreviewSupport;
+			sourceTree = "<group>";
+		};
+		E77069FBBA168A46776D69E7 /* Domain */ = {
+			isa = PBXGroup;
+			children = (
+				185A49CF04897A7803A09434 /* OverviewSnapshot.swift */,
+			);
+			path = Domain;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		45F13C514158836F5997B64A /* FiscaliOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CCFE5545F4C356D51A830F82 /* Build configuration list for PBXNativeTarget "FiscaliOS" */;
+			buildPhases = (
+				DB8D75638DFCAD563C33C887 /* Sources */,
+				69957A6D62DD07061A9F33EF /* Frameworks */,
+				92079675CD5CB8AD3C824F1A /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6B095DA081A077145F9325FD /* PBXTargetDependency */,
+			);
+			name = FiscaliOS;
+			packageProductDependencies = (
+			);
+			productName = FiscaliOS;
+			productReference = 22D6DBE46DB3991049438550 /* FiscaliOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		6B57E8E3B1B1BCCC75962CB5 /* FiscalmacOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 085F957DCBD9E53B1F0DBA33 /* Build configuration list for PBXNativeTarget "FiscalmacOS" */;
+			buildPhases = (
+				B344B216BDEEC4145A81373F /* Sources */,
+				A54E17FAA07370E49DD17FA0 /* Frameworks */,
+				A5E5D7A291086571FB534A01 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				59D111E6AFC77E6683115C2B /* PBXTargetDependency */,
+			);
+			name = FiscalmacOS;
+			packageProductDependencies = (
+			);
+			productName = FiscalmacOS;
+			productReference = A48D8B5171D3A1FF7724A9BA /* FiscalmacOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		815E6F5C3B93A6D19BF95C81 /* FiscalKitTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9D5797AE7253A815B39EFC2D /* Build configuration list for PBXNativeTarget "FiscalKitTests" */;
+			buildPhases = (
+				5A032459F39EC56928041B1D /* Sources */,
+				B5B6BF6E602E7A77BD6561A9 /* Frameworks */,
+				C4985D202321DB1034149B26 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4D62DAE78CA3B0371D2E702D /* PBXTargetDependency */,
+			);
+			name = FiscalKitTests;
+			packageProductDependencies = (
+			);
+			productName = FiscalKitTests;
+			productReference = E0D63863F934E27294B1542B /* FiscalKitTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		B72B8EC053FAD83C228BFEA5 /* FiscalKit_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E47EC3D0B4B39A6785E00D0E /* Build configuration list for PBXNativeTarget "FiscalKit_iOS" */;
+			buildPhases = (
+				99C5151150C1BC16B7991037 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FiscalKit_iOS;
+			packageProductDependencies = (
+			);
+			productName = FiscalKit_iOS;
+			productReference = E2FF91C44F1DCC211426631D /* FiscalKit.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		EFD2231970AF74FED6F35D80 /* FiscalKit_macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C8DE300D71DE9BA7352897FC /* Build configuration list for PBXNativeTarget "FiscalKit_macOS" */;
+			buildPhases = (
+				B6B58445FD1C2A40BC09F128 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FiscalKit_macOS;
+			packageProductDependencies = (
+			);
+			productName = FiscalKit_macOS;
+			productReference = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		DADC49572FB901351DC0BBED /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = DE991A38B96670C5CC65EA38 /* Build configuration list for PBXProject "Fiscal" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 7DB5746800CA4D78339A007B;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 286CDCC43FF0C2D12F56091A /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				815E6F5C3B93A6D19BF95C81 /* FiscalKitTests */,
+				B72B8EC053FAD83C228BFEA5 /* FiscalKit_iOS */,
+				EFD2231970AF74FED6F35D80 /* FiscalKit_macOS */,
+				45F13C514158836F5997B64A /* FiscaliOS */,
+				6B57E8E3B1B1BCCC75962CB5 /* FiscalmacOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5A032459F39EC56928041B1D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B456FF5781B7A73DE7AEFF19 /* FiscalKitTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		99C5151150C1BC16B7991037 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BE17976A44A851276CF80AFD /* APIConfiguration.swift in Sources */,
+				9E05E23319E13CE50F8BC00A /* ConnectionModel.swift in Sources */,
+				15BB0F18A42867A3156A607C /* FiscalDesign.swift in Sources */,
+				981CC9DC6BC9DF96A0EDE71B /* IOSOverviewScreen.swift in Sources */,
+				0E59ACB97BECD3181F51A92F /* KeychainTokenStore.swift in Sources */,
+				0593A52F50EF56D7F4AD9CF5 /* MacOverviewScreen.swift in Sources */,
+				A306C34BEC185CD5FE479DF0 /* MoneyFormat.swift in Sources */,
+				351A8469BB5904E68E5069DF /* OverviewFixtures.swift in Sources */,
+				AEB258C3DF48989FDDC59B2B /* OverviewSnapshot.swift in Sources */,
+				B6DE74EF3CF5E14A638D02F9 /* PlaceholderScreen.swift in Sources */,
+				7A3542E65018766E4BA525A2 /* SharedOverviewComponents.swift in Sources */,
+				3A2A0B10963D95C372BD4924 /* SystemStatus.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B344B216BDEEC4145A81373F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8E8037BF67BFD62CDA4033EA /* FiscalmacOSApp.swift in Sources */,
+				762C619FE720543408DACD69 /* MacRootView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B6B58445FD1C2A40BC09F128 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CE4D4DDA94380519D6AA4DD2 /* APIConfiguration.swift in Sources */,
+				D049B3275D9D8CF1DF91BC4B /* ConnectionModel.swift in Sources */,
+				B4F38F2E63F4D88D9C40F60D /* FiscalDesign.swift in Sources */,
+				BAD009742B2AE146F55E918A /* IOSOverviewScreen.swift in Sources */,
+				BDBC32BC1071C2E175D1E539 /* KeychainTokenStore.swift in Sources */,
+				2C2CEBA165280B41950328E6 /* MacOverviewScreen.swift in Sources */,
+				42CF6FAB3A19861566479BE9 /* MoneyFormat.swift in Sources */,
+				956D11991AADEFD598358E95 /* OverviewFixtures.swift in Sources */,
+				0DB3D38B493F1B22A954DEC2 /* OverviewSnapshot.swift in Sources */,
+				F75E5694540328D93F6A9CBE /* PlaceholderScreen.swift in Sources */,
+				F75284CCBBC1D7F4D2CED316 /* SharedOverviewComponents.swift in Sources */,
+				6297712DE1515836BCC6E29E /* SystemStatus.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DB8D75638DFCAD563C33C887 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C448FE553D4EDD301055D712 /* FiscaliOSApp.swift in Sources */,
+				E3046B16C01C9457A052EF11 /* IOSRootView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		4D62DAE78CA3B0371D2E702D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EFD2231970AF74FED6F35D80 /* FiscalKit_macOS */;
+			targetProxy = D0715A5F168D936695DEAC3A /* PBXContainerItemProxy */;
+		};
+		59D111E6AFC77E6683115C2B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EFD2231970AF74FED6F35D80 /* FiscalKit_macOS */;
+			targetProxy = 76644735BD468C16311DEB9B /* PBXContainerItemProxy */;
+		};
+		6B095DA081A077145F9325FD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B72B8EC053FAD83C228BFEA5 /* FiscalKit_iOS */;
+			targetProxy = 1A7E0860F5A05C40CBCAC705 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2A02F921A2A7CF6D6AEDE642 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FISCAL_API_BASE_URL = "";
+				INFOPLIST_FILE = Apps/iOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		3A5CC94E9715CD1E81B57B0A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				FISCAL_API_BASE_URL = "http://127.0.0.1:8000";
+				INFOPLIST_FILE = Apps/macOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal.mac;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		57745941697FC8A063EAC5A1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FISCAL_API_BASE_URL = "http://127.0.0.1:8000";
+				INFOPLIST_FILE = Apps/iOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5FB754073EBC1F8E15321CA7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal.kit;
+				PRODUCT_NAME = FiscalKit;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		7A0FE7EA983CB3EFA03985AD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal.kit;
+				PRODUCT_NAME = FiscalKit;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		8B75217FA0F91F34BB7C2FBD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				FISCAL_API_BASE_URL = "";
+				INFOPLIST_FILE = Apps/macOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal.mac;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		8F5457A819B8A6D24B4E85E5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		98169A0E786E4175E1062463 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal.kit;
+				PRODUCT_NAME = FiscalKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		A7EA2846A06CE821FA707BA7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal.kit.tests;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		B65FE39EBB589A188AE4D3F3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal.kit.tests;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		DD469AE39676498330C628D8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal.kit;
+				PRODUCT_NAME = FiscalKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		F3CC6A2B31AB64FE9DCCFF54 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		085F957DCBD9E53B1F0DBA33 /* Build configuration list for PBXNativeTarget "FiscalmacOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3A5CC94E9715CD1E81B57B0A /* Debug */,
+				8B75217FA0F91F34BB7C2FBD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9D5797AE7253A815B39EFC2D /* Build configuration list for PBXNativeTarget "FiscalKitTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A7EA2846A06CE821FA707BA7 /* Debug */,
+				B65FE39EBB589A188AE4D3F3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C8DE300D71DE9BA7352897FC /* Build configuration list for PBXNativeTarget "FiscalKit_macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7A0FE7EA983CB3EFA03985AD /* Debug */,
+				5FB754073EBC1F8E15321CA7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CCFE5545F4C356D51A830F82 /* Build configuration list for PBXNativeTarget "FiscaliOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				57745941697FC8A063EAC5A1 /* Debug */,
+				2A02F921A2A7CF6D6AEDE642 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DE991A38B96670C5CC65EA38 /* Build configuration list for PBXProject "Fiscal" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8F5457A819B8A6D24B4E85E5 /* Debug */,
+				F3CC6A2B31AB64FE9DCCFF54 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E47EC3D0B4B39A6785E00D0E /* Build configuration list for PBXNativeTarget "FiscalKit_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				98169A0E786E4175E1062463 /* Debug */,
+				DD469AE39676498330C628D8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = DADC49572FB901351DC0BBED /* Project object */;
+}

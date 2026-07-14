@@ -1,0 +1,67 @@
+name: fiscal-staging
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fiscal}
+      POSTGRES_USER: ${POSTGRES_USER:-fiscal}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/staging.env}
+    volumes:
+      - fiscal_staging_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    image: fiscal-api:${FISCAL_IMAGE_TAG:-staging}
+    build:
+      context: ..
+      dockerfile: infra/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      FISCAL_ENVIRONMENT: staging
+      FISCAL_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-fiscal}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/staging.env}@postgres:5432/${POSTGRES_DB:-fiscal}
+      FISCAL_DEVICE_TOKEN: ${FISCAL_DEVICE_TOKEN:?set FISCAL_DEVICE_TOKEN in infra/staging.env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      FISCAL_DOMAIN: ${FISCAL_DOMAIN:?set FISCAL_DOMAIN in infra/staging.env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in infra/staging.env}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - fiscal_staging_caddy_data:/data
+      - fiscal_staging_caddy_config:/config
+
+volumes:
+  fiscal_staging_postgres:
+  fiscal_staging_caddy_data:
+  fiscal_staging_caddy_config:

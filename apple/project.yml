@@ -1,0 +1,94 @@
+name: Fiscal
+options:
+  bundleIdPrefix: com.linotsai
+  deploymentTarget:
+    iOS: "26.0"
+    macOS: "26.0"
+  xcodeVersion: "26.6"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    GENERATE_INFOPLIST_FILE: YES
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: 1
+targets:
+  FiscalKit:
+    type: framework
+    platform: [iOS, macOS]
+    sources: Sources/FiscalKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.kit
+        DEFINES_MODULE: YES
+  FiscaliOS:
+    type: application
+    platform: iOS
+    sources: Apps/iOS
+    info:
+      path: Apps/iOS/Info.plist
+      properties:
+        CFBundleDisplayName: Fiscal
+        FISCAL_API_BASE_URL: "$(FISCAL_API_BASE_URL)"
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UILaunchScreen: {}
+    dependencies:
+      - target: FiscalKit_iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal
+      configs:
+        Debug:
+          FISCAL_API_BASE_URL: "http://127.0.0.1:8000"
+        Release:
+          FISCAL_API_BASE_URL: ""
+  FiscalmacOS:
+    type: application
+    platform: macOS
+    sources: Apps/macOS
+    info:
+      path: Apps/macOS/Info.plist
+      properties:
+        CFBundleDisplayName: Fiscal
+        FISCAL_API_BASE_URL: "$(FISCAL_API_BASE_URL)"
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    dependencies:
+      - target: FiscalKit_macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.mac
+      configs:
+        Debug:
+          FISCAL_API_BASE_URL: "http://127.0.0.1:8000"
+        Release:
+          FISCAL_API_BASE_URL: ""
+  FiscalKitTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: Tests/FiscalKitTests
+    dependencies:
+      - target: FiscalKit_macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.kit.tests
+schemes:
+  FiscaliOS:
+    build:
+      targets:
+        FiscaliOS: all
+    run:
+      config: Debug
+  FiscalmacOS:
+    build:
+      targets:
+        FiscalmacOS: all
+    run:
+      config: Debug
+    test:
+      targets:
+        - FiscalKitTests
