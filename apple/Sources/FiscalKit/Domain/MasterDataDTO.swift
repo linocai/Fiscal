@@ -14,6 +14,7 @@ public struct AccountDTO: Codable, Sendable, Equatable, Identifiable {
     public let institution: String?
     public let lastFour: String?
     public let openingBalanceMinor: Int64
+    public let currentBalanceMinor: Int64
     public let creditLimitMinor: Int64?
     public let statementDay: Int?
     public let dueDay: Int?
@@ -28,6 +29,7 @@ public struct AccountDTO: Codable, Sendable, Equatable, Identifiable {
         case id, name, kind, institution, version
         case lastFour = "last_four"
         case openingBalanceMinor = "opening_balance_minor"
+        case currentBalanceMinor = "current_balance_minor"
         case creditLimitMinor = "credit_limit_minor"
         case statementDay = "statement_day"
         case dueDay = "due_day"

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from fiscal_api.db.readiness import ReadinessCheck
 from fiscal_api.services.accounts import AccountService
 from fiscal_api.services.categories import CategoryService
+from fiscal_api.services.transactions import TransactionService
 
 
 def get_readiness_check(request: Request) -> ReadinessCheck:
@@ -33,5 +34,10 @@ def get_category_service(session: SessionDependency) -> CategoryService:
     return CategoryService(session)
 
 
+def get_transaction_service(session: SessionDependency) -> TransactionService:
+    return TransactionService(session)
+
+
 AccountServiceDependency = Annotated[AccountService, Depends(get_account_service)]
 CategoryServiceDependency = Annotated[CategoryService, Depends(get_category_service)]
+TransactionServiceDependency = Annotated[TransactionService, Depends(get_transaction_service)]

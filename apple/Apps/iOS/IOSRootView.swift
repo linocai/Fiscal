@@ -8,37 +8,34 @@ struct IOSRootView: View {
     @Bindable var connection: ConnectionModel
     let accounts: AccountsModel
     let categories: CategoriesModel
+    let transactions: TransactionsModel
     @State private var selection: IOSTab = .overview
-    @State private var showP1Notice = false
+    @State private var showRecordSheet = false
 
     var body: some View {
         Group {
             switch selection {
             case .overview: NavigationStack { IOSOverviewScreen(connectionPhase: connection.phase) }
-            case .transactions: PlaceholderScreen("流水", symbol: "list.bullet.rectangle", phase: "P3")
+            case .transactions: NavigationStack { IOSTransactionsScreen(model: transactions, accounts: accounts, categories: categories) }
             case .cashFlow: PlaceholderScreen("现金流", symbol: "arrow.up.arrow.down", phase: "P7")
             case .more: IOSMoreScreen(accounts: accounts, categories: categories, connection: connection)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
-        .alert("P1 工程地基", isPresented: $showP1Notice) {
-            Button("知道了", role: .cancel) {}
-        } message: {
-            Text("正式记账将在 P3 接入统一业务服务。本阶段不会写入样例账本。")
-        }
+        .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories) }
     }
 
     private var tabBar: some View {
         HStack(spacing: 0) {
             tabButton("总览", symbol: "house", tab: .overview)
             tabButton("流水", symbol: "list.bullet.rectangle", tab: .transactions)
-            Button { showP1Notice = true } label: {
+            Button { showRecordSheet = true } label: {
                 Image(systemName: "plus").font(.title3.bold()).foregroundStyle(.white)
                     .frame(width: 52, height: 52)
                     .background(LinearGradient(colors: [FiscalColor.accent, FiscalColor.accentDark], startPoint: .top, endPoint: .bottom), in: .rect(cornerRadius: 16))
                     .shadow(color: FiscalColor.accent.opacity(0.4), radius: 9, y: 5)
             }
-            .frame(maxWidth: .infinity).accessibilityLabel("记一笔，P3 开放")
+            .frame(maxWidth: .infinity).accessibilityLabel("记一笔")
             tabButton("现金流", symbol: "arrow.up.arrow.down", tab: .cashFlow)
             tabButton("更多", symbol: "ellipsis", tab: .more)
         }
@@ -51,6 +48,8 @@ struct IOSRootView: View {
         }
         .shadow(color: Color.black.opacity(0.16), radius: 22, y: 9)
         .padding(.horizontal, 12).padding(.bottom, 5)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("fiscal.customBottomBar")
     }
 
     private func tabButton(_ title: String, symbol: String, tab: IOSTab) -> some View {

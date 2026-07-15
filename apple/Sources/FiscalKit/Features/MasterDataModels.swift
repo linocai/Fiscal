@@ -18,6 +18,12 @@ public final class AccountsModel {
 
     public init(repository: any AccountRepository) { self.repository = repository }
 
+    /// A transaction editor needs every active option plus archived historical references,
+    /// independently of the management screen's current archive filter.
+    public func transactionOptions() async throws -> [AccountDTO] {
+        try await repository.list(includeArchived: true)
+    }
+
     public func load() async {
         phase = .loading; message = nil; conflictDetected = false
         do {
@@ -94,6 +100,12 @@ public final class CategoriesModel {
 
     public init(repository: any CategoryRepository) { self.repository = repository }
     public var flattened: [CategoryDTO] { categories.flatMap { [$0] + $0.children } }
+
+    /// This does not mutate the management screen's direction/archive filters.
+    public func transactionOptions() async throws -> [CategoryDTO] {
+        let roots = try await repository.list(direction: nil, includeArchived: true)
+        return roots.flatMap { [$0] + $0.children }
+    }
 
     public func load() async {
         phase = .loading; message = nil; conflictDetected = false

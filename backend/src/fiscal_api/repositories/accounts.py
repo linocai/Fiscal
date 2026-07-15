@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fiscal_api.db.models import Account
+from fiscal_api.db.models import Account, LedgerTransaction, Posting
 
 
 class AccountRepository:
@@ -42,6 +42,20 @@ class AccountRepository:
             )
         )
         return int(maximum or 0) + 1
+
+    async def balance_impacts(self, account_ids: list[UUID]) -> dict[UUID, int]:
+        if not account_ids:
+            return {}
+        rows = await self.session.execute(
+            select(Posting.account_id, func.coalesce(func.sum(Posting.amount_minor), 0))
+            .join(LedgerTransaction, LedgerTransaction.id == Posting.transaction_id)
+            .where(
+                Posting.account_id.in_(account_ids),
+                LedgerTransaction.voided_at.is_(None),
+            )
+            .group_by(Posting.account_id)
+        )
+        return {account_id: int(amount) for account_id, amount in rows.all()}
 
     def add(self, account: Account) -> None:
         self.session.add(account)

@@ -13,6 +13,7 @@ from fiscal_api.api.p2_schemas import (
 from fiscal_api.core.time import utc_now
 from fiscal_api.db.models import Category, CategoryDirection
 from fiscal_api.repositories.categories import CategoryRepository
+from fiscal_api.repositories.transactions import TransactionRepository
 from fiscal_api.services.common import (
     acquire_p2_mutation_lock,
     check_version,
@@ -99,6 +100,12 @@ class CategoryService:
         category = await self._required(category_id, for_update=True)
         check_version(category.version, patch.expected_version)
         updates = patch.model_dump(exclude={"expected_version"}, exclude_unset=True)
+        if (
+            category.usage_count > 0
+            and "direction" in updates
+            and updates["direction"].value != category.direction
+        ):
+            conflict("category_in_use", "A used category cannot change direction")
         new_parent_id = updates.get("parent_id", category.parent_id)
         direction = CategoryDirection(updates.get("direction", category.direction))
         children = await self.repository.children(category.id)
@@ -162,7 +169,11 @@ class CategoryService:
         if category.usage_count != 0:
             conflict("category_in_use", "The category is referenced and cannot be deleted")
         await self.repository.delete(category)
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            conflict("category_in_use", "The category is referenced and cannot be deleted")
 
     async def reorder(
         self,
@@ -219,13 +230,21 @@ class CategoryService:
                 "Merge requires two roots or two children",
             )
         source_children = await self.repository.children(source.id)
+        ledger = TransactionRepository(self.session)
+        reassigned = await ledger.reassign_category(source.id, target.id)
+        source.usage_count -= reassigned
+        target.usage_count += reassigned
         if source.parent_id is None and target.parent_id is None:
-            target_names = {
-                child.name.casefold()
+            target_by_name = {
+                child.name.casefold(): child
                 for child in await self.repository.children(target.id, active_only=True)
             }
             for child in source_children:
-                if child.archived_at is None and child.name.casefold() in target_names:
+                matching = target_by_name.get(child.name.casefold())
+                if child.archived_at is None and matching is not None:
+                    child_reassigned = await ledger.reassign_category(child.id, matching.id)
+                    child.usage_count -= child_reassigned
+                    matching.usage_count += child_reassigned
                     child.archived_at = utc_now()
                     self._touch(child)
                     continue

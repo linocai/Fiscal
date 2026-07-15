@@ -77,3 +77,106 @@ struct FiscalKitP2Tests {
         #expect(CNYAmountParser.minorUnits("999999999999999999999") == nil)
     }
 }
+
+@Suite("FiscalKit P3 contracts")
+struct FiscalKitP3Tests {
+    @Test("Transfer payload uses account_id as source and no source alias")
+    func transferPayload() throws {
+        let source = UUID(), destination = UUID()
+        var draft = TransactionDraft(); draft.kind = .transfer; draft.amountMinor = 1_280
+        draft.occurredAt = Date(timeIntervalSince1970: 0); draft.title = "转入储蓄"; draft.note = "  "
+        draft.accountID = source; draft.destinationAccountID = destination
+        let object = try #require(JSONSerialization.jsonObject(with: encoded(draft)) as? [String: Any])
+        #expect(object["account_id"] as? String == source.uuidString)
+        #expect(object["destination_account_id"] as? String == destination.uuidString)
+        #expect(object["source_account_id"] == nil)
+        #expect(object["category_id"] is NSNull)
+        #expect(object["note"] is NSNull)
+        #expect(Set(object.keys) == Set(["kind", "amount_minor", "occurred_at", "title", "note", "account_id", "destination_account_id", "category_id"]))
+    }
+
+    @Test("Versioned update is a full semantic replacement")
+    func updatePayload() throws {
+        var draft = TransactionDraft(); draft.kind = .expense; draft.amountMinor = 500; draft.title = "咖啡"
+        draft.accountID = UUID(); draft.categoryID = UUID()
+        let object = try #require(JSONSerialization.jsonObject(with: encoded(VersionedTransactionDraft(draft: draft, expectedVersion: 7))) as? [String: Any])
+        #expect(object["expected_version"] as? Int == 7)
+        #expect(object["amount_minor"] as? Int == 500)
+        #expect(object["source"] == nil)
+    }
+
+    @Test("Canonical response decodes account impacts without internal transaction IDs")
+    func responsePayload() throws {
+        let data = Data(#"{"id":"00000000-0000-0000-0000-000000000001","kind":"expense","amount_minor":1280,"occurred_at":"2026-07-15T12:00:00Z","business_date":"2026-07-15","title":"午餐","note":null,"category_id":"00000000-0000-0000-0000-000000000002","account_id":"00000000-0000-0000-0000-000000000003","destination_account_id":null,"source":"manual","postings":[{"id":"00000000-0000-0000-0000-000000000004","account_id":"00000000-0000-0000-0000-000000000003","role":"account","amount_minor":-1280,"position":0}],"version":1,"voided_at":null,"created_at":"2026-07-15T12:00:00Z","updated_at":"2026-07-15T12:00:00Z"}"#.utf8)
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let transaction = try decoder.decode(TransactionDTO.self, from: data)
+        #expect(transaction.businessDate == "2026-07-15")
+        #expect(transaction.postings.first?.amountMinor == -1_280)
+    }
+
+    @Test("Editor validates all three semantic shapes") @MainActor
+    func semanticValidation() {
+        var draft = TransactionDraft(); draft.title = "午餐"; draft.amountMinor = 1
+        #expect(TransactionEditorModel.validate(draft) != nil)
+        draft.accountID = UUID(); draft.categoryID = UUID()
+        #expect(TransactionEditorModel.validate(draft) == nil)
+        draft.kind = .transfer; draft.categoryID = nil; draft.destinationAccountID = draft.accountID
+        #expect(TransactionEditorModel.validate(draft) == "转出和转入账户不能相同。")
+        draft.destinationAccountID = UUID()
+        #expect(TransactionEditorModel.validate(draft) == nil)
+    }
+
+    @Test("Create key is retained only for ambiguous failures") @MainActor
+    func idempotencyDisposition() {
+        #expect(TransactionsModel.shouldPreserveCreateKey(after: FiscalAPIError.transport("offline")))
+        #expect(TransactionsModel.shouldPreserveCreateKey(after: FiscalAPIError.invalidResponse))
+        let detail = APIErrorDetail(code: "idempotency_key_reused", message: "reused", details: nil, requestID: "req")
+        #expect(!TransactionsModel.shouldPreserveCreateKey(after: FiscalAPIError.domain(status: 409, detail: detail)))
+    }
+
+    @Test("A cancelled old search cannot replace the current query") @MainActor
+    func staleSearchIsIgnored() async throws {
+        let model = TransactionsModel(repository: RaceTransactionRepository())
+        model.search = "old"
+        let old = Task { await model.load() }
+        try await Task.sleep(for: .milliseconds(10))
+        model.search = "new"; await model.load(); await old.value
+        #expect(model.transactions.map(\.title) == ["new"])
+    }
+
+    @Test("Pagination is bound to its filter and cursor snapshot") @MainActor
+    func stalePageIsIgnored() async throws {
+        let model = TransactionsModel(repository: RaceTransactionRepository())
+        await model.load()
+        let last = try #require(model.transactions.last)
+        let more = Task { await model.loadMoreIfNeeded(after: last) }
+        try await Task.sleep(for: .milliseconds(10))
+        model.kind = .expense; await model.load(); await more.value
+        #expect(model.transactions.map(\.title) == ["expense"])
+    }
+
+    private func encoded<T: Encodable>(_ value: T) throws -> Data {
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601; return try encoder.encode(value)
+    }
+}
+
+private enum RaceRepositoryError: Error { case unsupported }
+private actor RaceTransactionRepository: TransactionRepository {
+    func list(_ query: TransactionQuery) async throws -> TransactionPage {
+        if query.cursor != nil { try? await Task.sleep(for: .milliseconds(120)); return .init(items: [item("stale-more", .income)], nextCursor: nil) }
+        if query.search == "old" { try? await Task.sleep(for: .milliseconds(100)); return .init(items: [item("old", .income)], nextCursor: nil) }
+        if query.search == "new" { return .init(items: [item("new", .income)], nextCursor: nil) }
+        if query.kind == .expense { return .init(items: [item("expense", .expense)], nextCursor: nil) }
+        return .init(items: [item("first", .income)], nextCursor: "next")
+    }
+    func get(id: UUID) async throws -> TransactionDTO { throw RaceRepositoryError.unsupported }
+    func create(_ draft: TransactionDraft, idempotencyKey: UUID) async throws -> TransactionDTO { throw RaceRepositoryError.unsupported }
+    func update(id: UUID, version: Int, draft: TransactionDraft) async throws -> TransactionDTO { throw RaceRepositoryError.unsupported }
+    func void(_ transaction: TransactionDTO) async throws -> TransactionDTO { throw RaceRepositoryError.unsupported }
+    func restore(_ transaction: TransactionDTO) async throws -> TransactionDTO { throw RaceRepositoryError.unsupported }
+
+    private func item(_ title: String, _ kind: TransactionKind) -> TransactionDTO {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        return TransactionDTO(id: UUID(), kind: kind, occurredAt: now, businessDate: "2026-07-15", title: title, note: nil, amountMinor: 100, categoryID: nil, accountID: nil, destinationAccountID: nil, source: "manual", postings: [], version: 1, voidedAt: nil, createdAt: now, updatedAt: now)
+    }
+}

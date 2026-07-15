@@ -40,6 +40,13 @@ def test_system_status_rejects_invalid_device_token(client: TestClient) -> None:
         ("PATCH", f"/api/v1/categories/{RESOURCE_ID}", {}),
         ("POST", f"/api/v1/categories/{RESOURCE_ID}/merge", {}),
         ("POST", f"/api/v1/categories/{RESOURCE_ID}/split", {}),
+        ("GET", "/api/v1/transactions", None),
+        ("POST", "/api/v1/transactions", {}),
+        ("GET", "/api/v1/transactions/summary", None),
+        ("GET", f"/api/v1/transactions/{RESOURCE_ID}", None),
+        ("PUT", f"/api/v1/transactions/{RESOURCE_ID}", {}),
+        ("POST", f"/api/v1/transactions/{RESOURCE_ID}/void", {}),
+        ("POST", f"/api/v1/transactions/{RESOURCE_ID}/restore", {}),
     ],
 )
 def test_p2_route_matrix_rejects_missing_token_before_database_access(

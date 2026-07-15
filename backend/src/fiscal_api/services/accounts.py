@@ -6,12 +6,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fiscal_api.api.p2_schemas import AccountDraft, AccountPatch, AccountResponse
+from fiscal_api.core.errors import APIError
 from fiscal_api.core.time import utc_now
 from fiscal_api.db.models import Account, AccountKind
 from fiscal_api.repositories.accounts import AccountRepository
 from fiscal_api.services.common import (
     acquire_p2_mutation_lock,
     check_version,
+    checked_int64,
     conflict,
     invalid,
     not_found,
@@ -24,17 +26,29 @@ class AccountService:
         self.repository = AccountRepository(session)
 
     @staticmethod
-    def response(account: Account) -> AccountResponse:
-        return AccountResponse.model_validate(account)
+    def response(account: Account, impact: int = 0) -> AccountResponse:
+        values: dict[str, object] = {
+            field: getattr(account, field)
+            for field in AccountResponse.model_fields
+            if field != "current_balance_minor"
+        }
+        current_balance = (
+            account.opening_balance_minor - impact
+            if account.kind == AccountKind.CREDIT.value
+            else account.opening_balance_minor + impact
+        )
+        values["current_balance_minor"] = checked_int64(current_balance, label="account balance")
+        return AccountResponse.model_validate(values)
 
     async def list(self, *, include_archived: bool) -> list[AccountResponse]:
-        return [
-            self.response(item)
-            for item in await self.repository.list(include_archived=include_archived)
-        ]
+        accounts = await self.repository.list(include_archived=include_archived)
+        impacts = await self.repository.balance_impacts([item.id for item in accounts])
+        return [self.response(item, impacts.get(item.id, 0)) for item in accounts]
 
     async def get(self, account_id: UUID) -> AccountResponse:
-        return self.response(await self._required(account_id))
+        account = await self._required(account_id)
+        impacts = await self.repository.balance_impacts([account.id])
+        return self.response(account, impacts.get(account.id, 0))
 
     async def create(self, draft: AccountDraft) -> AccountResponse:
         await acquire_p2_mutation_lock(self.session)
@@ -68,6 +82,8 @@ class AccountService:
         account = await self._required(account_id, for_update=True)
         check_version(account.version, patch.expected_version)
         updates = patch.model_dump(exclude={"expected_version"}, exclude_unset=True)
+        if account.usage_count > 0 and "kind" in updates and updates["kind"].value != account.kind:
+            conflict("account_in_use", "A used account cannot change kind")
         kind = AccountKind(updates.get("kind", account.kind))
         opening = updates.get("opening_balance_minor", account.opening_balance_minor)
         limit = updates.get("credit_limit_minor", account.credit_limit_minor)
@@ -88,9 +104,15 @@ class AccountService:
         for field, value in updates.items():
             setattr(account, field, value.value if isinstance(value, AccountKind) else value)
         self._touch(account)
+        impacts = await self.repository.balance_impacts([account.id])
+        try:
+            self.response(account, impacts.get(account.id, 0))
+        except APIError:
+            await self.session.rollback()
+            raise
         await self._commit_name_safe()
         await self.session.refresh(account)
-        return self.response(account)
+        return self.response(account, impacts.get(account.id, 0))
 
     async def archive(self, account_id: UUID, expected_version: int) -> AccountResponse:
         await acquire_p2_mutation_lock(self.session)
@@ -101,7 +123,8 @@ class AccountService:
             self._touch(account)
             await self.session.commit()
             await self.session.refresh(account)
-        return self.response(account)
+        impacts = await self.repository.balance_impacts([account.id])
+        return self.response(account, impacts.get(account.id, 0))
 
     async def restore(self, account_id: UUID, expected_version: int) -> AccountResponse:
         await acquire_p2_mutation_lock(self.session)
@@ -114,7 +137,8 @@ class AccountService:
             self._touch(account)
             await self._commit_name_safe()
             await self.session.refresh(account)
-        return self.response(account)
+        impacts = await self.repository.balance_impacts([account.id])
+        return self.response(account, impacts.get(account.id, 0))
 
     async def delete(self, account_id: UUID, expected_version: int) -> None:
         await acquire_p2_mutation_lock(self.session)
@@ -123,7 +147,11 @@ class AccountService:
         if account.usage_count != 0:
             conflict("account_in_use", "The account is referenced and cannot be deleted")
         await self.repository.delete(account)
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            conflict("account_in_use", "The account is referenced and cannot be deleted")
 
     async def reorder(self, ordered_ids: list[UUID]) -> list[AccountResponse]:
         await acquire_p2_mutation_lock(self.session)
@@ -141,7 +169,11 @@ class AccountService:
             account.sort_order = order
             self._touch(account)
         await self.session.commit()
-        return [self.response(by_id[account_id]) for account_id in ordered_ids]
+        impacts = await self.repository.balance_impacts(ordered_ids)
+        return [
+            self.response(by_id[account_id], impacts.get(account_id, 0))
+            for account_id in ordered_ids
+        ]
 
     async def _required(self, account_id: UUID, *, for_update: bool = False) -> Account:
         account = await self.repository.get(account_id, for_update=for_update)

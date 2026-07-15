@@ -35,6 +35,7 @@ struct MacRootView: View {
     @Bindable var connection: ConnectionModel
     let accounts: AccountsModel
     let categories: CategoriesModel
+    let transactions: TransactionsModel
     @State private var section: MacSection = .overview
 
     var body: some View {
@@ -48,10 +49,13 @@ struct MacRootView: View {
                     NavigationStack { AccountsManagementScreen(model: accounts) }
                 } else if section == .categories {
                     NavigationStack { CategoriesManagementScreen(model: categories) }
+                } else if section == .transactions {
+                    MacTransactionsScreen(model: transactions, accounts: accounts, categories: categories)
                 } else {
                     PlaceholderScreen(section.rawValue, symbol: section.symbol, phase: section.phase)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .background(FiscalColor.macBackground)
     }

@@ -50,16 +50,20 @@ public actor APITransport {
     }
 
     public func request<Response: Decodable & Sendable, Body: Encodable & Sendable>(
-        _ path: String, method: String = "GET", query: [URLQueryItem] = [], body: Body? = Optional<String>.none
+        _ path: String, method: String = "GET", query: [URLQueryItem] = [], headers: [String: String] = [:], body: Body? = Optional<String>.none
     ) async throws -> Response {
         var components = URLComponents(url: baseURL.appending(path: "api/v1/\(path)"), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { components.queryItems = query }
         var request = URLRequest(url: components.url!); request.httpMethod = method; request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
         if let token = try await tokenStore.read(), !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body { request.httpBody = try encoder.encode(body); request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         let (data, response): (Data, URLResponse)
-        do { (data, response) = try await session.data(for: request) } catch { throw FiscalAPIError.transport(error.localizedDescription) }
+        do { (data, response) = try await session.data(for: request) }
+        catch is CancellationError { throw CancellationError() }
+        catch let error as URLError where error.code == .cancelled { throw CancellationError() }
+        catch { throw FiscalAPIError.transport(error.localizedDescription) }
         guard let http = response as? HTTPURLResponse else { throw FiscalAPIError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
@@ -76,7 +80,10 @@ public actor APITransport {
         var request = URLRequest(url: components.url!); request.httpMethod = method; request.timeoutInterval = 15
         if let token = try await tokenStore.read(), !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let (data, response): (Data, URLResponse)
-        do { (data, response) = try await session.data(for: request) } catch { throw FiscalAPIError.transport(error.localizedDescription) }
+        do { (data, response) = try await session.data(for: request) }
+        catch is CancellationError { throw CancellationError() }
+        catch let error as URLError where error.code == .cancelled { throw CancellationError() }
+        catch { throw FiscalAPIError.transport(error.localizedDescription) }
         guard let http = response as? HTTPURLResponse else { throw FiscalAPIError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error

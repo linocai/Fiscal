@@ -2,7 +2,7 @@
 
 > 计划版本：v0.2（施工权威版）
 > 日期：2026-07-14
-> 状态：P2 账户与分类已实现并通过自动化验收；等待用户目视确认后进入 P3
+> 状态：P3 统一账本已通过自动化、真实 API 与双端视觉验证，等待用户目视验收
 > 旧项目参考：`/Users/linotsai/Lino/LinoFinance`
 > 前端视觉合同：`design_handoff_fiscal_app/Fiscal Prototype.dc.html` 与同目录 `README.md`
 
@@ -823,7 +823,8 @@ Back Tap
 - 已完成：v0.2 P1–P12 总体施工节奏与关键验收节点。
 - 已完成：P1 仓库结构、后端骨架、Apple 双端骨架、基础设施定义、系统状态联调与双端静态总览基线。
 - 已完成：P2 账户/分类后端、双端真实 API 界面、乐观并发与安全删除、分类合并/拆分，以及 iOS 单一底部导航修复；验收记录见 `docs/qa/p2/results.md`。
-- 当前施工位置：P2 已完成自动化与截图验收，等待用户目视确认；不得提前进入 P3。
+- 已完成：P3 收入/支出/转账统一账本、服务端账户影响、完整编辑、作废/恢复、幂等提交、余额/摘要派生，以及 iOS/macOS 真实 API 界面；验收记录见 `docs/qa/p3/results.md`。
+- 当前施工位置：P3 自动化、真实 PostgreSQL/API 联调和双端截图已完成，等待用户目视验收录入与编辑手感。
 - 外部阻塞：Docker Desktop 已恢复，但 Docker Hub 镜像层经本机代理链下载持续停滞，因此 PostgreSQL 17 容器复验仍待网络恢复；本轮已用本机 PostgreSQL 14 完成真实迁移与集成验证。VPS 发布仍需目标主机、DNS 与凭据。
 - 新对话恢复顺序：先读本文件与 `design_handoff_fiscal_app/README.md`，再检查 `git status`。
-- 下一步：用户目视确认 P2 双端账户/分类界面；通过后再由 Planner 冻结 P3 统一账本合同。网络恢复时补做 PostgreSQL 17 容器复验。
+- 下一步：用户目视验收 P3；通过后才进入 P4 信用卡账期与还款。网络恢复时补做 PostgreSQL 17 容器复验。

@@ -70,6 +70,7 @@ class AccountResponse(APIModel):
     institution: str | None
     last_four: str | None
     opening_balance_minor: int
+    current_balance_minor: int
     credit_limit_minor: int | None
     statement_day: int | None
     due_day: int | None

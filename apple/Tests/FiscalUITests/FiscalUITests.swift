@@ -4,7 +4,7 @@ import XCTest
 final class FiscalUITests: XCTestCase {
     private var app: XCUIApplication!
 
-    override func setUpWithError() throws {
+    private func launchApp() throws {
         continueAfterFailure = false
         let token = try XCTUnwrap(
             ProcessInfo.processInfo.environment["FISCAL_UI_TEST_DEVICE_TOKEN"],
@@ -16,7 +16,9 @@ final class FiscalUITests: XCTestCase {
     }
 
     func testAccountsUseRealAPIAndOnlyOneCustomBottomBar() throws {
+        try launchApp()
         XCTAssertEqual(app.tabBars.count, 0, "The native TabView bar must not exist beneath Fiscal's custom bar.")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 1)
         let more = app.buttons["更多"]
         XCTAssertTrue(more.waitForExistence(timeout: 5))
         more.tap()
@@ -29,7 +31,26 @@ final class FiscalUITests: XCTestCase {
         keepScreenshot(named: "ios-p2-accounts")
     }
 
+    func testP3TransactionListAndRecordSheetUseRealAPI() throws {
+        try launchApp()
+        XCTAssertEqual(app.tabBars.count, 0)
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 1)
+
+        app.buttons["流水"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["transactions.screen"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["手冲咖啡与午餐"].waitForExistence(timeout: 8))
+        keepScreenshot(named: "ios-p3-transactions")
+
+        app.buttons["记一笔"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["transaction.editor"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["支出"].exists)
+        XCTAssertTrue(app.buttons["收入"].exists)
+        XCTAssertTrue(app.buttons["转账"].exists)
+        keepScreenshot(named: "ios-p3-record")
+    }
+
     func testCategoriesReadTheSharedAPIHierarchy() throws {
+        try launchApp()
         let more = app.buttons["更多"]
         XCTAssertTrue(more.waitForExistence(timeout: 5))
         more.tap()

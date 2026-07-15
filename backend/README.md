@@ -26,6 +26,12 @@ ordering, category merge, and category split. Mutable single-resource requests u
 `expected_version` for optimistic concurrency. Monetary fields are signed integer CNY minor
 units.
 
+P3 adds the device-token-protected unified ledger at `/api/v1/transactions`. Clients submit
+semantic income, expense, or transfer drafts with a UUID `Idempotency-Key`; the server owns
+postings, derives balances and Shanghai business dates, supports complete replacement plus
+void/restore, and exposes an income/expense category summary. P3 deliberately accepts only
+active cash and debit accounts; credit-account ledger behavior begins in P4.
+
 Run quality checks with:
 
 ```sh
