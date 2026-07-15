@@ -34,12 +34,34 @@ final class FiscalUITests: XCTestCase {
     func testP3TransactionListAndRecordSheetUseRealAPI() throws {
         try launchApp()
         XCTAssertEqual(app.tabBars.count, 0)
-        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 1)
+        let customBar = app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar")
+        XCTAssertEqual(customBar.count, 1)
 
         app.buttons["流水"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["transactions.screen"].waitForExistence(timeout: 8))
+        let search = app.searchFields["搜索标题或备注"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        XCTAssertLessThan(search.frame.maxY, customBar.element.frame.minY, "iOS 26 must keep search above the custom bottom bar.")
         XCTAssertTrue(app.staticTexts["手冲咖啡与午餐"].waitForExistence(timeout: 8))
         keepScreenshot(named: "ios-p3-transactions")
+
+        let rowMenu = app.buttons
+            .matching(identifier: "transaction.rowMenu")
+            .matching(NSPredicate(format: "label == %@", "More"))
+            .firstMatch
+        XCTAssertTrue(rowMenu.waitForExistence(timeout: 5))
+        rowMenu.tap()
+        let voidMenuItem = app.buttons["作废"]
+        XCTAssertTrue(voidMenuItem.waitForExistence(timeout: 3))
+        voidMenuItem.tap()
+        let confirmVoid = app.alerts.buttons["作废"]
+        XCTAssertTrue(confirmVoid.waitForExistence(timeout: 3))
+        confirmVoid.tap()
+        let undoBar = app.descendants(matching: .any)["transaction.undoBar"]
+        XCTAssertTrue(undoBar.waitForExistence(timeout: 5))
+        XCTAssertLessThanOrEqual(undoBar.frame.maxY, customBar.element.frame.minY, "Undo must remain fully above the custom bottom bar.")
+        app.buttons["撤销"].tap()
+        XCTAssertTrue(undoBar.waitForNonExistence(timeout: 5))
 
         app.buttons["记一笔"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["transaction.editor"].waitForExistence(timeout: 5))

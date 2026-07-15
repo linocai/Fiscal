@@ -21,7 +21,9 @@ struct IOSRootView: View {
             case .more: IOSMoreScreen(accounts: accounts, categories: categories, connection: connection)
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(FiscalColor.iOSBackground.ignoresSafeArea())
+        .overlay(alignment: .bottom) { tabBar }
         .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories) }
     }
 
@@ -40,14 +42,9 @@ struct IOSRootView: View {
             tabButton("更多", symbol: "ellipsis", tab: .more)
         }
         .padding(.horizontal, 8).frame(height: 72)
-        .background(.regularMaterial, in: .rect(cornerRadius: 31))
-        .overlay {
-            RoundedRectangle(cornerRadius: 31)
-                .stroke(.white.opacity(0.8), lineWidth: 0.5)
-                .allowsHitTesting(false)
-        }
-        .shadow(color: Color.black.opacity(0.16), radius: 22, y: 9)
-        .padding(.horizontal, 12).padding(.bottom, 5)
+        .glassEffect(.regular, in: .rect(cornerRadius: 31))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 5)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("fiscal.customBottomBar")
     }

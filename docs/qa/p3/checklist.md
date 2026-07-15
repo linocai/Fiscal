@@ -30,6 +30,7 @@
 - [x] Search, filters, Shanghai-day grouping, empty/no-result/error states work.
 - [x] Void confirmation and real server restore/Undo work.
 - [x] Zero native tab bars and exactly one custom bottom bar remain.
+- [x] iOS 26 transaction search stays above the custom bottom bar and does not create a second bottom toolbar.
 
 ## macOS
 
@@ -37,6 +38,7 @@
 - [x] Inspector exposes edit and void while postings remain read-only.
 - [x] Create/edit/void/restore use the real API.
 - [x] 940×700 layout has no clipping or horizontal overflow.
+- [x] Filters, transaction rows, selection state, primary actions, and Inspector match the high-fidelity reference language rather than default system Table controls.
 
 ## Evidence and acceptance
 

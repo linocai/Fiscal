@@ -27,7 +27,7 @@ Toolchain: Xcode 26.6, Swift 6.3.3, Swift 6 language mode with complete concurre
 - authenticated iOS real-API XCUITest suite: 3 tests passed
 - source audit: zero `TabView`/`.tabItem` references in the live iOS shell
 
-The UI suite verifies zero native tab bars, exactly one custom bottom bar, real seeded transaction data, and the real expense/income/transfer record sheet. Shared-model tests cover cancellation, stale-response suppression, pagination, request construction, idempotency-key reuse, conflict, authorization, and offline presentation.
+The UI suite verifies zero native tab bars, exactly one custom bottom bar, real seeded transaction data, and the real expense/income/transfer record sheet. It also performs a real void/restore cycle and asserts both the top search field and the dynamic Undo bar remain geometrically outside the custom bottom bar. Shared-model tests cover cancellation, stale-response suppression, pagination, request construction, idempotency-key reuse, conflict, authorization, and offline presentation.
 
 ## Real integration smoke
 
@@ -40,4 +40,6 @@ The API was exercised with cash/debit accounts, income/expense categories, and a
 - `screenshots/macos-transactions.png`
 - `screenshots/macos-inspector.png`
 
-The final macOS pass fixed the root view's intrinsic-height gap and reserved a stable 256-point Inspector so amounts no longer clip at the 940-point acceptance width. The remaining gate is user acceptance of the daily recording and editing feel; P4 does not begin before that confirmation.
+After the first visual review was rejected, the iOS transaction search was pinned to the top navigation drawer: iOS 26 had automatically placed `.searchable` as a bottom toolbar beneath Fiscal's custom bar. The root shell now uses a single overlaid `glassEffect` capsule on a full-screen background, and UI automation asserts the search field is geometrically above that capsule.
+
+The macOS transaction screen was rebuilt from the high-fidelity reference instead of using the default `Table`, `Picker`, rounded text field, and system gray buttons. It now has reference-style filter chips, semantic columns, 26-point icon rows, an accent selection state, a modern primary record action, and a full-height white 256-point Inspector with structured details and primary/secondary actions. The four screenshots above were replaced after this correction. The remaining gate is renewed user acceptance; P4 does not begin before that confirmation.
