@@ -45,7 +45,7 @@ targets:
         Debug:
           FISCAL_API_BASE_URL: "http://127.0.0.1:8000"
         Release:
-          FISCAL_API_BASE_URL: ""
+          FISCAL_API_BASE_URL: "https://fiscal.invalid"
   FiscalmacOS:
     type: application
     platform: macOS
@@ -66,7 +66,7 @@ targets:
         Debug:
           FISCAL_API_BASE_URL: "http://127.0.0.1:8000"
         Release:
-          FISCAL_API_BASE_URL: ""
+          FISCAL_API_BASE_URL: "https://fiscal.invalid"
   FiscalKitTests:
     type: bundle.unit-test
     platform: macOS
@@ -76,6 +76,15 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.kit.tests
+  FiscalUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: Tests/FiscalUITests
+    dependencies:
+      - target: FiscaliOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.ui-tests
 schemes:
   FiscaliOS:
     build:
@@ -83,6 +92,11 @@ schemes:
         FiscaliOS: all
     run:
       config: Debug
+    test:
+      targets:
+        - FiscalUITests
+      environmentVariables:
+        FISCAL_UI_TEST_DEVICE_TOKEN: integration-device-token
   FiscalmacOS:
     build:
       targets:

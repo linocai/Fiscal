@@ -2,7 +2,7 @@ import FiscalKit
 import SwiftUI
 
 private enum MacSection: String, CaseIterable, Identifiable {
-    case overview = "总览", transactions = "流水", accounts = "账户", cashFlow = "现金流"
+    case overview = "总览", transactions = "流水", accounts = "账户", categories = "分类", cashFlow = "现金流"
     case reimbursement = "报销", reports = "报表", ai = "AI 待确认", settings = "设置"
     var id: Self { self }
     var symbol: String {
@@ -10,6 +10,7 @@ private enum MacSection: String, CaseIterable, Identifiable {
         case .overview: "house"
         case .transactions: "list.bullet.rectangle"
         case .accounts: "wallet.bifold"
+        case .categories: "tag"
         case .cashFlow: "arrow.up.arrow.down"
         case .reimbursement: "doc.text"
         case .reports: "chart.bar"
@@ -21,7 +22,7 @@ private enum MacSection: String, CaseIterable, Identifiable {
         switch self {
         case .overview: "P1"
         case .transactions: "P3"
-        case .accounts: "P4"
+        case .accounts, .categories: "P2"
         case .cashFlow, .reports: "P7"
         case .reimbursement: "P6"
         case .ai: "P8–P9"
@@ -32,6 +33,8 @@ private enum MacSection: String, CaseIterable, Identifiable {
 
 struct MacRootView: View {
     @Bindable var connection: ConnectionModel
+    let accounts: AccountsModel
+    let categories: CategoriesModel
     @State private var section: MacSection = .overview
 
     var body: some View {
@@ -41,6 +44,10 @@ struct MacRootView: View {
             Group {
                 if section == .overview {
                     MacOverviewScreen(connectionPhase: connection.phase)
+                } else if section == .accounts {
+                    NavigationStack { AccountsManagementScreen(model: accounts) }
+                } else if section == .categories {
+                    NavigationStack { CategoriesManagementScreen(model: categories) }
                 } else {
                     PlaceholderScreen(section.rawValue, symbol: section.symbol, phase: section.phase)
                 }

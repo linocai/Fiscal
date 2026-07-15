@@ -40,7 +40,11 @@ public struct FiscalCard<Content: View>: View {
             .padding(18)
             .background(.white)
             .clipShape(.rect(cornerRadius: radius))
-            .overlay { RoundedRectangle(cornerRadius: radius).stroke(.black.opacity(0.055), lineWidth: 0.5) }
+            .overlay {
+                RoundedRectangle(cornerRadius: radius)
+                    .stroke(.black.opacity(0.055), lineWidth: 0.5)
+                    .allowsHitTesting(false)
+            }
             .shadow(color: Color(hex: 0x1E2846).opacity(0.05), radius: 12, y: 5)
     }
 }

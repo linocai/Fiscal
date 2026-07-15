@@ -2,6 +2,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -86,10 +87,10 @@ async def http_error_handler(request: Request, error: HTTPException) -> JSONResp
 async def validation_error_handler(request: Request, error: RequestValidationError) -> JSONResponse:
     return _response(
         request,
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         code="validation_error",
         message="Request validation failed",
-        details=error.errors(),
+        details=jsonable_encoder(error.errors()),
     )
 
 

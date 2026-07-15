@@ -1,17 +1,17 @@
 # Fiscal
 
-Fiscal is a private, single-user personal-finance application for iOS 26 and macOS 26. The repository is currently implementing the P1 engineering and visual foundation defined in [`PROJECT_PLAN.md`](PROJECT_PLAN.md).
+Fiscal is a private, single-user personal-finance application for iOS 26 and macOS 26. P1 established the engineering and visual foundation; P2 account/category master data is implemented and awaiting visual acceptance under [`PROJECT_PLAN.md`](PROJECT_PLAN.md).
 
 ## Repository map
 
-- `backend/` — FastAPI, SQLAlchemy, Alembic, PostgreSQL access, and P1 system endpoints.
+- `backend/` — FastAPI, SQLAlchemy, Alembic, PostgreSQL access, system endpoints, and P2 master-data services.
 - `apple/` — native SwiftUI iOS/macOS applications and shared `FiscalKit`.
 - `infra/` — local PostgreSQL and VPS staging deployment scaffolding.
 - `docs/architecture/` — phase-level implementation contracts.
 - `docs/qa/` — acceptance checklists, results, and screenshots.
 - `design_handoff_fiscal_app/` — read-only visual contract; it is not production code.
 
-P1 deliberately contains no formal account, category, transaction, posting, credit, reimbursement, or AI persistence. Financial figures on the overview are isolated presentation fixtures until later phases deliver the relevant ledger services.
+P2 introduces formal account and two-level category master data only. Transactions, postings, credit statement cycles, reimbursements, reports, and AI persistence remain out of scope. Financial figures on the overview stay isolated presentation fixtures until later phases deliver the ledger services.
 
 ## Toolchain
 
@@ -85,14 +85,25 @@ xcodebuild \
 
 The debug API base URL is `http://127.0.0.1:8000`, with local-network transport enabled only for development. Override `FISCAL_API_BASE_URL` with an HTTPS endpoint through build settings for staging and release. Provide `FISCAL_DEVICE_TOKEN` as a Run-scheme environment value only for the first bootstrap; the app transfers it to this-device-only Keychain storage.
 
+With the local integration API running and seeded, run the authenticated iOS navigation/data acceptance tests on an available simulator:
+
+```sh
+xcodebuild \
+  -project Fiscal.xcodeproj \
+  -scheme FiscaliOS \
+  -destination 'platform=iOS Simulator,id=<SIMULATOR_UDID>' \
+  test
+```
+
+The shared scheme uses the local-only `integration-device-token`; it must match the test API process and is not a production credential.
+
 ## Infrastructure
 
 See [`infra/README.md`](infra/README.md) for local PostgreSQL, staging HTTPS, migration, and rollback commands. P1 does not claim production backup/restore, monitoring, rate limiting, or token lifecycle management; those remain P11 work.
 
-## P1 acceptance
+## Phase contracts and acceptance
 
-- Contract: [`docs/architecture/p1-contracts.md`](docs/architecture/p1-contracts.md)
-- Checklist: [`docs/qa/p1/checklist.md`](docs/qa/p1/checklist.md)
-- Screenshots: `docs/qa/p1/screenshots/`
+- P1 contract/results: [`docs/architecture/p1-contracts.md`](docs/architecture/p1-contracts.md), [`docs/qa/p1/results.md`](docs/qa/p1/results.md)
+- P2 contract/checklist/results: [`docs/architecture/p2-contracts.md`](docs/architecture/p2-contracts.md), [`docs/qa/p2/checklist.md`](docs/qa/p2/checklist.md), [`docs/qa/p2/results.md`](docs/qa/p2/results.md)
 
-P2 must not begin until the P1 build gates pass and the user approves the native iOS/macOS visual baseline.
+The user approved the native iOS/macOS visual direction before P2. Each phase still requires real API integration, dual-platform screenshots, automated gates, and explicit acceptance before the next business slice begins.

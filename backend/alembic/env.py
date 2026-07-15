@@ -6,6 +6,7 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from fiscal_api.core.config import get_settings
+from fiscal_api.db import models as _models  # noqa: F401
 from fiscal_api.db.base import Base
 
 config = context.config

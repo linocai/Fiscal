@@ -20,6 +20,12 @@ The service listens on port 8000 by default. Its P1 endpoints are:
 - `GET /api/v1/health/ready`
 - `GET /api/v1/system/status` with `Authorization: Bearer <device-token>`
 
+P2 adds device-token-protected account and category master-data routes under
+`/api/v1/accounts` and `/api/v1/categories`, including archive/restore, safe delete,
+ordering, category merge, and category split. Mutable single-resource requests use an
+`expected_version` for optimistic concurrency. Monetary fields are signed integer CNY minor
+units.
+
 Run quality checks with:
 
 ```sh

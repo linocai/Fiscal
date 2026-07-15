@@ -2,20 +2,24 @@ import FiscalKit
 import SwiftUI
 
 private enum IOSTab: Hashable { case overview, transactions, cashFlow, more }
+private enum IOSMoreDestination: Hashable { case accounts, categories }
 
 struct IOSRootView: View {
     @Bindable var connection: ConnectionModel
+    let accounts: AccountsModel
+    let categories: CategoriesModel
     @State private var selection: IOSTab = .overview
     @State private var showP1Notice = false
 
     var body: some View {
-        TabView(selection: $selection) {
-            NavigationStack { IOSOverviewScreen(connectionPhase: connection.phase) }.tag(IOSTab.overview)
-            PlaceholderScreen("流水", symbol: "list.bullet.rectangle", phase: "P3").tag(IOSTab.transactions)
-            PlaceholderScreen("现金流", symbol: "arrow.up.arrow.down", phase: "P7").tag(IOSTab.cashFlow)
-            PlaceholderScreen("更多", symbol: "ellipsis", phase: "P4–P9").tag(IOSTab.more)
+        Group {
+            switch selection {
+            case .overview: NavigationStack { IOSOverviewScreen(connectionPhase: connection.phase) }
+            case .transactions: PlaceholderScreen("流水", symbol: "list.bullet.rectangle", phase: "P3")
+            case .cashFlow: PlaceholderScreen("现金流", symbol: "arrow.up.arrow.down", phase: "P7")
+            case .more: IOSMoreScreen(accounts: accounts, categories: categories, connection: connection)
+            }
         }
-        .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
         .alert("P1 工程地基", isPresented: $showP1Notice) {
             Button("知道了", role: .cancel) {}
@@ -40,7 +44,11 @@ struct IOSRootView: View {
         }
         .padding(.horizontal, 8).frame(height: 72)
         .background(.regularMaterial, in: .rect(cornerRadius: 31))
-        .overlay { RoundedRectangle(cornerRadius: 31).stroke(.white.opacity(0.8), lineWidth: 0.5) }
+        .overlay {
+            RoundedRectangle(cornerRadius: 31)
+                .stroke(.white.opacity(0.8), lineWidth: 0.5)
+                .allowsHitTesting(false)
+        }
         .shadow(color: Color.black.opacity(0.16), radius: 22, y: 9)
         .padding(.horizontal, 12).padding(.bottom, 5)
     }
@@ -54,5 +62,51 @@ struct IOSRootView: View {
             .foregroundStyle(selection == tab ? FiscalColor.accent : Color(hex: 0x9098A4))
             .frame(maxWidth: .infinity, minHeight: 56)
         }
+    }
+}
+
+private struct IOSMoreScreen: View {
+    let accounts: AccountsModel
+    let categories: CategoriesModel
+    let connection: ConnectionModel
+    @State private var path: [IOSMoreDestination] = []
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            ScrollView {
+                VStack(spacing: 14) {
+                    FiscalCard(radius: 20) {
+                        VStack(spacing: 0) {
+                            NavigationLink(value: IOSMoreDestination.accounts) {
+                                row("账户", symbol: "wallet.bifold", detail: "现金 · 储蓄卡 · 信用卡", color: FiscalColor.accent)
+                            }
+                            .buttonStyle(.plain)
+                            Divider().padding(.leading, 46)
+                            NavigationLink(value: IOSMoreDestination.categories) {
+                                row("分类设置", symbol: "tag", detail: "两级 · AI 识别资料", color: FiscalColor.reimbursement)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    FiscalCard(radius: 18) { HStack { ConnectionBadge(phase: connection.phase); Spacer(); Text("个人 VPS · 设备密钥访问").font(.caption).foregroundStyle(FiscalColor.tertiary) } }
+                    FiscalCard(radius: 20) { VStack(spacing: 0) { placeholderRow("信用账期与分期", "calendar.badge.clock", "P4–P5"); Divider(); placeholderRow("报销", "doc.text", "P6"); Divider(); placeholderRow("报表", "chart.bar", "P7"); Divider(); placeholderRow("其他设置", "gearshape", "P11") } }
+                }.padding(16).padding(.bottom, 100)
+            }
+            .background(FiscalColor.iOSBackground).navigationTitle("更多")
+            .navigationDestination(for: IOSMoreDestination.self) { destination in
+                switch destination {
+                case .accounts: AccountsManagementScreen(model: accounts)
+                case .categories: CategoriesManagementScreen(model: categories)
+                }
+            }
+        }
+    }
+    private func row(_ title: String, symbol: String, detail: String, color: Color) -> some View {
+        HStack(spacing: 12) { FiscalIconTile(symbol, color: color); Text(title).font(.headline); Spacer(); Text(detail).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1); Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(FiscalColor.tertiary) }
+            .frame(minHeight: 56)
+            .contentShape(.rect)
+    }
+    private func placeholderRow(_ title: String, _ symbol: String, _ phase: String) -> some View {
+        HStack(spacing: 12) { FiscalIconTile(symbol, color: FiscalColor.tertiary); Text(title); Spacer(); Text(phase).font(.caption).foregroundStyle(FiscalColor.tertiary) }.frame(minHeight: 52)
     }
 }
