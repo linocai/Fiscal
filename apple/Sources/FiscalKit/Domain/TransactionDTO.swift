@@ -4,9 +4,12 @@ public enum TransactionKind: String, Codable, Sendable, CaseIterable, Identifiab
     case expense, income, transfer
     case creditPurchase = "credit_purchase"
     case repayment
+    case installmentFee = "installment_fee"
+    case installmentRefund = "installment_refund"
+    public static let allCases: [TransactionKind] = [.expense, .income, .transfer, .creditPurchase, .repayment]
     public var id: Self { self }
-    public var title: String { switch self { case .expense: "支出"; case .income: "收入"; case .transfer: "转账"; case .creditPurchase: "信用消费"; case .repayment: "还款" } }
-    public var symbol: String { switch self { case .expense: "arrow.up.right"; case .income: "arrow.down.left"; case .transfer: "arrow.left.arrow.right"; case .creditPurchase: "creditcard.fill"; case .repayment: "arrow.uturn.backward" } }
+    public var title: String { switch self { case .expense: "支出"; case .income: "收入"; case .transfer: "转账"; case .creditPurchase: "信用消费"; case .repayment: "还款"; case .installmentFee: "分期手续费"; case .installmentRefund: "分期退款" } }
+    public var symbol: String { switch self { case .expense: "arrow.up.right"; case .income: "arrow.down.left"; case .transfer: "arrow.left.arrow.right"; case .creditPurchase: "creditcard.fill"; case .repayment: "arrow.uturn.backward"; case .installmentFee: "percent"; case .installmentRefund: "arrow.uturn.left.circle" } }
 }
 
 public enum PostingRole: String, Codable, Sendable { case account, source, destination }
@@ -35,6 +38,8 @@ public struct TransactionDTO: Codable, Sendable, Equatable, Identifiable {
     public let accountID: UUID?
     public let destinationAccountID: UUID?
     public let creditCycleID: UUID?
+    public let installmentPlanID: UUID?
+    public let installmentRelation: InstallmentRelation?
     public let source: String
     public let postings: [PostingDTO]
     public let version: Int
@@ -44,8 +49,30 @@ public struct TransactionDTO: Codable, Sendable, Equatable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id, kind, title, note, source, postings, version
         case occurredAt = "occurred_at"; case businessDate = "business_date"; case amountMinor = "amount_minor"
-        case categoryID = "category_id"; case accountID = "account_id"; case destinationAccountID = "destination_account_id"; case creditCycleID = "credit_cycle_id"; case voidedAt = "voided_at"
+        case categoryID = "category_id"; case accountID = "account_id"; case destinationAccountID = "destination_account_id"; case creditCycleID = "credit_cycle_id"
+        case installmentPlanID = "installment_plan_id"; case installmentRelation = "installment_relation"; case voidedAt = "voided_at"
         case createdAt = "created_at"; case updatedAt = "updated_at"
+    }
+
+    public init(id: UUID, kind: TransactionKind, occurredAt: Date, businessDate: String, title: String, note: String?, amountMinor: Int64, categoryID: UUID?, accountID: UUID?, destinationAccountID: UUID?, creditCycleID: UUID?, installmentPlanID: UUID? = nil, installmentRelation: InstallmentRelation? = nil, source: String, postings: [PostingDTO], version: Int, voidedAt: Date?, createdAt: Date, updatedAt: Date) {
+        self.id = id; self.kind = kind; self.occurredAt = occurredAt; self.businessDate = businessDate; self.title = title; self.note = note; self.amountMinor = amountMinor
+        self.categoryID = categoryID; self.accountID = accountID; self.destinationAccountID = destinationAccountID; self.creditCycleID = creditCycleID
+        self.installmentPlanID = installmentPlanID; self.installmentRelation = installmentRelation; self.source = source; self.postings = postings; self.version = version; self.voidedAt = voidedAt; self.createdAt = createdAt; self.updatedAt = updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id); kind = try values.decode(TransactionKind.self, forKey: .kind)
+        occurredAt = try values.decode(Date.self, forKey: .occurredAt); businessDate = try values.decode(String.self, forKey: .businessDate)
+        title = try values.decode(String.self, forKey: .title); note = try values.decode(Optional<String>.self, forKey: .note)
+        amountMinor = try values.decode(Int64.self, forKey: .amountMinor); categoryID = try values.decode(Optional<UUID>.self, forKey: .categoryID)
+        accountID = try values.decode(Optional<UUID>.self, forKey: .accountID); destinationAccountID = try values.decode(Optional<UUID>.self, forKey: .destinationAccountID)
+        creditCycleID = try values.decode(Optional<UUID>.self, forKey: .creditCycleID)
+        installmentPlanID = try values.decode(Optional<UUID>.self, forKey: .installmentPlanID)
+        installmentRelation = try values.decode(Optional<InstallmentRelation>.self, forKey: .installmentRelation)
+        source = try values.decode(String.self, forKey: .source); postings = try values.decode([PostingDTO].self, forKey: .postings)
+        version = try values.decode(Int.self, forKey: .version); voidedAt = try values.decode(Optional<Date>.self, forKey: .voidedAt)
+        createdAt = try values.decode(Date.self, forKey: .createdAt); updatedAt = try values.decode(Date.self, forKey: .updatedAt)
     }
 }
 

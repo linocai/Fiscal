@@ -16,7 +16,11 @@
 		16C11D0F2A385F40A9CA246A /* TransactionScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9654628B5C1FF4264957DEA3 /* TransactionScreens.swift */; };
 		182C32DC2D8B456E50A6458A /* APITransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC300DFA7D718CB81ABD669 /* APITransport.swift */; };
 		1AA79C712F4EE4661527C1B0 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; };
+		1E93660618BFA3172A2C2886 /* InstallmentScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B76007E6901E55864724E2F /* InstallmentScreens.swift */; };
+		26658545C3F7F97DCC2DC110 /* InstallmentModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61975243C0F4B54528AB4EB5 /* InstallmentModel.swift */; };
 		268326D892E97761F947F6D0 /* CreditDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50AE5EE92E61AC85DDE507B3 /* CreditDTO.swift */; };
+		290EF44276D0A4983D3D3883 /* InstallmentDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = B776D98F419D1A0D118D08AC /* InstallmentDTO.swift */; };
+		2A6C366F90678183C6E76FEB /* InstallmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */; };
 		2C2CEBA165280B41950328E6 /* MacOverviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30AD3A2039A614D2F2543AE1 /* MacOverviewScreen.swift */; };
 		3010D4B8CF583CCB83B9C0CF /* MasterDataScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40E7C412779E444B2EBDB328 /* MasterDataScreens.swift */; };
 		351A8469BB5904E68E5069DF /* OverviewFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AB6841587AA8B69AFF3A00A /* OverviewFixtures.swift */; };
@@ -25,6 +29,7 @@
 		42CF6FAB3A19861566479BE9 /* MoneyFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCB93673B1BC323E17CA866A /* MoneyFormat.swift */; };
 		45CD9B1BCF0BB42D87684C7D /* CreditRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F6D5C08025FA9E847D78B61 /* CreditRepository.swift */; };
 		4B862841FABAAF8631C459E9 /* CreditScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA464751FCA42DDEA8005314 /* CreditScreens.swift */; };
+		58D58F47A45AD9947FD3CC62 /* InstallmentDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = B776D98F419D1A0D118D08AC /* InstallmentDTO.swift */; };
 		6297712DE1515836BCC6E29E /* SystemStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = F05017C6B56940B011F6E23E /* SystemStatus.swift */; };
 		682F700DD6FD0ACCC4BC1BCD /* MasterDataDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CB89B668C9785D2064942E1 /* MasterDataDTO.swift */; };
 		70083F44D5488D2A90A18600 /* MasterDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 549791302DE4F9854A26918B /* MasterDataModels.swift */; };
@@ -33,8 +38,10 @@
 		7A3542E65018766E4BA525A2 /* SharedOverviewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8C3E571ECB6E946D838BB2 /* SharedOverviewComponents.swift */; };
 		803947D4FBF8B2BEF726E0A7 /* CreditDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50AE5EE92E61AC85DDE507B3 /* CreditDTO.swift */; };
 		830689914AD7D22FC9F5749F /* TransactionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0752D3D57AD3B99FE1943E05 /* TransactionModels.swift */; };
+		89087700DD68C77C7175FA1C /* InstallmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */; };
 		8E2A9F3F530D7AEC804E1A0E /* TransactionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0752D3D57AD3B99FE1943E05 /* TransactionModels.swift */; };
 		8E8037BF67BFD62CDA4033EA /* FiscalmacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E8B677BF8165F1CF2AA217F /* FiscalmacOSApp.swift */; };
+		9307E589EF04A2D630C49160 /* InstallmentScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B76007E6901E55864724E2F /* InstallmentScreens.swift */; };
 		946C85A339DB616A6ECDDC29 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E2FF91C44F1DCC211426631D /* FiscalKit.framework */; };
 		956D11991AADEFD598358E95 /* OverviewFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AB6841587AA8B69AFF3A00A /* OverviewFixtures.swift */; };
 		981CC9DC6BC9DF96A0EDE71B /* IOSOverviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7078C368BF50D6FDB597E7B3 /* IOSOverviewScreen.swift */; };
@@ -65,6 +72,7 @@
 		E3046B16C01C9457A052EF11 /* IOSRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2144E087E40C5B7FEF232A /* IOSRootView.swift */; };
 		E67C6BEF0FFD61DE50A2E3B8 /* CreditModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5407B68FAE8AFB476A8A2C45 /* CreditModel.swift */; };
 		E7AFE36F01F57CCED68F06B4 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; };
+		EB941A8C4F43A67DDF71A0D0 /* InstallmentModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61975243C0F4B54528AB4EB5 /* InstallmentModel.swift */; };
 		EC7C9011E02301DF54E04B1D /* TransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0067D7F4A0681CA61009D6 /* TransactionRepository.swift */; };
 		F75284CCBBC1D7F4D2CED316 /* SharedOverviewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8C3E571ECB6E946D838BB2 /* SharedOverviewComponents.swift */; };
 		F75E5694540328D93F6A9CBE /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */; };
@@ -159,16 +167,20 @@
 		5A0067D7F4A0681CA61009D6 /* TransactionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionRepository.swift; sourceTree = "<group>"; };
 		5CB89B668C9785D2064942E1 /* MasterDataDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasterDataDTO.swift; sourceTree = "<group>"; };
 		5F8C3E571ECB6E946D838BB2 /* SharedOverviewComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedOverviewComponents.swift; sourceTree = "<group>"; };
+		61975243C0F4B54528AB4EB5 /* InstallmentModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentModel.swift; sourceTree = "<group>"; };
 		6A8B134AC6D0F6AF80ECDA80 /* MasterDataRepositories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasterDataRepositories.swift; sourceTree = "<group>"; };
 		6F6D5C08025FA9E847D78B61 /* CreditRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditRepository.swift; sourceTree = "<group>"; };
 		7078C368BF50D6FDB597E7B3 /* IOSOverviewScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSOverviewScreen.swift; sourceTree = "<group>"; };
+		7B76007E6901E55864724E2F /* InstallmentScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentScreens.swift; sourceTree = "<group>"; };
 		804F88664C4025B50AD0FC75 /* FiscalKitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalKitTests.swift; sourceTree = "<group>"; };
 		9654628B5C1FF4264957DEA3 /* TransactionScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionScreens.swift; sourceTree = "<group>"; };
 		9AB6841587AA8B69AFF3A00A /* OverviewFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewFixtures.swift; sourceTree = "<group>"; };
 		A48D8B5171D3A1FF7724A9BA /* FiscalmacOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FiscalmacOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A501B4150DAFA4ABFE586271 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		AC2144E087E40C5B7FEF232A /* IOSRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSRootView.swift; sourceTree = "<group>"; };
+		B776D98F419D1A0D118D08AC /* InstallmentDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentDTO.swift; sourceTree = "<group>"; };
 		C1164C772E643D0CF6996CB1 /* FiscalDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalDesign.swift; sourceTree = "<group>"; };
+		D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentRepository.swift; sourceTree = "<group>"; };
 		D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
 		E0D63863F934E27294B1542B /* FiscalKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FiscalKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2FF91C44F1DCC211426631D /* FiscalKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FiscalKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -237,6 +249,8 @@
 				E38857D295F340534E49F652 /* ConnectionModel.swift */,
 				5407B68FAE8AFB476A8A2C45 /* CreditModel.swift */,
 				EA464751FCA42DDEA8005314 /* CreditScreens.swift */,
+				61975243C0F4B54528AB4EB5 /* InstallmentModel.swift */,
+				7B76007E6901E55864724E2F /* InstallmentScreens.swift */,
 				7078C368BF50D6FDB597E7B3 /* IOSOverviewScreen.swift */,
 				30AD3A2039A614D2F2543AE1 /* MacOverviewScreen.swift */,
 				549791302DE4F9854A26918B /* MasterDataModels.swift */,
@@ -317,6 +331,7 @@
 			isa = PBXGroup;
 			children = (
 				6F6D5C08025FA9E847D78B61 /* CreditRepository.swift */,
+				D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */,
 				500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */,
 				6A8B134AC6D0F6AF80ECDA80 /* MasterDataRepositories.swift */,
 				5A0067D7F4A0681CA61009D6 /* TransactionRepository.swift */,
@@ -347,6 +362,7 @@
 			isa = PBXGroup;
 			children = (
 				50AE5EE92E61AC85DDE507B3 /* CreditDTO.swift */,
+				B776D98F419D1A0D118D08AC /* InstallmentDTO.swift */,
 				5CB89B668C9785D2064942E1 /* MasterDataDTO.swift */,
 				185A49CF04897A7803A09434 /* OverviewSnapshot.swift */,
 				14D2F5B51728A050A74E8E3F /* TransactionDTO.swift */,
@@ -537,6 +553,10 @@
 				4B862841FABAAF8631C459E9 /* CreditScreens.swift in Sources */,
 				15BB0F18A42867A3156A607C /* FiscalDesign.swift in Sources */,
 				981CC9DC6BC9DF96A0EDE71B /* IOSOverviewScreen.swift in Sources */,
+				58D58F47A45AD9947FD3CC62 /* InstallmentDTO.swift in Sources */,
+				26658545C3F7F97DCC2DC110 /* InstallmentModel.swift in Sources */,
+				89087700DD68C77C7175FA1C /* InstallmentRepository.swift in Sources */,
+				9307E589EF04A2D630C49160 /* InstallmentScreens.swift in Sources */,
 				0E59ACB97BECD3181F51A92F /* KeychainTokenStore.swift in Sources */,
 				0593A52F50EF56D7F4AD9CF5 /* MacOverviewScreen.swift in Sources */,
 				B6D9AA5E9C3D3D572F7F3FDE /* MasterDataDTO.swift in Sources */,
@@ -578,6 +598,10 @@
 				79595B893A93FD06DF6B4F4A /* CreditScreens.swift in Sources */,
 				B4F38F2E63F4D88D9C40F60D /* FiscalDesign.swift in Sources */,
 				BAD009742B2AE146F55E918A /* IOSOverviewScreen.swift in Sources */,
+				290EF44276D0A4983D3D3883 /* InstallmentDTO.swift in Sources */,
+				EB941A8C4F43A67DDF71A0D0 /* InstallmentModel.swift in Sources */,
+				2A6C366F90678183C6E76FEB /* InstallmentRepository.swift in Sources */,
+				1E93660618BFA3172A2C2886 /* InstallmentScreens.swift in Sources */,
 				BDBC32BC1071C2E175D1E539 /* KeychainTokenStore.swift in Sources */,
 				2C2CEBA165280B41950328E6 /* MacOverviewScreen.swift in Sources */,
 				682F700DD6FD0ACCC4BC1BCD /* MasterDataDTO.swift in Sources */,

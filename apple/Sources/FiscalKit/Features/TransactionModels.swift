@@ -201,6 +201,7 @@ public final class TransactionEditorModel {
         case .repayment: draft.categoryID = nil
         case .creditPurchase: draft.destinationAccountID = nil; draft.creditCycleID = nil
         case .expense, .income: draft.destinationAccountID = nil; draft.creditCycleID = nil
+        case .installmentFee, .installmentRefund: draft.categoryID = nil; draft.accountID = nil; draft.destinationAccountID = nil; draft.creditCycleID = nil
         }
     }
     public func rotateCreateKey() { if editing == nil { idempotencyKey = UUID() } }
@@ -218,6 +219,7 @@ public final class TransactionEditorModel {
         case .repayment:
             guard let source = draft.accountID, let destination = draft.destinationAccountID, draft.creditCycleID != nil else { return "请选择付款账户、信用账户和目标账期。" }
             if source == destination { return "付款账户和信用账户不能相同。" }
+        case .installmentFee, .installmentRefund: return "分期系统流水不能手工创建或编辑。"
         }
         return nil
     }

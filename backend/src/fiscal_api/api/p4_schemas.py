@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from fiscal_api.api.p5_schemas import InstallmentPeriodResponse, InstallmentTeaser
 from fiscal_api.db.models import CreditCycleStatus
 
 
@@ -28,6 +29,9 @@ class CreditCycleResponse(APIModel):
     version: int
     created_at: datetime
     updated_at: datetime
+    installment_principal_minor: int = 0
+    installment_fee_minor: int = 0
+    installment_periods: list[InstallmentPeriodResponse] = []
 
 
 class CreditCyclePage(APIModel):
@@ -50,3 +54,6 @@ class CreditAccountSummary(APIModel):
     current_cycle: CreditCycleResponse
     next_due_cycle: CreditCycleResponse | None
     has_overdue_cycle: bool
+    active_installment_count: int = 0
+    future_scheduled_gross_minor: int = 0
+    next_installment: InstallmentTeaser | None = None

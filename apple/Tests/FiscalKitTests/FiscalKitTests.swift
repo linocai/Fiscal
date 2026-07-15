@@ -107,7 +107,7 @@ struct FiscalKitP3Tests {
 
     @Test("Canonical response decodes account impacts without internal transaction IDs")
     func responsePayload() throws {
-        let data = Data(#"{"id":"00000000-0000-0000-0000-000000000001","kind":"expense","amount_minor":1280,"occurred_at":"2026-07-15T12:00:00Z","business_date":"2026-07-15","title":"午餐","note":null,"category_id":"00000000-0000-0000-0000-000000000002","account_id":"00000000-0000-0000-0000-000000000003","destination_account_id":null,"source":"manual","postings":[{"id":"00000000-0000-0000-0000-000000000004","account_id":"00000000-0000-0000-0000-000000000003","role":"account","amount_minor":-1280,"position":0}],"version":1,"voided_at":null,"created_at":"2026-07-15T12:00:00Z","updated_at":"2026-07-15T12:00:00Z"}"#.utf8)
+        let data = Data(#"{"id":"00000000-0000-0000-0000-000000000001","kind":"expense","amount_minor":1280,"occurred_at":"2026-07-15T12:00:00Z","business_date":"2026-07-15","title":"午餐","note":null,"category_id":"00000000-0000-0000-0000-000000000002","account_id":"00000000-0000-0000-0000-000000000003","destination_account_id":null,"credit_cycle_id":null,"installment_plan_id":null,"installment_relation":null,"source":"manual","postings":[{"id":"00000000-0000-0000-0000-000000000004","account_id":"00000000-0000-0000-0000-000000000003","role":"account","amount_minor":-1280,"position":0}],"version":1,"voided_at":null,"created_at":"2026-07-15T12:00:00Z","updated_at":"2026-07-15T12:00:00Z"}"#.utf8)
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
         let transaction = try decoder.decode(TransactionDTO.self, from: data)
         #expect(transaction.businessDate == "2026-07-15")
@@ -164,8 +164,8 @@ struct FiscalKitP3Tests {
 struct FiscalKitP4Tests {
     @Test("Credit cycle and account summary decode the frozen schema")
     func creditResponsePayload() throws {
-        let cycle = #"{"id":"00000000-0000-0000-0000-000000000010","account_id":"00000000-0000-0000-0000-000000000011","period_start":"2026-06-11","period_end":"2026-07-10","statement_date":"2026-07-10","due_date":"2026-07-22","is_opening_cycle":false,"purchase_minor":50000,"opening_minor":0,"amount_due_minor":50000,"repaid_minor":12000,"remaining_minor":38000,"status":"partial","is_overdue":false,"version":2,"created_at":"2026-07-10T00:00:00Z","updated_at":"2026-07-15T00:00:00Z"}"#
-        let json = #"{"account_id":"00000000-0000-0000-0000-000000000011","name":"信用卡","institution":"银行","last_four":"1234","credit_limit_minor":1000000,"current_debt_minor":38000,"available_credit_minor":962000,"over_limit_minor":0,"opening_configuration_required":false,"statement_day":10,"due_day":22,"current_cycle":"# + cycle + #", "next_due_cycle":"# + cycle + #", "has_overdue_cycle":false}"#
+        let cycle = #"{"id":"00000000-0000-0000-0000-000000000010","account_id":"00000000-0000-0000-0000-000000000011","period_start":"2026-06-11","period_end":"2026-07-10","statement_date":"2026-07-10","due_date":"2026-07-22","is_opening_cycle":false,"purchase_minor":50000,"opening_minor":0,"amount_due_minor":50000,"repaid_minor":12000,"remaining_minor":38000,"status":"partial","is_overdue":false,"installment_principal_minor":0,"installment_fee_minor":0,"installment_periods":[],"version":2,"created_at":"2026-07-10T00:00:00Z","updated_at":"2026-07-15T00:00:00Z"}"#
+        let json = #"{"account_id":"00000000-0000-0000-0000-000000000011","name":"信用卡","institution":"银行","last_four":"1234","credit_limit_minor":1000000,"current_debt_minor":38000,"available_credit_minor":962000,"over_limit_minor":0,"opening_configuration_required":false,"statement_day":10,"due_day":22,"current_cycle":"# + cycle + #", "next_due_cycle":"# + cycle + #", "has_overdue_cycle":false,"active_installment_count":0,"future_scheduled_gross_minor":0,"next_installment":null}"#
         let data = Data(json.utf8)
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
         let summary = try decoder.decode(CreditAccountSummaryDTO.self, from: data)
@@ -214,6 +214,143 @@ struct FiscalKitP4Tests {
         #expect(try await model.cyclesForRepayment(accountID: cycle.accountID).isEmpty)
         #expect(try await model.cyclesForRepayment(accountID: cycle.accountID, retaining: cycle.id).map(\.id) == [cycle.id])
     }
+}
+
+@Suite("FiscalKit P5 contracts")
+struct FiscalKitP5Tests {
+    @Test("Installment plan decodes scheduled gross semantics and fee metadata")
+    func planResponsePayload() throws {
+        let data = Data(#"{"id":"00000000-0000-0000-0000-000000000101","purchase_transaction_id":"00000000-0000-0000-0000-000000000102","credit_account_id":"00000000-0000-0000-0000-000000000103","fee_transaction_id":"00000000-0000-0000-0000-000000000104","fee_category_id":"00000000-0000-0000-0000-000000000105","fee_occurred_at":"2026-07-15T08:00:00Z","title":"MacBook","status":"active","principal_minor":1200000,"fee_minor":6000,"total_financed_minor":1206000,"installment_count":12,"start_statement_date":"2026-08-10","locked_count":2,"future_count":10,"cancelled_count":0,"cycle_settled_count":1,"scheduled_gross_minor":1206000,"future_scheduled_gross_minor":1005000,"next_period":null,"periods":[],"version":3,"created_at":"2026-07-15T08:00:00Z","updated_at":"2026-07-15T08:00:00Z"}"#.utf8)
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let plan = try decoder.decode(InstallmentPlanDTO.self, from: data)
+        #expect(plan.futureScheduledGrossMinor == 1_005_000)
+        #expect(plan.feeTransactionID == UUID(uuidString: "00000000-0000-0000-0000-000000000104"))
+        #expect(plan.feeCategoryID == UUID(uuidString: "00000000-0000-0000-0000-000000000105"))
+        #expect(plan.cycleSettledCount == 1)
+    }
+
+    @Test("Installment preview accepts cycles that do not exist yet")
+    func previewCycleIDsAreNullable() throws {
+        let data = Data(#"{"sequence":1,"scheduled_cycle_id":null,"effective_cycle_id":null,"scheduled_statement_date":"2026-08-10","effective_statement_date":"2026-08-10","due_date":"2026-08-22","principal_minor":10000,"fee_minor":500,"amount_due_minor":10500,"locked":false,"status":"scheduled"}"#.utf8)
+        let period = try JSONDecoder().decode(InstallmentPeriodPreview.self, from: data)
+        #expect(period.scheduledCycleID == nil)
+        #expect(period.effectiveCycleID == nil)
+        #expect(period.amountDueMinor == 10_500)
+    }
+
+    @Test("Installment mutation payload uses exact snake-case contract")
+    func createPayload() throws {
+        let purchaseID = UUID(), categoryID = UUID()
+        let request = InstallmentCreateRequest(purchaseTransactionID: purchaseID, installmentCount: 6, totalFeeMinor: 1_200, feeCategoryID: categoryID, feeOccurredAt: Date(timeIntervalSince1970: 0), startStatementDate: "2026-08-10")
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        let object = try #require(JSONSerialization.jsonObject(with: encoder.encode(request)) as? [String: Any])
+        #expect(object["purchase_transaction_id"] as? String == purchaseID.uuidString)
+        #expect(object["installment_count"] as? Int == 6)
+        #expect(object["total_fee_minor"] as? Int == 1_200)
+        #expect(object["fee_category_id"] as? String == categoryID.uuidString)
+        #expect(object["start_statement_date"] as? String == "2026-08-10")
+    }
+
+    @Test("System-generated installment ledger kinds are not manual editor choices")
+    func systemKindsAreNotManual() {
+        #expect(TransactionKind(rawValue: "installment_fee") == .installmentFee)
+        #expect(TransactionKind(rawValue: "installment_refund") == .installmentRefund)
+        #expect(!TransactionKind.allCases.contains(.installmentFee))
+        #expect(!TransactionKind.allCases.contains(.installmentRefund))
+    }
+
+    @Test("Missing P5 outer keys fail decoding instead of silently using P4 shape")
+    func requiredOuterKeys() throws {
+        let missingFeeMetadata = installmentPlanJSON(planID: UUID(), accountID: UUID()).replacingOccurrences(of: #""fee_transaction_id":null,"#, with: "")
+        #expect(throws: DecodingError.self) { try fiscalDecoder().decode(InstallmentPlanDTO.self, from: Data(missingFeeMetadata.utf8)) }
+
+        let legacyCycle = Data(#"{"id":"00000000-0000-0000-0000-000000000010","account_id":"00000000-0000-0000-0000-000000000011","period_start":"2026-06-11","period_end":"2026-07-10","statement_date":"2026-07-10","due_date":"2026-07-22","is_opening_cycle":false,"purchase_minor":50000,"opening_minor":0,"amount_due_minor":50000,"repaid_minor":12000,"remaining_minor":38000,"status":"partial","is_overdue":false,"version":2,"created_at":"2026-07-10T00:00:00Z","updated_at":"2026-07-15T00:00:00Z"}"#.utf8)
+        #expect(throws: DecodingError.self) { try fiscalDecoder().decode(CreditCycleDTO.self, from: legacyCycle) }
+
+        let missingLiabilityAccount = Data(#"{"total_future_scheduled_gross_minor":0,"groups":[]}"#.utf8)
+        let nullLiabilityAccount = Data(#"{"account_id":null,"total_future_scheduled_gross_minor":0,"groups":[]}"#.utf8)
+        #expect(throws: DecodingError.self) { try fiscalDecoder().decode(InstallmentLiabilities.self, from: missingLiabilityAccount) }
+        #expect(throws: DecodingError.self) { try fiscalDecoder().decode(InstallmentLiabilities.self, from: nullLiabilityAccount) }
+    }
+
+    @Test("Backend installment conflict codes all trigger conflict recovery")
+    func conflictCodes() {
+        #expect(InstallmentModel.isConflictCode("version_conflict"))
+        #expect(InstallmentModel.isConflictCode("resource_version_conflict"))
+        #expect(InstallmentModel.isConflictCode("installment_operation_conflict"))
+        #expect(!InstallmentModel.isConflictCode("idempotency_key_reused"))
+    }
+
+    @Test("Editor preserves a historical start date outside the rolling eligible window")
+    func historicalStartDatePickerOption() {
+        #expect(InstallmentEditorSheet.legacyStartStatementDate(planStartDate: "2025-01-10", eligibleStatementDates: ["2026-08-10", "2026-09-10"]) == "2025-01-10")
+        #expect(InstallmentEditorSheet.legacyStartStatementDate(planStartDate: "2026-08-10", eligibleStatementDates: ["2026-08-10", "2026-09-10"]) == nil)
+    }
+
+    @Test("Switching accounts never publishes the previous account installment list") @MainActor
+    func accountKeyedLoading() async throws {
+        let first = UUID(), second = UUID()
+        let repository = AuditInstallmentRepository(firstAccountID: first, secondAccountID: second)
+        let model = InstallmentModel(repository: repository, transactions: AuditTransactionRepository())
+        let stale = Task { await model.loadAccount(first) }
+        try await Task.sleep(for: .milliseconds(10)); await model.loadAccount(second); await stale.value
+        #expect(model.loadedAccountID == second)
+        #expect(model.plans.allSatisfy { $0.creditAccountID == second })
+        #expect(model.liabilities?.accountID == second)
+    }
+
+    @Test("A changed editor request cannot submit an old preview") @MainActor
+    func previewSnapshotInvalidation() async throws {
+        let accountID = UUID(), repository = AuditInstallmentRepository(firstAccountID: accountID, secondAccountID: UUID())
+        let model = InstallmentModel(repository: repository, transactions: AuditTransactionRepository())
+        let planID = await repository.firstPlanID
+        await model.loadPlan(planID)
+        let purchase = try #require(model.selectedPurchase)
+        let base = InstallmentReplacementRequest(expectedVersion: 1, purchase: .init(amountMinor: purchase.amountMinor, occurredAt: purchase.occurredAt, title: purchase.title, note: purchase.note, accountID: purchase.accountID!, categoryID: purchase.categoryID!), installmentCount: 6, totalFeeMinor: 0, feeCategoryID: nil, feeOccurredAt: nil, startStatementDate: "2026-08-10")
+        #expect(await model.preview(base))
+        var changed = base; changed.installmentCount = 12
+        #expect(await model.update(changed) == nil)
+        #expect(model.changePreview == nil)
+        #expect(await repository.updateCalls == 0)
+    }
+}
+
+private func fiscalDecoder() -> JSONDecoder { let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601; return decoder }
+private func installmentPlanJSON(planID: UUID, accountID: UUID) -> String {
+    #"{"id":"\#(planID.uuidString)","purchase_transaction_id":"00000000-0000-0000-0000-000000000202","credit_account_id":"\#(accountID.uuidString)","fee_transaction_id":null,"fee_category_id":null,"fee_occurred_at":null,"title":"测试分期","status":"active","principal_minor":60000,"fee_minor":0,"total_financed_minor":60000,"installment_count":6,"start_statement_date":"2026-08-10","locked_count":0,"future_count":6,"cancelled_count":0,"cycle_settled_count":0,"scheduled_gross_minor":60000,"future_scheduled_gross_minor":60000,"next_period":null,"periods":[],"version":1,"created_at":"2026-07-15T08:00:00Z","updated_at":"2026-07-15T08:00:00Z"}"#
+}
+private func installmentPreviewJSON(planID: UUID, accountID: UUID) -> String {
+    #"{"id":"\#(planID.uuidString)","purchase_transaction_id":"00000000-0000-0000-0000-000000000202","credit_account_id":"\#(accountID.uuidString)","fee_transaction_id":null,"fee_category_id":null,"fee_occurred_at":null,"title":"测试分期","status":"active","principal_minor":60000,"fee_minor":0,"total_financed_minor":60000,"installment_count":6,"start_statement_date":"2026-08-10","locked_count":0,"future_count":6,"cancelled_count":0,"cycle_settled_count":0,"scheduled_gross_minor":60000,"future_scheduled_gross_minor":60000,"next_period":null,"periods":[]}"#
+}
+
+private actor AuditInstallmentRepository: InstallmentRepository {
+    let firstAccountID: UUID; let secondAccountID: UUID; let firstPlanID = UUID(); let secondPlanID = UUID()
+    private(set) var updateCalls = 0
+    init(firstAccountID: UUID, secondAccountID: UUID) { self.firstAccountID = firstAccountID; self.secondAccountID = secondAccountID }
+    func plan(_ accountID: UUID, _ id: UUID) throws -> InstallmentPlanDTO { try fiscalDecoder().decode(InstallmentPlanDTO.self, from: Data(installmentPlanJSON(planID: id, accountID: accountID).utf8)) }
+    func list(accountID: UUID?, status: InstallmentPlanStatus?, cursor: String?, limit: Int) async throws -> InstallmentPlanPage { let accountID = accountID ?? firstAccountID; if accountID == firstAccountID { try? await Task.sleep(for: .milliseconds(80)) }; return .init(items: [try plan(accountID, accountID == firstAccountID ? firstPlanID : secondPlanID)], nextCursor: nil) }
+    func get(id: UUID) async throws -> InstallmentPlanDTO { try plan(firstAccountID, id) }
+    func eligibility(transactionID: UUID) async throws -> InstallmentEligibility { throw RaceRepositoryError.unsupported }
+    func cycleOptions(transactionID: UUID, months: Int) async throws -> [InstallmentCycleOption] { [] }
+    func liabilities(accountID: UUID?) async throws -> InstallmentLiabilities { let json = #"{"account_id":"\#((accountID ?? firstAccountID).uuidString)","total_future_scheduled_gross_minor":60000,"groups":[]}"#; return try fiscalDecoder().decode(InstallmentLiabilities.self, from: Data(json.utf8)) }
+    func create(_ request: InstallmentCreateRequest, idempotencyKey: UUID) async throws -> InstallmentPlanDTO { throw RaceRepositoryError.unsupported }
+    func preview(id: UUID, request: InstallmentReplacementRequest) async throws -> InstallmentPlanChangePreview { let current = installmentPlanJSON(planID: id, accountID: firstAccountID); let proposed = installmentPreviewJSON(planID: id, accountID: firstAccountID); let json = #"{"current_plan":\#(current),"proposed_plan":\#(proposed),"locked_periods":[],"future_periods":[],"affected_cycles":[],"warnings":[]}"#; return try fiscalDecoder().decode(InstallmentPlanChangePreview.self, from: Data(json.utf8)) }
+    func update(id: UUID, request: InstallmentReplacementRequest) async throws -> InstallmentPlanDTO { updateCalls += 1; return try plan(firstAccountID, id) }
+    func settlementPreview(id: UUID, request: InstallmentSettlementRequest) async throws -> InstallmentSettlementPreview { throw RaceRepositoryError.unsupported }
+    func settleEarly(id: UUID, request: InstallmentSettlementRequest, idempotencyKey: UUID) async throws -> InstallmentSettlementResult { throw RaceRepositoryError.unsupported }
+    func reversePreview(id: UUID, request: InstallmentOperationRequest) async throws -> InstallmentReversePreview { throw RaceRepositoryError.unsupported }
+    func reverseSettlement(id: UUID, request: InstallmentOperationRequest, idempotencyKey: UUID) async throws -> InstallmentReverseResult { throw RaceRepositoryError.unsupported }
+    func cancellationPreview(id: UUID, request: InstallmentOperationRequest) async throws -> InstallmentCancellationPreview { throw RaceRepositoryError.unsupported }
+    func cancelFuture(id: UUID, request: InstallmentOperationRequest, idempotencyKey: UUID) async throws -> InstallmentCancellationResult { throw RaceRepositoryError.unsupported }
+}
+
+private actor AuditTransactionRepository: TransactionRepository {
+    func list(_ query: TransactionQuery) async throws -> TransactionPage { .init(items: [], nextCursor: nil) }
+    func get(id: UUID) async throws -> TransactionDTO { TransactionDTO(id: id, kind: .creditPurchase, occurredAt: Date(timeIntervalSince1970: 0), businessDate: "1970-01-01", title: "测试消费", note: nil, amountMinor: 60_000, categoryID: UUID(), accountID: UUID(), destinationAccountID: nil, creditCycleID: nil, source: "manual", postings: [], version: 1, voidedAt: nil, createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0)) }
+    func create(_ draft: TransactionDraft, idempotencyKey: UUID) async throws -> TransactionDTO { throw RaceRepositoryError.unsupported }
+    func update(id: UUID, version: Int, draft: TransactionDraft) async throws -> TransactionDTO { throw RaceRepositoryError.unsupported }
+    func void(_ transaction: TransactionDTO) async throws -> TransactionDTO { throw RaceRepositoryError.unsupported }
+    func restore(_ transaction: TransactionDTO) async throws -> TransactionDTO { throw RaceRepositoryError.unsupported }
 }
 
 private actor SettledCycleRepository: CreditRepository {

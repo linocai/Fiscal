@@ -3,10 +3,18 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import Select, case, func, or_, select
+from sqlalchemy import Select, case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fiscal_api.db.models import Account, CreditCycle, LedgerTransaction, Posting
+from fiscal_api.db.models import (
+    Account,
+    CreditCycle,
+    InstallmentLedgerLink,
+    InstallmentPeriod,
+    InstallmentPlan,
+    LedgerTransaction,
+    Posting,
+)
 
 
 class CreditRepository:
@@ -113,10 +121,29 @@ class CreditRepository:
             .where(
                 LedgerTransaction.credit_cycle_id.in_(cycle_ids),
                 LedgerTransaction.voided_at.is_(None),
+                or_(
+                    LedgerTransaction.kind == "repayment",
+                    ~exists().where(InstallmentLedgerLink.transaction_id == LedgerTransaction.id),
+                ),
             )
             .group_by(LedgerTransaction.credit_cycle_id)
         )
-        return {cycle_id: (int(purchase), int(repaid)) for cycle_id, purchase, repaid in rows}
+        result = {cycle_id: (int(purchase), int(repaid)) for cycle_id, purchase, repaid in rows}
+        allocations = await self.session.execute(
+            select(
+                InstallmentPeriod.effective_cycle_id,
+                func.sum(InstallmentPeriod.principal_minor + InstallmentPeriod.fee_minor),
+            )
+            .where(
+                InstallmentPeriod.effective_cycle_id.in_(cycle_ids),
+                InstallmentPeriod.cancelled_at.is_(None),
+            )
+            .group_by(InstallmentPeriod.effective_cycle_id)
+        )
+        for cycle_id, amount in allocations:
+            direct, repaid = result.get(cycle_id, (0, 0))
+            result[cycle_id] = (direct + int(amount), repaid)
+        return result
 
     async def account_impacts(self, account_ids: list[UUID]) -> dict[UUID, int]:
         if not account_ids:
@@ -165,7 +192,6 @@ class CreditRepository:
             .join(Posting, Posting.transaction_id == LedgerTransaction.id)
             .where(
                 Posting.account_id == account_id,
-                LedgerTransaction.kind.in_(["credit_purchase", "repayment"]),
                 LedgerTransaction.voided_at.is_(None),
             )
             .group_by(LedgerTransaction.occurred_at)
@@ -182,11 +208,41 @@ class CreditRepository:
                 LedgerTransaction.kind.in_(["credit_purchase", "repayment"]),
                 LedgerTransaction.voided_at.is_(None),
                 Posting.role.in_(["account", "destination"]),
+                or_(
+                    LedgerTransaction.kind == "repayment",
+                    ~exists().where(InstallmentLedgerLink.transaction_id == LedgerTransaction.id),
+                ),
             )
             .group_by(LedgerTransaction.occurred_at)
             .order_by(LedgerTransaction.occurred_at)
         )
-        return [(occurred_at, int(delta)) for occurred_at, delta in rows]
+        events = [(occurred_at, int(delta)) for occurred_at, delta in rows]
+        allocation_rows = await self.session.execute(
+            select(
+                LedgerTransaction.occurred_at,
+                func.sum(InstallmentPeriod.principal_minor),
+            )
+            .join(InstallmentPlan, InstallmentPlan.purchase_transaction_id == LedgerTransaction.id)
+            .join(InstallmentPeriod, InstallmentPeriod.plan_id == InstallmentPlan.id)
+            .where(
+                InstallmentPeriod.effective_cycle_id == cycle_id,
+                InstallmentPeriod.cancelled_at.is_(None),
+            )
+            .group_by(LedgerTransaction.occurred_at)
+        )
+        fee_rows = await self.session.execute(
+            select(LedgerTransaction.occurred_at, func.sum(InstallmentPeriod.fee_minor))
+            .join(InstallmentPlan, InstallmentPlan.fee_transaction_id == LedgerTransaction.id)
+            .join(InstallmentPeriod, InstallmentPeriod.plan_id == InstallmentPlan.id)
+            .where(
+                InstallmentPeriod.effective_cycle_id == cycle_id,
+                InstallmentPeriod.cancelled_at.is_(None),
+            )
+            .group_by(LedgerTransaction.occurred_at)
+        )
+        events.extend((occurred, int(amount)) for occurred, amount in allocation_rows)
+        events.extend((occurred, int(amount)) for occurred, amount in fee_rows)
+        return sorted(events, key=lambda item: item[0])
 
     async def cycle_has_any_transaction(self, cycle_id: UUID) -> bool:
         return (

@@ -30,6 +30,7 @@ from fiscal_api.db.models import (
     TransactionRevision,
 )
 from fiscal_api.repositories.credit import CreditRepository
+from fiscal_api.repositories.installments import InstallmentRepository
 from fiscal_api.repositories.transactions import TransactionRepository
 from fiscal_api.services.common import (
     acquire_mutation_lock,
@@ -47,6 +48,7 @@ class TransactionService:
         self.session = session
         self.repository = TransactionRepository(session)
         self.credit_repository = CreditRepository(session)
+        self.installment_repository = InstallmentRepository(session)
 
     async def create(self, draft: TransactionDraft, idempotency_key: UUID) -> TransactionResponse:
         await acquire_mutation_lock(self.session)
@@ -98,7 +100,7 @@ class TransactionService:
 
     async def get(self, transaction_id: UUID) -> TransactionResponse:
         transaction = await self._required(transaction_id)
-        return self._response(transaction, list(transaction.postings))
+        return await self.response_with_relation(transaction, list(transaction.postings))
 
     async def list(
         self,
@@ -134,7 +136,7 @@ class TransactionService:
             last = page[-1]
             next_cursor = self._encode_cursor(last.occurred_at, last.id)
         return TransactionPage(
-            items=[self._response(item, list(item.postings)) for item in page],
+            items=[await self.response_with_relation(item, list(item.postings)) for item in page],
             next_cursor=next_cursor,
         )
 
@@ -152,7 +154,7 @@ class TransactionService:
         page = transactions[:limit]
         next_cursor = self._encode_cursor(page[-1].occurred_at, page[-1].id) if has_more else None
         return TransactionPage(
-            items=[self._response(item, list(item.postings)) for item in page],
+            items=[await self.response_with_relation(item, list(item.postings)) for item in page],
             next_cursor=next_cursor,
         )
 
@@ -164,6 +166,7 @@ class TransactionService:
     ) -> TransactionResponse:
         await acquire_mutation_lock(self.session)
         transaction = await self._required(transaction_id, for_update=True)
+        await self._assert_generic_mutation_allowed(transaction)
         check_version(transaction.version, expected_version)
         if transaction.voided_at is not None:
             conflict("transaction_voided", "Restore the transaction before editing it")
@@ -222,6 +225,7 @@ class TransactionService:
     async def void(self, transaction_id: UUID, expected_version: int) -> TransactionResponse:
         await acquire_mutation_lock(self.session)
         transaction = await self._required(transaction_id, for_update=True)
+        await self._assert_generic_mutation_allowed(transaction)
         check_version(transaction.version, expected_version)
         if transaction.voided_at is not None:
             return self._response(transaction, list(transaction.postings))
@@ -244,6 +248,7 @@ class TransactionService:
     async def restore(self, transaction_id: UUID, expected_version: int) -> TransactionResponse:
         await acquire_mutation_lock(self.session)
         transaction = await self._required(transaction_id, for_update=True)
+        await self._assert_generic_mutation_allowed(transaction)
         check_version(transaction.version, expected_version)
         if transaction.voided_at is None:
             return self._response(transaction, list(transaction.postings))
@@ -281,7 +286,11 @@ class TransactionService:
     def _summary_response(rows: list[tuple[str, UUID, str, int]]) -> TransactionSummary:
         grouped: dict[tuple[str, UUID, str], int] = {}
         for kind, category_id, category_name, amount in rows:
-            direction = "expense" if kind == "credit_purchase" else kind
+            direction = (
+                "expense"
+                if kind in {"credit_purchase", "installment_fee", "installment_refund"}
+                else kind
+            )
             key = (direction, category_id, category_name)
             normalized_amount = amount if direction == "income" else -amount
             grouped[key] = checked_int64(
@@ -613,6 +622,15 @@ class TransactionService:
             not_found("transaction_not_found", "The transaction does not exist")
         return transaction
 
+    async def _assert_generic_mutation_allowed(self, transaction: LedgerTransaction) -> None:
+        if transaction.source == "system" or await self.installment_repository.linked(
+            transaction.id
+        ):
+            conflict(
+                "installment_plan_in_use",
+                "Use the installment plan command to change this transaction",
+            )
+
     async def _adjust_usage(
         self,
         old_accounts: set[UUID],
@@ -683,6 +701,33 @@ class TransactionService:
             voided_at=transaction.voided_at,
             created_at=transaction.created_at,
             updated_at=transaction.updated_at,
+        )
+
+    async def response_with_relation(
+        self, transaction: LedgerTransaction, postings: list[Posting]
+    ) -> TransactionResponse:
+        response = self._response(transaction, postings)
+        link = await self.installment_repository.linked(transaction.id)
+        if link is None:
+            return response
+        plan = await self.installment_repository.plan(link.plan_id)
+        if plan is None:
+            raise RuntimeError("installment relation plan missing")
+        from fiscal_api.api.installment_types import InstallmentRelation
+        from fiscal_api.db.models import InstallmentLedgerRole
+        from fiscal_api.services.installments import InstallmentService
+
+        plan_response = await InstallmentService(self.session).response(plan)
+        return response.model_copy(
+            update={
+                "installment_plan_id": plan.id,
+                "installment_relation": InstallmentRelation(
+                    plan_id=plan.id,
+                    role=InstallmentLedgerRole(link.role),
+                    plan_title=plan_response.title,
+                    plan_status=plan_response.status,
+                ),
+            }
         )
 
     @staticmethod

@@ -1,7 +1,7 @@
 import SwiftUI
 
 private extension TransactionKind {
-    var color: Color { switch self { case .expense: FiscalColor.expense; case .income: FiscalColor.income; case .transfer: FiscalColor.accent; case .creditPurchase, .repayment: FiscalColor.debt } }
+    var color: Color { switch self { case .expense: FiscalColor.expense; case .income, .installmentRefund: FiscalColor.income; case .transfer: FiscalColor.accent; case .creditPurchase, .repayment, .installmentFee: FiscalColor.debt } }
 }
 
 private struct TransactionAmount: View {
@@ -10,7 +10,7 @@ private struct TransactionAmount: View {
         Text(prefix + Money(minorUnits: transaction.amountMinor).formatted())
             .font(.body.weight(.semibold)).foregroundStyle(transaction.kind.color).monospacedDigit()
     }
-    private var prefix: String { switch transaction.kind { case .expense, .creditPurchase: "−"; case .income: "+"; case .transfer, .repayment: "" } }
+    private var prefix: String { switch transaction.kind { case .expense, .creditPurchase, .installmentFee: "−"; case .income, .installmentRefund: "+"; case .transfer, .repayment: "" } }
 }
 
 public struct TransactionEditorSheet: View {
@@ -58,6 +58,7 @@ public struct TransactionEditorSheet: View {
                 case .repayment: repaymentSection
                 case .creditPurchase: creditPurchaseSection
                 case .expense, .income: incomeExpenseSection
+                case .installmentFee, .installmentRefund: EmptyView()
                 }
                 if loadingOptions { Section { ProgressView("正在读取账户与分类…") } }
                 if let optionsError { Section { Label(optionsError, systemImage: "wifi.exclamationmark").foregroundStyle(FiscalColor.expense); Button("重试") { Task { await loadOptions() } } } }
@@ -247,10 +248,12 @@ public struct IOSTransactionsScreen: View {
     let accounts: AccountsModel
     let categories: CategoriesModel
     let credit: CreditModel?
+    let installments: InstallmentModel?
     @State private var editing: TransactionDTO?
     @State private var pendingVoid: TransactionDTO?
+    @State private var installmentPurchase: TransactionDTO?
 
-    public init(model: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil) { self.model = model; self.accounts = accounts; self.categories = categories; self.credit = credit }
+    public init(model: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil, installments: InstallmentModel? = nil) { self.model = model; self.accounts = accounts; self.categories = categories; self.credit = credit; self.installments = installments }
     public var body: some View {
         VStack(spacing: 0) {
             filterBar
@@ -267,6 +270,7 @@ public struct IOSTransactionsScreen: View {
         .onChange(of: model.search) { _, _ in model.scheduleLoad() }
         .task { if model.phase == .idle { await model.load() } }
         .sheet(item: $editing) { TransactionEditorSheet(transactions: model, accounts: accounts, categories: categories, credit: credit, editing: $0) }
+        .sheet(item: $installmentPurchase) { if let installments { InstallmentCreateSheet(installments: installments, purchase: $0, categories: categories) } }
         .alert("作废这笔流水？", isPresented: Binding(get: { pendingVoid != nil }, set: { if !$0 { pendingVoid = nil } })) {
             Button("取消", role: .cancel) { pendingVoid = nil }
             Button("作废", role: .destructive) { if let item = pendingVoid { Task { _ = await model.void(item); pendingVoid = nil } } }
@@ -294,9 +298,9 @@ public struct IOSTransactionsScreen: View {
         }
     }
     private func row(_ item: TransactionDTO) -> some View {
-        Button { editing = item } label: { HStack(spacing: 12) { FiscalIconTile(item.kind.symbol, color: item.kind.color); VStack(alignment: .leading, spacing: 3) { Text(item.title).font(.headline).foregroundStyle(FiscalColor.text); Text(detail(item)).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1) }; Spacer(); TransactionAmount(transaction: item); Menu { Button("编辑", systemImage: "pencil") { editing = item }; Button("作废", systemImage: "trash", role: .destructive) { pendingVoid = item } } label: { Image(systemName: "ellipsis").frame(width: 32, height: 44) }.buttonStyle(.plain).accessibilityIdentifier("transaction.rowMenu") }.contentShape(.rect).padding(.vertical, 6) }.buttonStyle(.plain).task { await model.loadMoreIfNeeded(after: item) }
+        Button { if item.source == "manual" && item.installmentPlanID == nil { editing = item } } label: { HStack(spacing: 12) { FiscalIconTile(item.kind.symbol, color: item.kind.color); VStack(alignment: .leading, spacing: 3) { Text(item.title).font(.headline).foregroundStyle(FiscalColor.text); Text(detail(item)).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1) }; Spacer(); TransactionAmount(transaction: item); Menu { if item.kind == .creditPurchase && item.installmentPlanID == nil { Button("创建分期计划", systemImage: "calendar.badge.plus") { installmentPurchase = item } }; if item.source == "manual" && item.installmentPlanID == nil { Button("编辑", systemImage: "pencil") { editing = item }; Button("作废", systemImage: "trash", role: .destructive) { pendingVoid = item } } } label: { Image(systemName: "ellipsis").frame(width: 32, height: 44) }.buttonStyle(.plain).accessibilityIdentifier("transaction.rowMenu") }.contentShape(.rect).padding(.vertical, 6) }.buttonStyle(.plain).task { await model.loadMoreIfNeeded(after: item) }
     }
-    private func detail(_ item: TransactionDTO) -> String { item.note.map { "\(item.kind.title) · \($0)" } ?? item.kind.title }
+    private func detail(_ item: TransactionDTO) -> String { [item.kind.title, item.installmentRelation.map { "分期 · \($0.planTitle)" }, item.note].compactMap { $0 }.joined(separator: " · ") }
     private func retry(_ title: String, _ symbol: String) -> some View { ContentUnavailableView { Label(title, systemImage: symbol) } description: { Text(model.message ?? "不会使用预览数据替代。") } actions: { Button("重试") { Task { await model.load() } } } }
     private func bannerView(_ text: String) -> some View { Label(text, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(FiscalColor.expense).padding(8).frame(maxWidth: .infinity).background(FiscalColor.expense.opacity(0.08)) }
     private var undoBar: some View {
@@ -322,15 +326,17 @@ public struct MacTransactionsScreen: View {
     let accounts: AccountsModel
     let categories: CategoriesModel
     let credit: CreditModel?
+    let installments: InstallmentModel?
     @State private var showCreate = false
     @State private var editing: TransactionDTO?
     @State private var pendingVoid: TransactionDTO?
     @State private var accountNames: [UUID: String] = [:]
     @State private var categoryNames: [UUID: String] = [:]
     @State private var masterNamesError: String?
+    @State private var installmentPurchase: TransactionDTO?
 
-    public init(model: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil) {
-        self.model = model; self.accounts = accounts; self.categories = categories; self.credit = credit
+    public init(model: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil, installments: InstallmentModel? = nil) {
+        self.model = model; self.accounts = accounts; self.categories = categories; self.credit = credit; self.installments = installments
     }
 
     public var body: some View {
@@ -362,6 +368,7 @@ public struct MacTransactionsScreen: View {
         }
         .sheet(isPresented: $showCreate) { TransactionEditorSheet(transactions: model, accounts: accounts, categories: categories, credit: credit) }
         .sheet(item: $editing) { TransactionEditorSheet(transactions: model, accounts: accounts, categories: categories, credit: credit, editing: $0) }
+        .sheet(item: $installmentPurchase) { if let installments { InstallmentCreateSheet(installments: installments, purchase: $0, categories: categories) } }
         .alert("作废这笔流水？", isPresented: Binding(get: { pendingVoid != nil }, set: { if !$0 { pendingVoid = nil } })) {
             Button("取消", role: .cancel) {}
             Button("作废", role: .destructive) { if let item = pendingVoid { Task { _ = await model.void(item); pendingVoid = nil } } }
@@ -483,6 +490,7 @@ public struct MacTransactionsScreen: View {
                     detailRow("账户", accountName(item))
                     detailRow("日期", item.businessDate)
                     if let note = item.note { detailRow("备注", note) }
+                    if let relation = item.installmentRelation { detailRow("分期关联", "\(relation.planTitle) · \(relation.planStatus.title)") }
                     Text("账户影响").font(.system(size: 12, weight: .semibold)).foregroundStyle(FiscalColor.tertiary).padding(.top, 16).padding(.bottom, 7)
                     ForEach(item.postings) { posting in
                         HStack {
@@ -490,10 +498,8 @@ public struct MacTransactionsScreen: View {
                             Text(Money(minorUnits: posting.amountMinor).formatted(showPositiveSign: true)).monospacedDigit()
                         }.font(.system(size: 12.5)).foregroundStyle(FiscalColor.secondary).padding(.vertical, 5)
                     }
-                    HStack(spacing: 8) {
-                        Button { editing = item } label: { Text("编辑").frame(maxWidth: .infinity, minHeight: 38).background(FiscalColor.accent, in: .rect(cornerRadius: 10)).foregroundStyle(.white) }
-                        Button { pendingVoid = item } label: { Text("删除").padding(.horizontal, 15).frame(minHeight: 38).background(Color.black.opacity(0.06), in: .rect(cornerRadius: 10)).foregroundStyle(FiscalColor.secondary) }
-                    }.font(.system(size: 13, weight: .semibold)).buttonStyle(.plain).padding(.top, 18)
+                    if item.kind == .creditPurchase && item.installmentPlanID == nil { Button("创建分期计划") { installmentPurchase = item }.buttonStyle(.borderedProminent).padding(.top, 16) }
+                    if item.source == "manual" && item.installmentPlanID == nil { HStack(spacing: 8) { Button { editing = item } label: { Text("编辑").frame(maxWidth: .infinity, minHeight: 38).background(FiscalColor.accent, in: .rect(cornerRadius: 10)).foregroundStyle(.white) }; Button { pendingVoid = item } label: { Text("删除").padding(.horizontal, 15).frame(minHeight: 38).background(Color.black.opacity(0.06), in: .rect(cornerRadius: 10)).foregroundStyle(FiscalColor.secondary) } }.font(.system(size: 13, weight: .semibold)).buttonStyle(.plain).padding(.top, 18) }
                 }.padding(.horizontal, 20).padding(.vertical, 22)
             }.background(.white)
         } else {
@@ -515,7 +521,11 @@ public struct MacTransactionsScreen: View {
         return source
     }
     private func amountText(_ item: TransactionDTO) -> Text {
-        let prefix = item.kind == .income ? "+" : item.kind == .expense ? "-" : ""
+        let prefix = switch item.kind {
+        case .income, .installmentRefund: "+"
+        case .expense, .creditPurchase, .installmentFee: "-"
+        case .transfer, .repayment: ""
+        }
         return Text(prefix + Money(minorUnits: item.amountMinor).formatted())
     }
     private func shortDate(_ value: String) -> String { String(value.suffix(5)).replacingOccurrences(of: "-", with: "/") }

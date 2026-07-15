@@ -8,6 +8,7 @@ from fiscal_api.db.readiness import ReadinessCheck
 from fiscal_api.services.accounts import AccountService
 from fiscal_api.services.categories import CategoryService
 from fiscal_api.services.credit import CreditService
+from fiscal_api.services.installments import InstallmentService
 from fiscal_api.services.transactions import TransactionService
 
 
@@ -43,7 +44,12 @@ def get_credit_service(session: SessionDependency) -> CreditService:
     return CreditService(session)
 
 
+def get_installment_service(session: SessionDependency) -> InstallmentService:
+    return InstallmentService(session)
+
+
 AccountServiceDependency = Annotated[AccountService, Depends(get_account_service)]
 CategoryServiceDependency = Annotated[CategoryService, Depends(get_category_service)]
 TransactionServiceDependency = Annotated[TransactionService, Depends(get_transaction_service)]
 CreditServiceDependency = Annotated[CreditService, Depends(get_credit_service)]
+InstallmentServiceDependency = Annotated[InstallmentService, Depends(get_installment_service)]

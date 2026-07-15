@@ -216,7 +216,15 @@ class TransactionRepository:
             .join(Category, Category.id == LedgerTransaction.category_id)
             .where(
                 LedgerTransaction.voided_at.is_(None),
-                LedgerTransaction.kind.in_(["income", "expense", "credit_purchase"]),
+                LedgerTransaction.kind.in_(
+                    [
+                        "income",
+                        "expense",
+                        "credit_purchase",
+                        "installment_fee",
+                        "installment_refund",
+                    ]
+                ),
             )
             .group_by(LedgerTransaction.kind, LedgerTransaction.category_id, Category.name)
         )

@@ -37,6 +37,7 @@ struct MacRootView: View {
     let categories: CategoriesModel
     let transactions: TransactionsModel
     let credit: CreditModel
+    let installments: InstallmentModel
     @State private var section: MacSection = .overview
 
     var body: some View {
@@ -47,11 +48,11 @@ struct MacRootView: View {
                 if section == .overview {
                     MacOverviewScreen(connectionPhase: connection.phase)
                 } else if section == .accounts {
-                    MacAccountsCreditScreen(accounts: accounts, credit: credit, transactions: transactions, categories: categories)
+                    MacAccountsCreditScreen(accounts: accounts, credit: credit, installments: installments, transactions: transactions, categories: categories)
                 } else if section == .categories {
                     NavigationStack { CategoriesManagementScreen(model: categories) }
                 } else if section == .transactions {
-                    MacTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit)
+                    MacTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments)
                 } else {
                     PlaceholderScreen(section.rawValue, symbol: section.symbol, phase: section.phase)
                 }

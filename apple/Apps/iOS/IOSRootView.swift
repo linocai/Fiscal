@@ -10,6 +10,7 @@ struct IOSRootView: View {
     let categories: CategoriesModel
     let transactions: TransactionsModel
     let credit: CreditModel
+    let installments: InstallmentModel
     @State private var selection: IOSTab = .overview
     @State private var showRecordSheet = false
 
@@ -17,9 +18,9 @@ struct IOSRootView: View {
         Group {
             switch selection {
             case .overview: NavigationStack { IOSOverviewScreen(connectionPhase: connection.phase) }
-            case .transactions: NavigationStack { IOSTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit) }
+            case .transactions: NavigationStack { IOSTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments) }
             case .cashFlow: PlaceholderScreen("现金流", symbol: "arrow.up.arrow.down", phase: "P7")
-            case .more: IOSMoreScreen(accounts: accounts, categories: categories, transactions: transactions, credit: credit, connection: connection)
+            case .more: IOSMoreScreen(accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, connection: connection)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -67,6 +68,7 @@ private struct IOSMoreScreen: View {
     let categories: CategoriesModel
     let transactions: TransactionsModel
     let credit: CreditModel
+    let installments: InstallmentModel
     let connection: ConnectionModel
     @State private var path: [IOSMoreDestination] = []
 
@@ -87,12 +89,12 @@ private struct IOSMoreScreen: View {
                             .buttonStyle(.plain)
                             Divider().padding(.leading, 46)
                             NavigationLink(value: IOSMoreDestination.credit) {
-                                row("信用账期", symbol: "calendar.badge.clock", detail: "账期 · 还款", color: FiscalColor.debt)
+                                row("信用账期与分期", symbol: "calendar.badge.clock", detail: "账期 · 分期 · 还款", color: FiscalColor.debt)
                             }.buttonStyle(.plain)
                         }
                     }
                     FiscalCard(radius: 18) { HStack { ConnectionBadge(phase: connection.phase); Spacer(); Text("个人 VPS · 设备密钥访问").font(.caption).foregroundStyle(FiscalColor.tertiary) } }
-                    FiscalCard(radius: 20) { VStack(spacing: 0) { placeholderRow("分期", "calendar.badge.clock", "P5"); Divider(); placeholderRow("报销", "doc.text", "P6"); Divider(); placeholderRow("报表", "chart.bar", "P7"); Divider(); placeholderRow("其他设置", "gearshape", "P11") } }
+                    FiscalCard(radius: 20) { VStack(spacing: 0) { placeholderRow("报销", "doc.text", "P6"); Divider(); placeholderRow("报表", "chart.bar", "P7"); Divider(); placeholderRow("其他设置", "gearshape", "P11") } }
                 }.padding(16).padding(.bottom, 100)
             }
             .background(FiscalColor.iOSBackground).navigationTitle("更多")
@@ -100,7 +102,7 @@ private struct IOSMoreScreen: View {
                 switch destination {
                 case .accounts: AccountsManagementScreen(model: accounts)
                 case .categories: CategoriesManagementScreen(model: categories)
-                case .credit: IOSCreditAccountsScreen(credit: credit, transactions: transactions, accounts: accounts, categories: categories)
+                case .credit: IOSCreditAccountsScreen(credit: credit, installments: installments, transactions: transactions, accounts: accounts, categories: categories)
                 }
             }
         }

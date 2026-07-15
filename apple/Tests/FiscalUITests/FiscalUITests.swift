@@ -120,6 +120,51 @@ final class FiscalUITests: XCTestCase {
         keepScreenshot(named: "ios-credit-repayment")
     }
 
+    func testP5InstallmentSummaryAndDetailUseRealAPI() throws {
+        try launchApp()
+        XCTAssertEqual(app.tabBars.count, 0)
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 1)
+
+        app.buttons["更多"].tap()
+        let creditEntry = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "信用账期与分期")).firstMatch
+        XCTAssertTrue(creditEntry.waitForExistence(timeout: 5))
+        creditEntry.tap()
+
+        let card = app.staticTexts["招行信用卡"]
+        XCTAssertTrue(card.waitForExistence(timeout: 8))
+        card.tap()
+        XCTAssertTrue(app.staticTexts["分期计划"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["未来计划毛额 ¥3,399.00"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.tabBars.count, 0)
+        waitForVisualStability()
+        keepScreenshot(named: "ios-installment-summary")
+
+        let plan = app.staticTexts["京东数码 · 配件"]
+        XCTAssertTrue(plan.waitForExistence(timeout: 5))
+        plan.tap()
+        XCTAssertTrue(app.staticTexts["分期详情"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["全部期次"].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "第 1 期")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "未来计划毛额")).firstMatch.exists)
+        XCTAssertEqual(app.tabBars.count, 0)
+        waitForVisualStability()
+        keepScreenshot(named: "ios-installment-detail")
+
+        let planMenu = app.buttons.matching(NSPredicate(format: "label == %@", "More")).firstMatch
+        XCTAssertTrue(planMenu.waitForExistence(timeout: 5))
+        planMenu.tap()
+        let editPlan = app.buttons["编辑计划"]
+        XCTAssertTrue(editPlan.waitForExistence(timeout: 3))
+        editPlan.tap()
+        XCTAssertTrue(app.staticTexts["编辑分期"].waitForExistence(timeout: 5))
+        let preview = app.buttons["预览"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 8))
+        preview.tap()
+        XCTAssertTrue(app.buttons["确认保存"].waitForExistence(timeout: 8))
+        waitForVisualStability()
+        keepScreenshot(named: "ios-installment-edit-preview")
+    }
+
     private func keepScreenshot(named name: String) {
         let screenshot = app.screenshot()
         let attachment = XCTAttachment(screenshot: screenshot)

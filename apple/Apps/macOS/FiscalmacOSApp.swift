@@ -8,6 +8,7 @@ struct FiscalmacOSApp: App {
     @State private var categories: CategoriesModel
     @State private var transactions: TransactionsModel
     @State private var credit: CreditModel
+    @State private var installments: InstallmentModel
 
     init() {
         let baseURL = APIConfiguration.baseURL()
@@ -15,16 +16,20 @@ struct FiscalmacOSApp: App {
         let accounts = AccountsModel(repository: RemoteAccountRepository(transport: transport))
         let categories = CategoriesModel(repository: RemoteCategoryRepository(transport: transport))
         let credit = CreditModel(repository: RemoteCreditRepository(transport: transport))
+        let transactionRepository = RemoteTransactionRepository(transport: transport)
+        let transactions = TransactionsModel(repository: transactionRepository, accounts: accounts, categories: categories, credit: credit)
+        let installments = InstallmentModel(repository: RemoteInstallmentRepository(transport: transport), transactions: transactionRepository, credit: credit, transactionList: transactions)
         _connection = State(initialValue: ConnectionModel(client: SystemStatusClient(baseURL: baseURL)))
         _accounts = State(initialValue: accounts)
         _categories = State(initialValue: categories)
         _credit = State(initialValue: credit)
-        _transactions = State(initialValue: TransactionsModel(repository: RemoteTransactionRepository(transport: transport), accounts: accounts, categories: categories, credit: credit))
+        _installments = State(initialValue: installments)
+        _transactions = State(initialValue: transactions)
     }
 
     var body: some Scene {
         WindowGroup {
-            MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit)
+            MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments)
                 .tint(FiscalColor.accent)
                 .preferredColorScheme(.light)
                 .frame(minWidth: 940, minHeight: 700)

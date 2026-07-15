@@ -28,6 +28,8 @@ class TransactionKind(StrEnum):
     TRANSFER = "transfer"
     CREDIT_PURCHASE = "credit_purchase"
     REPAYMENT = "repayment"
+    INSTALLMENT_FEE = "installment_fee"
+    INSTALLMENT_REFUND = "installment_refund"
 
 
 class PostingRole(StrEnum):
@@ -47,10 +49,11 @@ class LedgerTransaction(Base):
     __tablename__ = "transactions"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('income', 'expense', 'transfer', 'credit_purchase', 'repayment')",
+            "kind IN ('income', 'expense', 'transfer', 'credit_purchase', 'repayment', "
+            "'installment_fee', 'installment_refund')",
             name="valid_kind",
         ),
-        CheckConstraint("source = 'manual'", name="manual_source"),
+        CheckConstraint("source IN ('manual', 'system')", name="valid_source"),
         CheckConstraint("version >= 1", name="version_positive"),
         CheckConstraint("char_length(title) BETWEEN 1 AND 120", name="title_length"),
         CheckConstraint("note IS NULL OR char_length(note) <= 500", name="note_length"),
@@ -61,7 +64,7 @@ class LedgerTransaction(Base):
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
