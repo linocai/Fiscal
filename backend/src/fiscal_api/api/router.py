@@ -6,6 +6,7 @@ from fiscal_api.api.routes import (
     credit,
     health,
     installments,
+    reimbursements,
     system,
     transactions,
 )
@@ -18,3 +19,4 @@ api_router.include_router(categories.router)
 api_router.include_router(transactions.router)
 api_router.include_router(credit.router)
 api_router.include_router(installments.router)
+api_router.include_router(reimbursements.router)

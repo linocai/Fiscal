@@ -30,6 +30,7 @@ class TransactionKind(StrEnum):
     REPAYMENT = "repayment"
     INSTALLMENT_FEE = "installment_fee"
     INSTALLMENT_REFUND = "installment_refund"
+    REIMBURSEMENT_RECEIPT = "reimbursement_receipt"
 
 
 class PostingRole(StrEnum):
@@ -50,7 +51,7 @@ class LedgerTransaction(Base):
     __table_args__ = (
         CheckConstraint(
             "kind IN ('income', 'expense', 'transfer', 'credit_purchase', 'repayment', "
-            "'installment_fee', 'installment_refund')",
+            "'installment_fee', 'installment_refund', 'reimbursement_receipt')",
             name="valid_kind",
         ),
         CheckConstraint("source IN ('manual', 'system')", name="valid_source"),

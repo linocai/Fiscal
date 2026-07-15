@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 from fiscal_api.api.installment_types import InstallmentRelation
+from fiscal_api.api.reimbursement_types import ReimbursementRelation
 from fiscal_api.db.models import PostingRole, TransactionKind
 
 MAX_MINOR_UNITS = 9_223_372_036_854_775_807
@@ -62,8 +63,12 @@ class TransactionDraft(APIModel):
     @field_validator("kind")
     @classmethod
     def manual_kinds_only(cls, value: TransactionKind) -> TransactionKind:
-        if value in {TransactionKind.INSTALLMENT_FEE, TransactionKind.INSTALLMENT_REFUND}:
-            raise ValueError("installment transaction kinds are server-owned")
+        if value in {
+            TransactionKind.INSTALLMENT_FEE,
+            TransactionKind.INSTALLMENT_REFUND,
+            TransactionKind.REIMBURSEMENT_RECEIPT,
+        }:
+            raise ValueError("system transaction kinds are server-owned")
         return value
 
 
@@ -99,6 +104,9 @@ class TransactionResponse(APIModel):
     updated_at: datetime
     installment_plan_id: UUID | None = None
     installment_relation: InstallmentRelation | None = None
+    reimbursement_relations: list[ReimbursementRelation] = Field(
+        default_factory=lambda: list[ReimbursementRelation]()
+    )
 
 
 class TransactionPage(APIModel):

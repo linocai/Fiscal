@@ -30,7 +30,10 @@ async def _seed_materialized_cycle() -> None:
     async with engine.begin() as connection:
         await connection.execute(
             text(
-                "TRUNCATE transaction_revisions, postings, transactions, "
+                "TRUNCATE reimbursement_operations, reimbursement_receipt_revisions, "
+                "reimbursement_claim_revisions, reimbursement_receipt_allocations, "
+                "reimbursement_receipts, reimbursement_allocations, reimbursement_parties, "
+                "reimbursement_claims, transaction_revisions, postings, transactions, "
                 "credit_cycles, categories, accounts CASCADE"
             )
         )
@@ -64,7 +67,10 @@ async def _clear_p4_data() -> None:
     async with engine.begin() as connection:
         await connection.execute(
             text(
-                "TRUNCATE transaction_revisions, postings, transactions, "
+                "TRUNCATE reimbursement_operations, reimbursement_receipt_revisions, "
+                "reimbursement_claim_revisions, reimbursement_receipt_allocations, "
+                "reimbursement_receipts, reimbursement_allocations, reimbursement_parties, "
+                "reimbursement_claims, transaction_revisions, postings, transactions, "
                 "credit_cycles, categories, accounts CASCADE"
             )
         )

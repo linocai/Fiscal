@@ -19,6 +19,18 @@ from fiscal_api.db.models.ledger import (
     TransactionKind,
     TransactionRevision,
 )
+from fiscal_api.db.models.reimbursement import (
+    ReimbursementAllocation,
+    ReimbursementClaim,
+    ReimbursementClaimRevision,
+    ReimbursementClaimStatus,
+    ReimbursementOperation,
+    ReimbursementParty,
+    ReimbursementReceipt,
+    ReimbursementReceiptAllocation,
+    ReimbursementReceiptRevision,
+    ReimbursementRelationRole,
+)
 
 __all__ = [
     "Account",
@@ -38,6 +50,16 @@ __all__ = [
     "LedgerTransaction",
     "Posting",
     "PostingRole",
+    "ReimbursementAllocation",
+    "ReimbursementClaim",
+    "ReimbursementClaimRevision",
+    "ReimbursementClaimStatus",
+    "ReimbursementOperation",
+    "ReimbursementParty",
+    "ReimbursementReceipt",
+    "ReimbursementReceiptAllocation",
+    "ReimbursementReceiptRevision",
+    "ReimbursementRelationRole",
     "RevisionEvent",
     "TransactionKind",
     "TransactionRevision",

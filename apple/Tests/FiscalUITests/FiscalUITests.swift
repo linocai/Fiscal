@@ -2,185 +2,256 @@ import XCTest
 
 @MainActor
 final class FiscalUITests: XCTestCase {
-    private var app: XCUIApplication!
+  private var app: XCUIApplication!
 
-    private func launchApp() throws {
-        continueAfterFailure = false
-        let token = try XCTUnwrap(
-            ProcessInfo.processInfo.environment["FISCAL_UI_TEST_DEVICE_TOKEN"],
-            "Set FISCAL_UI_TEST_DEVICE_TOKEN for authenticated integration UI tests."
-        )
-        app = XCUIApplication()
-        app.launchEnvironment["FISCAL_DEVICE_TOKEN"] = token
-        app.launch()
+  private func launchApp() throws {
+    continueAfterFailure = false
+    let token = try XCTUnwrap(
+      ProcessInfo.processInfo.environment["FISCAL_UI_TEST_DEVICE_TOKEN"],
+      "Set FISCAL_UI_TEST_DEVICE_TOKEN for authenticated integration UI tests."
+    )
+    app = XCUIApplication()
+    app.launchEnvironment["FISCAL_DEVICE_TOKEN"] = token
+    app.launch()
+  }
+
+  func testAccountsUseRealAPIAndOnlyOneCustomBottomBar() throws {
+    try launchApp()
+    XCTAssertEqual(
+      app.tabBars.count, 0, "The native TabView bar must not exist beneath Fiscal's custom bar.")
+    XCTAssertEqual(
+      app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 1)
+    let more = app.buttons["更多"]
+    XCTAssertTrue(more.waitForExistence(timeout: 5))
+    more.tap()
+
+    let accounts = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "账户")).firstMatch
+    XCTAssertTrue(accounts.waitForExistence(timeout: 5))
+    accounts.tap()
+
+    XCTAssertTrue(app.staticTexts["招行储蓄卡"].waitForExistence(timeout: 8))
+    keepScreenshot(named: "ios-p2-accounts")
+  }
+
+  func testP3TransactionListAndRecordSheetUseRealAPI() throws {
+    try launchApp()
+    XCTAssertEqual(app.tabBars.count, 0)
+    let customBar = app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar")
+    XCTAssertEqual(customBar.count, 1)
+
+    app.buttons["流水"].tap()
+    XCTAssertTrue(
+      app.descendants(matching: .any)["transactions.screen"].waitForExistence(timeout: 8))
+    let search = app.searchFields["搜索标题或备注"]
+    XCTAssertTrue(search.waitForExistence(timeout: 5))
+    XCTAssertLessThan(
+      search.frame.maxY, customBar.element.frame.minY,
+      "iOS 26 must keep search above the custom bottom bar.")
+    XCTAssertTrue(app.staticTexts["手冲咖啡与午餐"].waitForExistence(timeout: 8))
+    keepScreenshot(named: "ios-p3-transactions")
+
+    let rowMenu = app.buttons
+      .matching(identifier: "transaction.rowMenu")
+      .matching(NSPredicate(format: "label == %@", "More"))
+      .firstMatch
+    XCTAssertTrue(rowMenu.waitForExistence(timeout: 5))
+    rowMenu.tap()
+    let voidMenuItem = app.buttons["作废"]
+    XCTAssertTrue(voidMenuItem.waitForExistence(timeout: 3))
+    voidMenuItem.tap()
+    let confirmVoid = app.alerts.buttons["作废"]
+    XCTAssertTrue(confirmVoid.waitForExistence(timeout: 3))
+    confirmVoid.tap()
+    let undoBar = app.descendants(matching: .any)["transaction.undoBar"]
+    XCTAssertTrue(undoBar.waitForExistence(timeout: 5))
+    XCTAssertLessThanOrEqual(
+      undoBar.frame.maxY, customBar.element.frame.minY,
+      "Undo must remain fully above the custom bottom bar.")
+    app.buttons["撤销"].tap()
+    XCTAssertTrue(undoBar.waitForNonExistence(timeout: 5))
+
+    app.buttons["记一笔"].tap()
+    XCTAssertTrue(
+      app.descendants(matching: .any)["transaction.editor"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["支出"].exists)
+    XCTAssertTrue(app.buttons["收入"].exists)
+    XCTAssertTrue(app.buttons["转账"].exists)
+    keepScreenshot(named: "ios-p3-record")
+  }
+
+  func testCategoriesReadTheSharedAPIHierarchy() throws {
+    try launchApp()
+    let more = app.buttons["更多"]
+    XCTAssertTrue(more.waitForExistence(timeout: 5))
+    more.tap()
+
+    let categories = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "分类设置"))
+      .firstMatch
+    XCTAssertTrue(categories.waitForExistence(timeout: 5))
+    categories.tap()
+
+    XCTAssertTrue(app.staticTexts["餐饮"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["咖啡"].waitForExistence(timeout: 5))
+    keepScreenshot(named: "ios-p2-categories")
+  }
+
+  func testP4CreditCycleAndRepaymentUseRealAPI() throws {
+    try launchApp()
+    XCTAssertEqual(app.tabBars.count, 0)
+    XCTAssertEqual(
+      app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 1)
+
+    app.buttons["更多"].tap()
+    let creditEntry = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "信用账期"))
+      .firstMatch
+    XCTAssertTrue(creditEntry.waitForExistence(timeout: 5))
+    creditEntry.tap()
+
+    let card = app.staticTexts["招行信用卡"]
+    XCTAssertTrue(card.waitForExistence(timeout: 8))
+    card.tap()
+    XCTAssertTrue(app.staticTexts["当前信用负债"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["已逾期"].exists)
+    keepScreenshot(named: "ios-credit-account")
+
+    let details = app.buttons["查看明细"]
+    XCTAssertTrue(details.waitForExistence(timeout: 5))
+    details.tap()
+    XCTAssertTrue(app.staticTexts["差旅酒店"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["已逾期"].exists)
+    waitForVisualStability()
+    keepScreenshot(named: "ios-credit-cycle")
+
+    let repay = app.buttons["全额或部分还款"]
+    XCTAssertTrue(repay.waitForExistence(timeout: 5))
+    repay.tap()
+    XCTAssertTrue(
+      app.descendants(matching: .any)["transaction.editor"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["目标账期"].exists)
+    waitForVisualStability()
+    keepScreenshot(named: "ios-credit-repayment")
+  }
+
+  func testP5InstallmentSummaryAndDetailUseRealAPI() throws {
+    try launchApp()
+    XCTAssertEqual(app.tabBars.count, 0)
+    XCTAssertEqual(
+      app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 1)
+
+    app.buttons["更多"].tap()
+    let creditEntry = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "信用账期与分期"))
+      .firstMatch
+    XCTAssertTrue(creditEntry.waitForExistence(timeout: 5))
+    creditEntry.tap()
+
+    let card = app.staticTexts["招行信用卡"]
+    XCTAssertTrue(card.waitForExistence(timeout: 8))
+    card.tap()
+    XCTAssertTrue(app.staticTexts["分期计划"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["未来计划毛额 ¥3,399.00"].waitForExistence(timeout: 5))
+    XCTAssertEqual(app.tabBars.count, 0)
+    waitForVisualStability()
+    keepScreenshot(named: "ios-installment-summary")
+
+    let plan = app.staticTexts["京东数码 · 配件"]
+    XCTAssertTrue(plan.waitForExistence(timeout: 5))
+    plan.tap()
+    XCTAssertTrue(app.staticTexts["分期详情"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["全部期次"].exists)
+    XCTAssertTrue(
+      app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "第 1 期")).firstMatch
+        .exists)
+    XCTAssertTrue(
+      app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "未来计划毛额")).firstMatch.exists
+    )
+    XCTAssertEqual(app.tabBars.count, 0)
+    waitForVisualStability()
+    keepScreenshot(named: "ios-installment-detail")
+
+    let planMenu = app.buttons.matching(NSPredicate(format: "label == %@", "More")).firstMatch
+    XCTAssertTrue(planMenu.waitForExistence(timeout: 5))
+    planMenu.tap()
+    let editPlan = app.buttons["编辑计划"]
+    XCTAssertTrue(editPlan.waitForExistence(timeout: 3))
+    editPlan.tap()
+    XCTAssertTrue(app.staticTexts["编辑分期"].waitForExistence(timeout: 5))
+    let preview = app.buttons["预览"]
+    XCTAssertTrue(preview.waitForExistence(timeout: 8))
+    preview.tap()
+    XCTAssertTrue(app.buttons["确认保存"].waitForExistence(timeout: 8))
+    waitForVisualStability()
+    keepScreenshot(named: "ios-installment-edit-preview")
+  }
+
+  func testP6ReimbursementDetailAndReceiptPreviewUseRealAPI() throws {
+    try launchApp()
+    XCTAssertEqual(app.tabBars.count, 0)
+    let customBar = app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar")
+    XCTAssertEqual(customBar.count, 1)
+
+    app.buttons["更多"].tap()
+    let entry = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "报销")).firstMatch
+    XCTAssertTrue(entry.waitForExistence(timeout: 5))
+    entry.tap()
+    XCTAssertTrue(app.staticTexts["报销概览"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["差旅报销单 · 7月"].waitForExistence(timeout: 8))
+    XCTAssertEqual(app.tabBars.count, 0)
+    keepScreenshot(named: "ios-reimbursements")
+
+    app.staticTexts["差旅报销单 · 7月"].tap()
+    XCTAssertTrue(app.staticTexts["付款主体"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["关联垫付 · 主体 × 支出"].exists)
+    XCTAssertTrue(app.staticTexts["回款记录"].exists)
+    waitForVisualStability()
+    keepScreenshot(named: "ios-reimbursement-detail")
+
+    let register = app.buttons["登记到账"].firstMatch
+    XCTAssertTrue(register.waitForExistence(timeout: 5))
+    register.tap()
+    XCTAssertTrue(app.staticTexts["到账信息"].waitForExistence(timeout: 5))
+    let amount = app.textFields["金额（分）"]
+    XCTAssertTrue(amount.waitForExistence(timeout: 3))
+    amount.tap()
+    amount.typeText("20000")
+    let preview = app.buttons["预览影响"]
+    XCTAssertTrue(preview.waitForExistence(timeout: 3))
+    preview.tap()
+    let confirm = app.buttons["确认到账"]
+    XCTAssertTrue(confirm.waitForExistence(timeout: 8))
+    if app.keyboards.firstMatch.exists {
+      let done = app.buttons["完成"]
+      XCTAssertTrue(done.waitForExistence(timeout: 3))
+      done.tap()
+      XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 3))
     }
+    waitForVisualStability()
+    keepScreenshot(named: "ios-reimbursement-receipt-preview")
+    confirm.tap()
+    XCTAssertTrue(app.staticTexts["到账信息"].waitForNonExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["报销到账"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["+¥200.00"].waitForExistence(timeout: 8))
+    XCTAssertTrue(
+      app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "已到账")).firstMatch.exists)
+  }
 
-    func testAccountsUseRealAPIAndOnlyOneCustomBottomBar() throws {
-        try launchApp()
-        XCTAssertEqual(app.tabBars.count, 0, "The native TabView bar must not exist beneath Fiscal's custom bar.")
-        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 1)
-        let more = app.buttons["更多"]
-        XCTAssertTrue(more.waitForExistence(timeout: 5))
-        more.tap()
-
-        let accounts = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "账户")).firstMatch
-        XCTAssertTrue(accounts.waitForExistence(timeout: 5))
-        accounts.tap()
-
-        XCTAssertTrue(app.staticTexts["招行储蓄卡"].waitForExistence(timeout: 8))
-        keepScreenshot(named: "ios-p2-accounts")
+  private func keepScreenshot(named name: String) {
+    let screenshot = app.screenshot()
+    let attachment = XCTAttachment(screenshot: screenshot)
+    attachment.name = name
+    attachment.lifetime = .keepAlways
+    add(attachment)
+    if let directory = ProcessInfo.processInfo.environment["FISCAL_QA_SCREENSHOT_DIR"] {
+      let url = URL(fileURLWithPath: directory, isDirectory: true).appendingPathComponent(
+        "\(name).png")
+      try? FileManager.default.createDirectory(
+        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try? screenshot.pngRepresentation.write(to: url, options: .atomic)
     }
+  }
 
-    func testP3TransactionListAndRecordSheetUseRealAPI() throws {
-        try launchApp()
-        XCTAssertEqual(app.tabBars.count, 0)
-        let customBar = app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar")
-        XCTAssertEqual(customBar.count, 1)
-
-        app.buttons["流水"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["transactions.screen"].waitForExistence(timeout: 8))
-        let search = app.searchFields["搜索标题或备注"]
-        XCTAssertTrue(search.waitForExistence(timeout: 5))
-        XCTAssertLessThan(search.frame.maxY, customBar.element.frame.minY, "iOS 26 must keep search above the custom bottom bar.")
-        XCTAssertTrue(app.staticTexts["手冲咖啡与午餐"].waitForExistence(timeout: 8))
-        keepScreenshot(named: "ios-p3-transactions")
-
-        let rowMenu = app.buttons
-            .matching(identifier: "transaction.rowMenu")
-            .matching(NSPredicate(format: "label == %@", "More"))
-            .firstMatch
-        XCTAssertTrue(rowMenu.waitForExistence(timeout: 5))
-        rowMenu.tap()
-        let voidMenuItem = app.buttons["作废"]
-        XCTAssertTrue(voidMenuItem.waitForExistence(timeout: 3))
-        voidMenuItem.tap()
-        let confirmVoid = app.alerts.buttons["作废"]
-        XCTAssertTrue(confirmVoid.waitForExistence(timeout: 3))
-        confirmVoid.tap()
-        let undoBar = app.descendants(matching: .any)["transaction.undoBar"]
-        XCTAssertTrue(undoBar.waitForExistence(timeout: 5))
-        XCTAssertLessThanOrEqual(undoBar.frame.maxY, customBar.element.frame.minY, "Undo must remain fully above the custom bottom bar.")
-        app.buttons["撤销"].tap()
-        XCTAssertTrue(undoBar.waitForNonExistence(timeout: 5))
-
-        app.buttons["记一笔"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["transaction.editor"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["支出"].exists)
-        XCTAssertTrue(app.buttons["收入"].exists)
-        XCTAssertTrue(app.buttons["转账"].exists)
-        keepScreenshot(named: "ios-p3-record")
-    }
-
-    func testCategoriesReadTheSharedAPIHierarchy() throws {
-        try launchApp()
-        let more = app.buttons["更多"]
-        XCTAssertTrue(more.waitForExistence(timeout: 5))
-        more.tap()
-
-        let categories = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "分类设置")).firstMatch
-        XCTAssertTrue(categories.waitForExistence(timeout: 5))
-        categories.tap()
-
-        XCTAssertTrue(app.staticTexts["餐饮"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts["咖啡"].waitForExistence(timeout: 5))
-        keepScreenshot(named: "ios-p2-categories")
-    }
-
-    func testP4CreditCycleAndRepaymentUseRealAPI() throws {
-        try launchApp()
-        XCTAssertEqual(app.tabBars.count, 0)
-        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 1)
-
-        app.buttons["更多"].tap()
-        let creditEntry = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "信用账期")).firstMatch
-        XCTAssertTrue(creditEntry.waitForExistence(timeout: 5))
-        creditEntry.tap()
-
-        let card = app.staticTexts["招行信用卡"]
-        XCTAssertTrue(card.waitForExistence(timeout: 8))
-        card.tap()
-        XCTAssertTrue(app.staticTexts["当前信用负债"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts["已逾期"].exists)
-        keepScreenshot(named: "ios-credit-account")
-
-        let details = app.buttons["查看明细"]
-        XCTAssertTrue(details.waitForExistence(timeout: 5))
-        details.tap()
-        XCTAssertTrue(app.staticTexts["差旅酒店"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts["已逾期"].exists)
-        waitForVisualStability()
-        keepScreenshot(named: "ios-credit-cycle")
-
-        let repay = app.buttons["全额或部分还款"]
-        XCTAssertTrue(repay.waitForExistence(timeout: 5))
-        repay.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["transaction.editor"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["目标账期"].exists)
-        waitForVisualStability()
-        keepScreenshot(named: "ios-credit-repayment")
-    }
-
-    func testP5InstallmentSummaryAndDetailUseRealAPI() throws {
-        try launchApp()
-        XCTAssertEqual(app.tabBars.count, 0)
-        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 1)
-
-        app.buttons["更多"].tap()
-        let creditEntry = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "信用账期与分期")).firstMatch
-        XCTAssertTrue(creditEntry.waitForExistence(timeout: 5))
-        creditEntry.tap()
-
-        let card = app.staticTexts["招行信用卡"]
-        XCTAssertTrue(card.waitForExistence(timeout: 8))
-        card.tap()
-        XCTAssertTrue(app.staticTexts["分期计划"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts["未来计划毛额 ¥3,399.00"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.tabBars.count, 0)
-        waitForVisualStability()
-        keepScreenshot(named: "ios-installment-summary")
-
-        let plan = app.staticTexts["京东数码 · 配件"]
-        XCTAssertTrue(plan.waitForExistence(timeout: 5))
-        plan.tap()
-        XCTAssertTrue(app.staticTexts["分期详情"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts["全部期次"].exists)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "第 1 期")).firstMatch.exists)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "未来计划毛额")).firstMatch.exists)
-        XCTAssertEqual(app.tabBars.count, 0)
-        waitForVisualStability()
-        keepScreenshot(named: "ios-installment-detail")
-
-        let planMenu = app.buttons.matching(NSPredicate(format: "label == %@", "More")).firstMatch
-        XCTAssertTrue(planMenu.waitForExistence(timeout: 5))
-        planMenu.tap()
-        let editPlan = app.buttons["编辑计划"]
-        XCTAssertTrue(editPlan.waitForExistence(timeout: 3))
-        editPlan.tap()
-        XCTAssertTrue(app.staticTexts["编辑分期"].waitForExistence(timeout: 5))
-        let preview = app.buttons["预览"]
-        XCTAssertTrue(preview.waitForExistence(timeout: 8))
-        preview.tap()
-        XCTAssertTrue(app.buttons["确认保存"].waitForExistence(timeout: 8))
-        waitForVisualStability()
-        keepScreenshot(named: "ios-installment-edit-preview")
-    }
-
-    private func keepScreenshot(named name: String) {
-        let screenshot = app.screenshot()
-        let attachment = XCTAttachment(screenshot: screenshot)
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
-        if let directory = ProcessInfo.processInfo.environment["FISCAL_QA_SCREENSHOT_DIR"] {
-            let url = URL(fileURLWithPath: directory, isDirectory: true).appendingPathComponent("\(name).png")
-            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? screenshot.pngRepresentation.write(to: url, options: .atomic)
-        }
-    }
-
-    private func waitForVisualStability() {
-        let expectation = expectation(description: "wait for navigation and sheet animations")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { expectation.fulfill() }
-        wait(for: [expectation], timeout: 2)
-    }
+  private func waitForVisualStability() {
+    let expectation = expectation(description: "wait for navigation and sheet animations")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { expectation.fulfill() }
+    wait(for: [expectation], timeout: 2)
+  }
 }

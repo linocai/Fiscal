@@ -52,8 +52,12 @@ class InstallmentPlan(Base):
             name="valid_lifecycle",
         ),
         CheckConstraint("version >= 1", name="version_positive"),
-        UniqueConstraint("purchase_transaction_id", name="uq_installment_plans_purchase"),
-        UniqueConstraint("create_idempotency_key", name="uq_installment_plans_idempotency"),
+        UniqueConstraint(
+            "purchase_transaction_id", name="uq_installment_plans_purchase_transaction_id"
+        ),
+        UniqueConstraint(
+            "create_idempotency_key", name="uq_installment_plans_create_idempotency_key"
+        ),
         Index("ix_installment_plans_account", "credit_account_id", text("created_at DESC")),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -131,7 +135,7 @@ class InstallmentOperation(Base):
         CheckConstraint(
             "kind IN ('settle_early','reverse_settlement','cancel_future')", name="valid_kind"
         ),
-        UniqueConstraint("idempotency_key", name="uq_installment_operations_idempotency"),
+        UniqueConstraint("idempotency_key", name="uq_installment_operations_idempotency_key"),
         Index("ix_installment_operations_plan", "plan_id", text("created_at DESC")),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -161,7 +165,7 @@ class InstallmentLedgerLink(Base):
             "role IN ('purchase','fee','principal_refund','fee_refund','settlement_repayment')",
             name="valid_role",
         ),
-        UniqueConstraint("transaction_id", name="uq_installment_ledger_links_transaction"),
+        UniqueConstraint("transaction_id", name="uq_installment_ledger_links_transaction_id"),
         Index(
             "uq_installment_ledger_links_plan_purchase",
             "plan_id",

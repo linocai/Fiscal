@@ -1,7 +1,7 @@
 import SwiftUI
 
 private extension TransactionKind {
-    var color: Color { switch self { case .expense: FiscalColor.expense; case .income, .installmentRefund: FiscalColor.income; case .transfer: FiscalColor.accent; case .creditPurchase, .repayment, .installmentFee: FiscalColor.debt } }
+    var color: Color { switch self { case .expense: FiscalColor.expense; case .income, .installmentRefund, .reimbursementReceipt: FiscalColor.income; case .transfer: FiscalColor.accent; case .creditPurchase, .repayment, .installmentFee: FiscalColor.debt } }
 }
 
 private struct TransactionAmount: View {
@@ -10,7 +10,7 @@ private struct TransactionAmount: View {
         Text(prefix + Money(minorUnits: transaction.amountMinor).formatted())
             .font(.body.weight(.semibold)).foregroundStyle(transaction.kind.color).monospacedDigit()
     }
-    private var prefix: String { switch transaction.kind { case .expense, .creditPurchase, .installmentFee: "−"; case .income, .installmentRefund: "+"; case .transfer, .repayment: "" } }
+    private var prefix: String { switch transaction.kind { case .expense, .creditPurchase, .installmentFee: "−"; case .income, .installmentRefund, .reimbursementReceipt: "+"; case .transfer, .repayment: "" } }
 }
 
 public struct TransactionEditorSheet: View {
@@ -58,7 +58,7 @@ public struct TransactionEditorSheet: View {
                 case .repayment: repaymentSection
                 case .creditPurchase: creditPurchaseSection
                 case .expense, .income: incomeExpenseSection
-                case .installmentFee, .installmentRefund: EmptyView()
+                case .installmentFee, .installmentRefund, .reimbursementReceipt: EmptyView()
                 }
                 if loadingOptions { Section { ProgressView("正在读取账户与分类…") } }
                 if let optionsError { Section { Label(optionsError, systemImage: "wifi.exclamationmark").foregroundStyle(FiscalColor.expense); Button("重试") { Task { await loadOptions() } } } }
@@ -522,7 +522,7 @@ public struct MacTransactionsScreen: View {
     }
     private func amountText(_ item: TransactionDTO) -> Text {
         let prefix = switch item.kind {
-        case .income, .installmentRefund: "+"
+        case .income, .installmentRefund, .reimbursementReceipt: "+"
         case .expense, .creditPurchase, .installmentFee: "-"
         case .transfer, .repayment: ""
         }

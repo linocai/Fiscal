@@ -33,7 +33,10 @@ async def _seed_plan_marker() -> None:
     async with engine.begin() as connection:
         statements = "".join(
             (
-                "TRUNCATE installment_plan_revisions, installment_ledger_links, "
+                "TRUNCATE reimbursement_operations, reimbursement_receipt_revisions, "
+                "reimbursement_claim_revisions, reimbursement_receipt_allocations, "
+                "reimbursement_receipts, reimbursement_allocations, reimbursement_parties, "
+                "reimbursement_claims, installment_plan_revisions, installment_ledger_links, "
                 "installment_operations, installment_periods, installment_plans, "
                 "transaction_revisions, postings, transactions, credit_cycles, "
                 "categories, accounts CASCADE;",
@@ -71,7 +74,10 @@ async def _clear() -> None:
     async with engine.begin() as connection:
         await connection.execute(
             text(
-                "TRUNCATE installment_plan_revisions, installment_ledger_links, "
+                "TRUNCATE reimbursement_operations, reimbursement_receipt_revisions, "
+                "reimbursement_claim_revisions, reimbursement_receipt_allocations, "
+                "reimbursement_receipts, reimbursement_allocations, reimbursement_parties, "
+                "reimbursement_claims, installment_plan_revisions, installment_ledger_links, "
                 "installment_operations, installment_periods, installment_plans, "
                 "transaction_revisions, postings, transactions, credit_cycles, "
                 "categories, accounts CASCADE"

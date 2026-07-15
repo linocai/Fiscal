@@ -38,6 +38,7 @@ struct MacRootView: View {
     let transactions: TransactionsModel
     let credit: CreditModel
     let installments: InstallmentModel
+    let reimbursements: ReimbursementModel
     @State private var section: MacSection = .overview
 
     var body: some View {
@@ -53,6 +54,8 @@ struct MacRootView: View {
                     NavigationStack { CategoriesManagementScreen(model: categories) }
                 } else if section == .transactions {
                     MacTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments)
+                } else if section == .reimbursement {
+                    MacReimbursementsScreen(model: reimbursements, accounts: accounts)
                 } else {
                     PlaceholderScreen(section.rawValue, symbol: section.symbol, phase: section.phase)
                 }

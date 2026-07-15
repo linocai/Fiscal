@@ -31,6 +31,7 @@ from fiscal_api.db.models import (
 )
 from fiscal_api.repositories.credit import CreditRepository
 from fiscal_api.repositories.installments import InstallmentRepository
+from fiscal_api.repositories.reimbursements import ReimbursementRepository
 from fiscal_api.repositories.transactions import TransactionRepository
 from fiscal_api.services.common import (
     acquire_mutation_lock,
@@ -49,6 +50,7 @@ class TransactionService:
         self.repository = TransactionRepository(session)
         self.credit_repository = CreditRepository(session)
         self.installment_repository = InstallmentRepository(session)
+        self.reimbursement_repository = ReimbursementRepository(session)
 
     async def create(self, draft: TransactionDraft, idempotency_key: UUID) -> TransactionResponse:
         await acquire_mutation_lock(self.session)
@@ -166,7 +168,7 @@ class TransactionService:
     ) -> TransactionResponse:
         await acquire_mutation_lock(self.session)
         transaction = await self._required(transaction_id, for_update=True)
-        await self._assert_generic_mutation_allowed(transaction)
+        await self._assert_generic_mutation_allowed(transaction, draft=draft)
         check_version(transaction.version, expected_version)
         if transaction.voided_at is not None:
             conflict("transaction_voided", "Restore the transaction before editing it")
@@ -225,7 +227,7 @@ class TransactionService:
     async def void(self, transaction_id: UUID, expected_version: int) -> TransactionResponse:
         await acquire_mutation_lock(self.session)
         transaction = await self._required(transaction_id, for_update=True)
-        await self._assert_generic_mutation_allowed(transaction)
+        await self._assert_generic_mutation_allowed(transaction, voiding=True)
         check_version(transaction.version, expected_version)
         if transaction.voided_at is not None:
             return self._response(transaction, list(transaction.postings))
@@ -372,6 +374,14 @@ class TransactionService:
         except APIError:
             await self.session.rollback()
             raise
+
+    async def validate_account_impacts(self, account_ids: set[UUID]) -> None:
+        await self._validate_mutation_ranges(
+            account_ids,
+            credit_accounts=set(),
+            enforce_limit=set(),
+            repayment_error=False,
+        )
 
     async def _validated_postings(
         self,
@@ -622,7 +632,34 @@ class TransactionService:
             not_found("transaction_not_found", "The transaction does not exist")
         return transaction
 
-    async def _assert_generic_mutation_allowed(self, transaction: LedgerTransaction) -> None:
+    async def _assert_generic_mutation_allowed(
+        self,
+        transaction: LedgerTransaction,
+        *,
+        draft: TransactionDraft | None = None,
+        voiding: bool = False,
+    ) -> None:
+        (
+            reimbursement_allocations,
+            reimbursement_receipt,
+        ) = await self.reimbursement_repository.reimbursement_for_transaction(transaction.id)
+        if reimbursement_receipt is not None or transaction.kind == "reimbursement_receipt":
+            conflict(
+                "reimbursement_receipt_in_use",
+                "Use the reimbursement receipt command to change this transaction",
+            )
+        if reimbursement_allocations:
+            if voiding or draft is None or draft.kind.value != transaction.kind:
+                conflict(
+                    "reimbursement_claim_in_use",
+                    "The source expense is used by a reimbursement claim",
+                )
+            effective = await self.reimbursement_repository.allocated_for_expense(transaction.id)
+            if draft.amount_minor < effective:
+                conflict(
+                    "reimbursement_claim_in_use",
+                    "The source expense would fall below its reimbursement allocation",
+                )
         if transaction.source == "system" or await self.installment_repository.linked(
             transaction.id
         ):
@@ -703,32 +740,94 @@ class TransactionService:
             updated_at=transaction.updated_at,
         )
 
+    @staticmethod
+    def snapshot_response(
+        transaction: LedgerTransaction, postings: list[Posting]
+    ) -> TransactionResponse:
+        return TransactionService._response(transaction, postings)
+
     async def response_with_relation(
         self, transaction: LedgerTransaction, postings: list[Posting]
     ) -> TransactionResponse:
         response = self._response(transaction, postings)
         link = await self.installment_repository.linked(transaction.id)
-        if link is None:
-            return response
-        plan = await self.installment_repository.plan(link.plan_id)
-        if plan is None:
-            raise RuntimeError("installment relation plan missing")
-        from fiscal_api.api.installment_types import InstallmentRelation
-        from fiscal_api.db.models import InstallmentLedgerRole
-        from fiscal_api.services.installments import InstallmentService
+        if link is not None:
+            plan = await self.installment_repository.plan(link.plan_id)
+            if plan is None:
+                raise RuntimeError("installment relation plan missing")
+            from fiscal_api.api.installment_types import InstallmentRelation
+            from fiscal_api.db.models import InstallmentLedgerRole
+            from fiscal_api.services.installments import InstallmentService
 
-        plan_response = await InstallmentService(self.session).response(plan)
-        return response.model_copy(
-            update={
-                "installment_plan_id": plan.id,
-                "installment_relation": InstallmentRelation(
-                    plan_id=plan.id,
-                    role=InstallmentLedgerRole(link.role),
-                    plan_title=plan_response.title,
-                    plan_status=plan_response.status,
-                ),
-            }
+            plan_response = await InstallmentService(self.session).response(plan)
+            response = response.model_copy(
+                update={
+                    "installment_plan_id": plan.id,
+                    "installment_relation": InstallmentRelation(
+                        plan_id=plan.id,
+                        role=InstallmentLedgerRole(link.role),
+                        plan_title=plan_response.title,
+                        plan_status=plan_response.status,
+                    ),
+                }
+            )
+        allocations, receipt = await self.reimbursement_repository.reimbursement_for_transaction(
+            transaction.id
         )
+        if not allocations and receipt is None:
+            return response
+        from fiscal_api.api.reimbursement_types import ReimbursementRelation
+        from fiscal_api.db.models import ReimbursementRelationRole
+        from fiscal_api.services.reimbursements import ReimbursementService
+
+        service = ReimbursementService(self.session)
+        relations: list[ReimbursementRelation] = []
+        for allocation in allocations:
+            claim = await self.reimbursement_repository.claim(allocation.claim_id)
+            if claim is None:
+                raise RuntimeError("reimbursement relation claim missing")
+            received = (await self.reimbursement_repository.active_received(claim.id)).get(
+                allocation.id, 0
+            )
+            party = next(item for item in claim.parties if item.id == allocation.party_id)
+            effective_allocated = (
+                received if claim.cancelled_at is not None else allocation.amount_minor
+            )
+            relations.append(
+                ReimbursementRelation(
+                    role=ReimbursementRelationRole.EXPENSE,
+                    claim_id=claim.id,
+                    claim_title=claim.title,
+                    claim_status=await service.derived_status(claim),
+                    party_id=party.id,
+                    party_name=party.name,
+                    receipt_id=None,
+                    allocated_minor=effective_allocated,
+                    received_minor=received,
+                    outstanding_minor=effective_allocated - received,
+                )
+            )
+        if receipt is not None:
+            claim = await self.reimbursement_repository.claim(receipt.claim_id)
+            if claim is None:
+                raise RuntimeError("reimbursement receipt claim missing")
+            party = next(item for item in claim.parties if item.id == receipt.party_id)
+            amount = response.amount_minor
+            relations.append(
+                ReimbursementRelation(
+                    role=ReimbursementRelationRole.RECEIPT,
+                    claim_id=claim.id,
+                    claim_title=claim.title,
+                    claim_status=await service.derived_status(claim),
+                    party_id=party.id,
+                    party_name=party.name,
+                    receipt_id=receipt.id,
+                    allocated_minor=amount,
+                    received_minor=0 if transaction.voided_at else amount,
+                    outstanding_minor=0,
+                )
+            )
+        return response.model_copy(update={"reimbursement_relations": relations})
 
     @staticmethod
     def _account_ids(postings: list[Posting]) -> set[UUID]:

@@ -1079,6 +1079,17 @@ class InstallmentService:
             raise RuntimeError("installment purchase is incomplete")
         principal = sum(period.principal_minor for period, _response in candidates)
         fee = sum(period.fee_minor for period, _response in candidates)
+        from fiscal_api.services.reimbursements import ensure_reimbursement_capacity
+
+        purchase_capacity = abs(next(item.amount_minor for item in purchase.postings))
+        already_refunded = purchase_capacity - sum(
+            item.principal_minor for item in plan.periods if item.cancelled_at is None
+        )
+        await ensure_reimbursement_capacity(
+            self.session,
+            purchase.id,
+            purchase_capacity - already_refunded - principal,
+        )
         refunds: list[LedgerTransaction] = []
         for amount, category_id, role, label in (
             (principal, purchase.category_id, "principal_refund", "本金退款"),

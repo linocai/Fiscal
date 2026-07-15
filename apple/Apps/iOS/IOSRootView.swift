@@ -2,7 +2,7 @@ import FiscalKit
 import SwiftUI
 
 private enum IOSTab: Hashable { case overview, transactions, cashFlow, more }
-private enum IOSMoreDestination: Hashable { case accounts, categories, credit }
+private enum IOSMoreDestination: Hashable { case accounts, categories, credit, reimbursements }
 
 struct IOSRootView: View {
     @Bindable var connection: ConnectionModel
@@ -11,6 +11,7 @@ struct IOSRootView: View {
     let transactions: TransactionsModel
     let credit: CreditModel
     let installments: InstallmentModel
+    let reimbursements: ReimbursementModel
     @State private var selection: IOSTab = .overview
     @State private var showRecordSheet = false
 
@@ -20,7 +21,7 @@ struct IOSRootView: View {
             case .overview: NavigationStack { IOSOverviewScreen(connectionPhase: connection.phase) }
             case .transactions: NavigationStack { IOSTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments) }
             case .cashFlow: PlaceholderScreen("现金流", symbol: "arrow.up.arrow.down", phase: "P7")
-            case .more: IOSMoreScreen(accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, connection: connection)
+            case .more: IOSMoreScreen(accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, connection: connection)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -69,6 +70,7 @@ private struct IOSMoreScreen: View {
     let transactions: TransactionsModel
     let credit: CreditModel
     let installments: InstallmentModel
+    let reimbursements: ReimbursementModel
     let connection: ConnectionModel
     @State private var path: [IOSMoreDestination] = []
 
@@ -94,7 +96,7 @@ private struct IOSMoreScreen: View {
                         }
                     }
                     FiscalCard(radius: 18) { HStack { ConnectionBadge(phase: connection.phase); Spacer(); Text("个人 VPS · 设备密钥访问").font(.caption).foregroundStyle(FiscalColor.tertiary) } }
-                    FiscalCard(radius: 20) { VStack(spacing: 0) { placeholderRow("报销", "doc.text", "P6"); Divider(); placeholderRow("报表", "chart.bar", "P7"); Divider(); placeholderRow("其他设置", "gearshape", "P11") } }
+                    FiscalCard(radius: 20) { VStack(spacing: 0) { NavigationLink(value: IOSMoreDestination.reimbursements) { row("报销", symbol: "doc.text", detail: "多人 · 分次到账", color: FiscalColor.reimbursement) }.buttonStyle(.plain); Divider(); placeholderRow("报表", "chart.bar", "P7"); Divider(); placeholderRow("其他设置", "gearshape", "P11") } }
                 }.padding(16).padding(.bottom, 100)
             }
             .background(FiscalColor.iOSBackground).navigationTitle("更多")
@@ -103,6 +105,7 @@ private struct IOSMoreScreen: View {
                 case .accounts: AccountsManagementScreen(model: accounts)
                 case .categories: CategoriesManagementScreen(model: categories)
                 case .credit: IOSCreditAccountsScreen(credit: credit, installments: installments, transactions: transactions, accounts: accounts, categories: categories)
+                case .reimbursements: IOSReimbursementsScreen(model: reimbursements, accounts: accounts)
                 }
             }
         }

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01C1E84B8390289B1D225E71 /* ReimbursementModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2143E2EC10FFF85034FFD8BB /* ReimbursementModel.swift */; };
 		0593A52F50EF56D7F4AD9CF5 /* MacOverviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30AD3A2039A614D2F2543AE1 /* MacOverviewScreen.swift */; };
 		07C81CB610412DD379C0101C /* TransactionDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14D2F5B51728A050A74E8E3F /* TransactionDTO.swift */; };
 		095E87EC30FDBE600CB36502 /* CreditRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F6D5C08025FA9E847D78B61 /* CreditRepository.swift */; };
@@ -14,6 +15,7 @@
 		0E59ACB97BECD3181F51A92F /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */; };
 		15BB0F18A42867A3156A607C /* FiscalDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1164C772E643D0CF6996CB1 /* FiscalDesign.swift */; };
 		16C11D0F2A385F40A9CA246A /* TransactionScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9654628B5C1FF4264957DEA3 /* TransactionScreens.swift */; };
+		176EB9254474739905284C8E /* ReimbursementRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A3AB4BE7E4F9C491EEA3497 /* ReimbursementRepository.swift */; };
 		182C32DC2D8B456E50A6458A /* APITransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC300DFA7D718CB81ABD669 /* APITransport.swift */; };
 		1AA79C712F4EE4661527C1B0 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; };
 		1E93660618BFA3172A2C2886 /* InstallmentScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B76007E6901E55864724E2F /* InstallmentScreens.swift */; };
@@ -32,6 +34,7 @@
 		58D58F47A45AD9947FD3CC62 /* InstallmentDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = B776D98F419D1A0D118D08AC /* InstallmentDTO.swift */; };
 		6297712DE1515836BCC6E29E /* SystemStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = F05017C6B56940B011F6E23E /* SystemStatus.swift */; };
 		682F700DD6FD0ACCC4BC1BCD /* MasterDataDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CB89B668C9785D2064942E1 /* MasterDataDTO.swift */; };
+		6CEE9412D66F9E0E5250DA7B /* ReimbursementModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2143E2EC10FFF85034FFD8BB /* ReimbursementModel.swift */; };
 		70083F44D5488D2A90A18600 /* MasterDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 549791302DE4F9854A26918B /* MasterDataModels.swift */; };
 		762C619FE720543408DACD69 /* MacRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 255F8031C4F10F48F933A838 /* MacRootView.swift */; };
 		79595B893A93FD06DF6B4F4A /* CreditScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA464751FCA42DDEA8005314 /* CreditScreens.swift */; };
@@ -41,6 +44,7 @@
 		89087700DD68C77C7175FA1C /* InstallmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */; };
 		8E2A9F3F530D7AEC804E1A0E /* TransactionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0752D3D57AD3B99FE1943E05 /* TransactionModels.swift */; };
 		8E8037BF67BFD62CDA4033EA /* FiscalmacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E8B677BF8165F1CF2AA217F /* FiscalmacOSApp.swift */; };
+		8F352FC4B0E80F982525AED9 /* ReimbursementDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF39C6F2744F63EE814A73F2 /* ReimbursementDTO.swift */; };
 		9307E589EF04A2D630C49160 /* InstallmentScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B76007E6901E55864724E2F /* InstallmentScreens.swift */; };
 		946C85A339DB616A6ECDDC29 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E2FF91C44F1DCC211426631D /* FiscalKit.framework */; };
 		956D11991AADEFD598358E95 /* OverviewFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AB6841587AA8B69AFF3A00A /* OverviewFixtures.swift */; };
@@ -63,6 +67,8 @@
 		C9F0CD5E3ED47A855E847C3E /* CreditModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5407B68FAE8AFB476A8A2C45 /* CreditModel.swift */; };
 		CAB14618787EAB485A7F0920 /* FiscalUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C18CEE768684AD8529AC01 /* FiscalUITests.swift */; };
 		CE4D4DDA94380519D6AA4DD2 /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05A497A70BFC7C3E143FE00A /* APIConfiguration.swift */; };
+		CECB7E26EC40C8BAAE042E28 /* ReimbursementScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6DF31AF77C0838D251DDC32 /* ReimbursementScreens.swift */; };
+		CF97D0DCF3FDF7229D0BEE04 /* ReimbursementRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A3AB4BE7E4F9C491EEA3497 /* ReimbursementRepository.swift */; };
 		D049B3275D9D8CF1DF91BC4B /* ConnectionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E38857D295F340534E49F652 /* ConnectionModel.swift */; };
 		DD074CA639D50F253BC74684 /* MasterDataRepositories.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A8B134AC6D0F6AF80ECDA80 /* MasterDataRepositories.swift */; };
 		DE3269DC41F6C6035D92F953 /* TransactionScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9654628B5C1FF4264957DEA3 /* TransactionScreens.swift */; };
@@ -70,7 +76,9 @@
 		E0691180982BF60F9F6547EA /* FiscalKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E1F6BFF656B87F2DAA1C21E5 /* TransactionDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14D2F5B51728A050A74E8E3F /* TransactionDTO.swift */; };
 		E3046B16C01C9457A052EF11 /* IOSRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2144E087E40C5B7FEF232A /* IOSRootView.swift */; };
+		E5EA9FB15375AD6F67A32EC4 /* ReimbursementDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF39C6F2744F63EE814A73F2 /* ReimbursementDTO.swift */; };
 		E67C6BEF0FFD61DE50A2E3B8 /* CreditModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5407B68FAE8AFB476A8A2C45 /* CreditModel.swift */; };
+		E6996334DD1C8B508DDAE946 /* ReimbursementScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6DF31AF77C0838D251DDC32 /* ReimbursementScreens.swift */; };
 		E7AFE36F01F57CCED68F06B4 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; };
 		EB941A8C4F43A67DDF71A0D0 /* InstallmentModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61975243C0F4B54528AB4EB5 /* InstallmentModel.swift */; };
 		EC7C9011E02301DF54E04B1D /* TransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0067D7F4A0681CA61009D6 /* TransactionRepository.swift */; };
@@ -152,6 +160,7 @@
 		0FC300DFA7D718CB81ABD669 /* APITransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APITransport.swift; sourceTree = "<group>"; };
 		14D2F5B51728A050A74E8E3F /* TransactionDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionDTO.swift; sourceTree = "<group>"; };
 		185A49CF04897A7803A09434 /* OverviewSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewSnapshot.swift; sourceTree = "<group>"; };
+		2143E2EC10FFF85034FFD8BB /* ReimbursementModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimbursementModel.swift; sourceTree = "<group>"; };
 		22D6DBE46DB3991049438550 /* FiscaliOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FiscaliOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		255F8031C4F10F48F933A838 /* MacRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacRootView.swift; sourceTree = "<group>"; };
 		29540C1D2948FC97337C271B /* FiscaliOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscaliOSApp.swift; sourceTree = "<group>"; };
@@ -174,10 +183,12 @@
 		7B76007E6901E55864724E2F /* InstallmentScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentScreens.swift; sourceTree = "<group>"; };
 		804F88664C4025B50AD0FC75 /* FiscalKitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalKitTests.swift; sourceTree = "<group>"; };
 		9654628B5C1FF4264957DEA3 /* TransactionScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionScreens.swift; sourceTree = "<group>"; };
+		9A3AB4BE7E4F9C491EEA3497 /* ReimbursementRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimbursementRepository.swift; sourceTree = "<group>"; };
 		9AB6841587AA8B69AFF3A00A /* OverviewFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewFixtures.swift; sourceTree = "<group>"; };
 		A48D8B5171D3A1FF7724A9BA /* FiscalmacOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FiscalmacOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A501B4150DAFA4ABFE586271 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		AC2144E087E40C5B7FEF232A /* IOSRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSRootView.swift; sourceTree = "<group>"; };
+		B6DF31AF77C0838D251DDC32 /* ReimbursementScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimbursementScreens.swift; sourceTree = "<group>"; };
 		B776D98F419D1A0D118D08AC /* InstallmentDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentDTO.swift; sourceTree = "<group>"; };
 		C1164C772E643D0CF6996CB1 /* FiscalDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalDesign.swift; sourceTree = "<group>"; };
 		D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentRepository.swift; sourceTree = "<group>"; };
@@ -187,6 +198,7 @@
 		E38857D295F340534E49F652 /* ConnectionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionModel.swift; sourceTree = "<group>"; };
 		E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FiscalKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		EA464751FCA42DDEA8005314 /* CreditScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditScreens.swift; sourceTree = "<group>"; };
+		EF39C6F2744F63EE814A73F2 /* ReimbursementDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimbursementDTO.swift; sourceTree = "<group>"; };
 		F05017C6B56940B011F6E23E /* SystemStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemStatus.swift; sourceTree = "<group>"; };
 		F41296659AE4F2333D274669 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		FCB93673B1BC323E17CA866A /* MoneyFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyFormat.swift; sourceTree = "<group>"; };
@@ -256,6 +268,8 @@
 				549791302DE4F9854A26918B /* MasterDataModels.swift */,
 				40E7C412779E444B2EBDB328 /* MasterDataScreens.swift */,
 				D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */,
+				2143E2EC10FFF85034FFD8BB /* ReimbursementModel.swift */,
+				B6DF31AF77C0838D251DDC32 /* ReimbursementScreens.swift */,
 				5F8C3E571ECB6E946D838BB2 /* SharedOverviewComponents.swift */,
 				0752D3D57AD3B99FE1943E05 /* TransactionModels.swift */,
 				9654628B5C1FF4264957DEA3 /* TransactionScreens.swift */,
@@ -334,6 +348,7 @@
 				D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */,
 				500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */,
 				6A8B134AC6D0F6AF80ECDA80 /* MasterDataRepositories.swift */,
+				9A3AB4BE7E4F9C491EEA3497 /* ReimbursementRepository.swift */,
 				5A0067D7F4A0681CA61009D6 /* TransactionRepository.swift */,
 			);
 			path = Data;
@@ -365,6 +380,7 @@
 				B776D98F419D1A0D118D08AC /* InstallmentDTO.swift */,
 				5CB89B668C9785D2064942E1 /* MasterDataDTO.swift */,
 				185A49CF04897A7803A09434 /* OverviewSnapshot.swift */,
+				EF39C6F2744F63EE814A73F2 /* ReimbursementDTO.swift */,
 				14D2F5B51728A050A74E8E3F /* TransactionDTO.swift */,
 			);
 			path = Domain;
@@ -567,6 +583,10 @@
 				351A8469BB5904E68E5069DF /* OverviewFixtures.swift in Sources */,
 				AEB258C3DF48989FDDC59B2B /* OverviewSnapshot.swift in Sources */,
 				B6DE74EF3CF5E14A638D02F9 /* PlaceholderScreen.swift in Sources */,
+				8F352FC4B0E80F982525AED9 /* ReimbursementDTO.swift in Sources */,
+				01C1E84B8390289B1D225E71 /* ReimbursementModel.swift in Sources */,
+				176EB9254474739905284C8E /* ReimbursementRepository.swift in Sources */,
+				E6996334DD1C8B508DDAE946 /* ReimbursementScreens.swift in Sources */,
 				7A3542E65018766E4BA525A2 /* SharedOverviewComponents.swift in Sources */,
 				3A2A0B10963D95C372BD4924 /* SystemStatus.swift in Sources */,
 				07C81CB610412DD379C0101C /* TransactionDTO.swift in Sources */,
@@ -612,6 +632,10 @@
 				956D11991AADEFD598358E95 /* OverviewFixtures.swift in Sources */,
 				0DB3D38B493F1B22A954DEC2 /* OverviewSnapshot.swift in Sources */,
 				F75E5694540328D93F6A9CBE /* PlaceholderScreen.swift in Sources */,
+				E5EA9FB15375AD6F67A32EC4 /* ReimbursementDTO.swift in Sources */,
+				6CEE9412D66F9E0E5250DA7B /* ReimbursementModel.swift in Sources */,
+				CF97D0DCF3FDF7229D0BEE04 /* ReimbursementRepository.swift in Sources */,
+				CECB7E26EC40C8BAAE042E28 /* ReimbursementScreens.swift in Sources */,
 				F75284CCBBC1D7F4D2CED316 /* SharedOverviewComponents.swift in Sources */,
 				6297712DE1515836BCC6E29E /* SystemStatus.swift in Sources */,
 				E1F6BFF656B87F2DAA1C21E5 /* TransactionDTO.swift in Sources */,
