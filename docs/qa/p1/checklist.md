@@ -82,4 +82,4 @@
 - [x] Screenshots were compared manually with `design_handoff_fiscal_app/`.
 - [x] Build and test commands/results are recorded.
 - [x] `git diff --check` passes and only expected changes remain.
-- [ ] User completed the P1 visual review before P2 begins.
+- [x] User completed the P1 visual review before P2 begins. Overall direction approved; the iOS double-tab-bar defect is explicitly deferred to the first P2 fix.

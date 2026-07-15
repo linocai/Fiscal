@@ -6,7 +6,9 @@ Date: 2026-07-14 (Asia/Shanghai)
 
 P1's repository, backend, infrastructure definitions, shared Apple foundation, and native iOS/macOS overview baseline are implemented. Backend and Apple build gates pass, and a normally signed iOS Simulator build has completed a real authenticated request to the local FastAPI process.
 
-P1 remains open until the user approves the visual baseline and the registry/network-dependent PostgreSQL and container-image checks can run.
+The user approved the overall iOS/macOS visual direction on 2026-07-15. The iOS screenshot exposes a known shell defect: the hidden system `TabView` bar remains visible underneath the custom glass tab bar on iOS 26. By user direction, P2 must begin by replacing this layered navigation approach with one custom tab bar and explicit content switching.
+
+P1 remains open only for the registry/network-dependent PostgreSQL and container-image checks.
 
 ## Toolchain
 
@@ -56,7 +58,7 @@ Blocked externally:
 
 ## Remaining acceptance
 
-1. User approves or requests changes to the iOS/macOS screenshots.
-2. Retry the real PostgreSQL readiness and migration checks when Docker Hub connectivity is available.
-3. Retry the API container build and non-root runtime check.
-4. Close P1 before beginning P2 business persistence.
+1. Retry the real PostgreSQL readiness and migration checks when Docker Hub connectivity is available.
+2. Retry the API container build and non-root runtime check.
+3. Close P1 before beginning P2 business persistence.
+4. Start P2 by fixing the iOS double-tab-bar shell defect before adding account/category screens.
