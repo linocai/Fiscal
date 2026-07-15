@@ -10,6 +10,7 @@ struct FiscaliOSApp: App {
     @State private var credit: CreditModel
     @State private var installments: InstallmentModel
     @State private var reimbursements: ReimbursementModel
+    @State private var reports: ReportingModel
 
     init() {
         let baseURL = APIConfiguration.baseURL()
@@ -28,14 +29,18 @@ struct FiscaliOSApp: App {
         _installments = State(initialValue: installments)
         _transactions = State(initialValue: transactions)
         _reimbursements = State(initialValue: reimbursements)
+        _reports = State(initialValue: ReportingModel(repository: RemoteReportingRepository(transport: transport)))
     }
 
     var body: some Scene {
         WindowGroup {
-            IOSRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements)
+            IOSRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports)
                 .tint(FiscalColor.accent)
                 .preferredColorScheme(.light)
-                .task { await connection.configureAndRefresh(bootstrapToken: APIConfiguration.bootstrapDeviceToken()) }
+                .task {
+                    await connection.configureAndRefresh(bootstrapToken: APIConfiguration.bootstrapDeviceToken())
+                    if case .connected = connection.phase { await reports.loadAll() }
+                }
         }
     }
 }

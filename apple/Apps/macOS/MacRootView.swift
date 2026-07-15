@@ -39,6 +39,7 @@ struct MacRootView: View {
     let credit: CreditModel
     let installments: InstallmentModel
     let reimbursements: ReimbursementModel
+    let reports: ReportingModel
     @State private var section: MacSection = .overview
 
     var body: some View {
@@ -47,7 +48,11 @@ struct MacRootView: View {
             Divider().opacity(0.45)
             Group {
                 if section == .overview {
-                    MacOverviewScreen(connectionPhase: connection.phase)
+                    MacReportingOverviewScreen(model: reports) { destination in
+                        guard let destination else { section = .reimbursement; return }
+                        reports.lens = destination
+                        section = destination == .cashFlow ? .cashFlow : .reports
+                    }
                 } else if section == .accounts {
                     MacAccountsCreditScreen(accounts: accounts, credit: credit, installments: installments, transactions: transactions, categories: categories)
                 } else if section == .categories {
@@ -56,6 +61,10 @@ struct MacRootView: View {
                     MacTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments)
                 } else if section == .reimbursement {
                     MacReimbursementsScreen(model: reimbursements, accounts: accounts)
+                } else if section == .cashFlow {
+                    MacCashFlowScreen(model: reports)
+                } else if section == .reports {
+                    MacReportsScreen(model: reports)
                 } else {
                     PlaceholderScreen(section.rawValue, symbol: section.symbol, phase: section.phase)
                 }

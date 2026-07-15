@@ -10,6 +10,7 @@ struct FiscalmacOSApp: App {
     @State private var credit: CreditModel
     @State private var installments: InstallmentModel
     @State private var reimbursements: ReimbursementModel
+    @State private var reports: ReportingModel
 
     init() {
         let baseURL = APIConfiguration.baseURL()
@@ -28,15 +29,19 @@ struct FiscalmacOSApp: App {
         _installments = State(initialValue: installments)
         _transactions = State(initialValue: transactions)
         _reimbursements = State(initialValue: reimbursements)
+        _reports = State(initialValue: ReportingModel(repository: RemoteReportingRepository(transport: transport)))
     }
 
     var body: some Scene {
         WindowGroup {
-            MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements)
+            MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports)
                 .tint(FiscalColor.accent)
                 .preferredColorScheme(.light)
                 .frame(minWidth: 940, minHeight: 700)
-                .task { await connection.configureAndRefresh(bootstrapToken: APIConfiguration.bootstrapDeviceToken()) }
+                .task {
+                    await connection.configureAndRefresh(bootstrapToken: APIConfiguration.bootstrapDeviceToken())
+                    if case .connected = connection.phase { await reports.loadAll() }
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 940, height: 700)

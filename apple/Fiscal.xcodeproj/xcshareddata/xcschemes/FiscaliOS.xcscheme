@@ -55,6 +55,11 @@
       </CommandLineArguments>
       <EnvironmentVariables>
          <EnvironmentVariable
+            key = "FISCAL_QA_SCREENSHOT_DIR"
+            value = "$(SRCROOT)/../docs/qa/p7/screenshots"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
             key = "FISCAL_UI_TEST_DEVICE_TOKEN"
             value = "integration-device-token"
             isEnabled = "YES">

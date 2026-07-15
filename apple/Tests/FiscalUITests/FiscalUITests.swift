@@ -234,6 +234,41 @@ final class FiscalUITests: XCTestCase {
       app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "已到账")).firstMatch.exists)
   }
 
+  func testP7OverviewCashFlowAndReportsUseRealAPI() throws {
+    try launchApp()
+    XCTAssertEqual(app.tabBars.count, 0)
+    let customBar = app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar")
+    XCTAssertEqual(customBar.count, 1)
+
+    XCTAssertTrue(app.staticTexts["本月消费"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.staticTexts["本月实际现金流"].exists)
+    XCTAssertTrue(app.staticTexts["当前信用负债"].exists)
+    waitForVisualStability()
+    keepScreenshot(named: "ios-p7-overview")
+
+    app.buttons["现金流"].tap()
+    XCTAssertTrue(app.staticTexts["未来 30 天预测"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["实际现金流趋势"].exists)
+    XCTAssertEqual(app.tabBars.count, 0)
+    waitForVisualStability()
+    keepScreenshot(named: "ios-p7-cash-flow")
+
+    app.buttons["更多"].tap()
+    let reportEntry = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "报表"))
+      .firstMatch
+    XCTAssertTrue(reportEntry.waitForExistence(timeout: 5))
+    reportEntry.tap()
+    XCTAssertTrue(app.staticTexts["报表"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["分类构成"].exists)
+    XCTAssertEqual(app.tabBars.count, 0)
+    waitForVisualStability()
+    keepScreenshot(named: "ios-p7-reports")
+
+    app.buttons["负债"].tap()
+    XCTAssertTrue(app.staticTexts["分期 · 未来计划毛额"].waitForExistence(timeout: 5))
+    keepScreenshot(named: "ios-p7-debt")
+  }
+
   private func keepScreenshot(named name: String) {
     let screenshot = app.screenshot()
     let attachment = XCTAttachment(screenshot: screenshot)

@@ -85,6 +85,15 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.ui-tests
+  FiscalSnapshotTool:
+    type: tool
+    platform: macOS
+    sources: Tests/FiscalSnapshotTool
+    dependencies:
+      - target: FiscalKit_macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.snapshot-tool
 schemes:
   FiscaliOS:
     build:
@@ -97,6 +106,7 @@ schemes:
         - FiscalUITests
       environmentVariables:
         FISCAL_UI_TEST_DEVICE_TOKEN: integration-device-token
+        FISCAL_QA_SCREENSHOT_DIR: "$(SRCROOT)/../docs/qa/p7/screenshots"
   FiscalmacOS:
     build:
       targets:
@@ -106,3 +116,6 @@ schemes:
     test:
       targets:
         - FiscalKitTests
+      environmentVariables:
+        FISCAL_UI_TEST_DEVICE_TOKEN: integration-device-token
+        FISCAL_QA_SCREENSHOT_DIR: "$(SRCROOT)/../docs/qa/p7/screenshots"

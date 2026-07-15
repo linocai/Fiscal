@@ -2,7 +2,10 @@ import FiscalKit
 import SwiftUI
 
 private enum IOSTab: Hashable { case overview, transactions, cashFlow, more }
-private enum IOSMoreDestination: Hashable { case accounts, categories, credit, reimbursements }
+private enum IOSMoreDestination: Hashable {
+    case accounts, categories, credit, reimbursements
+    case reports(ReportLens)
+}
 
 struct IOSRootView: View {
     @Bindable var connection: ConnectionModel
@@ -12,16 +15,25 @@ struct IOSRootView: View {
     let credit: CreditModel
     let installments: InstallmentModel
     let reimbursements: ReimbursementModel
+    let reports: ReportingModel
     @State private var selection: IOSTab = .overview
     @State private var showRecordSheet = false
+    @State private var morePath: [IOSMoreDestination] = []
 
     var body: some View {
         Group {
             switch selection {
-            case .overview: NavigationStack { IOSOverviewScreen(connectionPhase: connection.phase) }
+            case .overview:
+                NavigationStack {
+                    IOSReportingOverviewScreen(
+                        model: reports,
+                        openCashFlow: { selection = .cashFlow },
+                        openReport: { lens in morePath = [.reports(lens)]; selection = .more }
+                    )
+                }
             case .transactions: NavigationStack { IOSTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments) }
-            case .cashFlow: PlaceholderScreen("现金流", symbol: "arrow.up.arrow.down", phase: "P7")
-            case .more: IOSMoreScreen(accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, connection: connection)
+            case .cashFlow: NavigationStack { IOSCashFlowScreen(model: reports) }
+            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, connection: connection)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -65,14 +77,15 @@ struct IOSRootView: View {
 }
 
 private struct IOSMoreScreen: View {
+    @Binding var path: [IOSMoreDestination]
     let accounts: AccountsModel
     let categories: CategoriesModel
     let transactions: TransactionsModel
     let credit: CreditModel
     let installments: InstallmentModel
     let reimbursements: ReimbursementModel
+    let reports: ReportingModel
     let connection: ConnectionModel
-    @State private var path: [IOSMoreDestination] = []
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -96,7 +109,7 @@ private struct IOSMoreScreen: View {
                         }
                     }
                     FiscalCard(radius: 18) { HStack { ConnectionBadge(phase: connection.phase); Spacer(); Text("个人 VPS · 设备密钥访问").font(.caption).foregroundStyle(FiscalColor.tertiary) } }
-                    FiscalCard(radius: 20) { VStack(spacing: 0) { NavigationLink(value: IOSMoreDestination.reimbursements) { row("报销", symbol: "doc.text", detail: "多人 · 分次到账", color: FiscalColor.reimbursement) }.buttonStyle(.plain); Divider(); placeholderRow("报表", "chart.bar", "P7"); Divider(); placeholderRow("其他设置", "gearshape", "P11") } }
+                    FiscalCard(radius: 20) { VStack(spacing: 0) { NavigationLink(value: IOSMoreDestination.reimbursements) { row("报销", symbol: "doc.text", detail: "多人 · 分次到账", color: FiscalColor.reimbursement) }.buttonStyle(.plain); Divider(); NavigationLink(value: IOSMoreDestination.reports(.spending)) { row("报表", symbol: "chart.bar", detail: "消费 · 现金流 · 负债", color: FiscalColor.accent) }.buttonStyle(.plain); Divider(); placeholderRow("其他设置", "gearshape", "P11") } }
                 }.padding(16).padding(.bottom, 100)
             }
             .background(FiscalColor.iOSBackground).navigationTitle("更多")
@@ -106,6 +119,7 @@ private struct IOSMoreScreen: View {
                 case .categories: CategoriesManagementScreen(model: categories)
                 case .credit: IOSCreditAccountsScreen(credit: credit, installments: installments, transactions: transactions, accounts: accounts, categories: categories)
                 case .reimbursements: IOSReimbursementsScreen(model: reimbursements, accounts: accounts)
+                case .reports(let lens): IOSReportsScreen(model: reports, initialLens: lens)
                 }
             }
         }
