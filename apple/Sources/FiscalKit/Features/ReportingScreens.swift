@@ -1,5 +1,8 @@
-import Charts
 import SwiftUI
+
+#if os(macOS)
+import Charts
+#endif
 
 public struct ReportPeriodControl: View {
   @Bindable var model: ReportingModel
@@ -93,7 +96,7 @@ public struct IOSReportingOverviewScreen: View {
       FiscalCard(radius: 22) {
         VStack(alignment: .leading, spacing: 14) {
           HStack {
-            FiscalIconTile("chart.bar.fill", color: FiscalColor.accent)
+            FiscalIconTile("list.bullet.rectangle.fill", color: FiscalColor.accent)
             VStack(alignment: .leading, spacing: 2) {
               Text("本月消费").font(.headline)
               Text("原始消费与个人承担分开计算").font(.caption).foregroundStyle(FiscalColor.tertiary)
@@ -197,25 +200,20 @@ public struct IOSCashFlowScreen: View {
         }
         ReportingNotice(model: model)
         if let report = model.cashFlow {
-          FiscalCard(radius: 22) {
-            VStack(alignment: .leading, spacing: 15) {
-              Text("未来 30 天预测").font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
-              let net = report.forecast.expectedReceiptInflowMinor - report.forecast.exactDueOutflowMinor
-              Text(Money(minorUnits: net).formatted(showPositiveSign: net > 0))
-                .font(.system(size: 34, weight: .bold, design: .rounded)).monospacedDigit()
-                .foregroundStyle(net >= 0 ? FiscalColor.income : FiscalColor.expense)
-              HStack(spacing: 26) {
-                flowValue("预计到账", report.forecast.expectedReceiptInflowMinor, FiscalColor.income)
-                flowValue("精确应还", report.forecast.exactDueOutflowMinor, FiscalColor.expense)
-              }
-              Text("预测不会写入账本；报销标记为预计，信用账期标记为应还。")
-                .font(.caption).foregroundStyle(FiscalColor.tertiary)
-            }
-          }
+          Text("现金流摘要").font(.headline).padding(.horizontal, 3)
           FiscalCard(radius: 20) {
-            HStack {
-              ReportMetric(label: "本月实际流入", amount: report.actual.inflowMinor, color: FiscalColor.income)
-              Divider(); ReportMetric(label: "本月实际流出", amount: report.actual.outflowMinor, color: FiscalColor.expense)
+            VStack(spacing: 0) {
+              let forecastNet =
+                report.forecast.expectedReceiptInflowMinor - report.forecast.exactDueOutflowMinor
+              reportAmountRow("未来 30 天预测净额", forecastNet, forecastNet >= 0 ? FiscalColor.income : FiscalColor.expense)
+              Divider().opacity(0.35)
+              reportAmountRow("预计到账", report.forecast.expectedReceiptInflowMinor, FiscalColor.income)
+              Divider().opacity(0.35)
+              reportAmountRow("精确应还", report.forecast.exactDueOutflowMinor, FiscalColor.expense)
+              Divider().opacity(0.35)
+              reportAmountRow("本月实际流入", report.actual.inflowMinor, FiscalColor.income)
+              Divider().opacity(0.35)
+              reportAmountRow("本月实际流出", report.actual.outflowMinor, FiscalColor.expense)
             }
           }
           Text("未来将要发生").font(.headline).padding(.horizontal, 3)
@@ -224,32 +222,39 @@ public struct IOSCashFlowScreen: View {
               EmptyInline(symbol: "calendar.badge.checkmark", title: "未来 30 天没有权威日期事件")
             } else { forecastRows(report.forecast.events) }
           }
-          Text("实际现金流趋势").font(.headline).padding(.horizontal, 3)
-          FiscalCard(radius: 20) { cashChart(report.trend).frame(height: 170) }
+          Text("本月账户收支").font(.headline).padding(.horizontal, 3)
+          FiscalCard(radius: 20) {
+            if report.accounts.isEmpty {
+              EmptyInline(symbol: "wallet.bifold", title: "本月没有账户现金变动")
+            } else { accountRows(report.accounts, model: model) }
+          }
+          Text("预测不会写入账本；内部转账不计入全局流入与流出。")
+            .font(.caption).foregroundStyle(FiscalColor.tertiary).padding(.horizontal, 3)
         } else if model.phase == .loading { ProgressView().frame(maxWidth: .infinity).padding(80) }
         else { ContentUnavailableView("现金流暂不可用", systemImage: "arrow.up.arrow.down") }
       }.padding(16).padding(.bottom, 110)
     }.background(FiscalColor.iOSBackground.ignoresSafeArea())
   }
-  private func flowValue(_ title: String, _ amount: Int64, _ color: Color) -> some View {
-    VStack(alignment: .leading, spacing: 2) { Text(title).font(.caption).foregroundStyle(FiscalColor.tertiary); Text(Money(minorUnits: amount).formatted()).font(.subheadline.bold()).foregroundStyle(color).monospacedDigit() }
-  }
 }
 
 public struct IOSReportsScreen: View {
   @Bindable var model: ReportingModel
-  public init(model: ReportingModel, initialLens: ReportLens = .spending) { self.model = model; model.lens = initialLens }
+  public init(model: ReportingModel, initialLens: ReportLens = .spending) {
+    self.model = model
+    model.lens = initialLens == .cashFlow ? .spending : initialLens
+  }
   public var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 14) {
         ReportPeriodControl(model: model).frame(maxWidth: .infinity, alignment: .trailing)
         Picker("统计口径", selection: $model.lens) {
-          Text("消费").tag(ReportLens.spending); Text("现金流").tag(ReportLens.cashFlow); Text("负债").tag(ReportLens.debt)
+          Text("消费").tag(ReportLens.spending)
+          Text("负债").tag(ReportLens.debt)
         }.pickerStyle(.segmented)
         ReportingNotice(model: model)
         switch model.lens {
         case .spending: spendingBody
-        case .cashFlow: cashBody
+        case .cashFlow: spendingBody
         case .debt: debtBody
         }
       }.padding(16).padding(.bottom, 30)
@@ -258,25 +263,20 @@ public struct IOSReportsScreen: View {
   @ViewBuilder private var spendingBody: some View {
     if let report = model.spending {
       FiscalCard(radius: 20) {
-        VStack(alignment: .leading, spacing: 14) {
-          ReportMetric(label: "原始消费", amount: report.totals.grossConsumptionMinor, color: FiscalColor.text)
-          HStack { ReportMetric(label: "预计个人承担", amount: report.totals.personalExpectedMinor, color: FiscalColor.reimbursement); ReportMetric(label: "实际个人承担", amount: report.totals.personalRealizedMinor, color: FiscalColor.text) }
-          Text("商家退款 \(Money(minorUnits: report.totals.merchantRefundMinor).formatted()) · 已到账报销 \(Money(minorUnits: report.totals.receivedReimbursementMinor).formatted())")
-            .font(.caption).foregroundStyle(FiscalColor.tertiary)
+        VStack(spacing: 0) {
+          reportAmountRow("原始消费", report.totals.grossConsumptionMinor, FiscalColor.text)
+          Divider().opacity(0.35)
+          reportAmountRow("预计个人承担", report.totals.personalExpectedMinor, FiscalColor.reimbursement)
+          Divider().opacity(0.35)
+          reportAmountRow("实际个人承担", report.totals.personalRealizedMinor, FiscalColor.text)
+          Divider().opacity(0.35)
+          reportAmountRow("商家退款", report.totals.merchantRefundMinor, FiscalColor.income)
+          Divider().opacity(0.35)
+          reportAmountRow("已到账报销", report.totals.receivedReimbursementMinor, FiscalColor.income)
         }
       }
-      FiscalCard(radius: 20) { spendingChart(report.trend).frame(height: 180) }
       Text("分类构成").font(.headline).padding(.horizontal, 3)
-      FiscalCard(radius: 20) { categoryRows(report.categories, model: model) }
-      if let page = model.drillDown { FiscalCard(radius: 20) { drillDownRows(page, model: model) } }
-    } else { reportUnavailable }
-  }
-  @ViewBuilder private var cashBody: some View {
-    if let report = model.cashFlow {
-      FiscalCard(radius: 20) { HStack { ReportMetric(label: "实际净额", amount: report.actual.netMinor, color: report.actual.netMinor >= 0 ? FiscalColor.income : FiscalColor.expense); ReportMetric(label: "内部转账", amount: report.actual.internalTransferInMinor, color: FiscalColor.secondary, detail: "不计全局流入流出") } }
-      FiscalCard(radius: 20) { cashChart(report.trend).frame(height: 180) }
-      Text("按账户").font(.headline)
-      FiscalCard(radius: 20) { accountRows(report.accounts, model: model) }
+      FiscalCard(radius: 20) { categoryRows(report.categories, model: model, showsBars: false) }
       if let page = model.drillDown { FiscalCard(radius: 20) { drillDownRows(page, model: model) } }
     } else { reportUnavailable }
   }
@@ -419,6 +419,7 @@ public struct MacReportsScreen: View {
   }
 }
 
+#if os(macOS)
 private func spendingChart(_ values: [SpendingTrendBucket]) -> some View {
   VStack(spacing: 5) {
     Chart(values) { value in
@@ -465,6 +466,16 @@ private var currencyAxis: some AxisContent {
     }
   }
 }
+#endif
+
+private func reportAmountRow(_ title: String, _ amount: Int64, _ color: Color) -> some View {
+  HStack(spacing: 12) {
+    Text(title).font(.subheadline).foregroundStyle(FiscalColor.secondary)
+    Spacer()
+    Text(Money(minorUnits: amount).formatted())
+      .font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(color)
+  }.frame(minHeight: 46)
+}
 
 private func reportColor(_ hex: String?, fallback: Color = FiscalColor.tertiary) -> Color {
   guard let hex, let value = UInt(hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16)
@@ -472,16 +483,20 @@ private func reportColor(_ hex: String?, fallback: Color = FiscalColor.tertiary)
   return Color(hex: value)
 }
 
-private func categoryRows(_ values: [SpendingCategoryRow], model: ReportingModel) -> some View {
+private func categoryRows(
+  _ values: [SpendingCategoryRow], model: ReportingModel, showsBars: Bool = true
+) -> some View {
   let maximum = max(1, values.map(\.rollup.personalRealizedMinor).max() ?? 1)
   return VStack(spacing: 0) {
     ForEach(values) { row in
       Button { model.lens = .spending; Task { await model.loadDrillDown(categoryID: row.categoryID) } } label: {
         HStack(spacing: 10) {
           FiscalIconTile(row.icon ?? "questionmark", color: reportColor(row.colorHex))
-          VStack(alignment: .leading, spacing: 6) {
+          VStack(alignment: .leading, spacing: showsBars ? 6 : 0) {
             HStack { Text(row.name).font(.subheadline.weight(.semibold)); Spacer(); Text(Money(minorUnits: row.rollup.personalRealizedMinor).formatted()).monospacedDigit() }
-            GeometryReader { proxy in Capsule().fill(Color.black.opacity(0.055)).overlay(alignment: .leading) { Capsule().fill(reportColor(row.colorHex, fallback: FiscalColor.accent)).frame(width: proxy.size.width * CGFloat(max(0, row.rollup.personalRealizedMinor)) / CGFloat(maximum)) } }.frame(height: 7)
+            if showsBars {
+              GeometryReader { proxy in Capsule().fill(Color.black.opacity(0.055)).overlay(alignment: .leading) { Capsule().fill(reportColor(row.colorHex, fallback: FiscalColor.accent)).frame(width: proxy.size.width * CGFloat(max(0, row.rollup.personalRealizedMinor)) / CGFloat(maximum)) } }.frame(height: 7)
+            }
           }
           Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary)
         }.padding(.vertical, 9).contentShape(.rect)

@@ -67,9 +67,9 @@ This document freezes P7 before implementation. `PROJECT_PLAN.md` remains author
 ## Apple experience
 
 - P1 `OverviewFixture` remains preview-only. Production iOS/macOS roots inject one `ReportsModel` backed by the real API; offline state never displays sample money as if it were the user's ledger.
-- iOS provides a trusted overview, dedicated future cash-flow tab, and spend/debt report destinations under More. It prioritizes summary, clear semantics, category bars, compact trends, and push-based drill-down.
+- iOS provides a trusted overview, a dedicated list-only cash-flow tab, and spend/debt report destinations under More. Cash flow must not be duplicated inside Reports, and iOS reporting uses scannable amount/category/account/detail lists without charts.
 - macOS provides the formal overview, two-column cash-flow screen, and dense segmented spending/cash-flow/debt report screen with period controls and drill-down inspector/list.
-- Charts use native SwiftUI drawing/Charts available at the iOS 26/macOS 26 baseline. No third-party UI library is introduced.
+- Charts are a macOS-only analysis surface and use native SwiftUI Charts at the macOS 26 baseline. iOS stays list-only. No third-party UI library is introduced.
 - Empty, loading, stale-preserved refresh error, offline, long category names, negative contra-expense, and Int64 failure states are independently verified. Main screens and every period selector/drill-down state receive visual review; default forms/toolbars are not final UI.
 
 ## Completion gates

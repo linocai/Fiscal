@@ -6,7 +6,7 @@ P7 engineering is complete and is waiting for user visual/product acceptance.
 
 The backend now exposes one authoritative reporting service through overview, spending, actual-plus-forecast cash flow, debt, and stable-cursor drill-down endpoints. Spending re-attributes installment refunds and reimbursement effects to the original expense; actual cash flow counts cash/debit postings while separating internal transfers; forecasts include only exact credit-cycle dues and submitted reimbursements with explicit expected dates; current debt never adds future installment gross a second time. No business migration was added.
 
-The production iOS and macOS overview fixtures were replaced with live reporting models. Both platforms share strict DTOs and one remote repository. iOS retains exactly one custom bottom bar and root-owned navigation. macOS uses dense Fiscal-native cards, charts, account rows, forecast events, category composition, debt cycles, and contribution details. The first-launch Keychain bootstrap race found by the real iOS test was fixed by loading reports only after authentication succeeds.
+The production iOS and macOS overview fixtures were replaced with live reporting models. Both platforms share strict DTOs and one remote repository while deliberately using different presentation density. iOS retains exactly one custom bottom bar, keeps cash flow as its own list-only page, and limits Reports to list-only spending and debt views. macOS owns all trend charts and keeps the complete spending/cash-flow/debt analysis workspace. The first-launch Keychain bootstrap race found by the real iOS test was fixed by loading reports only after authentication succeeds.
 
 Verification:
 
@@ -16,7 +16,7 @@ Verification:
 - Alembic drift: no new upgrade operations.
 - Apple macOS suite: 46 tests passed.
 - iOS 26 and macOS 26 builds: passed under Swift 6 complete concurrency.
-- Real-API iOS UI path: overview, cash flow, spending report, and debt report; zero native tab bars and one Fiscal custom bottom bar. Contribution drill-down is covered by the shared SwiftUI implementation, backend API tests, and the macOS real-API render.
+- Real-API iOS UI path: overview, dedicated list-only cash flow, list-only spending report, and list-only debt report; Reports exposes no cash-flow segment, all iOS reporting charts are absent, zero native tab bars remain, and exactly one Fiscal custom bottom bar is present. Contribution drill-down is covered by the shared SwiftUI implementation, backend API tests, and the macOS real-API render.
 
 Visual evidence is retained in `screenshots/`:
 

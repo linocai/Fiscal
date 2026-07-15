@@ -247,8 +247,8 @@ final class FiscalUITests: XCTestCase {
     keepScreenshot(named: "ios-p7-overview")
 
     app.buttons["现金流"].tap()
-    XCTAssertTrue(app.staticTexts["未来 30 天预测"].waitForExistence(timeout: 8))
-    XCTAssertTrue(app.staticTexts["实际现金流趋势"].exists)
+    XCTAssertTrue(app.staticTexts["现金流摘要"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["本月账户收支"].exists)
     XCTAssertEqual(app.tabBars.count, 0)
     waitForVisualStability()
     keepScreenshot(named: "ios-p7-cash-flow")
@@ -260,6 +260,7 @@ final class FiscalUITests: XCTestCase {
     reportEntry.tap()
     XCTAssertTrue(app.staticTexts["报表"].waitForExistence(timeout: 8))
     XCTAssertTrue(app.staticTexts["分类构成"].exists)
+    XCTAssertFalse(app.segmentedControls.buttons["现金流"].exists)
     XCTAssertEqual(app.tabBars.count, 0)
     waitForVisualStability()
     keepScreenshot(named: "ios-p7-reports")

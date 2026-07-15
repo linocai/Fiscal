@@ -28,6 +28,7 @@ Date: 2026-07-15
 - [x] Overview, cash flow, and report models reject stale period responses.
 - [x] Production iOS/macOS overview requires live model and never defaults to fixture data.
 - [x] iOS preserves exactly one custom bottom bar and root-owned cross-tab navigation.
+- [x] iOS cash flow is one dedicated list-only page; Reports contains only spending and debt lists and has no charts or category bars.
 - [x] macOS overview, cash-flow, and reports use dense Fiscal-native layouts.
 - [x] Spending and cash-flow contribution rows reconcile visibly; debt remains its own exact-cycle lens.
 - [x] Initial loading, empty, offline/unauthorized, preserved refresh error, and long content are represented.
@@ -36,7 +37,7 @@ Date: 2026-07-15
 ## Visual evidence
 
 - [x] iOS live overview.
-- [x] iOS future cash flow, spending, and debt; drill-down is covered by the shared implementation, API tests, and macOS render evidence.
+- [x] iOS list-only future cash flow, spending, and debt; drill-down is covered by the shared implementation, API tests, and macOS render evidence.
 - [x] macOS live overview and cash flow at the 940×700 app content baseline.
 - [x] macOS spending, cash-flow, debt, and drill-down at the 940×700 app content baseline.
 - [x] Every screenshot visibly names the period and reporting lens.
