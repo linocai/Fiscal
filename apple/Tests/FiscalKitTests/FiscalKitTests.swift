@@ -222,6 +222,28 @@ struct FiscalKitP3Tests {
 
 @Suite("FiscalKit P6 contracts")
 struct FiscalKitP6Tests {
+  @Test("Reimbursement editor displays yuan while preserving exact minor units")
+  @MainActor
+  func reimbursementYuanConversion() {
+    #expect(ReimbursementClaimEditor.yuanText(minorUnits: 60_001) == "600.01")
+    #expect(ReimbursementClaimEditor.validatedAmount(text: "600.01", minimum: 0) == 60_001)
+    #expect(ReimbursementClaimEditor.validatedAmount(text: "600.001", minimum: 0) == nil)
+    #expect(ReimbursementClaimEditor.validatedAmount(text: "-1", minimum: 0) == nil)
+    #expect(ReimbursementClaimEditor.validatedAmount(text: "200", minimum: 30_000) == nil)
+    #expect(ReimbursementClaimEditor.validatedAmount(text: "", minimum: 0) == nil)
+    #expect(
+      ReimbursementClaimEditor.validatedAmount(
+        text: "999999999999999999999", minimum: 0) == nil)
+  }
+
+  @Test("Reimbursement expected date is strict Shanghai calendar ISO")
+  @MainActor
+  func reimbursementExpectedDate() {
+    #expect(ReimbursementClaimEditor.isValidISODate("2026-07-25"))
+    #expect(!ReimbursementClaimEditor.isValidISODate("2026-02-29"))
+    #expect(!ReimbursementClaimEditor.isValidISODate("2026-7-25"))
+  }
+
   @Test("Party status uses the localized reimbursement vocabulary")
   func partyStatusTitle() {
     let party = ReimbursementPartyDTO(

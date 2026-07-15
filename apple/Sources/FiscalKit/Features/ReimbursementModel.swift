@@ -29,6 +29,7 @@ public final class ReimbursementModel {
   private let accounts: AccountsModel?
   private var generation = 0
   private var previewedClaimRequest: ReimbursementClaimReplacementRequest?
+  private var claimPreviewGeneration = 0
   private var previewedReceiptRequest: ReimbursementReceiptRequest?
   private var previewedReceiptReplacement: ReimbursementReceiptReplacementRequest?
 
@@ -141,13 +142,21 @@ public final class ReimbursementModel {
   }
   public func preview(_ request: ReimbursementClaimReplacementRequest) async -> Bool {
     guard let id = selectedClaim?.id else { return false }
+    claimPreviewGeneration += 1
+    let current = claimPreviewGeneration
+    let version = selectedClaim?.version
     claimPreview = nil
     message = nil
     do {
-      claimPreview = try await repository.preview(id: id, request: request)
+      let preview = try await repository.preview(id: id, request: request)
+      guard current == claimPreviewGeneration, selectedClaim?.id == id,
+        selectedClaim?.version == version
+      else { return false }
+      claimPreview = preview
       previewedClaimRequest = request
       return true
     } catch {
+      guard current == claimPreviewGeneration else { return false }
       apply(error, preserving: true)
       return false
     }
@@ -301,6 +310,7 @@ public final class ReimbursementModel {
   }
 
   public func invalidateClaimPreview() {
+    claimPreviewGeneration += 1
     claimPreview = nil
     previewedClaimRequest = nil
   }

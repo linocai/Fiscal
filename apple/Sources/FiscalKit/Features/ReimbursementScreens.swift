@@ -561,21 +561,39 @@ public struct ReimbursementClaimEditor: View {
   @State private var title: String
   @State private var note: String
   @State private var parties: [ReimbursementPartyDraft]
+  @State private var amountTexts: [UUID: String]
   public init(model: ReimbursementModel, editing: ReimbursementClaimDTO?) {
     self.model = model
     self.editing = editing
     _title = State(initialValue: editing?.title ?? "")
     _note = State(initialValue: editing?.note ?? "")
-    _parties = State(
-      initialValue: editing?.parties.map {
-        .init(
+    let initialParties: [ReimbursementPartyDraft] = editing?.parties.map {
+        ReimbursementPartyDraft(
           id: $0.id, name: $0.name, expectedDate: $0.expectedDate, note: $0.note,
           allocations: $0.allocations.map {
-            .init(id: $0.id, transactionID: $0.transactionID, amountMinor: $0.amountMinor)
+            ReimbursementAllocationDraft(
+              id: $0.id, transactionID: $0.transactionID, amountMinor: $0.amountMinor)
           })
-      } ?? [.init(id: nil, name: "", expectedDate: nil, note: nil, allocations: [])])
+      } ?? [
+        ReimbursementPartyDraft(
+          id: nil, name: "", expectedDate: nil, note: nil, allocations: [])
+      ]
+    _parties = State(initialValue: initialParties)
+    _amountTexts = State(
+      initialValue: Dictionary(
+        uniqueKeysWithValues: initialParties.flatMap(\.allocations).map {
+          ($0.id, Self.yuanText(minorUnits: $0.amountMinor))
+        }))
   }
   public var body: some View {
+    #if os(macOS)
+      macEditor
+    #else
+      compactEditor
+    #endif
+  }
+
+  private var compactEditor: some View {
     NavigationStack {
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
@@ -632,44 +650,40 @@ public struct ReimbursementClaimEditor: View {
                       .foregroundStyle(FiscalColor.secondary)
                       Spacer()
                       TextField(
-                        "金额（分）",
-                        value: lockedAmountBinding($allocation), format: .number
+                        "金额（元）",
+                        text: amountTextBinding(
+                          $allocation, minimum: lockedReceivedMinor(allocation.serverID))
                       )
                       .frame(width: 120)
-                      Text("最低 \(lockedReceivedMinor(allocation.serverID)) 分")
+                      Text(
+                        "最低 \(Money(minorUnits: lockedReceivedMinor(allocation.serverID)).formatted())"
+                      )
                         .font(.caption)
                         .foregroundStyle(FiscalColor.tertiary)
                     }
                   } else {
                     HStack {
                       Picker("关联垫付", selection: $allocation.transactionID) {
-                        if !model.expenseOptions.contains(where: {
-                          $0.transactionID == allocation.transactionID
-                        }) {
-                          Text(existingExpenseTitle(allocation.transactionID)).tag(
-                            allocation.transactionID)
-                        }
-                        ForEach(model.expenseOptions) {
+                        ForEach(
+                          selectableExpenseOptions(
+                            for: party, current: allocation.transactionID)
+                        ) {
                           Text(
                             "\($0.title) · 可用 \(Money(minorUnits: $0.availableMinor).formatted())"
                           )
                           .tag($0.transactionID)
                         }
                       }
-                      TextField("金额（分）", value: $allocation.amountMinor, format: .number).frame(
-                        width: 120)
+                      TextField(
+                        "金额（元）", text: amountTextBinding($allocation, minimum: 0)
+                      ).frame(width: 120)
                     }
                   }
                 }
                 if !matrixFrozen {
                   Button("添加垫付") {
-                    if let option = model.expenseOptions.first {
-                      party.allocations.append(
-                        .init(
-                          id: nil, transactionID: option.transactionID,
-                          amountMinor: option.availableMinor))
-                    }
-                  }.disabled(model.expenseOptions.isEmpty)
+                    appendAllocation(to: $party)
+                  }.disabled(nextExpenseOption(for: $party) == nil)
                 }
               }
             }
@@ -715,14 +729,548 @@ public struct ReimbursementClaimEditor: View {
         }
     }.reimbursementEditorFrame(width: 760, height: 650)
   }
+
+  #if os(macOS)
+    private var macEditor: some View {
+      VStack(spacing: 0) {
+        macHeader
+        Divider().opacity(0.45)
+        HStack(alignment: .top, spacing: 16) {
+          ScrollView {
+            LazyVStack(alignment: .leading, spacing: 14) {
+              macIdentityCard
+              ForEach($parties) { party in
+                macPartyCard(
+                  party,
+                  index: parties.firstIndex(where: { $0.id == party.wrappedValue.id }) ?? 0)
+              }
+              if !matrixFrozen { macAddPartyButton }
+            }.padding(.bottom, 4)
+          }.scrollIndicators(.hidden)
+          ScrollView {
+            VStack(spacing: 14) {
+              macDraftSummary
+              if let message = model.message { macMessageBanner(message) }
+            }
+          }.scrollIndicators(.hidden).frame(width: 248)
+        }.padding(18).frame(maxHeight: .infinity)
+        Divider().opacity(0.45)
+        macActionBar
+      }
+      .background(FiscalColor.macBackground)
+      .frame(width: 840, height: 680)
+      .task { await model.loadExpenseOptions() }
+      .onChange(of: title) { _, _ in model.invalidateClaimPreview() }
+      .onChange(of: note) { _, _ in model.invalidateClaimPreview() }
+      .onChange(of: parties) { _, _ in model.invalidateClaimPreview() }
+    }
+
+    private var macHeader: some View {
+      HStack(spacing: 12) {
+        FiscalIconTile("doc.text.fill", color: FiscalColor.reimbursement)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(editing == nil ? "新建报销单" : "编辑报销单")
+            .font(.system(size: 19, weight: .bold))
+          Text("拆分付款主体与垫付金额，保存前由服务器校验影响")
+            .font(.caption).foregroundStyle(FiscalColor.tertiary)
+        }
+        Spacer()
+        if let editing {
+          Text("版本 \(model.selectedClaim?.version ?? editing.version)")
+            .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.tertiary)
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(Color.black.opacity(0.045), in: .capsule)
+        }
+        Button { dismiss() } label: {
+          Image(systemName: "xmark").font(.system(size: 12, weight: .bold))
+            .frame(width: 32, height: 32)
+            .background(Color.black.opacity(0.055), in: .circle)
+        }
+        .buttonStyle(.plain).foregroundStyle(FiscalColor.secondary)
+        .keyboardShortcut(.cancelAction).accessibilityLabel("取消编辑")
+      }.padding(.horizontal, 20).frame(height: 62).background(.white)
+    }
+
+    private var macIdentityCard: some View {
+      FiscalCard(radius: 16) {
+        VStack(alignment: .leading, spacing: 13) {
+          macSectionHeader(
+            title: "报销信息", subtitle: "给这张报销单一个便于检索的名称", symbol: "text.document")
+          macTextField(
+            label: "报销单标题", prompt: "例如：7 月上海差旅", text: $title,
+            symbol: "textformat")
+          macTextField(
+            label: "备注", prompt: "可选，记录项目或结算说明", text: $note,
+            symbol: "note.text")
+        }
+      }
+    }
+
+    private func macPartyCard(
+      _ party: Binding<ReimbursementPartyDraft>, index: Int
+    ) -> some View {
+      FiscalCard(radius: 16) {
+        VStack(alignment: .leading, spacing: 13) {
+          HStack(spacing: 10) {
+            Text("\(index + 1)").font(.caption.bold()).foregroundStyle(.white)
+              .frame(width: 25, height: 25)
+              .background(FiscalColor.reimbursement, in: .circle)
+            VStack(alignment: .leading, spacing: 1) {
+              Text("付款主体").font(.headline)
+              Text(partyStatusSubtitle(party.wrappedValue.serverID))
+                .font(.caption).foregroundStyle(FiscalColor.tertiary)
+            }
+            Spacer()
+            if parties.count > 1 && canRemoveParty(party.wrappedValue.serverID) {
+              Button {
+                let id = party.wrappedValue.id
+                parties.removeAll { $0.id == id }
+              } label: {
+                Label("移除主体", systemImage: "trash")
+                  .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.expense)
+                  .padding(.horizontal, 9).padding(.vertical, 6)
+                  .background(FiscalColor.expense.opacity(0.08), in: .rect(cornerRadius: 8))
+              }.buttonStyle(.plain)
+            }
+          }
+          HStack(alignment: .top, spacing: 10) {
+            macTextField(
+              label: "主体名称", prompt: "公司或项目组", text: party.name,
+              symbol: "building.2")
+            macTextField(
+              label: "预计到账", prompt: "yyyy-MM-dd",
+              text: optionalStringBinding(party.expectedDate), symbol: "calendar")
+          }
+          macTextField(
+            label: "主体备注", prompt: "可选，记录结算批次或联系人",
+            text: optionalStringBinding(party.note), symbol: "person.text.rectangle")
+          macAllocationMatrix(party)
+        }
+      }
+    }
+
+    private var macAddPartyButton: some View {
+      Button {
+        parties.append(.init(id: nil, name: "", expectedDate: nil, note: nil, allocations: []))
+      } label: {
+        HStack(spacing: 10) {
+          Image(systemName: "plus").font(.system(size: 13, weight: .bold))
+            .frame(width: 30, height: 30)
+            .background(FiscalColor.accent.opacity(0.12), in: .rect(cornerRadius: 9))
+          VStack(alignment: .leading, spacing: 2) {
+            Text("添加付款主体").fontWeight(.semibold)
+            Text("为另一家公司或项目组拆分应付金额").font(.caption)
+              .foregroundStyle(FiscalColor.tertiary)
+          }
+          Spacer()
+          Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+        }
+        .foregroundStyle(FiscalColor.accent).padding(13)
+        .background(FiscalColor.accent.opacity(0.065), in: .rect(cornerRadius: 14))
+        .overlay {
+          RoundedRectangle(cornerRadius: 14).stroke(
+            FiscalColor.accent.opacity(0.20), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+        }
+      }.buttonStyle(.plain)
+    }
+
+    private var macActionBar: some View {
+      HStack(spacing: 10) {
+        Text(valid ? "输入完整" : "请补全标题、主体与垫付金额")
+          .font(.caption).foregroundStyle(valid ? FiscalColor.income : FiscalColor.tertiary)
+        Spacer()
+        Button("取消") { dismiss() }
+          .buttonStyle(.plain).font(.system(size: 13, weight: .semibold))
+          .foregroundStyle(FiscalColor.secondary).padding(.horizontal, 18).frame(height: 38)
+          .background(Color.black.opacity(0.055), in: .rect(cornerRadius: 10))
+        Button { macPrimaryAction() } label: {
+          HStack(spacing: 7) {
+            if model.isMutating { ProgressView().controlSize(.small).tint(.white) }
+            Image(systemName: macPrimarySymbol)
+            Text(macPrimaryTitle)
+          }
+          .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+          .padding(.horizontal, 18).frame(minWidth: 126, minHeight: 38)
+          .background(
+            LinearGradient(
+              colors: [FiscalColor.accent, FiscalColor.accentDark],
+              startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: .rect(cornerRadius: 10))
+          .shadow(color: FiscalColor.accent.opacity(0.20), radius: 7, y: 3)
+        }
+        .buttonStyle(.plain).disabled(!valid || model.isMutating)
+        .opacity(!valid || model.isMutating ? 0.48 : 1)
+        .keyboardShortcut(.defaultAction)
+      }.padding(.horizontal, 20).frame(height: 58).background(.white)
+    }
+
+    private var macPrimaryTitle: String {
+      if editing == nil { return "创建报销单" }
+      return model.claimPreview == nil ? "预览影响" : "确认保存"
+    }
+
+    private var macPrimarySymbol: String {
+      if editing == nil { return "plus" }
+      return model.claimPreview == nil ? "arrow.right.circle" : "checkmark"
+    }
+
+    private func macPrimaryAction() {
+      if editing == nil { create() }
+      else if model.claimPreview == nil { preview() }
+      else { update() }
+    }
+
+    private func macAllocationMatrix(_ party: Binding<ReimbursementPartyDraft>) -> some View {
+      VStack(alignment: .leading, spacing: 0) {
+        HStack {
+          Text("关联垫付").frame(maxWidth: .infinity, alignment: .leading)
+          Text("已到账").frame(width: 82, alignment: .trailing)
+          Text("分配金额").frame(width: 116, alignment: .trailing)
+          Text("状态").frame(width: 68, alignment: .trailing)
+        }
+        .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.tertiary)
+        .padding(.horizontal, 12).padding(.bottom, 7)
+
+        VStack(spacing: 0) {
+          ForEach(party.allocations) { allocation in
+            macAllocationRow(allocation, party: party)
+            if allocation.wrappedValue.id != party.wrappedValue.allocations.last?.id {
+              Divider().opacity(0.45).padding(.leading, 42)
+            }
+          }
+          if !matrixFrozen {
+            Button { appendAllocation(to: party) } label: {
+              HStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill")
+                Text("添加垫付").fontWeight(.semibold)
+                Spacer()
+                Text(nextExpenseHint(for: party)).font(.caption)
+                  .foregroundStyle(FiscalColor.tertiary)
+              }
+              .foregroundStyle(FiscalColor.accent).padding(.horizontal, 12).frame(height: 42)
+              .contentShape(.rect)
+            }
+            .buttonStyle(.plain).disabled(nextExpenseOption(for: party) == nil)
+            .opacity(nextExpenseOption(for: party) == nil ? 0.45 : 1)
+          }
+        }
+        .background(Color(hex: 0xF7F9FC), in: .rect(cornerRadius: 11))
+        .overlay {
+          RoundedRectangle(cornerRadius: 11).stroke(Color.black.opacity(0.055), lineWidth: 0.5)
+        }
+      }
+    }
+
+    private func macAllocationRow(
+      _ allocation: Binding<ReimbursementAllocationDraft>,
+      party: Binding<ReimbursementPartyDraft>
+    ) -> some View {
+      let locked = isLockedAllocation(allocation.wrappedValue.serverID)
+      let frozen = matrixFrozen
+      return HStack(spacing: 10) {
+        Image(systemName: locked ? "lock.fill" : "doc.text")
+          .font(.system(size: 12, weight: .semibold))
+          .foregroundStyle(locked ? FiscalColor.reimbursement : FiscalColor.accent)
+          .frame(width: 28, height: 28)
+          .background(
+            (locked ? FiscalColor.reimbursement : FiscalColor.accent).opacity(0.10),
+            in: .rect(cornerRadius: 8))
+        if frozen || locked {
+          Text(existingExpenseTitle(allocation.wrappedValue.transactionID))
+            .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+          Picker("垫付事项", selection: allocation.transactionID) {
+            ForEach(
+              selectableExpenseOptions(
+                for: party.wrappedValue, current: allocation.wrappedValue.transactionID)
+            ) {
+              Text("\($0.title) · 可用 \(Money(minorUnits: $0.availableMinor).formatted())")
+                .tag($0.transactionID)
+            }
+          }.labelsHidden().pickerStyle(.menu).frame(maxWidth: .infinity, alignment: .leading)
+        }
+        Text(Money(minorUnits: allocationReceivedMinor(allocation.wrappedValue.serverID)).formatted())
+          .font(.caption).monospacedDigit().foregroundStyle(FiscalColor.secondary)
+          .frame(width: 82, alignment: .trailing)
+        if frozen {
+          Text(Money(minorUnits: allocation.wrappedValue.amountMinor).formatted())
+            .monospacedDigit().frame(width: 116, alignment: .trailing)
+        } else {
+          HStack(spacing: 3) {
+            Text("¥").foregroundStyle(FiscalColor.tertiary)
+            TextField(
+              "0.00",
+              text: amountTextBinding(
+                allocation, minimum: lockedReceivedMinor(allocation.wrappedValue.serverID)))
+              .textFieldStyle(.plain).multilineTextAlignment(.trailing).monospacedDigit()
+          }
+          .padding(.horizontal, 8).frame(width: 116, height: 32)
+          .background(.white, in: .rect(cornerRadius: 8))
+          .overlay {
+            RoundedRectangle(cornerRadius: 8).stroke(
+              amountIsValid(allocation.wrappedValue)
+                ? Color.black.opacity(0.08) : FiscalColor.expense.opacity(0.75),
+              lineWidth: amountIsValid(allocation.wrappedValue) ? 0.5 : 1)
+          }
+        }
+        HStack(spacing: 5) {
+          Text(
+            frozen ? "冻结" : locked ? "锁定"
+              : amountIsValid(allocation.wrappedValue) ? "可编辑" : "金额错误")
+          if !frozen && !locked {
+            Button {
+              let id = allocation.wrappedValue.id
+              party.wrappedValue.allocations.removeAll { $0.id == id }
+            } label: { Image(systemName: "xmark.circle.fill") }
+              .buttonStyle(.plain).foregroundStyle(FiscalColor.tertiary)
+              .accessibilityLabel("移除垫付")
+          }
+        }
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(
+          !frozen && !locked && !amountIsValid(allocation.wrappedValue)
+            ? FiscalColor.expense : locked ? FiscalColor.reimbursement : FiscalColor.tertiary)
+        .frame(width: 68, alignment: .trailing)
+      }
+      .padding(.horizontal, 10).frame(minHeight: 46)
+      .background(locked ? FiscalColor.reimbursement.opacity(0.035) : .clear)
+    }
+
+    private var macDraftSummary: some View {
+      FiscalCard(radius: 16) {
+        VStack(alignment: .leading, spacing: 13) {
+          macSectionHeader(
+            title: model.claimPreview == nil ? "保存前摘要" : "服务器影响",
+            subtitle: model.claimPreview == nil ? "预计口径" : "已按当前输入校验",
+            symbol: model.claimPreview == nil ? "sum" : "checkmark.shield.fill")
+          let claim = model.claimPreview?.proposed
+          macSummaryValue(
+            "拟议报销", claim?.totalClaimedMinor ?? draftTotalMinor, color: FiscalColor.text)
+          macSummaryValue(
+            "已到账", claim?.receivedMinor ?? editing?.receivedMinor ?? 0,
+            color: FiscalColor.income)
+          macSummaryValue(
+            "保存后待回",
+            claim?.outstandingMinor ?? max(0, draftTotalMinor - (editing?.receivedMinor ?? 0)),
+            color: FiscalColor.reimbursement)
+          if let preview = model.claimPreview {
+            Divider().opacity(0.45)
+            HStack {
+              Text("释放").foregroundStyle(FiscalColor.tertiary)
+              Spacer()
+              Text(Money(minorUnits: preview.releasedMinor).formatted()).monospacedDigit()
+            }
+            HStack {
+              Text("新增").foregroundStyle(FiscalColor.tertiary)
+              Spacer()
+              Text(Money(minorUnits: preview.newlyClaimedMinor).formatted()).monospacedDigit()
+            }
+            ForEach(preview.warnings, id: \.self) {
+              Label($0, systemImage: "exclamationmark.triangle.fill")
+                .font(.caption).foregroundStyle(FiscalColor.debt)
+            }
+          } else {
+            Text("预览不会写入账本；确认保存后才会替换当前矩阵。")
+              .font(.caption).foregroundStyle(FiscalColor.tertiary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+      }
+    }
+
+    private func macMessageBanner(_ message: String) -> some View {
+      HStack(alignment: .top, spacing: 9) {
+        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(FiscalColor.expense)
+        Text(message).font(.caption).foregroundStyle(FiscalColor.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+      .background(FiscalColor.expense.opacity(0.07), in: .rect(cornerRadius: 12))
+      .overlay {
+        RoundedRectangle(cornerRadius: 12).stroke(
+          FiscalColor.expense.opacity(0.16), lineWidth: 0.5)
+      }
+    }
+
+    private func macSectionHeader(
+      title: String, subtitle: String, symbol: String
+    ) -> some View {
+      HStack(spacing: 10) {
+        Image(systemName: symbol).font(.system(size: 13, weight: .semibold))
+          .foregroundStyle(FiscalColor.reimbursement)
+          .frame(width: 30, height: 30)
+          .background(FiscalColor.reimbursement.opacity(0.10), in: .rect(cornerRadius: 9))
+        VStack(alignment: .leading, spacing: 1) {
+          Text(title).font(.headline)
+          Text(subtitle).font(.caption).foregroundStyle(FiscalColor.tertiary)
+        }
+      }
+    }
+
+    private func macTextField(
+      label: String, prompt: String, text: Binding<String>, symbol: String
+    ) -> some View {
+      VStack(alignment: .leading, spacing: 6) {
+        Text(label).font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
+        HStack(spacing: 8) {
+          Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(FiscalColor.tertiary).frame(width: 16)
+          TextField(prompt, text: text).textFieldStyle(.plain)
+        }
+        .padding(.horizontal, 11).frame(height: 40)
+        .background(Color(hex: 0xF7F9FC), in: .rect(cornerRadius: 10))
+        .overlay {
+          RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.06), lineWidth: 0.5)
+        }
+      }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func macSummaryValue(_ label: String, _ amountMinor: Int64, color: Color) -> some View {
+      HStack(alignment: .firstTextBaseline) {
+        Text(label).font(.caption).foregroundStyle(FiscalColor.tertiary)
+        Spacer()
+        Text(Money(minorUnits: amountMinor).formatted())
+          .font(.system(size: 14, weight: .semibold)).monospacedDigit().foregroundStyle(color)
+      }
+    }
+
+    private func optionalStringBinding(_ value: Binding<String?>) -> Binding<String> {
+      Binding(
+        get: { value.wrappedValue ?? "" },
+        set: { value.wrappedValue = $0.isEmpty ? nil : $0 })
+    }
+
+    private var draftTotalMinor: Int64 {
+      parties.flatMap(\.allocations).reduce(0) { total, allocation in
+        let (sum, overflow) = total.addingReportingOverflow(allocation.amountMinor)
+        return overflow ? Int64.max : sum
+      }
+    }
+
+    private func partyStatusSubtitle(_ partyID: UUID?) -> String {
+      guard let partyID,
+        let party = editing?.parties.first(where: { $0.id == partyID })
+      else { return "新主体 · 尚未到账" }
+      return "\(party.statusTitle) · 已到账 \(Money(minorUnits: party.receivedMinor).formatted())"
+    }
+
+    private func allocationReceivedMinor(_ allocationID: UUID?) -> Int64 {
+      guard let allocationID else { return 0 }
+      return editing?.parties.flatMap(\.allocations)
+        .first(where: { $0.id == allocationID })?.receivedMinor ?? 0
+    }
+
+    private func nextExpenseHint(for party: Binding<ReimbursementPartyDraft>) -> String {
+      guard let option = nextExpenseOption(for: party) else { return "没有更多可分配垫付" }
+      return "可用 \(Money(minorUnits: option.availableMinor).formatted())"
+    }
+  #endif
+
+  private struct EditorExpenseOption: Identifiable {
+    var id: UUID { transactionID }
+    let transactionID: UUID
+    let title: String
+    let availableMinor: Int64
+  }
+
+  private var editorExpenseOptions: [EditorExpenseOption] {
+    let originalAllocations = editing?.parties.flatMap(\.allocations) ?? []
+    let originalTotals = Dictionary(grouping: originalAllocations, by: \.transactionID)
+      .mapValues { rows in rows.reduce(0) { $0 + $1.amountMinor } }
+    var values = model.expenseOptions.map { option in
+      EditorExpenseOption(
+        transactionID: option.transactionID, title: option.title,
+        availableMinor: option.availableMinor + (originalTotals[option.transactionID] ?? 0))
+    }
+    let known = Set(values.map(\.transactionID))
+    for (transactionID, rows) in originalTotals where !known.contains(transactionID) {
+      values.append(
+        .init(
+          transactionID: transactionID,
+          title: originalAllocations.first(where: { $0.transactionID == transactionID })?
+            .expenseTitle ?? "历史垫付",
+          availableMinor: rows))
+    }
+    return values
+  }
+
+  private func selectableExpenseOptions(
+    for party: ReimbursementPartyDraft, current: UUID
+  ) -> [EditorExpenseOption] {
+    let used = Set(
+      party.allocations.lazy.filter { $0.transactionID != current }.map(\.transactionID))
+    return editorExpenseOptions.filter { !used.contains($0.transactionID) }
+  }
+
+  private func nextExpenseOption(
+    for party: Binding<ReimbursementPartyDraft>
+  ) -> EditorExpenseOption? {
+    let used = Set(party.wrappedValue.allocations.map(\.transactionID))
+    return editorExpenseOptions.first { !used.contains($0.transactionID) }
+  }
+
+  private func appendAllocation(to party: Binding<ReimbursementPartyDraft>) {
+    guard let option = nextExpenseOption(for: party) else { return }
+    let allocation = ReimbursementAllocationDraft(
+      id: nil, transactionID: option.transactionID, amountMinor: option.availableMinor)
+    party.wrappedValue.allocations.append(allocation)
+    amountTexts[allocation.id] = Self.yuanText(minorUnits: allocation.amountMinor)
+  }
+
+  private func amountTextBinding(
+    _ allocation: Binding<ReimbursementAllocationDraft>, minimum: Int64
+  ) -> Binding<String> {
+    Binding(
+      get: {
+        amountTexts[allocation.wrappedValue.id]
+          ?? Self.yuanText(minorUnits: allocation.wrappedValue.amountMinor)
+      },
+      set: { text in
+        amountTexts[allocation.wrappedValue.id] = text
+        if let value = Self.validatedAmount(text: text, minimum: minimum) {
+          allocation.wrappedValue.amountMinor = value
+        }
+      })
+  }
+
+  private func amountIsValid(_ allocation: ReimbursementAllocationDraft) -> Bool {
+    let text = amountTexts[allocation.id] ?? Self.yuanText(minorUnits: allocation.amountMinor)
+    return Self.validatedAmount(
+      text: text, minimum: lockedReceivedMinor(allocation.serverID)) != nil
+  }
+
+  static func validatedAmount(text: String, minimum: Int64) -> Int64? {
+    guard let value = CNYAmountParser.minorUnits(text), value > 0, value >= minimum else {
+      return nil
+    }
+    return value
+  }
+
+  static func yuanText(minorUnits: Int64) -> String {
+    NSDecimalNumber(decimal: Decimal(minorUnits) / 100).stringValue
+  }
+
   private var valid: Bool {
     !title.trimmingCharacters(in: .whitespaces).isEmpty && !parties.isEmpty
       && parties.allSatisfy {
         !$0.name.trimmingCharacters(in: .whitespaces).isEmpty && !$0.allocations.isEmpty
-          && $0.allocations.allSatisfy {
-            $0.amountMinor > 0 && $0.amountMinor >= lockedReceivedMinor($0.serverID)
-          }
+          && ($0.expectedDate == nil || Self.isValidISODate($0.expectedDate!))
+          && Set($0.allocations.map(\.transactionID)).count == $0.allocations.count
+          && $0.allocations.allSatisfy(amountIsValid)
       }
+  }
+
+  static func isValidISODate(_ text: String) -> Bool {
+    guard text.range(of: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", options: .regularExpression) != nil
+    else { return false }
+    let formatter = DateFormatter()
+    formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+    formatter.dateFormat = "yyyy-MM-dd"
+    formatter.isLenient = false
+    guard let date = formatter.date(from: text) else { return false }
+    return formatter.string(from: date) == text
   }
   private var createRequest: ReimbursementClaimCreateRequest {
     .init(title: title, note: note.isEmpty ? nil : note, parties: parties)
@@ -751,16 +1299,6 @@ public struct ReimbursementClaimEditor: View {
   }
   private func lockedReceivedMinor(_ allocationID: UUID?) -> Int64 {
     Self.minimumAllocationAmount(allocationID: allocationID, editing: editing)
-  }
-  private func lockedAmountBinding(_ allocation: Binding<ReimbursementAllocationDraft>) -> Binding<
-    Int64
-  > {
-    return Binding(
-      get: { allocation.wrappedValue.amountMinor },
-      set: {
-        allocation.wrappedValue.amountMinor = Self.clampedAllocationAmount(
-          $0, allocationID: allocation.wrappedValue.serverID, editing: editing)
-      })
   }
   static func minimumAllocationAmount(
     allocationID: UUID?, editing: ReimbursementClaimDTO?

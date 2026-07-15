@@ -6,6 +6,8 @@ Date: 2026-07-15 (Asia/Shanghai)
 
 P6 implementation and engineering verification are complete. The phase is waiting for user visual/product acceptance; P7 has not started.
 
+After the first visual review, the macOS claim editor was rejected for falling back to a bare system form. It has been rebuilt as a Fiscal-native workbench with a structured header, designed field containers, party cards, a compact allocation matrix, a live summary rail, inline validation, and a custom sticky action bar. The replacement screenshot below is from the rebuilt SwiftUI view at its real 940×700-point window size.
+
 The accounting boundary is preserved throughout: the party × expense matrix is the expected reimbursement truth; each actual receipt is a server-owned positive cash/debit ledger transaction; reimbursement receipts affect cash flow but never ordinary income.
 
 ## Backend gates
@@ -22,7 +24,7 @@ The accounting boundary is preserved throughout: the party × expense matrix is 
 ## Apple gates
 
 - Verified with the current Xcode 26.6 / Swift 6.3.3 toolchain and iOS 26/macOS 26 deployment targets.
-- macOS shared/test target: 44 tests in 6 suites passed.
+- macOS shared/test target: 46 tests passed after the editor correction.
 - Authenticated real-API iOS P6 UI test: 1 passed in 30.771 seconds.
 - iOS simulator build and macOS build: passed.
 - Production iOS navigation contains zero native `TabView` tab bars and exactly one custom bottom bar.
@@ -52,6 +54,6 @@ The disposable API, database container, simulator data, and test Keychain token 
 - `screenshots/ios-reimbursement-detail.png` — localized party states, expected/received/outstanding totals, and party × expense matrix.
 - `screenshots/ios-reimbursement-receipt-preview.png` — unobscured server preview before committing the real receipt.
 - `screenshots/mac-reimbursements.png` — 940×700 point macOS list, modern matrix detail, receipt history, and cash-flow explanation.
-- `screenshots/mac-reimbursement-editor.png` — 940×700 point full editor with locked historical rows and editable remaining matrix amounts.
+- `screenshots/mac-reimbursement-editor.png` — corrected 940×700-point Fiscal-native editor; the former bare fields and default toolbar are gone.
 
 The evidence was reviewed against `design_handoff_fiscal_app`: expected reimbursement, actual receipts, outstanding amounts, and personal burden remain visually distinct; no second iOS navigation bar or obsolete macOS list styling remains.
