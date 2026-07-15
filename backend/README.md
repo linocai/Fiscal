@@ -1,7 +1,6 @@
 # Fiscal API
 
-P1 backend foundation for the private Fiscal app. It intentionally contains no ledger business
-tables yet.
+FastAPI/PostgreSQL backend for the private Fiscal app.
 
 ## Local development
 
@@ -29,8 +28,13 @@ units.
 P3 adds the device-token-protected unified ledger at `/api/v1/transactions`. Clients submit
 semantic income, expense, or transfer drafts with a UUID `Idempotency-Key`; the server owns
 postings, derives balances and Shanghai business dates, supports complete replacement plus
-void/restore, and exposes an income/expense category summary. P3 deliberately accepts only
-active cash and debit accounts; credit-account ledger behavior begins in P4.
+void/restore, and exposes an income/expense category summary.
+
+P4 adds `credit_purchase` and `repayment` to that same ledger plus protected
+`/api/v1/credit-accounts` and `/api/v1/credit-cycles` projections. Statement cycles, debt,
+available/over-limit credit, repayment progress, and status are server-derived. Positive opening
+debt requires explicit as-of and due dates rather than a fabricated deadline; installments remain
+P5.
 
 Run quality checks with:
 

@@ -22,6 +22,7 @@ public final class TransactionsModel {
     public private(set) var conflictDetected = false
     public private(set) var undoTransaction: TransactionDTO?
     public private(set) var shouldRotateCreateKeyAfterFailure = false
+    public private(set) var lastSavedTransaction: TransactionDTO?
     public var selectedID: UUID?
     public var kind: TransactionKind?
     public var search = ""
@@ -29,13 +30,14 @@ public final class TransactionsModel {
     private let repository: any TransactionRepository
     private let accounts: AccountsModel?
     private let categories: CategoriesModel?
+    private let credit: CreditModel?
     private var debounceTask: Task<Void, Never>?
     private var pageTask: Task<TransactionPage, Error>?
     private var moreTask: Task<TransactionPage, Error>?
     private var generation = 0
 
-    public init(repository: any TransactionRepository, accounts: AccountsModel? = nil, categories: CategoriesModel? = nil) {
-        self.repository = repository; self.accounts = accounts; self.categories = categories
+    public init(repository: any TransactionRepository, accounts: AccountsModel? = nil, categories: CategoriesModel? = nil, credit: CreditModel? = nil) {
+        self.repository = repository; self.accounts = accounts; self.categories = categories; self.credit = credit
     }
     public var selected: TransactionDTO? { transactions.first { $0.id == selectedID } }
     public var groups: [TransactionDayGroup] {
@@ -92,9 +94,10 @@ public final class TransactionsModel {
         shouldRotateCreateKeyAfterFailure = false
         isMutating = true; conflictDetected = false; defer { isMutating = false }
         do {
-            _ = if let editing { try await repository.update(id: editing.id, version: editing.version, draft: draft) }
+            let canonical = if let editing { try await repository.update(id: editing.id, version: editing.version, draft: draft) }
             else { try await repository.create(draft, idempotencyKey: idempotencyKey) }
             guard current == generation else { return false }
+            lastSavedTransaction = canonical
             await refreshAfterMutation(); return true
         } catch is CancellationError { return false }
         catch {
@@ -146,7 +149,8 @@ public final class TransactionsModel {
     private func refreshMasterData() async {
         async let accountRefresh: Void = accounts?.load() ?? ()
         async let categoryRefresh: Void = categories?.load() ?? ()
-        _ = await (accountRefresh, categoryRefresh)
+        async let creditRefresh: Void = credit?.refreshCurrentSelection() ?? ()
+        _ = await (accountRefresh, categoryRefresh, creditRefresh)
     }
     private func apply(_ error: Error, preservingData: Bool) {
         let text = display(error); message = text
@@ -192,8 +196,12 @@ public final class TransactionEditorModel {
     }
     public func changeKind(_ kind: TransactionKind) {
         draft.kind = kind
-        if kind == .transfer { draft.categoryID = nil }
-        else { draft.destinationAccountID = nil }
+        switch kind {
+        case .transfer: draft.categoryID = nil; draft.creditCycleID = nil
+        case .repayment: draft.categoryID = nil
+        case .creditPurchase: draft.destinationAccountID = nil; draft.creditCycleID = nil
+        case .expense, .income: draft.destinationAccountID = nil; draft.creditCycleID = nil
+        }
     }
     public func rotateCreateKey() { if editing == nil { idempotencyKey = UUID() } }
     public static func validate(_ draft: TransactionDraft) -> String? {
@@ -206,6 +214,10 @@ public final class TransactionEditorModel {
         case .transfer:
             guard let source = draft.accountID, let destination = draft.destinationAccountID else { return "请选择转出和转入账户。" }
             if source == destination { return "转出和转入账户不能相同。" }
+        case .creditPurchase: if draft.accountID == nil || draft.categoryID == nil { return "请选择信用账户和支出分类。" }
+        case .repayment:
+            guard let source = draft.accountID, let destination = draft.destinationAccountID, draft.creditCycleID != nil else { return "请选择付款账户、信用账户和目标账期。" }
+            if source == destination { return "付款账户和信用账户不能相同。" }
         }
         return nil
     }

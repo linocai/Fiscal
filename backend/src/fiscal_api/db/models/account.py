@@ -1,7 +1,8 @@
+from datetime import date
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, CheckConstraint, Index, Integer, String, Uuid, func, text
+from sqlalchemy import BigInteger, CheckConstraint, Date, Index, Integer, String, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from fiscal_api.db.base import Base
@@ -26,9 +27,15 @@ class Account(MutableResourceMixin, Base):
         CheckConstraint(
             "(kind = 'credit' AND credit_limit_minor > 0 "
             "AND statement_day BETWEEN 1 AND 28 AND due_day BETWEEN 1 AND 28 "
-            "AND opening_balance_minor >= 0 AND opening_balance_minor <= credit_limit_minor) "
+            "AND opening_balance_minor >= 0 "
+            "AND ((opening_balance_minor = 0 AND opening_balance_as_of_date IS NULL "
+            "AND opening_due_date IS NULL) OR (opening_balance_minor > 0 "
+            "AND ((opening_balance_as_of_date IS NULL AND opening_due_date IS NULL) "
+            "OR (opening_balance_as_of_date IS NOT NULL AND opening_due_date IS NOT NULL "
+            "AND opening_due_date >= opening_balance_as_of_date))))) "
             "OR (kind IN ('cash', 'debit') AND credit_limit_minor IS NULL "
-            "AND statement_day IS NULL AND due_day IS NULL)",
+            "AND statement_day IS NULL AND due_day IS NULL "
+            "AND opening_balance_as_of_date IS NULL AND opening_due_date IS NULL)",
             name="kind_configuration",
         ),
         Index(
@@ -49,3 +56,5 @@ class Account(MutableResourceMixin, Base):
     credit_limit_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     statement_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
     due_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    opening_balance_as_of_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    opening_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)

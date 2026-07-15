@@ -1,7 +1,7 @@
 import SwiftUI
 
 private extension TransactionKind {
-    var color: Color { switch self { case .expense: FiscalColor.expense; case .income: FiscalColor.income; case .transfer: FiscalColor.accent } }
+    var color: Color { switch self { case .expense: FiscalColor.expense; case .income: FiscalColor.income; case .transfer: FiscalColor.accent; case .creditPurchase, .repayment: FiscalColor.debt } }
 }
 
 private struct TransactionAmount: View {
@@ -10,7 +10,7 @@ private struct TransactionAmount: View {
         Text(prefix + Money(minorUnits: transaction.amountMinor).formatted())
             .font(.body.weight(.semibold)).foregroundStyle(transaction.kind.color).monospacedDigit()
     }
-    private var prefix: String { switch transaction.kind { case .expense: "−"; case .income: "+"; case .transfer: "" } }
+    private var prefix: String { switch transaction.kind { case .expense, .creditPurchase: "−"; case .income: "+"; case .transfer, .repayment: "" } }
 }
 
 public struct TransactionEditorSheet: View {
@@ -18,15 +18,25 @@ public struct TransactionEditorSheet: View {
     let transactions: TransactionsModel
     let accounts: AccountsModel
     let categories: CategoriesModel
+    let credit: CreditModel?
     @State private var editor: TransactionEditorModel
     @State private var accountOptions: [AccountDTO] = []
     @State private var categoryOptions: [CategoryDTO] = []
     @State private var optionsError: String?
     @State private var loadingOptions = true
+    @State private var cycleOptions: [CreditCycleDTO] = []
+    @State private var cycleLoadGeneration = 0
+    @State private var confirmCycleRecalculation = false
+    @State private var savedCycleDescription: String?
+    @State private var repaymentValidation: String?
 
-    public init(transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, editing: TransactionDTO? = nil) {
-        self.transactions = transactions; self.accounts = accounts; self.categories = categories
-        _editor = State(initialValue: TransactionEditorModel(editing: editing))
+    public init(transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil, editing: TransactionDTO? = nil, initialKind: TransactionKind? = nil, creditAccountID: UUID? = nil, cycleID: UUID? = nil, amountMinor: Int64? = nil) {
+        self.transactions = transactions; self.accounts = accounts; self.categories = categories; self.credit = credit
+        let model = TransactionEditorModel(editing: editing)
+        if let initialKind { model.changeKind(initialKind) }
+        if initialKind == .repayment { model.draft.destinationAccountID = creditAccountID; model.draft.creditCycleID = cycleID }
+        if let amountMinor { model.amountText = NSDecimalNumber(decimal: Decimal(amountMinor) / 100).stringValue }
+        _editor = State(initialValue: model)
     }
 
     public var body: some View {
@@ -43,10 +53,15 @@ public struct TransactionEditorSheet: View {
                     TextField("备注（可选）", text: $editor.draft.note, axis: .vertical).lineLimit(2...5)
                     DatePicker("发生时间", selection: $editor.draft.occurredAt)
                 } header: { Text("交易") }
-                if editor.draft.kind == .transfer { transferSection } else { incomeExpenseSection }
+                switch editor.draft.kind {
+                case .transfer: transferSection
+                case .repayment: repaymentSection
+                case .creditPurchase: creditPurchaseSection
+                case .expense, .income: incomeExpenseSection
+                }
                 if loadingOptions { Section { ProgressView("正在读取账户与分类…") } }
                 if let optionsError { Section { Label(optionsError, systemImage: "wifi.exclamationmark").foregroundStyle(FiscalColor.expense); Button("重试") { Task { await loadOptions() } } } }
-                if let message = editor.validationMessage ?? transactions.message {
+                if let message = repaymentValidation ?? editor.validationMessage ?? transactions.message {
                     Section { Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(FiscalColor.expense) }
                 }
             }
@@ -54,19 +69,31 @@ public struct TransactionEditorSheet: View {
             .accessibilityIdentifier("transaction.editor")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("保存") { save() }.disabled(transactions.isMutating || loadingOptions) }
+                ToolbarItem(placement: .confirmationAction) { Button("保存") { requestSave() }.disabled(transactions.isMutating || loadingOptions) }
             }
             .task { await loadOptions() }
         }
         .frame(minWidth: 380, idealWidth: 440, minHeight: 520, idealHeight: 620)
         .interactiveDismissDisabled(transactions.isMutating)
+        .alert("账期将重新计算", isPresented: $confirmCycleRecalculation) {
+            Button("取消", role: .cancel) {}
+            Button("继续保存") { performSave() }
+        } message: {
+            Text("信用账户或发生时间已变化。服务器会重新归属账期，客户端不会自行推算。")
+        }
+        .alert("信用消费已保存", isPresented: Binding(get: { savedCycleDescription != nil }, set: { if !$0 { savedCycleDescription = nil } })) {
+            Button("完成") { dismiss() }
+        } message: {
+            Text("服务器确认的新账期：\(savedCycleDescription ?? "")")
+        }
     }
 
-    private var kindBinding: Binding<TransactionKind> { Binding(get: { editor.draft.kind }, set: { editor.changeKind($0) }) }
+    private var kindBinding: Binding<TransactionKind> { Binding(get: { editor.draft.kind }, set: { editor.changeKind($0); cycleOptions = []; if $0 == .repayment, let id = editor.draft.destinationAccountID { Task { await loadCycles(id) } } }) }
     private var activeAccounts: [AccountDTO] {
         accountOptions.filter { ($0.archivedAt == nil || linkedAccountIDs.contains($0.id)) && $0.kind != .credit }
     }
     private var linkedAccountIDs: Set<UUID> { Set([editor.editing?.accountID, editor.editing?.destinationAccountID].compactMap { $0 }) }
+    private var creditAccounts: [AccountDTO] { accountOptions.filter { ($0.archivedAt == nil || linkedAccountIDs.contains($0.id)) && $0.kind == .credit } }
     private var eligibleCategories: [CategoryDTO] {
         let direction: CategoryDirection = editor.draft.kind == .income ? .income : .expense
         return categoryOptions.filter { $0.direction == direction && ($0.archivedAt == nil || $0.id == editor.editing?.categoryID) }
@@ -83,11 +110,88 @@ public struct TransactionEditorSheet: View {
             Picker("转入", selection: $editor.draft.destinationAccountID) { Text("请选择").tag(Optional<UUID>.none); ForEach(activeAccounts) { Text($0.name).tag(Optional($0.id)) } }
         }
     }
-    private func save() {
+    private var creditPurchaseSection: some View {
+        Section("信用消费") {
+            Picker("信用账户", selection: $editor.draft.accountID) { Text("请选择").tag(Optional<UUID>.none); ForEach(creditAccounts) { Text($0.name).tag(Optional($0.id)) } }
+            Picker("支出分类", selection: $editor.draft.categoryID) { Text("请选择").tag(Optional<UUID>.none); ForEach(eligibleCategories) { Text($0.name).tag(Optional($0.id)) } }
+            Text("账期由服务器根据发生日期自动归属。若编辑后账期变化，保存结果会显示新的账期。").font(.caption).foregroundStyle(FiscalColor.tertiary)
+        }
+    }
+    private var repaymentSection: some View {
+        Section("还款") {
+            Picker("付款账户", selection: $editor.draft.accountID) { Text("请选择").tag(Optional<UUID>.none); ForEach(activeAccounts) { Text($0.name).tag(Optional($0.id)) } }
+            Picker("信用账户", selection: $editor.draft.destinationAccountID) { Text("请选择").tag(Optional<UUID>.none); ForEach(creditAccounts) { Text($0.name).tag(Optional($0.id)) } }
+                .onChange(of: editor.draft.destinationAccountID) { _, id in
+                    cycleLoadGeneration += 1; editor.draft.creditCycleID = nil; cycleOptions = []
+                    if let id { Task { await loadCycles(id) } }
+                }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("目标账期")
+                    .font(.subheadline)
+                Menu {
+                    Button("请选择") { editor.draft.creditCycleID = nil }
+                    ForEach(cycleOptions) { cycle in
+                        Button(cycleMenuLabel(cycle)) { editor.draft.creditCycleID = cycle.id }
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        if let cycle = selectedRepaymentCycle {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(cyclePrimaryLabel(cycle))
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(.primary)
+                                Text("到期 \(cycle.dueDate) · 可还 \(Money(minorUnits: editableCapacity(cycle)).formatted())")
+                                    .font(.caption)
+                                    .foregroundStyle(FiscalColor.secondary)
+                            }
+                        } else {
+                            Text("请选择")
+                                .foregroundStyle(FiscalColor.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(FiscalColor.tertiary)
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("目标账期")
+                .accessibilityValue(selectedRepaymentCycle.map(cycleMenuLabel) ?? "请选择")
+            }
+            Text("一笔还款只偿还一个账期，不会自动跨账期分配。").font(.caption).foregroundStyle(FiscalColor.tertiary)
+        }
+    }
+    private func requestSave() {
         guard editor.prepare() else { return }
+        if let editing = editor.editing,
+           editing.kind == .creditPurchase,
+           editor.draft.kind == .creditPurchase,
+           (editing.accountID != editor.draft.accountID || editing.occurredAt != editor.draft.occurredAt) {
+            confirmCycleRecalculation = true
+            return
+        }
+        performSave()
+    }
+    private func performSave() {
+        if editor.draft.kind == .repayment,
+           let cycleID = editor.draft.creditCycleID,
+           let cycle = cycleOptions.first(where: { $0.id == cycleID }),
+           editor.draft.amountMinor > editableCapacity(cycle) {
+            repaymentValidation = "还款金额不能超过本次可编辑额度 \(Money(minorUnits: editableCapacity(cycle)).formatted())。"
+            return
+        }
+        repaymentValidation = nil
         Task {
             let succeeded = await transactions.save(draft: editor.draft, editing: editor.editing, idempotencyKey: editor.idempotencyKey)
-            if succeeded { dismiss() }
+            if succeeded, editor.draft.kind == .creditPurchase,
+               let cycleID = transactions.lastSavedTransaction?.creditCycleID {
+                if let cycle = try? await credit?.cycleSummary(id: cycleID) {
+                    savedCycleDescription = "\(cycle.periodStart)–\(cycle.periodEnd)（账单日 \(cycle.statementDate)）"
+                } else {
+                    savedCycleDescription = cycleID.uuidString
+                }
+            } else if succeeded { dismiss() }
             else if transactions.shouldRotateCreateKeyAfterFailure { editor.rotateCreateKey() }
         }
     }
@@ -98,11 +202,42 @@ public struct TransactionEditorSheet: View {
             async let loadedAccounts = accounts.transactionOptions()
             async let loadedCategories = categories.transactionOptions()
             accountOptions = try await loadedAccounts; categoryOptions = try await loadedCategories
+            if editor.draft.kind == .repayment, let id = editor.draft.destinationAccountID { await loadCycles(id) }
         } catch is CancellationError {
             optionsError = "读取已取消，请重试"
             return
         }
         catch { optionsError = (error as? FiscalAPIError)?.displayMessage ?? error.localizedDescription }
+    }
+    private func loadCycles(_ accountID: UUID) async {
+        guard let credit else { optionsError = "信用账期服务未配置。"; return }
+        cycleLoadGeneration += 1; let requestGeneration = cycleLoadGeneration
+        let retainedCycle = editor.editing?.kind == .repayment && editor.editing?.destinationAccountID == accountID ? editor.editing?.creditCycleID : nil
+        optionsError = nil
+        do {
+            let loaded = try await credit.cyclesForRepayment(accountID: accountID, retaining: retainedCycle)
+            guard requestGeneration == cycleLoadGeneration, editor.draft.destinationAccountID == accountID, !Task.isCancelled else { return }
+            cycleOptions = loaded
+        }
+        catch is CancellationError {} catch {
+            guard requestGeneration == cycleLoadGeneration, editor.draft.destinationAccountID == accountID else { return }
+            optionsError = (error as? FiscalAPIError)?.displayMessage ?? error.localizedDescription
+        }
+    }
+    private func editableCapacity(_ cycle: CreditCycleDTO) -> Int64 {
+        guard let editing = editor.editing, editing.kind == .repayment, editing.creditCycleID == cycle.id else { return cycle.remainingMinor }
+        let (capacity, overflow) = cycle.remainingMinor.addingReportingOverflow(editing.amountMinor)
+        return overflow ? Int64.max : capacity
+    }
+    private var selectedRepaymentCycle: CreditCycleDTO? {
+        guard let id = editor.draft.creditCycleID else { return nil }
+        return cycleOptions.first { $0.id == id }
+    }
+    private func cyclePrimaryLabel(_ cycle: CreditCycleDTO) -> String {
+        cycle.isOpeningCycle ? "期初欠款 · 余额日期 \(cycle.statementDate)" : "\(cycle.periodStart)–\(cycle.periodEnd)"
+    }
+    private func cycleMenuLabel(_ cycle: CreditCycleDTO) -> String {
+        "\(cyclePrimaryLabel(cycle))，到期 \(cycle.dueDate)，可还 \(Money(minorUnits: editableCapacity(cycle)).formatted())"
     }
 }
 
@@ -111,10 +246,11 @@ public struct IOSTransactionsScreen: View {
     @Bindable var model: TransactionsModel
     let accounts: AccountsModel
     let categories: CategoriesModel
+    let credit: CreditModel?
     @State private var editing: TransactionDTO?
     @State private var pendingVoid: TransactionDTO?
 
-    public init(model: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel) { self.model = model; self.accounts = accounts; self.categories = categories }
+    public init(model: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil) { self.model = model; self.accounts = accounts; self.categories = categories; self.credit = credit }
     public var body: some View {
         VStack(spacing: 0) {
             filterBar
@@ -130,7 +266,7 @@ public struct IOSTransactionsScreen: View {
         )
         .onChange(of: model.search) { _, _ in model.scheduleLoad() }
         .task { if model.phase == .idle { await model.load() } }
-        .sheet(item: $editing) { TransactionEditorSheet(transactions: model, accounts: accounts, categories: categories, editing: $0) }
+        .sheet(item: $editing) { TransactionEditorSheet(transactions: model, accounts: accounts, categories: categories, credit: credit, editing: $0) }
         .alert("作废这笔流水？", isPresented: Binding(get: { pendingVoid != nil }, set: { if !$0 { pendingVoid = nil } })) {
             Button("取消", role: .cancel) { pendingVoid = nil }
             Button("作废", role: .destructive) { if let item = pendingVoid { Task { _ = await model.void(item); pendingVoid = nil } } }
@@ -149,7 +285,7 @@ public struct IOSTransactionsScreen: View {
     @ViewBuilder private var content: some View {
         switch model.phase {
         case .idle, .loading: ProgressView("正在读取流水…").frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .empty: ContentUnavailableView(model.search.isEmpty && model.kind == nil ? "还没有流水" : "没有匹配的流水", systemImage: "list.bullet.rectangle", description: Text("使用底部中央按钮记录收入、支出或转账。"))
+        case .empty: ContentUnavailableView(model.search.isEmpty && model.kind == nil ? "还没有流水" : "没有匹配的流水", systemImage: "list.bullet.rectangle", description: Text("使用底部中央按钮记录收入、支出、转账或信用交易。"))
         case .unauthorized: retry("设备密钥无效", "key")
         case .offline: retry("无法连接个人 VPS", "wifi.slash")
         case .failed: retry(model.message ?? "读取失败", "exclamationmark.triangle")
@@ -185,6 +321,7 @@ public struct MacTransactionsScreen: View {
     @Bindable var model: TransactionsModel
     let accounts: AccountsModel
     let categories: CategoriesModel
+    let credit: CreditModel?
     @State private var showCreate = false
     @State private var editing: TransactionDTO?
     @State private var pendingVoid: TransactionDTO?
@@ -192,8 +329,8 @@ public struct MacTransactionsScreen: View {
     @State private var categoryNames: [UUID: String] = [:]
     @State private var masterNamesError: String?
 
-    public init(model: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel) {
-        self.model = model; self.accounts = accounts; self.categories = categories
+    public init(model: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil) {
+        self.model = model; self.accounts = accounts; self.categories = categories; self.credit = credit
     }
 
     public var body: some View {
@@ -223,8 +360,8 @@ public struct MacTransactionsScreen: View {
             async let masterLoad: Void = loadMasterNames()
             _ = await (transactionLoad, masterLoad)
         }
-        .sheet(isPresented: $showCreate) { TransactionEditorSheet(transactions: model, accounts: accounts, categories: categories) }
-        .sheet(item: $editing) { TransactionEditorSheet(transactions: model, accounts: accounts, categories: categories, editing: $0) }
+        .sheet(isPresented: $showCreate) { TransactionEditorSheet(transactions: model, accounts: accounts, categories: categories, credit: credit) }
+        .sheet(item: $editing) { TransactionEditorSheet(transactions: model, accounts: accounts, categories: categories, credit: credit, editing: $0) }
         .alert("作废这笔流水？", isPresented: Binding(get: { pendingVoid != nil }, set: { if !$0 { pendingVoid = nil } })) {
             Button("取消", role: .cancel) {}
             Button("作废", role: .destructive) { if let item = pendingVoid { Task { _ = await model.void(item); pendingVoid = nil } } }

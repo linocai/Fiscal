@@ -120,6 +120,37 @@ class TransactionRepository:
         await self.session.flush()
         self.session.add_all(postings)
 
+    async def list_cycle_page(
+        self,
+        cycle_id: UUID,
+        *,
+        limit: int,
+        cursor_occurred_at: datetime | None,
+        cursor_id: UUID | None,
+    ) -> list[LedgerTransaction]:
+        statement = (
+            select(LedgerTransaction)
+            .where(
+                LedgerTransaction.credit_cycle_id == cycle_id,
+                LedgerTransaction.voided_at.is_(None),
+            )
+            .options(selectinload(LedgerTransaction.postings))
+        )
+        if cursor_occurred_at is not None and cursor_id is not None:
+            statement = statement.where(
+                or_(
+                    LedgerTransaction.occurred_at < cursor_occurred_at,
+                    and_(
+                        LedgerTransaction.occurred_at == cursor_occurred_at,
+                        LedgerTransaction.id < cursor_id,
+                    ),
+                )
+            )
+        statement = statement.order_by(
+            LedgerTransaction.occurred_at.desc(), LedgerTransaction.id.desc()
+        ).limit(limit + 1)
+        return list((await self.session.scalars(statement)).all())
+
     async def account(self, account_id: UUID) -> Account | None:
         return await self.session.get(Account, account_id)
 
@@ -185,7 +216,7 @@ class TransactionRepository:
             .join(Category, Category.id == LedgerTransaction.category_id)
             .where(
                 LedgerTransaction.voided_at.is_(None),
-                LedgerTransaction.kind.in_(["income", "expense"]),
+                LedgerTransaction.kind.in_(["income", "expense", "credit_purchase"]),
             )
             .group_by(LedgerTransaction.kind, LedgerTransaction.category_id, Category.name)
         )

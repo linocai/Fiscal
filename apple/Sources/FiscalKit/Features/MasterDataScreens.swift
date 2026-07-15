@@ -86,12 +86,15 @@ private struct AccountEditor: View {
     @State private var draft: AccountDraft
     @State private var opening: String
     @State private var limit: String
+    @State private var openingAsOf: String
+    @State private var openingDue: String
     @State private var validation: String?
 
     init(model: AccountsModel, account: AccountDTO?) {
         self.model = model; self.account = account
         let draft = account.map(AccountDraft.init(account:)) ?? AccountDraft()
         _draft = State(initialValue: draft); _opening = State(initialValue: Self.major(draft.openingBalanceMinor)); _limit = State(initialValue: draft.creditLimitMinor.map(Self.major) ?? "")
+        _openingAsOf = State(initialValue: draft.openingBalanceAsOfDate ?? ""); _openingDue = State(initialValue: draft.openingDueDate ?? "")
     }
 
     var body: some View {
@@ -107,6 +110,11 @@ private struct AccountEditor: View {
                 if draft.kind == .credit {
                     Section("信用配置") {
                         TextField("信用额度", text: $limit)
+                        if CNYAmountParser.minorUnits(opening) ?? 0 > 0 {
+                            TextField("期初余额日期 YYYY-MM-DD", text: $openingAsOf)
+                            TextField("期初到期日 YYYY-MM-DD", text: $openingDue)
+                            Text("用于真实表达导入欠款是否已到期，不会自动猜测。").font(.caption).foregroundStyle(FiscalColor.tertiary)
+                        }
                         Stepper("账单日：\(draft.statementDay ?? 1)", value: Binding(get: { draft.statementDay ?? 1 }, set: { draft.statementDay = $0 }), in: 1...28)
                         Stepper("还款日：\(draft.dueDay ?? 1)", value: Binding(get: { draft.dueDay ?? 1 }, set: { draft.dueDay = $0 }), in: 1...28)
                     }
@@ -120,14 +128,16 @@ private struct AccountEditor: View {
     private func save() {
         guard let openingMinor = CNYAmountParser.minorUnits(opening) else { validation = "期初金额格式无效。"; return }
         draft.openingBalanceMinor = openingMinor
-        if draft.kind == .credit { guard let value = CNYAmountParser.minorUnits(limit) else { validation = "信用额度格式无效。"; return }; draft.creditLimitMinor = value }
-        else { draft.creditLimitMinor = nil; draft.statementDay = nil; draft.dueDay = nil }
+        if draft.kind == .credit { guard let value = CNYAmountParser.minorUnits(limit) else { validation = "信用额度格式无效。"; return }; draft.creditLimitMinor = value; draft.openingBalanceAsOfDate = openingMinor > 0 ? openingAsOf.nilIfBlank : nil; draft.openingDueDate = openingMinor > 0 ? openingDue.nilIfBlank : nil }
+        else { draft.creditLimitMinor = nil; draft.statementDay = nil; draft.dueDay = nil; draft.openingBalanceAsOfDate = nil; draft.openingDueDate = nil }
         validation = AccountsModel.validate(draft)
         guard validation == nil else { return }
         Task { if await model.save(draft: draft, editing: account) { dismiss() } else { validation = model.message } }
     }
     private static func major(_ minor: Int64) -> String { NSDecimalNumber(decimal: Decimal(minor) / 100).stringValue }
 }
+
+private extension String { var nilIfBlank: String? { trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : trimmingCharacters(in: .whitespacesAndNewlines) } }
 
 public struct CategoriesManagementScreen: View {
     @Bindable var model: CategoriesModel

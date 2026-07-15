@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
@@ -7,9 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fiscal_api.api.p2_schemas import AccountDraft, AccountPatch, AccountResponse
 from fiscal_api.core.errors import APIError
-from fiscal_api.core.time import utc_now
+from fiscal_api.core.time import BUSINESS_TIMEZONE, utc_now
 from fiscal_api.db.models import Account, AccountKind
 from fiscal_api.repositories.accounts import AccountRepository
+from fiscal_api.repositories.credit import CreditRepository
 from fiscal_api.services.common import (
     acquire_p2_mutation_lock,
     check_version,
@@ -18,12 +20,14 @@ from fiscal_api.services.common import (
     invalid,
     not_found,
 )
+from fiscal_api.services.credit import sync_opening_cycle, validate_credit_invariants
 
 
 class AccountService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.repository = AccountRepository(session)
+        self.credit_repository = CreditRepository(session)
 
     @staticmethod
     def response(account: Account, impact: int = 0) -> AccountResponse:
@@ -58,6 +62,9 @@ class AccountService:
             limit=draft.credit_limit_minor,
             statement_day=draft.statement_day,
             due_day=draft.due_day,
+            opening_as_of=draft.opening_balance_as_of_date,
+            opening_due=draft.opening_due_date,
+            today=utc_now().astimezone(BUSINESS_TIMEZONE).date(),
         )
         if await self.repository.active_name_exists(draft.name):
             conflict("account_name_conflict", "An active account already uses this name")
@@ -70,9 +77,14 @@ class AccountService:
             credit_limit_minor=draft.credit_limit_minor,
             statement_day=draft.statement_day,
             due_day=draft.due_day,
+            opening_balance_as_of_date=draft.opening_balance_as_of_date,
+            opening_due_date=draft.opening_due_date,
             sort_order=await self.repository.next_sort_order(),
         )
         self.repository.add(account)
+        await self.session.flush()
+        if draft.kind is AccountKind.CREDIT:
+            await sync_opening_cycle(self.credit_repository, account)
         await self._commit_name_safe()
         await self.session.refresh(account)
         return self.response(account)
@@ -82,19 +94,39 @@ class AccountService:
         account = await self._required(account_id, for_update=True)
         check_version(account.version, patch.expected_version)
         updates = patch.model_dump(exclude={"expected_version"}, exclude_unset=True)
-        if account.usage_count > 0 and "kind" in updates and updates["kind"].value != account.kind:
+        kind_changes = "kind" in updates and updates["kind"].value != account.kind
+        if kind_changes and (
+            account.usage_count > 0 or await self.credit_repository.has_any_cycle(account.id)
+        ):
             conflict("account_in_use", "A used account cannot change kind")
         kind = AccountKind(updates.get("kind", account.kind))
         opening = updates.get("opening_balance_minor", account.opening_balance_minor)
         limit = updates.get("credit_limit_minor", account.credit_limit_minor)
         statement_day = updates.get("statement_day", account.statement_day)
         due_day = updates.get("due_day", account.due_day)
+        opening_as_of = updates.get(
+            "opening_balance_as_of_date", account.opening_balance_as_of_date
+        )
+        opening_due = updates.get("opening_due_date", account.opening_due_date)
+        schedule_changed = statement_day != account.statement_day or due_day != account.due_day
+        if (
+            account.kind == AccountKind.CREDIT.value
+            and schedule_changed
+            and await self.credit_repository.schedule_is_used(account.id)
+        ):
+            conflict(
+                "credit_schedule_in_use",
+                "The statement schedule is frozen after the first credit cycle",
+            )
         self._validate_configuration(
             kind=kind,
             opening=opening,
             limit=limit,
             statement_day=statement_day,
             due_day=due_day,
+            opening_as_of=opening_as_of,
+            opening_due=opening_due,
+            today=utc_now().astimezone(BUSINESS_TIMEZONE).date(),
         )
         name = updates.get("name", account.name)
         if account.archived_at is None and await self.repository.active_name_exists(
@@ -104,6 +136,13 @@ class AccountService:
         for field, value in updates.items():
             setattr(account, field, value.value if isinstance(value, AccountKind) else value)
         self._touch(account)
+        try:
+            if kind is AccountKind.CREDIT:
+                await sync_opening_cycle(self.credit_repository, account)
+                await validate_credit_invariants(self.credit_repository, {account.id})
+        except APIError:
+            await self.session.rollback()
+            raise
         impacts = await self.repository.balance_impacts([account.id])
         try:
             self.response(account, impacts.get(account.id, 0))
@@ -203,7 +242,13 @@ class AccountService:
         limit: int | None,
         statement_day: int | None,
         due_day: int | None,
+        opening_as_of: date | None,
+        opening_due: date | None,
+        today: date,
     ) -> None:
+        checked_int64(opening, label="account opening balance")
+        if limit is not None:
+            checked_int64(limit, label="credit limit")
         if kind is AccountKind.CREDIT:
             valid = (
                 limit is not None
@@ -212,9 +257,25 @@ class AccountService:
                 and 1 <= statement_day <= 28
                 and due_day is not None
                 and 1 <= due_day <= 28
-                and 0 <= opening <= limit
+                and opening >= 0
+                and (
+                    (opening == 0 and opening_as_of is None and opening_due is None)
+                    or (
+                        opening > 0
+                        and opening_as_of is not None
+                        and opening_due is not None
+                        and opening_as_of <= today
+                        and opening_due >= opening_as_of
+                    )
+                )
             )
         else:
-            valid = limit is None and statement_day is None and due_day is None
+            valid = (
+                limit is None
+                and statement_day is None
+                and due_day is None
+                and opening_as_of is None
+                and opening_due is None
+            )
         if not valid:
             invalid("invalid_account_configuration", "The account fields do not match its kind")

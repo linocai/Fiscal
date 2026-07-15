@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -26,7 +26,10 @@ def trimmed(value: str) -> str:
 
 TrimmedName = Annotated[str, BeforeValidator(trimmed), Field(max_length=80)]
 TrimmedOptional = Annotated[str, BeforeValidator(trimmed), Field(max_length=80)]
-MinorUnits = StrictInt
+INT64_MIN = -(2**63)
+INT64_MAX = 2**63 - 1
+MinorUnits = Annotated[StrictInt, Field(ge=INT64_MIN, le=INT64_MAX)]
+PositiveMinorUnits = Annotated[StrictInt, Field(gt=0, le=INT64_MAX)]
 
 
 class APIModel(BaseModel):
@@ -39,9 +42,11 @@ class AccountDraft(APIModel):
     institution: TrimmedOptional | None = None
     last_four: str | None = Field(default=None, pattern=r"^[0-9]{4}$")
     opening_balance_minor: MinorUnits
-    credit_limit_minor: MinorUnits | None = None
+    credit_limit_minor: PositiveMinorUnits | None = None
     statement_day: StrictInt | None = Field(default=None, ge=1, le=28)
     due_day: StrictInt | None = Field(default=None, ge=1, le=28)
+    opening_balance_as_of_date: date | None = None
+    opening_due_date: date | None = None
 
 
 class AccountPatch(APIModel):
@@ -51,9 +56,11 @@ class AccountPatch(APIModel):
     institution: TrimmedOptional | None = None
     last_four: str | None = Field(default=None, pattern=r"^[0-9]{4}$")
     opening_balance_minor: MinorUnits | None = None
-    credit_limit_minor: MinorUnits | None = None
+    credit_limit_minor: PositiveMinorUnits | None = None
     statement_day: StrictInt | None = Field(default=None, ge=1, le=28)
     due_day: StrictInt | None = Field(default=None, ge=1, le=28)
+    opening_balance_as_of_date: date | None = None
+    opening_due_date: date | None = None
 
     @model_validator(mode="after")
     def reject_null_required_fields(self) -> AccountPatch:
@@ -74,6 +81,8 @@ class AccountResponse(APIModel):
     credit_limit_minor: int | None
     statement_day: int | None
     due_day: int | None
+    opening_balance_as_of_date: date | None
+    opening_due_date: date | None
     sort_order: int
     archived_at: datetime | None
     usage_count: int

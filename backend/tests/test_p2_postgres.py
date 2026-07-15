@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator
+from datetime import date
 from os import environ
 from uuid import UUID
 
@@ -43,6 +44,8 @@ def account_draft(name: str, kind: AccountKind = AccountKind.DEBIT) -> AccountDr
             credit_limit_minor=100_000,
             statement_day=10,
             due_day=20,
+            opening_balance_as_of_date=date(2026, 7, 1),
+            opening_due_date=date(2026, 7, 20),
         )
     return AccountDraft(name=name, kind=kind, opening_balance_minor=-500)
 

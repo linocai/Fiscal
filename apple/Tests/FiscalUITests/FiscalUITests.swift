@@ -86,10 +86,56 @@ final class FiscalUITests: XCTestCase {
         keepScreenshot(named: "ios-p2-categories")
     }
 
+    func testP4CreditCycleAndRepaymentUseRealAPI() throws {
+        try launchApp()
+        XCTAssertEqual(app.tabBars.count, 0)
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 1)
+
+        app.buttons["更多"].tap()
+        let creditEntry = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "信用账期")).firstMatch
+        XCTAssertTrue(creditEntry.waitForExistence(timeout: 5))
+        creditEntry.tap()
+
+        let card = app.staticTexts["招行信用卡"]
+        XCTAssertTrue(card.waitForExistence(timeout: 8))
+        card.tap()
+        XCTAssertTrue(app.staticTexts["当前信用负债"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["已逾期"].exists)
+        keepScreenshot(named: "ios-credit-account")
+
+        let details = app.buttons["查看明细"]
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        details.tap()
+        XCTAssertTrue(app.staticTexts["差旅酒店"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["已逾期"].exists)
+        waitForVisualStability()
+        keepScreenshot(named: "ios-credit-cycle")
+
+        let repay = app.buttons["全额或部分还款"]
+        XCTAssertTrue(repay.waitForExistence(timeout: 5))
+        repay.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["transaction.editor"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["目标账期"].exists)
+        waitForVisualStability()
+        keepScreenshot(named: "ios-credit-repayment")
+    }
+
     private func keepScreenshot(named name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
+        let screenshot = app.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        if let directory = ProcessInfo.processInfo.environment["FISCAL_QA_SCREENSHOT_DIR"] {
+            let url = URL(fileURLWithPath: directory, isDirectory: true).appendingPathComponent("\(name).png")
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? screenshot.pngRepresentation.write(to: url, options: .atomic)
+        }
+    }
+
+    private func waitForVisualStability() {
+        let expectation = expectation(description: "wait for navigation and sheet animations")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { expectation.fulfill() }
+        wait(for: [expectation], timeout: 2)
     }
 }

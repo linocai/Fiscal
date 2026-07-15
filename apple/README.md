@@ -23,6 +23,12 @@ Accounts and categories use the protected `/api/v1/accounts` and `/api/v1/catego
 
 The iOS shell intentionally does not use `TabView`: one explicit selection drives one custom glass bottom bar. Accounts and Categories are available from More. macOS exposes both as first-class sidebar destinations.
 
-## P2 integration UI tests
+## P3–P4 ledger and credit
+
+The shared transaction editor uses the authenticated unified ledger for income, expense, transfer, credit purchase, and repayment. Credit purchases are assigned to statement cycles by the server; repayments always name one payment account, one credit account, and one target cycle.
+
+iOS exposes Credit Cycles from More while preserving the single custom bottom bar. macOS keeps credit management inside Accounts with reference-style cards and a 256-point Inspector. Both platforms read debt, available/over-limit credit, opening-configuration state, cycle totals, overdue state, and archived history from the real API without Preview fallback.
+
+## Integration UI tests
 
 Start a seeded local API whose device token is `integration-device-token`, then run the `FiscaliOS` scheme against a booted simulator. The UI target verifies that no native tab bar exists, navigates through More, and reads account/category hierarchy from the authenticated API. The scheme token is local-test-only and must never be reused for staging or production.

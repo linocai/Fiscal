@@ -92,7 +92,7 @@ struct FiscalKitP3Tests {
         #expect(object["source_account_id"] == nil)
         #expect(object["category_id"] is NSNull)
         #expect(object["note"] is NSNull)
-        #expect(Set(object.keys) == Set(["kind", "amount_minor", "occurred_at", "title", "note", "account_id", "destination_account_id", "category_id"]))
+        #expect(Set(object.keys) == Set(["kind", "amount_minor", "occurred_at", "title", "note", "account_id", "destination_account_id", "category_id", "credit_cycle_id"]))
     }
 
     @Test("Versioned update is a full semantic replacement")
@@ -160,6 +160,72 @@ struct FiscalKitP3Tests {
     }
 }
 
+@Suite("FiscalKit P4 contracts")
+struct FiscalKitP4Tests {
+    @Test("Credit cycle and account summary decode the frozen schema")
+    func creditResponsePayload() throws {
+        let cycle = #"{"id":"00000000-0000-0000-0000-000000000010","account_id":"00000000-0000-0000-0000-000000000011","period_start":"2026-06-11","period_end":"2026-07-10","statement_date":"2026-07-10","due_date":"2026-07-22","is_opening_cycle":false,"purchase_minor":50000,"opening_minor":0,"amount_due_minor":50000,"repaid_minor":12000,"remaining_minor":38000,"status":"partial","is_overdue":false,"version":2,"created_at":"2026-07-10T00:00:00Z","updated_at":"2026-07-15T00:00:00Z"}"#
+        let json = #"{"account_id":"00000000-0000-0000-0000-000000000011","name":"信用卡","institution":"银行","last_four":"1234","credit_limit_minor":1000000,"current_debt_minor":38000,"available_credit_minor":962000,"over_limit_minor":0,"opening_configuration_required":false,"statement_day":10,"due_day":22,"current_cycle":"# + cycle + #", "next_due_cycle":"# + cycle + #", "has_overdue_cycle":false}"#
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let summary = try decoder.decode(CreditAccountSummaryDTO.self, from: data)
+        #expect(summary.currentCycle?.amountDueMinor == 50_000)
+        #expect(summary.nextDueCycle?.status == .partial)
+        #expect(summary.availableCreditMinor == 962_000)
+        #expect(summary.overLimitMinor == 0)
+    }
+
+    @Test("Credit purchase and repayment use exact transaction fields")
+    func creditTransactionPayloads() throws {
+        let creditAccount = UUID(), category = UUID(), paymentAccount = UUID(), cycle = UUID()
+        var purchase = TransactionDraft(); purchase.kind = .creditPurchase; purchase.amountMinor = 12_345; purchase.title = "消费"; purchase.accountID = creditAccount; purchase.categoryID = category
+        var repayment = TransactionDraft(); repayment.kind = .repayment; repayment.amountMinor = 5_000; repayment.title = "还款"; repayment.accountID = paymentAccount; repayment.destinationAccountID = creditAccount; repayment.creditCycleID = cycle
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        let purchaseJSON = try #require(JSONSerialization.jsonObject(with: encoder.encode(purchase)) as? [String: Any])
+        let repaymentJSON = try #require(JSONSerialization.jsonObject(with: encoder.encode(repayment)) as? [String: Any])
+        #expect(purchaseJSON["credit_cycle_id"] is NSNull)
+        #expect(purchaseJSON["account_id"] as? String == creditAccount.uuidString)
+        #expect(repaymentJSON["category_id"] is NSNull)
+        #expect(repaymentJSON["credit_cycle_id"] as? String == cycle.uuidString)
+    }
+
+    @Test("Credit opening debt requires valid explicit dates") @MainActor
+    func openingDebtValidation() {
+        var draft = AccountDraft(); draft.name = "信用卡"; draft.kind = .credit; draft.creditLimitMinor = 100_000; draft.statementDay = 10; draft.dueDay = 22; draft.openingBalanceMinor = 5_000
+        #expect(AccountsModel.validate(draft) == "正数期初欠款需要确认余额日期和到期日。")
+        draft.openingBalanceAsOfDate = "2026-07-10"; draft.openingDueDate = "2026-07-09"
+        #expect(AccountsModel.validate(draft) == "期初到期日不能早于余额日期。")
+        draft.openingDueDate = "2026-07-22"
+        #expect(AccountsModel.validate(draft) == nil)
+    }
+
+    @Test("Credit dashboard aggregation reports Int64 overflow")
+    func creditDashboardOverflow() {
+        let now = Date(timeIntervalSince1970: 0)
+        let first = AccountDTO(id: UUID(), name: "A", kind: .cash, institution: nil, lastFour: nil, openingBalanceMinor: 0, currentBalanceMinor: .max, openingBalanceAsOfDate: nil, openingDueDate: nil, creditLimitMinor: nil, statementDay: nil, dueDay: nil, sortOrder: 0, archivedAt: nil, usageCount: 0, version: 1, createdAt: now, updatedAt: now)
+        let second = AccountDTO(id: UUID(), name: "B", kind: .debit, institution: nil, lastFour: nil, openingBalanceMinor: 0, currentBalanceMinor: 1, openingBalanceAsOfDate: nil, openingDueDate: nil, creditLimitMinor: nil, statementDay: nil, dueDay: nil, sortOrder: 1, archivedAt: nil, usageCount: 0, version: 1, createdAt: now, updatedAt: now)
+        #expect(CreditDashboardTotals.checked(accounts: [first, second], credit: []) == nil)
+    }
+
+    @Test("Editing a settled repayment retains its canonical cycle") @MainActor
+    func settledRepaymentCycleRetention() async throws {
+        let cycle = CreditCycleDTO(id: UUID(), accountID: UUID(), periodStart: "2026-06-11", periodEnd: "2026-07-10", statementDate: "2026-07-10", dueDate: "2026-07-22", isOpeningCycle: false, purchaseMinor: 5_000, openingMinor: 0, amountDueMinor: 5_000, repaidMinor: 5_000, remainingMinor: 0, status: .settled, isOverdue: false, version: 1, createdAt: Date(), updatedAt: Date())
+        let model = CreditModel(repository: SettledCycleRepository(cycle: cycle))
+        #expect(try await model.cyclesForRepayment(accountID: cycle.accountID).isEmpty)
+        #expect(try await model.cyclesForRepayment(accountID: cycle.accountID, retaining: cycle.id).map(\.id) == [cycle.id])
+    }
+}
+
+private actor SettledCycleRepository: CreditRepository {
+    let value: CreditCycleDTO
+    init(cycle: CreditCycleDTO) { value = cycle }
+    func listAccounts() async throws -> [CreditAccountSummaryDTO] { [] }
+    func account(id: UUID) async throws -> CreditAccountSummaryDTO { throw RaceRepositoryError.unsupported }
+    func cycles(accountID: UUID, cursor: String?, limit: Int) async throws -> CreditCyclePage { .init(items: [value], nextCursor: nil) }
+    func cycle(id: UUID) async throws -> CreditCycleDTO { value }
+    func transactions(cycleID: UUID, cursor: String?, limit: Int) async throws -> TransactionPage { .init(items: [], nextCursor: nil) }
+}
+
 private enum RaceRepositoryError: Error { case unsupported }
 private actor RaceTransactionRepository: TransactionRepository {
     func list(_ query: TransactionQuery) async throws -> TransactionPage {
@@ -177,6 +243,6 @@ private actor RaceTransactionRepository: TransactionRepository {
 
     private func item(_ title: String, _ kind: TransactionKind) -> TransactionDTO {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        return TransactionDTO(id: UUID(), kind: kind, occurredAt: now, businessDate: "2026-07-15", title: title, note: nil, amountMinor: 100, categoryID: nil, accountID: nil, destinationAccountID: nil, source: "manual", postings: [], version: 1, voidedAt: nil, createdAt: now, updatedAt: now)
+        return TransactionDTO(id: UUID(), kind: kind, occurredAt: now, businessDate: "2026-07-15", title: title, note: nil, amountMinor: 100, categoryID: nil, accountID: nil, destinationAccountID: nil, creditCycleID: nil, source: "manual", postings: [], version: 1, voidedAt: nil, createdAt: now, updatedAt: now)
     }
 }

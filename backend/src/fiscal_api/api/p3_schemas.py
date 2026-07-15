@@ -39,6 +39,7 @@ class TransactionDraft(APIModel):
     account_id: UUID | None = None
     category_id: UUID | None = None
     destination_account_id: UUID | None = None
+    credit_cycle_id: UUID | None = None
 
     @field_validator("title", mode="before")
     @classmethod
@@ -81,6 +82,7 @@ class TransactionResponse(APIModel):
     category_id: UUID | None
     account_id: UUID | None
     destination_account_id: UUID | None
+    credit_cycle_id: UUID | None
     source: str
     postings: list[PostingResponse]
     version: int

@@ -15,6 +15,8 @@ public struct AccountDTO: Codable, Sendable, Equatable, Identifiable {
     public let lastFour: String?
     public let openingBalanceMinor: Int64
     public let currentBalanceMinor: Int64
+    public let openingBalanceAsOfDate: String?
+    public let openingDueDate: String?
     public let creditLimitMinor: Int64?
     public let statementDay: Int?
     public let dueDay: Int?
@@ -30,6 +32,8 @@ public struct AccountDTO: Codable, Sendable, Equatable, Identifiable {
         case lastFour = "last_four"
         case openingBalanceMinor = "opening_balance_minor"
         case currentBalanceMinor = "current_balance_minor"
+        case openingBalanceAsOfDate = "opening_balance_as_of_date"
+        case openingDueDate = "opening_due_date"
         case creditLimitMinor = "credit_limit_minor"
         case statementDay = "statement_day"
         case dueDay = "due_day"
@@ -47,6 +51,8 @@ public struct AccountDraft: Codable, Sendable, Equatable {
     public var institution = ""
     public var lastFour = ""
     public var openingBalanceMinor: Int64 = 0
+    public var openingBalanceAsOfDate: String?
+    public var openingDueDate: String?
     public var creditLimitMinor: Int64?
     public var statementDay: Int?
     public var dueDay: Int?
@@ -55,11 +61,12 @@ public struct AccountDraft: Codable, Sendable, Equatable {
     public init(account: AccountDTO) {
         name = account.name; kind = account.kind; institution = account.institution ?? ""; lastFour = account.lastFour ?? ""
         openingBalanceMinor = account.openingBalanceMinor; creditLimitMinor = account.creditLimitMinor
+        openingBalanceAsOfDate = account.openingBalanceAsOfDate; openingDueDate = account.openingDueDate
         statementDay = account.statementDay; dueDay = account.dueDay
     }
     enum CodingKeys: String, CodingKey {
         case name, kind, institution
-        case lastFour = "last_four"; case openingBalanceMinor = "opening_balance_minor"; case creditLimitMinor = "credit_limit_minor"
+        case lastFour = "last_four"; case openingBalanceMinor = "opening_balance_minor"; case openingBalanceAsOfDate = "opening_balance_as_of_date"; case openingDueDate = "opening_due_date"; case creditLimitMinor = "credit_limit_minor"
         case statementDay = "statement_day"; case dueDay = "due_day"
     }
     public func encode(to encoder: Encoder) throws {
@@ -67,6 +74,7 @@ public struct AccountDraft: Codable, Sendable, Equatable {
         try c.encode(name, forKey: .name); try c.encode(kind, forKey: .kind)
         try c.encode(institution.nilIfEmpty, forKey: .institution); try c.encode(lastFour.nilIfEmpty, forKey: .lastFour)
         try c.encode(openingBalanceMinor, forKey: .openingBalanceMinor); try c.encode(creditLimitMinor, forKey: .creditLimitMinor)
+        try c.encode(openingBalanceAsOfDate, forKey: .openingBalanceAsOfDate); try c.encode(openingDueDate, forKey: .openingDueDate)
         try c.encode(statementDay, forKey: .statementDay); try c.encode(dueDay, forKey: .dueDay)
     }
 }
@@ -166,6 +174,7 @@ public struct VersionedAccountDraft: Codable, Sendable {
         try c.encode(version, forKey: .init("expected_version")); try c.encode(draft.name, forKey: .init("name")); try c.encode(draft.kind, forKey: .init("kind"))
         try c.encode(draft.institution.nilIfEmpty, forKey: .init("institution")); try c.encode(draft.lastFour.nilIfEmpty, forKey: .init("last_four"))
         try c.encode(draft.openingBalanceMinor, forKey: .init("opening_balance_minor")); try c.encode(draft.creditLimitMinor, forKey: .init("credit_limit_minor"))
+        try c.encode(draft.openingBalanceAsOfDate, forKey: .init("opening_balance_as_of_date")); try c.encode(draft.openingDueDate, forKey: .init("opening_due_date"))
         try c.encode(draft.statementDay, forKey: .init("statement_day")); try c.encode(draft.dueDay, forKey: .init("due_day"))
     }
 }

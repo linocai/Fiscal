@@ -29,6 +29,7 @@ from fiscal_api.db.models import (
     TransactionKind,
     TransactionRevision,
 )
+from fiscal_api.repositories.credit import CreditRepository
 from fiscal_api.repositories.transactions import TransactionRepository
 from fiscal_api.services.common import (
     acquire_mutation_lock,
@@ -38,12 +39,14 @@ from fiscal_api.services.common import (
     invalid,
     not_found,
 )
+from fiscal_api.services.credit import ensure_regular_cycle, validate_credit_invariants
 
 
 class TransactionService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.repository = TransactionRepository(session)
+        self.credit_repository = CreditRepository(session)
 
     async def create(self, draft: TransactionDraft, idempotency_key: UUID) -> TransactionResponse:
         await acquire_mutation_lock(self.session)
@@ -60,13 +63,14 @@ class TransactionService:
                 raise RuntimeError("created transaction revision is missing")
             return TransactionResponse.model_validate(snapshot)
 
-        postings, category = await self._validated_postings(draft)
+        postings, category, cycle_id = await self._validated_postings(draft)
         transaction = LedgerTransaction(
             kind=draft.kind.value,
             occurred_at=ensure_utc(draft.occurred_at),
             title=draft.title,
             note=draft.note,
             category_id=category.id if category is not None else None,
+            credit_cycle_id=cycle_id,
             source="manual",
             idempotency_key=idempotency_key,
             request_hash=request_hash,
@@ -78,7 +82,15 @@ class TransactionService:
         self.session.add_all(postings)
         await self._adjust_usage(set(), self._account_ids(postings), None, transaction.category_id)
         await self.session.flush()
-        await self._validate_mutation_ranges(self._account_ids(postings))
+        credit_accounts = await self._credit_account_ids(postings)
+        await self._validate_mutation_ranges(
+            self._account_ids(postings),
+            credit_accounts=credit_accounts,
+            enforce_limit=(
+                credit_accounts if draft.kind is TransactionKind.CREDIT_PURCHASE else set()
+            ),
+            repayment_error=draft.kind is TransactionKind.REPAYMENT,
+        )
         response = self._response(transaction, postings)
         self._add_revision(transaction, RevisionEvent.CREATED, response)
         await self.session.commit()
@@ -126,6 +138,24 @@ class TransactionService:
             next_cursor=next_cursor,
         )
 
+    async def list_cycle(
+        self, cycle_id: UUID, *, cursor: str | None, limit: int
+    ) -> TransactionPage:
+        cursor_time, cursor_id = self._decode_cursor(cursor)
+        transactions = await self.repository.list_cycle_page(
+            cycle_id,
+            limit=limit,
+            cursor_occurred_at=cursor_time,
+            cursor_id=cursor_id,
+        )
+        has_more = len(transactions) > limit
+        page = transactions[:limit]
+        next_cursor = self._encode_cursor(page[-1].occurred_at, page[-1].id) if has_more else None
+        return TransactionPage(
+            items=[self._response(item, list(item.postings)) for item in page],
+            next_cursor=next_cursor,
+        )
+
     async def update(
         self,
         transaction_id: UUID,
@@ -142,18 +172,21 @@ class TransactionService:
             "account": old_response.account_id,
             "destination": old_response.destination_account_id,
         }
-        postings, category = await self._validated_postings(
+        postings, category, cycle_id = await self._validated_postings(
             draft,
             retain_accounts=retain_accounts,
             retain_category_id=old_response.category_id,
         )
         old_account_ids = self._account_ids(list(transaction.postings))
         old_category_id = transaction.category_id
+        old_kind = TransactionKind(transaction.kind)
+        old_amount = old_response.amount_minor
         transaction.kind = draft.kind.value
         transaction.occurred_at = ensure_utc(draft.occurred_at)
         transaction.title = draft.title
         transaction.note = draft.note
         transaction.category_id = category.id if category is not None else None
+        transaction.credit_cycle_id = cycle_id
         transaction.version += 1
         transaction.updated_at = utc_now()
         for posting in postings:
@@ -166,7 +199,21 @@ class TransactionService:
             transaction.category_id,
         )
         await self.session.flush()
-        await self._validate_mutation_ranges(old_account_ids | self._account_ids(postings))
+        new_credit_accounts = await self._credit_account_ids(postings)
+        old_credit_accounts = await self._credit_account_ids_from_response(old_response)
+        enforce_limit: set[UUID] = set()
+        if draft.kind is TransactionKind.CREDIT_PURCHASE and (
+            old_kind is not TransactionKind.CREDIT_PURCHASE
+            or old_response.account_id != draft.account_id
+            or draft.amount_minor > old_amount
+        ):
+            enforce_limit = new_credit_accounts
+        await self._validate_mutation_ranges(
+            old_account_ids | self._account_ids(postings),
+            credit_accounts=old_credit_accounts | new_credit_accounts,
+            enforce_limit=enforce_limit,
+            repayment_error=draft.kind is TransactionKind.REPAYMENT,
+        )
         response = self._response(transaction, postings)
         self._add_revision(transaction, RevisionEvent.UPDATED, response)
         await self.session.commit()
@@ -182,7 +229,13 @@ class TransactionService:
         transaction.version += 1
         transaction.updated_at = utc_now()
         await self.session.flush()
-        await self._validate_mutation_ranges(self._account_ids(list(transaction.postings)))
+        credit_accounts = await self._credit_account_ids(list(transaction.postings))
+        await self._validate_mutation_ranges(
+            self._account_ids(list(transaction.postings)),
+            credit_accounts=credit_accounts,
+            enforce_limit=set(),
+            repayment_error=False,
+        )
         response = self._response(transaction, list(transaction.postings))
         self._add_revision(transaction, RevisionEvent.VOIDED, response)
         await self.session.commit()
@@ -199,7 +252,14 @@ class TransactionService:
         transaction.version += 1
         transaction.updated_at = utc_now()
         await self.session.flush()
-        await self._validate_mutation_ranges(self._account_ids(list(transaction.postings)))
+        credit_accounts = await self._credit_account_ids(list(transaction.postings))
+        kind = TransactionKind(transaction.kind)
+        await self._validate_mutation_ranges(
+            self._account_ids(list(transaction.postings)),
+            credit_accounts=credit_accounts,
+            enforce_limit=credit_accounts if kind is TransactionKind.CREDIT_PURCHASE else set(),
+            repayment_error=kind is TransactionKind.REPAYMENT,
+        )
         response = self._response(transaction, list(transaction.postings))
         self._add_revision(transaction, RevisionEvent.RESTORED, response)
         await self.session.commit()
@@ -219,18 +279,16 @@ class TransactionService:
 
     @staticmethod
     def _summary_response(rows: list[tuple[str, UUID, str, int]]) -> TransactionSummary:
-        normalized = [
-            (
-                kind,
-                category_id,
-                category_name,
-                checked_int64(
-                    amount if kind == "income" else -amount,
-                    label="category summary amount",
-                ),
+        grouped: dict[tuple[str, UUID, str], int] = {}
+        for kind, category_id, category_name, amount in rows:
+            direction = "expense" if kind == "credit_purchase" else kind
+            key = (direction, category_id, category_name)
+            normalized_amount = amount if direction == "income" else -amount
+            grouped[key] = checked_int64(
+                grouped.get(key, 0) + normalized_amount,
+                label="category summary amount",
             )
-            for kind, category_id, category_name, amount in rows
-        ]
+        normalized = [(*key, amount) for key, amount in grouped.items()]
         income = checked_int64(
             sum(amount for kind, _category, _name, amount in normalized if kind == "income"),
             label="income summary",
@@ -258,7 +316,14 @@ class TransactionService:
             by_category=by_category,
         )
 
-    async def _validate_mutation_ranges(self, account_ids: set[UUID]) -> None:
+    async def _validate_mutation_ranges(
+        self,
+        account_ids: set[UUID],
+        *,
+        credit_accounts: set[UUID],
+        enforce_limit: set[UUID],
+        repayment_error: bool,
+    ) -> None:
         impacts = await self.repository.balance_impacts(list(account_ids))
         accounts = [await self.repository.account(account_id) for account_id in account_ids]
         summary_rows = await self.repository.summary(
@@ -276,7 +341,25 @@ class TransactionService:
                     else account.opening_balance_minor + impact
                 )
                 checked_int64(balance, label="account balance")
+                if account.kind == AccountKind.CREDIT.value and balance < 0:
+                    conflict(
+                        "repayment_exceeds_cycle_remaining"
+                        if repayment_error
+                        else "credit_cycle_overpaid",
+                        "Credit debt cannot be negative",
+                    )
+                if (
+                    account.id in enforce_limit
+                    and account.credit_limit_minor is not None
+                    and balance > account.credit_limit_minor
+                ):
+                    conflict("credit_limit_exceeded", "The credit purchase exceeds the limit")
             self._summary_response(summary_rows)
+            await validate_credit_invariants(
+                self.credit_repository,
+                credit_accounts,
+                repayment_error=repayment_error,
+            )
         except APIError:
             await self.session.rollback()
             raise
@@ -287,13 +370,14 @@ class TransactionService:
         *,
         retain_accounts: dict[str, UUID | None] | None = None,
         retain_category_id: UUID | None = None,
-    ) -> tuple[list[Posting], Category | None]:
+    ) -> tuple[list[Posting], Category | None, UUID | None]:
         retain_accounts = retain_accounts or {}
         if draft.kind in {TransactionKind.INCOME, TransactionKind.EXPENSE}:
             if (
                 draft.account_id is None
                 or draft.category_id is None
                 or draft.destination_account_id is not None
+                or draft.credit_cycle_id is not None
             ):
                 invalid(
                     "invalid_transaction_configuration",
@@ -305,7 +389,7 @@ class TransactionService:
             )
             category = await self._validated_category(
                 draft.category_id,
-                direction=draft.kind,
+                direction=draft.kind.value,
                 allow_archived=draft.category_id == retain_category_id,
             )
             sign = 1 if draft.kind is TransactionKind.INCOME else -1
@@ -319,11 +403,103 @@ class TransactionService:
                     )
                 ],
                 category,
+                None,
+            )
+        if draft.kind is TransactionKind.CREDIT_PURCHASE:
+            if (
+                draft.account_id is None
+                or draft.category_id is None
+                or draft.destination_account_id is not None
+                or draft.credit_cycle_id is not None
+            ):
+                invalid(
+                    "invalid_transaction_configuration",
+                    "Credit purchases require a credit account and expense category",
+                )
+            account = await self._validated_account(
+                draft.account_id,
+                allow_archived=draft.account_id == retain_accounts.get("account"),
+                allowed_kinds={AccountKind.CREDIT},
+            )
+            category = await self._validated_category(
+                draft.category_id,
+                direction=TransactionKind.EXPENSE.value,
+                allow_archived=draft.category_id == retain_category_id,
+            )
+            business_date = ensure_utc(draft.occurred_at).astimezone(BUSINESS_TIMEZONE).date()
+            if (
+                account.opening_balance_as_of_date is not None
+                and business_date < account.opening_balance_as_of_date
+            ):
+                invalid(
+                    "invalid_transaction_configuration",
+                    "Credit purchases cannot predate the opening balance",
+                )
+            cycle = await ensure_regular_cycle(self.credit_repository, account, business_date)
+            return (
+                [
+                    Posting(
+                        account_id=account.id,
+                        role=PostingRole.ACCOUNT.value,
+                        amount_minor=-draft.amount_minor,
+                        position=0,
+                    )
+                ],
+                category,
+                cycle.id,
+            )
+        if draft.kind is TransactionKind.REPAYMENT:
+            if (
+                draft.account_id is None
+                or draft.destination_account_id is None
+                or draft.category_id is not None
+                or draft.credit_cycle_id is None
+            ):
+                invalid(
+                    "invalid_transaction_configuration",
+                    "Repayments require payment account, credit account, and credit cycle",
+                )
+            source = await self._validated_account(
+                draft.account_id,
+                allow_archived=draft.account_id == retain_accounts.get("account"),
+                allowed_kinds={AccountKind.CASH, AccountKind.DEBIT},
+            )
+            destination = await self._validated_account(
+                draft.destination_account_id,
+                allow_archived=draft.destination_account_id == retain_accounts.get("destination"),
+                allowed_kinds={AccountKind.CREDIT},
+            )
+            cycle = await self.credit_repository.cycle(draft.credit_cycle_id)
+            if cycle is None:
+                not_found("credit_cycle_not_found", "The credit cycle does not exist")
+            if cycle.account_id != destination.id:
+                conflict(
+                    "credit_cycle_account_mismatch",
+                    "The credit cycle belongs to another account",
+                )
+            return (
+                [
+                    Posting(
+                        account_id=source.id,
+                        role=PostingRole.SOURCE.value,
+                        amount_minor=-draft.amount_minor,
+                        position=0,
+                    ),
+                    Posting(
+                        account_id=destination.id,
+                        role=PostingRole.DESTINATION.value,
+                        amount_minor=draft.amount_minor,
+                        position=1,
+                    ),
+                ],
+                None,
+                cycle.id,
             )
         if (
             draft.account_id is None
             or draft.destination_account_id is None
             or draft.category_id is not None
+            or draft.credit_cycle_id is not None
         ):
             invalid(
                 "invalid_transaction_configuration",
@@ -334,10 +510,12 @@ class TransactionService:
         source = await self._validated_account(
             draft.account_id,
             allow_archived=draft.account_id == retain_accounts.get("account"),
+            allowed_kinds={AccountKind.CASH, AccountKind.DEBIT},
         )
         destination = await self._validated_account(
             draft.destination_account_id,
             allow_archived=draft.destination_account_id == retain_accounts.get("destination"),
+            allowed_kinds={AccountKind.CASH, AccountKind.DEBIT},
         )
         return (
             [
@@ -355,16 +533,24 @@ class TransactionService:
                 ),
             ],
             None,
+            None,
         )
 
-    async def _validated_account(self, account_id: UUID, *, allow_archived: bool) -> Account:
+    async def _validated_account(
+        self,
+        account_id: UUID,
+        *,
+        allow_archived: bool,
+        allowed_kinds: set[AccountKind] | None = None,
+    ) -> Account:
         account = await self.repository.account(account_id)
         if account is None:
             not_found("account_not_found", "The account does not exist")
-        if account.kind not in {AccountKind.CASH.value, AccountKind.DEBIT.value}:
+        allowed_kinds = allowed_kinds or {AccountKind.CASH, AccountKind.DEBIT}
+        if account.kind not in {item.value for item in allowed_kinds}:
             invalid(
                 "invalid_transaction_configuration",
-                "P3 transactions require cash or debit accounts",
+                "The account kind does not match the transaction",
             )
         if account.archived_at is not None and not allow_archived:
             conflict("account_archived", "The selected account is archived")
@@ -374,13 +560,13 @@ class TransactionService:
         self,
         category_id: UUID,
         *,
-        direction: TransactionKind,
+        direction: str,
         allow_archived: bool,
     ) -> Category:
         category = await self.repository.category(category_id)
         if category is None:
             not_found("category_not_found", "The category does not exist")
-        if category.direction != direction.value:
+        if category.direction != direction:
             invalid(
                 "category_direction_mismatch",
                 "The category direction does not match the transaction kind",
@@ -390,14 +576,34 @@ class TransactionService:
         return category
 
     async def _validate_stored_references(self, transaction: LedgerTransaction) -> None:
+        kind = TransactionKind(transaction.kind)
         for posting in transaction.postings:
-            await self._validated_account(posting.account_id, allow_archived=True)
+            allowed = (
+                {AccountKind.CREDIT}
+                if kind is TransactionKind.CREDIT_PURCHASE
+                or (
+                    kind is TransactionKind.REPAYMENT
+                    and posting.role == PostingRole.DESTINATION.value
+                )
+                else {AccountKind.CASH, AccountKind.DEBIT}
+            )
+            await self._validated_account(
+                posting.account_id, allow_archived=True, allowed_kinds=allowed
+            )
         if transaction.category_id is not None:
             await self._validated_category(
                 transaction.category_id,
-                direction=TransactionKind(transaction.kind),
+                direction=(
+                    TransactionKind.EXPENSE.value
+                    if kind is TransactionKind.CREDIT_PURCHASE
+                    else kind.value
+                ),
                 allow_archived=True,
             )
+        if transaction.credit_cycle_id is not None:
+            cycle = await self.credit_repository.cycle(transaction.credit_cycle_id)
+            if cycle is None:
+                not_found("credit_cycle_not_found", "The credit cycle does not exist")
 
     async def _required(
         self, transaction_id: UUID, *, for_update: bool = False
@@ -461,6 +667,7 @@ class TransactionService:
             category_id=transaction.category_id,
             account_id=primary.account_id,
             destination_account_id=destination.account_id if destination is not None else None,
+            credit_cycle_id=transaction.credit_cycle_id,
             source=transaction.source,
             postings=[
                 PostingResponse(
@@ -481,6 +688,23 @@ class TransactionService:
     @staticmethod
     def _account_ids(postings: list[Posting]) -> set[UUID]:
         return {posting.account_id for posting in postings}
+
+    async def _credit_account_ids(self, postings: list[Posting]) -> set[UUID]:
+        result: set[UUID] = set()
+        for posting in postings:
+            account = await self.repository.account(posting.account_id)
+            if account is not None and account.kind == AccountKind.CREDIT.value:
+                result.add(account.id)
+        return result
+
+    async def _credit_account_ids_from_response(self, response: TransactionResponse) -> set[UUID]:
+        result: set[UUID] = set()
+        for account_id in {response.account_id, response.destination_account_id} - {None}:
+            assert account_id is not None
+            account = await self.repository.account(account_id)
+            if account is not None and account.kind == AccountKind.CREDIT.value:
+                result.add(account.id)
+        return result
 
     @staticmethod
     def _request_hash(draft: TransactionDraft) -> str:

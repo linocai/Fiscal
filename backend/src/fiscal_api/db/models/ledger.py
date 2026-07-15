@@ -26,6 +26,8 @@ class TransactionKind(StrEnum):
     INCOME = "income"
     EXPENSE = "expense"
     TRANSFER = "transfer"
+    CREDIT_PURCHASE = "credit_purchase"
+    REPAYMENT = "repayment"
 
 
 class PostingRole(StrEnum):
@@ -44,7 +46,10 @@ class RevisionEvent(StrEnum):
 class LedgerTransaction(Base):
     __tablename__ = "transactions"
     __table_args__ = (
-        CheckConstraint("kind IN ('income', 'expense', 'transfer')", name="valid_kind"),
+        CheckConstraint(
+            "kind IN ('income', 'expense', 'transfer', 'credit_purchase', 'repayment')",
+            name="valid_kind",
+        ),
         CheckConstraint("source = 'manual'", name="manual_source"),
         CheckConstraint("version >= 1", name="version_positive"),
         CheckConstraint("char_length(title) BETWEEN 1 AND 120", name="title_length"),
@@ -52,6 +57,7 @@ class LedgerTransaction(Base):
         UniqueConstraint("idempotency_key", name="uq_transactions_idempotency_key"),
         Index("ix_transactions_timeline", text("occurred_at DESC"), text("id DESC")),
         Index("ix_transactions_category_id", "category_id"),
+        Index("ix_transactions_credit_cycle_id", "credit_cycle_id"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -62,6 +68,11 @@ class LedgerTransaction(Base):
     category_id: Mapped[UUID | None] = mapped_column(
         Uuid,
         ForeignKey("categories.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    credit_cycle_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("credit_cycles.id", ondelete="RESTRICT"),
         nullable=True,
     )
     source: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")

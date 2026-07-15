@@ -47,6 +47,11 @@ def test_system_status_rejects_invalid_device_token(client: TestClient) -> None:
         ("PUT", f"/api/v1/transactions/{RESOURCE_ID}", {}),
         ("POST", f"/api/v1/transactions/{RESOURCE_ID}/void", {}),
         ("POST", f"/api/v1/transactions/{RESOURCE_ID}/restore", {}),
+        ("GET", "/api/v1/credit-accounts", None),
+        ("GET", f"/api/v1/credit-accounts/{RESOURCE_ID}", None),
+        ("GET", f"/api/v1/credit-accounts/{RESOURCE_ID}/cycles", None),
+        ("GET", f"/api/v1/credit-cycles/{RESOURCE_ID}", None),
+        ("GET", f"/api/v1/credit-cycles/{RESOURCE_ID}/transactions", None),
     ],
 )
 def test_p2_route_matrix_rejects_missing_token_before_database_access(
@@ -101,6 +106,40 @@ def test_account_create_rejects_json_floating_point_money(client: TestClient) ->
         headers={"Authorization": "Bearer test-device-token"},
     )
 
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"name": "极大现金", "kind": "cash", "opening_balance_minor": 2**63},
+        {
+            "name": "极大额度",
+            "kind": "credit",
+            "opening_balance_minor": 0,
+            "credit_limit_minor": 2**63,
+            "statement_day": 10,
+            "due_day": 20,
+        },
+        {
+            "name": "零额度",
+            "kind": "credit",
+            "opening_balance_minor": 0,
+            "credit_limit_minor": 0,
+            "statement_day": 10,
+            "due_day": 20,
+        },
+    ],
+)
+def test_account_money_rejects_out_of_range_or_nonpositive_limit(
+    client: TestClient, payload: dict[str, object]
+) -> None:
+    response = client.post(
+        "/api/v1/accounts",
+        json=payload,
+        headers={"Authorization": "Bearer test-device-token"},
+    )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
 

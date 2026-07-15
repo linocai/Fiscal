@@ -2,9 +2,11 @@ import Foundation
 
 public enum TransactionKind: String, Codable, Sendable, CaseIterable, Identifiable {
     case expense, income, transfer
+    case creditPurchase = "credit_purchase"
+    case repayment
     public var id: Self { self }
-    public var title: String { switch self { case .expense: "支出"; case .income: "收入"; case .transfer: "转账" } }
-    public var symbol: String { switch self { case .expense: "arrow.up.right"; case .income: "arrow.down.left"; case .transfer: "arrow.left.arrow.right" } }
+    public var title: String { switch self { case .expense: "支出"; case .income: "收入"; case .transfer: "转账"; case .creditPurchase: "信用消费"; case .repayment: "还款" } }
+    public var symbol: String { switch self { case .expense: "arrow.up.right"; case .income: "arrow.down.left"; case .transfer: "arrow.left.arrow.right"; case .creditPurchase: "creditcard.fill"; case .repayment: "arrow.uturn.backward" } }
 }
 
 public enum PostingRole: String, Codable, Sendable { case account, source, destination }
@@ -32,6 +34,7 @@ public struct TransactionDTO: Codable, Sendable, Equatable, Identifiable {
     public let categoryID: UUID?
     public let accountID: UUID?
     public let destinationAccountID: UUID?
+    public let creditCycleID: UUID?
     public let source: String
     public let postings: [PostingDTO]
     public let version: Int
@@ -41,7 +44,7 @@ public struct TransactionDTO: Codable, Sendable, Equatable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id, kind, title, note, source, postings, version
         case occurredAt = "occurred_at"; case businessDate = "business_date"; case amountMinor = "amount_minor"
-        case categoryID = "category_id"; case accountID = "account_id"; case destinationAccountID = "destination_account_id"; case voidedAt = "voided_at"
+        case categoryID = "category_id"; case accountID = "account_id"; case destinationAccountID = "destination_account_id"; case creditCycleID = "credit_cycle_id"; case voidedAt = "voided_at"
         case createdAt = "created_at"; case updatedAt = "updated_at"
     }
 }
@@ -61,17 +64,18 @@ public struct TransactionDraft: Codable, Sendable, Equatable {
     public var categoryID: UUID?
     public var accountID: UUID?
     public var destinationAccountID: UUID?
+    public var creditCycleID: UUID?
 
     public init() {}
     public init(transaction: TransactionDTO) {
         kind = transaction.kind; occurredAt = transaction.occurredAt; title = transaction.title
         note = transaction.note ?? ""; amountMinor = transaction.amountMinor; categoryID = transaction.categoryID
-        accountID = transaction.accountID; destinationAccountID = transaction.destinationAccountID
+        accountID = transaction.accountID; destinationAccountID = transaction.destinationAccountID; creditCycleID = transaction.creditCycleID
     }
     enum CodingKeys: String, CodingKey {
         case kind, title, note
         case occurredAt = "occurred_at"; case amountMinor = "amount_minor"; case categoryID = "category_id"
-        case accountID = "account_id"; case destinationAccountID = "destination_account_id"
+        case accountID = "account_id"; case destinationAccountID = "destination_account_id"; case creditCycleID = "credit_cycle_id"
     }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -80,9 +84,10 @@ public struct TransactionDraft: Codable, Sendable, Equatable {
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         try c.encode(trimmedNote.isEmpty ? nil : trimmedNote, forKey: .note)
         try c.encode(amountMinor, forKey: .amountMinor)
-        try c.encode(kind == .transfer ? nil : categoryID, forKey: .categoryID)
+        try c.encode(kind == .expense || kind == .income || kind == .creditPurchase ? categoryID : nil, forKey: .categoryID)
         try c.encode(accountID, forKey: .accountID)
-        try c.encode(kind == .transfer ? destinationAccountID : nil, forKey: .destinationAccountID)
+        try c.encode(kind == .transfer || kind == .repayment ? destinationAccountID : nil, forKey: .destinationAccountID)
+        try c.encode(kind == .repayment ? creditCycleID : nil, forKey: .creditCycleID)
     }
 }
 

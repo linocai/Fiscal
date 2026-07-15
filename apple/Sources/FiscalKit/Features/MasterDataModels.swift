@@ -73,9 +73,30 @@ public final class AccountsModel {
         if draft.kind == .credit {
             guard let limit = draft.creditLimitMinor, limit > 0 else { return "信用账户必须填写正数额度。" }
             guard let statement = draft.statementDay, (1...28).contains(statement), let due = draft.dueDay, (1...28).contains(due) else { return "账单日和还款日必须在 1–28 日。" }
-            if draft.openingBalanceMinor < 0 || draft.openingBalanceMinor > limit { return "信用欠款需在 0 与额度之间。" }
+            if draft.openingBalanceMinor < 0 { return "信用期初欠款不能为负数。" }
+            if draft.openingBalanceMinor > 0 {
+                guard let asOf = draft.openingBalanceAsOfDate, let due = draft.openingDueDate else { return "正数期初欠款需要确认余额日期和到期日。" }
+                guard let asOfDate = shanghaiDate(asOf), shanghaiDate(due) != nil else { return "期初日期必须使用 yyyy-MM-dd 格式。" }
+                if due < asOf { return "期初到期日不能早于余额日期。" }
+                var calendar = Calendar(identifier: .gregorian)
+                calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+                if asOfDate > calendar.startOfDay(for: Date()) { return "期初余额日期不能晚于今天。" }
+            } else if draft.openingBalanceAsOfDate != nil || draft.openingDueDate != nil { return "期初欠款为零时不应填写期初日期。" }
         }
         return nil
+    }
+
+    private static func shanghaiDate(_ value: String) -> Date? {
+        let components = value.split(separator: "-", omittingEmptySubsequences: false)
+        guard components.count == 3,
+              components[0].count == 4, components[1].count == 2, components[2].count == 2,
+              let year = Int(components[0]), let month = Int(components[1]), let day = Int(components[2]) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        guard let date = calendar.date(from: DateComponents(year: year, month: month, day: day)) else { return nil }
+        let resolved = calendar.dateComponents([.year, .month, .day], from: date)
+        guard resolved.year == year, resolved.month == month, resolved.day == day else { return nil }
+        return date
     }
 
     private func apply(_ error: Error) {

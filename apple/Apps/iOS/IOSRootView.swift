@@ -2,13 +2,14 @@ import FiscalKit
 import SwiftUI
 
 private enum IOSTab: Hashable { case overview, transactions, cashFlow, more }
-private enum IOSMoreDestination: Hashable { case accounts, categories }
+private enum IOSMoreDestination: Hashable { case accounts, categories, credit }
 
 struct IOSRootView: View {
     @Bindable var connection: ConnectionModel
     let accounts: AccountsModel
     let categories: CategoriesModel
     let transactions: TransactionsModel
+    let credit: CreditModel
     @State private var selection: IOSTab = .overview
     @State private var showRecordSheet = false
 
@@ -16,15 +17,15 @@ struct IOSRootView: View {
         Group {
             switch selection {
             case .overview: NavigationStack { IOSOverviewScreen(connectionPhase: connection.phase) }
-            case .transactions: NavigationStack { IOSTransactionsScreen(model: transactions, accounts: accounts, categories: categories) }
+            case .transactions: NavigationStack { IOSTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit) }
             case .cashFlow: PlaceholderScreen("现金流", symbol: "arrow.up.arrow.down", phase: "P7")
-            case .more: IOSMoreScreen(accounts: accounts, categories: categories, connection: connection)
+            case .more: IOSMoreScreen(accounts: accounts, categories: categories, transactions: transactions, credit: credit, connection: connection)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(FiscalColor.iOSBackground.ignoresSafeArea())
         .overlay(alignment: .bottom) { tabBar }
-        .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories) }
+        .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit) }
     }
 
     private var tabBar: some View {
@@ -64,6 +65,8 @@ struct IOSRootView: View {
 private struct IOSMoreScreen: View {
     let accounts: AccountsModel
     let categories: CategoriesModel
+    let transactions: TransactionsModel
+    let credit: CreditModel
     let connection: ConnectionModel
     @State private var path: [IOSMoreDestination] = []
 
@@ -82,10 +85,14 @@ private struct IOSMoreScreen: View {
                                 row("分类设置", symbol: "tag", detail: "两级 · AI 识别资料", color: FiscalColor.reimbursement)
                             }
                             .buttonStyle(.plain)
+                            Divider().padding(.leading, 46)
+                            NavigationLink(value: IOSMoreDestination.credit) {
+                                row("信用账期", symbol: "calendar.badge.clock", detail: "账期 · 还款", color: FiscalColor.debt)
+                            }.buttonStyle(.plain)
                         }
                     }
                     FiscalCard(radius: 18) { HStack { ConnectionBadge(phase: connection.phase); Spacer(); Text("个人 VPS · 设备密钥访问").font(.caption).foregroundStyle(FiscalColor.tertiary) } }
-                    FiscalCard(radius: 20) { VStack(spacing: 0) { placeholderRow("信用账期与分期", "calendar.badge.clock", "P4–P5"); Divider(); placeholderRow("报销", "doc.text", "P6"); Divider(); placeholderRow("报表", "chart.bar", "P7"); Divider(); placeholderRow("其他设置", "gearshape", "P11") } }
+                    FiscalCard(radius: 20) { VStack(spacing: 0) { placeholderRow("分期", "calendar.badge.clock", "P5"); Divider(); placeholderRow("报销", "doc.text", "P6"); Divider(); placeholderRow("报表", "chart.bar", "P7"); Divider(); placeholderRow("其他设置", "gearshape", "P11") } }
                 }.padding(16).padding(.bottom, 100)
             }
             .background(FiscalColor.iOSBackground).navigationTitle("更多")
@@ -93,6 +100,7 @@ private struct IOSMoreScreen: View {
                 switch destination {
                 case .accounts: AccountsManagementScreen(model: accounts)
                 case .categories: CategoriesManagementScreen(model: categories)
+                case .credit: IOSCreditAccountsScreen(credit: credit, transactions: transactions, accounts: accounts, categories: categories)
                 }
             }
         }
