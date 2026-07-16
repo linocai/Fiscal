@@ -104,9 +104,12 @@ temporary_release=""
 
 alembic_bin="$release/backend/.venv/bin/alembic"
 alembic_config="$release/backend/alembic.ini"
-expected_head="$(run_as_migrator env \
-  FISCAL_DATABASE_URL="${FISCAL_MIGRATION_DATABASE_URL:?missing migration URL}" \
-  "$alembic_bin" --config "$alembic_config" heads | awk 'NR == 1 {print $1}')"
+expected_head="$(
+  cd -- "$release/backend"
+  run_as_migrator env \
+    FISCAL_DATABASE_URL="${FISCAL_MIGRATION_DATABASE_URL:?missing migration URL}" \
+    "$alembic_bin" --config "$alembic_config" heads | awk 'NR == 1 {print $1}'
+)"
 [[ -n "$expected_head" ]] || die "unable to determine the release Alembic head"
 printf 'revision=%s\nalembic_head=%s\ncreated_at=%s\n' \
   "$revision" "$expected_head" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$release/RELEASE"
@@ -117,9 +120,12 @@ log "creating and verifying the mandatory pre-migration backup"
 "$release/infra/production/scripts/backup.sh" --apply
 
 log "upgrading the production schema explicitly"
-run_as_migrator env \
-  FISCAL_DATABASE_URL="${FISCAL_MIGRATION_DATABASE_URL:?missing migration URL}" \
-  "$alembic_bin" --config "$alembic_config" upgrade head
+(
+  cd -- "$release/backend"
+  run_as_migrator env \
+    FISCAL_DATABASE_URL="${FISCAL_MIGRATION_DATABASE_URL:?missing migration URL}" \
+    "$alembic_bin" --config "$alembic_config" upgrade head
+)
 
 actual_head="$(run_as_postgres psql --dbname="${FISCAL_BACKUP_DATABASE:-fiscal}" \
   --no-psqlrc --tuples-only --no-align --command='SELECT version_num FROM alembic_version')"
