@@ -12,7 +12,8 @@ ExecStart=/opt/fiscal/current/infra/production/scripts/backup.sh --apply
 UMask=0077
 Nice=10
 IOSchedulingClass=idle
-NoNewPrivileges=true
+# The root wrapper must drop to the postgres identity for pg_dump.
+NoNewPrivileges=false
 PrivateDevices=true
 PrivateTmp=true
 ProtectHome=true

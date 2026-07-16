@@ -12,7 +12,8 @@ ExecStart=/opt/fiscal/current/infra/production/scripts/restore-verify.sh --apply
 UMask=0077
 Nice=10
 IOSchedulingClass=idle
-NoNewPrivileges=true
+# The root wrapper must drop to postgres for the isolated database lifecycle.
+NoNewPrivileges=false
 PrivateDevices=true
 PrivateTmp=true
 ProtectHome=true
