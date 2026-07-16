@@ -12,13 +12,15 @@ public struct ReportPeriodControl: View {
       Button { Task { await model.moveMonth(by: -1) } } label: {
         Image(systemName: "chevron.left").frame(width: 30, height: 30)
       }
-      .buttonStyle(.plain).background(.white, in: .rect(cornerRadius: 9))
+      .buttonStyle(.plain).background(FiscalColor.surface, in: .rect(cornerRadius: 9))
+      .accessibilityLabel("上个月")
       Text(Self.title(model.month)).font(.subheadline.weight(.semibold)).monospacedDigit()
         .frame(minWidth: 92)
       Button { Task { await model.moveMonth(by: 1) } } label: {
         Image(systemName: "chevron.right").frame(width: 30, height: 30)
       }
-      .buttonStyle(.plain).background(.white, in: .rect(cornerRadius: 9))
+      .buttonStyle(.plain).background(FiscalColor.surface, in: .rect(cornerRadius: 9))
+      .accessibilityLabel("下个月")
       Button("本月") { Task { await model.returnToCurrentMonth() } }
         .buttonStyle(.plain).font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.accent)
         .padding(.horizontal, 10).frame(height: 30)
@@ -37,7 +39,7 @@ private struct ReportingNotice: View {
   var body: some View {
     if let message = model.refreshMessage ?? model.message {
       HStack(spacing: 9) {
-        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(FiscalColor.expense)
+        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(FiscalColor.expense).accessibilityHidden(true)
         Text(message).font(.caption).foregroundStyle(FiscalColor.secondary)
         Spacer()
       }
@@ -68,13 +70,16 @@ public struct IOSReportingOverviewScreen: View {
   let openAI: () -> Void
   let openCashFlow: () -> Void
   let openReport: (ReportLens) -> Void
+  let openUncategorized: () -> Void
   public init(
     model: ReportingModel, pendingProposalCount: Int, openAI: @escaping () -> Void,
     openCashFlow: @escaping () -> Void,
-    openReport: @escaping (ReportLens) -> Void
+    openReport: @escaping (ReportLens) -> Void,
+    openUncategorized: @escaping () -> Void = {}
   ) {
     self.model = model; self.pendingProposalCount = pendingProposalCount; self.openAI = openAI
     self.openCashFlow = openCashFlow; self.openReport = openReport
+    self.openUncategorized = openUncategorized
   }
   public var body: some View {
     ScrollView {
@@ -107,7 +112,7 @@ public struct IOSReportingOverviewScreen: View {
         if model.phase == .loading && model.overview == nil { loading }
         else if let value = model.overview { content(value) }
         else { unavailable }
-      }.padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 112)
+      }.padding(.horizontal, 16).padding(.vertical, 16)
     }.background(FiscalColor.iOSBackground.ignoresSafeArea())
       .refreshable { await model.loadAll() }
   }
@@ -121,7 +126,7 @@ public struct IOSReportingOverviewScreen: View {
               Text("本月消费").font(.headline)
               Text("原始消费与个人承担分开计算").font(.caption).foregroundStyle(FiscalColor.tertiary)
             }
-            Spacer(); Image(systemName: "chevron.right").foregroundStyle(FiscalColor.tertiary)
+            Spacer(); Image(systemName: "chevron.right").foregroundStyle(FiscalColor.tertiary).accessibilityHidden(true)
           }
           Text(Money(minorUnits: value.spending.grossConsumptionMinor).formatted())
             .font(.system(size: 35, weight: .bold, design: .rounded)).monospacedDigit()
@@ -139,7 +144,7 @@ public struct IOSReportingOverviewScreen: View {
           VStack(alignment: .leading, spacing: 3) {
             Text("本月实际现金流").font(.headline)
             Text("流入 \(Money(minorUnits: value.cashFlow.inflowMinor).formatted()) · 流出 \(Money(minorUnits: value.cashFlow.outflowMinor).formatted())")
-              .font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1)
+              .font(.caption).foregroundStyle(FiscalColor.tertiary).fixedSize(horizontal: false, vertical: true)
           }
           Spacer()
           Text(Money(minorUnits: value.cashFlow.netMinor).formatted(showPositiveSign: value.cashFlow.netMinor > 0))
@@ -161,12 +166,20 @@ public struct IOSReportingOverviewScreen: View {
       }
     }
     if !value.coverage.isComplete {
-      Label(
-        "\(value.coverage.uncategorizedCount) 笔待归类 · \(Money(minorUnits: value.coverage.uncategorizedMinor).formatted()) 已计入总额",
-        systemImage: "questionmark.circle.fill")
+      Button(action: openUncategorized) {
+        HStack(spacing: 10) {
+          Image(systemName: "questionmark.circle.fill").accessibilityHidden(true)
+          Text("\(value.coverage.uncategorizedCount) 笔待归类 · \(Money(minorUnits: value.coverage.uncategorizedMinor).formatted()) 已计入总额")
+          Spacer()
+          Text("去处理").foregroundStyle(FiscalColor.accent)
+          Image(systemName: "chevron.right").accessibilityHidden(true)
+        }
         .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.debt).padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(FiscalColor.debt.opacity(0.09), in: .rect(cornerRadius: 14))
+      }
+      .buttonStyle(.plain)
+      .accessibilityHint("打开待归类流水")
     }
     if !value.forecastEvents.isEmpty {
       VStack(alignment: .leading, spacing: 9) {
@@ -183,7 +196,7 @@ public struct IOSReportingOverviewScreen: View {
             HStack(spacing: 10) {
               FiscalIconTile(row.kind.symbol, color: row.kind == .income ? FiscalColor.income : FiscalColor.accent)
               VStack(alignment: .leading, spacing: 2) {
-                Text(row.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text(row.title).font(.subheadline.weight(.semibold)).lineLimit(2)
                 Text(row.businessDate).font(.caption).foregroundStyle(FiscalColor.tertiary)
               }
               Spacer(); Text(Money(minorUnits: row.amountMinor).formatted())
@@ -201,7 +214,7 @@ public struct IOSReportingOverviewScreen: View {
     }
   }
   private var loading: some View {
-    VStack(spacing: 13) { ForEach(0..<4, id: \.self) { _ in RoundedRectangle(cornerRadius: 20).fill(.white).frame(height: 130) } }.redacted(reason: .placeholder)
+    VStack(spacing: 13) { ForEach(0..<4, id: \.self) { _ in RoundedRectangle(cornerRadius: 20).fill(FiscalColor.surface).frame(height: 130) } }.redacted(reason: .placeholder)
   }
   private var unavailable: some View {
     FiscalCard(radius: 20) { ContentUnavailableView("无法加载总览", systemImage: "chart.bar.xaxis", description: Text("检查个人 VPS 连接后重试。")) }
@@ -252,7 +265,7 @@ public struct IOSCashFlowScreen: View {
             .font(.caption).foregroundStyle(FiscalColor.tertiary).padding(.horizontal, 3)
         } else if model.phase == .loading { ProgressView().frame(maxWidth: .infinity).padding(80) }
         else { ContentUnavailableView("现金流暂不可用", systemImage: "arrow.up.arrow.down") }
-      }.padding(16).padding(.bottom, 110)
+      }.padding(16)
     }.background(FiscalColor.iOSBackground.ignoresSafeArea())
   }
 }
@@ -334,7 +347,7 @@ public struct MacReportingOverviewScreen: View {
                 Text("最近流水").font(.headline)
                 ForEach(value.recentTransactions) { row in
                   Divider().opacity(0.35)
-                  HStack { Text(row.businessDate).font(.caption).foregroundStyle(FiscalColor.tertiary).frame(width: 72, alignment: .leading); Text(row.title).lineLimit(1); Spacer(); Text(Money(minorUnits: row.amountMinor).formatted()).monospacedDigit() }
+                  HStack { Text(row.businessDate).font(.caption).foregroundStyle(FiscalColor.tertiary).frame(width: 72, alignment: .leading); Text(row.title).lineLimit(2); Spacer(); Text(Money(minorUnits: row.amountMinor).formatted()).monospacedDigit() }
                 }
               }
             }.frame(maxWidth: .infinity)
@@ -358,7 +371,7 @@ public struct MacCashFlowScreen: View {
   public init(model: ReportingModel) { self.model = model }
   public var body: some View {
     VStack(spacing: 0) {
-      HStack { Text("现金流").font(.system(size: 22, weight: .bold)); Spacer(); ReportPeriodControl(model: model) }.padding(.horizontal, 20).frame(height: 54).background(.white)
+      HStack { Text("现金流").font(.system(size: 22, weight: .bold)); Spacer(); ReportPeriodControl(model: model) }.padding(.horizontal, 20).frame(height: 54).background(FiscalColor.surface)
       if let report = model.cashFlow {
         HStack(alignment: .top, spacing: 16) {
           FiscalCard(radius: 15) { VStack(alignment: .leading, spacing: 12) { Text("未来现金流").font(.headline); Text("仅显示有正式日期来源的预测").font(.caption).foregroundStyle(FiscalColor.tertiary); if report.forecast.events.isEmpty { ContentUnavailableView("未来 30 天无权威事件", systemImage: "calendar.badge.checkmark") } else { forecastRows(report.forecast.events) } } }.frame(maxWidth: .infinity)
@@ -381,7 +394,7 @@ public struct MacReportsScreen: View {
         Text("报表").font(.system(size: 22, weight: .bold)); Spacer()
         Picker("统计口径", selection: $model.lens) { Text("消费").tag(ReportLens.spending); Text("现金流").tag(ReportLens.cashFlow); Text("负债").tag(ReportLens.debt) }.pickerStyle(.segmented).frame(width: 250)
         ReportPeriodControl(model: model)
-      }.padding(.horizontal, 20).frame(height: 58).background(.white)
+      }.padding(.horizontal, 20).frame(height: 58).background(FiscalColor.surface)
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
           ReportingNotice(model: model)
@@ -426,7 +439,7 @@ public struct MacReportsScreen: View {
 }
 #endif
 
-@ViewBuilder private func forecastRows<S: Sequence>(_ events: S) -> some View where S.Element == ForecastEvent {
+@MainActor @ViewBuilder private func forecastRows<S: Sequence>(_ events: S) -> some View where S.Element == ForecastEvent {
   VStack(spacing: 0) {
     ForEach(Array(events)) { event in
       HStack(spacing: 10) {
@@ -478,7 +491,7 @@ private func chartRangeLabels(_ first: String?, _ last: String?) -> some View {
 
 private var currencyAxis: some AxisContent {
   AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
-    AxisGridLine().foregroundStyle(Color.black.opacity(0.09))
+    AxisGridLine().foregroundStyle(FiscalColor.separator)
     AxisValueLabel {
       if let amount = value.as(Double.self) {
         Text(amount.formatted(.number.precision(.fractionLength(0...1))))
@@ -503,7 +516,7 @@ private func reportColor(_ hex: String?, fallback: Color = FiscalColor.tertiary)
   return Color(hex: value)
 }
 
-private func categoryRows(
+@MainActor private func categoryRows(
   _ values: [SpendingCategoryRow], model: ReportingModel, showsBars: Bool = true
 ) -> some View {
   let maximum = max(1, values.map(\.rollup.personalRealizedMinor).max() ?? 1)
@@ -515,10 +528,10 @@ private func categoryRows(
           VStack(alignment: .leading, spacing: showsBars ? 6 : 0) {
             HStack { Text(row.name).font(.subheadline.weight(.semibold)); Spacer(); Text(Money(minorUnits: row.rollup.personalRealizedMinor).formatted()).monospacedDigit() }
             if showsBars {
-              GeometryReader { proxy in Capsule().fill(Color.black.opacity(0.055)).overlay(alignment: .leading) { Capsule().fill(reportColor(row.colorHex, fallback: FiscalColor.accent)).frame(width: proxy.size.width * CGFloat(max(0, row.rollup.personalRealizedMinor)) / CGFloat(maximum)) } }.frame(height: 7)
+              GeometryReader { proxy in Capsule().fill(FiscalColor.separator.opacity(0.72)).overlay(alignment: .leading) { Capsule().fill(reportColor(row.colorHex, fallback: FiscalColor.accent)).frame(width: proxy.size.width * CGFloat(max(0, row.rollup.personalRealizedMinor)) / CGFloat(maximum)) } }.frame(height: 7)
             }
           }
-          Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary)
+          Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary).accessibilityHidden(true)
         }.padding(.vertical, 9).contentShape(.rect)
       }.buttonStyle(.plain)
       Divider().padding(.leading, 45).opacity(0.35)
@@ -526,11 +539,11 @@ private func categoryRows(
   }
 }
 
-private func accountRows(_ values: [CashFlowAccountRow], model: ReportingModel) -> some View {
+@MainActor private func accountRows(_ values: [CashFlowAccountRow], model: ReportingModel) -> some View {
   VStack(spacing: 0) {
     ForEach(values) { row in
       Button { model.lens = .cashFlow; Task { await model.loadDrillDown(accountID: row.accountID) } } label: {
-        HStack { Text(row.name).font(.subheadline.weight(.semibold)); Spacer(); Text("+\(Money(minorUnits: row.metrics.inflowMinor).formatted())").foregroundStyle(FiscalColor.income); Text("−\(Money(minorUnits: row.metrics.outflowMinor).formatted())").foregroundStyle(FiscalColor.expense); Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary) }.padding(.vertical, 11)
+        HStack { Text(row.name).font(.subheadline.weight(.semibold)); Spacer(); Text("+\(Money(minorUnits: row.metrics.inflowMinor).formatted())").foregroundStyle(FiscalColor.income); Text("−\(Money(minorUnits: row.metrics.outflowMinor).formatted())").foregroundStyle(FiscalColor.expense); Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary).accessibilityHidden(true) }.padding(.vertical, 11)
       }.buttonStyle(.plain); Divider().opacity(0.35)
     }
   }
@@ -548,7 +561,7 @@ private func drillDownRows(_ page: ReportDrillDownPage, model: ReportingModel) -
       Spacer()
       Button { model.clearDrillDown() } label: {
         Image(systemName: "xmark").font(.caption.bold()).frame(width: 28, height: 28)
-          .background(Color.black.opacity(0.055), in: .circle)
+          .background(FiscalColor.separator.opacity(0.72), in: .circle)
       }.buttonStyle(.plain).accessibilityLabel("关闭贡献明细")
     }.padding(.bottom, 8)
     if page.items.isEmpty {
@@ -561,11 +574,11 @@ private func drillDownRows(_ page: ReportDrillDownPage, model: ReportingModel) -
             color: model.lens == .cashFlow && item.signedAmountMinor > 0
               ? FiscalColor.income : FiscalColor.accent)
           VStack(alignment: .leading, spacing: 2) {
-            Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+            Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(2)
             Text(
               [item.businessDate, item.accountName, item.categoryName]
                 .compactMap { $0 }.joined(separator: " · "))
-              .font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1)
+              .font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(2)
           }
           Spacer()
           Text(
@@ -592,7 +605,7 @@ private func drillDownRows(_ page: ReportDrillDownPage, model: ReportingModel) -
   }
 }
 
-private func debtAccountCard(_ account: DebtAccountRow) -> some View {
+@MainActor private func debtAccountCard(_ account: DebtAccountRow) -> some View {
   FiscalCard(radius: 16) {
     VStack(alignment: .leading, spacing: 10) {
       HStack { Text(account.name).font(.headline); Spacer(); Text(Money(minorUnits: account.currentDebtMinor).formatted()).font(.headline).monospacedDigit().foregroundStyle(FiscalColor.debt) }

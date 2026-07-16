@@ -51,14 +51,14 @@ public struct MacOverviewScreen: View {
                 HStack {
                     Text("日期").frame(width: 60, alignment: .leading); Text("摘要"); Spacer(); Text("金额")
                 }.font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.tertiary)
-                Divider().opacity(0.35)
+                Divider().overlay(FiscalColor.separator)
                 if snapshot.recent.isEmpty { EmptyInline(symbol: "list.bullet.rectangle", title: "还没有流水") }
                 ForEach(Array(snapshot.recent.enumerated()), id: \.element.id) { index, item in
-                    if index > 0 { Divider().opacity(0.3) }
+                    if index > 0 { Divider().overlay(FiscalColor.separator) }
                     HStack(spacing: 10) {
                         Text(item.dateLabel).frame(width: 60, alignment: .leading).font(.caption).foregroundStyle(FiscalColor.tertiary)
                         FiscalIconTile(item.symbol, color: item.direction == .income ? FiscalColor.income : FiscalColor.accent)
-                        VStack(alignment: .leading, spacing: 2) { Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(1); Text(item.detail).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1) }
+                        VStack(alignment: .leading, spacing: 2) { Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(2); Text(item.detail).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(2) }
                         Spacer()
                         Text(item.amount.formatted(showPositiveSign: item.direction == .income)).font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(item.direction == .income ? FiscalColor.income : FiscalColor.text)
                     }
@@ -73,10 +73,10 @@ public struct MacOverviewScreen: View {
                 HStack { Text("账户概览").font(.headline); Spacer(); Text("查看全部").font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.accent) }
                 Text(snapshot.available.formatted()).font(.system(size: 25, weight: .bold, design: .rounded)).monospacedDigit()
                 Text("可用余额 · 净资产 \(snapshot.netWorth.formatted())").font(.caption).foregroundStyle(FiscalColor.tertiary)
-                Divider().opacity(0.35)
+                Divider().overlay(FiscalColor.separator)
                 if snapshot.accounts.isEmpty { EmptyInline(symbol: "wallet.bifold", title: "还没有账户") }
                 ForEach(Array(snapshot.accounts.prefix(3).enumerated()), id: \.element.id) { index, account in
-                    if index > 0 { Divider().padding(.leading, 47).opacity(0.3) }
+                    if index > 0 { Divider().padding(.leading, 47).overlay(FiscalColor.separator) }
                     AccountRow(account: account)
                 }
             }
@@ -95,14 +95,14 @@ public struct MacOverviewScreen: View {
 
     private var loading: some View {
         VStack(spacing: 16) {
-            HStack(spacing: 12) { ForEach(0..<4, id: \.self) { _ in RoundedRectangle(cornerRadius: 15).fill(.white.opacity(0.75)).frame(height: 118) } }
-            RoundedRectangle(cornerRadius: 15).fill(.white.opacity(0.75)).frame(height: 340)
+            HStack(spacing: 12) { ForEach(0..<4, id: \.self) { _ in RoundedRectangle(cornerRadius: 15).fill(FiscalColor.surface.opacity(0.75)).frame(height: 118) } }
+            RoundedRectangle(cornerRadius: 15).fill(FiscalColor.surface.opacity(0.75)).frame(height: 340)
         }.redacted(reason: .placeholder)
     }
 
     private var connectionNotice: some View {
         HStack(spacing: 10) {
-            Image(systemName: fixture == .unauthorized ? "key" : "wifi.slash")
+            Image(systemName: fixture == .unauthorized ? "key" : "wifi.slash").accessibilityHidden(true)
             Text(fixture == .unauthorized ? "设备密钥尚未配置；当前显示严格隔离的预览数据。" : "无法连接个人 VPS；当前显示严格隔离的预览数据。")
             Spacer()
         }

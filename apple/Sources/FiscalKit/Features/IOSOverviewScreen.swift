@@ -22,7 +22,7 @@ public struct IOSOverviewScreen: View {
                     content(fixture.snapshot)
                 }
             }
-            .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 110)
+            .padding(.horizontal, 16).padding(.vertical, 16)
         }
         .background(FiscalColor.iOSBackground.ignoresSafeArea())
     }
@@ -76,7 +76,7 @@ public struct IOSOverviewScreen: View {
                 FiscalIconTile("arrow.up.arrow.down", color: FiscalColor.reimbursement)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("本月现金流").font(.subheadline.weight(.semibold)).foregroundStyle(FiscalColor.text)
-                    Text("流入 \(snapshot.cashIn.formatted()) · 流出 \(snapshot.cashOut.formatted())").font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1).minimumScaleFactor(0.75)
+                    Text("流入 \(snapshot.cashIn.formatted()) · 流出 \(snapshot.cashOut.formatted())").font(.caption).foregroundStyle(FiscalColor.tertiary).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 Text(snapshot.cashNet.formatted(showPositiveSign: snapshot.cashNet.minorUnits > 0)).font(.subheadline.bold().monospacedDigit()).foregroundStyle(snapshot.cashNet.minorUnits >= 0 ? FiscalColor.income : FiscalColor.expense)
@@ -86,7 +86,7 @@ public struct IOSOverviewScreen: View {
 
     private func uncategorized(_ count: Int) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "questionmark.circle.fill").foregroundStyle(FiscalColor.debt)
+            Image(systemName: "questionmark.circle.fill").foregroundStyle(FiscalColor.debt).accessibilityHidden(true)
             Text("\(count) 笔待归类 · 未计入消费统计").font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
             Spacer(); Text("去处理").font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.debt)
         }
@@ -110,13 +110,13 @@ public struct IOSOverviewScreen: View {
     }
 
     private var loading: some View {
-        VStack(spacing: 13) { ForEach(0..<3, id: \.self) { _ in RoundedRectangle(cornerRadius: 22).fill(.white.opacity(0.72)).frame(height: 180).redacted(reason: .placeholder) } }
+        VStack(spacing: 13) { ForEach(0..<3, id: \.self) { _ in RoundedRectangle(cornerRadius: 22).fill(FiscalColor.surface.opacity(0.72)).frame(height: 180).redacted(reason: .placeholder) } }
     }
 
     private var connectionNotice: some View {
         FiscalCard(radius: 16) {
             HStack(spacing: 12) {
-                Image(systemName: isUnauthorized ? "key" : "wifi.slash").foregroundStyle(isUnauthorized ? FiscalColor.debt : FiscalColor.expense)
+                Image(systemName: isUnauthorized ? "key" : "wifi.slash").foregroundStyle(isUnauthorized ? FiscalColor.debt : FiscalColor.expense).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(isUnauthorized ? "需要设备密钥" : "当前离线").font(.subheadline.weight(.semibold))
                     Text(connectionDetail).font(.caption).foregroundStyle(FiscalColor.secondary)

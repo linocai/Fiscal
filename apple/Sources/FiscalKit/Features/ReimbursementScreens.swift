@@ -83,7 +83,7 @@ private struct ReimbursementTotals: View {
                 Label(message, systemImage: "wifi.exclamationmark").font(.caption).foregroundStyle(
                   FiscalColor.expense)
               }
-            }.padding(16).padding(.bottom, 100)
+            }.padding(16)
           }
         }
       }
@@ -111,7 +111,7 @@ private struct ReimbursementTotals: View {
         model.statusFilter = status
         Task { await model.load() }
       }.buttonStyle(.borderedProminent).tint(
-        model.statusFilter == status ? FiscalColor.accent : Color(hex: 0xDDE2EA)
+        model.statusFilter == status ? FiscalColor.accent : FiscalColor.surface
       ).foregroundStyle(model.statusFilter == status ? .white : FiscalColor.secondary)
     }
     private func summaryCard(_ value: ReimbursementSummary) -> some View {
@@ -146,7 +146,7 @@ private struct ReimbursementTotals: View {
             }
             Spacer()
             ReimbursementStatusPill(status: claim.status)
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary)
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary).accessibilityHidden(true)
           }
           ReimbursementTotals(claim: claim)
           if claim.archivedAt != nil {
@@ -181,7 +181,7 @@ private struct ReimbursementTotals: View {
               expenses(claim)
               receiptHistory(claim)
               scope(claim)
-            }.padding(16).padding(.bottom, 100)
+            }.padding(16)
           }
           .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -440,66 +440,73 @@ public struct ReimbursementReceiptEditor: View {
   }
   public var body: some View {
     NavigationStack {
-      Form {
-        Section("到账信息") {
-          Picker("付款主体", selection: $partyID) {
-            Text("请选择").tag(Optional<UUID>.none)
-            ForEach(claim.parties.filter { $0.outstandingMinor > 0 || $0.id == editing?.partyID }) {
-              Text("\($0.name) · 待回 \(Money(minorUnits: $0.outstandingMinor).formatted())").tag(
-                Optional($0.id))
+      ScrollView {
+        VStack(alignment: .leading, spacing: 14) {
+          receiptSection("到账信息") {
+            VStack(alignment: .leading, spacing: 13) {
+              Picker("付款主体", selection: $partyID) {
+                Text("请选择").tag(Optional<UUID>.none)
+                ForEach(claim.parties.filter { $0.outstandingMinor > 0 || $0.id == editing?.partyID }) {
+                  Text("\($0.name) · 待回 \(Money(minorUnits: $0.outstandingMinor).formatted())").tag(Optional($0.id))
+                }
+              }
+              Divider().opacity(0.35)
+              Picker("到账账户", selection: $accountID) {
+                Text("请选择").tag(Optional<UUID>.none)
+                ForEach(options.filter { $0.kind == .cash || $0.kind == .debit || $0.id == editing?.destinationAccountID }) {
+                  Text($0.name).tag(Optional($0.id))
+                }
+              }
+              Divider().opacity(0.35)
+              TextField("金额（分）", text: $amount).focused($focusedField, equals: .amount)
+#if os(iOS)
+                .keyboardType(.numberPad)
+#endif
+              Divider().opacity(0.35)
+              DatePicker("到账时间", selection: $receivedAt, in: ...Date())
+              Divider().opacity(0.35)
+              TextField("标题", text: $title).focused($focusedField, equals: .title)
+              Divider().opacity(0.35)
+              TextField("备注", text: $note, axis: .vertical).lineLimit(2...5).focused($focusedField, equals: .note)
+            }.textFieldStyle(.plain)
+          }
+          if let preview = model.receiptPreview {
+            receiptSection("服务器影响预览") {
+              VStack(alignment: .leading, spacing: 11) {
+                receiptValue("主体到账前", preview.partyReceivedBeforeMinor)
+                Divider().opacity(0.35)
+                receiptValue("主体到账后", preview.partyReceivedAfterMinor)
+                Divider().opacity(0.35)
+                receiptValue("本单到账前", preview.claimReceivedBeforeMinor)
+                Divider().opacity(0.35)
+                receiptValue("本单到账后", preview.claimReceivedAfterMinor)
+                Text("将按服务器稳定顺序分配到 \(preview.persistedAllocations.count) 个主体 × 支出矩阵行。")
+                  .font(.caption).foregroundStyle(FiscalColor.tertiary)
+              }
             }
           }
-          Picker("到账账户", selection: $accountID) {
-            Text("请选择").tag(Optional<UUID>.none)
-            ForEach(
-              options.filter {
-                $0.kind == .cash || $0.kind == .debit || $0.id == editing?.destinationAccountID
-              }
-            ) { Text($0.name).tag(Optional($0.id)) }
+          if let message = model.message {
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+              .font(.subheadline).foregroundStyle(FiscalColor.expense).padding(13)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .background(FiscalColor.expense.opacity(0.09), in: .rect(cornerRadius: 14))
           }
-          TextField("金额（分）", text: $amount)
-            .focused($focusedField, equals: .amount)
-            #if os(iOS)
-              .keyboardType(.numberPad)
-            #endif
-          DatePicker("到账时间", selection: $receivedAt, in: ...Date())
-          TextField("标题", text: $title).focused($focusedField, equals: .title)
-          TextField("备注", text: $note).focused($focusedField, equals: .note)
-        }
-        if let preview = model.receiptPreview {
-          Section("服务器确认") {
-            LabeledContent(
-              "主体到账前", value: Money(minorUnits: preview.partyReceivedBeforeMinor).formatted())
-            LabeledContent(
-              "主体到账后", value: Money(minorUnits: preview.partyReceivedAfterMinor).formatted())
-            LabeledContent(
-              "本单到账前", value: Money(minorUnits: preview.claimReceivedBeforeMinor).formatted())
-            LabeledContent(
-              "本单到账后", value: Money(minorUnits: preview.claimReceivedAfterMinor).formatted())
-            Text("将按服务器稳定顺序分配到 \(preview.persistedAllocations.count) 个主体 × 支出矩阵行。")
-          }
-        }
-        if let message = model.message {
-          Section {
-            Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(
-              FiscalColor.expense)
-          }
-        }
-      }.navigationTitle(editing == nil ? "登记到账" : "编辑到账").toolbar {
+        }.padding(16)
+      }.background(receiptBackground).scrollDismissesKeyboard(.interactively)
+      .navigationTitle(editing == nil ? "登记到账" : "编辑到账").toolbar {
         ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-        ToolbarItem(placement: .confirmationAction) {
-          if model.receiptPreview == nil {
-            Button("预览影响") { preview() }.disabled(request == nil)
-          } else {
-            Button(editing == nil ? "确认到账" : "确认保存") { commit() }.disabled(model.isMutating)
-          }
-        }
-        #if os(iOS)
-          ToolbarItemGroup(placement: .keyboard) {
-            Spacer()
-            Button("完成") { focusedField = nil }
-          }
-        #endif
+#if os(iOS)
+        ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("完成") { focusedField = nil } }
+#endif
+      }.safeAreaInset(edge: .bottom) {
+        Button {
+          focusedField = nil
+          if model.receiptPreview == nil { preview() } else { commit() }
+        } label: {
+          Text(receiptActionTitle).frame(maxWidth: .infinity)
+        }.buttonStyle(FiscalActionButtonStyle())
+          .disabled(model.receiptPreview == nil ? request == nil : model.isMutating)
+          .padding(.horizontal, 16).padding(.vertical, 10).background(.regularMaterial)
       }.task {
         options = (try? await accounts.transactionOptions()) ?? []
         if accountID == nil {
@@ -513,6 +520,27 @@ public struct ReimbursementReceiptEditor: View {
         _, _ in model.invalidateReceiptPreview()
       }
     }.reimbursementEditorFrame(width: 520, height: 600)
+  }
+  private var receiptActionTitle: String {
+    if model.isMutating { return "保存中…" }
+    if model.receiptPreview == nil { return "预览影响" }
+    return editing == nil ? "确认到账" : "确认保存"
+  }
+  private var receiptBackground: Color {
+#if os(iOS)
+    FiscalColor.iOSBackground
+#else
+    FiscalColor.macBackground
+#endif
+  }
+  private func receiptSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(title).font(.headline).padding(.horizontal, 3)
+      FiscalCard(radius: 18) { content() }
+    }
+  }
+  private func receiptValue(_ title: String, _ amount: Int64) -> some View {
+    HStack { Text(title).foregroundStyle(FiscalColor.secondary); Spacer(); Text(Money(minorUnits: amount).formatted()).fontWeight(.semibold).monospacedDigit() }.font(.subheadline)
   }
   private var request: ReimbursementReceiptRequest? {
     guard let partyID, let accountID, let amountMinor = Int64(amount), amountMinor > 0,
@@ -779,16 +807,16 @@ public struct ReimbursementClaimEditor: View {
           Text("版本 \(model.selectedClaim?.version ?? editing.version)")
             .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.tertiary)
             .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(Color.black.opacity(0.045), in: .capsule)
+            .background(FiscalColor.separator.opacity(0.72), in: .capsule)
         }
         Button { dismiss() } label: {
           Image(systemName: "xmark").font(.system(size: 12, weight: .bold))
             .frame(width: 32, height: 32)
-            .background(Color.black.opacity(0.055), in: .circle)
+            .background(FiscalColor.separator.opacity(0.72), in: .circle)
         }
         .buttonStyle(.plain).foregroundStyle(FiscalColor.secondary)
         .keyboardShortcut(.cancelAction).accessibilityLabel("取消编辑")
-      }.padding(.horizontal, 20).frame(height: 62).background(.white)
+      }.padding(.horizontal, 20).frame(height: 62).background(FiscalColor.surface)
     }
 
     private var macIdentityCard: some View {
@@ -882,7 +910,7 @@ public struct ReimbursementClaimEditor: View {
         Button("取消") { dismiss() }
           .buttonStyle(.plain).font(.system(size: 13, weight: .semibold))
           .foregroundStyle(FiscalColor.secondary).padding(.horizontal, 18).frame(height: 38)
-          .background(Color.black.opacity(0.055), in: .rect(cornerRadius: 10))
+          .background(FiscalColor.separator.opacity(0.72), in: .rect(cornerRadius: 10))
         Button { macPrimaryAction() } label: {
           HStack(spacing: 7) {
             if model.isMutating { ProgressView().controlSize(.small).tint(.white) }
@@ -901,7 +929,7 @@ public struct ReimbursementClaimEditor: View {
         .buttonStyle(.plain).disabled(!valid || model.isMutating)
         .opacity(!valid || model.isMutating ? 0.48 : 1)
         .keyboardShortcut(.defaultAction)
-      }.padding(.horizontal, 20).frame(height: 58).background(.white)
+      }.padding(.horizontal, 20).frame(height: 58).background(FiscalColor.surface)
     }
 
     private var macPrimaryTitle: String {
@@ -954,9 +982,9 @@ public struct ReimbursementClaimEditor: View {
             .opacity(nextExpenseOption(for: party) == nil ? 0.45 : 1)
           }
         }
-        .background(Color(hex: 0xF7F9FC), in: .rect(cornerRadius: 11))
+        .background(FiscalColor.macBackground, in: .rect(cornerRadius: 11))
         .overlay {
-          RoundedRectangle(cornerRadius: 11).stroke(Color.black.opacity(0.055), lineWidth: 0.5)
+          RoundedRectangle(cornerRadius: 11).stroke(FiscalColor.separator, lineWidth: 0.5)
         }
       }
     }
@@ -975,9 +1003,10 @@ public struct ReimbursementClaimEditor: View {
           .background(
             (locked ? FiscalColor.reimbursement : FiscalColor.accent).opacity(0.10),
             in: .rect(cornerRadius: 8))
+          .accessibilityHidden(true)
         if frozen || locked {
           Text(existingExpenseTitle(allocation.wrappedValue.transactionID))
-            .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
         } else {
           Picker("垫付事项", selection: allocation.transactionID) {
             ForEach(
@@ -1005,11 +1034,11 @@ public struct ReimbursementClaimEditor: View {
               .textFieldStyle(.plain).multilineTextAlignment(.trailing).monospacedDigit()
           }
           .padding(.horizontal, 8).frame(width: 116, height: 32)
-          .background(.white, in: .rect(cornerRadius: 8))
+          .background(FiscalColor.surface, in: .rect(cornerRadius: 8))
           .overlay {
             RoundedRectangle(cornerRadius: 8).stroke(
               amountIsValid(allocation.wrappedValue)
-                ? Color.black.opacity(0.08) : FiscalColor.expense.opacity(0.75),
+                ? FiscalColor.separator : FiscalColor.expense.opacity(0.75),
               lineWidth: amountIsValid(allocation.wrappedValue) ? 0.5 : 1)
           }
         }
@@ -1080,7 +1109,7 @@ public struct ReimbursementClaimEditor: View {
 
     private func macMessageBanner(_ message: String) -> some View {
       HStack(alignment: .top, spacing: 9) {
-        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(FiscalColor.expense)
+        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(FiscalColor.expense).accessibilityHidden(true)
         Text(message).font(.caption).foregroundStyle(FiscalColor.secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -1100,6 +1129,7 @@ public struct ReimbursementClaimEditor: View {
           .foregroundStyle(FiscalColor.reimbursement)
           .frame(width: 30, height: 30)
           .background(FiscalColor.reimbursement.opacity(0.10), in: .rect(cornerRadius: 9))
+          .accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 1) {
           Text(title).font(.headline)
           Text(subtitle).font(.caption).foregroundStyle(FiscalColor.tertiary)
@@ -1114,13 +1144,13 @@ public struct ReimbursementClaimEditor: View {
         Text(label).font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
         HStack(spacing: 8) {
           Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(FiscalColor.tertiary).frame(width: 16)
+            .foregroundStyle(FiscalColor.tertiary).frame(width: 16).accessibilityHidden(true)
           TextField(prompt, text: text).textFieldStyle(.plain)
         }
         .padding(.horizontal, 11).frame(height: 40)
-        .background(Color(hex: 0xF7F9FC), in: .rect(cornerRadius: 10))
+        .background(FiscalColor.macBackground, in: .rect(cornerRadius: 10))
         .overlay {
-          RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.06), lineWidth: 0.5)
+          RoundedRectangle(cornerRadius: 10).stroke(FiscalColor.separator, lineWidth: 0.5)
         }
       }.frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1348,7 +1378,7 @@ public struct ReimbursementClaimEditor: View {
             }
           }.frame(width: 150)
           Button("新建报销单", systemImage: "plus") { showCreate = true }.buttonStyle(.borderedProminent)
-        }.padding(.horizontal, 20).frame(height: 54).background(.white)
+        }.padding(.horizontal, 20).frame(height: 54).background(FiscalColor.surface)
         HStack(spacing: 0) {
           claimList.frame(width: 285)
           Divider()
@@ -1404,7 +1434,7 @@ public struct ReimbursementClaimEditor: View {
                     .foregroundStyle(FiscalColor.reimbursement)
                 }.font(.caption)
               }.padding(13).frame(maxWidth: .infinity, alignment: .leading).background(
-                selectedID == claim.id ? FiscalColor.accent.opacity(0.10) : .white,
+                selectedID == claim.id ? FiscalColor.accent.opacity(0.10) : FiscalColor.surface,
                 in: .rect(cornerRadius: 13))
             }.buttonStyle(.plain).task {
               if claim.id == model.claims.last?.id { await model.loadMore() }

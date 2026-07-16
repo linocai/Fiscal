@@ -2,7 +2,7 @@ import FiscalKit
 import SwiftUI
 
 private enum MacSection: String, CaseIterable, Identifiable {
-    case overview = "总览", transactions = "流水", accounts = "账户", categories = "分类", cashFlow = "现金流"
+    case overview = "总览", transactions = "流水", accounts = "账户", cashFlow = "现金流"
     case reimbursement = "报销", reports = "报表", ai = "AI 待确认", settings = "设置"
     var id: Self { self }
     var symbol: String {
@@ -10,7 +10,6 @@ private enum MacSection: String, CaseIterable, Identifiable {
         case .overview: "house"
         case .transactions: "list.bullet.rectangle"
         case .accounts: "wallet.bifold"
-        case .categories: "tag"
         case .cashFlow: "arrow.up.arrow.down"
         case .reimbursement: "doc.text"
         case .reports: "chart.bar"
@@ -22,7 +21,7 @@ private enum MacSection: String, CaseIterable, Identifiable {
         switch self {
         case .overview: "P1"
         case .transactions: "P3"
-        case .accounts, .categories: "P2"
+        case .accounts: "P2"
         case .cashFlow, .reports: "P7"
         case .reimbursement: "P6"
         case .ai, .settings: "P8"
@@ -41,7 +40,10 @@ struct MacRootView: View {
     let reports: ReportingModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
+    let recordingPreferences: RecordingPreferences
+    let cache: HTTPResponseCache
     @State private var section: MacSection = .overview
+    @State private var showCategories = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -56,10 +58,8 @@ struct MacRootView: View {
                     }
                 } else if section == .accounts {
                     MacAccountsCreditScreen(accounts: accounts, credit: credit, installments: installments, transactions: transactions, categories: categories)
-                } else if section == .categories {
-                    NavigationStack { CategoriesManagementScreen(model: categories) }
                 } else if section == .transactions {
-                    MacTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments)
+                    MacTransactionWorkbench(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments, preferences: recordingPreferences)
                 } else if section == .reimbursement {
                     MacReimbursementsScreen(model: reimbursements, accounts: accounts)
                 } else if section == .cashFlow {
@@ -69,7 +69,15 @@ struct MacRootView: View {
                 } else if section == .ai {
                     MacAIProposalScreen(model: aiProposals, accounts: accounts, categories: categories, credit: credit)
                 } else if section == .settings {
-                    MacSettingsScreen(model: aiSettings)
+                    MacSettingsScreen(
+                        model: aiSettings,
+                        preferences: recordingPreferences,
+                        accounts: accounts,
+                        transactions: transactions,
+                        cache: cache,
+                        openCategories: { showCategories = true },
+                        openReports: { section = .reports }
+                    )
                 } else {
                     PlaceholderScreen(section.rawValue, symbol: section.symbol, phase: section.phase)
                 }
@@ -77,6 +85,10 @@ struct MacRootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .background(FiscalColor.macBackground)
+        .sheet(isPresented: $showCategories) {
+            NavigationStack { CategoriesManagementScreen(model: categories) }
+                .frame(width: 660, height: 680)
+        }
     }
 
     private var sidebar: some View {

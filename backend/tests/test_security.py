@@ -43,6 +43,8 @@ def test_system_status_rejects_invalid_device_token(client: TestClient) -> None:
         ("GET", "/api/v1/transactions", None),
         ("POST", "/api/v1/transactions", {}),
         ("GET", "/api/v1/transactions/summary", None),
+        ("GET", "/api/v1/transactions/export.csv", None),
+        ("POST", "/api/v1/transactions/bulk-category", {}),
         ("GET", f"/api/v1/transactions/{RESOURCE_ID}", None),
         ("PUT", f"/api/v1/transactions/{RESOURCE_ID}", {}),
         ("POST", f"/api/v1/transactions/{RESOURCE_ID}/void", {}),

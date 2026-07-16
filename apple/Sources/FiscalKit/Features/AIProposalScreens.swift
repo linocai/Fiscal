@@ -142,7 +142,7 @@ public struct IOSAIProposalSheet: View {
               VStack(alignment: .leading, spacing: 8) {
                 Text("识别文字").font(.headline)
                 TextEditor(text: $transcript).font(.body).padding(10).frame(minHeight: 220)
-                  .background(.white, in: .rect(cornerRadius: 16))
+                  .background(FiscalColor.surface, in: .rect(cornerRadius: 16))
                 Text("可在提交前修正识别错误；超过 2,000 字不会静默截断。")
                   .font(.caption).foregroundStyle(FiscalColor.tertiary)
               }
@@ -362,7 +362,7 @@ private struct AITextEntrySheet: View {
         Text("用一句话描述收入或支出，AI 只会生成待校验的结构化提案。")
           .font(.subheadline).foregroundStyle(FiscalColor.secondary)
         TextEditor(text: $text).font(.body).padding(10).frame(minHeight: 150)
-          .background(.white, in: .rect(cornerRadius: 14))
+          .background(FiscalColor.surface, in: .rect(cornerRadius: 14))
         if let message = model.message { Text(message).font(.caption).foregroundStyle(FiscalColor.expense) }
         Spacer()
         Button("生成提案") {
@@ -391,7 +391,7 @@ public struct MacAIProposalScreen: View {
   public var body: some View {
     VStack(spacing: 0) {
       HStack { Text("AI 待确认").font(.system(size: 23, weight: .bold)); Text("\(model.pendingCount)").font(.caption.bold()).foregroundStyle(.white).padding(.horizontal, 8).padding(.vertical, 4).background(FiscalColor.expense, in: .capsule); Picker("提案状态", selection: Binding(get: { model.statusFilter ?? .pending }, set: { status in Task { await model.selectStatus(status) } })) { Text("待确认").tag(AIProposalStatus.pending); Text("失败").tag(AIProposalStatus.failed) }.pickerStyle(.segmented).frame(width: 170); Spacer(); Button("刷新") { Task { await model.load() } }.buttonStyle(.plain).foregroundStyle(FiscalColor.accent) }
-        .padding(.horizontal, 20).frame(height: 58).background(.white)
+        .padding(.horizontal, 20).frame(height: 58).background(FiscalColor.surface)
       HStack(spacing: 0) {
         ScrollView {
           LazyVStack(spacing: 8) {
@@ -401,7 +401,7 @@ public struct MacAIProposalScreen: View {
                   FiscalIconTile("sparkles", color: FiscalColor.accent)
                   VStack(alignment: .leading, spacing: 3) { Text(proposal.title ?? "待补全提案").font(.subheadline.weight(.semibold)); Text("\(proposal.source.title) · \(proposal.confidenceTitle) · \(proposal.status.title)").font(.caption).foregroundStyle(FiscalColor.tertiary) }
                   Spacer(); Text(proposal.amountMinor.map { Money(minorUnits: $0).formatted() } ?? "—").font(.subheadline.monospacedDigit())
-                }.padding(12).background(model.selectedID == proposal.id ? FiscalColor.accent.opacity(0.09) : .white, in: .rect(cornerRadius: 12))
+                }.padding(12).background(model.selectedID == proposal.id ? FiscalColor.accent.opacity(0.09) : FiscalColor.surface, in: .rect(cornerRadius: 12))
               }.buttonStyle(.plain).task { if proposal.id == model.proposals.last?.id { await model.loadMore() } }
             }
           }.padding(14)
@@ -426,7 +426,7 @@ public struct MacAIProposalScreen: View {
           else if proposal.status == .failed { Button("重新识别") { Task { await model.retry(proposal) } }.buttonStyle(FiscalActionButtonStyle(.secondary)) }
           else if proposal.status == .executed { Button("撤销这笔 AI 记账") { Task { await model.undo(proposal) } }.buttonStyle(FiscalActionButtonStyle(.secondary)) }
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-      }.background(.white)
+      }.background(FiscalColor.surface)
     } else { ContentUnavailableView("选择一条提案", systemImage: "sparkles") }
   }
   private func detail(_ label: String, _ value: String) -> some View { HStack { Text(label).foregroundStyle(FiscalColor.tertiary); Spacer(); Text(value) }.font(.subheadline) }

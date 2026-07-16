@@ -9,6 +9,7 @@ private enum IOSMoreDestination: Hashable {
 }
 
 struct IOSRootView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var connection: ConnectionModel
     let accounts: AccountsModel
     let categories: CategoriesModel
@@ -19,6 +20,7 @@ struct IOSRootView: View {
     let reports: ReportingModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
+    let recordingPreferences: RecordingPreferences
     @State private var selection: IOSTab = .overview
     @State private var showRecordSheet = false
     @State private var morePath: [IOSMoreDestination] = []
@@ -34,18 +36,23 @@ struct IOSRootView: View {
                         pendingProposalCount: aiProposals.pendingCount,
                         openAI: { showAIProposals = true },
                         openCashFlow: { selection = .cashFlow },
-                        openReport: { lens in morePath = [.reports(lens)]; selection = .more }
+                        openReport: { lens in morePath = [.reports(lens)]; selection = .more },
+                        openUncategorized: {
+                            transactions.classification = .uncategorized
+                            selection = .transactions
+                            Task { await transactions.load() }
+                        }
                     )
                 }
             case .transactions: NavigationStack { IOSTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments) }
             case .cashFlow: NavigationStack { IOSCashFlowScreen(model: reports) }
-            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, aiProposals: aiProposals, aiSettings: aiSettings, connection: connection, openAI: { showAIProposals = true })
+            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, aiProposals: aiProposals, aiSettings: aiSettings, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true })
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(FiscalColor.iOSBackground.ignoresSafeArea())
-        .overlay(alignment: .bottom) { tabBar }
-        .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit) }
+        .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
+        .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit, preferences: recordingPreferences) }
         .sheet(isPresented: $showAIProposals) { IOSAIProposalSheet(model: aiProposals, accounts: accounts, categories: categories, credit: credit) }
     }
 
@@ -75,11 +82,16 @@ struct IOSRootView: View {
         Button { selection = tab } label: {
             VStack(spacing: 5) {
                 Image(systemName: symbol).font(.system(size: 20, weight: .medium))
-                Text(title).font(.caption2.weight(.medium))
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Text(title).font(.caption2.weight(.medium))
+                }
             }
             .foregroundStyle(selection == tab ? FiscalColor.accent : Color(hex: 0x9098A4))
             .frame(maxWidth: .infinity, minHeight: 56)
         }
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selection == tab ? .isSelected : [])
+        .accessibilityHint(selection == tab ? "当前页面" : "切换到\(title)")
     }
 }
 
@@ -95,6 +107,7 @@ private struct IOSMoreScreen: View {
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
     let connection: ConnectionModel
+    let recordingPreferences: RecordingPreferences
     let openAI: () -> Void
 
     var body: some View {
@@ -119,8 +132,8 @@ private struct IOSMoreScreen: View {
                         }
                     }
                     FiscalCard(radius: 18) { HStack { ConnectionBadge(phase: connection.phase); Spacer(); Text("个人 VPS · 设备密钥访问").font(.caption).foregroundStyle(FiscalColor.tertiary) } }
-                    FiscalCard(radius: 20) { VStack(spacing: 0) { NavigationLink(value: IOSMoreDestination.reimbursements) { row("报销", symbol: "doc.text", detail: "多人 · 分次到账", color: FiscalColor.reimbursement) }.buttonStyle(.plain); Divider(); NavigationLink(value: IOSMoreDestination.reports(.spending)) { row("报表", symbol: "list.bullet.rectangle", detail: "消费 · 负债", color: FiscalColor.accent) }.buttonStyle(.plain); Divider(); Button(action: openAI) { badgeRow("AI 待确认", symbol: "sparkles", count: aiProposals.pendingCount) }.buttonStyle(.plain); Divider(); NavigationLink(value: IOSMoreDestination.settings) { row("设置", symbol: "gearshape", detail: "AI 自动记账", color: FiscalColor.secondary) }.buttonStyle(.plain) } }
-                }.padding(16).padding(.bottom, 100)
+                    FiscalCard(radius: 20) { VStack(spacing: 0) { NavigationLink(value: IOSMoreDestination.reimbursements) { row("报销", symbol: "doc.text", detail: "多人 · 分次到账", color: FiscalColor.reimbursement) }.buttonStyle(.plain); Divider(); NavigationLink(value: IOSMoreDestination.reports(.spending)) { row("报表", symbol: "list.bullet.rectangle", detail: "消费 · 负债", color: FiscalColor.accent) }.buttonStyle(.plain); Divider(); Button(action: openAI) { badgeRow("AI 待确认", symbol: "sparkles", count: aiProposals.pendingCount) }.buttonStyle(.plain); Divider(); NavigationLink(value: IOSMoreDestination.settings) { row("设置", symbol: "gearshape", detail: "偏好 · AI · 数据", color: FiscalColor.secondary) }.buttonStyle(.plain) } }
+                }.padding(16)
             }
             .background(FiscalColor.iOSBackground).navigationTitle("更多")
             .navigationDestination(for: IOSMoreDestination.self) { destination in
@@ -130,7 +143,15 @@ private struct IOSMoreScreen: View {
                 case .credit: IOSCreditAccountsScreen(credit: credit, installments: installments, transactions: transactions, accounts: accounts, categories: categories)
                 case .reimbursements: IOSReimbursementsScreen(model: reimbursements, accounts: accounts)
                 case .reports(let lens): IOSReportsScreen(model: reports, initialLens: lens)
-                case .settings: IOSSettingsScreen(model: aiSettings)
+                case .settings:
+                    IOSSettingsScreen(
+                        model: aiSettings,
+                        preferences: recordingPreferences,
+                        accounts: accounts,
+                        transactions: transactions,
+                        openCategories: { path = [.categories] },
+                        openReports: { path = [.reports(.spending)] }
+                    )
                 }
             }
         }

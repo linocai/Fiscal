@@ -14,11 +14,14 @@ private struct TransactionAmount: View {
 }
 
 public struct TransactionEditorSheet: View {
+    private enum FocusedField: Hashable { case amount, title, note }
     @Environment(\.dismiss) private var dismiss
     let transactions: TransactionsModel
     let accounts: AccountsModel
     let categories: CategoriesModel
     let credit: CreditModel?
+    let preferences: RecordingPreferences?
+    let appliesPreferences: Bool
     @State private var editor: TransactionEditorModel
     @State private var accountOptions: [AccountDTO] = []
     @State private var categoryOptions: [CategoryDTO] = []
@@ -29,9 +32,12 @@ public struct TransactionEditorSheet: View {
     @State private var confirmCycleRecalculation = false
     @State private var savedCycleDescription: String?
     @State private var repaymentValidation: String?
+    @FocusState private var focusedField: FocusedField?
+    @State private var didApplyPreferences = false
 
-    public init(transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil, editing: TransactionDTO? = nil, initialKind: TransactionKind? = nil, creditAccountID: UUID? = nil, cycleID: UUID? = nil, amountMinor: Int64? = nil) {
-        self.transactions = transactions; self.accounts = accounts; self.categories = categories; self.credit = credit
+    public init(transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil, editing: TransactionDTO? = nil, initialKind: TransactionKind? = nil, creditAccountID: UUID? = nil, cycleID: UUID? = nil, amountMinor: Int64? = nil, preferences: RecordingPreferences? = nil) {
+        self.transactions = transactions; self.accounts = accounts; self.categories = categories; self.credit = credit; self.preferences = preferences
+        appliesPreferences = editing == nil && initialKind == nil && preferences != nil
         let model = TransactionEditorModel(editing: editing)
         if let initialKind { model.changeKind(initialKind) }
         if initialKind == .repayment { model.draft.destinationAccountID = creditAccountID; model.draft.creditCycleID = cycleID }
@@ -41,37 +47,54 @@ public struct TransactionEditorSheet: View {
 
     public var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    Picker("类型", selection: kindBinding) { ForEach(TransactionKind.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) } }
-                        .pickerStyle(.segmented)
-                    TextField("金额，例如 38.50", text: $editor.amountText)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    sectionTitle("类型")
+                    kindPicker
+                    sectionCard("交易") {
+                        VStack(spacing: 12) {
+                            editorField("金额", symbol: "yensign", prompt: "例如 38.50") {
+                                TextField("金额，例如 38.50", text: $editor.amountText)
+                                    .focused($focusedField, equals: .amount)
 #if os(iOS)
-                        .keyboardType(.decimalPad)
+                                    .keyboardType(.decimalPad)
 #endif
-                    TextField("标题", text: $editor.draft.title)
-                    TextField("备注（可选）", text: $editor.draft.note, axis: .vertical).lineLimit(2...5)
-                    DatePicker("发生时间", selection: $editor.draft.occurredAt)
-                } header: { Text("交易") }
-                switch editor.draft.kind {
-                case .transfer: transferSection
-                case .repayment: repaymentSection
-                case .creditPurchase: creditPurchaseSection
-                case .expense, .income: incomeExpenseSection
-                case .installmentFee, .installmentRefund, .reimbursementReceipt: EmptyView()
+                            }
+                            Divider().opacity(0.35)
+                            editorField("标题", symbol: "text.alignleft", prompt: "这笔钱用于什么") {
+                                TextField("标题", text: $editor.draft.title)
+                                    .focused($focusedField, equals: .title)
+                                    .submitLabel(.next)
+                                    .onSubmit { focusedField = .note }
+                            }
+                            Divider().opacity(0.35)
+                            editorField("备注", symbol: "note.text", prompt: "可选") {
+                                TextField("备注（可选）", text: $editor.draft.note, axis: .vertical)
+                                    .lineLimit(2...5).focused($focusedField, equals: .note)
+                            }
+                            Divider().opacity(0.35)
+                            DatePicker("发生时间", selection: $editor.draft.occurredAt)
+                        }
+                    }
+                    classificationSection
+                    statusContent
                 }
-                if loadingOptions { Section { ProgressView("正在读取账户与分类…") } }
-                if let optionsError { Section { Label(optionsError, systemImage: "wifi.exclamationmark").foregroundStyle(FiscalColor.expense); Button("重试") { Task { await loadOptions() } } } }
-                if let message = repaymentValidation ?? editor.validationMessage ?? transactions.message {
-                    Section { Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(FiscalColor.expense) }
-                }
+                .padding(16)
             }
+            .background(editorBackground)
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(editor.editing == nil ? "记一笔" : "编辑流水")
             .accessibilityIdentifier("transaction.editor")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("保存") { requestSave() }.disabled(transactions.isMutating || loadingOptions) }
+#if os(iOS)
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("完成") { focusedField = nil }
+                }
+#endif
             }
+            .safeAreaInset(edge: .bottom) { saveBar }
             .task { await loadOptions() }
         }
         .frame(minWidth: 380, idealWidth: 440, minHeight: 520, idealHeight: 620)
@@ -83,12 +106,93 @@ public struct TransactionEditorSheet: View {
             Text("信用账户或发生时间已变化。服务器会重新归属账期，客户端不会自行推算。")
         }
         .alert("信用消费已保存", isPresented: Binding(get: { savedCycleDescription != nil }, set: { if !$0 { savedCycleDescription = nil } })) {
-            Button("完成") { dismiss() }
+            Button(shouldStayAfterSave ? "继续记账" : "完成") { completeSuccessfulSave() }
         } message: {
             Text("服务器确认的新账期：\(savedCycleDescription ?? "")")
         }
     }
 
+    private var kindPicker: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(editableKinds) { kind in
+                    Button {
+                        kindBinding.wrappedValue = kind
+                    } label: {
+                        Label(kind.title, systemImage: kind.symbol)
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 13).frame(minHeight: 42)
+                            .foregroundStyle(editor.draft.kind == kind ? Color.white : FiscalColor.secondary)
+                            .background(editor.draft.kind == kind ? kind.color : FiscalColor.surface, in: .capsule)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(editor.draft.kind == kind ? .isSelected : [])
+                }
+            }
+        }.scrollIndicators(.hidden)
+    }
+    private var editableKinds: [TransactionKind] { [.expense, .income, .transfer, .creditPurchase, .repayment] }
+    @ViewBuilder private var classificationSection: some View {
+        switch editor.draft.kind {
+        case .transfer: transferSection
+        case .repayment: repaymentSection
+        case .creditPurchase: creditPurchaseSection
+        case .expense, .income: incomeExpenseSection
+        case .installmentFee, .installmentRefund, .reimbursementReceipt: EmptyView()
+        }
+    }
+    @ViewBuilder private var statusContent: some View {
+        if loadingOptions {
+            FiscalCard(radius: 16) { ProgressView("正在读取账户与分类…").frame(maxWidth: .infinity) }
+        }
+        if let optionsError {
+            FiscalCard(radius: 16) {
+                HStack { Label(optionsError, systemImage: "wifi.exclamationmark").foregroundStyle(FiscalColor.expense); Spacer(); Button("重试") { Task { await loadOptions() } }.buttonStyle(FiscalActionButtonStyle(.secondary)) }
+            }
+        }
+        if let message = repaymentValidation ?? editor.validationMessage ?? transactions.message {
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline).foregroundStyle(FiscalColor.expense).padding(13)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(FiscalColor.expense.opacity(0.09), in: .rect(cornerRadius: 14))
+        }
+    }
+    private var saveBar: some View {
+        Button {
+            focusedField = nil; requestSave()
+        } label: {
+            Text(transactions.isMutating ? "保存中…" : (editor.editing == nil ? "保存这笔流水" : "保存修改"))
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(FiscalActionButtonStyle())
+        .disabled(transactions.isMutating || loadingOptions || optionsError != nil)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .background(.regularMaterial)
+        .accessibilityIdentifier("transaction.save")
+    }
+    private var editorBackground: Color {
+#if os(iOS)
+        FiscalColor.iOSBackground
+#else
+        FiscalColor.macBackground
+#endif
+    }
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title).font(.headline).padding(.horizontal, 3)
+    }
+    private func sectionCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) { sectionTitle(title); FiscalCard(radius: 18) { content() } }
+    }
+    private func editorField<Content: View>(_ title: String, symbol: String, prompt: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: symbol).foregroundStyle(FiscalColor.accent).frame(width: 22).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.tertiary)
+                content().textFieldStyle(.plain)
+            }
+        }.accessibilityElement(children: .contain)
+    }
     private var kindBinding: Binding<TransactionKind> { Binding(get: { editor.draft.kind }, set: { editor.changeKind($0); cycleOptions = []; if $0 == .repayment, let id = editor.draft.destinationAccountID { Task { await loadCycles(id) } } }) }
     private var activeAccounts: [AccountDTO] {
         accountOptions.filter { ($0.archivedAt == nil || linkedAccountIDs.contains($0.id)) && $0.kind != .credit }
@@ -100,27 +204,38 @@ public struct TransactionEditorSheet: View {
         return categoryOptions.filter { $0.direction == direction && ($0.archivedAt == nil || $0.id == editor.editing?.categoryID) }
     }
     private var incomeExpenseSection: some View {
-        Section("归类") {
+        sectionCard("归类") {
+            VStack(spacing: 14) {
             Picker("账户", selection: $editor.draft.accountID) { Text("请选择").tag(Optional<UUID>.none); ForEach(activeAccounts) { Text($0.name).tag(Optional($0.id)) } }
+            Divider().opacity(0.35)
             Picker("分类", selection: $editor.draft.categoryID) { Text("请选择").tag(Optional<UUID>.none); ForEach(eligibleCategories) { Text($0.name).tag(Optional($0.id)) } }
+            }
         }
     }
     private var transferSection: some View {
-        Section("转账账户") {
+        sectionCard("转账账户") {
+            VStack(spacing: 14) {
             Picker("转出", selection: $editor.draft.accountID) { Text("请选择").tag(Optional<UUID>.none); ForEach(activeAccounts) { Text($0.name).tag(Optional($0.id)) } }
+            Divider().opacity(0.35)
             Picker("转入", selection: $editor.draft.destinationAccountID) { Text("请选择").tag(Optional<UUID>.none); ForEach(activeAccounts) { Text($0.name).tag(Optional($0.id)) } }
+            }
         }
     }
     private var creditPurchaseSection: some View {
-        Section("信用消费") {
+        sectionCard("信用消费") {
+            VStack(alignment: .leading, spacing: 14) {
             Picker("信用账户", selection: $editor.draft.accountID) { Text("请选择").tag(Optional<UUID>.none); ForEach(creditAccounts) { Text($0.name).tag(Optional($0.id)) } }
+            Divider().opacity(0.35)
             Picker("支出分类", selection: $editor.draft.categoryID) { Text("请选择").tag(Optional<UUID>.none); ForEach(eligibleCategories) { Text($0.name).tag(Optional($0.id)) } }
             Text("账期由服务器根据发生日期自动归属。若编辑后账期变化，保存结果会显示新的账期。").font(.caption).foregroundStyle(FiscalColor.tertiary)
+            }
         }
     }
     private var repaymentSection: some View {
-        Section("还款") {
+        sectionCard("还款") {
+            VStack(alignment: .leading, spacing: 14) {
             Picker("付款账户", selection: $editor.draft.accountID) { Text("请选择").tag(Optional<UUID>.none); ForEach(activeAccounts) { Text($0.name).tag(Optional($0.id)) } }
+            Divider().opacity(0.35)
             Picker("信用账户", selection: $editor.draft.destinationAccountID) { Text("请选择").tag(Optional<UUID>.none); ForEach(creditAccounts) { Text($0.name).tag(Optional($0.id)) } }
                 .onChange(of: editor.draft.destinationAccountID) { _, id in
                     cycleLoadGeneration += 1; editor.draft.creditCycleID = nil; cycleOptions = []
@@ -161,6 +276,7 @@ public struct TransactionEditorSheet: View {
                 .accessibilityValue(selectedRepaymentCycle.map(cycleMenuLabel) ?? "请选择")
             }
             Text("一笔还款只偿还一个账期，不会自动跨账期分配。").font(.caption).foregroundStyle(FiscalColor.tertiary)
+            }
         }
     }
     private func requestSave() {
@@ -192,7 +308,7 @@ public struct TransactionEditorSheet: View {
                 } else {
                     savedCycleDescription = cycleID.uuidString
                 }
-            } else if succeeded { dismiss() }
+            } else if succeeded { completeSuccessfulSave() }
             else if transactions.shouldRotateCreateKeyAfterFailure { editor.rotateCreateKey() }
         }
     }
@@ -203,6 +319,10 @@ public struct TransactionEditorSheet: View {
             async let loadedAccounts = accounts.transactionOptions()
             async let loadedCategories = categories.transactionOptions()
             accountOptions = try await loadedAccounts; categoryOptions = try await loadedCategories
+            if appliesPreferences, !didApplyPreferences, let preferences {
+                editor.apply(preferences: preferences, accounts: accountOptions)
+                didApplyPreferences = true
+            }
             if editor.draft.kind == .repayment, let id = editor.draft.destinationAccountID { await loadCycles(id) }
         } catch is CancellationError {
             optionsError = "读取已取消，请重试"
@@ -240,10 +360,21 @@ public struct TransactionEditorSheet: View {
     private func cycleMenuLabel(_ cycle: CreditCycleDTO) -> String {
         "\(cyclePrimaryLabel(cycle))，到期 \(cycle.dueDate)，可还 \(Money(minorUnits: editableCapacity(cycle)).formatted())"
     }
+    private var shouldStayAfterSave: Bool { editor.editing == nil && preferences?.stayAfterSave == true }
+    private func completeSuccessfulSave() {
+        savedCycleDescription = nil
+        guard shouldStayAfterSave else { dismiss(); return }
+        editor.resetForNextEntry(validAccounts: accountOptions)
+        cycleOptions = []
+        repaymentValidation = nil
+        transactions.clearMessage()
+        focusedField = .amount
+    }
 }
 
 #if os(iOS)
 public struct IOSTransactionsScreen: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var model: TransactionsModel
     let accounts: AccountsModel
     let categories: CategoriesModel
@@ -252,6 +383,16 @@ public struct IOSTransactionsScreen: View {
     @State private var editing: TransactionDTO?
     @State private var pendingVoid: TransactionDTO?
     @State private var installmentPurchase: TransactionDTO?
+    @State private var showAdvancedFilters = false
+    @State private var isSelecting = false
+    @State private var selectedIDs = Set<UUID>()
+    @State private var showBatchClassification = false
+    @State private var batchCategoryID: UUID?
+    @State private var accountOptions: [AccountDTO] = []
+    @State private var categoryOptions: [CategoryDTO] = []
+    @State private var filterOptionsMessage: String?
+    @State private var amountMinimumText = ""
+    @State private var amountMaximumText = ""
 
     public init(model: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil, installments: InstallmentModel? = nil) { self.model = model; self.accounts = accounts; self.categories = categories; self.credit = credit; self.installments = installments }
     public var body: some View {
@@ -265,12 +406,30 @@ public struct IOSTransactionsScreen: View {
         .searchable(
             text: $model.search,
             placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "搜索标题或备注"
+            prompt: "搜索标题、备注、账户或分类"
         )
         .onChange(of: model.search) { _, _ in model.scheduleLoad() }
-        .task { if model.phase == .idle { await model.load() } }
+        .task {
+            if model.phase == .idle { await model.load() }
+            await loadFilterOptions()
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                if model.classification == .uncategorized && model.phase == .loaded {
+                    Button(isSelecting ? "完成" : "选择") {
+                        isSelecting.toggle()
+                        if !isSelecting { selectedIDs.removeAll() }
+                    }
+                }
+                Button { prepareAdvancedFilters(); showAdvancedFilters = true } label: {
+                    Label("高级筛选", systemImage: model.hasAdvancedFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+            }
+        }
         .sheet(item: $editing) { TransactionEditorSheet(transactions: model, accounts: accounts, categories: categories, credit: credit, editing: $0) }
         .sheet(item: $installmentPurchase) { if let installments { InstallmentCreateSheet(installments: installments, purchase: $0, categories: categories) } }
+        .sheet(isPresented: $showAdvancedFilters) { advancedFilterSheet }
+        .sheet(isPresented: $showBatchClassification) { batchClassificationSheet }
         .alert("作废这笔流水？", isPresented: Binding(get: { pendingVoid != nil }, set: { if !$0 { pendingVoid = nil } })) {
             Button("取消", role: .cancel) { pendingVoid = nil }
             Button("作废", role: .destructive) { if let item = pendingVoid { Task { _ = await model.void(item); pendingVoid = nil } } }
@@ -278,13 +437,35 @@ public struct IOSTransactionsScreen: View {
         .alert("数据已变化", isPresented: Binding(get: { model.conflictDetected }, set: { if !$0 { model.clearConflict() } })) {
             Button("重新加载") { Task { await model.load() } }; Button("取消", role: .cancel) { model.clearConflict() }
         } message: { Text("服务器上的版本更高，请重新加载后再编辑。") }
-        .safeAreaInset(edge: .bottom) { if model.undoTransaction != nil { undoBar } }
+        .safeAreaInset(edge: .bottom) {
+            if isSelecting && !selectedIDs.isEmpty { selectionBar }
+            else if model.undoTransaction != nil { undoBar }
+        }
     }
     private var filterBar: some View {
-        ScrollView(.horizontal) { HStack { chip("全部", nil); ForEach(TransactionKind.allCases) { chip($0.title, $0) } }.padding(.horizontal, 16).padding(.vertical, 8) }.scrollIndicators(.hidden)
+        ScrollView(.horizontal) {
+            HStack {
+                chip("全部", nil)
+                classificationChip
+                ForEach(TransactionKind.allCases) { chip($0.title, $0) }
+            }.padding(.horizontal, 16).padding(.vertical, 8)
+        }.scrollIndicators(.hidden)
+    }
+    private var classificationChip: some View {
+        Button {
+            model.classification = model.classification == .uncategorized ? .all : .uncategorized
+            isSelecting = false; selectedIDs.removeAll()
+            Task { await model.load() }
+        } label: {
+            Label("待归类", systemImage: "questionmark.circle")
+                .font(.subheadline.weight(.medium)).padding(.horizontal, 14).padding(.vertical, 8)
+                .background(model.classification == .uncategorized ? FiscalColor.debt : FiscalColor.surface, in: .capsule)
+                .foregroundStyle(model.classification == .uncategorized ? .white : FiscalColor.secondary)
+        }.buttonStyle(.plain).accessibilityAddTraits(model.classification == .uncategorized ? .isSelected : [])
     }
     private func chip(_ title: String, _ kind: TransactionKind?) -> some View {
-        Button { model.kind = kind; Task { await model.load() } } label: { Text(title).font(.subheadline.weight(.medium)).padding(.horizontal, 14).padding(.vertical, 8).background(model.kind == kind ? FiscalColor.accent : .white, in: .capsule).foregroundStyle(model.kind == kind ? .white : FiscalColor.secondary) }.buttonStyle(.plain)
+        Button { model.kind = kind; Task { await model.load() } } label: { Text(title).font(.subheadline.weight(.medium)).padding(.horizontal, 14).padding(.vertical, 8).background(model.kind == kind ? FiscalColor.accent : FiscalColor.surface, in: .capsule).foregroundStyle(model.kind == kind ? .white : FiscalColor.secondary) }.buttonStyle(.plain)
+            .accessibilityAddTraits(model.kind == kind ? .isSelected : [])
     }
     @ViewBuilder private var content: some View {
         switch model.phase {
@@ -294,11 +475,76 @@ public struct IOSTransactionsScreen: View {
         case .offline: retry("无法连接个人 VPS", "wifi.slash")
         case .failed: retry(model.message ?? "读取失败", "exclamationmark.triangle")
         case .loaded:
-            ScrollView { LazyVStack(alignment: .leading, spacing: 12) { ForEach(model.groups) { group in Text(group.title).font(.headline).padding(.horizontal, 4); FiscalCard(radius: 18) { VStack(spacing: 0) { ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in if index > 0 { Divider() }; row(item) } } } } }.padding(16).padding(.bottom, 88) }.refreshable { await model.load() }
+            ScrollView { LazyVStack(alignment: .leading, spacing: 12) { ForEach(model.groups) { group in Text(group.title).font(.headline).padding(.horizontal, 4); FiscalCard(radius: 18) { VStack(spacing: 0) { ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in if index > 0 { Divider() }; row(item) } } } } }.padding(16) }.refreshable { await model.load() }
         }
     }
     private func row(_ item: TransactionDTO) -> some View {
-        Button { if item.isUserEditable && item.installmentPlanID == nil { editing = item } } label: { HStack(spacing: 12) { FiscalIconTile(item.kind.symbol, color: item.kind.color); VStack(alignment: .leading, spacing: 3) { Text(item.title).font(.headline).foregroundStyle(FiscalColor.text); Text(detail(item)).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1) }; Spacer(); TransactionAmount(transaction: item); Menu { if item.kind == .creditPurchase && item.installmentPlanID == nil { Button("创建分期计划", systemImage: "calendar.badge.plus") { installmentPurchase = item } }; if item.isUserEditable && item.installmentPlanID == nil { Button("编辑", systemImage: "pencil") { editing = item }; Button("作废", systemImage: "trash", role: .destructive) { pendingVoid = item } } } label: { Image(systemName: "ellipsis").frame(width: 32, height: 44) }.buttonStyle(.plain).accessibilityIdentifier("transaction.rowMenu") }.contentShape(.rect).padding(.vertical, 6) }.buttonStyle(.plain).task { await model.loadMoreIfNeeded(after: item) }
+        Button {
+            if isSelecting {
+                if selectedIDs.contains(item.id) { selectedIDs.remove(item.id) }
+                else if isBatchClassifiable(item) { selectedIDs.insert(item.id) }
+            } else if item.isUserEditable && item.installmentPlanID == nil { editing = item }
+        } label: { transactionRowContent(item).contentShape(.rect).padding(.vertical, 6) }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("\(item.title)，\(item.kind.title)")
+            .accessibilityValue("\(Money(minorUnits: item.amountMinor).formatted())，\(detail(item))")
+            .accessibilityHint(isSelecting ? (isBatchClassifiable(item) ? "轻点选择或取消选择" : "该流水不可批量分类") : (item.isUserEditable && item.installmentPlanID == nil ? "轻点编辑；更多操作可作废" : "只读流水"))
+            .accessibilityIdentifier(isBatchClassifiable(item) ? "transaction.classifiableRow" : "transaction.row")
+            .task { await model.loadMoreIfNeeded(after: item) }
+    }
+    @ViewBuilder private func transactionRowContent(_ item: TransactionDTO) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            HStack(alignment: .top, spacing: 12) {
+                selectionIndicator(item)
+                FiscalIconTile(item.kind.symbol, color: item.kind.color).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(item.title).font(.headline).foregroundStyle(FiscalColor.text)
+                    Text(detail(item)).font(.caption).foregroundStyle(FiscalColor.tertiary)
+                    HStack {
+                        TransactionAmount(transaction: item).fixedSize()
+                        Spacer()
+                        rowMenu(item)
+                    }
+                }
+            }
+        } else {
+            HStack(spacing: 12) {
+                selectionIndicator(item)
+                FiscalIconTile(item.kind.symbol, color: item.kind.color).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.title).font(.headline).foregroundStyle(FiscalColor.text)
+                    Text(detail(item)).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1)
+                }
+                Spacer()
+                TransactionAmount(transaction: item)
+                rowMenu(item)
+            }
+        }
+    }
+    @ViewBuilder private func selectionIndicator(_ item: TransactionDTO) -> some View {
+        if isSelecting {
+            Image(systemName: selectedIDs.contains(item.id) ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(selectedIDs.contains(item.id) ? FiscalColor.accent : FiscalColor.tertiary)
+                .font(.title3).accessibilityHidden(true)
+        }
+    }
+    @ViewBuilder private func rowMenu(_ item: TransactionDTO) -> some View {
+        if !isSelecting {
+            Menu {
+                if item.kind == .creditPurchase && item.installmentPlanID == nil {
+                    Button("创建分期计划", systemImage: "calendar.badge.plus") { installmentPurchase = item }
+                }
+                if item.isUserEditable && item.installmentPlanID == nil {
+                    Button("编辑", systemImage: "pencil") { editing = item }
+                    Button("作废", systemImage: "trash", role: .destructive) { pendingVoid = item }
+                }
+            } label: {
+                Image(systemName: "ellipsis").frame(width: 32, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("transaction.rowMenu")
+        }
     }
     private func detail(_ item: TransactionDTO) -> String { [item.kind.title, item.installmentRelation.map { "分期 · \($0.planTitle)" }, item.note].compactMap { $0 }.joined(separator: " · ") }
     private func retry(_ title: String, _ symbol: String) -> some View { ContentUnavailableView { Label(title, systemImage: symbol) } description: { Text(model.message ?? "不会使用预览数据替代。") } actions: { Button("重试") { Task { await model.load() } } } }
@@ -313,9 +559,215 @@ public struct IOSTransactionsScreen: View {
         .padding()
         .background(.regularMaterial, in: .rect(cornerRadius: 14))
         .padding(.horizontal)
-        .padding(.bottom, 82)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("transaction.undoBar")
+    }
+
+    private var selectionBar: some View {
+        HStack(spacing: 12) {
+            Text("已选择 \(selectedIDs.count) 笔").font(.subheadline.weight(.semibold))
+            Spacer()
+            Button("取消") { selectedIDs.removeAll(); isSelecting = false }
+            Button("重新分类") { showBatchClassification = true }
+                .buttonStyle(FiscalActionButtonStyle())
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10).background(.regularMaterial)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("transactions.batchBar")
+    }
+
+    private var advancedFilterSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    sectionCard("归类与来源") {
+                        VStack(spacing: 13) {
+                            Picker("归类状态", selection: $model.classification) {
+                                ForEach(TransactionClassificationFilter.allCases) { Text($0.title).tag($0) }
+                            }
+                            Divider().opacity(0.35)
+                            Picker("来源", selection: $model.source) {
+                                Text("全部").tag(Optional<String>.none)
+                                Text("手动录入").tag(Optional("manual"))
+                                Text("AI 文本").tag(Optional("ai_text"))
+                                Text("截图 OCR").tag(Optional("ocr"))
+                                Text("系统").tag(Optional("system"))
+                            }
+                        }
+                    }
+                    sectionCard("账户与分类") {
+                        VStack(spacing: 13) {
+                            Picker("账户", selection: $model.accountID) {
+                                Text("全部").tag(Optional<UUID>.none)
+                                ForEach(accountOptions) { Text($0.name).tag(Optional($0.id)) }
+                            }
+                            Divider().opacity(0.35)
+                            Picker("分类", selection: $model.categoryID) {
+                                Text("全部").tag(Optional<UUID>.none)
+                                ForEach(categoryOptions) { Text($0.name).tag(Optional($0.id)) }
+                            }
+                        }
+                    }
+                    sectionCard("金额范围") {
+                        VStack(spacing: 13) {
+                            HStack {
+                                Text("最低金额")
+                                Spacer()
+                                TextField("不限", text: $amountMinimumText)
+                                    .multilineTextAlignment(.trailing)
+                                    .keyboardType(.decimalPad)
+                            }
+                            Divider().opacity(0.35)
+                            HStack {
+                                Text("最高金额")
+                                Spacer()
+                                TextField("不限", text: $amountMaximumText)
+                                    .multilineTextAlignment(.trailing)
+                                    .keyboardType(.decimalPad)
+                            }
+                            Text("按人民币金额筛选，最多两位小数。")
+                                .font(.caption).foregroundStyle(FiscalColor.tertiary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    sectionCard("日期与状态") {
+                        VStack(spacing: 13) {
+                            Toggle("限制开始日期", isOn: optionalDateToggle(\.dateFrom))
+                            if model.dateFrom != nil { DatePicker("开始日期", selection: requiredDate(\.dateFrom), displayedComponents: .date) }
+                            Divider().opacity(0.35)
+                            Toggle("限制结束日期", isOn: optionalDateToggle(\.dateTo))
+                            if model.dateTo != nil { DatePicker("结束日期", selection: requiredDate(\.dateTo), displayedComponents: .date) }
+                            Divider().opacity(0.35)
+                            Toggle("包含已作废", isOn: $model.includeVoided)
+                        }
+                    }
+                    if let filterOptionsMessage {
+                        Label(filterOptionsMessage, systemImage: "wifi.exclamationmark")
+                            .font(.caption).foregroundStyle(FiscalColor.expense)
+                    }
+                }.padding(16)
+            }.background(FiscalColor.iOSBackground).navigationTitle("高级筛选")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("清除") { clearAdvancedFilters() } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("应用") { applyAdvancedFilters() }
+                    }
+                }
+        }
+    }
+
+    private var batchClassificationSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    FiscalCard(radius: 18) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("原子批量操作", systemImage: "checkmark.shield")
+                                .font(.headline).foregroundStyle(FiscalColor.accent)
+                            Text("\(selectedIDs.count) 笔流水会一次提交；任意一笔版本变化时，整批都不会写入。")
+                                .font(.subheadline).foregroundStyle(FiscalColor.secondary)
+                        }
+                    }
+                    sectionCard("目标分类") {
+                        Picker("目标分类", selection: $batchCategoryID) {
+                            Text("请选择").tag(Optional<UUID>.none)
+                            ForEach(batchCategoryOptions) { Text($0.name).tag(Optional($0.id)) }
+                        }
+                    }
+                    if batchDirection == nil {
+                        Label("收入和支出不能在同一批次归入一个分类。", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(FiscalColor.expense)
+                    }
+                }.padding(16)
+            }.background(FiscalColor.iOSBackground).navigationTitle("批量重新分类")
+                .safeAreaInset(edge: .bottom) {
+                    Button(model.isMutating ? "提交中…" : "确认重新分类") { performBatchClassification() }
+                        .buttonStyle(FiscalActionButtonStyle()).disabled(batchCategoryID == nil || batchDirection == nil || model.isMutating)
+                        .frame(maxWidth: .infinity).padding(16).background(.regularMaterial)
+                }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { showBatchClassification = false } } }
+        }
+    }
+
+    private func sectionCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) { Text(title).font(.headline).padding(.horizontal, 3); FiscalCard(radius: 18) { content() } }
+    }
+    private func optionalDateToggle(_ keyPath: ReferenceWritableKeyPath<TransactionsModel, Date?>) -> Binding<Bool> {
+        Binding(get: { model[keyPath: keyPath] != nil }, set: { model[keyPath: keyPath] = $0 ? .now : nil })
+    }
+    private func requiredDate(_ keyPath: ReferenceWritableKeyPath<TransactionsModel, Date?>) -> Binding<Date> {
+        Binding(get: { model[keyPath: keyPath] ?? .now }, set: { model[keyPath: keyPath] = $0 })
+    }
+    private func clearAdvancedFilters() {
+        model.accountID = nil; model.categoryID = nil; model.classification = .all
+        model.source = nil; model.includeVoided = false; model.resetDates()
+        model.amountMinMinor = nil; model.amountMaxMinor = nil
+        amountMinimumText = ""; amountMaximumText = ""; filterOptionsMessage = nil
+    }
+    private func prepareAdvancedFilters() {
+        amountMinimumText = model.amountMinMinor.map(Self.majorAmount) ?? ""
+        amountMaximumText = model.amountMaxMinor.map(Self.majorAmount) ?? ""
+        filterOptionsMessage = nil
+    }
+    private func applyAdvancedFilters() {
+        let minimum = parsedFilterAmount(amountMinimumText)
+        let maximum = parsedFilterAmount(amountMaximumText)
+        if (!amountMinimumText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && minimum == nil)
+            || (!amountMaximumText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && maximum == nil) {
+            filterOptionsMessage = "金额必须大于 0，且最多包含两位小数。"
+            return
+        }
+        if let minimum, let maximum, minimum > maximum {
+            filterOptionsMessage = "最低金额不能高于最高金额。"
+            return
+        }
+        model.amountMinMinor = minimum; model.amountMaxMinor = maximum
+        filterOptionsMessage = nil; showAdvancedFilters = false
+        Task { await model.load() }
+    }
+    private func parsedFilterAmount(_ text: String) -> Int64? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let value = CNYAmountParser.minorUnits(trimmed), value > 0 else { return nil }
+        return value
+    }
+    private static func majorAmount(_ minor: Int64) -> String {
+        NSDecimalNumber(decimal: Decimal(minor) / 100).stringValue
+    }
+    private func loadFilterOptions() async {
+        do {
+            async let loadedAccounts = accounts.transactionOptions()
+            async let loadedCategories = categories.transactionOptions()
+            accountOptions = try await loadedAccounts
+            categoryOptions = try await loadedCategories
+        } catch is CancellationError { return }
+        catch { filterOptionsMessage = (error as? FiscalAPIError)?.displayMessage ?? error.localizedDescription }
+    }
+    private func isBatchClassifiable(_ item: TransactionDTO) -> Bool {
+        item.voidedAt == nil && item.categoryID == nil && item.source != "system"
+            && item.installmentPlanID == nil && item.reimbursementRelations.isEmpty
+            && [.expense, .income, .creditPurchase].contains(item.kind)
+    }
+    private var selectedTransactions: [TransactionDTO] { model.transactions.filter { selectedIDs.contains($0.id) } }
+    private var batchDirection: CategoryDirection? {
+        let kinds = Set(selectedTransactions.map(\.kind))
+        if kinds == [.income] { return .income }
+        if kinds.isSubset(of: [.expense, .creditPurchase]) { return .expense }
+        return nil
+    }
+    private var batchCategoryOptions: [CategoryDTO] {
+        guard let batchDirection else { return [] }
+        return categoryOptions.filter { $0.archivedAt == nil && $0.direction == batchDirection && $0.children.isEmpty }
+    }
+    private func performBatchClassification() {
+        guard let batchCategoryID else { return }
+        let items = selectedTransactions.map { TransactionBatchClassificationItem(transactionID: $0.id, expectedVersion: $0.version) }
+        Task {
+            if await model.batchClassify(items: items, categoryID: batchCategoryID) {
+                selectedIDs.removeAll(); isSelecting = false; self.batchCategoryID = nil
+                showBatchClassification = false
+            }
+        }
     }
 }
 #endif
@@ -357,7 +809,7 @@ public struct MacTransactionsScreen: View {
                 VStack(spacing: 0) { filterBar; columnHeader; transactionContent }
                     .frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
                 Divider().opacity(0.55)
-                inspector.frame(width: 256).frame(maxHeight: .infinity).background(.white)
+                inspector.frame(width: 256).frame(maxHeight: .infinity).background(FiscalColor.surface)
             }
         }
         .background(FiscalColor.macBackground)
@@ -387,10 +839,10 @@ public struct MacTransactionsScreen: View {
                 TextField("搜索流水…", text: $model.search).textFieldStyle(.plain).font(.system(size: 13)).onSubmit { Task { await model.load() } }
             }
             .padding(.horizontal, 11).frame(width: 220, height: 32)
-            .background(.white, in: .rect(cornerRadius: 9))
-            .overlay { RoundedRectangle(cornerRadius: 9).stroke(.black.opacity(0.09), lineWidth: 0.5) }
+            .background(FiscalColor.surface, in: .rect(cornerRadius: 9))
+            .overlay { RoundedRectangle(cornerRadius: 9).stroke(FiscalColor.separator, lineWidth: 0.5) }
         }
-        .padding(.horizontal, 20).frame(height: 54).background(.white)
+        .padding(.horizontal, 20).frame(height: 54).background(FiscalColor.surface)
         .overlay(alignment: .bottom) { Divider().opacity(0.45) }
     }
 
@@ -501,10 +953,10 @@ public struct MacTransactionsScreen: View {
                     if item.kind == .creditPurchase && item.installmentPlanID == nil { Button("创建分期计划") { installmentPurchase = item }.buttonStyle(.borderedProminent).padding(.top, 16) }
                     if item.isUserEditable && item.installmentPlanID == nil { HStack(spacing: 8) { Button { editing = item } label: { Text("编辑").frame(maxWidth: .infinity, minHeight: 38).background(FiscalColor.accent, in: .rect(cornerRadius: 10)).foregroundStyle(.white) }; Button { pendingVoid = item } label: { Text("删除").padding(.horizontal, 15).frame(minHeight: 38).background(Color.black.opacity(0.06), in: .rect(cornerRadius: 10)).foregroundStyle(FiscalColor.secondary) } }.font(.system(size: 13, weight: .semibold)).buttonStyle(.plain).padding(.top, 18) }
                 }.padding(.horizontal, 20).padding(.vertical, 22)
-            }.background(.white)
+            }.background(FiscalColor.surface)
         } else {
             ContentUnavailableView("选择一笔流水", systemImage: "sidebar.right", description: Text("右侧将显示详情。"))
-                .background(.white)
+                .background(FiscalColor.surface)
         }
     }
 

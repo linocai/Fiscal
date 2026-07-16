@@ -108,7 +108,7 @@ schemes:
         - FiscalUITests
       environmentVariables:
         FISCAL_UI_TEST_DEVICE_TOKEN: integration-device-token
-        FISCAL_QA_SCREENSHOT_DIR: "$(SRCROOT)/../docs/qa/p9/screenshots"
+        FISCAL_QA_SCREENSHOT_DIR: "$(SRCROOT)/../docs/qa/p10/screenshots"
   FiscalmacOS:
     build:
       targets:
@@ -120,4 +120,4 @@ schemes:
         - FiscalKitTests
       environmentVariables:
         FISCAL_UI_TEST_DEVICE_TOKEN: integration-device-token
-        FISCAL_QA_SCREENSHOT_DIR: "$(SRCROOT)/../docs/qa/p9/screenshots"
+        FISCAL_QA_SCREENSHOT_DIR: "$(SRCROOT)/../docs/qa/p10/screenshots"

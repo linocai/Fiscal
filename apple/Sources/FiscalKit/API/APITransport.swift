@@ -39,12 +39,22 @@ public enum FiscalAPIError: Error, Sendable, Equatable {
 public actor APITransport {
     private let baseURL: URL
     private let session: URLSession
-    private let tokenStore: KeychainTokenStore
+    private let tokenProvider: @Sendable () async throws -> String?
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let responseCache: HTTPResponseCache
+    private var inFlightGETs: [String: Task<(Data, HTTPURLResponse), Error>] = [:]
 
-    public init(baseURL: URL, session: URLSession = .shared, tokenStore: KeychainTokenStore = .init()) {
-        self.baseURL = baseURL; self.session = session; self.tokenStore = tokenStore
+    public init(baseURL: URL, session: URLSession = .shared, tokenStore: KeychainTokenStore = .init(), responseCache: HTTPResponseCache = .shared) {
+        self.baseURL = baseURL; self.session = session; self.tokenProvider = { try await tokenStore.read() }; self.responseCache = responseCache
+        encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+    }
+
+    /// A non-persistent credential seam for deterministic tools and tests. Production apps keep
+    /// using the Keychain-backed initializer above.
+    public init(baseURL: URL, session: URLSession = .shared, token: String, responseCache: HTTPResponseCache = .shared) {
+        self.baseURL = baseURL; self.session = session; self.tokenProvider = { token }; self.responseCache = responseCache
         encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
     }
@@ -57,20 +67,22 @@ public actor APITransport {
         var request = URLRequest(url: components.url!); request.httpMethod = method; request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
-        if let token = try await tokenStore.read(), !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let token = try await tokenProvider()
+        if let token, !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body { request.httpBody = try encoder.encode(body); request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
-        let (data, response): (Data, URLResponse)
-        do { (data, response) = try await session.data(for: request) }
-        catch is CancellationError { throw CancellationError() }
-        catch let error as URLError where error.code == .cancelled { throw CancellationError() }
-        catch { throw FiscalAPIError.transport(error.localizedDescription) }
-        guard let http = response as? HTTPURLResponse else { throw FiscalAPIError.invalidResponse }
+        let cacheKey = request.httpMethod == "GET" ? cacheKey(for: request, token: token) : nil
+        if let cacheKey, let data = await responseCache.data(for: cacheKey) {
+            do { return try decoder.decode(Response.self, from: data) } catch { throw FiscalAPIError.invalidResponse }
+        }
+        let (data, http) = try await perform(request, cacheKey: cacheKey)
         guard (200..<300).contains(http.statusCode) else {
             let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
             if http.statusCode == 401 { throw FiscalAPIError.unauthorized(detail) }
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
+        if let cacheKey { await responseCache.store(data, for: cacheKey) }
+        else { await responseCache.removeAll() }
         do { return try decoder.decode(Response.self, from: data) } catch { throw FiscalAPIError.invalidResponse }
     }
 
@@ -78,7 +90,7 @@ public actor APITransport {
         var components = URLComponents(url: baseURL.appending(path: "api/v1/\(path)"), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { components.queryItems = query }
         var request = URLRequest(url: components.url!); request.httpMethod = method; request.timeoutInterval = 15
-        if let token = try await tokenStore.read(), !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        if let token = try await tokenProvider(), !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let (data, response): (Data, URLResponse)
         do { (data, response) = try await session.data(for: request) }
         catch is CancellationError { throw CancellationError() }
@@ -91,5 +103,61 @@ public actor APITransport {
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
+        await responseCache.removeAll()
+    }
+
+    /// Performs an authenticated, uncached GET for non-JSON server artifacts such as CSV.
+    public func rawDataGET(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        accept: String = "application/octet-stream"
+    ) async throws -> Data {
+        var components = URLComponents(
+            url: baseURL.appending(path: "api/v1/\(path)"),
+            resolvingAgainstBaseURL: false)!
+        if !query.isEmpty { components.queryItems = query }
+        guard let url = components.url else { throw FiscalAPIError.invalidResponse }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 30
+        request.setValue(accept, forHTTPHeaderField: "Accept")
+        if let token = try await tokenProvider(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (data, http) = try await perform(request, cacheKey: nil)
+        guard (200..<300).contains(http.statusCode) else {
+            let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
+            if http.statusCode == 401 { throw FiscalAPIError.unauthorized(detail) }
+            if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
+            throw FiscalAPIError.invalidResponse
+        }
+        return data
+    }
+
+    private func cacheKey(for request: URLRequest, token: String?) -> String {
+        let tokenScope = token.map { String($0.hashValue) } ?? "anonymous"
+        return "\(request.url?.absoluteString ?? "")|\(tokenScope)"
+    }
+
+    private func perform(_ request: URLRequest, cacheKey: String?) async throws -> (Data, HTTPURLResponse) {
+        if let cacheKey, let existing = inFlightGETs[cacheKey] { return try await existing.value }
+        let task = Task<(Data, HTTPURLResponse), Error> {
+            do {
+                let (data, response) = try await session.data(for: request)
+                guard let http = response as? HTTPURLResponse else { throw FiscalAPIError.invalidResponse }
+                return (data, http)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as URLError where error.code == .cancelled {
+                throw CancellationError()
+            } catch let error as FiscalAPIError {
+                throw error
+            } catch {
+                throw FiscalAPIError.transport(error.localizedDescription)
+            }
+        }
+        if let cacheKey { inFlightGETs[cacheKey] = task }
+        defer { if let cacheKey { inFlightGETs.removeValue(forKey: cacheKey) } }
+        return try await task.value
     }
 }

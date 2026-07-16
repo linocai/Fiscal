@@ -14,6 +14,7 @@ struct FiscaliOSApp: App {
     @State private var reports: ReportingModel
     @State private var aiProposals: AIProposalModel
     @State private var aiSettings: AISettingsModel
+    @State private var recordingPreferences = RecordingPreferences()
 
     init() {
         let baseURL = APIConfiguration.baseURL()
@@ -41,9 +42,8 @@ struct FiscaliOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            IOSRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, aiProposals: aiProposals, aiSettings: aiSettings)
+            IOSRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, aiProposals: aiProposals, aiSettings: aiSettings, recordingPreferences: recordingPreferences)
                 .tint(FiscalColor.accent)
-                .preferredColorScheme(.light)
                 .task {
                     await connection.configureAndRefresh(bootstrapToken: APIConfiguration.bootstrapDeviceToken())
                     if case .connected = connection.phase {

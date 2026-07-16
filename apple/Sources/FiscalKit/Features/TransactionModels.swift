@@ -26,6 +26,15 @@ public final class TransactionsModel {
     public var selectedID: UUID?
     public var kind: TransactionKind?
     public var search = ""
+    public var accountID: UUID?
+    public var categoryID: UUID?
+    public var classification: TransactionClassificationFilter = .all
+    public var source: String?
+    public var dateFrom: Date?
+    public var dateTo: Date?
+    public var includeVoided = false
+    public var amountMinMinor: Int64?
+    public var amountMaxMinor: Int64?
 
     private let repository: any TransactionRepository
     private let accounts: AccountsModel?
@@ -40,6 +49,13 @@ public final class TransactionsModel {
         self.repository = repository; self.accounts = accounts; self.categories = categories; self.credit = credit
     }
     public var selected: TransactionDTO? { transactions.first { $0.id == selectedID } }
+    public var totalCount: Int { transactions.count }
+    public var hasAdvancedFilters: Bool {
+        kind != nil || accountID != nil || categoryID != nil || classification != .all
+            || source != nil || dateFrom != nil || dateTo != nil || includeVoided
+            || amountMinMinor != nil || amountMaxMinor != nil
+    }
+    public var hasFilters: Bool { hasAdvancedFilters || !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var groups: [TransactionDayGroup] {
         let grouped = Dictionary(grouping: transactions, by: \.businessDate)
         return grouped.keys.sorted(by: >).map { date in .init(id: date, title: Self.dayTitle(date), items: grouped[date] ?? []) }
@@ -56,14 +72,14 @@ public final class TransactionsModel {
 
     public func load() async {
         cancelRequests(); generation += 1; let current = generation
-        let snapshot = query()
+        let snapshot = currentQuery()
         let hasData = !transactions.isEmpty
         if !hasData { phase = .loading }
         message = nil; refreshMessage = nil; conflictDetected = false
         let task = Task { try await repository.list(snapshot) }; pageTask = task
         do {
             let page = try await task.value
-            guard current == generation, snapshot == query(), !Task.isCancelled else { return }
+            guard current == generation, snapshot == currentQuery(), !Task.isCancelled else { return }
             transactions = page.items; nextCursor = page.nextCursor
             if let selectedID, !transactions.contains(where: { $0.id == selectedID }) { self.selectedID = nil }
             phase = transactions.isEmpty ? .empty : .loaded
@@ -74,16 +90,16 @@ public final class TransactionsModel {
 
     public func loadMoreIfNeeded(after item: TransactionDTO) async {
         guard item.id == transactions.last?.id, let cursor = nextCursor, !isLoadingMore else { return }
-        let current = generation; var snapshot = query(); snapshot.cursor = cursor
-        let baseQuery = query(); let knownCursor = nextCursor
+        let current = generation; var snapshot = currentQuery(); snapshot.cursor = cursor
+        let baseQuery = currentQuery(); let knownCursor = nextCursor
         isLoadingMore = true; defer { isLoadingMore = false }
         let task = Task { try await repository.list(snapshot) }; moreTask = task
         do {
             let page = try await task.value
-            guard current == generation, baseQuery == query(), knownCursor == nextCursor, !Task.isCancelled else { return }
+            guard current == generation, baseQuery == currentQuery(), knownCursor == nextCursor, !Task.isCancelled else { return }
             let known = Set(transactions.map(\.id)); transactions.append(contentsOf: page.items.filter { !known.contains($0.id) })
             nextCursor = page.nextCursor
-        } catch is CancellationError {} catch { if current == generation, baseQuery == query() { refreshMessage = display(error) } }
+        } catch is CancellationError {} catch { if current == generation, baseQuery == currentQuery() { refreshMessage = display(error) } }
         if current == generation { moreTask = nil }
     }
 
@@ -128,13 +144,46 @@ public final class TransactionsModel {
     public func clearUndo() { undoTransaction = nil }
     public func clearConflict() { conflictDetected = false }
     public func clearMessage() { message = nil; refreshMessage = nil }
+    public func resetDates() { dateFrom = nil; dateTo = nil }
+
+    public func exportCSV() async throws -> Data {
+        try await repository.exportCSV(currentQuery())
+    }
+
+    public func batchClassify(
+        items: [TransactionBatchClassificationItem], categoryID: UUID
+    ) async -> Bool {
+        guard !isMutating, !items.isEmpty else { return false }
+        beginMutation(); let current = generation
+        isMutating = true; defer { isMutating = false }
+        do {
+            _ = try await repository.batchClassify(
+                .init(items: items, categoryID: categoryID))
+            guard current == generation else { return false }
+            await refreshAfterMutation(); return true
+        } catch is CancellationError { return false }
+        catch {
+            guard current == generation else { return false }
+            apply(error, preservingData: !transactions.isEmpty); return false
+        }
+    }
 
     public static func shouldPreserveCreateKey(after error: Error) -> Bool {
         guard let api = error as? FiscalAPIError else { return true }
         return switch api { case .transport, .invalidResponse: true; case .unauthorized, .domain: false }
     }
 
-    private func query() -> TransactionQuery { var value = TransactionQuery(); value.kind = kind; value.search = search.trimmingCharacters(in: .whitespacesAndNewlines); return value }
+    /// A normalized value snapshot safe to hand to paging and export operations.
+    public func currentQuery() -> TransactionQuery {
+        var value = TransactionQuery()
+        value.kind = kind; value.accountID = accountID; value.categoryID = categoryID
+        value.classification = classification; value.source = source
+        value.dateFrom = dateFrom.map(Self.apiDate); value.dateTo = dateTo.map(Self.apiDate)
+        value.includeVoided = includeVoided
+        value.amountMinMinor = amountMinMinor; value.amountMaxMinor = amountMaxMinor
+        value.search = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value
+    }
     private func cancelRequests() {
         pageTask?.cancel(); moreTask?.cancel(); pageTask = nil; moreTask = nil; isLoadingMore = false
     }
@@ -175,6 +224,12 @@ public final class TransactionsModel {
         let calendar = formatter.calendar!; if calendar.isDateInToday(value) { return "今天" }; if calendar.isDateInYesterday(value) { return "昨天" }
         formatter.dateFormat = "M月d日 EEEE"; return formatter.string(from: value)
     }
+    private static func apiDate(_ date: Date) -> String {
+        let formatter = DateFormatter(); formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        formatter.dateFormat = "yyyy-MM-dd"; return formatter.string(from: date)
+    }
 }
 
 @MainActor
@@ -205,6 +260,27 @@ public final class TransactionEditorModel {
         }
     }
     public func rotateCreateKey() { if editing == nil { idempotencyKey = UUID() } }
+    public func apply(preferences: RecordingPreferences, accounts: [AccountDTO]) {
+        guard editing == nil else { return }
+        changeKind(preferences.defaultKind.transactionKind)
+        draft.accountID = preferences.validatedDefaultAccount(in: accounts)
+    }
+    public func resetForNextEntry(validAccounts: [AccountDTO]) {
+        guard editing == nil else { return }
+        let retainedKind = draft.kind
+        let retainedAccount = draft.accountID.flatMap { id in
+            validAccounts.contains(where: {
+                $0.id == id && $0.archivedAt == nil
+                    && (retainedKind == .creditPurchase ? $0.kind == .credit : ($0.kind == .cash || $0.kind == .debit))
+            }) ? id : nil
+        }
+        draft = TransactionDraft()
+        changeKind(retainedKind)
+        draft.accountID = retainedAccount
+        amountText = ""
+        validationMessage = nil
+        idempotencyKey = UUID()
+    }
     public static func validate(_ draft: TransactionDraft) -> String? {
         let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
         if title.isEmpty || title.count > 120 { return "标题需要 1–120 个字符。" }

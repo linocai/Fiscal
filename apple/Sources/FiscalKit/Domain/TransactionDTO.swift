@@ -87,6 +87,41 @@ public struct TransactionPage: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey { case items; case nextCursor = "next_cursor" }
 }
 
+public enum TransactionClassificationFilter: String, Codable, Sendable, CaseIterable, Identifiable {
+    case all, categorized, uncategorized
+    public var id: Self { self }
+    public var title: String {
+        switch self { case .all: "全部"; case .categorized: "已归类"; case .uncategorized: "待归类" }
+    }
+}
+
+public struct TransactionBatchClassificationItem: Codable, Sendable, Equatable {
+    public let transactionID: UUID
+    public let expectedVersion: Int
+    enum CodingKeys: String, CodingKey {
+        case transactionID = "transaction_id"
+        case expectedVersion = "expected_version"
+    }
+    public init(transactionID: UUID, expectedVersion: Int) {
+        self.transactionID = transactionID; self.expectedVersion = expectedVersion
+    }
+}
+
+public struct TransactionBatchClassificationRequest: Codable, Sendable, Equatable {
+    public let items: [TransactionBatchClassificationItem]
+    public let categoryID: UUID
+    enum CodingKeys: String, CodingKey { case items; case categoryID = "category_id" }
+    public init(items: [TransactionBatchClassificationItem], categoryID: UUID) {
+        self.items = items; self.categoryID = categoryID
+    }
+}
+
+public struct TransactionBatchClassificationResponse: Codable, Sendable, Equatable {
+    public let items: [TransactionDTO]
+    public let changedCount: Int
+    enum CodingKeys: String, CodingKey { case items; case changedCount = "changed_count" }
+}
+
 public struct TransactionDraft: Codable, Sendable, Equatable {
     public var kind: TransactionKind = .expense
     public var occurredAt = Date()
@@ -139,6 +174,10 @@ public struct VersionedTransactionDraft: Codable, Sendable {
 public struct TransactionQuery: Sendable, Equatable {
     public var cursor: String?; public var limit = 50; public var kind: TransactionKind?
     public var accountID: UUID?; public var categoryID: UUID?; public var dateFrom: String?; public var dateTo: String?
+    public var classification: TransactionClassificationFilter = .all
+    public var source: String?
+    public var amountMinMinor: Int64?
+    public var amountMaxMinor: Int64?
     public var search = ""; public var includeVoided = false
     public init() {}
 }

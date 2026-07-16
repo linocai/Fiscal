@@ -80,6 +80,7 @@ public struct AccountsManagementScreen: View {
 }
 
 private struct AccountEditor: View {
+    private enum Field: Hashable { case name, institution, lastFour, opening, limit, openingAsOf, openingDue }
     @Environment(\.dismiss) private var dismiss
     let model: AccountsModel
     let account: AccountDTO?
@@ -89,6 +90,7 @@ private struct AccountEditor: View {
     @State private var openingAsOf: String
     @State private var openingDue: String
     @State private var validation: String?
+    @FocusState private var focusedField: Field?
 
     init(model: AccountsModel, account: AccountDTO?) {
         self.model = model; self.account = account
@@ -99,31 +101,68 @@ private struct AccountEditor: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("基本信息") {
-                    TextField("账户名称", text: $draft.name)
-                    Picker("类型", selection: $draft.kind) { ForEach(AccountKind.allCases) { Text($0.title).tag($0) } }
-                    TextField("机构（可选）", text: $draft.institution)
-                    TextField("尾号 4 位（可选）", text: $draft.lastFour)
-                    TextField(draft.kind == .credit ? "期初欠款" : "期初余额", text: $opening)
-                }
-                if draft.kind == .credit {
-                    Section("信用配置") {
-                        TextField("信用额度", text: $limit)
-                        if CNYAmountParser.minorUnits(opening) ?? 0 > 0 {
-                            TextField("期初余额日期 YYYY-MM-DD", text: $openingAsOf)
-                            TextField("期初到期日 YYYY-MM-DD", text: $openingDue)
-                            Text("用于真实表达导入欠款是否已到期，不会自动猜测。").font(.caption).foregroundStyle(FiscalColor.tertiary)
-                        }
-                        Stepper("账单日：\(draft.statementDay ?? 1)", value: Binding(get: { draft.statementDay ?? 1 }, set: { draft.statementDay = $0 }), in: 1...28)
-                        Stepper("还款日：\(draft.dueDay ?? 1)", value: Binding(get: { draft.dueDay ?? 1 }, set: { draft.dueDay = $0 }), in: 1...28)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    editorSection("基本信息") {
+                        VStack(spacing: 13) {
+                            TextField("账户名称", text: $draft.name).focused($focusedField, equals: .name)
+                            Divider().opacity(0.35)
+                            Picker("类型", selection: $draft.kind) { ForEach(AccountKind.allCases) { Text($0.title).tag($0) } }
+                            Divider().opacity(0.35)
+                            TextField("机构（可选）", text: $draft.institution).focused($focusedField, equals: .institution)
+                            Divider().opacity(0.35)
+                            TextField("尾号 4 位（可选）", text: $draft.lastFour).focused($focusedField, equals: .lastFour)
+                            Divider().opacity(0.35)
+                            TextField(draft.kind == .credit ? "期初欠款" : "期初余额", text: $opening)
+                                .focused($focusedField, equals: .opening)
+#if os(iOS)
+                                .keyboardType(.decimalPad)
+#endif
+                        }.textFieldStyle(.plain)
                     }
+                    if draft.kind == .credit {
+                        editorSection("信用配置") {
+                            VStack(alignment: .leading, spacing: 13) {
+                                TextField("信用额度", text: $limit).focused($focusedField, equals: .limit)
+#if os(iOS)
+                                    .keyboardType(.decimalPad)
+#endif
+                                if CNYAmountParser.minorUnits(opening) ?? 0 > 0 {
+                                    Divider().opacity(0.35)
+                                    TextField("期初余额日期 YYYY-MM-DD", text: $openingAsOf).focused($focusedField, equals: .openingAsOf)
+                                    Divider().opacity(0.35)
+                                    TextField("期初到期日 YYYY-MM-DD", text: $openingDue).focused($focusedField, equals: .openingDue)
+                                    Text("用于真实表达导入欠款是否已到期，不会自动猜测。").font(.caption).foregroundStyle(FiscalColor.tertiary)
+                                }
+                                Divider().opacity(0.35)
+                                Stepper("账单日：\(draft.statementDay ?? 1)", value: Binding(get: { draft.statementDay ?? 1 }, set: { draft.statementDay = $0 }), in: 1...28)
+                                Divider().opacity(0.35)
+                                Stepper("还款日：\(draft.dueDay ?? 1)", value: Binding(get: { draft.dueDay ?? 1 }, set: { draft.dueDay = $0 }), in: 1...28)
+                            }.textFieldStyle(.plain)
+                        }
+                    }
+                    if let validation { validationBanner(validation) }
                 }
-                if let validation { Section { Text(validation).foregroundStyle(FiscalColor.expense) } }
-            }
+                .padding(16)
+            }.background(MasterDataLayout.background).scrollDismissesKeyboard(.interactively)
             .navigationTitle(account == nil ? "新建账户" : "编辑账户")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("保存") { save() }.disabled(model.isMutating) } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+#if os(iOS)
+                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("完成") { focusedField = nil } }
+#endif
+            }
+            .safeAreaInset(edge: .bottom) { primaryBar(model.isMutating ? "保存中…" : "保存账户", disabled: model.isMutating) { focusedField = nil; save() } }
         }.fiscalEditorFrame(width: 380, height: 520)
+    }
+    private func editorSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) { Text(title).font(.headline).padding(.horizontal, 3); FiscalCard(radius: 18) { content() } }
+    }
+    private func validationBanner(_ message: String) -> some View {
+        Label(message, systemImage: "exclamationmark.triangle.fill").font(.subheadline).foregroundStyle(FiscalColor.expense).padding(13).frame(maxWidth: .infinity, alignment: .leading).background(FiscalColor.expense.opacity(0.09), in: .rect(cornerRadius: 14))
+    }
+    private func primaryBar(_ title: String, disabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Text(title).frame(maxWidth: .infinity) }.buttonStyle(FiscalActionButtonStyle()).disabled(disabled).padding(.horizontal, 16).padding(.vertical, 10).background(.regularMaterial)
     }
     private func save() {
         guard let openingMinor = CNYAmountParser.minorUnits(opening) else { validation = "期初金额格式无效。"; return }
@@ -195,12 +234,12 @@ public struct CategoriesManagementScreen: View {
     private func categoryCard(_ item: CategoryDTO, depth: Int) -> some View {
         FiscalCard(radius: 14) {
             HStack(spacing: 12) {
-                if depth == 1 { Image(systemName: "arrow.turn.down.right").foregroundStyle(FiscalColor.tertiary).frame(width: 18) }
+                if depth == 1 { Image(systemName: "arrow.turn.down.right").foregroundStyle(FiscalColor.tertiary).frame(width: 18).accessibilityHidden(true) }
                 FiscalIconTile(item.icon, color: Color(fiscalHex: item.colorHex))
                 VStack(alignment: .leading, spacing: 3) {
                     HStack { Text(item.name).font(.headline); Text(item.direction.title).font(.caption2).padding(.horizontal, 6).padding(.vertical, 3).background(FiscalColor.accent.opacity(0.1), in: .capsule); if item.archivedAt != nil { Text("已归档").font(.caption2) } }
                     Text("别名 \(item.aliases.count) · 示例 \(item.examples.count) · 使用 \(item.usageCount)").font(.caption).foregroundStyle(FiscalColor.tertiary)
-                    if !item.aliases.isEmpty { Text(item.aliases.joined(separator: "、")).font(.caption).foregroundStyle(FiscalColor.secondary).lineLimit(1) }
+                    if !item.aliases.isEmpty { Text(item.aliases.joined(separator: "、")).font(.caption).foregroundStyle(FiscalColor.secondary).lineLimit(2) }
                 }
                 Spacer()
                 Menu {
@@ -227,32 +266,67 @@ public struct CategoriesManagementScreen: View {
 }
 
 private struct CategoryEditor: View {
+    private enum Field: Hashable { case name, icon, color, aliases, examples }
     @Environment(\.dismiss) private var dismiss
     let model: CategoriesModel; let category: CategoryDTO?; let roots: [CategoryDTO]
     @State private var draft: CategoryDraft; @State private var aliases: String; @State private var examples: String; @State private var validation: String?
+    @FocusState private var focusedField: Field?
     init(model: CategoriesModel, category: CategoryDTO?, roots: [CategoryDTO]) {
         self.model = model; self.category = category; self.roots = roots
         let d = category.map(CategoryDraft.init(category:)) ?? CategoryDraft(); _draft = State(initialValue: d); _aliases = State(initialValue: d.aliases.joined(separator: "，")); _examples = State(initialValue: d.examples.joined(separator: "，"))
     }
     var body: some View {
-        NavigationStack { Form {
-            Section("基本信息") {
-                TextField("分类名称", text: $draft.name)
-                Picker("方向", selection: $draft.direction) { ForEach(CategoryDirection.allCases) { Text($0.title).tag($0) } }
-                    .disabled(hierarchyLocked)
-                    .onChange(of: draft.direction) { _, direction in
-                        if let parentID = draft.parentID,
-                           roots.first(where: { $0.id == parentID })?.direction != direction { draft.parentID = nil }
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    categorySection("基本信息") {
+                        VStack(alignment: .leading, spacing: 13) {
+                            TextField("分类名称", text: $draft.name).focused($focusedField, equals: .name)
+                            Divider().opacity(0.35)
+                            Picker("方向", selection: $draft.direction) { ForEach(CategoryDirection.allCases) { Text($0.title).tag($0) } }
+                                .disabled(hierarchyLocked)
+                                .onChange(of: draft.direction) { _, direction in
+                                    if let parentID = draft.parentID, roots.first(where: { $0.id == parentID })?.direction != direction { draft.parentID = nil }
+                                }
+                            Divider().opacity(0.35)
+                            Picker("父分类", selection: $draft.parentID) { Text("根分类").tag(Optional<UUID>.none); ForEach(eligibleRoots) { Text($0.name).tag(Optional($0.id)) } }
+                                .disabled(hierarchyLocked)
+                            if hierarchyLocked { Label("含子分类的根分类不能改变方向或父级。", systemImage: "lock.fill").font(.caption).foregroundStyle(FiscalColor.tertiary) }
+                            Divider().opacity(0.35)
+                            TextField("SF Symbol", text: $draft.icon).focused($focusedField, equals: .icon)
+                            Divider().opacity(0.35)
+                            TextField("颜色 #RRGGBB", text: $draft.colorHex).focused($focusedField, equals: .color)
+                        }.textFieldStyle(.plain)
                     }
-                Picker("父分类", selection: $draft.parentID) { Text("根分类").tag(Optional<UUID>.none); ForEach(eligibleRoots) { Text($0.name).tag(Optional($0.id)) } }
-                    .disabled(hierarchyLocked)
-                if hierarchyLocked { Text("含子分类的根分类不能改变方向或父级。").font(.caption).foregroundStyle(FiscalColor.tertiary) }
-                TextField("SF Symbol", text: $draft.icon)
-                TextField("颜色 #RRGGBB", text: $draft.colorHex)
-            }
-            Section("AI 识别资料") { TextField("别名，以逗号分隔", text: $aliases); TextField("识别示例，以逗号分隔", text: $examples); Text("每组最多 20 条，每条不超过 40 个字符。").font(.caption).foregroundStyle(FiscalColor.tertiary) }
-            if let validation { Section { Text(validation).foregroundStyle(FiscalColor.expense) } }
-        }.navigationTitle(category == nil ? "新建分类" : "编辑分类").toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("保存") { save() } } } }.fiscalEditorFrame(width: 400, height: 540)
+                    categorySection("AI 识别资料") {
+                        VStack(alignment: .leading, spacing: 13) {
+                            TextField("别名，以逗号分隔", text: $aliases).focused($focusedField, equals: .aliases)
+                            Divider().opacity(0.35)
+                            TextField("识别示例，以逗号分隔", text: $examples).focused($focusedField, equals: .examples)
+                            Text("每组最多 20 条，每条不超过 40 个字符。").font(.caption).foregroundStyle(FiscalColor.tertiary)
+                        }.textFieldStyle(.plain)
+                    }
+                    if let validation {
+                        Label(validation, systemImage: "exclamationmark.triangle.fill").font(.subheadline).foregroundStyle(FiscalColor.expense).padding(13).frame(maxWidth: .infinity, alignment: .leading).background(FiscalColor.expense.opacity(0.09), in: .rect(cornerRadius: 14))
+                    }
+                }.padding(16)
+            }.background(MasterDataLayout.background).scrollDismissesKeyboard(.interactively)
+                .navigationTitle(category == nil ? "新建分类" : "编辑分类")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+#if os(iOS)
+                    ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("完成") { focusedField = nil } }
+#endif
+                }
+                .safeAreaInset(edge: .bottom) {
+                    Button { focusedField = nil; save() } label: { Text("保存分类").frame(maxWidth: .infinity) }
+                        .buttonStyle(FiscalActionButtonStyle()).disabled(model.isMutating)
+                        .padding(.horizontal, 16).padding(.vertical, 10).background(.regularMaterial)
+                }
+        }.fiscalEditorFrame(width: 400, height: 540)
+    }
+    private func categorySection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) { Text(title).font(.headline).padding(.horizontal, 3); FiscalCard(radius: 18) { content() } }
     }
     private var hierarchyLocked: Bool { category?.children.isEmpty == false }
     private var eligibleRoots: [CategoryDTO] { roots.filter { $0.parentID == nil && $0.id != category?.id && $0.direction == draft.direction && $0.archivedAt == nil } }
@@ -273,12 +347,68 @@ private struct MergeCategorySheet: View {
             $0.id != source.id && $0.direction == source.direction && $0.archivedAt == nil && (($0.parentID == nil) == (source.parentID == nil))
         }
     }
-    var body: some View { NavigationStack { Form { Text("“\(source.name)”将归档；冲突外的子分类会移动到目标分类。"); Picker("目标分类", selection: $targetID) { Text("请选择").tag(Optional<UUID>.none); ForEach(targets) { Text($0.name).tag(Optional($0.id)) } } }.navigationTitle("合并分类").toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("合并") { if let target = targets.first(where: { $0.id == targetID }) { Task { if await model.merge(source: source, target: target) { dismiss() } } } }.disabled(targetID == nil) } } }.fiscalEditorFrame(width: 380, height: 260) }
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Label("合并会保留历史语义", systemImage: "arrow.triangle.merge").font(.headline)
+                    FiscalCard(radius: 18) {
+                        VStack(alignment: .leading, spacing: 13) {
+                            Text("“\(source.name)”将归档；冲突外的子分类会移动到目标分类。").font(.subheadline).foregroundStyle(FiscalColor.secondary)
+                            Divider().opacity(0.35)
+                            Picker("目标分类", selection: $targetID) { Text("请选择").tag(Optional<UUID>.none); ForEach(targets) { Text($0.name).tag(Optional($0.id)) } }
+                        }
+                    }
+                }.padding(16)
+            }.background(MasterDataLayout.background).navigationTitle("合并分类")
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
+                .safeAreaInset(edge: .bottom) {
+                    Button {
+                        if let target = targets.first(where: { $0.id == targetID }) { Task { if await model.merge(source: source, target: target) { dismiss() } } }
+                    } label: { Text(model.isMutating ? "合并中…" : "确认合并").frame(maxWidth: .infinity) }
+                    .buttonStyle(FiscalActionButtonStyle(.destructive)).disabled(targetID == nil || model.isMutating)
+                    .padding(.horizontal, 16).padding(.vertical, 10).background(.regularMaterial)
+                }
+        }.fiscalEditorFrame(width: 380, height: 300)
+    }
 }
 
 private struct SplitCategorySheet: View {
+    private enum Field: Hashable { case first, second }
     @Environment(\.dismiss) private var dismiss; let model: CategoriesModel; let root: CategoryDTO; @State private var first = ""; @State private var second = ""
-    var body: some View { NavigationStack { Form { Text("在“\(root.name)”下原子创建至少两个子分类，不移动任何流水。"); TextField("子分类一", text: $first); TextField("子分类二", text: $second) }.navigationTitle("拆分辅助").toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }; ToolbarItem(placement: .confirmationAction) { Button("创建") { Task { if await model.split(root: root, children: [draft(first), draft(second)]) { dismiss() } } }.disabled(first.trimmingCharacters(in: .whitespaces).isEmpty || second.trimmingCharacters(in: .whitespaces).isEmpty) } } }.fiscalEditorFrame(width: 400, height: 300) }
+    @FocusState private var focusedField: Field?
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("子分类").font(.headline).padding(.horizontal, 3)
+                    FiscalCard(radius: 18) {
+                        VStack(alignment: .leading, spacing: 13) {
+                            Text("在“\(root.name)”下原子创建至少两个子分类，不移动任何流水。").font(.subheadline).foregroundStyle(FiscalColor.secondary)
+                            Divider().opacity(0.35)
+                            TextField("子分类一", text: $first).focused($focusedField, equals: .first)
+                            Divider().opacity(0.35)
+                            TextField("子分类二", text: $second).focused($focusedField, equals: .second)
+                        }.textFieldStyle(.plain)
+                    }
+                }.padding(16)
+            }.background(MasterDataLayout.background).scrollDismissesKeyboard(.interactively).navigationTitle("拆分辅助")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+#if os(iOS)
+                    ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("完成") { focusedField = nil } }
+#endif
+                }
+                .safeAreaInset(edge: .bottom) {
+                    Button {
+                        focusedField = nil
+                        Task { if await model.split(root: root, children: [draft(first), draft(second)]) { dismiss() } }
+                    } label: { Text(model.isMutating ? "创建中…" : "创建子分类").frame(maxWidth: .infinity) }
+                    .buttonStyle(FiscalActionButtonStyle()).disabled(model.isMutating || first.trimmingCharacters(in: .whitespaces).isEmpty || second.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .padding(.horizontal, 16).padding(.vertical, 10).background(.regularMaterial)
+                }
+        }.fiscalEditorFrame(width: 400, height: 340)
+    }
     private func draft(_ name: String) -> CategoryDraft { var d = CategoryDraft(); d.name = name; d.direction = root.direction; d.parentID = root.id; d.icon = root.icon; d.colorHex = root.colorHex; return d }
 }
 
@@ -305,7 +435,7 @@ private enum MasterDataLayout {
     #else
     static let spacing: CGFloat = 10
     static let padding: CGFloat = 16
-    static let bottomPadding: CGFloat = 100
+    static let bottomPadding: CGFloat = 0
     static let background = FiscalColor.iOSBackground
     #endif
 }

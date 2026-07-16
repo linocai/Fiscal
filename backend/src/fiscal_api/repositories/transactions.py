@@ -7,6 +7,7 @@ from sqlalchemy import Select, and_, delete, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from fiscal_api.api.p10_schemas import TransactionClassification
 from fiscal_api.db.models import (
     Account,
     Category,
@@ -14,6 +15,7 @@ from fiscal_api.db.models import (
     Posting,
     TransactionKind,
     TransactionRevision,
+    TransactionSource,
 )
 
 
@@ -61,19 +63,108 @@ class TransactionRepository:
         occurred_from: datetime | None,
         occurred_to_exclusive: datetime | None,
         query: str | None,
+        classification: TransactionClassification,
+        source: TransactionSource | None,
+        amount_min_minor: int | None,
+        amount_max_minor: int | None,
         include_voided: bool,
         cursor_occurred_at: datetime | None,
         cursor_id: UUID | None,
     ) -> list[LedgerTransaction]:
-        statement: Select[tuple[LedgerTransaction]] = select(LedgerTransaction).options(
-            selectinload(LedgerTransaction.postings)
-        )
+        statement = self._filtered_statement(
+            kind=kind,
+            account_id=account_id,
+            category_id=category_id,
+            occurred_from=occurred_from,
+            occurred_to_exclusive=occurred_to_exclusive,
+            query=query,
+            classification=classification,
+            source=source,
+            amount_min_minor=amount_min_minor,
+            amount_max_minor=amount_max_minor,
+            include_voided=include_voided,
+        ).options(selectinload(LedgerTransaction.postings))
+        if cursor_occurred_at is not None and cursor_id is not None:
+            statement = statement.where(
+                or_(
+                    LedgerTransaction.occurred_at < cursor_occurred_at,
+                    and_(
+                        LedgerTransaction.occurred_at == cursor_occurred_at,
+                        LedgerTransaction.id < cursor_id,
+                    ),
+                )
+            )
+        statement = statement.order_by(
+            LedgerTransaction.occurred_at.desc(), LedgerTransaction.id.desc()
+        ).limit(limit + 1)
+        return list((await self.session.scalars(statement)).all())
+
+    async def list_export(
+        self,
+        *,
+        limit: int,
+        kind: TransactionKind | None,
+        account_id: UUID | None,
+        category_id: UUID | None,
+        occurred_from: datetime | None,
+        occurred_to_exclusive: datetime | None,
+        query: str | None,
+        classification: TransactionClassification,
+        source: TransactionSource | None,
+        amount_min_minor: int | None,
+        amount_max_minor: int | None,
+        include_voided: bool,
+    ) -> list[LedgerTransaction]:
+        statement = self._filtered_statement(
+            kind=kind,
+            account_id=account_id,
+            category_id=category_id,
+            occurred_from=occurred_from,
+            occurred_to_exclusive=occurred_to_exclusive,
+            query=query,
+            classification=classification,
+            source=source,
+            amount_min_minor=amount_min_minor,
+            amount_max_minor=amount_max_minor,
+            include_voided=include_voided,
+        ).options(selectinload(LedgerTransaction.postings))
+        statement = statement.order_by(
+            LedgerTransaction.occurred_at.desc(), LedgerTransaction.id.desc()
+        ).limit(limit)
+        return list((await self.session.scalars(statement)).all())
+
+    @staticmethod
+    def _filtered_statement(
+        *,
+        kind: TransactionKind | None,
+        account_id: UUID | None,
+        category_id: UUID | None,
+        occurred_from: datetime | None,
+        occurred_to_exclusive: datetime | None,
+        query: str | None,
+        classification: TransactionClassification,
+        source: TransactionSource | None,
+        amount_min_minor: int | None,
+        amount_max_minor: int | None,
+        include_voided: bool,
+    ) -> Select[tuple[LedgerTransaction]]:
+        statement: Select[tuple[LedgerTransaction]] = select(LedgerTransaction)
         if not include_voided:
             statement = statement.where(LedgerTransaction.voided_at.is_(None))
         if kind is not None:
             statement = statement.where(LedgerTransaction.kind == kind.value)
         if category_id is not None:
             statement = statement.where(LedgerTransaction.category_id == category_id)
+        if classification is TransactionClassification.CATEGORIZED:
+            statement = statement.where(LedgerTransaction.category_id.is_not(None))
+        elif classification is TransactionClassification.UNCATEGORIZED:
+            statement = statement.where(
+                LedgerTransaction.category_id.is_(None),
+                LedgerTransaction.kind.in_(["income", "expense", "credit_purchase"]),
+                LedgerTransaction.voided_at.is_(None),
+            )
+        if source is not None:
+            statement = statement.where(LedgerTransaction.source == source.value)
         if account_id is not None:
             statement = statement.where(
                 exists(
@@ -94,22 +185,55 @@ class TransactionRepository:
                 or_(
                     LedgerTransaction.title.ilike(pattern, escape="\\"),
                     LedgerTransaction.note.ilike(pattern, escape="\\"),
-                )
-            )
-        if cursor_occurred_at is not None and cursor_id is not None:
-            statement = statement.where(
-                or_(
-                    LedgerTransaction.occurred_at < cursor_occurred_at,
-                    and_(
-                        LedgerTransaction.occurred_at == cursor_occurred_at,
-                        LedgerTransaction.id < cursor_id,
+                    exists(
+                        select(Category.id).where(
+                            Category.id == LedgerTransaction.category_id,
+                            Category.name.ilike(pattern, escape="\\"),
+                        )
+                    ),
+                    exists(
+                        select(Posting.id)
+                        .join(Account, Account.id == Posting.account_id)
+                        .where(
+                            Posting.transaction_id == LedgerTransaction.id,
+                            Account.name.ilike(pattern, escape="\\"),
+                        )
                     ),
                 )
             )
-        statement = statement.order_by(
-            LedgerTransaction.occurred_at.desc(), LedgerTransaction.id.desc()
-        ).limit(limit + 1)
+        if amount_min_minor is not None or amount_max_minor is not None:
+            amount_conditions = [
+                Posting.transaction_id == LedgerTransaction.id,
+                Posting.position == 0,
+            ]
+            if amount_min_minor is not None:
+                amount_conditions.append(func.abs(Posting.amount_minor) >= amount_min_minor)
+            if amount_max_minor is not None:
+                amount_conditions.append(func.abs(Posting.amount_minor) <= amount_max_minor)
+            statement = statement.where(exists(select(Posting.id).where(*amount_conditions)))
+        return statement
+
+    async def get_many_for_update(self, transaction_ids: list[UUID]) -> list[LedgerTransaction]:
+        statement = (
+            select(LedgerTransaction)
+            .where(LedgerTransaction.id.in_(transaction_ids))
+            .order_by(LedgerTransaction.id)
+            .options(selectinload(LedgerTransaction.postings))
+            .with_for_update()
+        )
         return list((await self.session.scalars(statement)).all())
+
+    async def accounts_by_ids(self, account_ids: set[UUID]) -> dict[UUID, Account]:
+        if not account_ids:
+            return {}
+        rows = await self.session.scalars(select(Account).where(Account.id.in_(account_ids)))
+        return {item.id: item for item in rows.all()}
+
+    async def categories_by_ids(self, category_ids: set[UUID]) -> dict[UUID, Category]:
+        if not category_ids:
+            return {}
+        rows = await self.session.scalars(select(Category).where(Category.id.in_(category_ids)))
+        return {item.id: item for item in rows.all()}
 
     async def replace_postings(
         self,

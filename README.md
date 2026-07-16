@@ -1,6 +1,6 @@
 # Fiscal
 
-Fiscal is a private, single-user personal-finance application for iOS 26 and macOS 26. P1–P3 established the engineering foundation, master data, and unified ledger; P4 credit-cycle and repayment construction is complete pending user acceptance under [`PROJECT_PLAN.md`](PROJECT_PLAN.md).
+Fiscal is a private, single-user personal-finance application for iOS 26 and macOS 26. P1–P10 now cover the unified ledger, credit cycles, installments, reimbursements, reports, AI/OCR capture, and the finished dual-platform daily-use experience described in [`PROJECT_PLAN.md`](PROJECT_PLAN.md). P10 is awaiting user visual acceptance before P11 begins.
 
 ## Repository map
 
@@ -11,7 +11,7 @@ Fiscal is a private, single-user personal-finance application for iOS 26 and mac
 - `docs/qa/` — acceptance checklists, results, and screenshots.
 - `design_handoff_fiscal_app/` — read-only visual contract; it is not production code.
 
-P4 extends the same CNY ledger with credit purchases, server-derived statement cycles, explicit full/partial repayments, opening-debt configuration, overdue state, and complete edit/void/restore behavior. Installments, reimbursements, formal reports, and AI persistence remain later phases. Financial figures on the overview stay isolated presentation fixtures until their reporting slices replace them.
+The current product uses one canonical CNY ledger across accounts, credit cycles, installments, reimbursements and reports. iOS remains list-first and chart-free with one custom bottom bar; macOS uses dense native tables, inspectors and report visualizations. P10 adds uncategorized batch handling, advanced search/filtering, device-local recording preferences, short read-only caching, semantic dark mode and filtered CSV export.
 
 ## Toolchain
 
@@ -106,6 +106,7 @@ See [`infra/README.md`](infra/README.md) for local PostgreSQL, staging HTTPS, mi
 - P1 contract/results: [`docs/architecture/p1-contracts.md`](docs/architecture/p1-contracts.md), [`docs/qa/p1/results.md`](docs/qa/p1/results.md)
 - P2 contract/checklist/results: [`docs/architecture/p2-contracts.md`](docs/architecture/p2-contracts.md), [`docs/qa/p2/checklist.md`](docs/qa/p2/checklist.md), [`docs/qa/p2/results.md`](docs/qa/p2/results.md)
 - P3 contract/checklist/results: [`docs/architecture/p3-contracts.md`](docs/architecture/p3-contracts.md), [`docs/qa/p3/checklist.md`](docs/qa/p3/checklist.md), [`docs/qa/p3/results.md`](docs/qa/p3/results.md)
-- P4 contract/checklist/results: [`docs/architecture/p4-contracts.md`](docs/architecture/p4-contracts.md), [`docs/qa/p4/checklist.md`](docs/qa/p4/checklist.md), [`docs/qa/p4/results.md`](docs/qa/p4/results.md)
+- P4–P9 contracts and results remain under `docs/architecture/` and `docs/qa/`.
+- P10 contract/checklist/results: [`docs/architecture/p10-contracts.md`](docs/architecture/p10-contracts.md), [`docs/qa/p10/checklist.md`](docs/qa/p10/checklist.md), [`docs/qa/p10/results.md`](docs/qa/p10/results.md)
 
 The user approved the native iOS/macOS visual direction before P2. Each phase still requires real API integration, dual-platform screenshots, automated gates, and explicit acceptance before the next business slice begins.

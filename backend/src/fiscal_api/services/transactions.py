@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import base64
+import csv
 import hashlib
+import io
 import json
 from datetime import date, datetime, time, timedelta
 from uuid import UUID
@@ -15,6 +17,11 @@ from fiscal_api.api.p3_schemas import (
     TransactionPage,
     TransactionResponse,
     TransactionSummary,
+)
+from fiscal_api.api.p10_schemas import (
+    BatchCategoryRequest,
+    BatchCategoryResponse,
+    TransactionClassification,
 )
 from fiscal_api.core.errors import APIError
 from fiscal_api.core.time import BUSINESS_TIMEZONE, UTC, ensure_utc, utc_now
@@ -30,6 +37,7 @@ from fiscal_api.db.models import (
     TransactionRevision,
     TransactionSource,
 )
+from fiscal_api.repositories.categories import CategoryRepository
 from fiscal_api.repositories.credit import CreditRepository
 from fiscal_api.repositories.installments import InstallmentRepository
 from fiscal_api.repositories.reimbursements import ReimbursementRepository
@@ -46,6 +54,8 @@ from fiscal_api.services.credit import ensure_regular_cycle, validate_credit_inv
 
 
 class TransactionService:
+    EXPORT_LIMIT = 10_000
+
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.repository = TransactionRepository(session)
@@ -166,9 +176,28 @@ class TransactionService:
         date_to: date | None,
         query: str | None,
         include_voided: bool,
+        classification: TransactionClassification = TransactionClassification.ALL,
+        source: TransactionSource | None = None,
+        amount_min_minor: int | None = None,
+        amount_max_minor: int | None = None,
     ) -> TransactionPage:
+        normalized_query = self._normalized_query(query)
+        self._validate_amount_range(amount_min_minor, amount_max_minor)
         occurred_from, occurred_to = self._date_bounds(date_from, date_to)
-        cursor_time, cursor_id = self._decode_cursor(cursor)
+        fingerprint = self._filter_fingerprint(
+            kind=kind,
+            account_id=account_id,
+            category_id=category_id,
+            date_from=date_from,
+            date_to=date_to,
+            query=normalized_query,
+            include_voided=include_voided,
+            classification=classification,
+            source=source,
+            amount_min_minor=amount_min_minor,
+            amount_max_minor=amount_max_minor,
+        )
+        cursor_time, cursor_id = self._decode_cursor(cursor, fingerprint)
         transactions = await self.repository.list_page(
             limit=limit,
             kind=kind,
@@ -176,7 +205,11 @@ class TransactionService:
             category_id=category_id,
             occurred_from=occurred_from,
             occurred_to_exclusive=occurred_to,
-            query=query.strip() if query and query.strip() else None,
+            query=normalized_query,
+            classification=classification,
+            source=source,
+            amount_min_minor=amount_min_minor,
+            amount_max_minor=amount_max_minor,
             include_voided=include_voided,
             cursor_occurred_at=cursor_time,
             cursor_id=cursor_id,
@@ -186,7 +219,7 @@ class TransactionService:
         next_cursor = None
         if has_more and page:
             last = page[-1]
-            next_cursor = self._encode_cursor(last.occurred_at, last.id)
+            next_cursor = self._encode_cursor(last.occurred_at, last.id, fingerprint)
         return TransactionPage(
             items=[await self.response_with_relation(item, list(item.postings)) for item in page],
             next_cursor=next_cursor,
@@ -195,7 +228,8 @@ class TransactionService:
     async def list_cycle(
         self, cycle_id: UUID, *, cursor: str | None, limit: int
     ) -> TransactionPage:
-        cursor_time, cursor_id = self._decode_cursor(cursor)
+        fingerprint = hashlib.sha256(f"cycle:{cycle_id}".encode()).hexdigest()
+        cursor_time, cursor_id = self._decode_cursor(cursor, fingerprint)
         transactions = await self.repository.list_cycle_page(
             cycle_id,
             limit=limit,
@@ -204,11 +238,182 @@ class TransactionService:
         )
         has_more = len(transactions) > limit
         page = transactions[:limit]
-        next_cursor = self._encode_cursor(page[-1].occurred_at, page[-1].id) if has_more else None
+        next_cursor = (
+            self._encode_cursor(page[-1].occurred_at, page[-1].id, fingerprint)
+            if has_more
+            else None
+        )
         return TransactionPage(
             items=[await self.response_with_relation(item, list(item.postings)) for item in page],
             next_cursor=next_cursor,
         )
+
+    async def bulk_category(self, request: BatchCategoryRequest) -> BatchCategoryResponse:
+        await acquire_mutation_lock(self.session)
+        category_repository = CategoryRepository(self.session)
+        category = await category_repository.get(request.category_id, for_update=True)
+        if category is None:
+            not_found("category_not_found", "The category does not exist")
+        if category.archived_at is not None:
+            conflict("category_archived", "The selected category is archived")
+        if await category_repository.children(category.id, active_only=True):
+            invalid("category_not_leaf", "Batch classification requires an active leaf category")
+
+        expected_by_id = {item.transaction_id: item.expected_version for item in request.items}
+        ordered_ids = sorted(expected_by_id)
+        transactions = await self.repository.get_many_for_update(ordered_ids)
+        found_ids = {item.id for item in transactions}
+        missing = next((item for item in ordered_ids if item not in found_ids), None)
+        if missing is not None:
+            not_found("transaction_not_found", "A transaction does not exist")
+
+        for transaction in transactions:
+            check_version(transaction.version, expected_by_id[transaction.id])
+            if transaction.voided_at is not None:
+                conflict("transaction_voided", "Voided transactions cannot be batch classified")
+            if transaction.kind not in {"income", "expense", "credit_purchase"}:
+                conflict(
+                    "transaction_not_classifiable",
+                    "The transaction kind cannot be batch classified",
+                )
+            if transaction.source == TransactionSource.SYSTEM.value:
+                conflict(
+                    "transaction_not_classifiable",
+                    "System transactions cannot be batch classified",
+                )
+            if await self.installment_repository.linked(transaction.id) is not None:
+                conflict(
+                    "transaction_not_classifiable",
+                    "Installment transactions cannot be batch classified",
+                )
+            expected_direction = "income" if transaction.kind == "income" else "expense"
+            if category.direction != expected_direction:
+                invalid(
+                    "category_direction_mismatch",
+                    "The category direction does not match every transaction",
+                )
+
+        changed: list[LedgerTransaction] = []
+        for transaction in transactions:
+            if transaction.category_id == category.id:
+                continue
+            old_category_id = transaction.category_id
+            transaction.category_id = category.id
+            transaction.version += 1
+            transaction.updated_at = utc_now()
+            if old_category_id is not None:
+                await self.repository.adjust_category_usage(old_category_id, -1)
+            await self.repository.adjust_category_usage(category.id, 1)
+            response = self._response(transaction, list(transaction.postings))
+            self._add_revision(transaction, RevisionEvent.UPDATED, response)
+            changed.append(transaction)
+        await self.session.commit()
+        return BatchCategoryResponse(
+            items=[
+                await self.response_with_relation(item, list(item.postings))
+                for item in transactions
+            ],
+            changed_count=len(changed),
+        )
+
+    async def export_csv(
+        self,
+        *,
+        kind: TransactionKind | None,
+        account_id: UUID | None,
+        category_id: UUID | None,
+        date_from: date | None,
+        date_to: date | None,
+        query: str | None,
+        include_voided: bool,
+        classification: TransactionClassification,
+        source: TransactionSource | None,
+        amount_min_minor: int | None,
+        amount_max_minor: int | None,
+    ) -> str:
+        normalized_query = self._normalized_query(query)
+        self._validate_amount_range(amount_min_minor, amount_max_minor)
+        occurred_from, occurred_to = self._date_bounds(date_from, date_to)
+        transactions = await self.repository.list_export(
+            limit=self.EXPORT_LIMIT + 1,
+            kind=kind,
+            account_id=account_id,
+            category_id=category_id,
+            occurred_from=occurred_from,
+            occurred_to_exclusive=occurred_to,
+            query=normalized_query,
+            classification=classification,
+            source=source,
+            amount_min_minor=amount_min_minor,
+            amount_max_minor=amount_max_minor,
+            include_voided=include_voided,
+        )
+        if len(transactions) > self.EXPORT_LIMIT:
+            conflict(
+                "transaction_export_too_large",
+                f"Transaction export is limited to {self.EXPORT_LIMIT} rows",
+            )
+        account_ids = {posting.account_id for item in transactions for posting in item.postings}
+        category_ids = {item.category_id for item in transactions if item.category_id is not None}
+        accounts = await self.repository.accounts_by_ids(account_ids)
+        categories = await self.repository.categories_by_ids(category_ids)
+        output = io.StringIO(newline="")
+        writer = csv.writer(output, lineterminator="\r\n")
+        writer.writerow(["# Fiscal Transactions CSV schema=v1"])
+        writer.writerow(
+            [
+                "id",
+                "kind",
+                "amount_minor",
+                "currency",
+                "occurred_at",
+                "business_date",
+                "title",
+                "note",
+                "account_id",
+                "account_name",
+                "destination_account_id",
+                "destination_account_name",
+                "category_id",
+                "category_name",
+                "source",
+                "version",
+                "voided_at",
+            ]
+        )
+        for transaction in transactions:
+            value = self._response(transaction, list(transaction.postings))
+            account = accounts.get(value.account_id) if value.account_id is not None else None
+            destination = (
+                accounts.get(value.destination_account_id)
+                if value.destination_account_id is not None
+                else None
+            )
+            category = categories.get(value.category_id) if value.category_id is not None else None
+            writer.writerow(
+                [
+                    str(value.id),
+                    value.kind.value,
+                    value.amount_minor,
+                    "CNY",
+                    value.occurred_at.isoformat(),
+                    value.business_date.isoformat(),
+                    self._csv_safe(value.title),
+                    self._csv_safe(value.note),
+                    str(value.account_id) if value.account_id is not None else "",
+                    self._csv_safe(account.name if account is not None else None),
+                    str(value.destination_account_id)
+                    if value.destination_account_id is not None
+                    else "",
+                    self._csv_safe(destination.name if destination is not None else None),
+                    str(value.category_id) if value.category_id is not None else "",
+                    self._csv_safe(category.name if category is not None else None),
+                    value.source,
+                    value.version,
+                    value.voided_at.isoformat() if value.voided_at is not None else "",
+                ]
+            )
+        return output.getvalue()
 
     async def update(
         self,
@@ -453,22 +658,25 @@ class TransactionService:
         if draft.kind in {TransactionKind.INCOME, TransactionKind.EXPENSE}:
             if (
                 draft.account_id is None
-                or draft.category_id is None
                 or draft.destination_account_id is not None
                 or draft.credit_cycle_id is not None
             ):
                 invalid(
                     "invalid_transaction_configuration",
-                    "Income and expense require account_id and category_id only",
+                    "Income and expense require account_id and allow an optional category_id",
                 )
             account = await self._validated_account(
                 draft.account_id,
                 allow_archived=draft.account_id == retain_accounts.get("account"),
             )
-            category = await self._validated_category(
-                draft.category_id,
-                direction=draft.kind.value,
-                allow_archived=draft.category_id == retain_category_id,
+            category = (
+                await self._validated_category(
+                    draft.category_id,
+                    direction=draft.kind.value,
+                    allow_archived=draft.category_id == retain_category_id,
+                )
+                if draft.category_id is not None
+                else None
             )
             sign = 1 if draft.kind is TransactionKind.INCOME else -1
             return (
@@ -486,23 +694,27 @@ class TransactionService:
         if draft.kind is TransactionKind.CREDIT_PURCHASE:
             if (
                 draft.account_id is None
-                or draft.category_id is None
                 or draft.destination_account_id is not None
                 or draft.credit_cycle_id is not None
             ):
                 invalid(
                     "invalid_transaction_configuration",
-                    "Credit purchases require a credit account and expense category",
+                    "Credit purchases require a credit account and allow an optional "
+                    "expense category",
                 )
             account = await self._validated_account(
                 draft.account_id,
                 allow_archived=draft.account_id == retain_accounts.get("account"),
                 allowed_kinds={AccountKind.CREDIT},
             )
-            category = await self._validated_category(
-                draft.category_id,
-                direction=TransactionKind.EXPENSE.value,
-                allow_archived=draft.category_id == retain_category_id,
+            category = (
+                await self._validated_category(
+                    draft.category_id,
+                    direction=TransactionKind.EXPENSE.value,
+                    allow_archived=draft.category_id == retain_category_id,
+                )
+                if draft.category_id is not None
+                else None
             )
             business_date = ensure_utc(draft.occurred_at).astimezone(BUSINESS_TIMEZONE).date()
             if (
@@ -939,23 +1151,99 @@ class TransactionService:
         return start, end
 
     @staticmethod
-    def _encode_cursor(occurred_at: datetime, transaction_id: UUID) -> str:
+    def _encode_cursor(occurred_at: datetime, transaction_id: UUID, filter_fingerprint: str) -> str:
         payload = json.dumps(
-            {"occurred_at": ensure_utc(occurred_at).isoformat(), "id": str(transaction_id)},
+            {
+                "v": 2,
+                "occurred_at": ensure_utc(occurred_at).isoformat(),
+                "id": str(transaction_id),
+                "filters": filter_fingerprint,
+            },
             separators=(",", ":"),
         )
         return base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
 
     @staticmethod
-    def _decode_cursor(cursor: str | None) -> tuple[datetime | None, UUID | None]:
+    def _decode_cursor(
+        cursor: str | None, filter_fingerprint: str
+    ) -> tuple[datetime | None, UUID | None]:
         if cursor is None:
             return None, None
         try:
             padded = cursor + "=" * (-len(cursor) % 4)
             payload = json.loads(base64.urlsafe_b64decode(padded).decode())
+            if payload["v"] != 2 or payload["filters"] != filter_fingerprint:
+                raise ValueError
             occurred_at = ensure_utc(datetime.fromisoformat(payload["occurred_at"]))
             transaction_id = UUID(payload["id"])
         except (ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
-            invalid("invalid_transaction_configuration", "The cursor is invalid")
+            invalid("invalid_transaction_cursor", "The transaction cursor is invalid")
             raise AssertionError from error
         return occurred_at, transaction_id
+
+    @staticmethod
+    def _normalized_query(query: str | None) -> str | None:
+        if query is None:
+            return None
+        value = query.strip()
+        if not value:
+            return None
+        if len(value) > 120:
+            invalid("invalid_transaction_configuration", "query must not exceed 120 characters")
+        return value
+
+    @staticmethod
+    def _validate_amount_range(amount_min_minor: int | None, amount_max_minor: int | None) -> None:
+        if amount_min_minor is not None and amount_min_minor < 1:
+            invalid("invalid_transaction_configuration", "amount_min_minor must be positive")
+        if amount_max_minor is not None and amount_max_minor < 1:
+            invalid("invalid_transaction_configuration", "amount_max_minor must be positive")
+        if (
+            amount_min_minor is not None
+            and amount_max_minor is not None
+            and amount_min_minor > amount_max_minor
+        ):
+            invalid(
+                "invalid_transaction_configuration",
+                "amount_min_minor must not exceed amount_max_minor",
+            )
+
+    @staticmethod
+    def _filter_fingerprint(
+        *,
+        kind: TransactionKind | None,
+        account_id: UUID | None,
+        category_id: UUID | None,
+        date_from: date | None,
+        date_to: date | None,
+        query: str | None,
+        include_voided: bool,
+        classification: TransactionClassification,
+        source: TransactionSource | None,
+        amount_min_minor: int | None,
+        amount_max_minor: int | None,
+    ) -> str:
+        payload = {
+            "v": 1,
+            "kind": kind.value if kind is not None else None,
+            "account_id": str(account_id) if account_id is not None else None,
+            "category_id": str(category_id) if category_id is not None else None,
+            "date_from": date_from.isoformat() if date_from is not None else None,
+            "date_to": date_to.isoformat() if date_to is not None else None,
+            "query": query.casefold() if query is not None else None,
+            "include_voided": include_voided,
+            "classification": classification.value,
+            "source": source.value if source is not None else None,
+            "amount_min_minor": amount_min_minor,
+            "amount_max_minor": amount_max_minor,
+        }
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        return hashlib.sha256(canonical.encode()).hexdigest()
+
+    @staticmethod
+    def _csv_safe(value: str | None) -> str:
+        if value is None:
+            return ""
+        if value.startswith(("=", "+", "-", "@", "\t", "\r")):
+            return "'" + value
+        return value

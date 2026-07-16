@@ -114,15 +114,24 @@ private struct FiscalSnapshotTool {
     let token = environment["FISCAL_DEVICE_TOKEN"] ?? "integration-device-token"
     let output = URL(
       fileURLWithPath: environment["FISCAL_QA_SCREENSHOT_DIR"]
-        ?? "../docs/qa/p9/screenshots", isDirectory: true)
+        ?? "../docs/qa/p10/screenshots", isDirectory: true)
     try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
     let baseURL = URL(string: environment["FISCAL_API_BASE_URL"] ?? "http://127.0.0.1:8000")!
-    let tokenStore = KeychainTokenStore(service: "com.linotsai.fiscal.snapshot")
-    try await tokenStore.save(token)
-    let transport = APITransport(baseURL: baseURL, tokenStore: tokenStore)
+    let transport = APITransport(baseURL: baseURL, token: token)
     let accountsModel = AccountsModel(repository: RemoteAccountRepository(transport: transport))
     let categoriesModel = CategoriesModel(repository: RemoteCategoryRepository(transport: transport))
     let creditModel = CreditModel(repository: RemoteCreditRepository(transport: transport))
+    let transactionRepository = RemoteTransactionRepository(transport: transport)
+    let transactionsModel = TransactionsModel(
+      repository: transactionRepository,
+      accounts: accountsModel,
+      categories: categoriesModel,
+      credit: creditModel)
+    let installmentModel = InstallmentModel(
+      repository: RemoteInstallmentRepository(transport: transport),
+      transactions: transactionRepository,
+      credit: creditModel,
+      transactionList: transactionsModel)
     let repository = SnapshotReportingRepository(
       baseURL: baseURL,
       token: token)
@@ -136,34 +145,64 @@ private struct FiscalSnapshotTool {
     async let accountLoad: Void = accountsModel.load()
     async let categoryLoad: Void = categoriesModel.load()
     async let creditLoad: Void = creditModel.loadAccounts()
-    _ = await (proposalLoad, settingsLoad, accountLoad, categoryLoad, creditLoad)
+    async let transactionLoad: Void = transactionsModel.load()
+    _ = await (
+      proposalLoad, settingsLoad, accountLoad, categoryLoad, creditLoad, transactionLoad)
 
-    let aiScreenshot = output.appendingPathComponent("macos-p9-ai-ocr.png")
+    let preferences = RecordingPreferences()
     try render(
-      MacAIProposalScreen(model: aiModel, accounts: accountsModel, categories: categoriesModel, credit: creditModel),
-      to: aiScreenshot)
+      MacSettingsScreen(
+        model: settingsModel, preferences: preferences, accounts: accountsModel,
+        transactions: transactionsModel),
+      to: output.appendingPathComponent("macos-p10-settings.png"))
     try render(
-      MacSettingsScreen(model: settingsModel),
-      to: output.appendingPathComponent("macos-p9-settings-sources.png"))
+      MacSettingsScreen(
+        model: settingsModel, preferences: preferences, accounts: accountsModel,
+        transactions: transactionsModel),
+      to: output.appendingPathComponent("macos-p10-settings-dark.png"), colorScheme: .dark)
+    let workbench = MacTransactionWorkbench(
+      model: transactionsModel,
+      accounts: accountsModel,
+      categories: categoriesModel,
+      credit: creditModel,
+      installments: installmentModel)
+    try render(
+      workbench,
+      to: output.appendingPathComponent("macos-p10-transactions-workbench.png"),
+      size: CGSize(width: 1160, height: 760))
+    try render(
+      workbench,
+      to: output.appendingPathComponent("macos-p10-transactions-compact.png"),
+      size: CGSize(width: 820, height: 700))
+    try render(
+      workbench,
+      to: output.appendingPathComponent("macos-p10-transactions-dark.png"),
+      size: CGSize(width: 1160, height: 760), colorScheme: .dark)
   }
 
   @MainActor
-  private static func render<V: View>(_ view: V, to url: URL) throws {
+  private static func render<V: View>(
+    _ view: V,
+    to url: URL,
+    size: CGSize = CGSize(width: 830, height: 700),
+    colorScheme: ColorScheme = .light
+  ) throws {
     NSApplication.shared.setActivationPolicy(.accessory)
     let hosting = NSHostingView(
       rootView: ZStack { FiscalColor.macBackground; view }
-        .frame(width: 830, height: 700).environment(\.colorScheme, .light))
-    hosting.frame = NSRect(x: 0, y: 0, width: 830, height: 700)
+        .frame(width: size.width, height: size.height).environment(\.colorScheme, colorScheme))
+    hosting.frame = NSRect(origin: .zero, size: size)
     hosting.wantsLayer = true
     hosting.layer?.backgroundColor = NSColor(
-      calibratedRed: 0.965, green: 0.973, blue: 0.984, alpha: 1).cgColor
+      calibratedWhite: colorScheme == .dark ? 0.055 : 0.965, alpha: 1).cgColor
     let window = NSWindow(
       contentRect: hosting.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-    window.backgroundColor = .white
+    window.backgroundColor = NSColor(
+      calibratedWhite: colorScheme == .dark ? 0.055 : 0.965, alpha: 1)
     window.contentView = hosting
     window.orderFrontRegardless()
     hosting.layoutSubtreeIfNeeded()
-    RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+    RunLoop.main.run(until: Date().addingTimeInterval(1))
     guard let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else {
       throw CocoaError(.fileWriteUnknown)
     }

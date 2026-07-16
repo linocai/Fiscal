@@ -2,7 +2,7 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 from starlette import status
 
 from fiscal_api.api.dependencies import TransactionServiceDependency
@@ -14,8 +14,13 @@ from fiscal_api.api.p3_schemas import (
     TransactionSummary,
     TransactionVersionRequest,
 )
+from fiscal_api.api.p10_schemas import (
+    BatchCategoryRequest,
+    BatchCategoryResponse,
+    TransactionClassification,
+)
 from fiscal_api.core.security import require_device_token
-from fiscal_api.db.models import TransactionKind
+from fiscal_api.db.models import TransactionKind, TransactionSource
 
 router = APIRouter(
     prefix="/transactions",
@@ -36,6 +41,10 @@ async def list_transactions(
     date_to: date | None = None,
     query: str | None = None,
     include_voided: bool = False,
+    classification: TransactionClassification = TransactionClassification.ALL,
+    source: TransactionSource | None = None,
+    amount_min_minor: Annotated[int | None, Query(ge=1)] = None,
+    amount_max_minor: Annotated[int | None, Query(ge=1)] = None,
 ) -> TransactionPage:
     return await service.list(
         cursor=cursor,
@@ -47,6 +56,10 @@ async def list_transactions(
         date_to=date_to,
         query=query,
         include_voided=include_voided,
+        classification=classification,
+        source=source,
+        amount_min_minor=amount_min_minor,
+        amount_max_minor=amount_max_minor,
     )
 
 
@@ -66,6 +79,49 @@ async def transaction_summary(
     date_to: date | None = None,
 ) -> TransactionSummary:
     return await service.summary(date_from=date_from, date_to=date_to)
+
+
+@router.get("/export.csv", response_class=Response)
+async def export_transactions_csv(
+    service: TransactionServiceDependency,
+    kind: TransactionKind | None = None,
+    account_id: UUID | None = None,
+    category_id: UUID | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    query: str | None = None,
+    include_voided: bool = False,
+    classification: TransactionClassification = TransactionClassification.ALL,
+    source: TransactionSource | None = None,
+    amount_min_minor: Annotated[int | None, Query(ge=1)] = None,
+    amount_max_minor: Annotated[int | None, Query(ge=1)] = None,
+) -> Response:
+    body = await service.export_csv(
+        kind=kind,
+        account_id=account_id,
+        category_id=category_id,
+        date_from=date_from,
+        date_to=date_to,
+        query=query,
+        include_voided=include_voided,
+        classification=classification,
+        source=source,
+        amount_min_minor=amount_min_minor,
+        amount_max_minor=amount_max_minor,
+    )
+    return Response(
+        content=body,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="fiscal-transactions-v1.csv"'},
+    )
+
+
+@router.post("/bulk-category", response_model=BatchCategoryResponse)
+async def bulk_category_transactions(
+    request: BatchCategoryRequest,
+    service: TransactionServiceDependency,
+) -> BatchCategoryResponse:
+    return await service.bulk_category(request)
 
 
 @router.get("/{transaction_id}", response_model=TransactionResponse)

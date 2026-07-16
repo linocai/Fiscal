@@ -42,7 +42,7 @@ final class FiscalUITests: XCTestCase {
     app.buttons["流水"].tap()
     XCTAssertTrue(
       app.descendants(matching: .any)["transactions.screen"].waitForExistence(timeout: 8))
-    let search = app.searchFields["搜索标题或备注"]
+    let search = app.searchFields["搜索标题、备注、账户或分类"]
     XCTAssertTrue(search.waitForExistence(timeout: 5))
     XCTAssertLessThan(
       search.frame.maxY, customBar.element.frame.minY,
@@ -175,7 +175,7 @@ final class FiscalUITests: XCTestCase {
     XCTAssertTrue(editPlan.waitForExistence(timeout: 3))
     editPlan.tap()
     XCTAssertTrue(app.staticTexts["编辑分期"].waitForExistence(timeout: 5))
-    let preview = app.buttons["预览"]
+    let preview = app.buttons["预览服务器影响"]
     XCTAssertTrue(preview.waitForExistence(timeout: 8))
     preview.tap()
     XCTAssertTrue(app.buttons["确认保存"].waitForExistence(timeout: 8))
@@ -342,6 +342,142 @@ final class FiscalUITests: XCTestCase {
     keepScreenshot(named: "ios-p9-ocr-capture")
   }
 
+  func testP10SingleBottomBarSafeAreaAndModernTransactionEditor() throws {
+    try launchApp()
+    XCTAssertEqual(app.tabBars.count, 0)
+    let customBars = app.descendants(matching: .any).matching(
+      identifier: "fiscal.customBottomBar")
+    XCTAssertEqual(customBars.count, 1)
+
+    app.buttons["流水"].tap()
+    XCTAssertTrue(
+      app.descendants(matching: .any)["transactions.screen"].waitForExistence(timeout: 8))
+    let search = app.searchFields["搜索标题、备注、账户或分类"]
+    XCTAssertTrue(search.waitForExistence(timeout: 5))
+    XCTAssertLessThan(
+      search.frame.maxY, customBars.element.frame.minY,
+      "The global ledger search must remain above the one custom safe-area bar.")
+
+    app.buttons["记一笔"].tap()
+    let editor = app.descendants(matching: .any)["transaction.editor"]
+    XCTAssertTrue(editor.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.textFields["金额，例如 38.50"].exists)
+    XCTAssertTrue(app.textFields["标题"].exists)
+    XCTAssertTrue(app.textFields["备注（可选）"].exists)
+    XCTAssertTrue(app.descendants(matching: .any)["transaction.save"].exists)
+    XCTAssertEqual(app.tables.count, 0, "The modern transaction editor must not regress to Form.")
+    keepScreenshot(named: "ios-p10-modern-transaction-editor")
+
+    app.navigationBars["记一笔"].buttons["取消"].tap()
+    XCTAssertTrue(editor.waitForNonExistence(timeout: 5))
+    XCTAssertEqual(customBars.count, 1)
+  }
+
+  func testP10SettingsExposePreferencesCacheAndRealCSVBoundary() throws {
+    try launchApp()
+    app.buttons["更多"].tap()
+    let settings = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "设置"))
+      .firstMatch
+    XCTAssertTrue(settings.waitForExistence(timeout: 8))
+    settings.tap()
+
+    let preferences = app.descendants(matching: .any)["settings.recordingPreferences"]
+    XCTAssertTrue(preferences.waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["记账偏好"].exists)
+    XCTAssertTrue(app.staticTexts["默认账户"].exists)
+    XCTAssertTrue(app.staticTexts["默认类型"].exists)
+    XCTAssertTrue(
+      app.descendants(matching: .any).matching(
+        NSPredicate(format: "label CONTAINS %@", "保存后停留在记一笔")).firstMatch.exists)
+
+    let cacheTitle = app.staticTexts["本地只读缓存"]
+    scrollToElement(cacheTitle)
+    XCTAssertTrue(cacheTitle.exists)
+    XCTAssertTrue(app.staticTexts["导出当前流水 CSV"].exists)
+    XCTAssertTrue(
+      app.staticTexts["当前没有缓存响应"].exists
+        || app.staticTexts.matching(
+          NSPredicate(format: "label CONTAINS %@", "个短时响应")).firstMatch.exists)
+    XCTAssertTrue(app.buttons["清除"].exists)
+    keepScreenshot(named: "ios-p10-settings-data-boundaries")
+
+    let export = app.buttons["导出"]
+    XCTAssertTrue(export.waitForExistence(timeout: 3))
+    export.tap()
+    let generated = app.staticTexts.matching(
+      NSPredicate(format: "label CONTAINS %@", "CSV 已由服务器生成")).firstMatch
+    XCTAssertTrue(
+      generated.waitForExistence(timeout: 10),
+      "The real filtered CSV response must be returned before the system exporter opens.")
+  }
+
+  func testP10UncategorizedAdvancedFiltersAndBatchEntryWithoutCommit() throws {
+    try launchApp()
+    let inbox = app.buttons.matching(
+      NSPredicate(format: "label CONTAINS %@", "笔待归类")).firstMatch
+    XCTAssertTrue(inbox.waitForExistence(timeout: 10))
+    inbox.tap()
+
+    XCTAssertTrue(
+      app.descendants(matching: .any)["transactions.screen"].waitForExistence(timeout: 8))
+    let advancedFilters = app.buttons["高级筛选"]
+    XCTAssertTrue(advancedFilters.waitForExistence(timeout: 5))
+    advancedFilters.tap()
+    XCTAssertTrue(app.navigationBars["高级筛选"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["归类与来源"].exists)
+    XCTAssertTrue(app.staticTexts["金额范围"].exists)
+    let sourcePicker = app.buttons.matching(
+      NSPredicate(format: "label CONTAINS %@", "来源")).firstMatch
+    XCTAssertTrue(sourcePicker.exists)
+    sourcePicker.tap()
+    XCTAssertTrue(app.buttons["截图 OCR"].waitForExistence(timeout: 3))
+    app.buttons["全部"].firstMatch.tap()
+    keepScreenshot(named: "ios-p10-advanced-filters")
+    app.navigationBars["高级筛选"].buttons["应用"].tap()
+
+    let select = app.buttons["选择"]
+    XCTAssertTrue(select.waitForExistence(timeout: 8))
+    select.tap()
+    let classifiableRow = app.descendants(matching: .any)
+      .matching(identifier: "transaction.classifiableRow").firstMatch
+    XCTAssertTrue(classifiableRow.waitForExistence(timeout: 8))
+    classifiableRow.tap()
+
+    let batchBar = app.descendants(matching: .any)["transactions.batchBar"]
+    XCTAssertTrue(batchBar.waitForExistence(timeout: 5))
+    batchBar.buttons["重新分类"].tap()
+    XCTAssertTrue(app.navigationBars["批量重新分类"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["原子批量操作"].exists)
+    let confirm = app.buttons["确认重新分类"]
+    XCTAssertTrue(confirm.exists)
+    XCTAssertFalse(confirm.isEnabled, "QA must not choose a target category or submit the batch.")
+    keepScreenshot(named: "ios-p10-batch-classification-entry")
+
+    app.navigationBars["批量重新分类"].buttons["取消"].tap()
+    XCTAssertTrue(batchBar.waitForExistence(timeout: 5))
+    batchBar.buttons["取消"].tap()
+    XCTAssertTrue(batchBar.waitForNonExistence(timeout: 5))
+  }
+
+  func testP10DarkLargeTextLedgerKeepsSafeAreaAndHierarchy() throws {
+    try launchApp()
+    XCTAssertEqual(app.tabBars.count, 0)
+    let customBars = app.descendants(matching: .any).matching(
+      identifier: "fiscal.customBottomBar")
+    XCTAssertEqual(customBars.count, 1)
+
+    app.buttons["流水"].tap()
+    XCTAssertTrue(
+      app.descendants(matching: .any)["transactions.screen"].waitForExistence(timeout: 8))
+    let search = app.searchFields["搜索标题、备注、账户或分类"]
+    XCTAssertTrue(search.waitForExistence(timeout: 5))
+    XCTAssertLessThan(
+      search.frame.maxY, customBars.element.frame.minY,
+      "AX text must not let ledger controls overlap the one custom safe-area bar.")
+    waitForVisualStability()
+    keepScreenshot(named: "ios-p10-dark-large-text-transactions")
+  }
+
   private func keepScreenshot(named name: String) {
     let screenshot = app.screenshot()
     let attachment = XCTAttachment(screenshot: screenshot)
@@ -361,5 +497,12 @@ final class FiscalUITests: XCTestCase {
     let expectation = expectation(description: "wait for navigation and sheet animations")
     DispatchQueue.main.asyncAfter(deadline: .now() + 1) { expectation.fulfill() }
     wait(for: [expectation], timeout: 2)
+  }
+
+  private func scrollToElement(_ element: XCUIElement, swipes: Int = 8) {
+    for _ in 0..<swipes {
+      if element.isHittable { return }
+      app.swipeUp()
+    }
   }
 }

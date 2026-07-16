@@ -43,7 +43,7 @@ struct CategoryBar: View {
         HStack(spacing: 10) {
             Text(item.name).font(.caption).foregroundStyle(FiscalColor.secondary).frame(width: 38, alignment: .leading)
             GeometryReader { proxy in
-                Capsule().fill(Color.black.opacity(0.045))
+                Capsule().fill(FiscalColor.separator.opacity(0.72))
                     .overlay(alignment: .leading) {
                         Capsule().fill(Color(hex: item.colorHex)).frame(width: max(5, proxy.size.width * CGFloat(item.amount.minorUnits) / CGFloat(maximum)))
                     }
@@ -61,8 +61,8 @@ struct AccountRow: View {
         HStack(spacing: 11) {
             FiscalIconTile(account.symbol, color: account.kind == .credit ? FiscalColor.debt : FiscalColor.accent)
             VStack(alignment: .leading, spacing: 3) {
-                Text(account.name).font(.subheadline.weight(.semibold)).foregroundStyle(FiscalColor.text).lineLimit(1)
-                Text(account.detail).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1)
+                Text(account.name).font(.subheadline.weight(.semibold)).foregroundStyle(FiscalColor.text).lineLimit(2)
+                Text(account.detail).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(2)
             }
             Spacer(minLength: 8)
             Text(account.amount.formatted())
@@ -80,10 +80,10 @@ struct ActivityRow: View {
         HStack(spacing: 11) {
             FiscalIconTile(activity.symbol, color: activity.direction == .income ? FiscalColor.income : FiscalColor.accent)
             VStack(alignment: .leading, spacing: 3) {
-                Text(activity.title).font(.subheadline.weight(.semibold)).foregroundStyle(FiscalColor.text).lineLimit(1)
+                Text(activity.title).font(.subheadline.weight(.semibold)).foregroundStyle(FiscalColor.text).lineLimit(2)
                 HStack(spacing: 5) {
                     if showDate { Text(activity.dateLabel) }
-                    Text(activity.detail).lineLimit(1)
+                    Text(activity.detail).lineLimit(2)
                     if let tag = activity.tag {
                         Text(tag).font(.caption2.weight(.semibold)).padding(.horizontal, 5).padding(.vertical, 2)
                             .background(FiscalColor.accent.opacity(0.1), in: .rect(cornerRadius: 4))
@@ -105,7 +105,7 @@ struct EmptyInline: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: symbol).foregroundStyle(FiscalColor.tertiary)
+            Image(systemName: symbol).foregroundStyle(FiscalColor.tertiary).accessibilityHidden(true)
             Text(title).font(.subheadline).foregroundStyle(FiscalColor.secondary)
             Spacer()
         }

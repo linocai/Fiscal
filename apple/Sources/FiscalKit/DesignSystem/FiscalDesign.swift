@@ -1,20 +1,37 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 public enum FiscalColor {
-    public static let accent = Color(hex: 0x2E68D6)
-    public static let accentDark = Color(hex: 0x1E52B8)
-    public static let text = Color(hex: 0x1C2026)
-    public static let secondary = Color(hex: 0x5C6675)
-    public static let tertiary = Color(hex: 0x8A94A3)
-    public static let income = Color(hex: 0x1F9E6A)
-    public static let expense = Color(hex: 0xD24B4E)
-    public static let debt = Color(hex: 0xC2892B)
-    public static let reimbursement = Color(hex: 0x2E8E93)
-    public static let iOSBackground = Color(hex: 0xEEF1F6)
-    public static let macBackground = Color(hex: 0xF4F6F9)
+    public static let accent = Color(light: 0x2E68D6, dark: 0x6E9BFF)
+    public static let accentDark = Color(light: 0x1E52B8, dark: 0x477CE5)
+    public static let text = Color(light: 0x1C2026, dark: 0xF2F4F8)
+    public static let secondary = Color(light: 0x5C6675, dark: 0xBCC3CE)
+    public static let tertiary = Color(light: 0x8A94A3, dark: 0x929CAA)
+    public static let income = Color(light: 0x1F9E6A, dark: 0x4BC890)
+    public static let expense = Color(light: 0xD24B4E, dark: 0xFF777A)
+    public static let debt = Color(light: 0xC2892B, dark: 0xE5AD52)
+    public static let reimbursement = Color(light: 0x2E8E93, dark: 0x58BBC0)
+    public static let iOSBackground = Color(light: 0xEEF1F6, dark: 0x101318)
+    public static let macBackground = Color(light: 0xF4F6F9, dark: 0x15181E)
+    public static let surface = Color(light: 0xFFFFFF, dark: 0x20242C)
+    public static let separator = Color(light: 0xDDE1E8, dark: 0x353B46)
 }
 
 public extension Color {
+    init(light: UInt, dark: UInt) {
+#if os(iOS)
+        self.init(uiColor: UIColor { traits in UIColor(hex: traits.userInterfaceStyle == .dark ? dark : light) })
+#elseif os(macOS)
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            NSColor(hex: appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light)
+        })
+#endif
+    }
+
     init(hex: UInt, alpha: Double = 1) {
         self.init(
             .sRGB,
@@ -38,11 +55,11 @@ public struct FiscalCard<Content: View>: View {
     public var body: some View {
         content
             .padding(18)
-            .background(.white)
+            .background(FiscalColor.surface)
             .clipShape(.rect(cornerRadius: radius))
             .overlay {
                 RoundedRectangle(cornerRadius: radius)
-                    .stroke(.black.opacity(0.055), lineWidth: 0.5)
+                    .stroke(FiscalColor.separator.opacity(0.72), lineWidth: 0.5)
                     .allowsHitTesting(false)
             }
             .shadow(color: Color(hex: 0x1E2846).opacity(0.05), radius: 12, y: 5)
@@ -64,6 +81,7 @@ public struct FiscalIconTile: View {
             .foregroundStyle(color)
             .frame(width: 36, height: 36)
             .background(color.opacity(0.12), in: .rect(cornerRadius: 10))
+            .accessibilityHidden(true)
     }
 }
 
@@ -72,6 +90,7 @@ public extension View {
 }
 
 public struct FiscalActionButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     public enum Role { case primary, secondary, destructive }
     private let role: Role
     public init(_ role: Role = .primary) { self.role = role }
@@ -87,8 +106,8 @@ public struct FiscalActionButtonStyle: ButtonStyle {
                     RoundedRectangle(cornerRadius: 12).stroke(FiscalColor.accent.opacity(0.22), lineWidth: 0.7)
                 }
             }
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
+            .scaleEffect(!reduceMotion && configuration.isPressed ? 0.98 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: configuration.isPressed)
     }
     private var foreground: Color { role == .secondary ? FiscalColor.accent : .white }
     private var background: Color {
@@ -101,6 +120,7 @@ public struct FiscalActionButtonStyle: ButtonStyle {
 }
 
 public struct FiscalSwitchToggleStyle: ToggleStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     public init() {}
     public func makeBody(configuration: Configuration) -> some View {
         Button { configuration.isOn.toggle() } label: {
@@ -114,7 +134,21 @@ public struct FiscalSwitchToggleStyle: ToggleStyle {
             }.contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .animation(.easeOut(duration: 0.2), value: configuration.isOn)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: configuration.isOn)
         .accessibilityValue(configuration.isOn ? "开启" : "关闭")
     }
 }
+
+#if os(iOS)
+private extension UIColor {
+    convenience init(hex: UInt) {
+        self.init(red: CGFloat((hex >> 16) & 0xff) / 255, green: CGFloat((hex >> 8) & 0xff) / 255, blue: CGFloat(hex & 0xff) / 255, alpha: 1)
+    }
+}
+#elseif os(macOS)
+private extension NSColor {
+    convenience init(hex: UInt) {
+        self.init(srgbRed: CGFloat((hex >> 16) & 0xff) / 255, green: CGFloat((hex >> 8) & 0xff) / 255, blue: CGFloat(hex & 0xff) / 255, alpha: 1)
+    }
+}
+#endif
