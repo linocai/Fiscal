@@ -89,18 +89,20 @@ log "running release verification gates without production database access"
   export UV_DEFAULT_INDEX="${FISCAL_PYPI_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}"
   export UV_HTTP_TIMEOUT="${FISCAL_UV_HTTP_TIMEOUT_SECONDS:-60}"
   "$uv_bin" venv --relocatable .venv
-  "$uv_bin" sync --frozen
+  "$uv_bin" sync --frozen --no-editable
   "$uv_bin" run ruff format --check .
   "$uv_bin" run ruff check .
   "$uv_bin" run pyright
   "$uv_bin" run pytest
-  "$uv_bin" sync --frozen --no-dev
+  "$uv_bin" sync --frozen --no-dev --no-editable
 )
 
 chown -R root:fiscal "$temporary_release"
 find "$temporary_release" -type d -exec chmod 0755 {} +
 mv -- "$temporary_release" "$release"
 temporary_release=""
+
+runuser --user=fiscal -- "$release/backend/.venv/bin/python" -c 'import fiscal_api'
 
 alembic_bin="$release/backend/.venv/bin/alembic"
 alembic_config="$release/backend/alembic.ini"
