@@ -308,7 +308,7 @@ async def _require_production_target_state(
                 "SELECT "
                 "(SELECT count(*) FROM accounts) + "
                 "(SELECT count(*) FROM categories) + "
-                "(SELECT count(*) FROM ledger_transactions) + "
+                "(SELECT count(*) FROM transactions) + "
                 "(SELECT count(*) FROM reimbursement_claims) + "
                 "(SELECT count(*) FROM reimbursement_receipts)"
             )

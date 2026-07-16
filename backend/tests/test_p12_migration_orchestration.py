@@ -191,3 +191,11 @@ async def test_production_target_must_be_pristine_or_same_source_replay() -> Non
     await _require_production_target_state(_ProductionSession("3", 0), manifest)
     with pytest.raises(RuntimeError, match="different source"):
         await _require_production_target_state(_ProductionSession("3", 1), manifest)
+
+
+def test_production_empty_target_query_uses_canonical_table_names() -> None:
+    import inspect
+
+    source = inspect.getsource(_require_production_target_state)
+    assert "FROM transactions" in source
+    assert "FROM ledger_transactions" not in source
