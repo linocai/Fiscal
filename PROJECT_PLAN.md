@@ -875,4 +875,4 @@ Back Tap
 - 权威信息架构缺漏已纠正并落实：iOS `更多`保留完整目标入口，P8 已将临时 `其他设置 · P11`占位替换为正式 `设置`目的页；后续分组仍按 P9–P11 接通。
 - 外部环境：HZ 已在独立 `8010`/`fiscal` 数据库部署，`fiscal.linotsai.top` DNS、证书、Nginx HTTPS、首个 Mac 操作员、定时备份与隔离恢复均已通过；现有 LinoFinance/LinoN/主页保持健康。真实模型调用未配置时继续保持安全、可测试的“AI 未配置”状态。真实告警接收方、可证明的 90 天异地恢复策略、共享 PostgreSQL 维护窗口重启和双平台生产截图仍是 P11 验收门。
 - 新对话恢复顺序：先读本文件与 `design_handoff_fiscal_app/README.md`，再检查 `git status`。
-- 下一步：采集 iOS/macOS 生产设置证据；配置真实告警与异地恢复策略，在获批维护窗口内验证共享 PostgreSQL 重启后 Fiscal/LinoFinance 均健康。Primary Mac 的生产两阶段密钥轮换与旧密钥 401 已通过。
+- 下一步：macOS 生产设置证据已归档，继续在稳定模拟器或真机采集 iOS 生产设置证据；配置真实告警与异地恢复策略，在获批维护窗口内验证共享 PostgreSQL 重启后 Fiscal/LinoFinance 均健康。Primary Mac 的生产两阶段密钥轮换与旧密钥 401 已通过。

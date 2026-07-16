@@ -33,6 +33,7 @@ Status: HZ deployment and HTTPS cutover passed; final operational and dual-platf
 - `fiscal.linotsai.top` resolves to `118.178.122.194`. The ECDSA certificate is valid through 2026-10-14; HTTP redirects to HTTPS, public liveness returns 200, readiness remains denied publicly, unauthenticated protected routes return 401 and a real Keychain-backed operator request returns 200.
 - The first `Primary Mac` operator is active; its raw key exists only in the local macOS Keychain and the database stores its digest/fingerprint.
 - A real production two-phase rotation stored the candidate in the Keychain pending slot before activation, promoted it after activation, returned 200 with the successor and 401 with the revoked predecessor.
+- The macOS 26 Release app loaded the production Keychain credential and rendered real VPS, Primary Mac, schema, backup, restore, disk and security-boundary facts; evidence is [`screenshots/macos-production-security.png`](screenshots/macos-production-security.png).
 - A systemd-run custom-format backup completed with checksum/archive validation. An isolated restore drill completed in two seconds at the deployed Alembic head and passed canonical-table/orphan checks. Disk status is healthy at 25% against 75%/85% thresholds.
 - Backup, weekly restore, five-minute health and fifteen-minute disk timers are enabled. API restart and repeated release restarts preserved authentication.
 - LinoFinance, LinoN, Nginx and PostgreSQL remained active; their public health endpoints passed and ports 8000/8001 were unchanged.
@@ -42,7 +43,7 @@ Status: HZ deployment and HTTPS cutover passed; final operational and dual-platf
 
 - Confirm an encrypted off-host copy or cloud snapshot policy with 90-day retention; active HBR agents alone do not prove Fiscal coverage or restoration.
 - Configure and test a real alert receiver; journald alone is not accepted.
-- Capture iOS and macOS production Settings evidence.
+- Capture iOS production Settings evidence on a stable simulator or device. The attempted simulator candidate was never activated, was revoked, and its pasteboard was cleared after the simulator failed to load production reliably.
 - Restart the shared PostgreSQL cluster only in an approved maintenance window, then recheck Fiscal and LinoFinance. P11 did not disrupt the shared database merely to satisfy a checkbox.
 
 P12 historical migration has not started.
