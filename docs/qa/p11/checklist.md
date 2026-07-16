@@ -13,17 +13,17 @@ Date: 2026-07-16
 
 ## HZ production infrastructure
 
-- [ ] Dedicated Unix user, database/roles, release directories and root-owned environment file exist.
-- [ ] API and PostgreSQL listen only on loopback; UFW exposes only 22/80/443.
-- [ ] Hardened systemd service, Nginx TLS/reverse proxy and log rotation validate cleanly.
-- [ ] Existing HZ sites/services remain unchanged and healthy.
-- [ ] DNS and certificate for `fiscal.linotsai.top` are active before public cutover.
+- [x] Dedicated Unix user, database/roles, release directories and root-owned environment file exist.
+- [x] API and PostgreSQL listen only on loopback; UFW exposes only 22/80/443.
+- [x] Hardened systemd service, Nginx TLS/reverse proxy and log rotation validate cleanly.
+- [x] Existing HZ sites/services remain unchanged and healthy.
+- [x] DNS and certificate for `fiscal.linotsai.top` are active before public cutover.
 
 ## Backup, restore and operations
 
-- [ ] Daily custom-format backup, checksum, archive validation and 14-day local retention pass.
+- [x] Daily custom-format backup, checksum, archive validation and 14-day local retention pass.
 - [ ] Encrypted off-host copy or confirmed cloud snapshot policy is verified.
-- [ ] Isolated restore drill reaches Alembic head and validates canonical data invariants.
+- [x] Isolated restore drill reaches Alembic head and validates canonical data invariants.
 - [ ] Pre-migration backup, forward migration, release rollback and incompatible-schema recovery are documented and exercised proportionally.
 - [ ] Health, backup age, restore status and 75%/85% disk thresholds reach a real notification channel.
 

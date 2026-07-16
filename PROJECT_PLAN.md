@@ -873,6 +873,6 @@ Back Tap
 - 当前施工位置：P11 VPS 生产化与数据安全；合同见 `docs/architecture/p11-contracts.md`，不得提前开始 P12 历史迁移。
 - P7 双端信息架构纠正：iOS 为无图表的简洁列表，独立现金流不在报表中重复；macOS 保留三类报表与图形分析。
 - 权威信息架构缺漏已纠正并落实：iOS `更多`保留完整目标入口，P8 已将临时 `其他设置 · P11`占位替换为正式 `设置`目的页；后续分组仍按 P9–P11 接通。
-- 外部环境：HZ 目标主机与 SSH 路径已核验；真实模型调用仍需在服务端配置 Provider URL、模型与 API Key，未配置时保持安全、可测试的“AI 未配置”状态。`fiscal.linotsai.top` DNS、证书、真实告警接收方与异地备份策略仍是 P11 生产验收门。
+- 外部环境：HZ 已在独立 `8010`/`fiscal` 数据库部署，`fiscal.linotsai.top` DNS、证书、Nginx HTTPS、首个 Mac 操作员、定时备份与隔离恢复均已通过；现有 LinoFinance/LinoN/主页保持健康。真实模型调用未配置时继续保持安全、可测试的“AI 未配置”状态。真实告警接收方、可证明的 90 天异地恢复策略、共享 PostgreSQL 维护窗口重启和双平台生产截图仍是 P11 验收门。
 - 新对话恢复顺序：先读本文件与 `design_handoff_fiscal_app/README.md`，再检查 `git status`。
-- 下一步：设备密钥、真实运维状态、Apple 设置和生产基础设施资产的本地门已通过；将已提交版本隔离部署到 HZ 的 `8010`/独立数据库，完成备份恢复与重启验证。公开 HTTPS 切换等待 `fiscal.linotsai.top` DNS 指向 HZ 云。
+- 下一步：采集 iOS/macOS 生产设置证据；配置真实告警与异地恢复策略，在获批维护窗口内验证共享 PostgreSQL 重启后 Fiscal/LinoFinance 均健康。Primary Mac 的生产两阶段密钥轮换与旧密钥 401 已通过。
