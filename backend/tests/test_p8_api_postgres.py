@@ -67,6 +67,8 @@ def test_p8_real_api_nested_edit_idempotency_and_queue_count() -> None:
             headers=auth,
             json={
                 "auto_execute_enabled": False,
+                "ocr_source_enabled": False,
+                "shortcut_text_source_enabled": False,
                 "auto_execute_limit_minor": 100_000,
                 "minimum_confidence_bps": 9_000,
                 "expected_version": settings["version"],
@@ -174,6 +176,8 @@ def test_p8_settings_reject_unsafe_client_relaxation() -> None:
             headers=auth,
             json={
                 "auto_execute_enabled": True,
+                "ocr_source_enabled": False,
+                "shortcut_text_source_enabled": False,
                 "auto_execute_limit_minor": 100_001,
                 "minimum_confidence_bps": 8_999,
                 "expected_version": body["version"],

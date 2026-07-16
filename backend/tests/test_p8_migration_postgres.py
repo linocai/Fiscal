@@ -84,6 +84,8 @@ def test_p8_upgrade_downgrade_restores_complete_validators(
     upgraded_shape, upgraded_installment, settings_count = asyncio.run(validator_definitions())
     assert "ai_text" in upgraded_shape
     assert "ai_text" in upgraded_installment
+    assert "ocr" in upgraded_shape
+    assert "ocr" in upgraded_installment
     assert settings_count == 1
 
     command.downgrade(config(), "20260715_0006")
@@ -95,5 +97,39 @@ def test_p8_upgrade_downgrade_restores_complete_validators(
     roundtrip_shape, roundtrip_installment, settings_count = asyncio.run(validator_definitions())
     assert "ai_text" in roundtrip_shape
     assert "ai_text" in roundtrip_installment
+    assert "ocr" in roundtrip_shape
+    assert "ocr" in roundtrip_installment
     assert settings_count == 1
+    get_settings.cache_clear()
+
+
+async def insert_p9_proposal() -> None:
+    assert TEST_DATABASE_URL is not None
+    engine = create_async_engine(TEST_DATABASE_URL)
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "INSERT INTO ai_proposals "
+                "(id,source,raw_input,content_fingerprint,create_idempotency_key,"
+                "create_request_hash,field_confidences,missing_fields,reason_codes,status,"
+                "version,created_at,updated_at) VALUES "
+                "('00000000-0000-0000-0000-000000009001','ocr','fixture',"
+                ":fingerprint,'00000000-0000-0000-0000-000000009002',:request_hash,"
+                "'{}'::jsonb,'[]'::jsonb,'[]'::jsonb,'failed',1,now(),now())"
+            ),
+            {"fingerprint": "f" * 64, "request_hash": "h" * 64},
+        )
+    await engine.dispose()
+
+
+def test_p9_downgrade_blocks_non_text_proposals(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert TEST_DATABASE_URL is not None
+    monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
+    get_settings.cache_clear()
+    command.upgrade(config(), "head")
+    asyncio.run(clear_p8_data())
+    asyncio.run(insert_p9_proposal())
+    with pytest.raises(Exception, match="P9 downgrade blocked"):
+        command.downgrade(config(), "20260716_0007")
+    asyncio.run(clear_p8_data())
     get_settings.cache_clear()

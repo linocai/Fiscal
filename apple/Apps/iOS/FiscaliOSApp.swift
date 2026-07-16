@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct FiscaliOSApp: App {
+    @UIApplicationDelegateAdaptor(FiscalAppDelegate.self) private var appDelegate
     @State private var connection: ConnectionModel
     @State private var accounts: AccountsModel
     @State private var categories: CategoriesModel

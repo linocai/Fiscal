@@ -108,9 +108,10 @@ async def session() -> AsyncIterator[AsyncSession]:
         await connection.execute(
             text(
                 "INSERT INTO ai_settings "
-                "(id,auto_execute_enabled,auto_execute_limit_minor,minimum_confidence_bps,"
+                "(id,auto_execute_enabled,ocr_source_enabled,shortcut_text_source_enabled,"
+                "auto_execute_limit_minor,minimum_confidence_bps,"
                 "version,created_at,updated_at) "
-                "VALUES (1,false,100000,9000,1,now(),now())"
+                "VALUES (1,false,false,false,100000,9000,1,now(),now())"
             )
         )
     async with factory() as value:
@@ -194,19 +195,107 @@ async def test_pending_idempotency_edit_execute_and_undo(session: AsyncSession) 
         ),
         executed.transaction.version,
     )
-    undone = await service.undo(executed.proposal.id, executed.proposal.version)
-    assert undone.proposal.status == "undone"
-    assert undone.transaction is not None and undone.transaction.version == changed.version + 1
+    with pytest.raises(APIError) as stale_undo:
+        await service.undo(
+            executed.proposal.id,
+            executed.proposal.version,
+            executed.transaction.version,
+        )
+    assert stale_undo.value.code == "ai_undo_transaction_changed"
+    assert (await AccountService(session).get(account_id)).current_balance_minor == 97_800
+
+    await TransactionService(session).void(changed.id, changed.version)
     assert (await AccountService(session).get(account_id)).current_balance_minor == 100_000
+
+
+async def test_unedited_ai_undo_is_exactly_replayable(session: AsyncSession) -> None:
+    account_id, expense_id, _income_id = await seed(session)
+    service = AIService(session, FakeProvider())
+    created, _ = await service.create(
+        AIProposalCreate(source="text", text="可撤销午餐 20 元"), uuid4()
+    )
+    edited = await service.edit(
+        created.id,
+        TransactionDraft(
+            kind=TransactionKind.EXPENSE,
+            amount_minor=2_100,
+            occurred_at=datetime(2026, 7, 16, 5, tzinfo=UTC),
+            title="可撤销午餐",
+            account_id=account_id,
+            category_id=expense_id,
+        ),
+        created.version,
+    )
+    executed = await service.execute(edited.id, edited.version)
+    assert executed.transaction is not None
+    undone = await service.undo(
+        executed.proposal.id,
+        executed.proposal.version,
+        executed.transaction.version,
+    )
+    assert undone.proposal.status == "undone"
+    assert undone.transaction is not None
     revisions_before = await session.scalar(
         select(text("count(*)")).select_from(TransactionRevision)
     )
-    repeated = await service.undo(executed.proposal.id, executed.proposal.version)
+    repeated = await service.undo(
+        executed.proposal.id,
+        executed.proposal.version,
+        executed.transaction.version,
+    )
     revisions_after = await session.scalar(
         select(text("count(*)")).select_from(TransactionRevision)
     )
     assert repeated.proposal == undone.proposal
     assert revisions_after == revisions_before
+
+
+async def test_p9_sources_require_settings_and_replay_after_disable(
+    session: AsyncSession,
+) -> None:
+    await seed(session)
+    service = AIService(session, FakeProvider())
+    with pytest.raises(APIError) as disabled:
+        await service.create(AIProposalCreate(source="ocr", text="午餐 20 元"), uuid4())
+    assert disabled.value.code == "ai_source_disabled"
+
+    settings = await service.get_settings()
+    enabled = await service.update_settings(
+        AISettingsReplace(
+            auto_execute_enabled=True,
+            ocr_source_enabled=True,
+            shortcut_text_source_enabled=True,
+            auto_execute_limit_minor=100_000,
+            minimum_confidence_bps=9_000,
+            expected_version=settings.version,
+        )
+    )
+    ocr_key = uuid4()
+    ocr, replay = await service.create(AIProposalCreate(source="ocr", text="午餐 20 元"), ocr_key)
+    shortcut, _ = await service.create(
+        AIProposalCreate(source="shortcut_text", text="午餐 20 元"), uuid4()
+    )
+    assert not replay
+    assert ocr.content_fingerprint != shortcut.content_fingerprint
+    assert ocr.status == "executed" and ocr.transaction_id is not None
+    ocr_transaction = await session.get(LedgerTransaction, ocr.transaction_id)
+    assert ocr_transaction is not None and ocr_transaction.source == "ocr"
+
+    await service.update_settings(
+        AISettingsReplace(
+            auto_execute_enabled=False,
+            ocr_source_enabled=False,
+            shortcut_text_source_enabled=False,
+            auto_execute_limit_minor=100_000,
+            minimum_confidence_bps=9_000,
+            expected_version=enabled.version,
+        )
+    )
+    same, replay = await service.create(AIProposalCreate(source="ocr", text="午餐 20 元"), ocr_key)
+    assert replay and same.id == ocr.id
+    with pytest.raises(APIError) as newly_disabled:
+        await service.create(AIProposalCreate(source="ocr", text="晚餐 30 元"), uuid4())
+    assert newly_disabled.value.code == "ai_source_disabled"
 
 
 async def test_ignore_and_failed_retry_state_machine(session: AsyncSession) -> None:
@@ -246,6 +335,8 @@ async def test_automatic_execution_boundaries(
     await service.update_settings(
         AISettingsReplace(
             auto_execute_enabled=True,
+            ocr_source_enabled=False,
+            shortcut_text_source_enabled=False,
             auto_execute_limit_minor=100_000,
             minimum_confidence_bps=9_000,
             expected_version=settings.version,
@@ -271,6 +362,8 @@ async def test_ledger_auto_validation_failure_preserves_full_pending_draft(
     await service.update_settings(
         AISettingsReplace(
             auto_execute_enabled=True,
+            ocr_source_enabled=False,
+            shortcut_text_source_enabled=False,
             auto_execute_limit_minor=100_000,
             minimum_confidence_bps=9_000,
             expected_version=settings.version,

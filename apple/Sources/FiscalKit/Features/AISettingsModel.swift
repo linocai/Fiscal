@@ -10,6 +10,8 @@ public final class AISettingsModel {
   public private(set) var isSaving = false
   public private(set) var conflictDetected = false
   public var autoExecuteEnabled = false
+  public var ocrSourceEnabled = false
+  public var shortcutTextSourceEnabled = false
   public var autoExecuteLimitMinor: Int64 = 100_000
   public var minimumConfidenceBps = 9_000
 
@@ -42,6 +44,8 @@ public final class AISettingsModel {
     do {
       let value = try await repository.update(.init(
         autoExecuteEnabled: autoExecuteEnabled,
+        ocrSourceEnabled: ocrSourceEnabled,
+        shortcutTextSourceEnabled: shortcutTextSourceEnabled,
         autoExecuteLimitMinor: autoExecuteLimitMinor,
         minimumConfidenceBps: minimumConfidenceBps,
         expectedVersion: settings.version))
@@ -53,6 +57,8 @@ public final class AISettingsModel {
   private func apply(_ value: AISettingsDTO) {
     settings = value
     autoExecuteEnabled = value.autoExecuteEnabled
+    ocrSourceEnabled = value.ocrSourceEnabled
+    shortcutTextSourceEnabled = value.shortcutTextSourceEnabled
     autoExecuteLimitMinor = value.autoExecuteLimitMinor
     minimumConfidenceBps = value.minimumConfidenceBps
   }

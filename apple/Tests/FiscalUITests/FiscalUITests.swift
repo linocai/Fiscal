@@ -306,6 +306,42 @@ final class FiscalUITests: XCTestCase {
     keepScreenshot(named: "ios-p8-settings-ai")
   }
 
+  func testP9CaptureSettingsAndOCRSourceUseRealAPI() throws {
+    try launchApp()
+    app.buttons["更多"].tap()
+    let settings = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "设置"))
+      .firstMatch
+    XCTAssertTrue(settings.waitForExistence(timeout: 8))
+    settings.tap()
+    XCTAssertTrue(app.staticTexts["快捷录入"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["快捷指令文本"].exists)
+    XCTAssertTrue(app.staticTexts["截图 OCR"].exists)
+    XCTAssertTrue(app.staticTexts["Back Tap 需手工配置"].exists)
+    XCTAssertTrue(app.staticTexts["最新截图访问"].exists)
+    XCTAssertTrue(app.staticTexts["记账结果通知"].exists)
+    waitForVisualStability()
+    keepScreenshot(named: "ios-p9-settings-capture")
+
+    app.navigationBars["设置"].buttons["更多"].tap()
+    let aiEntry = app.buttons.matching(NSPredicate(
+      format: "label CONTAINS %@ AND label CONTAINS %@", "AI 待确认", "1 笔"
+    )).firstMatch
+    XCTAssertTrue(aiEntry.waitForExistence(timeout: 8))
+    aiEntry.tap()
+    XCTAssertTrue(app.staticTexts["截图 OCR"].waitForExistence(timeout: 8))
+    waitForVisualStability()
+    keepScreenshot(named: "ios-p9-ai-ocr-source")
+
+    app.buttons["新建 AI 提案"].tap()
+    XCTAssertTrue(app.buttons["截图记账"].waitForExistence(timeout: 5))
+    app.buttons["截图记账"].tap()
+    XCTAssertTrue(app.navigationBars["截图记账"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["选择图片"].exists)
+    XCTAssertTrue(app.buttons["最新截图"].exists)
+    waitForVisualStability()
+    keepScreenshot(named: "ios-p9-ocr-capture")
+  }
+
   private func keepScreenshot(named name: String) {
     let screenshot = app.screenshot()
     let attachment = XCTAttachment(screenshot: screenshot)

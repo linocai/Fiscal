@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import unicodedata
+from asyncio import CancelledError
 from datetime import datetime
 from typing import cast
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -35,6 +36,7 @@ from fiscal_api.db.models import (
     AISettings,
     Category,
     TransactionKind,
+    TransactionSource,
 )
 from fiscal_api.repositories.ai import AIRepository
 from fiscal_api.services.ai_provider import AIProvider
@@ -68,6 +70,8 @@ class AIService:
         settings = await self.repository.settings(for_update=True)
         check_version(settings.version, replacement.expected_version)
         settings.auto_execute_enabled = replacement.auto_execute_enabled
+        settings.ocr_source_enabled = replacement.ocr_source_enabled
+        settings.shortcut_text_source_enabled = replacement.shortcut_text_source_enabled
         settings.auto_execute_limit_minor = replacement.auto_execute_limit_minor
         settings.minimum_confidence_bps = replacement.minimum_confidence_bps
         settings.version += 1
@@ -83,12 +87,26 @@ class AIService:
                 conflict("idempotency_key_reused", "该幂等键已用于不同的 AI 输入")
             return self._proposal_response(existing), True
 
+        settings = await self.repository.settings()
+        if request.source == "ocr" and not settings.ocr_source_enabled:
+            raise APIError(
+                status_code=403,
+                code="ai_source_disabled",
+                message="OCR 记账来源尚未启用",
+            )
+        if request.source == "shortcut_text" and not settings.shortcut_text_source_enabled:
+            raise APIError(
+                status_code=403,
+                code="ai_source_disabled",
+                message="快捷指令文本记账来源尚未启用",
+            )
+
         normalized = unicodedata.normalize("NFKC", request.text)
         proposal = AIProposal(
             source=request.source,
             raw_input=request.text,
             content_fingerprint=hashlib.sha256(
-                f"fiscal-ai-text-v1\n{normalized}".encode()
+                f"fiscal-ai-input-v2\n{request.source}\n{normalized}".encode()
             ).hexdigest(),
             create_idempotency_key=key,
             create_request_hash=request_hash,
@@ -175,8 +193,11 @@ class AIService:
         check_version(proposal.version, expected_version)
         self._require_status(proposal, AIProposalStatus.PENDING)
         draft = self._draft(proposal)
-        transaction = await self.transactions.create_ai_text(
-            draft, self._transaction_key(proposal.id), commit=False
+        transaction = await self.transactions.create_ai(
+            draft,
+            self._transaction_key(proposal.id),
+            self._ledger_source(proposal),
+            commit=False,
         )
         self._mark_executed(proposal, transaction)
         await self.session.commit()
@@ -209,7 +230,12 @@ class AIService:
         await self.session.commit()
         return await self._parse_and_finalize(proposal.id)
 
-    async def undo(self, proposal_id: UUID, expected_version: int) -> AIProposalMutationResponse:
+    async def undo(
+        self,
+        proposal_id: UUID,
+        expected_version: int,
+        expected_transaction_version: int,
+    ) -> AIProposalMutationResponse:
         await acquire_mutation_lock(self.session)
         proposal = await self._required(proposal_id, for_update=True)
         if (
@@ -218,6 +244,14 @@ class AIService:
             and proposal.transaction_id is not None
         ):
             transaction = await self.transactions.get(proposal.transaction_id)
+            if (
+                proposal.transaction_version != transaction.version
+                or expected_transaction_version != transaction.version - 1
+            ):
+                conflict(
+                    "ai_undo_transaction_changed",
+                    "该流水在通知生成后已发生变化, 不能从旧通知撤销",
+                )
             response = AIProposalMutationResponse(
                 proposal=self._proposal_response(proposal), transaction=transaction
             )
@@ -228,8 +262,16 @@ class AIService:
         if proposal.transaction_id is None:
             raise RuntimeError("executed AI proposal has no transaction")
         current = await self.transactions.get(proposal.transaction_id)
+        if (
+            proposal.transaction_version != current.version
+            or expected_transaction_version != current.version
+        ):
+            conflict(
+                "ai_undo_transaction_changed",
+                "该流水在通知生成后已发生变化, 不能从旧通知撤销",
+            )
         transaction = await self.transactions.void(
-            proposal.transaction_id, current.version, commit=False
+            proposal.transaction_id, expected_transaction_version, commit=False
         )
         proposal.status = AIProposalStatus.UNDONE.value
         proposal.transaction_version = transaction.version
@@ -257,6 +299,16 @@ class AIService:
         await self.session.commit()
         try:
             result = await self.provider.parse(parse_request)
+        except CancelledError:
+            await self._mark_failed(
+                proposal_id,
+                APIError(
+                    status_code=503,
+                    code="ai_processing_cancelled",
+                    message="AI 识别已取消, 可使用同一次操作重试",
+                ),
+            )
+            raise
         except APIError as error:
             await self._mark_failed(proposal_id, error)
             raise
@@ -278,8 +330,11 @@ class AIService:
             await self.session.commit()
             return self._proposal_response(locked)
         try:
-            transaction = await self.transactions.create_ai_text(
-                self._draft(locked), self._transaction_key(locked.id), commit=False
+            transaction = await self.transactions.create_ai(
+                self._draft(locked),
+                self._transaction_key(locked.id),
+                self._ledger_source(locked),
+                commit=False,
             )
         except APIError:
             await self.session.rollback()
@@ -364,6 +419,10 @@ class AIService:
     @staticmethod
     def _auto_eligible(proposal: AIProposal, settings: AISettings) -> bool:
         if not settings.auto_execute_enabled:
+            return False
+        if proposal.source == "ocr" and not settings.ocr_source_enabled:
+            return False
+        if proposal.source == "shortcut_text" and not settings.shortcut_text_source_enabled:
             return False
         if proposal.reason_codes or proposal.missing_fields:
             return False
@@ -455,6 +514,8 @@ class AIService:
     def _settings_response(self, settings: AISettings) -> AISettingsResponse:
         return AISettingsResponse(
             auto_execute_enabled=settings.auto_execute_enabled,
+            ocr_source_enabled=settings.ocr_source_enabled,
+            shortcut_text_source_enabled=settings.shortcut_text_source_enabled,
             auto_execute_limit_minor=settings.auto_execute_limit_minor,
             minimum_confidence_bps=settings.minimum_confidence_bps,
             version=settings.version,
@@ -510,6 +571,12 @@ class AIService:
     @staticmethod
     def _transaction_key(proposal_id: UUID) -> UUID:
         return uuid5(NAMESPACE_URL, f"fiscal-ai-text:{proposal_id}")
+
+    @staticmethod
+    def _ledger_source(proposal: AIProposal) -> TransactionSource:
+        if proposal.source == "ocr":
+            return TransactionSource.OCR
+        return TransactionSource.AI_TEXT
 
     @staticmethod
     def _encode_cursor(proposal: AIProposal) -> str:

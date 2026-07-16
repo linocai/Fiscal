@@ -15,7 +15,18 @@ public enum AIProposalStatus: String, Codable, Sendable, CaseIterable, Identifia
   }
 }
 
-public enum AIProposalSource: String, Codable, Sendable { case text }
+public enum AIProposalSource: String, Codable, Sendable {
+  case text
+  case ocr
+  case shortcutText = "shortcut_text"
+  public var title: String {
+    switch self {
+    case .text: "文本"
+    case .ocr: "截图 OCR"
+    case .shortcutText: "快捷指令文本"
+    }
+  }
+}
 
 public struct AIProposalDTO: Codable, Sendable, Equatable, Identifiable {
   public let id: UUID
@@ -125,6 +136,7 @@ public struct AIProposalCreateRequest: Codable, Sendable, Equatable {
   public let source: AIProposalSource
   public let text: String
   public init(text: String) { source = .text; self.text = text }
+  public init(source: AIProposalSource, text: String) { self.source = source; self.text = text }
 }
 
 public struct AIProposalReplacementRequest: Encodable, Sendable {
@@ -146,5 +158,18 @@ public struct AIProposalActionResponse: Codable, Sendable, Equatable {
   public let transaction: TransactionDTO?
   public init(proposal: AIProposalDTO, transaction: TransactionDTO?) {
     self.proposal = proposal; self.transaction = transaction
+  }
+}
+
+public struct AIProposalUndoRequest: Codable, Sendable, Equatable {
+  public let expectedVersion: Int
+  public let expectedTransactionVersion: Int
+  enum CodingKeys: String, CodingKey {
+    case expectedVersion = "expected_version"
+    case expectedTransactionVersion = "expected_transaction_version"
+  }
+  public init(expectedVersion: Int, expectedTransactionVersion: Int) {
+    self.expectedVersion = expectedVersion
+    self.expectedTransactionVersion = expectedTransactionVersion
   }
 }

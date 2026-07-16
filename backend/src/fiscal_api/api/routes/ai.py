@@ -12,6 +12,7 @@ from fiscal_api.api.p8_schemas import (
     AIProposalReplace,
     AIProposalResponse,
     AIProposalRetryRequest,
+    AIProposalUndoRequest,
     AIProposalVersionRequest,
     AISettingsReplace,
     AISettingsResponse,
@@ -109,7 +110,11 @@ async def retry_ai_proposal(
 @router.post("/proposals/{proposal_id}/undo", response_model=AIProposalMutationResponse)
 async def undo_ai_proposal(
     proposal_id: UUID,
-    request: AIProposalVersionRequest,
+    request: AIProposalUndoRequest,
     service: AIServiceDependency,
 ) -> AIProposalMutationResponse:
-    return await service.undo(proposal_id, request.expected_version)
+    return await service.undo(
+        proposal_id,
+        request.expected_version,
+        request.expected_transaction_version,
+    )

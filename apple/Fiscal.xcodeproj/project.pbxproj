@@ -36,8 +36,10 @@
 		42CF6FAB3A19861566479BE9 /* MoneyFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCB93673B1BC323E17CA866A /* MoneyFormat.swift */; };
 		45CD9B1BCF0BB42D87684C7D /* CreditRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F6D5C08025FA9E847D78B61 /* CreditRepository.swift */; };
 		47AB207089C1F68AF4078C10 /* AISettingsDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A96FD3E04393BDF8D525167 /* AISettingsDTO.swift */; };
+		47DD9F8FF2D3DFEECA226CD4 /* AIInputSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18FCC6EB2E38FE0813B18CB8 /* AIInputSubmission.swift */; };
 		4B862841FABAAF8631C459E9 /* CreditScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA464751FCA42DDEA8005314 /* CreditScreens.swift */; };
 		4E8E488F5194E9A013CF1ABD /* AIProposalRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA7703B5970A868EC31D996 /* AIProposalRepository.swift */; };
+		4FEA18DD0F6BFB141B18BE6F /* FiscalShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128E44B859F89927A62EEE28 /* FiscalShortcuts.swift */; };
 		546512E139DB1A8B3B31F4A9 /* AIProposalModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E485063B64D3CA0E90E279 /* AIProposalModel.swift */; };
 		57EA19B5230ACCC35A5BFCD1 /* SettingsScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA34BB566D8135E012268007 /* SettingsScreens.swift */; };
 		58D58F47A45AD9947FD3CC62 /* InstallmentDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = B776D98F419D1A0D118D08AC /* InstallmentDTO.swift */; };
@@ -45,16 +47,19 @@
 		6297712DE1515836BCC6E29E /* SystemStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = F05017C6B56940B011F6E23E /* SystemStatus.swift */; };
 		64867B9499765117BF8434D4 /* ReportingRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2565D0CD7EC6A2E0C3659D71 /* ReportingRepository.swift */; };
 		682F700DD6FD0ACCC4BC1BCD /* MasterDataDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CB89B668C9785D2064942E1 /* MasterDataDTO.swift */; };
+		69114C706C51C5E175810D51 /* CaptureAuthorizationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2C430AD2037E1D3CACC0A4 /* CaptureAuthorizationModel.swift */; };
 		6CEE9412D66F9E0E5250DA7B /* ReimbursementModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2143E2EC10FFF85034FFD8BB /* ReimbursementModel.swift */; };
 		70083F44D5488D2A90A18600 /* MasterDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 549791302DE4F9854A26918B /* MasterDataModels.swift */; };
 		762C619FE720543408DACD69 /* MacRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 255F8031C4F10F48F933A838 /* MacRootView.swift */; };
 		78AA1D87BA584A3B070ACAC1 /* ReportingRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2565D0CD7EC6A2E0C3659D71 /* ReportingRepository.swift */; };
+		790361283016EDBEF8212D3D /* OCRInputService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C53CFB1B3FBC363B77ED08 /* OCRInputService.swift */; };
 		79595B893A93FD06DF6B4F4A /* CreditScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA464751FCA42DDEA8005314 /* CreditScreens.swift */; };
 		7A3542E65018766E4BA525A2 /* SharedOverviewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8C3E571ECB6E946D838BB2 /* SharedOverviewComponents.swift */; };
 		803947D4FBF8B2BEF726E0A7 /* CreditDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50AE5EE92E61AC85DDE507B3 /* CreditDTO.swift */; };
 		830689914AD7D22FC9F5749F /* TransactionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0752D3D57AD3B99FE1943E05 /* TransactionModels.swift */; };
 		83469C4C09BE7378492F2B31 /* AISettingsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F67EBD69105DDF7D3E4FED2 /* AISettingsRepository.swift */; };
 		89087700DD68C77C7175FA1C /* InstallmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */; };
+		8C3520FB72EC576D0544255C /* P9InputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B37F87A62073E2D426AC5C /* P9InputTests.swift */; };
 		8E2A9F3F530D7AEC804E1A0E /* TransactionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0752D3D57AD3B99FE1943E05 /* TransactionModels.swift */; };
 		8E8037BF67BFD62CDA4033EA /* FiscalmacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E8B677BF8165F1CF2AA217F /* FiscalmacOSApp.swift */; };
 		8F352FC4B0E80F982525AED9 /* ReimbursementDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF39C6F2744F63EE814A73F2 /* ReimbursementDTO.swift */; };
@@ -78,16 +83,20 @@
 		B6D9AA5E9C3D3D572F7F3FDE /* MasterDataDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CB89B668C9785D2064942E1 /* MasterDataDTO.swift */; };
 		B6DE74EF3CF5E14A638D02F9 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */; };
 		B7F5464BC01EB757FA330392 /* AISettingsDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A96FD3E04393BDF8D525167 /* AISettingsDTO.swift */; };
+		BA71137FB7961C822DA900E9 /* OCRInputService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C53CFB1B3FBC363B77ED08 /* OCRInputService.swift */; };
 		BAD009742B2AE146F55E918A /* IOSOverviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7078C368BF50D6FDB597E7B3 /* IOSOverviewScreen.swift */; };
 		BDBC32BC1071C2E175D1E539 /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */; };
 		BE17976A44A851276CF80AFD /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05A497A70BFC7C3E143FE00A /* APIConfiguration.swift */; };
 		BF28273EB1C825AED3B34E8B /* FiscalKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E2FF91C44F1DCC211426631D /* FiscalKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C2FF5131387EF586283B5E4A /* FiscalNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = A34095B1DD7CB23F5F409164 /* FiscalNotifications.swift */; };
+		C3465B84C2BAFC3BF304C6CB /* CaptureAuthorizationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2C430AD2037E1D3CACC0A4 /* CaptureAuthorizationModel.swift */; };
 		C42A579D33B3CC37A069CB3F /* APITransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC300DFA7D718CB81ABD669 /* APITransport.swift */; };
 		C448FE553D4EDD301055D712 /* FiscaliOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29540C1D2948FC97337C271B /* FiscaliOSApp.swift */; };
 		C700E2C6D2B666953C652129 /* SettingsScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA34BB566D8135E012268007 /* SettingsScreens.swift */; };
 		C9F0CD5E3ED47A855E847C3E /* CreditModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5407B68FAE8AFB476A8A2C45 /* CreditModel.swift */; };
 		CAB14618787EAB485A7F0920 /* FiscalUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C18CEE768684AD8529AC01 /* FiscalUITests.swift */; };
 		CB689EF9A13E2E14EC31044B /* ReportingModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83EEBE7F74FA862A373C393A /* ReportingModel.swift */; };
+		CB7FEFEFF177F9D2BC620ABC /* AIInputSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18FCC6EB2E38FE0813B18CB8 /* AIInputSubmission.swift */; };
 		CE4D4DDA94380519D6AA4DD2 /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05A497A70BFC7C3E143FE00A /* APIConfiguration.swift */; };
 		CECB7E26EC40C8BAAE042E28 /* ReimbursementScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6DF31AF77C0838D251DDC32 /* ReimbursementScreens.swift */; };
 		CF97D0DCF3FDF7229D0BEE04 /* ReimbursementRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A3AB4BE7E4F9C491EEA3497 /* ReimbursementRepository.swift */; };
@@ -193,8 +202,10 @@
 		075ACF23C85C06B791846066 /* AISettingsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettingsModel.swift; sourceTree = "<group>"; };
 		0C171D635157C9F0E510E27F /* FiscalSnapshotTool */ = {isa = PBXFileReference; includeInIndex = 0; path = FiscalSnapshotTool; sourceTree = BUILT_PRODUCTS_DIR; };
 		0FC300DFA7D718CB81ABD669 /* APITransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APITransport.swift; sourceTree = "<group>"; };
+		128E44B859F89927A62EEE28 /* FiscalShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalShortcuts.swift; sourceTree = "<group>"; };
 		14D2F5B51728A050A74E8E3F /* TransactionDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionDTO.swift; sourceTree = "<group>"; };
 		185A49CF04897A7803A09434 /* OverviewSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewSnapshot.swift; sourceTree = "<group>"; };
+		18FCC6EB2E38FE0813B18CB8 /* AIInputSubmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInputSubmission.swift; sourceTree = "<group>"; };
 		1A96FD3E04393BDF8D525167 /* AISettingsDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettingsDTO.swift; sourceTree = "<group>"; };
 		2143E2EC10FFF85034FFD8BB /* ReimbursementModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimbursementModel.swift; sourceTree = "<group>"; };
 		22D6DBE46DB3991049438550 /* FiscaliOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FiscaliOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -205,6 +216,7 @@
 		2E901AA4B81BD9921A100F0C /* FiscalUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FiscalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2F67EBD69105DDF7D3E4FED2 /* AISettingsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettingsRepository.swift; sourceTree = "<group>"; };
 		30AD3A2039A614D2F2543AE1 /* MacOverviewScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOverviewScreen.swift; sourceTree = "<group>"; };
+		36C53CFB1B3FBC363B77ED08 /* OCRInputService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRInputService.swift; sourceTree = "<group>"; };
 		40E7C412779E444B2EBDB328 /* MasterDataScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasterDataScreens.swift; sourceTree = "<group>"; };
 		4EA7703B5970A868EC31D996 /* AIProposalRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProposalRepository.swift; sourceTree = "<group>"; };
 		500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTokenStore.swift; sourceTree = "<group>"; };
@@ -215,6 +227,7 @@
 		59C18CEE768684AD8529AC01 /* FiscalUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalUITests.swift; sourceTree = "<group>"; };
 		5A0067D7F4A0681CA61009D6 /* TransactionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionRepository.swift; sourceTree = "<group>"; };
 		5A9F4731919A2E01A4446F81 /* SnapshotTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotTool.swift; sourceTree = "<group>"; };
+		5C2C430AD2037E1D3CACC0A4 /* CaptureAuthorizationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureAuthorizationModel.swift; sourceTree = "<group>"; };
 		5CB89B668C9785D2064942E1 /* MasterDataDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasterDataDTO.swift; sourceTree = "<group>"; };
 		5F8C3E571ECB6E946D838BB2 /* SharedOverviewComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedOverviewComponents.swift; sourceTree = "<group>"; };
 		61975243C0F4B54528AB4EB5 /* InstallmentModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentModel.swift; sourceTree = "<group>"; };
@@ -229,6 +242,7 @@
 		9A3AB4BE7E4F9C491EEA3497 /* ReimbursementRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimbursementRepository.swift; sourceTree = "<group>"; };
 		9AB6841587AA8B69AFF3A00A /* OverviewFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewFixtures.swift; sourceTree = "<group>"; };
 		A0B4C67D67A062E6762293EE /* ReportingScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportingScreens.swift; sourceTree = "<group>"; };
+		A34095B1DD7CB23F5F409164 /* FiscalNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalNotifications.swift; sourceTree = "<group>"; };
 		A48D8B5171D3A1FF7724A9BA /* FiscalmacOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FiscalmacOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A501B4150DAFA4ABFE586271 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A8E485063B64D3CA0E90E279 /* AIProposalModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProposalModel.swift; sourceTree = "<group>"; };
@@ -240,6 +254,7 @@
 		C1164C772E643D0CF6996CB1 /* FiscalDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalDesign.swift; sourceTree = "<group>"; };
 		D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentRepository.swift; sourceTree = "<group>"; };
 		D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
+		E0B37F87A62073E2D426AC5C /* P9InputTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P9InputTests.swift; sourceTree = "<group>"; };
 		E0D63863F934E27294B1542B /* FiscalKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FiscalKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2FF91C44F1DCC211426631D /* FiscalKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FiscalKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E38857D295F340534E49F652 /* ConnectionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionModel.swift; sourceTree = "<group>"; };
@@ -314,9 +329,11 @@
 		4610971F7E42E6C9632D3CE8 /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				18FCC6EB2E38FE0813B18CB8 /* AIInputSubmission.swift */,
 				A8E485063B64D3CA0E90E279 /* AIProposalModel.swift */,
 				B71C4B21663391E2601CBC53 /* AIProposalScreens.swift */,
 				075ACF23C85C06B791846066 /* AISettingsModel.swift */,
+				5C2C430AD2037E1D3CACC0A4 /* CaptureAuthorizationModel.swift */,
 				E38857D295F340534E49F652 /* ConnectionModel.swift */,
 				5407B68FAE8AFB476A8A2C45 /* CreditModel.swift */,
 				EA464751FCA42DDEA8005314 /* CreditScreens.swift */,
@@ -326,6 +343,7 @@
 				30AD3A2039A614D2F2543AE1 /* MacOverviewScreen.swift */,
 				549791302DE4F9854A26918B /* MasterDataModels.swift */,
 				40E7C412779E444B2EBDB328 /* MasterDataScreens.swift */,
+				36C53CFB1B3FBC363B77ED08 /* OCRInputService.swift */,
 				D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */,
 				2143E2EC10FFF85034FFD8BB /* ReimbursementModel.swift */,
 				B6DF31AF77C0838D251DDC32 /* ReimbursementScreens.swift */,
@@ -399,6 +417,7 @@
 			isa = PBXGroup;
 			children = (
 				804F88664C4025B50AD0FC75 /* FiscalKitTests.swift */,
+				E0B37F87A62073E2D426AC5C /* P9InputTests.swift */,
 			);
 			name = FiscalKitTests;
 			path = Tests/FiscalKitTests;
@@ -424,6 +443,8 @@
 			isa = PBXGroup;
 			children = (
 				29540C1D2948FC97337C271B /* FiscaliOSApp.swift */,
+				A34095B1DD7CB23F5F409164 /* FiscalNotifications.swift */,
+				128E44B859F89927A62EEE28 /* FiscalShortcuts.swift */,
 				A501B4150DAFA4ABFE586271 /* Info.plist */,
 				AC2144E087E40C5B7FEF232A /* IOSRootView.swift */,
 			);
@@ -651,6 +672,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B456FF5781B7A73DE7AEFF19 /* FiscalKitTests.swift in Sources */,
+				8C3520FB72EC576D0544255C /* P9InputTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -658,6 +680,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CB7FEFEFF177F9D2BC620ABC /* AIInputSubmission.swift in Sources */,
 				DC3A6F94ECC3CCBE95DA33BB /* AIProposalDTO.swift in Sources */,
 				25F7A3F9B77E2D03F773E6B1 /* AIProposalModel.swift in Sources */,
 				D64D2A140FEB4DC93DFBD670 /* AIProposalRepository.swift in Sources */,
@@ -667,6 +690,7 @@
 				A2FC5A547E003382E291D173 /* AISettingsRepository.swift in Sources */,
 				BE17976A44A851276CF80AFD /* APIConfiguration.swift in Sources */,
 				C42A579D33B3CC37A069CB3F /* APITransport.swift in Sources */,
+				69114C706C51C5E175810D51 /* CaptureAuthorizationModel.swift in Sources */,
 				9E05E23319E13CE50F8BC00A /* ConnectionModel.swift in Sources */,
 				803947D4FBF8B2BEF726E0A7 /* CreditDTO.swift in Sources */,
 				E67C6BEF0FFD61DE50A2E3B8 /* CreditModel.swift in Sources */,
@@ -685,6 +709,7 @@
 				DD074CA639D50F253BC74684 /* MasterDataRepositories.swift in Sources */,
 				3010D4B8CF583CCB83B9C0CF /* MasterDataScreens.swift in Sources */,
 				A306C34BEC185CD5FE479DF0 /* MoneyFormat.swift in Sources */,
+				BA71137FB7961C822DA900E9 /* OCRInputService.swift in Sources */,
 				351A8469BB5904E68E5069DF /* OverviewFixtures.swift in Sources */,
 				AEB258C3DF48989FDDC59B2B /* OverviewSnapshot.swift in Sources */,
 				B6DE74EF3CF5E14A638D02F9 /* PlaceholderScreen.swift in Sources */,
@@ -719,6 +744,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				47DD9F8FF2D3DFEECA226CD4 /* AIInputSubmission.swift in Sources */,
 				DB18067C21BFC9CB378604D9 /* AIProposalDTO.swift in Sources */,
 				546512E139DB1A8B3B31F4A9 /* AIProposalModel.swift in Sources */,
 				4E8E488F5194E9A013CF1ABD /* AIProposalRepository.swift in Sources */,
@@ -728,6 +754,7 @@
 				83469C4C09BE7378492F2B31 /* AISettingsRepository.swift in Sources */,
 				CE4D4DDA94380519D6AA4DD2 /* APIConfiguration.swift in Sources */,
 				182C32DC2D8B456E50A6458A /* APITransport.swift in Sources */,
+				C3465B84C2BAFC3BF304C6CB /* CaptureAuthorizationModel.swift in Sources */,
 				D049B3275D9D8CF1DF91BC4B /* ConnectionModel.swift in Sources */,
 				268326D892E97761F947F6D0 /* CreditDTO.swift in Sources */,
 				C9F0CD5E3ED47A855E847C3E /* CreditModel.swift in Sources */,
@@ -746,6 +773,7 @@
 				DF89480104FF18E9975CA435 /* MasterDataRepositories.swift in Sources */,
 				38CD903D4D58CFE2A8C209D0 /* MasterDataScreens.swift in Sources */,
 				42CF6FAB3A19861566479BE9 /* MoneyFormat.swift in Sources */,
+				790361283016EDBEF8212D3D /* OCRInputService.swift in Sources */,
 				956D11991AADEFD598358E95 /* OverviewFixtures.swift in Sources */,
 				0DB3D38B493F1B22A954DEC2 /* OverviewSnapshot.swift in Sources */,
 				F75E5694540328D93F6A9CBE /* PlaceholderScreen.swift in Sources */,
@@ -771,6 +799,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C2FF5131387EF586283B5E4A /* FiscalNotifications.swift in Sources */,
+				4FEA18DD0F6BFB141B18BE6F /* FiscalShortcuts.swift in Sources */,
 				C448FE553D4EDD301055D712 /* FiscaliOSApp.swift in Sources */,
 				E3046B16C01C9457A052EF11 /* IOSRootView.swift in Sources */,
 			);

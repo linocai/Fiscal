@@ -31,6 +31,8 @@ targets:
       properties:
         CFBundleDisplayName: Fiscal
         FISCAL_API_BASE_URL: "$(FISCAL_API_BASE_URL)"
+        NSPhotoLibraryUsageDescription: "Fiscal 读取你允许访问的截图，在设备端识别记账文字；图片不会上传。"
+        PHPhotoLibraryPreventAutomaticLimitedAccessAlert: true
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIApplicationSceneManifest:
@@ -106,7 +108,7 @@ schemes:
         - FiscalUITests
       environmentVariables:
         FISCAL_UI_TEST_DEVICE_TOKEN: integration-device-token
-        FISCAL_QA_SCREENSHOT_DIR: "$(SRCROOT)/../docs/qa/p8/screenshots"
+        FISCAL_QA_SCREENSHOT_DIR: "$(SRCROOT)/../docs/qa/p9/screenshots"
   FiscalmacOS:
     build:
       targets:
@@ -118,4 +120,4 @@ schemes:
         - FiscalKitTests
       environmentVariables:
         FISCAL_UI_TEST_DEVICE_TOKEN: integration-device-token
-        FISCAL_QA_SCREENSHOT_DIR: "$(SRCROOT)/../docs/qa/p8/screenshots"
+        FISCAL_QA_SCREENSHOT_DIR: "$(SRCROOT)/../docs/qa/p9/screenshots"

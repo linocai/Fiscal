@@ -30,11 +30,25 @@ struct FiscalKitP8Tests {
 
   @Test("AI settings payload cannot disguise confidence or money as floating point")
   func settingsPayload() throws {
-    let request = AISettingsUpdateRequest(autoExecuteEnabled: true, autoExecuteLimitMinor: 100_000, minimumConfidenceBps: 9_500, expectedVersion: 3)
+    let request = AISettingsUpdateRequest(
+      autoExecuteEnabled: true, ocrSourceEnabled: true,
+      shortcutTextSourceEnabled: true, autoExecuteLimitMinor: 100_000,
+      minimumConfidenceBps: 9_500, expectedVersion: 3)
     let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
     #expect(object["auto_execute_limit_minor"] as? Int == 100_000)
     #expect(object["minimum_confidence_bps"] as? Int == 9_500)
     #expect(object["expected_version"] as? Int == 3)
+    #expect(object["ocr_source_enabled"] as? Bool == true)
+    #expect(object["shortcut_text_source_enabled"] as? Bool == true)
+  }
+
+  @Test("Undo payload binds both proposal and ledger versions")
+  func undoPayload() throws {
+    let request = AIProposalUndoRequest(expectedVersion: 4, expectedTransactionVersion: 2)
+    let object = try #require(
+      JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
+    #expect(object["expected_version"] as? Int == 4)
+    #expect(object["expected_transaction_version"] as? Int == 2)
   }
 
   @Test("AI text transactions remain ordinary user editable rows")

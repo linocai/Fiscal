@@ -75,6 +75,23 @@ class TransactionService:
             commit=commit,
         )
 
+    async def create_ai(
+        self,
+        draft: TransactionDraft,
+        idempotency_key: UUID,
+        source: TransactionSource,
+        *,
+        commit: bool = True,
+    ) -> TransactionResponse:
+        if source not in {TransactionSource.AI_TEXT, TransactionSource.OCR}:
+            raise ValueError("AI ledger source must be ai_text or ocr")
+        return await self._create(
+            draft,
+            idempotency_key,
+            source=source,
+            commit=commit,
+        )
+
     async def _create(
         self,
         draft: TransactionDraft,

@@ -17,7 +17,7 @@ ConfidenceBPS = Annotated[StrictInt, Field(ge=0, le=10_000)]
 SafeConfidenceBPS = Annotated[StrictInt, Field(ge=9_000, le=10_000)]
 SafeAutoLimit = Annotated[StrictInt, Field(ge=1, le=100_000)]
 ProposalStatus = Literal["processing", "pending", "executed", "failed", "ignored", "undone"]
-ProposalSource = Literal["text"]
+ProposalSource = Literal["text", "ocr", "shortcut_text"]
 AIField = Literal[
     "kind",
     "amount_minor",
@@ -90,6 +90,8 @@ class AIProviderResult(P8Model):
 
 class AISettingsResponse(P8Model):
     auto_execute_enabled: bool
+    ocr_source_enabled: bool
+    shortcut_text_source_enabled: bool
     auto_execute_limit_minor: int
     minimum_confidence_bps: int
     version: int
@@ -101,6 +103,8 @@ class AISettingsResponse(P8Model):
 
 class AISettingsReplace(P8Model):
     auto_execute_enabled: bool
+    ocr_source_enabled: bool
+    shortcut_text_source_enabled: bool
     auto_execute_limit_minor: SafeAutoLimit
     minimum_confidence_bps: SafeConfidenceBPS
     expected_version: Annotated[StrictInt, Field(ge=1)]
@@ -171,6 +175,10 @@ class AIProposalVersionRequest(P8Model):
 
 class AIProposalRetryRequest(AIProposalVersionRequest):
     pass
+
+
+class AIProposalUndoRequest(AIProposalVersionRequest):
+    expected_transaction_version: Annotated[StrictInt, Field(ge=1)]
 
 
 class AIProposalMutationResponse(P8Model):

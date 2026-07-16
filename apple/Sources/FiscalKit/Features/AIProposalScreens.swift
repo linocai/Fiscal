@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+  import PhotosUI
+#endif
 
 public struct IOSAIProposalSheet: View {
   @Bindable var model: AIProposalModel
@@ -8,6 +11,9 @@ public struct IOSAIProposalSheet: View {
   @Environment(\.dismiss) private var dismiss
   @State private var editing: AIProposalDTO?
   @State private var showTextEntry = false
+  #if os(iOS)
+    @State private var showOCRCapture = false
+  #endif
 
   public init(model: AIProposalModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil) {
     self.model = model; self.accounts = accounts; self.categories = categories; self.credit = credit
@@ -42,8 +48,13 @@ public struct IOSAIProposalSheet: View {
       .toolbar {
         ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() }.buttonStyle(.plain) }
         ToolbarItem(placement: .primaryAction) {
-          Button { showTextEntry = true } label: { Label("文本记账", systemImage: "plus") }
-            .buttonStyle(.plain).foregroundStyle(FiscalColor.accent)
+          Menu {
+            Button("文本记账", systemImage: "text.badge.plus") { showTextEntry = true }
+            #if os(iOS)
+              Button("截图记账", systemImage: "text.viewfinder") { showOCRCapture = true }
+            #endif
+          } label: { Label("新建 AI 提案", systemImage: "plus") }
+          .buttonStyle(.plain).foregroundStyle(FiscalColor.accent)
         }
       }
       .refreshable { await model.load() }
@@ -57,6 +68,9 @@ public struct IOSAIProposalSheet: View {
         AIProposalEditorScreen(model: model, proposal: proposal, accounts: accounts, categories: categories, credit: credit)
       }
       .sheet(isPresented: $showTextEntry) { AITextEntrySheet(model: model) }
+      #if os(iOS)
+        .sheet(isPresented: $showOCRCapture) { IOSOCRCaptureSheet(model: model) }
+      #endif
     }
     .presentationDetents([.large])
   }
@@ -92,6 +106,104 @@ public struct IOSAIProposalSheet: View {
   }
 }
 
+#if os(iOS)
+  private struct IOSOCRCaptureSheet: View {
+    @Bindable var model: AIProposalModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedItem: PhotosPickerItem?
+    @State private var transcript = ""
+    @State private var message: String?
+    @State private var isRecognizing = false
+    @State private var idempotencyKey = UUID()
+    @State private var lastAttemptText: String?
+    private let ocr = VisionOCRService()
+    private let screenshots = LatestScreenshotPhotoLibrary()
+
+    var body: some View {
+      NavigationStack {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 16) {
+            Text("图片只在这台 iPhone 上通过 Vision 识别；发送给服务器的只有下面这段文字。")
+              .font(.subheadline).foregroundStyle(FiscalColor.secondary)
+            HStack(spacing: 10) {
+              PhotosPicker(selection: $selectedItem, matching: .images) {
+                Label("选择图片", systemImage: "photo")
+                  .frame(maxWidth: .infinity)
+              }.buttonStyle(FiscalActionButtonStyle(.secondary))
+              Button {
+                Task { await recognizeLatestScreenshot() }
+              } label: {
+                Label("最新截图", systemImage: "photo.badge.clock")
+                  .frame(maxWidth: .infinity)
+              }.buttonStyle(FiscalActionButtonStyle(.secondary))
+            }
+            if isRecognizing { ProgressView("正在设备端识别文字…").padding(.vertical, 16) }
+            if !transcript.isEmpty {
+              VStack(alignment: .leading, spacing: 8) {
+                Text("识别文字").font(.headline)
+                TextEditor(text: $transcript).font(.body).padding(10).frame(minHeight: 220)
+                  .background(.white, in: .rect(cornerRadius: 16))
+                Text("可在提交前修正识别错误；超过 2,000 字不会静默截断。")
+                  .font(.caption).foregroundStyle(FiscalColor.tertiary)
+              }
+            }
+            if let message {
+              Label(message, systemImage: "exclamationmark.triangle.fill")
+                .font(.caption).foregroundStyle(FiscalColor.expense)
+            }
+            if !transcript.isEmpty {
+              Button(model.isMutating ? "提交中…" : "生成 OCR 提案") {
+                Task { await submit() }
+              }.buttonStyle(FiscalActionButtonStyle()).disabled(model.isMutating)
+            }
+          }.padding(18)
+        }.background(FiscalColor.iOSBackground).navigationTitle("截图记账")
+          .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+              Button("取消") { dismiss() }.buttonStyle(.plain)
+            }
+          }
+          .task(id: selectedItem) {
+            guard let selectedItem else { return }
+            do {
+              guard let data = try await selectedItem.loadTransferable(type: Data.self) else {
+                throw OCRInputError.invalidImage
+              }
+              await recognize(data)
+            } catch is CancellationError {
+            } catch { message = AIInputFeedback.message(for: error) }
+          }
+      }.presentationDetents([.large])
+    }
+
+    private func recognizeLatestScreenshot() async {
+      do { await recognize(try await screenshots.latestScreenshotData(requestAccess: true)) }
+      catch is CancellationError {}
+      catch { message = AIInputFeedback.message(for: error) }
+    }
+
+    private func recognize(_ data: Data) async {
+      isRecognizing = true; message = nil; defer { isRecognizing = false }
+      do {
+        let result = try await ocr.recognize(imageData: data)
+        transcript = result.text
+        idempotencyKey = UUID(); lastAttemptText = nil
+      } catch is CancellationError {
+      } catch { message = AIInputFeedback.message(for: error) }
+    }
+
+    private func submit() async {
+      let normalized = AIInputSubmissionService.normalized(transcript)
+      if normalized != lastAttemptText { idempotencyKey = UUID(); lastAttemptText = normalized }
+      let success = await model.create(
+        source: .ocr, text: normalized, idempotencyKey: idempotencyKey)
+      if model.shouldRotateCreateKeyAfterFailure { idempotencyKey = UUID(); lastAttemptText = nil }
+      message = model.message
+      if success { dismiss() }
+    }
+  }
+#endif
+
 private struct IOSAIProposalRow: View {
   let proposal: AIProposalDTO
   let accountName: String
@@ -105,7 +217,7 @@ private struct IOSAIProposalRow: View {
     FiscalCard(radius: 19) {
       VStack(alignment: .leading, spacing: 12) {
         HStack(spacing: 8) {
-          Text("文本").font(.caption2.bold()).foregroundStyle(FiscalColor.accent)
+          Text(proposal.source.title).font(.caption2.bold()).foregroundStyle(FiscalColor.accent)
             .padding(.horizontal, 8).padding(.vertical, 4)
             .background(FiscalColor.accent.opacity(0.09), in: .capsule)
           Text("置信度 \(proposal.confidenceTitle)").font(.caption).foregroundStyle(FiscalColor.secondary)
@@ -287,7 +399,7 @@ public struct MacAIProposalScreen: View {
               Button { model.selectedID = proposal.id } label: {
                 HStack(spacing: 10) {
                   FiscalIconTile("sparkles", color: FiscalColor.accent)
-                  VStack(alignment: .leading, spacing: 3) { Text(proposal.title ?? "待补全提案").font(.subheadline.weight(.semibold)); Text("文本 · \(proposal.confidenceTitle) · \(proposal.status.title)").font(.caption).foregroundStyle(FiscalColor.tertiary) }
+                  VStack(alignment: .leading, spacing: 3) { Text(proposal.title ?? "待补全提案").font(.subheadline.weight(.semibold)); Text("\(proposal.source.title) · \(proposal.confidenceTitle) · \(proposal.status.title)").font(.caption).foregroundStyle(FiscalColor.tertiary) }
                   Spacer(); Text(proposal.amountMinor.map { Money(minorUnits: $0).formatted() } ?? "—").font(.subheadline.monospacedDigit())
                 }.padding(12).background(model.selectedID == proposal.id ? FiscalColor.accent.opacity(0.09) : .white, in: .rect(cornerRadius: 12))
               }.buttonStyle(.plain).task { if proposal.id == model.proposals.last?.id { await model.loadMore() } }
@@ -308,7 +420,7 @@ public struct MacAIProposalScreen: View {
         VStack(alignment: .leading, spacing: 14) {
           Text(proposal.title ?? "待补全标题").font(.title2.bold())
           Text(proposal.amountMinor.map { Money(minorUnits: $0).formatted() } ?? "金额待确认").font(.system(size: 28, weight: .bold)).monospacedDigit()
-          detail("状态", proposal.status.title); detail("置信度", proposal.confidenceTitle); detail("来源", "文本")
+          detail("状态", proposal.status.title); detail("置信度", proposal.confidenceTitle); detail("来源", proposal.source.title)
           if let explanation = proposal.explanation { Text(explanation).font(.caption).foregroundStyle(FiscalColor.secondary) }
           if proposal.canReview { Button("确认记账") { Task { await model.execute(proposal) } }.buttonStyle(FiscalActionButtonStyle()); if accounts != nil && categories != nil { Button("编辑") { editing = proposal }.buttonStyle(FiscalActionButtonStyle(.secondary)) }; Button("忽略") { Task { await model.ignore(proposal) } }.buttonStyle(.plain).foregroundStyle(FiscalColor.tertiary) }
           else if proposal.status == .failed { Button("重新识别") { Task { await model.retry(proposal) } }.buttonStyle(FiscalActionButtonStyle(.secondary)) }

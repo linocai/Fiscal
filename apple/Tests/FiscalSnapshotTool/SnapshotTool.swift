@@ -114,7 +114,7 @@ private struct FiscalSnapshotTool {
     let token = environment["FISCAL_DEVICE_TOKEN"] ?? "integration-device-token"
     let output = URL(
       fileURLWithPath: environment["FISCAL_QA_SCREENSHOT_DIR"]
-        ?? "../docs/qa/p8/screenshots", isDirectory: true)
+        ?? "../docs/qa/p9/screenshots", isDirectory: true)
     try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
     let baseURL = URL(string: environment["FISCAL_API_BASE_URL"] ?? "http://127.0.0.1:8000")!
     let tokenStore = KeychainTokenStore(service: "com.linotsai.fiscal.snapshot")
@@ -138,42 +138,13 @@ private struct FiscalSnapshotTool {
     async let creditLoad: Void = creditModel.loadAccounts()
     _ = await (proposalLoad, settingsLoad, accountLoad, categoryLoad, creditLoad)
 
-    let aiScreenshot = output.appendingPathComponent("macos-p8-ai-pending.png")
+    let aiScreenshot = output.appendingPathComponent("macos-p9-ai-ocr.png")
     try render(
       MacAIProposalScreen(model: aiModel, accounts: accountsModel, categories: categoriesModel, credit: creditModel),
       to: aiScreenshot)
-    let inspectorScreenshot = output.appendingPathComponent("macos-p8-ai-inspector.png")
-    try? FileManager.default.removeItem(at: inspectorScreenshot)
-    try FileManager.default.copyItem(at: aiScreenshot, to: inspectorScreenshot)
     try render(
       MacSettingsScreen(model: settingsModel),
-      to: output.appendingPathComponent("macos-p8-settings-ai.png"))
-
-    try render(
-      MacReportingOverviewScreen(model: model, navigate: { _ in }),
-      to: output.appendingPathComponent("macos-p7-overview.png"))
-    try render(
-      MacCashFlowScreen(model: model),
-      to: output.appendingPathComponent("macos-p7-cash-flow.png"))
-    model.lens = .spending
-    try render(
-      MacReportsScreen(model: model),
-      to: output.appendingPathComponent("macos-p7-reports.png"))
-    model.lens = .cashFlow
-    try render(
-      MacReportsScreen(model: model),
-      to: output.appendingPathComponent("macos-p7-cash-report.png"))
-    model.lens = .debt
-    try render(
-      MacReportsScreen(model: model),
-      to: output.appendingPathComponent("macos-p7-debt.png"))
-    if let categoryID = model.spending?.categories.first?.categoryID {
-      model.lens = .spending
-      await model.loadDrillDown(categoryID: categoryID)
-      try render(
-        MacReportsScreen(model: model),
-        to: output.appendingPathComponent("macos-p7-drill-down.png"))
-    }
+      to: output.appendingPathComponent("macos-p9-settings-sources.png"))
   }
 
   @MainActor

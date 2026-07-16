@@ -73,6 +73,12 @@ public final class AIProposalModel {
   }
 
   public func create(text: String, idempotencyKey: UUID) async -> Bool {
+    await create(source: .text, text: text, idempotencyKey: idempotencyKey)
+  }
+
+  public func create(
+    source: AIProposalSource, text: String, idempotencyKey: UUID
+  ) async -> Bool {
     let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !normalized.isEmpty, normalized.count <= 2_000 else {
       message = "请输入 1–2,000 个字符的记账描述。"; return false
@@ -81,11 +87,13 @@ public final class AIProposalModel {
     beginMutation(); let current = generation
     shouldRotateCreateKeyAfterFailure = false; isMutating = true; defer { isMutating = false }
     do {
-      let proposal = try await repository.create(text: normalized, idempotencyKey: idempotencyKey)
+      let proposal = try await repository.create(
+        source: source, text: normalized, idempotencyKey: idempotencyKey)
       guard current == generation else { return false }
       selectedID = proposal.id; await load(); return true
     } catch {
-      shouldRotateCreateKeyAfterFailure = !TransactionsModel.shouldPreserveCreateKey(after: error)
+      shouldRotateCreateKeyAfterFailure = !AIInputSubmissionService.shouldPreserveRetryKey(
+        after: error)
       guard current == generation else { return false }; apply(error, preserving: !proposals.isEmpty)
       return false
     }
@@ -104,7 +112,7 @@ public final class AIProposalModel {
   }
 
   public func execute(_ proposal: AIProposalDTO) async -> Bool {
-    await mutate(proposal, refreshLedger: true) {
+    return await mutate(proposal, refreshLedger: true) {
       let response = try await self.repository.action(
         id: proposal.id, action: "execute", expectedVersion: proposal.version)
       self.replace(response.proposal)
@@ -125,9 +133,13 @@ public final class AIProposalModel {
     }
   }
   public func undo(_ proposal: AIProposalDTO) async -> Bool {
-    await mutate(proposal, refreshLedger: true) {
-      let response = try await self.repository.action(
-        id: proposal.id, action: "undo", expectedVersion: proposal.version)
+    guard let transactionVersion = proposal.transactionVersion else {
+      message = "缺少流水版本，无法安全撤销。"; return false
+    }
+    return await mutate(proposal, refreshLedger: true) {
+      let response = try await self.repository.undo(
+        id: proposal.id, expectedVersion: proposal.version,
+        expectedTransactionVersion: transactionVersion)
       self.replace(response.proposal)
     }
   }

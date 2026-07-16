@@ -80,3 +80,19 @@ def test_user_settings_only_tighten_and_forbidden_shapes_stay_pending() -> None:
     value.destination_account_id = None
     value.reason_codes = ["unknown_category"]
     assert not AIService._auto_eligible(value, settings())
+
+
+def test_p9_source_switch_is_rechecked_before_automatic_execution() -> None:
+    value = proposal()
+    value.source = "ocr"
+    current = settings()
+    current.ocr_source_enabled = False
+    assert not AIService._auto_eligible(value, current)
+    current.ocr_source_enabled = True
+    assert AIService._auto_eligible(value, current)
+
+    value.source = "shortcut_text"
+    current.shortcut_text_source_enabled = False
+    assert not AIService._auto_eligible(value, current)
+    current.shortcut_text_source_enabled = True
+    assert AIService._auto_eligible(value, current)

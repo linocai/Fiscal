@@ -26,6 +26,8 @@ from fiscal_api.db.base import Base
 
 class AIProposalSource(StrEnum):
     TEXT = "text"
+    OCR = "ocr"
+    SHORTCUT_TEXT = "shortcut_text"
 
 
 class AIProposalStatus(StrEnum):
@@ -48,6 +50,10 @@ class AISettings(Base):
 
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, default=1)
     auto_execute_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    ocr_source_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    shortcut_text_source_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     auto_execute_limit_minor: Mapped[int] = mapped_column(
         BigInteger, nullable=False, default=100_000
     )
@@ -64,7 +70,7 @@ class AISettings(Base):
 class AIProposal(Base):
     __tablename__ = "ai_proposals"
     __table_args__ = (
-        CheckConstraint("source = 'text'", name="valid_source"),
+        CheckConstraint("source IN ('text','ocr','shortcut_text')", name="valid_source"),
         CheckConstraint(
             "status IN ('processing','pending','executed','failed','ignored','undone')",
             name="valid_status",

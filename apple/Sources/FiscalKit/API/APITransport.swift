@@ -67,7 +67,7 @@ public actor APITransport {
         guard let http = response as? HTTPURLResponse else { throw FiscalAPIError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
-            if http.statusCode == 401 || http.statusCode == 403 { throw FiscalAPIError.unauthorized(detail) }
+            if http.statusCode == 401 { throw FiscalAPIError.unauthorized(detail) }
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
@@ -87,7 +87,7 @@ public actor APITransport {
         guard let http = response as? HTTPURLResponse else { throw FiscalAPIError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
-            if http.statusCode == 401 || http.statusCode == 403 { throw FiscalAPIError.unauthorized(detail) }
+            if http.statusCode == 401 { throw FiscalAPIError.unauthorized(detail) }
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }

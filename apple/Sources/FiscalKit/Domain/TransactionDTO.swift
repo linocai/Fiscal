@@ -78,7 +78,7 @@ public struct TransactionDTO: Codable, Sendable, Equatable, Identifiable {
         createdAt = try values.decode(Date.self, forKey: .createdAt); updatedAt = try values.decode(Date.self, forKey: .updatedAt)
     }
 
-    public var isUserEditable: Bool { source == "manual" || source == "ai_text" }
+    public var isUserEditable: Bool { source == "manual" || source == "ai_text" || source == "ocr" }
 }
 
 public struct TransactionPage: Codable, Sendable, Equatable {
