@@ -37,14 +37,14 @@ run_as_postgres pg_dump \
 run_as_postgres pg_restore --list "$temporary" >/dev/null
 mv -- "$temporary" "$dump"
 chown postgres:postgres "$dump"
-chmod 0600 "$dump"
+run_as_postgres chmod 0600 "$dump"
 
 (
   cd -- "$FISCAL_BACKUP_DIR"
   sha256sum "$(basename -- "$dump")" >"$(basename -- "$manifest")"
 )
-chown root:postgres "$manifest"
 chmod 0640 "$manifest"
+chown root:postgres "$manifest"
 
 finished_epoch="$(date +%s)"
 size_bytes="$(stat -c %s "$dump")"

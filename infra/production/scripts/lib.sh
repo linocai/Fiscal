@@ -54,7 +54,7 @@ write_operation_json() {
   local temporary
   temporary="$(mktemp "$FISCAL_OPERATIONS_DIR/.status.XXXXXX")"
   printf '%s\n' "$body" >"$temporary"
-  chown root:fiscal "$temporary"
   chmod 0640 "$temporary"
+  chown root:fiscal "$temporary"
   mv -f "$temporary" "$target"
 }
