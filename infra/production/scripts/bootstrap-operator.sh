@@ -31,6 +31,7 @@ load_fiscal_env
 [[ -x /opt/fiscal/current/backend/.venv/bin/python ]] || die "no deployed Fiscal release exists"
 cd /opt/fiscal/current/backend
 
+HOME=/opt/fiscal \
 FISCAL_ENVIRONMENT=production \
 FISCAL_DATABASE_URL="${FISCAL_DATABASE_URL:?missing application database URL}" \
 FISCAL_TOKEN_PEPPER="${FISCAL_TOKEN_PEPPER:?missing token pepper}" \
