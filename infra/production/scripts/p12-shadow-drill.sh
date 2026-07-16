@@ -101,6 +101,42 @@ for command in pg_dump pg_restore psql sha256sum; do
   command -v "$command" >/dev/null || die "$command is required"
 done
 
+pg_run() {
+  local url="$1"
+  shift
+  local -a connection
+  mapfile -d '' -t connection < <(
+    FISCAL_PG_PARSE_URL="$url" "$python_bin" - <<'PY'
+import os
+import sys
+from urllib.parse import unquote, urlsplit
+
+url = urlsplit(os.environ["FISCAL_PG_PARSE_URL"])
+if url.scheme not in {"postgresql", "postgres"}:
+    raise SystemExit("libpq URL must use the PostgreSQL URI scheme")
+if not url.hostname or not url.username or not url.path.removeprefix("/"):
+    raise SystemExit("libpq URL requires host, user and database")
+values = (
+    url.hostname,
+    str(url.port or 5432),
+    unquote(url.username),
+    unquote(url.password or ""),
+    unquote(url.path.removeprefix("/")),
+)
+for value in values:
+    sys.stdout.buffer.write(value.encode())
+    sys.stdout.buffer.write(b"\0")
+PY
+  )
+  [[ ${#connection[@]} -eq 5 ]] || die "unable to parse protected libpq URL"
+  PGHOST="${connection[0]}" \
+    PGPORT="${connection[1]}" \
+    PGUSER="${connection[2]}" \
+    PGPASSWORD="${connection[3]}" \
+    PGDATABASE="${connection[4]}" \
+    "$@"
+}
+
 old_umask="$(umask)"
 umask 077
 [[ ! -e "$report_dir" ]] || \
@@ -139,10 +175,10 @@ finish() {
 trap finish EXIT
 
 stage="preflight"
-baseline_database="$(PGDATABASE="$FISCAL_SHADOW_BASELINE_DATABASE_URL" \
+baseline_database="$(pg_run "$FISCAL_SHADOW_BASELINE_DATABASE_URL" \
   psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 \
   --command='SELECT current_database()')"
-target_connection_database="$(PGDATABASE="$FISCAL_SHADOW_TARGET_PG_URL" \
+target_connection_database="$(pg_run "$FISCAL_SHADOW_TARGET_PG_URL" \
   psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 \
   --command='SELECT current_database()')"
 [[ "$target_connection_database" == "$target_database" ]] || \
@@ -150,7 +186,7 @@ target_connection_database="$(PGDATABASE="$FISCAL_SHADOW_TARGET_PG_URL" \
 [[ "$baseline_database" != "$target_database" ]] || \
   die "baseline and target database must be different"
 
-target_user_tables="$(PGDATABASE="$FISCAL_SHADOW_TARGET_PG_URL" \
+target_user_tables="$(pg_run "$FISCAL_SHADOW_TARGET_PG_URL" \
   psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 \
   --command="SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND c.relkind IN ('r','p')")"
 [[ "$target_user_tables" == "0" ]] || \
@@ -158,7 +194,7 @@ target_user_tables="$(PGDATABASE="$FISCAL_SHADOW_TARGET_PG_URL" \
 
 stage="backup"
 log "creating a verified custom-format baseline backup"
-PGDATABASE="$FISCAL_SHADOW_BASELINE_DATABASE_URL" pg_dump \
+pg_run "$FISCAL_SHADOW_BASELINE_DATABASE_URL" pg_dump \
   --format=custom --compress=9 --no-owner --no-privileges --file="$partial_dump"
 pg_restore --list "$partial_dump" >/dev/null
 mv -- "$partial_dump" "$baseline_dump"
@@ -170,8 +206,8 @@ mv -- "$partial_dump" "$baseline_dump"
 stage="restore"
 log "restoring baseline into explicit shadow database $target_database"
 pg_restore --exit-on-error --no-owner --no-privileges --file=- "$baseline_dump" | \
-  PGDATABASE="$FISCAL_SHADOW_TARGET_PG_URL" \
-  psql --no-psqlrc --set=ON_ERROR_STOP=1 --single-transaction
+  pg_run "$FISCAL_SHADOW_TARGET_PG_URL" \
+    psql --no-psqlrc --set=ON_ERROR_STOP=1 --single-transaction
 
 stage="alembic"
 backend_dir="$(cd -- "$(dirname -- "$python_bin")/../.." && pwd)"
@@ -184,7 +220,7 @@ alembic_config="$backend_dir/alembic.ini"
   export FISCAL_DATABASE_URL="$FISCAL_SHADOW_TARGET_DATABASE_URL"
   "$alembic_bin" --config "$alembic_config" upgrade head
   expected_head="$($alembic_bin --config "$alembic_config" heads | awk 'NR == 1 {print $1}')"
-  actual_head="$(PGDATABASE="$FISCAL_SHADOW_TARGET_PG_URL" \
+  actual_head="$(pg_run "$FISCAL_SHADOW_TARGET_PG_URL" \
     psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 \
     --command='SELECT version_num FROM alembic_version')"
   [[ -n "$expected_head" && "$actual_head" == "$expected_head" ]] || \

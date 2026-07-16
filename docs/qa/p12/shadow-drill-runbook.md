@@ -57,6 +57,8 @@ unset FISCAL_LEGACY_DATABASE_URL
 migration CLI (for example, a `postgresql+asyncpg://` URL). `FISCAL_SHADOW_TARGET_PG_URL`
 is the equivalent libpq `postgresql://` URL used by `psql` and `pg_restore`. They must
 resolve to the same explicitly named shadow database; neither value is written to evidence.
+The shell gate parses the libpq URLs in-process and passes individual `PG*` environment
+variables to PostgreSQL tools; the password-bearing URL is never placed in process arguments.
 
 For a development checkout, `--python` may point to `backend/.venv/bin/python`. The migration module defaults to `fiscal_api.cli.legacy_migration`; a release with a relocated CLI can pass `--migration-module` without changing this gate.
 
