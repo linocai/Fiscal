@@ -5,6 +5,7 @@ private enum IOSTab: Hashable { case overview, transactions, cashFlow, more }
 private enum IOSMoreDestination: Hashable {
     case accounts, categories, credit, reimbursements
     case reports(ReportLens)
+    case settings
 }
 
 struct IOSRootView: View {
@@ -16,9 +17,12 @@ struct IOSRootView: View {
     let installments: InstallmentModel
     let reimbursements: ReimbursementModel
     let reports: ReportingModel
+    let aiProposals: AIProposalModel
+    let aiSettings: AISettingsModel
     @State private var selection: IOSTab = .overview
     @State private var showRecordSheet = false
     @State private var morePath: [IOSMoreDestination] = []
+    @State private var showAIProposals = false
 
     var body: some View {
         Group {
@@ -27,19 +31,22 @@ struct IOSRootView: View {
                 NavigationStack {
                     IOSReportingOverviewScreen(
                         model: reports,
+                        pendingProposalCount: aiProposals.pendingCount,
+                        openAI: { showAIProposals = true },
                         openCashFlow: { selection = .cashFlow },
                         openReport: { lens in morePath = [.reports(lens)]; selection = .more }
                     )
                 }
             case .transactions: NavigationStack { IOSTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments) }
             case .cashFlow: NavigationStack { IOSCashFlowScreen(model: reports) }
-            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, connection: connection)
+            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, aiProposals: aiProposals, aiSettings: aiSettings, connection: connection, openAI: { showAIProposals = true })
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(FiscalColor.iOSBackground.ignoresSafeArea())
         .overlay(alignment: .bottom) { tabBar }
         .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit) }
+        .sheet(isPresented: $showAIProposals) { IOSAIProposalSheet(model: aiProposals, accounts: accounts, categories: categories, credit: credit) }
     }
 
     private var tabBar: some View {
@@ -85,7 +92,10 @@ private struct IOSMoreScreen: View {
     let installments: InstallmentModel
     let reimbursements: ReimbursementModel
     let reports: ReportingModel
+    let aiProposals: AIProposalModel
+    let aiSettings: AISettingsModel
     let connection: ConnectionModel
+    let openAI: () -> Void
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -109,7 +119,7 @@ private struct IOSMoreScreen: View {
                         }
                     }
                     FiscalCard(radius: 18) { HStack { ConnectionBadge(phase: connection.phase); Spacer(); Text("个人 VPS · 设备密钥访问").font(.caption).foregroundStyle(FiscalColor.tertiary) } }
-                    FiscalCard(radius: 20) { VStack(spacing: 0) { NavigationLink(value: IOSMoreDestination.reimbursements) { row("报销", symbol: "doc.text", detail: "多人 · 分次到账", color: FiscalColor.reimbursement) }.buttonStyle(.plain); Divider(); NavigationLink(value: IOSMoreDestination.reports(.spending)) { row("报表", symbol: "list.bullet.rectangle", detail: "消费 · 负债", color: FiscalColor.accent) }.buttonStyle(.plain); Divider(); placeholderRow("其他设置", "gearshape", "P11") } }
+                    FiscalCard(radius: 20) { VStack(spacing: 0) { NavigationLink(value: IOSMoreDestination.reimbursements) { row("报销", symbol: "doc.text", detail: "多人 · 分次到账", color: FiscalColor.reimbursement) }.buttonStyle(.plain); Divider(); NavigationLink(value: IOSMoreDestination.reports(.spending)) { row("报表", symbol: "list.bullet.rectangle", detail: "消费 · 负债", color: FiscalColor.accent) }.buttonStyle(.plain); Divider(); Button(action: openAI) { badgeRow("AI 待确认", symbol: "sparkles", count: aiProposals.pendingCount) }.buttonStyle(.plain); Divider(); NavigationLink(value: IOSMoreDestination.settings) { row("设置", symbol: "gearshape", detail: "AI 自动记账", color: FiscalColor.secondary) }.buttonStyle(.plain) } }
                 }.padding(16).padding(.bottom, 100)
             }
             .background(FiscalColor.iOSBackground).navigationTitle("更多")
@@ -120,6 +130,7 @@ private struct IOSMoreScreen: View {
                 case .credit: IOSCreditAccountsScreen(credit: credit, installments: installments, transactions: transactions, accounts: accounts, categories: categories)
                 case .reimbursements: IOSReimbursementsScreen(model: reimbursements, accounts: accounts)
                 case .reports(let lens): IOSReportsScreen(model: reports, initialLens: lens)
+                case .settings: IOSSettingsScreen(model: aiSettings)
                 }
             }
         }
@@ -129,7 +140,7 @@ private struct IOSMoreScreen: View {
             .frame(minHeight: 56)
             .contentShape(.rect)
     }
-    private func placeholderRow(_ title: String, _ symbol: String, _ phase: String) -> some View {
-        HStack(spacing: 12) { FiscalIconTile(symbol, color: FiscalColor.tertiary); Text(title); Spacer(); Text(phase).font(.caption).foregroundStyle(FiscalColor.tertiary) }.frame(minHeight: 52)
+    private func badgeRow(_ title: String, symbol: String, count: Int) -> some View {
+        HStack(spacing: 12) { FiscalIconTile(symbol, color: FiscalColor.accent); Text(title).font(.headline); Spacer(); if count > 0 { Text(count > 99 ? "99+" : String(count)).font(.caption2.bold()).foregroundStyle(.white).padding(.horizontal, 7).frame(minHeight: 20).background(FiscalColor.expense, in: .capsule) }; Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(FiscalColor.tertiary) }.frame(minHeight: 56).contentShape(.rect).accessibilityLabel("AI 待确认，\(count) 笔")
     }
 }

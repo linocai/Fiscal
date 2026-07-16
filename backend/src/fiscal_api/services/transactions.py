@@ -28,6 +28,7 @@ from fiscal_api.db.models import (
     RevisionEvent,
     TransactionKind,
     TransactionRevision,
+    TransactionSource,
 )
 from fiscal_api.repositories.credit import CreditRepository
 from fiscal_api.repositories.installments import InstallmentRepository
@@ -53,8 +54,37 @@ class TransactionService:
         self.reimbursement_repository = ReimbursementRepository(session)
 
     async def create(self, draft: TransactionDraft, idempotency_key: UUID) -> TransactionResponse:
+        return await self._create(
+            draft,
+            idempotency_key,
+            source=TransactionSource.MANUAL,
+            commit=True,
+        )
+
+    async def create_ai_text(
+        self,
+        draft: TransactionDraft,
+        idempotency_key: UUID,
+        *,
+        commit: bool = True,
+    ) -> TransactionResponse:
+        return await self._create(
+            draft,
+            idempotency_key,
+            source=TransactionSource.AI_TEXT,
+            commit=commit,
+        )
+
+    async def _create(
+        self,
+        draft: TransactionDraft,
+        idempotency_key: UUID,
+        *,
+        source: TransactionSource,
+        commit: bool,
+    ) -> TransactionResponse:
         await acquire_mutation_lock(self.session)
-        request_hash = self._request_hash(draft)
+        request_hash = self._request_hash(draft, source=source)
         existing = await self.repository.get_by_idempotency_key(idempotency_key)
         if existing is not None:
             if existing.request_hash != request_hash:
@@ -75,7 +105,7 @@ class TransactionService:
             note=draft.note,
             category_id=category.id if category is not None else None,
             credit_cycle_id=cycle_id,
-            source="manual",
+            source=source.value,
             idempotency_key=idempotency_key,
             request_hash=request_hash,
         )
@@ -97,7 +127,10 @@ class TransactionService:
         )
         response = self._response(transaction, postings)
         self._add_revision(transaction, RevisionEvent.CREATED, response)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
         return response
 
     async def get(self, transaction_id: UUID) -> TransactionResponse:
@@ -224,7 +257,13 @@ class TransactionService:
         await self.session.commit()
         return response
 
-    async def void(self, transaction_id: UUID, expected_version: int) -> TransactionResponse:
+    async def void(
+        self,
+        transaction_id: UUID,
+        expected_version: int,
+        *,
+        commit: bool = True,
+    ) -> TransactionResponse:
         await acquire_mutation_lock(self.session)
         transaction = await self._required(transaction_id, for_update=True)
         await self._assert_generic_mutation_allowed(transaction, voiding=True)
@@ -244,7 +283,10 @@ class TransactionService:
         )
         response = self._response(transaction, list(transaction.postings))
         self._add_revision(transaction, RevisionEvent.VOIDED, response)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
         return response
 
     async def restore(self, transaction_id: UUID, expected_version: int) -> TransactionResponse:
@@ -851,9 +893,10 @@ class TransactionService:
         return result
 
     @staticmethod
-    def _request_hash(draft: TransactionDraft) -> str:
+    def _request_hash(draft: TransactionDraft, *, source: TransactionSource) -> str:
         payload = draft.model_dump(mode="json")
         payload["occurred_at"] = ensure_utc(draft.occurred_at).isoformat()
+        payload["source"] = source.value
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         return hashlib.sha256(canonical.encode()).hexdigest()
 

@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from os import environ
 from uuid import uuid4
 
@@ -458,7 +458,7 @@ async def test_partial_receipt_cancel_and_future_day_thirty_exclusion(
             expected_claim_version=claim.version,
             party_id=claim.parties[0].id,
             amount_minor=3_000,
-            received_at=datetime.now(UTC) - timedelta(seconds=1),
+            received_at=datetime(2026, 7, 15, 8, tzinfo=UTC),
             destination_account_id=bank.id,
             title="首笔回款",
         ),

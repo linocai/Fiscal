@@ -64,22 +64,42 @@ private struct ReportMetric: View {
 
 public struct IOSReportingOverviewScreen: View {
   @Bindable var model: ReportingModel
+  let pendingProposalCount: Int
+  let openAI: () -> Void
   let openCashFlow: () -> Void
   let openReport: (ReportLens) -> Void
   public init(
-    model: ReportingModel, openCashFlow: @escaping () -> Void,
+    model: ReportingModel, pendingProposalCount: Int, openAI: @escaping () -> Void,
+    openCashFlow: @escaping () -> Void,
     openReport: @escaping (ReportLens) -> Void
   ) {
-    self.model = model; self.openCashFlow = openCashFlow; self.openReport = openReport
+    self.model = model; self.pendingProposalCount = pendingProposalCount; self.openAI = openAI
+    self.openCashFlow = openCashFlow; self.openReport = openReport
   }
   public var body: some View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 13) {
         VStack(alignment: .leading, spacing: 10) {
-          VStack(alignment: .leading, spacing: 3) {
-            Text("\(ReportPeriodControl.title(model.month)) · 消费 / 现金流 / 负债")
-              .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.tertiary)
-            Text("总览").font(.system(size: 32, weight: .bold)).tracking(-0.8)
+          HStack {
+            VStack(alignment: .leading, spacing: 3) {
+              Text("\(ReportPeriodControl.title(model.month)) · 消费 / 现金流 / 负债")
+                .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.tertiary)
+              Text("总览").font(.system(size: 32, weight: .bold)).tracking(-0.8)
+            }
+            Spacer()
+            Button(action: openAI) {
+              Image(systemName: "sparkles").font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(FiscalColor.accent).frame(width: 42, height: 42)
+                .background(.regularMaterial, in: .circle)
+                .overlay(alignment: .topTrailing) {
+                  if pendingProposalCount > 0 {
+                    Text(pendingProposalCount > 99 ? "99+" : String(pendingProposalCount))
+                      .font(.caption2.bold()).foregroundStyle(.white).padding(.horizontal, 5)
+                      .frame(minWidth: 17, minHeight: 17).background(FiscalColor.expense, in: .capsule)
+                  }
+                }
+            }.buttonStyle(.plain).accessibilityLabel("AI 待确认，\(pendingProposalCount) 笔")
+              .accessibilityIdentifier("overview.aiPending")
           }
           ReportPeriodControl(model: model).frame(maxWidth: .infinity, alignment: .trailing)
         }

@@ -3,6 +3,69 @@ import Testing
 
 @testable import FiscalKit
 
+@Suite("FiscalKit P8 contracts")
+struct FiscalKitP8Tests {
+  @Test("AI proposal decodes strict integer confidence and authoritative pending count")
+  func proposalContract() throws {
+    let data = Data(#"{"items":[{"id":"00000000-0000-0000-0000-000000000081","source":"text","text":"午餐 28 元","content_fingerprint":"abc","provider":"fake","model":"fixture","kind":"expense","amount_minor":2800,"occurred_at":"2026-07-16T04:00:00Z","title":"午餐","note":null,"account_id":"00000000-0000-0000-0000-000000000082","category_id":"00000000-0000-0000-0000-000000000083","destination_account_id":null,"credit_cycle_id":null,"field_confidences":{"kind":9500,"amount_minor":9600,"occurred_at":9300,"title":9400,"note":9000,"account_id":9200,"category_id":9100,"destination_account_id":9000},"overall_confidence_bps":9300,"missing_fields":[],"reason_codes":["manual_confirmation_required"],"explanation":"匹配现有账户和分类","status":"pending","error_code":null,"error_message":null,"transaction_id":null,"transaction_version":null,"version":2,"created_at":"2026-07-16T04:00:00Z","updated_at":"2026-07-16T04:00:00Z","executed_at":null,"ignored_at":null,"undone_at":null}],"next_cursor":null,"pending_count":7}"#.utf8)
+    let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+    let page = try decoder.decode(AIProposalPage.self, from: data)
+    #expect(page.pendingCount == 7)
+    #expect(page.items.first?.fieldConfidences["amount_minor"] == 9_600)
+    #expect(page.items.first?.confidenceTitle == "93%")
+    #expect(page.items.first?.reviewWarnings == ["需要人工确认"])
+  }
+
+  @Test("AI proposal replacement keeps draft nested beside expected version")
+  func nestedReplacement() throws {
+    var draft = TransactionDraft(); draft.kind = .expense; draft.title = "午餐"
+    draft.amountMinor = 2_800; draft.accountID = UUID(); draft.categoryID = UUID()
+    let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+    let object = try #require(JSONSerialization.jsonObject(with: encoder.encode(
+      AIProposalReplacementRequest(draft: draft, expectedVersion: 4))) as? [String: Any])
+    #expect(object["expected_version"] as? Int == 4)
+    #expect((object["draft"] as? [String: Any])?["amount_minor"] as? Int == 2_800)
+    #expect(object["amount_minor"] == nil)
+  }
+
+  @Test("AI settings payload cannot disguise confidence or money as floating point")
+  func settingsPayload() throws {
+    let request = AISettingsUpdateRequest(autoExecuteEnabled: true, autoExecuteLimitMinor: 100_000, minimumConfidenceBps: 9_500, expectedVersion: 3)
+    let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
+    #expect(object["auto_execute_limit_minor"] as? Int == 100_000)
+    #expect(object["minimum_confidence_bps"] as? Int == 9_500)
+    #expect(object["expected_version"] as? Int == 3)
+  }
+
+  @Test("AI text transactions remain ordinary user editable rows")
+  func aiTextEditable() throws {
+    let data = Data(#"{"id":"00000000-0000-0000-0000-000000000091","kind":"expense","amount_minor":1280,"occurred_at":"2026-07-16T04:00:00Z","business_date":"2026-07-16","title":"午餐","note":null,"category_id":"00000000-0000-0000-0000-000000000092","account_id":"00000000-0000-0000-0000-000000000093","destination_account_id":null,"credit_cycle_id":null,"installment_plan_id":null,"installment_relation":null,"reimbursement_relations":[],"source":"ai_text","postings":[],"version":1,"voided_at":null,"created_at":"2026-07-16T04:00:00Z","updated_at":"2026-07-16T04:00:00Z"}"#.utf8)
+    let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+    let transaction = try decoder.decode(TransactionDTO.self, from: data)
+    #expect(transaction.isUserEditable)
+  }
+
+  @Test("A stale AI queue response cannot replace the current filter") @MainActor
+  func staleAIQueue() async throws {
+    let model = AIProposalModel(repository: RaceAIProposalRepository())
+    let old = Task { await model.load() }
+    try await Task.sleep(for: .milliseconds(10))
+    await model.selectStatus(.failed); await old.value
+    #expect(model.pendingCount == 2)
+  }
+}
+
+private actor RaceAIProposalRepository: AIProposalRepository {
+  func list(status: AIProposalStatus?, cursor: String?, limit: Int) async throws -> AIProposalPage {
+    if status == .pending { try await Task.sleep(for: .milliseconds(80)); return .init(items: [], nextCursor: nil, pendingCount: 1) }
+    try await Task.sleep(for: .milliseconds(5)); return .init(items: [], nextCursor: nil, pendingCount: 2)
+  }
+  func get(id: UUID) async throws -> AIProposalDTO { throw FiscalAPIError.invalidResponse }
+  func create(text: String, idempotencyKey: UUID) async throws -> AIProposalDTO { throw FiscalAPIError.invalidResponse }
+  func update(id: UUID, request: AIProposalReplacementRequest) async throws -> AIProposalDTO { throw FiscalAPIError.invalidResponse }
+  func action(id: UUID, action: String, expectedVersion: Int) async throws -> AIProposalActionResponse { throw FiscalAPIError.invalidResponse }
+}
+
 @Suite("FiscalKit P1")
 struct FiscalKitTests {
   @Test("Money uses integer minor units")

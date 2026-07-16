@@ -14,6 +14,7 @@ from fiscal_api.db.models import (
     InstallmentPlanRevision,
     LedgerTransaction,
     Posting,
+    TransactionSource,
 )
 
 
@@ -188,7 +189,9 @@ class InstallmentRepository:
                     exists().where(
                         LedgerTransaction.credit_cycle_id == cycle_id,
                         LedgerTransaction.kind == "repayment",
-                        LedgerTransaction.source == "manual",
+                        LedgerTransaction.source.in_(
+                            [TransactionSource.MANUAL.value, TransactionSource.AI_TEXT.value]
+                        ),
                         LedgerTransaction.voided_at.is_(None),
                         LedgerTransaction.id != excluding_transaction_id,
                         or_(

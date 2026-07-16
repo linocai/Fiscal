@@ -52,6 +52,16 @@ def test_system_status_rejects_invalid_device_token(client: TestClient) -> None:
         ("GET", f"/api/v1/credit-accounts/{RESOURCE_ID}/cycles", None),
         ("GET", f"/api/v1/credit-cycles/{RESOURCE_ID}", None),
         ("GET", f"/api/v1/credit-cycles/{RESOURCE_ID}/transactions", None),
+        ("GET", "/api/v1/ai/settings", None),
+        ("PUT", "/api/v1/ai/settings", {}),
+        ("GET", "/api/v1/ai/proposals", None),
+        ("POST", "/api/v1/ai/proposals", {}),
+        ("GET", f"/api/v1/ai/proposals/{RESOURCE_ID}", None),
+        ("PUT", f"/api/v1/ai/proposals/{RESOURCE_ID}", {}),
+        ("POST", f"/api/v1/ai/proposals/{RESOURCE_ID}/execute", {}),
+        ("POST", f"/api/v1/ai/proposals/{RESOURCE_ID}/ignore", {}),
+        ("POST", f"/api/v1/ai/proposals/{RESOURCE_ID}/retry", {}),
+        ("POST", f"/api/v1/ai/proposals/{RESOURCE_ID}/undo", {}),
     ],
 )
 def test_p2_route_matrix_rejects_missing_token_before_database_access(

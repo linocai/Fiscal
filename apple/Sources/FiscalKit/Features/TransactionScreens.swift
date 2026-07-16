@@ -298,7 +298,7 @@ public struct IOSTransactionsScreen: View {
         }
     }
     private func row(_ item: TransactionDTO) -> some View {
-        Button { if item.source == "manual" && item.installmentPlanID == nil { editing = item } } label: { HStack(spacing: 12) { FiscalIconTile(item.kind.symbol, color: item.kind.color); VStack(alignment: .leading, spacing: 3) { Text(item.title).font(.headline).foregroundStyle(FiscalColor.text); Text(detail(item)).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1) }; Spacer(); TransactionAmount(transaction: item); Menu { if item.kind == .creditPurchase && item.installmentPlanID == nil { Button("创建分期计划", systemImage: "calendar.badge.plus") { installmentPurchase = item } }; if item.source == "manual" && item.installmentPlanID == nil { Button("编辑", systemImage: "pencil") { editing = item }; Button("作废", systemImage: "trash", role: .destructive) { pendingVoid = item } } } label: { Image(systemName: "ellipsis").frame(width: 32, height: 44) }.buttonStyle(.plain).accessibilityIdentifier("transaction.rowMenu") }.contentShape(.rect).padding(.vertical, 6) }.buttonStyle(.plain).task { await model.loadMoreIfNeeded(after: item) }
+        Button { if item.isUserEditable && item.installmentPlanID == nil { editing = item } } label: { HStack(spacing: 12) { FiscalIconTile(item.kind.symbol, color: item.kind.color); VStack(alignment: .leading, spacing: 3) { Text(item.title).font(.headline).foregroundStyle(FiscalColor.text); Text(detail(item)).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1) }; Spacer(); TransactionAmount(transaction: item); Menu { if item.kind == .creditPurchase && item.installmentPlanID == nil { Button("创建分期计划", systemImage: "calendar.badge.plus") { installmentPurchase = item } }; if item.isUserEditable && item.installmentPlanID == nil { Button("编辑", systemImage: "pencil") { editing = item }; Button("作废", systemImage: "trash", role: .destructive) { pendingVoid = item } } } label: { Image(systemName: "ellipsis").frame(width: 32, height: 44) }.buttonStyle(.plain).accessibilityIdentifier("transaction.rowMenu") }.contentShape(.rect).padding(.vertical, 6) }.buttonStyle(.plain).task { await model.loadMoreIfNeeded(after: item) }
     }
     private func detail(_ item: TransactionDTO) -> String { [item.kind.title, item.installmentRelation.map { "分期 · \($0.planTitle)" }, item.note].compactMap { $0 }.joined(separator: " · ") }
     private func retry(_ title: String, _ symbol: String) -> some View { ContentUnavailableView { Label(title, systemImage: symbol) } description: { Text(model.message ?? "不会使用预览数据替代。") } actions: { Button("重试") { Task { await model.load() } } } }
@@ -499,7 +499,7 @@ public struct MacTransactionsScreen: View {
                         }.font(.system(size: 12.5)).foregroundStyle(FiscalColor.secondary).padding(.vertical, 5)
                     }
                     if item.kind == .creditPurchase && item.installmentPlanID == nil { Button("创建分期计划") { installmentPurchase = item }.buttonStyle(.borderedProminent).padding(.top, 16) }
-                    if item.source == "manual" && item.installmentPlanID == nil { HStack(spacing: 8) { Button { editing = item } label: { Text("编辑").frame(maxWidth: .infinity, minHeight: 38).background(FiscalColor.accent, in: .rect(cornerRadius: 10)).foregroundStyle(.white) }; Button { pendingVoid = item } label: { Text("删除").padding(.horizontal, 15).frame(minHeight: 38).background(Color.black.opacity(0.06), in: .rect(cornerRadius: 10)).foregroundStyle(FiscalColor.secondary) } }.font(.system(size: 13, weight: .semibold)).buttonStyle(.plain).padding(.top, 18) }
+                    if item.isUserEditable && item.installmentPlanID == nil { HStack(spacing: 8) { Button { editing = item } label: { Text("编辑").frame(maxWidth: .infinity, minHeight: 38).background(FiscalColor.accent, in: .rect(cornerRadius: 10)).foregroundStyle(.white) }; Button { pendingVoid = item } label: { Text("删除").padding(.horizontal, 15).frame(minHeight: 38).background(Color.black.opacity(0.06), in: .rect(cornerRadius: 10)).foregroundStyle(FiscalColor.secondary) } }.font(.system(size: 13, weight: .semibold)).buttonStyle(.plain).padding(.top, 18) }
                 }.padding(.horizontal, 20).padding(.vertical, 22)
             }.background(.white)
         } else {
@@ -529,7 +529,7 @@ public struct MacTransactionsScreen: View {
         return Text(prefix + Money(minorUnits: item.amountMinor).formatted())
     }
     private func shortDate(_ value: String) -> String { String(value.suffix(5)).replacingOccurrences(of: "-", with: "/") }
-    private func sourceName(_ source: String) -> String { switch source { case "manual": "手动录入"; case "ocr": "截图识别"; case "ai": "AI 录入"; default: source } }
+    private func sourceName(_ source: String) -> String { switch source { case "manual": "手动录入"; case "ai_text": "AI 文本"; case "ocr": "截图识别"; case "ai": "AI 录入"; default: source } }
     private func errorBanner(_ message: String) -> some View {
         Label(message, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(FiscalColor.expense)
             .padding(7).frame(maxWidth: .infinity).background(FiscalColor.expense.opacity(0.08))

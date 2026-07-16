@@ -29,6 +29,10 @@ The shared transaction editor uses the authenticated unified ledger for income, 
 
 iOS exposes Credit Cycles from More while preserving the single custom bottom bar. macOS keeps credit management inside Accounts with reference-style cards and a 256-point Inspector. Both platforms read debt, available/over-limit credit, opening-configuration state, cycle totals, overdue state, and archived history from the real API without Preview fallback.
 
+## P8 AI proposals and settings
+
+Both apps share one server-backed `AIProposalModel` and authoritative `pending_count`. iOS opens the compact pending queue from the production overview badge or More, and exposes a real Settings destination containing only P8 automatic-execution behavior. macOS uses a dense queue with an inspector and the same settings model. AI text transactions use source `ai_text` and remain editable, voidable, and restorable like manual ledger rows. OCR, Shortcuts, end-to-end-encryption, and logout controls are intentionally absent from P8.
+
 ## Integration UI tests
 
 Start a seeded local API whose device token is `integration-device-token`, then run the `FiscaliOS` scheme against a booted simulator. The UI target verifies that no native tab bar exists, navigates through More, and reads account/category hierarchy from the authenticated API. The scheme token is local-test-only and must never be reused for staging or production.

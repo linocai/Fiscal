@@ -56,6 +56,7 @@ from fiscal_api.db.models import (
     RevisionEvent,
     TransactionKind,
     TransactionRevision,
+    TransactionSource,
 )
 from fiscal_api.repositories.credit import CreditRepository
 from fiscal_api.repositories.installments import InstallmentRepository
@@ -1297,11 +1298,12 @@ class InstallmentService:
     ) -> tuple[Account, int, CreditCycle]:
         if (
             transaction.kind != TransactionKind.CREDIT_PURCHASE.value
-            or transaction.source != "manual"
+            or transaction.source
+            not in {TransactionSource.MANUAL.value, TransactionSource.AI_TEXT.value}
             or transaction.voided_at is not None
             or len(transaction.postings) != 1
         ):
-            invalid("purchase_not_eligible", "Only an active manual credit purchase is eligible")
+            invalid("purchase_not_eligible", "Only an active user credit purchase is eligible")
         if await self.repository.plan_for_purchase(transaction.id) is not None:
             invalid("purchase_not_eligible", "The purchase already has an installment plan")
         posting = transaction.postings[0]
@@ -1324,7 +1326,8 @@ class InstallmentService:
     ) -> tuple[Account, CreditCycle]:
         if (
             transaction.kind != TransactionKind.CREDIT_PURCHASE.value
-            or transaction.source != "manual"
+            or transaction.source
+            not in {TransactionSource.MANUAL.value, TransactionSource.AI_TEXT.value}
             or transaction.voided_at is not None
             or len(transaction.postings) != 1
             or transaction.credit_cycle_id is None

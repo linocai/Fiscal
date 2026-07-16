@@ -270,6 +270,42 @@ final class FiscalUITests: XCTestCase {
     keepScreenshot(named: "ios-p7-debt")
   }
 
+  func testP8AIQueueAndSettingsUseRealAPI() throws {
+    try launchApp()
+    XCTAssertEqual(app.tabBars.count, 0)
+    XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 1)
+
+    let overviewAI = app.buttons.matching(identifier: "overview.aiPending").firstMatch
+    XCTAssertTrue(overviewAI.waitForExistence(timeout: 10))
+    waitForVisualStability()
+    keepScreenshot(named: "ios-p8-overview-ai-badge")
+    overviewAI.tap()
+    XCTAssertTrue(app.navigationBars["AI 待确认"].waitForExistence(timeout: 8))
+    waitForVisualStability()
+    keepScreenshot(named: "ios-p8-ai-pending")
+    let editProposal = app.buttons["编辑"].firstMatch
+    XCTAssertTrue(editProposal.waitForExistence(timeout: 5))
+    editProposal.tap()
+    XCTAssertTrue(app.navigationBars["编辑 AI 提案"].waitForExistence(timeout: 5))
+    waitForVisualStability()
+    keepScreenshot(named: "ios-p8-ai-edit")
+    app.buttons["取消"].tap()
+    app.buttons["关闭"].tap()
+
+    app.buttons["更多"].tap()
+    let aiEntry = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "AI 待确认")).firstMatch
+    XCTAssertTrue(aiEntry.waitForExistence(timeout: 8))
+    let settings = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "设置")).firstMatch
+    XCTAssertTrue(settings.exists)
+    settings.tap()
+    XCTAssertTrue(app.staticTexts["AI 自动记账"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.buttons.matching(identifier: "ai.settings.save").firstMatch.exists)
+    XCTAssertFalse(app.staticTexts["端到端加密"].exists)
+    XCTAssertFalse(app.staticTexts["退出登录"].exists)
+    waitForVisualStability()
+    keepScreenshot(named: "ios-p8-settings-ai")
+  }
+
   private func keepScreenshot(named name: String) {
     let screenshot = app.screenshot()
     let attachment = XCTAttachment(screenshot: screenshot)

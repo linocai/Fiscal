@@ -25,8 +25,7 @@ private enum MacSection: String, CaseIterable, Identifiable {
         case .accounts, .categories: "P2"
         case .cashFlow, .reports: "P7"
         case .reimbursement: "P6"
-        case .ai: "P8–P9"
-        case .settings: "P2–P11"
+        case .ai, .settings: "P8"
         }
     }
 }
@@ -40,6 +39,8 @@ struct MacRootView: View {
     let installments: InstallmentModel
     let reimbursements: ReimbursementModel
     let reports: ReportingModel
+    let aiProposals: AIProposalModel
+    let aiSettings: AISettingsModel
     @State private var section: MacSection = .overview
 
     var body: some View {
@@ -65,6 +66,10 @@ struct MacRootView: View {
                     MacCashFlowScreen(model: reports)
                 } else if section == .reports {
                     MacReportsScreen(model: reports)
+                } else if section == .ai {
+                    MacAIProposalScreen(model: aiProposals, accounts: accounts, categories: categories, credit: credit)
+                } else if section == .settings {
+                    MacSettingsScreen(model: aiSettings)
                 } else {
                     PlaceholderScreen(section.rawValue, symbol: section.symbol, phase: section.phase)
                 }
@@ -88,7 +93,7 @@ struct MacRootView: View {
                     }
                     .frame(width: 94, height: 53)
                     .overlay(alignment: .topTrailing) {
-                        if item == .ai { Text("1").font(.caption2.bold()).foregroundStyle(.white).frame(width: 16, height: 16).background(FiscalColor.expense, in: .circle).offset(x: -16, y: 1) }
+                        if item == .ai && aiProposals.pendingCount > 0 { Text(aiProposals.pendingCount > 99 ? "99+" : String(aiProposals.pendingCount)).font(.caption2.bold()).foregroundStyle(.white).padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16).background(FiscalColor.expense, in: .capsule).offset(x: -14, y: 1) }
                     }
                 }.buttonStyle(.plain)
             }

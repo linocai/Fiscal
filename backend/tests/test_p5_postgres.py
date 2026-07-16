@@ -53,7 +53,7 @@ async def session() -> AsyncIterator[AsyncSession]:
     await engine.dispose()
 
 
-async def seeded_plan(session: AsyncSession):  # type: ignore[no-untyped-def]
+async def seeded_plan(session: AsyncSession, *, ai_text: bool = False):  # type: ignore[no-untyped-def]
     account = await AccountService(session).create(
         AccountDraft(
             name="分期卡",
@@ -72,7 +72,9 @@ async def seeded_plan(session: AsyncSession):  # type: ignore[no-untyped-def]
             color_hex="#AA5500",
         )
     )
-    purchase = await TransactionService(session).create(
+    transaction_service = TransactionService(session)
+    create_purchase = transaction_service.create_ai_text if ai_text else transaction_service.create
+    purchase = await create_purchase(
         TransactionDraft(
             kind=TransactionKind.CREDIT_PURCHASE,
             amount_minor=329_900,
@@ -95,6 +97,16 @@ async def seeded_plan(session: AsyncSession):  # type: ignore[no-untyped-def]
         uuid4(),
     )
     return account, purchase, plan
+
+
+async def test_ai_text_credit_purchase_is_an_ordinary_installment_purchase(
+    session: AsyncSession,
+) -> None:
+    _account, purchase, plan = await seeded_plan(session, ai_text=True)
+    assert purchase.source == "ai_text"
+    assert plan.purchase_transaction_id == purchase.id
+    options = await InstallmentService(session).options(purchase.id, 3)
+    assert len(options) == 3
 
 
 async def additional_plan(
@@ -328,7 +340,7 @@ async def test_shared_cycle_partial_repayment_keeps_gross_schedule(
             opening_balance_minor=10_000,
         )
     )
-    await TransactionService(session).create(
+    await TransactionService(session).create_ai_text(
         TransactionDraft(
             kind=TransactionKind.REPAYMENT,
             amount_minor=100,
@@ -468,7 +480,7 @@ async def test_reverse_rejects_later_generic_target_cycle_repayment(
         ),
         uuid4(),
     )
-    await TransactionService(session).create(
+    await TransactionService(session).create_ai_text(
         TransactionDraft(
             kind=TransactionKind.REPAYMENT,
             amount_minor=100,

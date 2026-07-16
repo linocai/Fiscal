@@ -4,8 +4,11 @@ from typing import Annotated, cast
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from fiscal_api.core.config import Settings, get_settings
 from fiscal_api.db.readiness import ReadinessCheck
 from fiscal_api.services.accounts import AccountService
+from fiscal_api.services.ai import AIService
+from fiscal_api.services.ai_provider import AIProvider, build_ai_provider
 from fiscal_api.services.categories import CategoryService
 from fiscal_api.services.credit import CreditService
 from fiscal_api.services.installments import InstallmentService
@@ -58,6 +61,17 @@ def get_reporting_service(session: SessionDependency) -> ReportingService:
     return ReportingService(session)
 
 
+def get_ai_provider(settings: Annotated[Settings, Depends(get_settings)]) -> AIProvider:
+    return build_ai_provider(settings)
+
+
+AIProviderDependency = Annotated[AIProvider, Depends(get_ai_provider)]
+
+
+def get_ai_service(session: SessionDependency, provider: AIProviderDependency) -> AIService:
+    return AIService(session, provider)
+
+
 AccountServiceDependency = Annotated[AccountService, Depends(get_account_service)]
 CategoryServiceDependency = Annotated[CategoryService, Depends(get_category_service)]
 TransactionServiceDependency = Annotated[TransactionService, Depends(get_transaction_service)]
@@ -65,3 +79,4 @@ CreditServiceDependency = Annotated[CreditService, Depends(get_credit_service)]
 InstallmentServiceDependency = Annotated[InstallmentService, Depends(get_installment_service)]
 ReimbursementServiceDependency = Annotated[ReimbursementService, Depends(get_reimbursement_service)]
 ReportingServiceDependency = Annotated[ReportingService, Depends(get_reporting_service)]
+AIServiceDependency = Annotated[AIService, Depends(get_ai_service)]

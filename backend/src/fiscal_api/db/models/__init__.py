@@ -1,4 +1,5 @@
 from fiscal_api.db.models.account import Account, AccountKind
+from fiscal_api.db.models.ai import AIProposal, AIProposalSource, AIProposalStatus, AISettings
 from fiscal_api.db.models.category import Category, CategoryDirection
 from fiscal_api.db.models.credit import CreditCycle, CreditCycleStatus
 from fiscal_api.db.models.installment import (
@@ -18,6 +19,7 @@ from fiscal_api.db.models.ledger import (
     RevisionEvent,
     TransactionKind,
     TransactionRevision,
+    TransactionSource,
 )
 from fiscal_api.db.models.reimbursement import (
     ReimbursementAllocation,
@@ -33,6 +35,10 @@ from fiscal_api.db.models.reimbursement import (
 )
 
 __all__ = [
+    "AIProposal",
+    "AIProposalSource",
+    "AIProposalStatus",
+    "AISettings",
     "Account",
     "AccountKind",
     "Category",
@@ -63,4 +69,5 @@ __all__ = [
     "RevisionEvent",
     "TransactionKind",
     "TransactionRevision",
+    "TransactionSource",
 ]

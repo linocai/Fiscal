@@ -70,3 +70,51 @@ public struct FiscalIconTile: View {
 public extension View {
     func fiscalMonospacedNumbers() -> some View { monospacedDigit() }
 }
+
+public struct FiscalActionButtonStyle: ButtonStyle {
+    public enum Role { case primary, secondary, destructive }
+    private let role: Role
+    public init(_ role: Role = .primary) { self.role = role }
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 15)
+            .frame(minHeight: 42)
+            .background(background.opacity(configuration.isPressed ? 0.72 : 1), in: .rect(cornerRadius: 12))
+            .overlay {
+                if role == .secondary {
+                    RoundedRectangle(cornerRadius: 12).stroke(FiscalColor.accent.opacity(0.22), lineWidth: 0.7)
+                }
+            }
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
+    }
+    private var foreground: Color { role == .secondary ? FiscalColor.accent : .white }
+    private var background: Color {
+        switch role {
+        case .primary: FiscalColor.accent
+        case .secondary: FiscalColor.accent.opacity(0.07)
+        case .destructive: FiscalColor.expense
+        }
+    }
+}
+
+public struct FiscalSwitchToggleStyle: ToggleStyle {
+    public init() {}
+    public func makeBody(configuration: Configuration) -> some View {
+        Button { configuration.isOn.toggle() } label: {
+            HStack(spacing: 12) {
+                configuration.label
+                Spacer(minLength: 12)
+                ZStack(alignment: configuration.isOn ? .trailing : .leading) {
+                    Capsule().fill(configuration.isOn ? FiscalColor.income : FiscalColor.tertiary.opacity(0.3))
+                    Circle().fill(.white).padding(2).shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+                }.frame(width: 44, height: 27)
+            }.contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.2), value: configuration.isOn)
+        .accessibilityValue(configuration.isOn ? "开启" : "关闭")
+    }
+}
