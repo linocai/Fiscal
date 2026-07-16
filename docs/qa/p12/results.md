@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: pre-decision local shadow passed; final decision manifest requires a fresh shadow run; production not started
+Status: production migration, idempotent replay, reconciliation and dual-client smoke passed
 
 ## Real source and isolated target
 
@@ -29,7 +29,7 @@ Skip reasons include the approved USD/investment boundary, 43 old cash-flow proj
 
 One 2026-05-16 `5月报销` income of CNY 3,015.17 is not linked to a legacy reimbursement claim. The user subsequently approved mapping it to the dedicated income category `历史报销`. The six income rows linked to received claims remain suppressed before category resolution, so Fiscal still generates each reimbursement receipt exactly once.
 
-The totals and hashes below are retained as the pre-decision shadow baseline. Adding `历史报销` changes the final manifest from 17 to 18 categories and is expected to change target objects from 147 to 148; a fresh isolated shadow apply, rerun and reconciliation must replace this evidence before production apply.
+The totals and hashes below are retained as the pre-decision local shadow baseline. The final HZ shadow and production evidence that supersedes it is recorded below.
 
 ## Apply, idempotency and reconciliation
 
@@ -64,15 +64,51 @@ The stable source fingerprint is `28ad95637f4b5e20a09e102e03fd89f2cd7b310d36e950
 
 ## Automated verification
 
-- P12 focused suite with real local PostgreSQL: 29 passed.
-- Full backend unit/non-PostgreSQL suite: 122 passed, 89 environment-gated PostgreSQL cases skipped.
+- P12 focused suite with real local PostgreSQL: 28 passed.
+- Full backend unit/non-PostgreSQL suite: 126 passed, 89 environment-gated PostgreSQL cases skipped.
 - Ruff: all checks passed.
 - Pyright strict: zero errors.
 - P12 migration PostgreSQL checks cover Alembic upgrade/downgrade guards, legacy transaction trigger shape, provenance uniqueness, real apply, identical rerun and changed-source conflict.
 
-## Remaining production gates
+## Final HZ PostgreSQL 16 shadow
 
-- Regenerate the real-source plan and repeat apply, idempotent rerun and reconciliation in a fresh shadow database using the final 18-category manifest.
-- Deploy the P12 release to HZ without applying data, create a new HZ shadow database, and repeat the same drill on PostgreSQL 16.
-- Verify old and Fiscal backups immediately before the authorized production apply.
-- Complete the carried P11 alert/off-host/restart/iOS evidence gates and final dual-client v1.0 acceptance.
+Release `79074181ccfb2d6e91d66e548882ed3c027fda9c` ran the protected full-chain drill against preserved database `fiscal_p12_shadow_20260716_07`. The source fingerprint remained `28ad95637f4b5e20a09e102e03fd89f2cd7b310d36e9509b7fcc46486cbbdab5`, the final plan contained seven accounts, 18 categories, 111 direct transactions, six claims and six receipts, and conflicts were empty.
+
+| Run | Created | Unchanged | Skipped | Reconciliation |
+|---|---:|---:|---:|---|
+| HZ shadow apply | 148 | 0 | 152 | 38 checks / 0 mismatch |
+| HZ shadow replay | 0 | 148 | 152 | 38 checks / 0 mismatch |
+
+The skip count decreased from the pre-decision 153 to 152 because `5月报销` is now mapped to `历史报销` instead of producing `unmapped_category_imported_uncategorized`. All evidence files are mode 0600 under `/var/lib/fiscal/p12-evidence/shadow-20260716-07`.
+
+## Production cutover
+
+- Final production release: `185041f5a2481efad6851888713b120037add038`; Alembic `20260716_0011`.
+- Fiscal and LinoFinance writes were stopped, ports 8010/8000 closed and both databases had zero other clients before backup and apply.
+- Verified pre-apply custom dumps were created for both databases. Fiscal SHA-256: `5313fed18aa3ca525aec58c4b1673eb81033db5167f346e328cb5a57a92dd479`; LinoFinance SHA-256: `1d29ef1c6500c6b08cb423806169dda6a863287206467b2a6d9f05e6fe1b48ed`.
+- The stopped-source plan reproduced the approved fingerprint, 148 targets, 152 skips, ready=true and zero conflicts.
+- Production apply created 148 provenance targets; replay created zero and reported 148 unchanged. Both 38-check reconciliations passed with zero mismatches.
+- Production contains seven accounts, 18 categories, 117 ledger transactions, six claims, six receipts and 148 provenance links. The single migration run is `production/succeeded`.
+- A new post-migration Fiscal backup (`fiscal-20260716T121722Z.dump`) and isolated restore verification both passed.
+- LinoFinance API was restored for reference with its application role defaulted to read-only; its jobs timer is disabled and inactive.
+
+Production report hashes:
+
+| Report | SHA-256 |
+|---|---|
+| Final plan | `5dc4387a9ae09f1aa87628aea7198cd4b32c209304f471b5834d1bf05be431af` |
+| Apply | `69829cda447e193095bf95a82a467814a9d32c8cb2f737fec43da05dbc6c90d7` |
+| Reconciliation | `81b536f00f5a591f26e38bb9e450f96fe158b9e62cf2fd674acd235e9605ee76` |
+| Replay | `2435a9b62fc27ac6fd76fb8df709d3d2bda29061cd0862cc5680c555c472eb67` |
+| Rereconciliation | `81b536f00f5a591f26e38bb9e450f96fe158b9e62cf2fd674acd235e9605ee76` |
+
+## Client production smoke
+
+- Primary Mac Keychain authentication returned production system status, all seven accounts, the first 100 migrated transactions and the July overview through HTTPS. The current macOS Release build points to production; its newly generated ad-hoc signature requires one manual Keychain “Always Allow” confirmation before UI screenshot refresh.
+- iOS 26.5 Simulator Release loaded the migrated production overview through a temporary activated device token. It displayed July spending CNY 3,619.51, actual net cash flow CNY -5,501.27 and current credit debt CNY 23,624.91. The temporary device was revoked immediately after evidence capture.
+- Physical-iPhone Siri, Back Tap, Photos/OCR and notification acceptance is deferred to post-release `v1.0.x` regression by explicit user instruction.
+
+## Remaining v1.0 gates
+
+- Complete the carried P11 real alert receiver, verified encrypted off-host/90-day recovery coverage and approved shared-PostgreSQL restart check.
+- Finalize stable Apple signing/version metadata, perform the one-time macOS Keychain approval, obtain user acceptance and create the v1.0 tag.

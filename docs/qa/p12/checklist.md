@@ -18,14 +18,14 @@ Date: 2026-07-16
 - [x] Business writes use Fiscal domain invariants and reimbursement income is not duplicated.
 - [x] Local real-source shadow apply and identical rerun pass.
 - [x] Account, credit, transaction, reimbursement and natural-month reconciliation pass with zero mismatches.
-- [ ] HZ PostgreSQL 16 shadow drill passes using the release artifact and protected runbook.
+- [x] HZ PostgreSQL 16 shadow drill and identical replay pass using the release artifact and protected runbook (148 targets, 152 skips, 38 checks, zero mismatch).
 
 ## Production and release
 
-- [ ] Both old LinoFinance and Fiscal receive verified pre-apply backups.
-- [ ] Fiscal writes are stopped/exclusively locked and the source manifest is reverified immediately before apply.
+- [x] Both old LinoFinance and Fiscal receive verified pre-apply custom-format backups with SHA-256 manifests.
+- [x] Fiscal/LinoFinance writes are stopped, database clients are drained and the source manifest is reverified immediately before apply.
 - [x] Production apply has an exact-database, approved-fingerprint, exclusive-connection and pristine-or-replay fail-closed gate.
-- [ ] Production apply and idempotent no-op recheck pass.
-- [ ] Production reconciliation and dual-client verification pass.
+- [x] Production apply and idempotent no-op recheck pass (148 created, then 0 created / 148 unchanged).
+- [x] Production reconciliation and dual-client verification pass; macOS UI still needs one local Keychain “Always Allow” click for the newly ad-hoc-signed build.
 - [ ] Carried P11 v1.0 operational gates are complete.
 - [ ] User accepts P12 and v1.0 release/tag.

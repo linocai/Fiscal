@@ -867,7 +867,7 @@ Back Tap
 - 已完成：P8 AI Provider 安全边界、文本提案状态机、确定性自动执行、幂等执行/撤销、AI 待确认与正式设置页，以及 iOS/macOS 真实 API 界面；验收记录见 `docs/qa/p8/results.md`。
 - 已验收：用户确认 P8 通过并指示开始 P9。
 - 已完成：P9 三类可信输入来源、端侧 Vision OCR、App Intent/快捷指令、真实相册与通知授权状态、Back Tap 使用路径、本地通知及版本绑定快速撤销；自动化与截图记录见 `docs/qa/p9/results.md`。
-- 已验收：用户确认 P9 通过并指示开始 P10；实体 iPhone 的 Siri、Back Tap、相册/最新截图、通知与通知撤销仍保留为发布前设备回归项，不再阻塞 P10 施工。
+- 已验收：用户确认 P9 通过并指示开始 P10；用户在 P12 切换前进一步明确实体 iPhone 的 Siri、Back Tap、相册/最新截图、通知与通知撤销不再作为 v1.0 前置，改为发版后真实使用回归，问题进入 `v1.0.x` 修复。
 - 已完成：P10 待归类收件箱、原子批量分类、全局搜索与高级筛选、设备本地记账偏好、短时只读缓存、真实筛选 CSV 导出、语义深色模式、iOS 现代编辑与大字适配、macOS 高密度 Table + Inspector；工程与截图记录见 `docs/qa/p10/results.md`。
 - 已验收：用户确认启动 P11，并提供 HZ 云当前真实状态文件；P10 视为通过。
 - 已验收：用户明确启动 P12；P11 获用户放行，尚未完成的真实告警、异地恢复、共享 PostgreSQL 维护窗口重启与 iOS 生产截图继续作为 v1.0 发布门，不因进入迁移阶段而消失。
@@ -876,5 +876,5 @@ Back Tap
 - 权威信息架构缺漏已纠正并落实：iOS `更多`保留完整目标入口，P8 已将临时 `其他设置 · P11`占位替换为正式 `设置`目的页；后续分组仍按 P9–P11 接通。
 - 外部环境：HZ 已在独立 `8010`/`fiscal` 数据库部署，`fiscal.linotsai.top` DNS、证书、Nginx HTTPS、首个 Mac 操作员、定时备份与隔离恢复均已通过；现有 LinoFinance/LinoN/主页保持健康。真实模型调用未配置时继续保持安全、可测试的“AI 未配置”状态。真实告警接收方、可证明的 90 天异地恢复策略、共享 PostgreSQL 维护窗口重启和双平台生产截图仍是 P11 验收门。
 - 新对话恢复顺序：先读本文件与 `design_handoff_fiscal_app/README.md`，再检查 `git status`。
-- P12 当前证据：HZ 旧库只读 resolved plan 与本机隔离 PostgreSQL shadow 实迁已通过；首次创建 147 个目标对象、跳过/依赖报告 153 个，38 项对账零差异；相同 manifest 重跑为 0 created / 147 unchanged，再次零差异。该证据是最终分类决策前的基线；用户随后批准跳过 5 笔“流水 confirmed、旧账期 voided”的花呗消费，并将未关联 claim 的 `5月报销`收入映射到新增分类`历史报销`。证据见 `docs/qa/p12/results.md`。
-- 下一步：以最终 18 分类 manifest 重新生成只读计划并在全新隔离影子库复验，随后将 P12 release 部署到 HZ 但先只做 PostgreSQL 16 影子演练。生产迁移仍须经过双库备份、排他写入窗口与 manifest 复验；用户已授权直接推进至正式迁移、幂等复跑和双端生产验收，其中实体 iPhone 系统能力验收延后至发版后的小版本回归。Primary Mac 的生产两阶段密钥轮换与旧密钥 401 已通过。
+- P12 当前证据：最终 18 分类 manifest 已在 HZ PostgreSQL 16 影子库与生产库完成。影子与生产首次均为 148 created / 152 skipped，幂等复跑均为 0 created / 148 unchanged；四次 38 项对账均为零差异。生产现有 7 个账户、18 个分类、117 笔账本流水、6 张报销单、6 次回款和 148 条 provenance；迁移前双库备份、迁移后 Fiscal 备份与隔离恢复均通过。证据见 `docs/qa/p12/results.md`。
+- 下一步：P12 数据切换与 Step 5 双端生产 smoke 已完成；实体 iPhone Siri/Back Tap/相册 OCR/通知由用户明确延后至发版后 `v1.0.x` 回归。v1.0 封板仍需完成 P11 遗留的真实告警、加密异地/90 天恢复覆盖与共享 PostgreSQL 维护窗口重启，并固定 Apple 版本/签名、完成一次 macOS Keychain“始终允许”、用户最终验收和 tag。Primary Mac 的生产两阶段密钥轮换与旧密钥 401 已通过。

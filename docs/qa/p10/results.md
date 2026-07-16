@@ -51,4 +51,4 @@ The evidence uses production views connected to an authenticated local PostgreSQ
 ## Remaining acceptance gates
 
 - [ ] User visually accepts P10 before P11 begins.
-- [ ] P9 Siri, Back Tap, Photos/latest-screenshot authorization, notifications, and notification Undo are verified on a physical iPhone before release.
+- [ ] P9 Siri, Back Tap, Photos/latest-screenshot authorization, notifications, and notification Undo are verified after release; the user explicitly deferred this to `v1.0.x` regression.

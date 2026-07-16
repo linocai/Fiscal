@@ -35,7 +35,9 @@ Status: engineering complete; awaiting physical-iPhone and user visual acceptanc
 
 The iOS and macOS evidence uses the production views connected to an authenticated local PostgreSQL-backed API. System authorization prompts and Siri/Back Tap behavior are intentionally not simulated as proof.
 
-## Physical-device acceptance gate
+## Deferred physical-device acceptance
+
+The user explicitly moved this gate after v1.0 production cutover. Failures found during real use will be handled in `v1.0.x`; the items remain visible and are not represented as tested.
 
 - [ ] User verifies both Siri/App Intents on a physical iPhone.
 - [ ] User binds and verifies Back Tap → Shortcut on a physical iPhone.

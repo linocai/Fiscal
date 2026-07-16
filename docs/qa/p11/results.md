@@ -46,4 +46,4 @@ Status: HZ deployment and HTTPS cutover passed; final operational and dual-platf
 - Capture iOS production Settings evidence on a stable simulator or device. The attempted simulator candidate was never activated, was revoked, and its pasteboard was cleared after the simulator failed to load production reliably.
 - Restart the shared PostgreSQL cluster only in an approved maintenance window, then recheck Fiscal and LinoFinance. P11 did not disrupt the shared database merely to satisfy a checkbox.
 
-P12 historical migration has not started.
+P12 production migration completed after this P11 baseline: 148 target objects were created, an identical replay was a no-op, and both 38-check reconciliations had zero mismatches. See `docs/qa/p12/results.md`.
