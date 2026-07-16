@@ -88,6 +88,7 @@ log "running release verification gates without production database access"
   unset FISCAL_TOKEN_PEPPER FISCAL_AI_PROVIDER_API_KEY
   export UV_DEFAULT_INDEX="${FISCAL_PYPI_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}"
   export UV_HTTP_TIMEOUT="${FISCAL_UV_HTTP_TIMEOUT_SECONDS:-60}"
+  "$uv_bin" venv --relocatable .venv
   "$uv_bin" sync --frozen
   "$uv_bin" run ruff format --check .
   "$uv_bin" run ruff check .
@@ -101,9 +102,11 @@ find "$temporary_release" -type d -exec chmod 0755 {} +
 mv -- "$temporary_release" "$release"
 temporary_release=""
 
-expected_head="$(cd "$release/backend" && \
-  run_as_migrator env FISCAL_DATABASE_URL="${FISCAL_MIGRATION_DATABASE_URL:?missing migration URL}" \
-  .venv/bin/alembic heads | awk 'NR == 1 {print $1}')"
+alembic_bin="$release/backend/.venv/bin/alembic"
+alembic_config="$release/backend/alembic.ini"
+expected_head="$(run_as_migrator env \
+  FISCAL_DATABASE_URL="${FISCAL_MIGRATION_DATABASE_URL:?missing migration URL}" \
+  "$alembic_bin" --config "$alembic_config" heads | awk 'NR == 1 {print $1}')"
 [[ -n "$expected_head" ]] || die "unable to determine the release Alembic head"
 printf 'revision=%s\nalembic_head=%s\ncreated_at=%s\n' \
   "$revision" "$expected_head" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$release/RELEASE"
@@ -114,11 +117,9 @@ log "creating and verifying the mandatory pre-migration backup"
 "$release/infra/production/scripts/backup.sh" --apply
 
 log "upgrading the production schema explicitly"
-(
-  cd -- "$release/backend"
-  run_as_migrator env FISCAL_DATABASE_URL="${FISCAL_MIGRATION_DATABASE_URL:?missing migration URL}" \
-    .venv/bin/alembic upgrade head
-)
+run_as_migrator env \
+  FISCAL_DATABASE_URL="${FISCAL_MIGRATION_DATABASE_URL:?missing migration URL}" \
+  "$alembic_bin" --config "$alembic_config" upgrade head
 
 actual_head="$(run_as_postgres psql --dbname="${FISCAL_BACKUP_DATABASE:-fiscal}" \
   --no-psqlrc --tuples-only --no-align --command='SELECT version_num FROM alembic_version')"

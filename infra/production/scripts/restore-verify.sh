@@ -45,9 +45,10 @@ run_as_postgres pg_restore \
 
 actual_head="$(run_as_postgres psql --dbname="$drill_database" --no-psqlrc --tuples-only --no-align \
   --command='SELECT version_num FROM alembic_version')"
-expected_head="$(cd /opt/fiscal/current/backend && \
-  run_as_postgres env FISCAL_DATABASE_URL="${FISCAL_MIGRATION_DATABASE_URL:?missing migration URL}" \
-  .venv/bin/alembic heads | awk 'NR == 1 {print $1}')"
+expected_head="$(run_as_postgres env \
+  FISCAL_DATABASE_URL="${FISCAL_MIGRATION_DATABASE_URL:?missing migration URL}" \
+  /opt/fiscal/current/backend/.venv/bin/alembic \
+  --config /opt/fiscal/current/backend/alembic.ini heads | awk 'NR == 1 {print $1}')"
 [[ -n "$actual_head" && "$actual_head" == "$expected_head" ]] || \
   die "restored Alembic revision does not match the deployed head"
 
