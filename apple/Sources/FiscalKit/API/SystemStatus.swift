@@ -50,7 +50,8 @@ public actor SystemStatusClient {
         return try JSONDecoder.fiscal.decode(SystemStatus.self, from: data)
     }
 
-    public func saveToken(_ token: String) async throws {
+    public func saveBootstrapTokenIfMissing(_ token: String) async throws {
+        guard try await tokenStore.read() == nil else { return }
         try await tokenStore.save(token)
     }
 }

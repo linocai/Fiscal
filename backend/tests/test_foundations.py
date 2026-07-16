@@ -35,8 +35,8 @@ def test_time_helpers_require_aware_values_and_use_shanghai() -> None:
         ensure_utc(datetime(2026, 7, 14))
 
 
-def test_production_rejects_default_or_short_device_tokens() -> None:
-    with pytest.raises(ValidationError, match="must be set"):
+def test_production_rejects_legacy_tokens_and_requires_strong_pepper() -> None:
+    with pytest.raises(ValidationError, match="forbidden"):
         Settings(environment="production", device_token=SecretStr(DEFAULT_DEVELOPMENT_TOKEN))
     with pytest.raises(ValidationError, match="at least 32"):
-        Settings(environment="production", device_token=SecretStr("short"))
+        Settings(environment="production", token_pepper=SecretStr("short"))

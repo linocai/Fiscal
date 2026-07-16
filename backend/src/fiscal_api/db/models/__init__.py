@@ -33,6 +33,7 @@ from fiscal_api.db.models.reimbursement import (
     ReimbursementReceiptRevision,
     ReimbursementRelationRole,
 )
+from fiscal_api.db.models.security import DeviceToken, DeviceTokenRole, DeviceTokenStatus
 
 __all__ = [
     "AIProposal",
@@ -45,6 +46,9 @@ __all__ = [
     "CategoryDirection",
     "CreditCycle",
     "CreditCycleStatus",
+    "DeviceToken",
+    "DeviceTokenRole",
+    "DeviceTokenStatus",
     "InstallmentLedgerLink",
     "InstallmentLedgerRole",
     "InstallmentOperation",

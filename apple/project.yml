@@ -47,7 +47,7 @@ targets:
         Debug:
           FISCAL_API_BASE_URL: "http://127.0.0.1:8000"
         Release:
-          FISCAL_API_BASE_URL: "https://fiscal.invalid"
+          FISCAL_API_BASE_URL: "https://fiscal.linotsai.top"
   FiscalmacOS:
     type: application
     platform: macOS
@@ -68,7 +68,7 @@ targets:
         Debug:
           FISCAL_API_BASE_URL: "http://127.0.0.1:8000"
         Release:
-          FISCAL_API_BASE_URL: "https://fiscal.invalid"
+          FISCAL_API_BASE_URL: "https://fiscal.linotsai.top"
   FiscalKitTests:
     type: bundle.unit-test
     platform: macOS

@@ -1,6 +1,8 @@
-# Fiscal infrastructure (P1)
+# Fiscal infrastructure
 
-This directory contains the local PostgreSQL service and the minimal VPS staging stack. It intentionally does not provide production backups, restore automation, rate limiting, monitoring, or device-token lifecycle management; those belong to P11 or its decision gates.
+This directory contains the local PostgreSQL service, the P1 Docker/Caddy staging stack, and the P11 native-production assets. The staging stack remains intentionally separate from production.
+
+For the HZ Ubuntu 24.04 / PostgreSQL 16 / Nginx topology, hardened systemd services, release deployment, backup/restore drills and monitoring timers, see [`production/README.md`](production/README.md). Those assets never connect to or mutate the server by themselves, and the old Docker/Caddy stack must not be presented as the production deployment.
 
 ## Local database
 
@@ -63,4 +65,4 @@ P1 builds the API image on the VPS and labels it with `FISCAL_IMAGE_TAG`. Before
 2. Check out the last known-good Git revision.
 3. Rebuild `api`, run `docker compose ... up -d`, and confirm `ps` plus the public liveness endpoint.
 
-Do not automatically downgrade the database schema. Schema rollback can destroy data and must follow the migration-specific instructions. P1 has no production backup/restore promise; that capability is delivered and exercised in P11 before production use.
+Do not automatically downgrade the database schema. Schema rollback can destroy data and must follow the migration-specific instructions. The Docker/Caddy path remains staging-only; P11 production backup/restore and recovery gates are defined by the native HZ workflow linked above.

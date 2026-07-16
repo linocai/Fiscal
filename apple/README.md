@@ -11,9 +11,13 @@ xcodebuild -project Fiscal.xcodeproj -scheme FiscaliOS -destination 'generic/pla
 xcodebuild -project Fiscal.xcodeproj -scheme FiscalmacOS test
 ```
 
-Debug builds use `http://127.0.0.1:8000` and allow local-network transport for development only. Override `FISCAL_API_BASE_URL` with an HTTPS endpoint for staging and release builds. The protected status endpoint is `/api/v1/system/status`; its bearer device token is stored as a this-device-only Keychain item.
+Debug builds use `http://127.0.0.1:8000` and allow local-network transport for development only. Release builds use `https://fiscal.linotsai.top`. The protected status endpoints are `/api/v1/system/status`, `/api/v1/system/security-status` and `/api/v1/system/operations-status`; bearer device keys are stored as this-device-only Keychain items.
 
 For a one-time local or staging bootstrap, set `FISCAL_DEVICE_TOKEN` in the Xcode Run scheme environment. On launch the app moves it into Keychain; the value is not compiled into the bundle, written to `UserDefaults`, or logged. Remove the scheme value after the first successful launch.
+
+## P11 VPS and device security
+
+Settings shows the current device role/fingerprint, server-enforced rate limits, database/schema alignment and the latest server-recorded backup, restore drill and disk facts. Operators can issue a one-time pending key. A new iPhone or Mac pastes that key into the unauthorized Settings state; activation completes before it becomes the active Keychain value. Rotation uses a separate pending Keychain slot and preserves the old key across transport ambiguity. “Remove this device key” is a revocation operation, not logout, and the UI accurately states that Fiscal is not end-to-end encrypted.
 
 P1 financial values come only from `PreviewSupport/OverviewFixtures.swift`. They are presentation fixtures and are never written to the backend or a local ledger.
 

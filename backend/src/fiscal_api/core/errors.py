@@ -28,11 +28,13 @@ class APIError(Exception):
         code: str,
         message: str,
         details: Any | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> None:
         self.status_code = status_code
         self.code = code
         self.message = message
         self.details = details
+        self.headers = dict(headers or {})
         super().__init__(message)
 
 
@@ -71,6 +73,7 @@ async def api_error_handler(request: Request, error: APIError) -> JSONResponse:
         code=error.code,
         message=error.message,
         details=error.details,
+        headers=error.headers,
     )
 
 

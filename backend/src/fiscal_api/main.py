@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy import func, select
 
 from fiscal_api import __version__
 from fiscal_api.api.router import api_router
@@ -9,6 +10,8 @@ from fiscal_api.core.config import Settings, get_settings
 from fiscal_api.core.errors import install_error_handlers
 from fiscal_api.core.logging import configure_logging
 from fiscal_api.core.middleware import install_request_middleware
+from fiscal_api.core.rate_limit import RateLimiter
+from fiscal_api.db.models.security import DeviceToken, DeviceTokenStatus
 from fiscal_api.db.readiness import ReadinessCheck, build_readiness_check
 from fiscal_api.db.session import create_engine, create_session_factory
 
@@ -26,6 +29,18 @@ def create_app(
         app.state.db_engine = engine
         app.state.session_factory = create_session_factory(engine)
         app.state.readiness_check = readiness_check or build_readiness_check(engine)
+        app.state.rate_limiter = RateLimiter(resolved_settings)
+        if resolved_settings.uses_database_device_tokens:
+            async with app.state.session_factory() as session:
+                active_tokens = await session.scalar(
+                    select(func.count())
+                    .select_from(DeviceToken)
+                    .where(DeviceToken.status == DeviceTokenStatus.ACTIVE)
+                )
+                if not active_tokens:
+                    raise RuntimeError(
+                        "Database token authentication requires at least one active device token"
+                    )
         yield
         await engine.dispose()
 

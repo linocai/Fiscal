@@ -36,6 +36,13 @@ available/over-limit credit, repayment progress, and status are server-derived. 
 debt requires explicit as-of and due dates rather than a fabricated deadline; installments remain
 P5.
 
+P11 replaces static secrets in staging/production with database-backed device keys. Raw keys are
+returned once, while PostgreSQL stores only an HMAC-SHA256 digest and short fingerprint. Operators
+can issue/revoke device keys; ordinary devices can inspect, rotate or remove only themselves. Safe
+rotation keeps the old key active until the Keychain-held successor proves possession. Protected
+`/api/v1/system/security-status` and `/api/v1/system/operations-status` expose real device, schema,
+backup, restore and disk facts without claiming end-to-end encryption.
+
 Run quality checks with:
 
 ```sh

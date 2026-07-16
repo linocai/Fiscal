@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic Fiscal readiness and stale-backup check
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=5m
+AccuracySec=30s
+Unit=fiscal-health-check.service
+
+[Install]
+WantedBy=timers.target

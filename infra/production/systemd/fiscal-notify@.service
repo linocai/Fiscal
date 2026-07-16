@@ -1,0 +1,17 @@
+[Unit]
+Description=Notify an operator that %i failed
+
+[Service]
+Type=oneshot
+User=fiscal
+Group=fiscal
+ExecStart=/opt/fiscal/current/infra/production/scripts/notify-failure.sh %i
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=

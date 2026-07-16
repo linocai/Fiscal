@@ -2,7 +2,7 @@
 
 > 计划版本：v0.3（施工权威版）
 > 日期：2026-07-16
-> 状态：P10 工程完成，等待用户视觉验收
+> 状态：P10 已通过，P11 施工中
 > 旧项目参考：`/Users/linotsai/Lino/LinoFinance`
 > 前端视觉合同：`design_handoff_fiscal_app/Fiscal Prototype.dc.html` 与同目录 `README.md`
 
@@ -869,9 +869,10 @@ Back Tap
 - 已完成：P9 三类可信输入来源、端侧 Vision OCR、App Intent/快捷指令、真实相册与通知授权状态、Back Tap 使用路径、本地通知及版本绑定快速撤销；自动化与截图记录见 `docs/qa/p9/results.md`。
 - 已验收：用户确认 P9 通过并指示开始 P10；实体 iPhone 的 Siri、Back Tap、相册/最新截图、通知与通知撤销仍保留为发布前设备回归项，不再阻塞 P10 施工。
 - 已完成：P10 待归类收件箱、原子批量分类、全局搜索与高级筛选、设备本地记账偏好、短时只读缓存、真实筛选 CSV 导出、语义深色模式、iOS 现代编辑与大字适配、macOS 高密度 Table + Inspector；工程与截图记录见 `docs/qa/p10/results.md`。
-- 当前施工位置：P10 工程完成，停在用户视觉验收点；P11 尚未开始。
+- 已验收：用户确认启动 P11，并提供 HZ 云当前真实状态文件；P10 视为通过。
+- 当前施工位置：P11 VPS 生产化与数据安全；合同见 `docs/architecture/p11-contracts.md`，不得提前开始 P12 历史迁移。
 - P7 双端信息架构纠正：iOS 为无图表的简洁列表，独立现金流不在报表中重复；macOS 保留三类报表与图形分析。
 - 权威信息架构缺漏已纠正并落实：iOS `更多`保留完整目标入口，P8 已将临时 `其他设置 · P11`占位替换为正式 `设置`目的页；后续分组仍按 P9–P11 接通。
-- 外部环境：真实模型调用仍需在服务端配置 Provider URL、模型与 API Key；未配置时保持安全、可测试的“AI 未配置”状态。VPS 发布仍需目标主机、DNS 与凭据。
+- 外部环境：HZ 目标主机与 SSH 路径已核验；真实模型调用仍需在服务端配置 Provider URL、模型与 API Key，未配置时保持安全、可测试的“AI 未配置”状态。`fiscal.linotsai.top` DNS、证书、真实告警接收方与异地备份策略仍是 P11 生产验收门。
 - 新对话恢复顺序：先读本文件与 `design_handoff_fiscal_app/README.md`，再检查 `git status`。
-- 下一步：用户检查 `docs/qa/p10/screenshots/` 的双端 P10 成品并确认是否通过；仅在明确通过后进入 P11，实体 iPhone 的 P9 系统集成仍保留为发布前设备回归项。
+- 下一步：设备密钥、真实运维状态、Apple 设置和生产基础设施资产的本地门已通过；将已提交版本隔离部署到 HZ 的 `8010`/独立数据库，完成备份恢复与重启验证。公开 HTTPS 切换等待 `fiscal.linotsai.top` DNS 指向 HZ 云。

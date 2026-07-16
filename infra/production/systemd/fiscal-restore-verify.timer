@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly isolated Fiscal restore drill
+
+[Timer]
+OnCalendar=Sun *-*-* 04:40:00 Asia/Shanghai
+RandomizedDelaySec=20m
+Persistent=true
+Unit=fiscal-restore-verify.service
+
+[Install]
+WantedBy=timers.target

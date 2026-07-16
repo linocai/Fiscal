@@ -1,0 +1,45 @@
+[Unit]
+Description=Fiscal production API
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+OnFailure=fiscal-notify@%n.service
+
+[Service]
+Type=simple
+User=fiscal
+Group=fiscal
+WorkingDirectory=/opt/fiscal/current/backend
+EnvironmentFile=/etc/fiscal/fiscal.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/fiscal/current/backend/.venv/bin/uvicorn fiscal_api.main:app --host 127.0.0.1 --port 8010 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+UMask=0077
+
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

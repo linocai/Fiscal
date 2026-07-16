@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic Fiscal production disk check
+
+[Timer]
+OnBootSec=10m
+OnUnitActiveSec=15m
+AccuracySec=1m
+Unit=fiscal-disk-check.service
+
+[Install]
+WantedBy=timers.target

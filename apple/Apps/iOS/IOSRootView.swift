@@ -20,6 +20,7 @@ struct IOSRootView: View {
     let reports: ReportingModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
+    let deviceSecurity: DeviceSecurityModel
     let recordingPreferences: RecordingPreferences
     @State private var selection: IOSTab = .overview
     @State private var showRecordSheet = false
@@ -46,7 +47,7 @@ struct IOSRootView: View {
                 }
             case .transactions: NavigationStack { IOSTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments) }
             case .cashFlow: NavigationStack { IOSCashFlowScreen(model: reports) }
-            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, aiProposals: aiProposals, aiSettings: aiSettings, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true })
+            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, aiProposals: aiProposals, aiSettings: aiSettings, deviceSecurity: deviceSecurity, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true })
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -106,6 +107,7 @@ private struct IOSMoreScreen: View {
     let reports: ReportingModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
+    let deviceSecurity: DeviceSecurityModel
     let connection: ConnectionModel
     let recordingPreferences: RecordingPreferences
     let openAI: () -> Void
@@ -146,6 +148,7 @@ private struct IOSMoreScreen: View {
                 case .settings:
                     IOSSettingsScreen(
                         model: aiSettings,
+                        security: deviceSecurity,
                         preferences: recordingPreferences,
                         accounts: accounts,
                         transactions: transactions,

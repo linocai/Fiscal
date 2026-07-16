@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Fiscal PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 Asia/Shanghai
+RandomizedDelaySec=15m
+Persistent=true
+Unit=fiscal-backup.service
+
+[Install]
+WantedBy=timers.target

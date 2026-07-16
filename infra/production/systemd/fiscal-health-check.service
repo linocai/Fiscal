@@ -1,0 +1,19 @@
+[Unit]
+Description=Check Fiscal readiness and backup freshness
+After=fiscal-api.service
+OnFailure=fiscal-notify@%n.service
+
+[Service]
+Type=oneshot
+User=fiscal
+Group=fiscal
+ExecStart=/opt/fiscal/current/infra/production/scripts/health-check.sh
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=

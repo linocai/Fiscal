@@ -167,7 +167,7 @@ def test_deployed_provider_requires_https_and_secret_is_masked() -> None:
     with pytest.raises(ValidationError, match="HTTPS"):
         Settings(
             environment="production",
-            device_token=SecretStr("d" * 32),
+            token_pepper=SecretStr("p" * 32),
             ai_provider="openai_compatible",
             ai_provider_base_url="http://provider.example/v1",
             ai_provider_model="model",
@@ -175,7 +175,7 @@ def test_deployed_provider_requires_https_and_secret_is_masked() -> None:
         )
     settings = Settings(
         environment="production",
-        device_token=SecretStr("d" * 32),
+        token_pepper=SecretStr("p" * 32),
         ai_provider="openai_compatible",
         ai_provider_base_url="https://provider.example/v1",
         ai_provider_model="model",

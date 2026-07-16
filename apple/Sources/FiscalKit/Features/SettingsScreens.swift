@@ -2,6 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 #if os(iOS)
   import UIKit
+#elseif os(macOS)
+  import AppKit
 #endif
 
 public struct TransactionCSVDocument: FileDocument {
@@ -22,6 +24,7 @@ public struct TransactionCSVDocument: FileDocument {
 #if os(iOS)
 public struct IOSSettingsScreen: View {
   @Bindable var model: AISettingsModel
+  let security: DeviceSecurityModel?
   @Bindable var preferences: RecordingPreferences
   let accounts: AccountsModel
   let transactions: TransactionsModel
@@ -38,6 +41,7 @@ public struct IOSSettingsScreen: View {
   @Environment(\.openURL) private var openURL
   public init(
     model: AISettingsModel,
+    security: DeviceSecurityModel? = nil,
     preferences: RecordingPreferences,
     accounts: AccountsModel,
     transactions: TransactionsModel,
@@ -45,7 +49,7 @@ public struct IOSSettingsScreen: View {
     openCategories: @escaping () -> Void = {},
     openReports: @escaping () -> Void = {}
   ) {
-    self.model = model; self.preferences = preferences; self.accounts = accounts
+    self.model = model; self.security = security; self.preferences = preferences; self.accounts = accounts
     self.transactions = transactions; self.cache = cache
     self.openCategories = openCategories; self.openReports = openReports
   }
@@ -63,12 +67,13 @@ public struct IOSSettingsScreen: View {
         section("AI 自动记账") { AISettingsCard(model: model, compact: true) }
         section("分类与统计") { classificationCard }
         section("数据与缓存") { dataCard }
-        section("账户与同步") { p11BoundaryCard }
+        section("账户与同步") { securityCard }
       }.padding(16)
     }.background(FiscalColor.iOSBackground).navigationTitle("设置")
       .task { if model.phase == .idle { await model.load() } }
       .task { await capture.refresh() }
       .task { await loadLocalState() }
+      .task { await security?.load() }
       .fileExporter(
         isPresented: $showCSVExporter,
         document: csvDocument,
@@ -162,17 +167,9 @@ public struct IOSSettingsScreen: View {
     }
   }
 
-  private var p11BoundaryCard: some View {
-    FiscalCard(radius: 18) {
-      HStack(alignment: .top, spacing: 12) {
-        FiscalIconTile("server.rack", color: FiscalColor.accent)
-        VStack(alignment: .leading, spacing: 4) {
-          Text("个人 VPS · 云端优先").font(.subheadline.weight(.semibold))
-          Text("设备密钥管理与备份状态将在后续安全版本接通；当前不会显示尚未生效的退出或加密开关。")
-            .font(.caption).foregroundStyle(FiscalColor.tertiary).fixedSize(horizontal: false, vertical: true)
-        }
-      }
-    }
+  @ViewBuilder private var securityCard: some View {
+    if let security { DeviceSecuritySettingsCard(model: security, compact: true) }
+    else { securityUnavailableCard(radius: 18) }
   }
 
   private var defaultAccountBinding: Binding<UUID?> {
@@ -382,6 +379,7 @@ public struct AISettingsCard: View {
 #if os(macOS)
 public struct MacSettingsScreen: View {
   @Bindable var model: AISettingsModel
+  let security: DeviceSecurityModel?
   @Bindable var preferences: RecordingPreferences
   let accounts: AccountsModel
   let cache: HTTPResponseCache
@@ -397,6 +395,7 @@ public struct MacSettingsScreen: View {
 
   public init(
     model: AISettingsModel,
+    security: DeviceSecurityModel? = nil,
     preferences: RecordingPreferences,
     accounts: AccountsModel,
     transactions: TransactionsModel,
@@ -404,7 +403,7 @@ public struct MacSettingsScreen: View {
     openCategories: @escaping () -> Void = {},
     openReports: @escaping () -> Void = {}
   ) {
-    self.model = model; self.preferences = preferences; self.accounts = accounts
+    self.model = model; self.security = security; self.preferences = preferences; self.accounts = accounts
     self.transactions = transactions; self.cache = cache
     self.openCategories = openCategories; self.openReports = openReports
   }
@@ -430,7 +429,7 @@ public struct MacSettingsScreen: View {
         }
         settingsSection("分类与统计") { classificationCard }
         settingsSection("数据与缓存") { dataCard }
-        settingsSection("账户与同步") { p11BoundaryCard }
+        settingsSection("账户与同步") { securityCard }
         if let message = model.message ?? localMessage {
           Label(message, systemImage: "exclamationmark.triangle.fill")
             .font(.caption).foregroundStyle(FiscalColor.expense)
@@ -438,7 +437,7 @@ public struct MacSettingsScreen: View {
       }.frame(maxWidth: 760).padding(22).frame(maxWidth: .infinity, alignment: .top)
     }
     .background(FiscalColor.macBackground)
-    .task { if model.phase == .idle { await model.load() }; await loadLocalState() }
+    .task { if model.phase == .idle { await model.load() }; await loadLocalState(); await security?.load() }
     .fileExporter(
       isPresented: $showCSVExporter,
       document: csvDocument,
@@ -537,18 +536,9 @@ public struct MacSettingsScreen: View {
     }
   }
 
-  private var p11BoundaryCard: some View {
-    FiscalCard(radius: 15) {
-      HStack(alignment: .top, spacing: 12) {
-        FiscalIconTile("server.rack", color: FiscalColor.accent)
-        VStack(alignment: .leading, spacing: 4) {
-          Text("个人 VPS · 云端优先").font(.subheadline.weight(.semibold))
-          Text("设备密钥签发、轮换、撤销和备份状态将在后续安全版本接通。当前不提供尚未生效的退出、备份或加密开关。")
-            .font(.caption).foregroundStyle(FiscalColor.tertiary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-      }
-    }
+  @ViewBuilder private var securityCard: some View {
+    if let security { DeviceSecuritySettingsCard(model: security) }
+    else { securityUnavailableCard(radius: 15) }
   }
 
   private func macInfoRow(_ title: String, detail: String, symbol: String) -> some View {
@@ -605,3 +595,228 @@ public struct MacSettingsScreen: View {
   }
 }
 #endif
+
+public struct DeviceSecuritySettingsCard: View {
+  @Bindable var model: DeviceSecurityModel
+  let compact: Bool
+  @State private var showRemoveConfirmation = false
+  @State private var showIssue = false
+  @State private var newDeviceLabel = ""
+  @State private var importedDeviceToken = ""
+
+  public init(model: DeviceSecurityModel, compact: Bool = false) {
+    self.model = model; self.compact = compact
+  }
+
+  public var body: some View {
+    FiscalCard(radius: compact ? 18 : 15) {
+      VStack(alignment: .leading, spacing: 14) {
+        HStack(spacing: 12) {
+          FiscalIconTile("server.rack", color: FiscalColor.accent)
+          VStack(alignment: .leading, spacing: 3) {
+            Text("个人 VPS · 云端优先").font(.subheadline.weight(.semibold))
+            Text(statusLine).font(.caption).foregroundStyle(FiscalColor.tertiary)
+          }
+          Spacer()
+          if model.phase == .loading { ProgressView().controlSize(.small) }
+        }
+        if let status = model.status {
+          Divider().opacity(0.35)
+          if let device = status.currentDevice {
+            currentDevice(device)
+            Divider().opacity(0.35)
+          }
+          if let operations = model.operations {
+            operationsFacts(operations)
+            Divider().opacity(0.35)
+          }
+          VStack(alignment: .leading, spacing: 5) {
+            Label("真实安全边界", systemImage: "lock.shield")
+              .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
+            Text("HTTPS 保护传输；设备密钥仅存本机 Keychain，服务器只保存加盐摘要。服务端需要计算报表并处理所选 AI 文本，因此不宣称端到端加密。")
+              .font(.caption).foregroundStyle(FiscalColor.tertiary)
+              .fixedSize(horizontal: false, vertical: true)
+            Text("限流：读取 \(status.rateLimits.readPerMinute)/分 · 写入 \(status.rateLimits.writePerMinute)/分 · AI \(status.rateLimits.aiPerMinute)/分")
+              .font(.caption2).foregroundStyle(FiscalColor.tertiary)
+          }
+          if let device = status.currentDevice { actionArea(status, device: device) }
+        } else if model.phase == .unauthorized {
+          importArea
+        } else if model.phase == .failed {
+          Button("重试读取安全状态") { Task { await model.load() } }
+            .buttonStyle(FiscalActionButtonStyle(.secondary))
+        }
+        if let message = model.message {
+          Text(message).font(.caption).foregroundStyle(FiscalColor.secondary)
+        }
+      }
+    }
+    .alert("移除此设备密钥？", isPresented: $showRemoveConfirmation) {
+      Button("取消", role: .cancel) {}
+      Button("移除", role: .destructive) { Task { await model.removeCurrentDevice() } }
+    } message: {
+      Text("服务器会立即撤销此密钥，并从本机 Keychain 删除。此操作不是退出登录。")
+    }
+  }
+
+  private var statusLine: String {
+    guard let status = model.status else {
+      return model.phase == .loading ? "正在核验服务器与设备密钥…" : "尚未读取生产安全状态"
+    }
+    return "\(status.authenticationMode == "database" ? "数据库密钥" : status.authenticationMode) · \(status.tokenCounts.active) 个有效设备"
+  }
+
+  private var importArea: some View {
+    VStack(alignment: .leading, spacing: 11) {
+      Label("设备密钥无效或已移除", systemImage: "key.slash")
+        .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.expense)
+      Text("在已授权的 Mac 上签发新设备密钥，再通过通用剪贴板或其他安全方式粘贴到这里。密钥激活后只保存在本机 Keychain。")
+        .font(.caption).foregroundStyle(FiscalColor.tertiary)
+        .fixedSize(horizontal: false, vertical: true)
+      SecureField("粘贴一次性设备密钥", text: $importedDeviceToken)
+        .textFieldStyle(.plain).font(.caption.monospaced())
+        .padding(.horizontal, 11).frame(minHeight: 40)
+        .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
+      Button(model.isMutating ? "正在激活…" : "激活此设备") {
+        let token = importedDeviceToken
+        importedDeviceToken = ""
+        Task { await model.installIssuedToken(token) }
+      }
+      .buttonStyle(FiscalActionButtonStyle(.secondary))
+      .disabled(model.isMutating || importedDeviceToken.isEmpty)
+    }
+  }
+
+  private func operationsFacts(_ operations: OperationsStatusDTO) -> some View {
+    VStack(alignment: .leading, spacing: 9) {
+      Label("备份与运行状态", systemImage: "externaldrive.badge.checkmark")
+        .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
+      operationRow("数据库", operations.schemaState == "current" ? "就绪 · 结构已对齐" : "就绪 · 结构状态\(localizedState(operations.schemaState))")
+      operationRow("最近备份", backupDescription(operations.backup))
+      operationRow("恢复演练", restoreDescription(operations.restore))
+      operationRow("磁盘", diskDescription(operations.disk))
+    }
+  }
+
+  private func operationRow(_ title: String, _ detail: String) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 12) {
+      Text(title).font(.caption).foregroundStyle(FiscalColor.tertiary).frame(width: 62, alignment: .leading)
+      Text(detail).font(.caption).foregroundStyle(FiscalColor.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  private func backupDescription(_ backup: BackupOperationStatus) -> String {
+    guard backup.state != "unavailable" else { return "尚无服务器验证记录" }
+    let size = backup.sizeBytes.map {
+      ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file)
+    } ?? "大小未知"
+    return "\(localizedState(backup.state)) · \(ageDescription(backup.ageHours)) · \(size)"
+  }
+
+  private func restoreDescription(_ restore: RestoreOperationStatus) -> String {
+    guard restore.state != "unavailable" else { return "尚无隔离恢复记录" }
+    return "\(localizedState(restore.state)) · \(ageDescription(restore.ageHours))"
+  }
+
+  private func diskDescription(_ disk: DiskOperationStatus) -> String {
+    guard disk.state != "unavailable" else { return "尚无服务器磁盘记录" }
+    let usage = disk.usedPercent.map { " · 已用 \($0)%" } ?? ""
+    return "\(localizedState(disk.state))\(usage)"
+  }
+
+  private func ageDescription(_ hours: Int?) -> String {
+    guard let hours else { return "时间未知" }
+    if hours < 1 { return "不到 1 小时前" }
+    if hours < 24 { return "\(hours) 小时前" }
+    return "\(hours / 24) 天前"
+  }
+
+  private func localizedState(_ state: String) -> String {
+    switch state {
+    case "verified": "已验证"
+    case "healthy": "正常"
+    case "warning": "需关注"
+    case "failure", "failed", "mismatch": "异常"
+    case "stale": "已过期"
+    case "current": "已对齐"
+    case "unknown", "unavailable": "不可用"
+    default: state
+    }
+  }
+
+  private func currentDevice(_ device: DeviceTokenSummary) -> some View {
+    HStack(alignment: .top, spacing: 12) {
+      FiscalIconTile(device.role == .operator ? "wrench.and.screwdriver" : "iphone", color: FiscalColor.reimbursement)
+      VStack(alignment: .leading, spacing: 3) {
+        Text(device.label).font(.subheadline.weight(.semibold))
+        Text("\(device.role.title) · 指纹 \(device.fingerprint) · \(device.status.title)")
+          .font(.caption).foregroundStyle(FiscalColor.tertiary)
+        if let lastUsedAt = device.lastUsedAt {
+          Text("最近使用 \(lastUsedAt.formatted(.relative(presentation: .named)))")
+            .font(.caption2).foregroundStyle(FiscalColor.tertiary)
+        }
+      }
+      Spacer()
+    }
+  }
+
+  @ViewBuilder private func actionArea(_ status: SecurityStatusDTO, device: DeviceTokenSummary) -> some View {
+    Divider().opacity(0.35)
+    if showIssue, device.role == .operator {
+      HStack {
+        TextField("新设备名称", text: $newDeviceLabel).textFieldStyle(.plain)
+          .padding(.horizontal, 11).frame(minHeight: 38)
+          .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
+        Button("签发") { Task { await model.issueDevice(label: newDeviceLabel); newDeviceLabel = "" } }
+          .buttonStyle(FiscalActionButtonStyle(.secondary))
+      }
+    }
+    if let issued = model.issuedDeviceToken {
+      VStack(alignment: .leading, spacing: 7) {
+        Text("一次性新设备密钥").font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.expense)
+        Text(issued.deviceToken).font(.caption.monospaced()).textSelection(.enabled)
+          .lineLimit(2).padding(9).frame(maxWidth: .infinity, alignment: .leading)
+          .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 9))
+        HStack {
+          Button("复制密钥") { copy(issued.deviceToken) }
+          Button("我已安全保存") { model.clearIssuedToken() }
+        }.font(.caption.weight(.semibold)).buttonStyle(.plain).foregroundStyle(FiscalColor.accent)
+      }
+    }
+    HStack(spacing: 10) {
+      Button(model.isMutating ? "处理中…" : "安全轮换本机密钥") {
+        Task { await model.rotateCurrent() }
+      }.buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating)
+      if device.role == .operator {
+        Button(showIssue ? "取消签发" : "签发新设备") { showIssue.toggle() }
+          .buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating)
+      }
+      Spacer()
+      Button("移除此设备密钥", role: .destructive) { showRemoveConfirmation = true }
+        .buttonStyle(.plain).foregroundStyle(FiscalColor.expense).disabled(model.isMutating)
+    }
+  }
+
+  private func copy(_ value: String) {
+#if os(iOS)
+    UIPasteboard.general.string = value
+#elseif os(macOS)
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(value, forType: .string)
+#endif
+  }
+}
+
+private func securityUnavailableCard(radius: CGFloat) -> some View {
+  FiscalCard(radius: radius) {
+    HStack(alignment: .top, spacing: 12) {
+      FiscalIconTile("server.rack", color: FiscalColor.accent)
+      VStack(alignment: .leading, spacing: 4) {
+        Text("个人 VPS · 云端优先").font(.subheadline.weight(.semibold))
+        Text("当前渲染环境没有连接设备密钥服务，不会伪造备份或安全状态。")
+          .font(.caption).foregroundStyle(FiscalColor.tertiary)
+      }
+    }
+  }
+}

@@ -14,11 +14,13 @@ struct FiscaliOSApp: App {
     @State private var reports: ReportingModel
     @State private var aiProposals: AIProposalModel
     @State private var aiSettings: AISettingsModel
+    @State private var deviceSecurity: DeviceSecurityModel
     @State private var recordingPreferences = RecordingPreferences()
 
     init() {
         let baseURL = APIConfiguration.baseURL()
-        let transport = APITransport(baseURL: baseURL)
+        let tokenStore = KeychainTokenStore()
+        let transport = APITransport(baseURL: baseURL, tokenStore: tokenStore)
         let accounts = AccountsModel(repository: RemoteAccountRepository(transport: transport))
         let categories = CategoriesModel(repository: RemoteCategoryRepository(transport: transport))
         let credit = CreditModel(repository: RemoteCreditRepository(transport: transport))
@@ -28,7 +30,9 @@ struct FiscaliOSApp: App {
         let reimbursements = ReimbursementModel(repository: RemoteReimbursementRepository(transport: transport), transactions: transactions, accounts: accounts)
         let reports = ReportingModel(repository: RemoteReportingRepository(transport: transport))
         let aiProposals = AIProposalModel(repository: RemoteAIProposalRepository(transport: transport), transactions: transactions, reports: reports)
-        _connection = State(initialValue: ConnectionModel(client: SystemStatusClient(baseURL: baseURL)))
+        _connection = State(initialValue: ConnectionModel(client: SystemStatusClient(baseURL: baseURL, tokenStore: tokenStore)))
+        _deviceSecurity = State(initialValue: DeviceSecurityModel(
+            repository: RemoteDeviceSecurityRepository(transport: transport), tokenStore: tokenStore))
         _accounts = State(initialValue: accounts)
         _categories = State(initialValue: categories)
         _credit = State(initialValue: credit)
@@ -42,10 +46,12 @@ struct FiscaliOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            IOSRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, aiProposals: aiProposals, aiSettings: aiSettings, recordingPreferences: recordingPreferences)
+            IOSRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, aiProposals: aiProposals, aiSettings: aiSettings, deviceSecurity: deviceSecurity, recordingPreferences: recordingPreferences)
                 .tint(FiscalColor.accent)
                 .task {
-                    await connection.configureAndRefresh(bootstrapToken: APIConfiguration.bootstrapDeviceToken())
+                    await connection.configure(bootstrapToken: APIConfiguration.bootstrapDeviceToken())
+                    _ = await deviceSecurity.recoverPendingRotation()
+                    await connection.refresh()
                     if case .connected = connection.phase {
                         async let reportLoad: Void = reports.loadAll()
                         async let proposalLoad: Void = aiProposals.load()
