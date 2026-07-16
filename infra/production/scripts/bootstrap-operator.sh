@@ -29,6 +29,7 @@ fi
 require_root
 load_fiscal_env
 [[ -x /opt/fiscal/current/backend/.venv/bin/python ]] || die "no deployed Fiscal release exists"
+cd /opt/fiscal/current/backend
 
 FISCAL_ENVIRONMENT=production \
 FISCAL_DATABASE_URL="${FISCAL_DATABASE_URL:?missing application database URL}" \
