@@ -276,16 +276,84 @@ def test_real_shape_snapshot_resolves_121_candidates_without_duplicate_income() 
         "confirmed_entry_on_voided_credit_cycle"
     }
     assert (
-        sum(
-            reason == "cash_flow_rebuilt_from_fiscal_ledger"
-            for reason in reasons.values()
-        )
-        == 43
+        sum(reason == "cash_flow_rebuilt_from_fiscal_ledger" for reason in reasons.values()) == 43
     )
 
     huabei = next(account for account in manifest.accounts if account.name == "花呗")
     assert huabei.opening_balance_minor == 111_577
     assert huabei.opening_due_date == date(2026, 8, 8)
+
+
+def test_unlinked_reimbursement_income_uses_history_category_without_duplicate_receipts() -> None:
+    snapshot = _snapshot()
+    snapshot["entries"].append(
+        {
+            "id": "unlinked-reimbursement-income",
+            "title": "5月报销",
+            "entry_type": "single",
+            "date": date(2026, 5, 16),
+            "status": "confirmed",
+            "note": None,
+            "created_by": "user",
+            "created_at": "fixture-created",
+            "updated_at": "fixture-updated",
+        }
+    )
+    snapshot["lines"].append(
+        {
+            "id": "l-unlinked-reimbursement-income",
+            "entry_id": "unlinked-reimbursement-income",
+            "category_id": "c-reimb",
+            "direction": "income",
+            "amount": Decimal("3015.17"),
+            "currency": "CNY",
+            "converted_cny_amount": Decimal("3015.17"),
+            "reimbursable_flag": False,
+            "reimbursement_payer": None,
+            "reimbursement_expected_date": None,
+            "reimbursement_status": None,
+            "note": None,
+            "category_name": "报销",
+            "category_type": "income",
+        }
+    )
+    snapshot["movements"].append(
+        {
+            "id": "m-unlinked-reimbursement-income-balance_in",
+            "entry_id": "unlinked-reimbursement-income",
+            "account_id": "a-agri",
+            "statement_cycle_id": None,
+            "movement_type": "balance_in",
+            "amount": Decimal("3015.17"),
+            "currency": "CNY",
+            "converted_cny_amount": Decimal("3015.17"),
+            "note": None,
+            "account_name": "农业4873",
+            "account_type": "balance",
+            "account_currency": "CNY",
+            "cycle_start_date": None,
+            "cycle_end_date": None,
+            "statement_cycle_status": None,
+        }
+    )
+
+    manifest = asyncio.run(build_resolved_manifest(SnapshotConnection(snapshot)))  # type: ignore[arg-type]
+
+    category = next(
+        item
+        for item in manifest.categories
+        if item.direction == "income" and item.name == "历史报销"
+    )
+    transaction = next(
+        item
+        for item in manifest.transactions
+        if item.source.object_id == "unlinked-reimbursement-income"
+    )
+    assert transaction.category_source_id == category.source.object_id
+    assert not any(
+        item.source.object_id.startswith("receipt-income-") for item in manifest.transactions
+    )
+    assert sum(item.reason == "suppressed_reimbursement_income" for item in manifest.skipped) == 6
 
 
 def test_manifest_hashes_include_ordered_dependencies_and_are_reproducible() -> None:

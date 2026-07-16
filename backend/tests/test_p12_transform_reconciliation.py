@@ -58,15 +58,16 @@ def test_legacy_date_maps_to_shanghai_noon_and_utc_storage() -> None:
 
 
 def test_approved_opening_party_and_category_transforms() -> None:
-    assert inferred_opening_balance_minor(
-        current_minor=281_512, movement_net_minor=-2_343_437
-    ) == 2_624_949
+    assert (
+        inferred_opening_balance_minor(current_minor=281_512, movement_net_minor=-2_343_437)
+        == 2_624_949
+    )
     assert normalize_reimbursement_party(" company ") == "公司"
     assert normalize_reimbursement_party("111") == "公司"
     assert normalize_reimbursement_party("个人甲") == "个人甲"
     assert mapped_category("expense", "平账") == "平账"
     assert mapped_category("expense", "理财") == "理财"
-    assert mapped_category("income", "报销") is None
+    assert mapped_category("income", "报销") == "历史报销"
 
 
 def test_account_and_credit_reconciliation_explains_differences_and_missing_rows() -> None:
@@ -105,9 +106,7 @@ def test_transaction_reconciliation_compares_count_and_amount_by_kind() -> None:
     assert len(report.checks) == 4
     assert report.mismatch_count == 1
     count = next(
-        item
-        for item in report.checks
-        if item.entity == "transfer" and item.metric == "count"
+        item for item in report.checks if item.entity == "transfer" and item.metric == "count"
     )
     assert count.difference == -1
     assert count.unit == "rows"

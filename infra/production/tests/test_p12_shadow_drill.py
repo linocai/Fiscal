@@ -47,7 +47,8 @@ class ShadowDrillShellTests(unittest.TestCase):
         self.assertIn("umask 077", source)
         self.assertIn("chmod 0600", source)
         self.assertIn("prior evidence is never overwritten", source)
-        self.assertIn('PGDATABASE="$FISCAL_SHADOW_TARGET_DATABASE_URL"', source)
+        self.assertIn('PGDATABASE="$FISCAL_SHADOW_TARGET_PG_URL"', source)
+        self.assertIn('export FISCAL_DATABASE_URL="$FISCAL_SHADOW_TARGET_DATABASE_URL"', source)
 
 
 if __name__ == "__main__":

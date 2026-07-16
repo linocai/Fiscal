@@ -142,7 +142,7 @@ def test_p11_issue_activate_rotate_revoke_and_roles() -> None:
         assert operations_response.status_code == 200, operations_response.text
         operations = operations_response.json()
         assert operations["database"] == "ready"
-        assert operations["alembic_revision"] == "20260716_0010"
+        assert operations["alembic_revision"] == "20260716_0011"
         assert operations["schema_state"] == "unknown"
         assert operations["backup"]["state"] == "unavailable"
 

@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: frozen for shadow construction; one legacy-cycle anomaly awaiting user decision
+Status: frozen for release shadow and production cutover
 
 ## Safety boundary
 
@@ -44,7 +44,7 @@ Status: frozen for shadow construction; one legacy-cycle anomaly awaiting user d
 - Migrate CNY credit accounts `工商3576`, `白条`, `花呗` and `车贷`; preserve their approved statement/due rules and reconcile their liabilities against the legacy cycles.
 - Select all eligible business dates from 2026-05-16 through 2026-07-14 inclusive. Convert each legacy date to 12:00 Asia/Shanghai before Fiscal stores its UTC instant.
 - Treat the source-less `2026-06-03 白条提前还款` CNY 1,410.64 as an opening-liability reconciliation adjustment. Do not invent a paying account or a cash-flow transaction.
-- Build new Fiscal categories from the approved map. `平账` and `理财` are dedicated new categories rather than aliases of another category.
+- Build new Fiscal categories from the approved map. `平账` and `理财` are dedicated expense categories. The unlinked `2026-05-16 5月报销` income maps to the dedicated income category `历史报销`; this does not affect linked reimbursement receipts, whose old income rows remain suppressed.
 - Normalize legacy reimbursement payer strings `company`, `公司` and `111` to the single Fiscal party `公司`. Migrate the abandoned Claude subscription source expense without an active reimbursement claim.
 - Do not migrate any of the 43 legacy cash-flow rows. Missing future plans may be re-entered manually after cutover.
-- Five confirmed Huabei purchase entries total CNY 493.92 but point at a voided legacy credit cycle and are absent from the current Huabei liability. Shadow planning skips these complete aggregates by default; production apply remains blocked until the user confirms skip or supplies an alternative treatment.
+- Five confirmed Huabei purchase entries total CNY 493.92 but point at a voided legacy credit cycle and are absent from the current Huabei liability. The user approved skipping all five complete aggregates; Fiscal must not create their purchases or increase Huabei liability.

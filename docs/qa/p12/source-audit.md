@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: read-only audit complete; one newly discovered legacy-cycle anomaly awaiting decision
+Status: read-only audit complete; all discovered migration decisions frozen
 
 ## Source inventory
 
@@ -39,7 +39,7 @@ To reproduce those closing liabilities from the selected history, the migration 
 
 The CNY 1,410.64 source-less White Bar repayment is intentionally absent from imported repayments and absorbed into White Bar's approved opening-liability treatment. This preserves the closing debt without inventing a cash outflow.
 
-Five additional confirmed Huabei purchases totaling CNY 493.92 have a linked legacy cycle marked `voided`. Those purchases are absent from the legacy current liability, so importing them as credit purchases would overstate Fiscal debt. Shadow planning marks the five complete aggregates `confirmed_entry_on_voided_credit_cycle` and excludes them pending user confirmation. The table uses that shadow decision: eligible Huabei charges are CNY 1,485.63 and its reproducible opening liability is CNY 1,115.77; the closing liability remains CNY 1,090.47 after the CNY 1,510.93 repayment.
+Five additional confirmed Huabei purchases totaling CNY 493.92 have a linked legacy cycle marked `voided`. Those purchases are absent from the legacy current liability, so importing them as credit purchases would overstate Fiscal debt. The user approved excluding all five complete aggregates as `confirmed_entry_on_voided_credit_cycle`. The table uses that frozen decision: eligible Huabei charges are CNY 1,485.63 and its reproducible opening liability is CNY 1,115.77; the closing liability remains CNY 1,090.47 after the CNY 1,510.93 repayment.
 
 `Crypto`, `Funds`, `Stock`, `USDT` and USD credit account `工商5438` are excluded by the P12 product decision. All 33 balance adjustments affect investment accounts and are excluded with them.
 
@@ -80,9 +80,9 @@ No old category definition is copied. Ordinary reimbursement-receipt income must
 | income / 工资 | 工资 |
 | income / 房租 | 房租 |
 | income / 意外 | 其他收入 |
-| income / 报销 | generated reimbursement receipt; no ordinary-income duplicate |
+| income / 报销 | `历史报销` when unlinked; linked receipt income is suppressed and generated once by Fiscal |
 
-## Reimbursements needing confirmation
+## Reimbursement migration
 
 - Six received claims total CNY 6,487.37. Every one has a source expense, receipt entry, receiving account and cash-flow link, so they can map structurally once parties are approved.
 - The user confirmed that payer strings `company`, `公司` and `111` all mean the single party `公司`.

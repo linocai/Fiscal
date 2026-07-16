@@ -18,6 +18,7 @@ from fiscal_api.db.models import (
     Account,
     LedgerTransaction,
     MigrationObjectLink,
+    MigrationRunMode,
     Posting,
     ReimbursementAllocation,
     ReimbursementReceipt,
@@ -47,6 +48,7 @@ from fiscal_api.legacy_migration.transform import yuan_to_minor
 
 TARGET_DSN_ENV: Final = "FISCAL_DATABASE_URL"
 CODE_REVISION_ENV: Final = "FISCAL_MIGRATION_CODE_REVISION"
+PRODUCTION_CONFIRM_ENV: Final = "FISCAL_MIGRATION_PRODUCTION_CONFIRM"
 
 
 def target_dsn(environ: Mapping[str, str]) -> SecretStr:
@@ -108,6 +110,16 @@ async def reconcile_shadow(
     database = await _require_shadow_database(session)
     await _require_approved_source(connection)
     manifest = await load_resolved_manifest(connection)
+    payload = await _reconcile(connection, session, manifest)
+    payload["target_database"] = database
+    return payload
+
+
+async def _reconcile(
+    connection: SourceConnection,
+    session: AsyncSession,
+    manifest: LegacyManifest,
+) -> dict[str, Any]:
     expected_assets, expected_credit = await _source_closing_balances(connection)
     actual_assets, actual_credit = await _target_closing_balances(session, manifest)
     expected_transactions = _expected_transaction_aggregates(manifest)
@@ -134,12 +146,55 @@ async def reconcile_shadow(
     return {
         "schema_version": 1,
         "mode": "shadow_reconciliation",
-        "target_database": database,
         "source_database_fingerprint": manifest.source_database_fingerprint,
         "passed": report.passed,
         "mismatch_count": report.mismatch_count,
         "checks": [asdict(item) for item in report.checks],
     }
+
+
+async def apply_production(
+    connection: SourceConnection,
+    session: AsyncSession,
+    *,
+    code_revision: str,
+    environ: Mapping[str, str],
+) -> dict[str, Any]:
+    await _require_approved_source(connection)
+    manifest = await load_resolved_manifest(connection)
+    database = await _require_production_database(session, manifest, environ)
+    await _require_production_target_state(session, manifest)
+    result = await LegacyShadowApplier(session).apply(
+        manifest,
+        code_revision=code_revision,
+        mode=MigrationRunMode.PRODUCTION,
+    )
+    return {
+        "schema_version": 1,
+        "mode": "production_apply",
+        "target_database": database,
+        "source_database_fingerprint": manifest.source_database_fingerprint,
+        "run_id": str(result.run_id),
+        "created": result.created,
+        "unchanged": result.unchanged,
+        "skipped": result.skipped,
+        "status": "succeeded",
+    }
+
+
+async def reconcile_production(
+    connection: SourceConnection,
+    session: AsyncSession,
+    *,
+    environ: Mapping[str, str],
+) -> dict[str, Any]:
+    await _require_approved_source(connection)
+    manifest = await load_resolved_manifest(connection)
+    database = await _require_production_database(session, manifest, environ)
+    payload = await _reconcile(connection, session, manifest)
+    payload["mode"] = "production_reconciliation"
+    payload["target_database"] = database
+    return payload
 
 
 async def run_target_command(
@@ -151,9 +206,10 @@ async def run_target_command(
 ) -> bool:
     engine = create_async_engine(target.get_secret_value(), pool_pre_ping=True)
     try:
-        async with legacy_source(source_dsn) as connection, AsyncSession(
-            engine, expire_on_commit=False
-        ) as session:
+        async with (
+            legacy_source(source_dsn) as connection,
+            AsyncSession(engine, expire_on_commit=False) as session,
+        ):
             if command == "apply":
                 payload = await apply_shadow(
                     connection,
@@ -161,10 +217,24 @@ async def run_target_command(
                     code_revision=environ.get(CODE_REVISION_ENV, "workspace").strip()
                     or "workspace",
                 )
-            else:
+            elif command == "reconcile":
                 payload = await reconcile_shadow(connection, session)
+            elif command == "production-apply":
+                payload = await apply_production(
+                    connection,
+                    session,
+                    code_revision=environ.get(CODE_REVISION_ENV, "workspace").strip()
+                    or "workspace",
+                    environ=environ,
+                )
+            else:
+                payload = await reconcile_production(
+                    connection,
+                    session,
+                    environ=environ,
+                )
         write_report(payload, output)
-        return command != "reconcile" or bool(payload["passed"])
+        return "reconcile" not in command or bool(payload["passed"])
     finally:
         await engine.dispose()
 
@@ -178,6 +248,78 @@ async def _require_shadow_database(session: AsyncSession) -> str:
             "'shadow' or 'drill'; production apply is not enabled"
         )
     return database
+
+
+async def _require_production_database(
+    session: AsyncSession,
+    manifest: LegacyManifest,
+    environ: Mapping[str, str],
+) -> str:
+    database = str(await session.scalar(text("SELECT current_database()")))
+    if database != "fiscal":
+        raise RuntimeError("P12 production operation requires the exact target database fiscal")
+    expected = f"fiscal:{manifest.source_database_fingerprint}"
+    if environ.get(PRODUCTION_CONFIRM_ENV, "").strip() != expected:
+        raise RuntimeError(
+            f"{PRODUCTION_CONFIRM_ENV} must equal fiscal:<approved-source-fingerprint>"
+        )
+    other_clients = int(
+        await session.scalar(
+            text(
+                "SELECT count(*) FROM pg_stat_activity "
+                "WHERE datname=current_database() AND pid<>pg_backend_pid() "
+                "AND backend_type='client backend'"
+            )
+        )
+        or 0
+    )
+    if other_clients:
+        raise RuntimeError(
+            "P12 production operation requires an exclusive write window; "
+            f"found {other_clients} other client connection(s)"
+        )
+    return database
+
+
+async def _require_production_target_state(
+    session: AsyncSession,
+    manifest: LegacyManifest,
+) -> None:
+    link_count = int(await session.scalar(text("SELECT count(*) FROM migration_object_links")) or 0)
+    if link_count:
+        foreign_links = int(
+            await session.scalar(
+                text(
+                    "SELECT count(*) FROM migration_object_links "
+                    "WHERE source_database_fingerprint<>:fingerprint"
+                ).bindparams(fingerprint=manifest.source_database_fingerprint)
+            )
+            or 0
+        )
+        if foreign_links:
+            raise RuntimeError(
+                "Fiscal contains provenance from a different source; production replay refused"
+            )
+        return
+
+    business_rows = int(
+        await session.scalar(
+            text(
+                "SELECT "
+                "(SELECT count(*) FROM accounts) + "
+                "(SELECT count(*) FROM categories) + "
+                "(SELECT count(*) FROM ledger_transactions) + "
+                "(SELECT count(*) FROM reimbursement_claims) + "
+                "(SELECT count(*) FROM reimbursement_receipts)"
+            )
+        )
+        or 0
+    )
+    if business_rows:
+        raise RuntimeError(
+            "Fiscal business tables are not empty and have no P12 provenance; "
+            "production import refused"
+        )
 
 
 async def _require_approved_source(connection: SourceConnection) -> None:

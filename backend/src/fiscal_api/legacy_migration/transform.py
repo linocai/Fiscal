@@ -94,6 +94,7 @@ CATEGORY_MAP: dict[tuple[str, str], str] = {
     ("income", "工资"): "工资",
     ("income", "房租"): "房租",
     ("income", "意外"): "其他收入",
+    ("income", "报销"): "历史报销",
 }
 
 

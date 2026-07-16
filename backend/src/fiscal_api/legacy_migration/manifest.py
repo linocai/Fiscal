@@ -113,9 +113,7 @@ async def build_resolved_manifest(connection: SourceConnection) -> LegacyManifes
     accounts_by_id = {_str(row, "id"): row for row in account_rows}
     selected_by_name = {plan.source_name: plan for plan in P12_POLICY.accounts}
     selected_account_ids = {
-        _str(row, "id")
-        for row in account_rows
-        if _str(row, "name") in selected_by_name
+        _str(row, "id") for row in account_rows if _str(row, "name") in selected_by_name
     }
     if {str(row["name"]) for row in account_rows if row["name"] in selected_by_name} != set(
         selected_by_name
@@ -160,9 +158,7 @@ async def build_resolved_manifest(connection: SourceConnection) -> LegacyManifes
                 kind=cast(Any, plan.target_kind),
                 opening_balance_minor=opening,
                 last_four=_last_four(name),
-                credit_limit_minor=(
-                    _money(row, "credit_limit") if is_credit else None
-                ),
+                credit_limit_minor=(_money(row, "credit_limit") if is_credit else None),
                 statement_day=_optional_int(row.get("statement_day")) if is_credit else None,
                 due_day=_optional_int(row.get("due_day")) if is_credit else None,
                 opening_balance_as_of_date=_OPENING_AS_OF if is_credit else None,
@@ -214,9 +210,7 @@ async def build_resolved_manifest(connection: SourceConnection) -> LegacyManifes
             entry, lines, movements, accounts_by_id, category_source_ids, source
         )
         if resolved is None:
-            skipped.append(
-                SkippedImport(source, "opening_liability_adjustment_without_cash_flow")
-            )
+            skipped.append(SkippedImport(source, "opening_liability_adjustment_without_cash_flow"))
             continue
         if lines and any(item.category_source_id is None for item in resolved):
             for line in lines:
@@ -518,8 +512,7 @@ def _category_imports(rows: Sequence[Mapping[str, object]]) -> list[CategoryImpo
             dependencies = [
                 row
                 for row in rows
-                if _str(row, "type") == direction
-                and mapping.get(_str(row, "name")) == target_name
+                if _str(row, "type") == direction and mapping.get(_str(row, "name")) == target_name
             ]
             source_id = f"{direction}:{target_name}"
             imports.append(

@@ -113,6 +113,10 @@ P12_POLICY: Final = MigrationPolicy(
         "工资": "工资",
         "房租": "房租",
         "意外": "其他收入",
+        # Linked reimbursement receipts are suppressed by their received claim
+        # before transaction resolution. This mapping therefore applies only to
+        # unlinked legacy reimbursement income such as `5月报销`.
+        "报销": "历史报销",
     },
     reimbursement_party_aliases={"company": "公司", "公司": "公司", "111": "公司"},
     orphan_repayment_treatment="opening_liability_adjustment_without_cash_flow",
@@ -362,13 +366,16 @@ def _json_default(value: object) -> str:
 
 
 def _write_report(payload: Mapping[str, Any], output: Path | None) -> None:
-    serialized = json.dumps(
-        payload,
-        ensure_ascii=False,
-        indent=2,
-        sort_keys=True,
-        default=_json_default,
-    ) + "\n"
+    serialized = (
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+            default=_json_default,
+        )
+        + "\n"
+    )
     if output is None:
         sys.stdout.write(serialized)
         return
@@ -388,14 +395,24 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Audit, plan, apply, and reconcile the LinoFinance to Fiscal migration"
     )
-    parser.add_argument("command", choices=("audit", "plan", "apply", "reconcile"))
+    parser.add_argument(
+        "command",
+        choices=(
+            "audit",
+            "plan",
+            "apply",
+            "reconcile",
+            "production-apply",
+            "production-reconcile",
+        ),
+    )
     parser.add_argument("--output", type=Path, help="write a credential-free JSON report")
     return parser
 
 
 async def _run(command: str, output: Path | None, environ: Mapping[str, str]) -> None:
     dsn = _source_dsn(environ)
-    if command in {"apply", "reconcile"}:
+    if command in {"apply", "reconcile", "production-apply", "production-reconcile"}:
         from fiscal_api.legacy_migration.orchestration import run_target_command, target_dsn
 
         passed = await run_target_command(command, dsn, target_dsn(environ), output, environ)
@@ -428,5 +445,5 @@ def main() -> None:
         if isinstance(error, asyncpg.PostgresError):
             raise SystemExit("Legacy source audit failed") from error
         if isinstance(error, SQLAlchemyError):
-            raise SystemExit("Fiscal shadow database operation failed") from error
+            raise SystemExit("Fiscal migration database operation failed") from error
         raise SystemExit(str(error)) from error

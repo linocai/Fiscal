@@ -38,6 +38,7 @@ Set the three DSNs in the operator's protected environment, not as arguments. Do
 ```sh
 export FISCAL_SHADOW_BASELINE_DATABASE_URL='REDACTED'
 export FISCAL_SHADOW_TARGET_DATABASE_URL='REDACTED'
+export FISCAL_SHADOW_TARGET_PG_URL='REDACTED'
 export FISCAL_LEGACY_DATABASE_URL='REDACTED'
 
 infra/production/scripts/p12-shadow-drill.sh \
@@ -48,8 +49,14 @@ infra/production/scripts/p12-shadow-drill.sh \
 
 unset FISCAL_SHADOW_BASELINE_DATABASE_URL
 unset FISCAL_SHADOW_TARGET_DATABASE_URL
+unset FISCAL_SHADOW_TARGET_PG_URL
 unset FISCAL_LEGACY_DATABASE_URL
 ```
+
+`FISCAL_SHADOW_TARGET_DATABASE_URL` is the SQLAlchemy async URL used by Alembic and the
+migration CLI (for example, a `postgresql+asyncpg://` URL). `FISCAL_SHADOW_TARGET_PG_URL`
+is the equivalent libpq `postgresql://` URL used by `psql` and `pg_restore`. They must
+resolve to the same explicitly named shadow database; neither value is written to evidence.
 
 For a development checkout, `--python` may point to `backend/.venv/bin/python`. The migration module defaults to `fiscal_api.cli.legacy_migration`; a release with a relocated CLI can pass `--migration-module` without changing this gate.
 

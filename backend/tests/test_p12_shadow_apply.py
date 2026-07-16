@@ -129,9 +129,7 @@ async def _exercise_shadow_apply() -> None:
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with engine.begin() as connection:
         await connection.execute(
-            text(
-                "TRUNCATE migration_runs, reimbursement_claims, accounts, categories CASCADE"
-            )
+            text("TRUNCATE migration_runs, reimbursement_claims, accounts, categories CASCADE")
         )
     async with session_factory() as session:
         first = await LegacyShadowApplier(session).apply(_manifest(), code_revision="p12-test")

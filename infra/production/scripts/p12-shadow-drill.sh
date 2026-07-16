@@ -22,7 +22,8 @@ Options:
 
 Apply mode reads these DSNs only from the environment:
   FISCAL_SHADOW_BASELINE_DATABASE_URL  Fiscal database to back up read-only
-  FISCAL_SHADOW_TARGET_DATABASE_URL    Existing empty shadow database
+  FISCAL_SHADOW_TARGET_DATABASE_URL    SQLAlchemy async URL for the shadow database
+  FISCAL_SHADOW_TARGET_PG_URL          libpq URL for the same shadow database
   FISCAL_LEGACY_DATABASE_URL           Legacy LinoFinance source (CLI enforces read-only)
 EOF
 }
@@ -88,6 +89,7 @@ fi
 
 : "${FISCAL_SHADOW_BASELINE_DATABASE_URL:?missing baseline database URL in environment}"
 : "${FISCAL_SHADOW_TARGET_DATABASE_URL:?missing target database URL in environment}"
+: "${FISCAL_SHADOW_TARGET_PG_URL:?missing target libpq URL in environment}"
 : "${FISCAL_LEGACY_DATABASE_URL:?missing legacy database URL in environment}"
 
 if [[ -z "$python_bin" ]]; then
@@ -140,7 +142,7 @@ stage="preflight"
 baseline_database="$(PGDATABASE="$FISCAL_SHADOW_BASELINE_DATABASE_URL" \
   psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 \
   --command='SELECT current_database()')"
-target_connection_database="$(PGDATABASE="$FISCAL_SHADOW_TARGET_DATABASE_URL" \
+target_connection_database="$(PGDATABASE="$FISCAL_SHADOW_TARGET_PG_URL" \
   psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 \
   --command='SELECT current_database()')"
 [[ "$target_connection_database" == "$target_database" ]] || \
@@ -148,7 +150,7 @@ target_connection_database="$(PGDATABASE="$FISCAL_SHADOW_TARGET_DATABASE_URL" \
 [[ "$baseline_database" != "$target_database" ]] || \
   die "baseline and target database must be different"
 
-target_user_tables="$(PGDATABASE="$FISCAL_SHADOW_TARGET_DATABASE_URL" \
+target_user_tables="$(PGDATABASE="$FISCAL_SHADOW_TARGET_PG_URL" \
   psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 \
   --command="SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND c.relkind IN ('r','p')")"
 [[ "$target_user_tables" == "0" ]] || \
@@ -168,7 +170,7 @@ mv -- "$partial_dump" "$baseline_dump"
 stage="restore"
 log "restoring baseline into explicit shadow database $target_database"
 pg_restore --exit-on-error --no-owner --no-privileges --file=- "$baseline_dump" | \
-  PGDATABASE="$FISCAL_SHADOW_TARGET_DATABASE_URL" \
+  PGDATABASE="$FISCAL_SHADOW_TARGET_PG_URL" \
   psql --no-psqlrc --set=ON_ERROR_STOP=1 --single-transaction
 
 stage="alembic"
@@ -182,7 +184,7 @@ alembic_config="$backend_dir/alembic.ini"
   export FISCAL_DATABASE_URL="$FISCAL_SHADOW_TARGET_DATABASE_URL"
   "$alembic_bin" --config "$alembic_config" upgrade head
   expected_head="$($alembic_bin --config "$alembic_config" heads | awk 'NR == 1 {print $1}')"
-  actual_head="$(PGDATABASE="$FISCAL_SHADOW_TARGET_DATABASE_URL" \
+  actual_head="$(PGDATABASE="$FISCAL_SHADOW_TARGET_PG_URL" \
     psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 \
     --command='SELECT version_num FROM alembic_version')"
   [[ -n "$expected_head" && "$actual_head" == "$expected_head" ]] || \

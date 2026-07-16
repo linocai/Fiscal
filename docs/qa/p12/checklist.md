@@ -7,8 +7,8 @@ Date: 2026-07-16
 - [x] HZ LinoFinance source inventory and dependencies audited read-only.
 - [x] User-approved accounts, period, timezone, opening balances, categories, reimbursement aliases, orphan repayment and cash-flow treatment are frozen.
 - [x] USD, investment, deleted-module, voided and cross-boundary aggregates are excluded completely and reported.
-- [ ] User decides the five confirmed Huabei entries attached to a voided legacy cycle.
-- [ ] User decides the category for the unlinked `5月报销` income.
+- [x] User approved skipping the five confirmed Huabei entries attached to a voided legacy cycle (CNY 493.92 total).
+- [x] User approved dedicated income category `历史报销` for the unlinked `5月报销` income; six linked reimbursement-income rows remain suppressed.
 
 ## Tooling and shadow verification
 
@@ -24,6 +24,7 @@ Date: 2026-07-16
 
 - [ ] Both old LinoFinance and Fiscal receive verified pre-apply backups.
 - [ ] Fiscal writes are stopped/exclusively locked and the source manifest is reverified immediately before apply.
+- [x] Production apply has an exact-database, approved-fingerprint, exclusive-connection and pristine-or-replay fail-closed gate.
 - [ ] Production apply and idempotent no-op recheck pass.
 - [ ] Production reconciliation and dual-client verification pass.
 - [ ] Carried P11 v1.0 operational gates are complete.

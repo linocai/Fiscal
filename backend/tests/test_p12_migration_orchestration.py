@@ -13,8 +13,11 @@ from fiscal_api.legacy_migration.apply import (
     TransactionImport,
 )
 from fiscal_api.legacy_migration.orchestration import (
+    PRODUCTION_CONFIRM_ENV,
     _expected_monthly,
     _expected_transaction_aggregates,
+    _require_production_database,
+    _require_production_target_state,
     _require_shadow_database,
     resolved_plan,
     target_dsn,
@@ -99,6 +102,8 @@ def test_cli_exposes_shadow_apply_and_reconcile_without_dsn_arguments() -> None:
     parser = _parser()
     assert parser.parse_args(["apply"]).command == "apply"
     assert parser.parse_args(["reconcile"]).command == "reconcile"
+    assert parser.parse_args(["production-apply"]).command == "production-apply"
+    assert parser.parse_args(["production-reconcile"]).command == "production-reconcile"
     assert all(action.dest != "database_url" for action in parser._actions)
     with pytest.raises(RuntimeError, match="FISCAL_DATABASE_URL must be set"):
         target_dsn({})
@@ -146,3 +151,43 @@ async def test_apply_and_reconcile_are_restricted_to_shadow_database_names() -> 
     )
     with pytest.raises(RuntimeError, match="production apply is not enabled"):
         await _require_shadow_database(_DatabaseSession("fiscal"))
+
+
+class _ProductionSession:
+    def __init__(self, database: str, other_clients: int = 0) -> None:
+        self.values = iter((database, other_clients))
+
+    async def scalar(self, _statement: object) -> str | int:
+        return next(self.values)
+
+
+async def test_production_requires_exact_database_confirmation_and_exclusive_window() -> None:
+    manifest = _manifest()
+    confirmation = {PRODUCTION_CONFIRM_ENV: f"fiscal:{manifest.source_database_fingerprint}"}
+    assert (
+        await _require_production_database(_ProductionSession("fiscal"), manifest, confirmation)
+        == "fiscal"
+    )
+
+    with pytest.raises(RuntimeError, match="exact target database fiscal"):
+        await _require_production_database(
+            _ProductionSession("fiscal_shadow"), manifest, confirmation
+        )
+    with pytest.raises(RuntimeError, match=PRODUCTION_CONFIRM_ENV):
+        await _require_production_database(_ProductionSession("fiscal"), manifest, {})
+    with pytest.raises(RuntimeError, match="exclusive write window"):
+        await _require_production_database(
+            _ProductionSession("fiscal", other_clients=1), manifest, confirmation
+        )
+
+
+async def test_production_target_must_be_pristine_or_same_source_replay() -> None:
+    manifest = _manifest()
+    await _require_production_target_state(_ProductionSession("0", 0), manifest)
+
+    with pytest.raises(RuntimeError, match="business tables are not empty"):
+        await _require_production_target_state(_ProductionSession("0", 1), manifest)
+
+    await _require_production_target_state(_ProductionSession("3", 0), manifest)
+    with pytest.raises(RuntimeError, match="different source"):
+        await _require_production_target_state(_ProductionSession("3", 1), manifest)
