@@ -17,4 +17,4 @@ ReadWritePaths=/var/lib/fiscal/operations
 RestrictAddressFamilies=AF_UNIX
 RestrictNamespaces=true
 LockPersonality=true
-CapabilityBoundingSet=CAP_DAC_OVERRIDE
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_CHOWN

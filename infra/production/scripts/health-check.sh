@@ -6,10 +6,18 @@ source "$SCRIPT_DIR/lib.sh"
 
 load_fiscal_env
 
-curl --fail --silent --show-error \
-  --connect-timeout 2 \
-  --max-time 5 \
-  http://127.0.0.1:8010/api/v1/health/ready >/dev/null
+ready=false
+for _ in {1..15}; do
+  if curl --fail --silent \
+    --connect-timeout 2 \
+    --max-time 5 \
+    http://127.0.0.1:8010/api/v1/health/ready >/dev/null; then
+    ready=true
+    break
+  fi
+  sleep 1
+done
+[[ "$ready" == true ]] || die "API readiness did not become healthy within 15 seconds"
 
 status_file="$FISCAL_OPERATIONS_DIR/latest-backup.json"
 [[ -r "$status_file" ]] || die "no verified backup status exists"
