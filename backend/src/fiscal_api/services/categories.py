@@ -76,7 +76,7 @@ class CategoryService:
         children = [self.response(child) for child in await self.repository.children(category.id)]
         return self.response(category, children)
 
-    async def create(self, draft: CategoryDraft) -> CategoryResponse:
+    async def create(self, draft: CategoryDraft, *, commit: bool = True) -> CategoryResponse:
         await acquire_p2_mutation_lock(self.session)
         await self._validate_parent(draft.parent_id, draft.direction)
         await self._ensure_name_available(draft.name, draft.parent_id)
@@ -91,8 +91,11 @@ class CategoryService:
             sort_order=await self.repository.next_sort_order(draft.parent_id, draft.direction),
         )
         self.repository.add(category)
-        await self._commit_name_safe()
-        await self.session.refresh(category)
+        if commit:
+            await self._commit_name_safe()
+            await self.session.refresh(category)
+        else:
+            await self.session.flush()
         return self.response(category)
 
     async def update(self, category_id: UUID, patch: CategoryPatch) -> CategoryResponse:

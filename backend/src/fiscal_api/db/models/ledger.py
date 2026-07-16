@@ -51,6 +51,7 @@ class TransactionSource(StrEnum):
     SYSTEM = "system"
     AI_TEXT = "ai_text"
     OCR = "ocr"
+    LEGACY_IMPORT = "legacy_import"
 
 
 class LedgerTransaction(Base):
@@ -61,7 +62,10 @@ class LedgerTransaction(Base):
             "'installment_fee', 'installment_refund', 'reimbursement_receipt')",
             name="valid_kind",
         ),
-        CheckConstraint("source IN ('manual', 'system', 'ai_text', 'ocr')", name="valid_source"),
+        CheckConstraint(
+            "source IN ('manual', 'system', 'ai_text', 'ocr', 'legacy_import')",
+            name="valid_source",
+        ),
         CheckConstraint("version >= 1", name="version_positive"),
         CheckConstraint("char_length(title) BETWEEN 1 AND 120", name="title_length"),
         CheckConstraint("note IS NULL OR char_length(note) <= 500", name="note_length"),

@@ -54,7 +54,7 @@ class AccountService:
         impacts = await self.repository.balance_impacts([account.id])
         return self.response(account, impacts.get(account.id, 0))
 
-    async def create(self, draft: AccountDraft) -> AccountResponse:
+    async def create(self, draft: AccountDraft, *, commit: bool = True) -> AccountResponse:
         await acquire_p2_mutation_lock(self.session)
         self._validate_configuration(
             kind=draft.kind,
@@ -85,8 +85,11 @@ class AccountService:
         await self.session.flush()
         if draft.kind is AccountKind.CREDIT:
             await sync_opening_cycle(self.credit_repository, account)
-        await self._commit_name_safe()
-        await self.session.refresh(account)
+        if commit:
+            await self._commit_name_safe()
+            await self.session.refresh(account)
+        else:
+            await self.session.flush()
         return self.response(account)
 
     async def update(self, account_id: UUID, patch: AccountPatch) -> AccountResponse:

@@ -21,6 +21,12 @@ from fiscal_api.db.models.ledger import (
     TransactionRevision,
     TransactionSource,
 )
+from fiscal_api.db.models.migration import (
+    MigrationObjectLink,
+    MigrationRun,
+    MigrationRunMode,
+    MigrationRunStatus,
+)
 from fiscal_api.db.models.reimbursement import (
     ReimbursementAllocation,
     ReimbursementClaim,
@@ -58,6 +64,10 @@ __all__ = [
     "InstallmentPlanLifecycle",
     "InstallmentPlanRevision",
     "LedgerTransaction",
+    "MigrationObjectLink",
+    "MigrationRun",
+    "MigrationRunMode",
+    "MigrationRunStatus",
     "Posting",
     "PostingRole",
     "ReimbursementAllocation",

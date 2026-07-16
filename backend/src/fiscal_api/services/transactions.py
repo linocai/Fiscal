@@ -102,6 +102,21 @@ class TransactionService:
             commit=commit,
         )
 
+    async def create_legacy_import(
+        self,
+        draft: TransactionDraft,
+        idempotency_key: UUID,
+        *,
+        commit: bool = True,
+    ) -> TransactionResponse:
+        """Create a validated ledger aggregate owned by the legacy migration."""
+        return await self._create(
+            draft,
+            idempotency_key,
+            source=TransactionSource.LEGACY_IMPORT,
+            commit=commit,
+        )
+
     async def _create(
         self,
         draft: TransactionDraft,

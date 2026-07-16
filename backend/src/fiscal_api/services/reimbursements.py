@@ -79,7 +79,9 @@ class ReimbursementService:
         self.transactions = TransactionRepository(session)
         self.transaction_service = TransactionService(session)
 
-    async def create(self, draft: ReimbursementClaimDraft, key: UUID) -> ReimbursementClaimResponse:
+    async def create(
+        self, draft: ReimbursementClaimDraft, key: UUID, *, commit: bool = True
+    ) -> ReimbursementClaimResponse:
         await acquire_mutation_lock(self.session)
         request_hash = self._hash(draft)
         existing = await self.repository.claim_for_key(key)
@@ -111,7 +113,10 @@ class ReimbursementService:
         await self._refresh_claim(claim)
         response = await self.response(claim)
         self._claim_revision(claim, "created", response)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
         return response
 
     async def get(self, claim_id: UUID) -> ReimbursementClaimResponse:
@@ -442,7 +447,12 @@ class ReimbursementService:
         )
 
     async def create_receipt(
-        self, claim_id: UUID, draft: ReimbursementReceiptDraft, key: UUID
+        self,
+        claim_id: UUID,
+        draft: ReimbursementReceiptDraft,
+        key: UUID,
+        *,
+        commit: bool = True,
     ) -> ReimbursementReceiptResponse:
         await acquire_mutation_lock(self.session)
         request_hash = self._hash(draft)
@@ -524,7 +534,10 @@ class ReimbursementService:
             result_snapshot=response.model_dump(mode="json"),
         )
         self.session.add(operation)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
         return response
 
     async def receipt_get(self, receipt_id: UUID) -> ReimbursementReceiptResponse:

@@ -38,4 +38,4 @@ Date: 2026-07-16
 
 - [x] Full backend, migration, iOS 26 and macOS 26 local gates pass.
 - [ ] Service/API and PostgreSQL restarts preserve data and authentication.
-- [ ] User accepts P11 production/security behavior before P12 begins.
+- [x] User explicitly starts P12; remaining operational items stay open as v1.0 release gates.
