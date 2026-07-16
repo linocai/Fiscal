@@ -53,3 +53,8 @@ typeCheckingMode = "strict"
 include = ["src"]
 exclude = [".venv", "alembic"]
 reportMissingTypeStubs = false
+
+[[tool.uv.index]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true

@@ -81,6 +81,9 @@ git -C "$source_root" archive "$revision" | tar -x -C "$temporary_release"
 log "running release verification gates without production database access"
 (
   cd -- "$temporary_release/backend"
+  if grep -Eq 'pypi\.org|files\.pythonhosted\.org' uv.lock; then
+    die "uv.lock contains direct PyPI sources; regenerate it against the approved mirror"
+  fi
   unset FISCAL_DATABASE_URL FISCAL_TEST_DATABASE_URL FISCAL_DEVICE_TOKEN
   unset FISCAL_TOKEN_PEPPER FISCAL_AI_PROVIDER_API_KEY
   export UV_DEFAULT_INDEX="${FISCAL_PYPI_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}"
