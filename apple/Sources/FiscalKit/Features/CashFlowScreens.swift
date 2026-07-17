@@ -386,6 +386,16 @@ private struct CashFlowEditorSheet: View {
         Section("事项") {
           TextField("名称", text: $title)
           Picker("方向", selection: $direction) { ForEach(FutureCashFlowDirection.allCases) { Text($0.title).tag($0) } }
+            .onChange(of: direction) { _, value in
+              if value == .transfer {
+                categoryID = nil
+              } else {
+                destinationID = nil
+                if !matchingCategories.contains(where: { $0.id == categoryID }) {
+                  categoryID = nil
+                }
+              }
+            }
           TextField("预计金额", text: $amount)
             #if os(iOS)
             .keyboardType(.decimalPad)
@@ -400,7 +410,16 @@ private struct CashFlowEditorSheet: View {
         if item == nil {
           Section("计划") { Toggle("每月重复", isOn: $monthly); if monthly { DatePicker("结束日期", selection: $endDate, displayedComponents: .date) } }
         } else if item?.seriesID != nil && item?.status != .settled && item?.status != .cancelled {
-          Section("修改范围") { Picker("范围", selection: $scope) { Text("仅本次").tag(FutureCashFlowMutationScope.occurrence); Text("本次及以后").tag(FutureCashFlowMutationScope.thisAndFuture) } }
+          Section("修改范围") {
+            Picker("范围", selection: $scope) {
+              Text("仅本次").tag(FutureCashFlowMutationScope.occurrence)
+              Text("本次及以后").tag(FutureCashFlowMutationScope.thisAndFuture)
+            }
+            if scope == .thisAndFuture {
+              Text("方向、金额等会应用到后续期次；日期按原来的每月间隔顺延，不会复制成同一天。")
+                .font(.caption).foregroundStyle(FiscalColor.tertiary)
+            }
+          }
         }
         if let validation { Text(validation).foregroundStyle(FiscalColor.expense) }
       }
@@ -420,7 +439,6 @@ private struct CashFlowEditorSheet: View {
     title = item.title; amount = String(format: "%.2f", Double(item.plannedAmountMinor) / 100)
     direction = item.direction; expectedDate = FutureCashFlowModel.date(item.expectedDate) ?? Date()
     accountID = item.accountID; destinationID = item.destinationAccountID; categoryID = item.categoryID
-    endDate = item.seriesID == nil ? expectedDate : (Calendar.current.date(byAdding: .month, value: 6, to: expectedDate) ?? expectedDate)
   }
   private func loadOptions() async {
     accountOptions = (try? await accounts.transactionOptions()) ?? []
@@ -436,8 +454,8 @@ private struct CashFlowEditorSheet: View {
       expectedDate: FutureCashFlowModel.dayString(expectedDate), accountID: accountID,
       destinationAccountID: direction == .transfer ? destinationID : nil,
       categoryID: direction == .transfer ? nil : categoryID,
-      recurrence: (monthly || scope == .thisAndFuture) ? .monthly : nil,
-      recurrenceEndDate: monthly ? FutureCashFlowModel.dayString(endDate) : (scope == .thisAndFuture ? FutureCashFlowModel.dayString(endDate) : nil))
+      recurrence: monthly ? .monthly : nil,
+      recurrenceEndDate: monthly ? FutureCashFlowModel.dayString(endDate) : nil)
     let success = if let item { await model.update(item, draft: draft, scope: scope) } else { await model.create(draft) }
     if success { dismiss() } else { validation = model.message }
   }

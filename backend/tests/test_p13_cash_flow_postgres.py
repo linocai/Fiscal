@@ -12,6 +12,8 @@ from fiscal_api.api.p2_schemas import AccountDraft, CategoryDraft
 from fiscal_api.api.p13_schemas import (
     CashFlowAction,
     CashFlowDraft,
+    CashFlowMutationScope,
+    CashFlowReplace,
     CashFlowSettlementDraft,
     CashFlowSystemKind,
     CashFlowSystemReplace,
@@ -119,6 +121,60 @@ async def test_monthly_create_is_idempotent_and_settle_creates_one_ledger_row(
     assert replay_settlement.linked_transaction_id == settled.linked_transaction_id
     assert settled.actual_amount_minor == 510_000
     assert await session.scalar(select(func.count()).select_from(LedgerTransaction)) == 1
+
+
+async def test_monthly_bulk_edit_preserves_each_occurrence_date_and_series_end(
+    session: AsyncSession,
+) -> None:
+    account, _income_category = await seed(session)
+    expense_category = await CategoryService(session).create(
+        CategoryDraft(
+            name="车贷",
+            direction=CategoryDirection.EXPENSE,
+            icon="car",
+            color_hex="#CC3344",
+        )
+    )
+    service = CashFlowService(session)
+    created = await service.create(
+        CashFlowDraft(
+            title="车贷",
+            direction=CashFlowDirection.INFLOW,
+            planned_amount_minor=253_300,
+            expected_date=date(2026, 9, 22),
+            account_id=account.id,
+            recurrence=CashFlowRecurrence.MONTHLY,
+            recurrence_end_date=date(2029, 9, 22),
+        ),
+        uuid4(),
+    )
+    first = created.items[0]
+    assert first.manual_item_id is not None
+
+    updated = await service.update(
+        first.manual_item_id,
+        CashFlowReplace(
+            title="车贷",
+            direction=CashFlowDirection.OUTFLOW,
+            planned_amount_minor=253_300,
+            expected_date=date(2026, 9, 22),
+            account_id=account.id,
+            category_id=expense_category.id,
+            recurrence=CashFlowRecurrence.MONTHLY,
+            # Simulates Build 8's incorrect editor default. The server owns the original
+            # series boundary and must not truncate a 2029 plan to this client value.
+            recurrence_end_date=date(2027, 3, 22),
+            expected_version=first.version,
+            scope=CashFlowMutationScope.THIS_AND_FUTURE,
+        ),
+    )
+
+    assert len(updated.items) == 37
+    assert [item.expected_date for item in updated.items] == CashFlowService._monthly_dates(
+        date(2026, 9, 22), date(2029, 9, 22)
+    )
+    assert all(item.direction is CashFlowDirection.OUTFLOW for item in updated.items)
+    assert all(item.status is CashFlowStatus.EXPECTED for item in updated.items)
 
 
 async def test_void_and_restore_keep_cash_flow_and_ledger_in_sync(session: AsyncSession) -> None:

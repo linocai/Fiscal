@@ -219,19 +219,12 @@ class CashFlowService:
         await self._validate_references(request)
         targets = await self._targets(item, request.scope)
         if request.scope is CashFlowMutationScope.THIS_AND_FUTURE and item.series_id is not None:
-            if request.recurrence_end_date is None:
-                invalid(
-                    "cash_flow_end_date_required", "Editing this and future requires an end date"
-                )
             for target in targets:
                 if target.status in {CashFlowStatus.SETTLED.value, CashFlowStatus.CANCELLED.value}:
                     continue
                 month_offset = self._month_offset(item.expected_date, target.expected_date)
-                target.expected_date = self._add_months(request.expected_date, month_offset)
-                if target.expected_date > request.recurrence_end_date:
-                    self._cancel(target)
-                    continue
-                self._apply_draft(target, request)
+                shifted_date = self._add_months(request.expected_date, month_offset)
+                self._apply_draft(target, request, expected_date=shifted_date)
                 self._touch(target, CashFlowRevisionEvent.UPDATED)
         else:
             self._apply_draft(item, request)
@@ -616,12 +609,14 @@ class CashFlowService:
         )
 
     @staticmethod
-    def _apply_draft(item: CashFlowItem, draft: CashFlowDraft) -> None:
+    def _apply_draft(
+        item: CashFlowItem, draft: CashFlowDraft, *, expected_date: date | None = None
+    ) -> None:
         item.title = draft.title
         item.note = draft.note
         item.direction = draft.direction.value
         item.planned_amount_minor = draft.planned_amount_minor
-        item.expected_date = draft.expected_date
+        item.expected_date = expected_date if expected_date is not None else draft.expected_date
         item.account_id = draft.account_id
         item.destination_account_id = draft.destination_account_id
         item.category_id = draft.category_id
