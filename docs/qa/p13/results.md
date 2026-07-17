@@ -2,7 +2,7 @@
 
 Date: 2026-07-17
 
-Status: engineering, production migration, data recovery, and Build 7 installation complete; iPhone launch acceptance awaits an unlocked device.
+Status: engineering, production migration, data recovery, and Build 7 installation/launch complete on macOS and the physical iPhone.
 
 ## Delivered
 
@@ -32,6 +32,7 @@ Status: engineering, production migration, data recovery, and Build 7 installati
 - Running the recovery twice still produced 7 items. Formal ledger transaction count remained 117 before and after recovery.
 - Authenticated production API smoke returned 16 active items: 7 restored manual items and 9 live system items.
 - Production 30-day summary for 2026-07-17 through 2026-08-15 returned inflow 500,000, outflow 1,807,186, and net -1,307,186 minor units.
+- Final smoke returned `live` through the public endpoint and `ready`/`database: ready` from the backend's bound localhost endpoint.
 - The disposable shadow database and temporary deployment source trees were removed after reconciliation; all three verified pre/deploy backups remain intact.
 
 ## Apple package acceptance
@@ -39,4 +40,4 @@ Status: engineering, production migration, data recovery, and Build 7 installati
 - macOS Build 7 is installed at `/Applications/Fiscal.app`, launches successfully, and displays all pending items with overdue-first ordering, future 30-day totals, a separate history action, and no month selector on the main cash-flow page.
 - The previous macOS Build 6 remains recoverable at `/Applications/Fiscal-build6-backup.app`.
 - iOS Build 7 is installed on the physical iPhone as `com.linotsai.fiscal`.
-- The iPhone rejected only the remote launch request because the device was locked; installation and signing succeeded. Final interactive iPhone acceptance remains a user/device-unlock gate.
+- After the device was unlocked, the signed Build 7 launched successfully on the physical iPhone.
