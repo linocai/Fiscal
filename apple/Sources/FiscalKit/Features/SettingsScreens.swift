@@ -676,6 +676,7 @@ public struct DeviceSecuritySettingsCard: View {
   @State private var showIssue = false
   @State private var newDeviceLabel = ""
   @State private var importedDeviceToken = ""
+  @FocusState private var credentialFieldFocused: Bool
 
   public init(
     model: DeviceSecurityModel,
@@ -762,17 +763,32 @@ public struct DeviceSecuritySettingsCard: View {
         .textFieldStyle(.plain).font(.caption.monospaced())
         .padding(.horizontal, 11).frame(minHeight: 40)
         .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
-      Button(model.isMutating ? "正在激活…" : "激活此设备") {
-        let token = importedDeviceToken
-        importedDeviceToken = ""
-        Task {
-          await model.installIssuedToken(token)
-          if model.phase == .loaded { onCredentialActivated() }
+        .focused($credentialFieldFocused)
+        .submitLabel(.go)
+        .onSubmit(activateImportedCredential)
+      Button(action: activateImportedCredential) {
+        HStack(spacing: 8) {
+          if model.isMutating { ProgressView().controlSize(.small) }
+          Text(model.isMutating ? "正在激活…" : "激活此设备")
         }
+        .frame(maxWidth: .infinity, minHeight: 48)
+        .contentShape(.rect)
       }
-      .buttonStyle(FiscalActionButtonStyle(.secondary))
-      .disabled(model.isMutating || importedDeviceToken.isEmpty)
+      .buttonStyle(FiscalActionButtonStyle())
+      .disabled(model.isMutating || importedDeviceToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       .accessibilityIdentifier("ios.cloudConnection.activate")
+    }
+  }
+
+  private func activateImportedCredential() {
+    let token = importedDeviceToken.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !model.isMutating, !token.isEmpty else { return }
+    Task {
+      await model.installIssuedToken(token)
+      guard model.phase == .loaded else { return }
+      importedDeviceToken = ""
+      credentialFieldFocused = false
+      onCredentialActivated()
     }
   }
 

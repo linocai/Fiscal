@@ -52,7 +52,9 @@ struct IOSRootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(FiscalColor.iOSBackground.ignoresSafeArea())
-        .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if selection != .more || morePath.isEmpty { tabBar }
+        }
         .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit, preferences: recordingPreferences) }
         .sheet(isPresented: $showAIProposals) { IOSAIProposalSheet(model: aiProposals, accounts: accounts, categories: categories, credit: credit) }
     }
@@ -241,7 +243,9 @@ private struct IOSCloudConnectionScreen: View {
                 )
             }
             .padding(16)
+            .padding(.bottom, 24)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(FiscalColor.iOSBackground)
         .navigationTitle("云端连接")
         .navigationBarTitleDisplayMode(.inline)

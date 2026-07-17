@@ -45,6 +45,9 @@ final class FiscalUITests: XCTestCase {
       app.descendants(matching: .any)["ios.cloudConnection.screen"]
         .waitForExistence(timeout: 5))
     XCTAssertTrue(app.staticTexts["连接个人云端"].exists)
+    XCTAssertEqual(
+      app.descendants(matching: .any).matching(identifier: "fiscal.customBottomBar").count, 0,
+      "A pushed cloud-connection screen must not keep the root tab bar over its bottom controls.")
   }
 
   func testP3TransactionListAndRecordSheetUseRealAPI() throws {

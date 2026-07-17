@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     device_token: SecretStr | None = None
     token_pepper: SecretStr | None = None
     token_pepper_version: int = 1
-    token_pending_ttl_minutes: int = 15
+    token_pending_ttl_minutes: int = 60
     rate_limit_read_per_minute: int = 120
     rate_limit_write_per_minute: int = 30
     rate_limit_ai_per_minute: int = 10
