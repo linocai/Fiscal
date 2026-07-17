@@ -11,7 +11,7 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     GENERATE_INFOPLIST_FILE: YES
-    MARKETING_VERSION: 0.1.0
+    MARKETING_VERSION: 1.0.0
     CURRENT_PROJECT_VERSION: 1
 targets:
   FiscalKit:
@@ -30,6 +30,8 @@ targets:
       path: Apps/iOS/Info.plist
       properties:
         CFBundleDisplayName: Fiscal
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         FISCAL_API_BASE_URL: "$(FISCAL_API_BASE_URL)"
         NSPhotoLibraryUsageDescription: "Fiscal 读取你允许访问的截图，在设备端识别记账文字；图片不会上传。"
         PHPhotoLibraryPreventAutomaticLimitedAccessAlert: true
@@ -43,6 +45,10 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal
+        PRODUCT_NAME: Fiscal
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        DEVELOPMENT_TEAM: J6H3FXT658
+        CODE_SIGN_STYLE: Automatic
       configs:
         Debug:
           FISCAL_API_BASE_URL: "http://127.0.0.1:8000"
@@ -56,7 +62,10 @@ targets:
       path: Apps/macOS/Info.plist
       properties:
         CFBundleDisplayName: Fiscal
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         FISCAL_API_BASE_URL: "$(FISCAL_API_BASE_URL)"
+        LSApplicationCategoryType: public.app-category.finance
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
     dependencies:
@@ -64,11 +73,19 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.mac
+        PRODUCT_NAME: Fiscal
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
       configs:
         Debug:
           FISCAL_API_BASE_URL: "http://127.0.0.1:8000"
         Release:
           FISCAL_API_BASE_URL: "https://fiscal.linotsai.top"
+          DEVELOPMENT_TEAM: HX73DFL88G
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+          OTHER_CODE_SIGN_FLAGS: "--timestamp"
   FiscalKitTests:
     type: bundle.unit-test
     platform: macOS

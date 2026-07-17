@@ -808,6 +808,7 @@ public struct DeviceSecuritySettingsCard: View {
   }
 }
 
+@MainActor
 private func securityUnavailableCard(radius: CGFloat) -> some View {
   FiscalCard(radius: radius) {
     HStack(alignment: .top, spacing: 12) {

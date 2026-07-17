@@ -23,11 +23,13 @@
 		182C32DC2D8B456E50A6458A /* APITransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC300DFA7D718CB81ABD669 /* APITransport.swift */; };
 		1AA79C712F4EE4661527C1B0 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; };
 		1E93660618BFA3172A2C2886 /* InstallmentScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B76007E6901E55864724E2F /* InstallmentScreens.swift */; };
+		24906508AF6167FD113A3D03 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9E82929FAEB7D2FF30F8FEE4 /* Assets.xcassets */; };
 		255219906D45CCA7F176A539 /* ReportingDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 524E9B77F58FABD7A662DE07 /* ReportingDTO.swift */; };
 		25F7A3F9B77E2D03F773E6B1 /* AIProposalModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E485063B64D3CA0E90E279 /* AIProposalModel.swift */; };
 		26658545C3F7F97DCC2DC110 /* InstallmentModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61975243C0F4B54528AB4EB5 /* InstallmentModel.swift */; };
 		268326D892E97761F947F6D0 /* CreditDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50AE5EE92E61AC85DDE507B3 /* CreditDTO.swift */; };
 		282293EA3D1B961E7267D0C4 /* SecurityDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 231B8C5B49337369E6329110 /* SecurityDTO.swift */; };
+		28C6F7D2B2F73409AF719339 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D633D5077E7D71031EF35843 /* Assets.xcassets */; };
 		290EF44276D0A4983D3D3883 /* InstallmentDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = B776D98F419D1A0D118D08AC /* InstallmentDTO.swift */; };
 		2A6C366F90678183C6E76FEB /* InstallmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */; };
 		2C2CEBA165280B41950328E6 /* MacOverviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30AD3A2039A614D2F2543AE1 /* MacOverviewScreen.swift */; };
@@ -261,6 +263,7 @@
 		971383DF03B4FB6974955E6F /* DeviceSecurityRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSecurityRepository.swift; sourceTree = "<group>"; };
 		9A3AB4BE7E4F9C491EEA3497 /* ReimbursementRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimbursementRepository.swift; sourceTree = "<group>"; };
 		9AB6841587AA8B69AFF3A00A /* OverviewFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewFixtures.swift; sourceTree = "<group>"; };
+		9E82929FAEB7D2FF30F8FEE4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A0B4C67D67A062E6762293EE /* ReportingScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportingScreens.swift; sourceTree = "<group>"; };
 		A0ED0C883C88E2A203C4CB4B /* HTTPResponseCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPResponseCache.swift; sourceTree = "<group>"; };
 		A34095B1DD7CB23F5F409164 /* FiscalNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalNotifications.swift; sourceTree = "<group>"; };
@@ -278,6 +281,7 @@
 		D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentRepository.swift; sourceTree = "<group>"; };
 		D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
 		D523C9CDC1C09EDA86539B22 /* RecordingPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingPreferences.swift; sourceTree = "<group>"; };
+		D633D5077E7D71031EF35843 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E0B37F87A62073E2D426AC5C /* P9InputTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P9InputTests.swift; sourceTree = "<group>"; };
 		E0D63863F934E27294B1542B /* FiscalKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FiscalKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2FF91C44F1DCC211426631D /* FiscalKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FiscalKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -388,6 +392,7 @@
 		5000667DE0E3F9057CC13AE3 /* macOS */ = {
 			isa = PBXGroup;
 			children = (
+				9E82929FAEB7D2FF30F8FEE4 /* Assets.xcassets */,
 				2E8B677BF8165F1CF2AA217F /* FiscalmacOSApp.swift */,
 				F41296659AE4F2333D274669 /* Info.plist */,
 				255F8031C4F10F48F933A838 /* MacRootView.swift */,
@@ -474,6 +479,7 @@
 		B16237A5BE4D2E3B11484E9C /* iOS */ = {
 			isa = PBXGroup;
 			children = (
+				D633D5077E7D71031EF35843 /* Assets.xcassets */,
 				29540C1D2948FC97337C271B /* FiscaliOSApp.swift */,
 				A34095B1DD7CB23F5F409164 /* FiscalNotifications.swift */,
 				128E44B859F89927A62EEE28 /* FiscalShortcuts.swift */,
@@ -563,6 +569,7 @@
 			buildConfigurationList = CCFE5545F4C356D51A830F82 /* Build configuration list for PBXNativeTarget "FiscaliOS" */;
 			buildPhases = (
 				DB8D75638DFCAD563C33C887 /* Sources */,
+				3ADC6BD14F779B81B3D77AEE /* Resources */,
 				69957A6D62DD07061A9F33EF /* Frameworks */,
 				92079675CD5CB8AD3C824F1A /* Embed Frameworks */,
 			);
@@ -583,6 +590,7 @@
 			buildConfigurationList = 085F957DCBD9E53B1F0DBA33 /* Build configuration list for PBXNativeTarget "FiscalmacOS" */;
 			buildPhases = (
 				B344B216BDEEC4145A81373F /* Sources */,
+				D9715915D99194FE4205407F /* Resources */,
 				A54E17FAA07370E49DD17FA0 /* Frameworks */,
 				A5E5D7A291086571FB534A01 /* Embed Frameworks */,
 			);
@@ -664,6 +672,10 @@
 					0C3D4DF70B1FF4DB0A48A385 = {
 						TestTargetID = 45F13C514158836F5997B64A;
 					};
+					45F13C514158836F5997B64A = {
+						DevelopmentTeam = J6H3FXT658;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = DE991A38B96670C5CC65EA38 /* Build configuration list for PBXProject "Fiscal" */;
@@ -690,6 +702,25 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3ADC6BD14F779B81B3D77AEE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				28C6F7D2B2F73409AF719339 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D9715915D99194FE4205407F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				24906508AF6167FD113A3D03 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		3A97C2CFE7A7A2436E12B594 /* Sources */ = {
@@ -898,6 +929,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = J6H3FXT658;
 				FISCAL_API_BASE_URL = "https://fiscal.linotsai.top";
 				INFOPLIST_FILE = Apps/iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -905,6 +938,7 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal;
+				PRODUCT_NAME = Fiscal;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -915,6 +949,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
 				FISCAL_API_BASE_URL = "http://127.0.0.1:8000";
 				INFOPLIST_FILE = Apps/macOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -922,6 +957,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal.mac;
+				PRODUCT_NAME = Fiscal;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -931,6 +967,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = J6H3FXT658;
 				FISCAL_API_BASE_URL = "http://127.0.0.1:8000";
 				INFOPLIST_FILE = Apps/iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -938,6 +976,7 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal;
+				PRODUCT_NAME = Fiscal;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -1006,14 +1045,21 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = HX73DFL88G;
+				ENABLE_HARDENED_RUNTIME = YES;
 				FISCAL_API_BASE_URL = "https://fiscal.linotsai.top";
 				INFOPLIST_FILE = Apps/macOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				OTHER_CODE_SIGN_FLAGS = "--timestamp";
 				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal.mac;
+				PRODUCT_NAME = Fiscal;
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -1074,7 +1120,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1257,7 +1303,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
