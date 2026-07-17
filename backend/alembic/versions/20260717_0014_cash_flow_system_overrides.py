@@ -96,9 +96,7 @@ def downgrade() -> None:
         END $$;
         """
     )
-    op.drop_index(
-        "ix_cash_flow_system_override_history", table_name="cash_flow_system_overrides"
-    )
+    op.drop_index("ix_cash_flow_system_override_history", table_name="cash_flow_system_overrides")
     op.drop_table("cash_flow_system_overrides")
     op.drop_constraint(op.f("ck_cash_flow_items_valid_status"), "cash_flow_items", type_="check")
     op.create_check_constraint(
