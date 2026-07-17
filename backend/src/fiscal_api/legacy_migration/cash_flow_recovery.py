@@ -76,9 +76,7 @@ def parse_rows(rows: Sequence[Mapping[str, object]]) -> list[LegacyCashFlow]:
                 status=str(row["status"]),
                 account_name=str(row["account_name"]) if row["account_name"] else None,
                 category_name=str(row["category_name"]) if row["category_name"] else None,
-                recurrence_rule=(
-                    str(row["recurrence_rule"]) if row["recurrence_rule"] else None
-                ),
+                recurrence_rule=(str(row["recurrence_rule"]) if row["recurrence_rule"] else None),
                 note=str(row["note"]) if row["note"] else None,
             )
         )
@@ -148,9 +146,7 @@ async def _target_reference(
     session: AsyncSession, model: type[Account] | type[Category], name: str
 ) -> Account | Category:
     values = list(
-        await session.scalars(
-            select(model).where(model.name == name, model.archived_at.is_(None))
-        )
+        await session.scalars(select(model).where(model.name == name, model.archived_at.is_(None)))
     )
     if len(values) != 1:
         raise RuntimeError(
@@ -159,9 +155,7 @@ async def _target_reference(
     return values[0]
 
 
-async def _audit_target(
-    session: AsyncSession, source_ids: set[str]
-) -> dict[str, object]:
+async def _audit_target(session: AsyncSession, source_ids: set[str]) -> dict[str, object]:
     database = str(await session.scalar(text("SELECT current_database()")))
     existing = list(
         await session.scalars(
@@ -183,9 +177,10 @@ async def _audit_target(
 async def run(command: str, source_dsn: SecretStr, target_dsn: SecretStr) -> dict[str, Any]:
     engine = create_async_engine(target_dsn.get_secret_value(), pool_pre_ping=True)
     try:
-        async with legacy_source(source_dsn) as source, AsyncSession(
-            engine, expire_on_commit=False
-        ) as session:
+        async with (
+            legacy_source(source_dsn) as source,
+            AsyncSession(engine, expire_on_commit=False) as session,
+        ):
             active = await load_active_source(source)
             salaries, rent, repayments = select_recoverable(active)
             salary_account = await _target_reference(session, Account, "农业4873")
