@@ -53,10 +53,13 @@ private struct ReportMetric: View {
   let amount: Int64
   let color: Color
   var detail: String?
+  // Net values (inflow − outflow) carry a directional sign; magnitude metrics do not. Set this
+  // explicitly instead of sniffing the label text for "净额" (L19).
+  var showsSign = false
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text(label).font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
-      Text(Money(minorUnits: amount).formatted(showPositiveSign: amount > 0 && label.contains("净额")))
+      Text(Money(minorUnits: amount).formatted(showPositiveSign: showsSign && amount > 0))
         .font(.system(size: 24, weight: .semibold, design: .default))
         .tracking(-0.35)
         .foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.68)
@@ -114,7 +117,7 @@ public struct IOSReportingOverviewScreen: View {
         else { unavailable }
       }.padding(.horizontal, 16).padding(.vertical, 16)
     }.background(FiscalColor.iOSBackground.ignoresSafeArea())
-      .task { await model.ensureCurrentMonth() }
+      .task { await model.returnToCurrentMonth() }
       .refreshable { await model.loadAll() }
   }
   @ViewBuilder private func content(_ value: OverviewReport) -> some View {
@@ -224,9 +227,14 @@ public struct IOSReportingOverviewScreen: View {
 
 public struct IOSReportsScreen: View {
   @Bindable var model: ReportingModel
+  private let initialLens: ReportLens
+  @State private var didApplyInitialLens = false
   public init(model: ReportingModel, initialLens: ReportLens = .spending) {
     self.model = model
-    model.lens = initialLens == .cashFlow ? .spending : initialLens
+    // Do not touch the shared model here: this view is rebuilt on every parent body recompute, so
+    // seeding the lens in init would keep snapping the user's selection back (H3). The navigation
+    // intent is applied once in onAppear instead.
+    self.initialLens = initialLens == .cashFlow ? .spending : initialLens
   }
   public var body: some View {
     ScrollView {
@@ -244,6 +252,12 @@ public struct IOSReportsScreen: View {
         }
       }.padding(16).padding(.bottom, 30)
     }.background(FiscalColor.iOSBackground).navigationTitle("报表")
+      .onAppear {
+        if !didApplyInitialLens {
+          model.lens = initialLens
+          didApplyInitialLens = true
+        }
+      }
   }
   @ViewBuilder private var spendingBody: some View {
     if let report = model.spending {
@@ -303,7 +317,7 @@ public struct MacReportingOverviewScreen: View {
               spacing: 12
             ) {
               metricButton("本月消费", value.spending.grossConsumptionMinor, FiscalColor.text) { navigate(.spending) }
-              metricButton("未来 30 天现金流", value.cashFlow.netMinor, value.cashFlow.netMinor >= 0 ? FiscalColor.income : FiscalColor.expense) { navigate(.cashFlow) }
+              metricButton("未来 30 天现金流", value.cashFlow.netMinor, value.cashFlow.netMinor >= 0 ? FiscalColor.income : FiscalColor.expense, showsSign: true) { navigate(.cashFlow) }
               metricButton("信用应还", value.currentCreditDebtMinor, FiscalColor.debt) { navigate(.debt) }
               metricButton("报销待回款", value.reimbursementOutstandingMinor, FiscalColor.reimbursement) { navigate(nil) }
             }
@@ -338,10 +352,10 @@ public struct MacReportingOverviewScreen: View {
       }
     }
     .background(FiscalColor.macBackground)
-    .task { await model.ensureCurrentMonth() }
+    .task { await model.returnToCurrentMonth() }
   }
-  private func metricButton(_ label: String, _ amount: Int64, _ color: Color, action: @escaping () -> Void) -> some View {
-    Button(action: action) { FiscalCard(radius: 15) { ReportMetric(label: label, amount: amount, color: color, detail: "查看口径与明细") } }.buttonStyle(.plain)
+  private func metricButton(_ label: String, _ amount: Int64, _ color: Color, showsSign: Bool = false, action: @escaping () -> Void) -> some View {
+    Button(action: action) { FiscalCard(radius: 15) { ReportMetric(label: label, amount: amount, color: color, detail: "查看口径与明细", showsSign: showsSign) } }.buttonStyle(.plain)
   }
   private func recentCard(_ value: OverviewReport) -> some View {
     FiscalCard(radius: 15) {
@@ -432,7 +446,7 @@ public struct MacReportsScreen: View {
   @ViewBuilder private var macCash: some View {
     if let report = model.cashFlow {
       HStack(alignment: .top, spacing: 16) {
-        FiscalCard(radius: 15) { VStack(alignment: .leading, spacing: 12) { ReportMetric(label: "实际现金流净额", amount: report.actual.netMinor, color: report.actual.netMinor >= 0 ? FiscalColor.income : FiscalColor.expense); HStack { ReportMetric(label: "流入", amount: report.actual.inflowMinor, color: FiscalColor.income); ReportMetric(label: "流出", amount: report.actual.outflowMinor, color: FiscalColor.expense) } } }.frame(width: 310)
+        FiscalCard(radius: 15) { VStack(alignment: .leading, spacing: 12) { ReportMetric(label: "实际现金流净额", amount: report.actual.netMinor, color: report.actual.netMinor >= 0 ? FiscalColor.income : FiscalColor.expense, showsSign: true); HStack { ReportMetric(label: "流入", amount: report.actual.inflowMinor, color: FiscalColor.income); ReportMetric(label: "流出", amount: report.actual.outflowMinor, color: FiscalColor.expense) } } }.frame(width: 310)
         FiscalCard(radius: 15) { cashChart(report.trend).frame(height: 190) }.frame(maxWidth: .infinity)
       }
       FiscalCard(radius: 15) { VStack(alignment: .leading) { Text("按账户").font(.headline); accountRows(report.accounts, model: model) } }
@@ -555,7 +569,7 @@ private func reportColor(_ hex: String?, fallback: Color = FiscalColor.tertiary)
   VStack(spacing: 0) {
     ForEach(values) { row in
       Button { model.lens = .cashFlow; Task { await model.loadDrillDown(accountID: row.accountID) } } label: {
-        HStack { Text(row.name).font(.subheadline.weight(.semibold)); Spacer(); Text("+\(Money(minorUnits: row.metrics.inflowMinor).formatted())").foregroundStyle(FiscalColor.income); Text("−\(Money(minorUnits: row.metrics.outflowMinor).formatted())").foregroundStyle(FiscalColor.expense); Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary).accessibilityHidden(true) }.padding(.vertical, 11)
+        HStack { Text(row.name).font(.subheadline.weight(.semibold)); Spacer(); Text("+\(Money(minorUnits: row.metrics.inflowMinor).formatted())").foregroundStyle(FiscalColor.income); Text("-\(Money(minorUnits: row.metrics.outflowMinor).formatted())").foregroundStyle(FiscalColor.expense); Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary).accessibilityHidden(true) }.padding(.vertical, 11)
       }.buttonStyle(.plain); Divider().opacity(0.35)
     }
   }
@@ -622,7 +636,7 @@ private func drillDownRows(_ page: ReportDrillDownPage, model: ReportingModel) -
     VStack(alignment: .leading, spacing: 10) {
       HStack { Text(account.name).font(.headline); Spacer(); Text(Money(minorUnits: account.currentDebtMinor).formatted()).font(.headline).foregroundStyle(FiscalColor.debt) }
       if account.openingConfigurationRequired { Label("期初欠款尚未配置日期，不推测到期事件", systemImage: "calendar.badge.exclamationmark").font(.caption).foregroundStyle(FiscalColor.debt) }
-      ForEach(account.cycles.filter { $0.remainingMinor > 0 }.prefix(4)) { cycle in
+      ForEach(account.cycles.filter { $0.remainingMinor > 0 }) { cycle in
         HStack { VStack(alignment: .leading) { Text("还款日 \(cycle.dueDate)").font(.caption); Text(cycle.overdue ? "已逾期" : cycle.status).font(.caption2).foregroundStyle(cycle.overdue ? FiscalColor.expense : FiscalColor.tertiary) }; Spacer(); Text(Money(minorUnits: cycle.remainingMinor).formatted()) }.padding(.top, 7)
       }
     }

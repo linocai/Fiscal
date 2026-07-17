@@ -15,7 +15,11 @@ public final class ReportingModel {
   public private(set) var message: String?
   public private(set) var refreshMessage: String?
   public private(set) var loadingMore = false
-  public var lens: ReportLens = .spending
+  public var lens: ReportLens = .spending {
+    // Drill-down belongs to one lens; changing lens must drop it so "加载更多" can't issue a mixed
+    // request (new lens + a stale drillCategoryID) and render two calibres in one list (M8).
+    didSet { if oldValue != lens { clearDrillDown() } }
+  }
   public private(set) var month: String
   public private(set) var dateFrom: String
   public private(set) var dateTo: String

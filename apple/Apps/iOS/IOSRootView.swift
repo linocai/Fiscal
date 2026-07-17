@@ -18,6 +18,7 @@ struct IOSRootView: View {
     let installments: InstallmentModel
     let reimbursements: ReimbursementModel
     let reports: ReportingModel
+    let overview: ReportingModel
     let cashFlow: FutureCashFlowModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
@@ -35,7 +36,7 @@ struct IOSRootView: View {
             case .overview:
                 NavigationStack {
                     IOSReportingOverviewScreen(
-                        model: reports,
+                        model: overview,
                         pendingProposalCount: aiProposals.pendingCount,
                         openAI: { showAIProposals = true },
                         openCashFlow: { selection = .cashFlow },

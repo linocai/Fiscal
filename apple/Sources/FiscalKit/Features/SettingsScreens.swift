@@ -230,7 +230,7 @@ public struct IOSSettingsScreen: View {
     }
   }
   private var exportFilename: String {
-    "Fiscal-流水-\(String(Date.now.ISO8601Format().prefix(10)))"
+    "Fiscal-流水-\(String(Date.now.ISO8601Format(Date.ISO8601FormatStyle(timeZone: TimeZone(identifier: "Asia/Shanghai")!)).prefix(10)))"
   }
   private func cacheAge(_ date: Date?) -> String {
     guard let date else { return "" }
@@ -662,7 +662,7 @@ public struct MacSettingsScreen: View {
     }
   }
   private var exportFilename: String {
-    "Fiscal-流水-\(String(Date.now.ISO8601Format().prefix(10)))"
+    "Fiscal-流水-\(String(Date.now.ISO8601Format(Date.ISO8601FormatStyle(timeZone: TimeZone(identifier: "Asia/Shanghai")!)).prefix(10)))"
   }
 }
 #endif

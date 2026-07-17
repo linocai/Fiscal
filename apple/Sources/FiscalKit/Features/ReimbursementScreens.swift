@@ -56,31 +56,27 @@ private struct ReimbursementTotals: View {
       Group {
         if model.phase == .loading && model.claims.isEmpty {
           ProgressView("正在读取报销单…")
-        } else if model.claims.isEmpty {
-          ContentUnavailableView {
-            Label("暂无报销单", systemImage: "doc.text")
-          } description: {
-            Text(model.message ?? "新建报销单后，可按付款主体登记分次到账。")
-          } actions: {
-            Button("新建报销单") { showCreate = true }
-          }
         } else {
           ScrollView {
             LazyVStack(spacing: 14) {
               if let summary = model.summary { summaryCard(summary) }
               filterChips
-              ForEach(model.claims) { claim in
-                NavigationLink {
-                  IOSReimbursementDetailScreen(model: model, accounts: accounts, claimID: claim.id)
-                } label: {
-                  claimCard(claim)
-                }.buttonStyle(.plain).task {
-                  if claim.id == model.claims.last?.id { await model.loadMore() }
+              if model.claims.isEmpty {
+                emptyClaimsState
+              } else {
+                ForEach(model.claims) { claim in
+                  NavigationLink {
+                    IOSReimbursementDetailScreen(model: model, accounts: accounts, claimID: claim.id)
+                  } label: {
+                    claimCard(claim)
+                  }.buttonStyle(.plain).task {
+                    if claim.id == model.claims.last?.id { await model.loadMore() }
+                  }
                 }
-              }
-              if let message = model.refreshMessage {
-                Label(message, systemImage: "wifi.exclamationmark").font(.caption).foregroundStyle(
-                  FiscalColor.expense)
+                if let message = model.refreshMessage {
+                  Label(message, systemImage: "wifi.exclamationmark").font(.caption).foregroundStyle(
+                    FiscalColor.expense)
+                }
               }
             }.padding(16)
           }
@@ -104,6 +100,25 @@ private struct ReimbursementTotals: View {
           Toggle("含归档", isOn: $model.includeArchived).toggleStyle(.button)
         }.padding(.horizontal, 1)
       }.scrollIndicators(.hidden)
+    }
+    private var hasActiveFilter: Bool { model.statusFilter != nil || model.includeArchived }
+    @ViewBuilder private var emptyClaimsState: some View {
+      VStack(spacing: 12) {
+        Image(systemName: hasActiveFilter ? "line.3.horizontal.decrease.circle" : "doc.text")
+          .font(.largeTitle).foregroundStyle(FiscalColor.tertiary).accessibilityHidden(true)
+        Text(hasActiveFilter ? "当前筛选没有报销单" : "暂无报销单").font(.headline)
+        Text(hasActiveFilter ? "调整或清除筛选后再试。" : (model.message ?? "新建报销单后，可按付款主体登记分次到账。"))
+          .font(.caption).foregroundStyle(FiscalColor.tertiary).multilineTextAlignment(.center)
+        if hasActiveFilter {
+          Button("清除筛选") {
+            model.statusFilter = nil
+            model.includeArchived = false
+            Task { await model.load() }
+          }.buttonStyle(FiscalActionButtonStyle(.secondary))
+        } else {
+          Button("新建报销单") { showCreate = true }.buttonStyle(FiscalActionButtonStyle())
+        }
+      }.frame(maxWidth: .infinity).padding(.vertical, 40)
     }
     private func filter(_ title: String, _ status: ReimbursementClaimStatus?) -> some View {
       Button(title) {
@@ -430,7 +445,7 @@ public struct ReimbursementReceiptEditor: View {
     _partyID = State(
       initialValue: editing?.partyID ?? claim.parties.first(where: { $0.outstandingMinor > 0 })?.id)
     _accountID = State(initialValue: editing?.destinationAccountID)
-    _amount = State(initialValue: editing.map { String($0.amountMinor) } ?? "")
+    _amount = State(initialValue: editing.map { ReimbursementClaimEditor.yuanText(minorUnits: $0.amountMinor) } ?? "")
     _receivedAt = State(initialValue: editing?.receivedAt ?? Date())
     _title = State(initialValue: editing?.title ?? "报销到账")
     _note = State(initialValue: editing?.note ?? "")
@@ -455,9 +470,9 @@ public struct ReimbursementReceiptEditor: View {
                 }
               }
               Divider().opacity(0.35)
-              TextField("金额（分）", text: $amount).focused($focusedField, equals: .amount)
+              TextField("金额（元）", text: $amount).focused($focusedField, equals: .amount)
 #if os(iOS)
-                .keyboardType(.numberPad)
+                .keyboardType(.decimalPad)
 #endif
               Divider().opacity(0.35)
               DatePicker("到账时间", selection: $receivedAt, in: ...Date())
@@ -541,7 +556,8 @@ public struct ReimbursementReceiptEditor: View {
     HStack { Text(title).foregroundStyle(FiscalColor.secondary); Spacer(); Text(Money(minorUnits: amount).formatted()).fontWeight(.semibold) }.font(.subheadline)
   }
   private var request: ReimbursementReceiptRequest? {
-    guard let partyID, let accountID, let amountMinor = Int64(amount), amountMinor > 0,
+    guard let partyID, let accountID,
+      let amountMinor = ReimbursementClaimEditor.validatedAmount(text: amount, minimum: 0),
       !title.trimmingCharacters(in: .whitespaces).isEmpty
     else { return nil }
     return .init(
@@ -748,7 +764,7 @@ public struct ReimbursementClaimEditor: View {
               .background(FiscalColor.expense.opacity(0.09), in: .rect(cornerRadius: 14))
           }
         }.padding(20)
-      }.background(FiscalColor.macBackground).navigationTitle(editing == nil ? "新建报销单" : "编辑报销单")
+      }.background(FiscalColor.iOSBackground).navigationTitle(editing == nil ? "新建报销单" : "编辑报销单")
         .toolbar {
           ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
           ToolbarItem(placement: .confirmationAction) {
@@ -757,7 +773,7 @@ public struct ReimbursementClaimEditor: View {
             } else if model.claimPreview == nil {
               Button("预览") { preview() }.disabled(!valid)
             } else {
-              Button("确认保存") { update() }.disabled(model.isMutating)
+              Button("确认保存") { update() }.disabled(model.isMutating || !valid)
             }
           }
         }.task { await model.loadExpenseOptions() }.onChange(of: title) { _, _ in
@@ -1267,6 +1283,9 @@ public struct ReimbursementClaimEditor: View {
       },
       set: { text in
         amountTexts[allocation.wrappedValue.id] = text
+        // Any amount edit — including one that leaves the field invalid — must invalidate the
+        // server preview so a stale "确认保存" can't commit against out-of-date numbers (M5).
+        model.invalidateClaimPreview()
         if let value = Self.validatedAmount(text: text, minimum: minimum) {
           allocation.wrappedValue.amountMinor = value
         }

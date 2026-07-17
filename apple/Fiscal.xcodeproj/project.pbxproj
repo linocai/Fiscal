@@ -42,6 +42,7 @@
 		3DED9C046347B3C9574CD56D /* DeviceSecurityModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34B636F2703D084EF6931D7 /* DeviceSecurityModel.swift */; };
 		42CF6FAB3A19861566479BE9 /* MoneyFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCB93673B1BC323E17CA866A /* MoneyFormat.swift */; };
 		45CD9B1BCF0BB42D87684C7D /* CreditRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F6D5C08025FA9E847D78B61 /* CreditRepository.swift */; };
+		45D0800DE7AADBA868775192 /* P16TransactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1676E1FA15119C8A6F267C3E /* P16TransactionTests.swift */; };
 		47AB207089C1F68AF4078C10 /* AISettingsDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A96FD3E04393BDF8D525167 /* AISettingsDTO.swift */; };
 		47DD9F8FF2D3DFEECA226CD4 /* AIInputSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18FCC6EB2E38FE0813B18CB8 /* AIInputSubmission.swift */; };
 		49D8529A3FAB5F351AAD7078 /* CashFlowScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3538F320E00777E2D3ED3BBD /* CashFlowScreens.swift */; };
@@ -225,6 +226,7 @@
 		0FC300DFA7D718CB81ABD669 /* APITransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APITransport.swift; sourceTree = "<group>"; };
 		128E44B859F89927A62EEE28 /* FiscalShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalShortcuts.swift; sourceTree = "<group>"; };
 		14D2F5B51728A050A74E8E3F /* TransactionDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionDTO.swift; sourceTree = "<group>"; };
+		1676E1FA15119C8A6F267C3E /* P16TransactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P16TransactionTests.swift; sourceTree = "<group>"; };
 		185A49CF04897A7803A09434 /* OverviewSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewSnapshot.swift; sourceTree = "<group>"; };
 		18FCC6EB2E38FE0813B18CB8 /* AIInputSubmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInputSubmission.swift; sourceTree = "<group>"; };
 		1A96FD3E04393BDF8D525167 /* AISettingsDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettingsDTO.swift; sourceTree = "<group>"; };
@@ -462,6 +464,7 @@
 				5DFD347A403BBE5D74B1F7F0 /* P11SecurityTests.swift */,
 				4D97882660F312713851BCE4 /* P16HorizontalTests.swift */,
 				882403E1F959EBCF7E11F243 /* P16InfrastructureTests.swift */,
+				1676E1FA15119C8A6F267C3E /* P16TransactionTests.swift */,
 			);
 			name = FiscalKitTests;
 			path = Tests/FiscalKitTests;
@@ -743,6 +746,7 @@
 				2EAE26195F0E9BA6687B253E /* P11SecurityTests.swift in Sources */,
 				349DEB01407F18F33E6E7F50 /* P16HorizontalTests.swift in Sources */,
 				A4A5F02D3C37B425F476E6B4 /* P16InfrastructureTests.swift in Sources */,
+				45D0800DE7AADBA868775192 /* P16TransactionTests.swift in Sources */,
 				8C3520FB72EC576D0544255C /* P9InputTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

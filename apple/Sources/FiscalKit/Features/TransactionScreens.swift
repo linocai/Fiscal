@@ -10,7 +10,7 @@ private struct TransactionAmount: View {
         Text(prefix + Money(minorUnits: transaction.amountMinor).formatted())
             .font(.body.weight(.semibold)).foregroundStyle(transaction.kind.color)
     }
-    private var prefix: String { switch transaction.kind { case .expense, .creditPurchase, .installmentFee: "−"; case .income, .installmentRefund, .reimbursementReceipt: "+"; case .transfer, .repayment: "" } }
+    private var prefix: String { switch transaction.kind { case .expense, .creditPurchase, .installmentFee: "-"; case .income, .installmentRefund, .reimbursementReceipt: "+"; case .transfer, .repayment: "" } }
 }
 
 public struct TransactionEditorSheet: View {
@@ -32,6 +32,7 @@ public struct TransactionEditorSheet: View {
     @State private var confirmCycleRecalculation = false
     @State private var savedCycleDescription: String?
     @State private var repaymentValidation: String?
+    @State private var referenceValidation: String?
     @FocusState private var focusedField: FocusedField?
     @State private var didApplyPreferences = false
 
@@ -150,7 +151,7 @@ public struct TransactionEditorSheet: View {
                 HStack { Label(optionsError, systemImage: "wifi.exclamationmark").foregroundStyle(FiscalColor.expense); Spacer(); Button("重试") { Task { await loadOptions() } }.buttonStyle(FiscalActionButtonStyle(.secondary)) }
             }
         }
-        if let message = repaymentValidation ?? editor.validationMessage ?? transactions.message {
+        if let message = referenceValidation ?? repaymentValidation ?? editor.validationMessage ?? transactions.message {
             Label(message, systemImage: "exclamationmark.triangle.fill")
                 .font(.subheadline).foregroundStyle(FiscalColor.expense).padding(13)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -193,7 +194,7 @@ public struct TransactionEditorSheet: View {
             }
         }.accessibilityElement(children: .contain)
     }
-    private var kindBinding: Binding<TransactionKind> { Binding(get: { editor.draft.kind }, set: { editor.changeKind($0); cycleOptions = []; if $0 == .repayment, let id = editor.draft.destinationAccountID { Task { await loadCycles(id) } } }) }
+    private var kindBinding: Binding<TransactionKind> { Binding(get: { editor.draft.kind }, set: { editor.changeKind($0); cycleOptions = []; referenceValidation = nil; repaymentValidation = nil; if $0 == .repayment, let id = editor.draft.destinationAccountID { Task { await loadCycles(id) } } }) }
     private var activeAccounts: [AccountDTO] {
         accountOptions.filter { ($0.archivedAt == nil || linkedAccountIDs.contains($0.id)) && $0.kind != .credit }
     }
@@ -280,7 +281,13 @@ public struct TransactionEditorSheet: View {
         }
     }
     private func requestSave() {
-        guard editor.prepare() else { return }
+        guard editor.prepare() else { referenceValidation = nil; return }
+        if let referenceError = TransactionEditorModel.validateReferences(
+            editor.draft, accounts: accountOptions, categories: categoryOptions) {
+            referenceValidation = referenceError
+            return
+        }
+        referenceValidation = nil
         if let editing = editor.editing,
            editing.kind == .creditPurchase,
            editor.draft.kind == .creditPurchase,
@@ -291,12 +298,17 @@ public struct TransactionEditorSheet: View {
         performSave()
     }
     private func performSave() {
-        if editor.draft.kind == .repayment,
-           let cycleID = editor.draft.creditCycleID,
-           let cycle = cycleOptions.first(where: { $0.id == cycleID }),
-           editor.draft.amountMinor > editableCapacity(cycle) {
-            repaymentValidation = "还款金额不能超过本次可编辑额度 \(Money(minorUnits: editableCapacity(cycle)).formatted())。"
-            return
+        if editor.draft.kind == .repayment, let cycleID = editor.draft.creditCycleID {
+            // The over-limit check must never be skipped just because the chosen cycle isn't in the
+            // loaded options (e.g. a pre-selected settled cycle on the new-repayment path).
+            guard let cycle = cycleOptions.first(where: { $0.id == cycleID }) else {
+                repaymentValidation = "所选账期当前不可用，请重新选择目标账期。"
+                return
+            }
+            if editor.draft.amountMinor > editableCapacity(cycle) {
+                repaymentValidation = "还款金额不能超过本次可编辑额度 \(Money(minorUnits: editableCapacity(cycle)).formatted())。"
+                return
+            }
         }
         repaymentValidation = nil
         Task {
@@ -315,13 +327,17 @@ public struct TransactionEditorSheet: View {
     private func loadOptions() async {
         loadingOptions = true; optionsError = nil
         defer { loadingOptions = false }
+        // Preferences seed the draft only on the first load attempt. Marking this before the fetch
+        // means a later "重试" (after a failed first load) can no longer overwrite a kind/account the
+        // user picked in the meantime.
+        let shouldApplyPreferences = appliesPreferences && !didApplyPreferences
+        didApplyPreferences = true
         do {
             async let loadedAccounts = accounts.transactionOptions()
             async let loadedCategories = categories.transactionOptions()
             accountOptions = try await loadedAccounts; categoryOptions = try await loadedCategories
-            if appliesPreferences, !didApplyPreferences, let preferences {
+            if shouldApplyPreferences, let preferences {
                 editor.apply(preferences: preferences, accounts: accountOptions)
-                didApplyPreferences = true
             }
             if editor.draft.kind == .repayment, let id = editor.draft.destinationAccountID { await loadCycles(id) }
         } catch is CancellationError {
@@ -367,6 +383,7 @@ public struct TransactionEditorSheet: View {
         editor.resetForNextEntry(validAccounts: accountOptions)
         cycleOptions = []
         repaymentValidation = nil
+        referenceValidation = nil
         transactions.clearMessage()
         focusedField = .amount
     }
@@ -393,6 +410,7 @@ public struct IOSTransactionsScreen: View {
     @State private var filterOptionsMessage: String?
     @State private var amountMinimumText = ""
     @State private var amountMaximumText = ""
+    @State private var filterDraft = TransactionsModel.FilterDraft()
 
     public init(model: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil, installments: InstallmentModel? = nil) { self.model = model; self.accounts = accounts; self.categories = categories; self.credit = credit; self.installments = installments }
     public var body: some View {
@@ -409,6 +427,11 @@ public struct IOSTransactionsScreen: View {
             prompt: "搜索标题、备注、账户或分类"
         )
         .onChange(of: model.search) { _, _ in model.scheduleLoad() }
+        .onChange(of: model.transactions.map(\.id)) { _, _ in
+            // Converge the batch selection onto rows that are still visible and classifiable, so the
+            // "已选 N 笔" count can't stay inflated after a refresh (matching the mac workbench).
+            selectedIDs.formIntersection(Set(model.transactions.filter(isBatchClassifiable).map(\.id)))
+        }
         .task {
             if model.phase == .idle { await model.load() }
             await loadFilterOptions()
@@ -422,7 +445,7 @@ public struct IOSTransactionsScreen: View {
                     }
                 }
                 Button { prepareAdvancedFilters(); showAdvancedFilters = true } label: {
-                    Label("高级筛选", systemImage: model.hasAdvancedFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    Label("高级筛选", systemImage: hasAdvancedSheetFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 }
             }
         }
@@ -483,13 +506,13 @@ public struct IOSTransactionsScreen: View {
             if isSelecting {
                 if selectedIDs.contains(item.id) { selectedIDs.remove(item.id) }
                 else if isBatchClassifiable(item) { selectedIDs.insert(item.id) }
-            } else if item.isUserEditable && item.installmentPlanID == nil { editing = item }
+            } else if isRowEditable(item) { editing = item }
         } label: { transactionRowContent(item).contentShape(.rect).padding(.vertical, 6) }
             .buttonStyle(.plain)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("\(item.title)，\(item.kind.title)")
             .accessibilityValue("\(Money(minorUnits: item.amountMinor).formatted())，\(detail(item))")
-            .accessibilityHint(isSelecting ? (isBatchClassifiable(item) ? "轻点选择或取消选择" : "该流水不可批量分类") : (item.isUserEditable && item.installmentPlanID == nil ? "轻点编辑；更多操作可作废" : "只读流水"))
+            .accessibilityHint(isSelecting ? (isBatchClassifiable(item) ? "轻点选择或取消选择" : "该流水不可批量分类") : (isRowEditable(item) ? "轻点编辑；更多操作可作废" : "只读流水"))
             .accessibilityIdentifier(isBatchClassifiable(item) ? "transaction.classifiableRow" : "transaction.row")
             .task { await model.loadMoreIfNeeded(after: item) }
     }
@@ -532,10 +555,10 @@ public struct IOSTransactionsScreen: View {
     @ViewBuilder private func rowMenu(_ item: TransactionDTO) -> some View {
         if !isSelecting {
             Menu {
-                if item.kind == .creditPurchase && item.installmentPlanID == nil {
+                if item.kind == .creditPurchase && item.installmentPlanID == nil && item.voidedAt == nil {
                     Button("创建分期计划", systemImage: "calendar.badge.plus") { installmentPurchase = item }
                 }
-                if item.isUserEditable && item.installmentPlanID == nil {
+                if isRowEditable(item) {
                     Button("编辑", systemImage: "pencil") { editing = item }
                     Button("作废", systemImage: "trash", role: .destructive) { pendingVoid = item }
                 }
@@ -582,11 +605,11 @@ public struct IOSTransactionsScreen: View {
                 VStack(alignment: .leading, spacing: 14) {
                     sectionCard("归类与来源") {
                         VStack(spacing: 13) {
-                            Picker("归类状态", selection: $model.classification) {
+                            Picker("归类状态", selection: $filterDraft.classification) {
                                 ForEach(TransactionClassificationFilter.allCases) { Text($0.title).tag($0) }
                             }
                             Divider().opacity(0.35)
-                            Picker("来源", selection: $model.source) {
+                            Picker("来源", selection: $filterDraft.source) {
                                 Text("全部").tag(Optional<String>.none)
                                 Text("手动录入").tag(Optional("manual"))
                                 Text("AI 文本").tag(Optional("ai_text"))
@@ -597,12 +620,12 @@ public struct IOSTransactionsScreen: View {
                     }
                     sectionCard("账户与分类") {
                         VStack(spacing: 13) {
-                            Picker("账户", selection: $model.accountID) {
+                            Picker("账户", selection: $filterDraft.accountID) {
                                 Text("全部").tag(Optional<UUID>.none)
                                 ForEach(accountOptions) { Text($0.name).tag(Optional($0.id)) }
                             }
                             Divider().opacity(0.35)
-                            Picker("分类", selection: $model.categoryID) {
+                            Picker("分类", selection: $filterDraft.categoryID) {
                                 Text("全部").tag(Optional<UUID>.none)
                                 ForEach(categoryOptions) { Text($0.name).tag(Optional($0.id)) }
                             }
@@ -632,13 +655,13 @@ public struct IOSTransactionsScreen: View {
                     }
                     sectionCard("日期与状态") {
                         VStack(spacing: 13) {
-                            Toggle("限制开始日期", isOn: optionalDateToggle(\.dateFrom))
-                            if model.dateFrom != nil { DatePicker("开始日期", selection: requiredDate(\.dateFrom), displayedComponents: .date) }
+                            Toggle("限制开始日期", isOn: draftDateToggle(\.dateFrom))
+                            if filterDraft.dateFrom != nil { DatePicker("开始日期", selection: draftRequiredDate(\.dateFrom), displayedComponents: .date) }
                             Divider().opacity(0.35)
-                            Toggle("限制结束日期", isOn: optionalDateToggle(\.dateTo))
-                            if model.dateTo != nil { DatePicker("结束日期", selection: requiredDate(\.dateTo), displayedComponents: .date) }
+                            Toggle("限制结束日期", isOn: draftDateToggle(\.dateTo))
+                            if filterDraft.dateTo != nil { DatePicker("结束日期", selection: draftRequiredDate(\.dateTo), displayedComponents: .date) }
                             Divider().opacity(0.35)
-                            Toggle("包含已作废", isOn: $model.includeVoided)
+                            Toggle("包含已作废", isOn: $filterDraft.includeVoided)
                         }
                     }
                     if let filterOptionsMessage {
@@ -698,19 +721,30 @@ public struct IOSTransactionsScreen: View {
     private func sectionCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) { Text(title).font(.headline).padding(.horizontal, 3); FiscalCard(radius: 18) { content() } }
     }
-    private func optionalDateToggle(_ keyPath: ReferenceWritableKeyPath<TransactionsModel, Date?>) -> Binding<Bool> {
-        Binding(get: { model[keyPath: keyPath] != nil }, set: { model[keyPath: keyPath] = $0 ? .now : nil })
+    /// The advanced-filter toolbar icon reflects only the fields the sheet controls; kind lives in
+    /// the top chips, so it must not light the advanced indicator (L11).
+    private var hasAdvancedSheetFilters: Bool {
+        model.accountID != nil || model.categoryID != nil || model.classification != .all
+            || model.source != nil || model.includeVoided
+            || model.dateFrom != nil || model.dateTo != nil
+            || model.amountMinMinor != nil || model.amountMaxMinor != nil
     }
-    private func requiredDate(_ keyPath: ReferenceWritableKeyPath<TransactionsModel, Date?>) -> Binding<Date> {
-        Binding(get: { model[keyPath: keyPath] ?? .now }, set: { model[keyPath: keyPath] = $0 })
+    private func draftDateToggle(_ keyPath: WritableKeyPath<TransactionsModel.FilterDraft, Date?>) -> Binding<Bool> {
+        Binding(get: { filterDraft[keyPath: keyPath] != nil }, set: { filterDraft[keyPath: keyPath] = $0 ? .now : nil })
+    }
+    private func draftRequiredDate(_ keyPath: WritableKeyPath<TransactionsModel.FilterDraft, Date?>) -> Binding<Date> {
+        Binding(get: { filterDraft[keyPath: keyPath] ?? .now }, set: { filterDraft[keyPath: keyPath] = $0 })
     }
     private func clearAdvancedFilters() {
-        model.accountID = nil; model.categoryID = nil; model.classification = .all
-        model.source = nil; model.includeVoided = false; model.resetDates()
-        model.amountMinMinor = nil; model.amountMaxMinor = nil
+        // Clearing resets every filter (including the kind chip) and reloads, rather than leaving a
+        // half-cleared, un-applied state (L11).
+        filterDraft = TransactionsModel.FilterDraft()
         amountMinimumText = ""; amountMaximumText = ""; filterOptionsMessage = nil
+        showAdvancedFilters = false
+        Task { await model.applyFilters(filterDraft) }
     }
     private func prepareAdvancedFilters() {
+        filterDraft = model.currentFilterDraft()
         amountMinimumText = model.amountMinMinor.map(Self.majorAmount) ?? ""
         amountMaximumText = model.amountMaxMinor.map(Self.majorAmount) ?? ""
         filterOptionsMessage = nil
@@ -727,9 +761,10 @@ public struct IOSTransactionsScreen: View {
             filterOptionsMessage = "最低金额不能高于最高金额。"
             return
         }
-        model.amountMinMinor = minimum; model.amountMaxMinor = maximum
+        // kind is not part of this sheet; currentFilterDraft() seeded it, so it is preserved.
+        filterDraft.amountMinMinor = minimum; filterDraft.amountMaxMinor = maximum
         filterOptionsMessage = nil; showAdvancedFilters = false
-        Task { await model.load() }
+        Task { await model.applyFilters(filterDraft) }
     }
     private func parsedFilterAmount(_ text: String) -> Int64? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -753,6 +788,11 @@ public struct IOSTransactionsScreen: View {
         item.voidedAt == nil && item.categoryID == nil && item.source != "system"
             && item.installmentPlanID == nil && item.reimbursementRelations.isEmpty
             && [.expense, .income, .creditPurchase].contains(item.kind)
+    }
+    /// A voided row can only be restored through undo, so it is not editable here — matching the
+    /// mac workbench, which already guards voidedAt.
+    private func isRowEditable(_ item: TransactionDTO) -> Bool {
+        item.isUserEditable && item.installmentPlanID == nil && item.voidedAt == nil
     }
     private var selectedTransactions: [TransactionDTO] { model.transactions.filter { selectedIDs.contains($0.id) } }
     private var batchDirection: CategoryDirection? {

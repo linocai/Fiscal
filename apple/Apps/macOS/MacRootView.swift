@@ -38,6 +38,7 @@ struct MacRootView: View {
     let installments: InstallmentModel
     let reimbursements: ReimbursementModel
     let reports: ReportingModel
+    let overview: ReportingModel
     let cashFlow: FutureCashFlowModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
@@ -55,7 +56,7 @@ struct MacRootView: View {
             Divider().opacity(0.45)
             Group {
                 if section == .overview {
-                    MacReportingOverviewScreen(model: reports) { destination in
+                    MacReportingOverviewScreen(model: overview) { destination in
                         guard let destination else { section = .reimbursement; return }
                         reports.lens = destination
                         section = destination == .cashFlow ? .cashFlow : .reports

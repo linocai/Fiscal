@@ -132,11 +132,15 @@ public final class DeviceSecurityModel {
         isMutating = true; message = nil; defer { isMutating = false }
         do {
             _ = try await repository.revoke(id: current.id, expectedVersion: current.version)
-            try await tokenStore.delete()
-            try await tokenStore.deletePending()
-            status = nil; operations = nil; devices = []; phase = .unauthorized
-            message = "此设备密钥已从服务器撤销并从本机 Keychain 移除"
-        } catch { applyMutationError(error) }
+        } catch { applyMutationError(error); return }
+        // The server key is revoked past this point. Even if local Keychain cleanup fails, move to
+        // the unauthorized state so the user isn't stranded with 401s and no way forward (L18).
+        let deleted = (try? await tokenStore.delete()) != nil
+        let deletedPending = (try? await tokenStore.deletePending()) != nil
+        status = nil; operations = nil; devices = []; phase = .unauthorized
+        message = deleted && deletedPending
+            ? "此设备密钥已从服务器撤销并从本机 Keychain 移除"
+            : "此设备密钥已从服务器撤销，但本机 Keychain 未能完全清除；请重新配置连接以清除残留密钥。"
     }
 
     public func revoke(_ device: DeviceTokenSummary) async {

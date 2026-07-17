@@ -302,7 +302,7 @@ private struct CashFlowSystemEditorSheet: View {
   @State private var note: String
   @State private var amount: String
   @State private var expectedDate: Date
-  @State private var status: FutureCashFlowStatus
+  @State private var markCompleted: Bool
   @State private var validation: String?
 
   init(model: FutureCashFlowModel, item: FutureCashFlowItem) {
@@ -311,7 +311,14 @@ private struct CashFlowSystemEditorSheet: View {
     _note = State(initialValue: item.note ?? "")
     _amount = State(initialValue: String(format: "%.2f", Double(item.plannedAmountMinor) / 100))
     _expectedDate = State(initialValue: FutureCashFlowModel.date(item.expectedDate) ?? Date())
-    _status = State(initialValue: item.status == .completed ? .completed : .confirmed)
+    _markCompleted = State(initialValue: item.status == .completed)
+  }
+  /// Preserve the item's real pending status (e.g. `.expected`) when it isn't being completed, so a
+  /// metadata edit can't silently promote an expected item to confirmed (L8). Reopening a completed
+  /// item falls back to confirmed.
+  private var resolvedStatus: FutureCashFlowStatus {
+    if markCompleted { return .completed }
+    return item.status == .completed ? .confirmed : item.status
   }
 
   var body: some View {
@@ -327,11 +334,11 @@ private struct CashFlowSystemEditorSheet: View {
           TextField("备注（可选）", text: $note, axis: .vertical).lineLimit(2...4)
         }
         Section("状态") {
-          Picker("处理状态", selection: $status) {
-            Text("待处理").tag(FutureCashFlowStatus.confirmed)
-            Text("已完成").tag(FutureCashFlowStatus.completed)
+          Picker("处理状态", selection: $markCompleted) {
+            Text("待处理").tag(false)
+            Text("已完成").tag(true)
           }.pickerStyle(.segmented)
-          Text(status == .completed ? "移入历史，不生成流水，也不改变账户余额。" : "重新显示在待处理列表中。")
+          Text(markCompleted ? "移入历史，不生成流水，也不改变账户余额。" : "保留在待处理列表中。")
             .font(.caption).foregroundStyle(FiscalColor.tertiary)
         }
         if let validation { Text(validation).foregroundStyle(FiscalColor.expense) }
@@ -355,7 +362,7 @@ private struct CashFlowSystemEditorSheet: View {
       item, title: cleaned,
       note: note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : note,
       amountMinor: minor, expectedDate: FutureCashFlowModel.dayString(expectedDate),
-      status: status)
+      status: resolvedStatus)
     if success { dismiss() } else { validation = model.message }
   }
 }
@@ -367,6 +374,7 @@ private struct CashFlowEditorSheet: View {
   let categories: CategoriesModel
   let item: FutureCashFlowItem?
   @State private var title = ""
+  @State private var note = ""
   @State private var amount = ""
   @State private var direction: FutureCashFlowDirection = .inflow
   @State private var expectedDate = Date()
@@ -401,6 +409,7 @@ private struct CashFlowEditorSheet: View {
             .keyboardType(.decimalPad)
             #endif
           DatePicker("预计日期", selection: $expectedDate, displayedComponents: .date)
+          TextField("备注（可选）", text: $note, axis: .vertical).lineLimit(1...3)
         }
         Section("归属") {
           Picker("账户", selection: $accountID) { Text("稍后填写").tag(UUID?.none); ForEach(cashAccounts) { Text($0.name).tag(Optional($0.id)) } }
@@ -436,7 +445,8 @@ private struct CashFlowEditorSheet: View {
   private var matchingCategories: [CategoryDTO] { categoryOptions.filter { $0.archivedAt == nil && $0.direction.rawValue == direction.rawValue } }
   private func seed() {
     guard let item else { endDate = Calendar.current.date(byAdding: .month, value: 6, to: expectedDate) ?? expectedDate; return }
-    title = item.title; amount = String(format: "%.2f", Double(item.plannedAmountMinor) / 100)
+    title = item.title; note = item.note ?? ""
+    amount = String(format: "%.2f", Double(item.plannedAmountMinor) / 100)
     direction = item.direction; expectedDate = FutureCashFlowModel.date(item.expectedDate) ?? Date()
     accountID = item.accountID; destinationID = item.destinationAccountID; categoryID = item.categoryID
   }
@@ -449,8 +459,10 @@ private struct CashFlowEditorSheet: View {
       let minor = CNYAmountParser.minorUnits(amount), minor > 0
     else { validation = "请填写名称和正确金额。"; return }
     if direction == .transfer && (accountID == nil || destinationID == nil || accountID == destinationID) { validation = "转账需要两个不同账户。"; return }
+    let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
     let draft = FutureCashFlowDraft(
-      title: title, direction: direction, plannedAmountMinor: minor,
+      title: title, note: trimmedNote.isEmpty ? nil : trimmedNote, direction: direction,
+      plannedAmountMinor: minor,
       expectedDate: FutureCashFlowModel.dayString(expectedDate), accountID: accountID,
       destinationAccountID: direction == .transfer ? destinationID : nil,
       categoryID: direction == .transfer ? nil : categoryID,
@@ -512,6 +524,11 @@ private struct CashFlowSettlementSheet: View {
   private func save() async {
     guard let minor = CNYAmountParser.minorUnits(amount), minor > 0, let accountID else { validation = "请填写金额和账户。"; return }
     if item.direction != .transfer && categoryID == nil { validation = "请选择分类。"; return }
+    // A transfer settlement must name a distinct destination account, matching the editor's own
+    // check (L6); otherwise it could post a transfer with a missing or same-account target.
+    if item.direction == .transfer && (destinationID == nil || destinationID == accountID) {
+      validation = "转账入账需要选择与转出不同的转入账户。"; return
+    }
     let success = await model.settle(item, amountMinor: minor, occurredAt: date, accountID: accountID, destinationAccountID: item.direction == .transfer ? destinationID : nil, categoryID: item.direction == .transfer ? nil : categoryID)
     if success { dismiss() } else { validation = model.message }
   }

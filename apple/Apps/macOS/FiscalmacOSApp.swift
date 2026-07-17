@@ -12,6 +12,7 @@ struct FiscalmacOSApp: App {
     @State private var installments: InstallmentModel
     @State private var reimbursements: ReimbursementModel
     @State private var reports: ReportingModel
+    @State private var overview: ReportingModel
     @State private var cashFlow: FutureCashFlowModel
     @State private var aiProposals: AIProposalModel
     @State private var aiSettings: AISettingsModel
@@ -30,6 +31,9 @@ struct FiscalmacOSApp: App {
         let installments = InstallmentModel(repository: RemoteInstallmentRepository(transport: transport), transactions: transactionRepository, credit: credit, transactionList: transactions)
         let reimbursements = ReimbursementModel(repository: RemoteReimbursementRepository(transport: transport), transactions: transactions, accounts: accounts)
         let reports = ReportingModel(repository: RemoteReportingRepository(transport: transport))
+        // A dedicated overview model so the always-current-month home view never resets the month
+        // (or drill-down) the user navigated to on the reports page.
+        let overview = ReportingModel(repository: RemoteReportingRepository(transport: transport))
         let cashFlow = FutureCashFlowModel(repository: RemoteFutureCashFlowRepository(transport: transport))
         let aiProposals = AIProposalModel(repository: RemoteAIProposalRepository(transport: transport), transactions: transactions, reports: reports, cashFlow: cashFlow)
         _connection = State(initialValue: ConnectionModel(client: SystemStatusClient(baseURL: baseURL, tokenStore: tokenStore)))
@@ -42,6 +46,7 @@ struct FiscalmacOSApp: App {
         _transactions = State(initialValue: transactions)
         _reimbursements = State(initialValue: reimbursements)
         _reports = State(initialValue: reports)
+        _overview = State(initialValue: overview)
         _cashFlow = State(initialValue: cashFlow)
         _aiProposals = State(initialValue: aiProposals)
         _aiSettings = State(initialValue: AISettingsModel(repository: RemoteAISettingsRepository(transport: transport)))
@@ -49,7 +54,7 @@ struct FiscalmacOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, deviceSecurity: deviceSecurity, recordingPreferences: recordingPreferences, cache: .shared)
+            MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, deviceSecurity: deviceSecurity, recordingPreferences: recordingPreferences, cache: .shared)
                 .tint(FiscalColor.accent)
                 .frame(minWidth: 1_040, minHeight: 700)
                 .background(
@@ -64,10 +69,11 @@ struct FiscalmacOSApp: App {
                     await connection.refresh()
                     if case .connected = connection.phase {
                         async let reportLoad: Void = reports.loadAll()
+                        async let overviewLoad: Void = overview.loadAll()
                         async let cashFlowLoad: Void = cashFlow.load()
                         async let proposalLoad: Void = aiProposals.load()
                         async let settingsLoad: Void = aiSettings.load()
-                        _ = await (reportLoad, cashFlowLoad, proposalLoad, settingsLoad)
+                        _ = await (reportLoad, overviewLoad, cashFlowLoad, proposalLoad, settingsLoad)
                     }
                 }
         }

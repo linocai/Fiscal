@@ -177,7 +177,9 @@ public struct InstallmentEditorSheet: View {
 
     public init(installments: InstallmentModel, plan: InstallmentPlanDTO, purchase: TransactionDTO, accounts: AccountsModel, categories: CategoriesModel) {
         self.installments = installments; self.plan = plan; self.purchase = purchase; self.accounts = accounts; self.categories = categories
-        _replacement = State(initialValue: .init(amountMinor: purchase.amountMinor, occurredAt: purchase.occurredAt, title: purchase.title, note: purchase.note, accountID: purchase.accountID!, categoryID: purchase.categoryID!))
+        // A credit purchase always carries an account and category, but decode defensively rather
+        // than force-unwrapping (L1); a missing reference is caught in request() before any save.
+        _replacement = State(initialValue: .init(amountMinor: purchase.amountMinor, occurredAt: purchase.occurredAt, title: purchase.title, note: purchase.note, accountID: purchase.accountID ?? Self.missingReference, categoryID: purchase.categoryID ?? Self.missingReference))
         _installmentCount = State(initialValue: plan.installmentCount); _feeText = State(initialValue: Self.major(plan.feeMinor)); _feeCategoryID = State(initialValue: plan.feeCategoryID)
         _feeOccurredAt = State(initialValue: plan.feeOccurredAt ?? purchase.occurredAt); _startStatementDate = State(initialValue: plan.startStatementDate)
     }
@@ -269,7 +271,11 @@ public struct InstallmentEditorSheet: View {
     }
     private func refreshConflict() { Task { await installments.loadPlan(plan.id); dismiss() } }
     private var amountBinding: Binding<String> { Binding(get: { Self.major(replacement.amountMinor) }, set: { if let value = CNYAmountParser.minorUnits($0) { replacement.amountMinor = value } }) }
+    private static let missingReference = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
     private func request() -> InstallmentReplacementRequest? {
+        guard replacement.accountID != Self.missingReference, replacement.categoryID != Self.missingReference else {
+            validation = "该消费缺少信用账户或分类，无法编辑分期。"; return nil
+        }
         guard feeMinor >= 0, feeMinor == 0 || feeCategoryID != nil else { validation = "手续费或分类无效。"; return nil }
         return .init(expectedVersion: plan.version, purchase: replacement, installmentCount: installmentCount, totalFeeMinor: feeMinor, feeCategoryID: feeMinor == 0 ? nil : feeCategoryID, feeOccurredAt: feeMinor == 0 ? nil : feeOccurredAt, startStatementDate: startStatementDate)
     }

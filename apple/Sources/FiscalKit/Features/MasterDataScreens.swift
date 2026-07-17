@@ -203,7 +203,12 @@ private struct AccountEditor: View {
     private func save() {
         guard let openingMinor = CNYAmountParser.minorUnits(opening) else { validation = "期初金额格式无效。"; return }
         draft.openingBalanceMinor = openingMinor
-        if draft.kind == .credit { guard let value = CNYAmountParser.minorUnits(limit) else { validation = "信用额度格式无效。"; return }; draft.creditLimitMinor = value; draft.openingBalanceAsOfDate = openingMinor > 0 ? openingAsOf.nilIfBlank : nil; draft.openingDueDate = openingMinor > 0 ? openingDue.nilIfBlank : nil }
+        if draft.kind == .credit { guard let value = CNYAmountParser.minorUnits(limit) else { validation = "信用额度格式无效。"; return }; draft.creditLimitMinor = value; draft.openingBalanceAsOfDate = openingMinor > 0 ? openingAsOf.nilIfBlank : nil; draft.openingDueDate = openingMinor > 0 ? openingDue.nilIfBlank : nil
+            // The Steppers show a fallback of 1 via `?? 1`; persist it so an untouched Stepper
+            // matches the display instead of failing validation with a nil day (M10).
+            if draft.statementDay == nil { draft.statementDay = 1 }
+            if draft.dueDay == nil { draft.dueDay = 1 }
+        }
         else { draft.creditLimitMinor = nil; draft.statementDay = nil; draft.dueDay = nil; draft.openingBalanceAsOfDate = nil; draft.openingDueDate = nil }
         validation = AccountsModel.validate(draft)
         guard validation == nil else { return }

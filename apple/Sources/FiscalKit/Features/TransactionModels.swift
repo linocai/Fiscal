@@ -44,6 +44,7 @@ public final class TransactionsModel {
     private var pageTask: Task<TransactionPage, Error>?
     private var moreTask: Task<TransactionPage, Error>?
     private var generation = 0
+    private var loadMoreToken = 0
 
     public init(repository: any TransactionRepository, accounts: AccountsModel? = nil, categories: CategoriesModel? = nil, credit: CreditModel? = nil) {
         self.repository = repository; self.accounts = accounts; self.categories = categories; self.credit = credit
@@ -90,17 +91,20 @@ public final class TransactionsModel {
 
     public func loadMoreIfNeeded(after item: TransactionDTO) async {
         guard item.id == transactions.last?.id, let cursor = nextCursor, !isLoadingMore else { return }
+        loadMoreToken += 1; let token = loadMoreToken
         let current = generation; var snapshot = currentQuery(); snapshot.cursor = cursor
         let baseQuery = currentQuery(); let knownCursor = nextCursor
-        isLoadingMore = true; defer { isLoadingMore = false }
+        isLoadingMore = true
         let task = Task { try await repository.list(snapshot) }; moreTask = task
+        // Only the request that currently owns the paging slot may clear the flag, so a cancelled
+        // older request can't reset the loading flag a newer request just set (L14).
+        defer { if token == loadMoreToken { isLoadingMore = false; moreTask = nil } }
         do {
             let page = try await task.value
             guard current == generation, baseQuery == currentQuery(), knownCursor == nextCursor, !Task.isCancelled else { return }
             let known = Set(transactions.map(\.id)); transactions.append(contentsOf: page.items.filter { !known.contains($0.id) })
             nextCursor = page.nextCursor
         } catch is CancellationError {} catch { if current == generation, baseQuery == currentQuery() { refreshMessage = display(error) } }
-        if current == generation { moreTask = nil }
     }
 
     public func save(draft: TransactionDraft, editing: TransactionDTO?, idempotencyKey: UUID) async -> Bool {
@@ -153,7 +157,8 @@ public final class TransactionsModel {
     public func batchClassify(
         items: [TransactionBatchClassificationItem], categoryID: UUID
     ) async -> Bool {
-        guard !isMutating, !items.isEmpty else { return false }
+        guard !isMutating else { return false }
+        guard !items.isEmpty else { message = "没有可重新分类的流水，请重新选择。"; return false }
         beginMutation(); let current = generation
         isMutating = true; defer { isMutating = false }
         do {
@@ -171,6 +176,37 @@ public final class TransactionsModel {
     public static func shouldPreserveCreateKey(after error: Error) -> Bool {
         guard let api = error as? FiscalAPIError else { return true }
         return switch api { case .transport, .invalidResponse: true; case .unauthorized, .domain: false }
+    }
+
+    /// A detached copy of the filter fields, edited in a sheet/popover and only written back on
+    /// "应用" so dismissing without applying leaves the applied filters (and the list) untouched.
+    public struct FilterDraft: Equatable, Sendable {
+        public var kind: TransactionKind?
+        public var accountID: UUID?
+        public var categoryID: UUID?
+        public var classification: TransactionClassificationFilter = .all
+        public var source: String?
+        public var dateFrom: Date?
+        public var dateTo: Date?
+        public var includeVoided = false
+        public var amountMinMinor: Int64?
+        public var amountMaxMinor: Int64?
+        public init() {}
+    }
+    public func currentFilterDraft() -> FilterDraft {
+        var draft = FilterDraft()
+        draft.kind = kind; draft.accountID = accountID; draft.categoryID = categoryID
+        draft.classification = classification; draft.source = source
+        draft.dateFrom = dateFrom; draft.dateTo = dateTo; draft.includeVoided = includeVoided
+        draft.amountMinMinor = amountMinMinor; draft.amountMaxMinor = amountMaxMinor
+        return draft
+    }
+    public func applyFilters(_ draft: FilterDraft) async {
+        kind = draft.kind; accountID = draft.accountID; categoryID = draft.categoryID
+        classification = draft.classification; source = draft.source
+        dateFrom = draft.dateFrom; dateTo = draft.dateTo; includeVoided = draft.includeVoided
+        amountMinMinor = draft.amountMinMinor; amountMaxMinor = draft.amountMaxMinor
+        await load()
     }
 
     /// A normalized value snapshot safe to hand to paging and export operations.
@@ -250,14 +286,29 @@ public final class TransactionEditorModel {
         draft.amountMinor = amount; validationMessage = Self.validate(draft); return validationMessage == nil
     }
     public func changeKind(_ kind: TransactionKind) {
+        let previous = draft.kind
         draft.kind = kind
-        switch kind {
-        case .transfer: draft.categoryID = nil; draft.creditCycleID = nil
-        case .repayment: draft.categoryID = nil
-        case .creditPurchase: draft.destinationAccountID = nil; draft.creditCycleID = nil
-        case .expense, .income: draft.destinationAccountID = nil; draft.creditCycleID = nil
-        case .installmentFee, .installmentRefund, .reimbursementReceipt: draft.categoryID = nil; draft.accountID = nil; draft.destinationAccountID = nil; draft.creditCycleID = nil
-        }
+        // Drop references that become invalid for the new kind's direction/account semantics so a
+        // stale value (which a constrained Picker renders as blank) can never survive a kind switch
+        // and be written with the wrong direction or account type.
+        if Self.categoryDirection(kind) != Self.categoryDirection(previous) { draft.categoryID = nil }
+        if Self.requiresCreditAccount(kind) != Self.requiresCreditAccount(previous) { draft.accountID = nil }
+        if Self.destinationRole(kind) != Self.destinationRole(previous) { draft.destinationAccountID = nil }
+        if kind != .repayment { draft.creditCycleID = nil }
+        if case .installmentFee = kind { draft.accountID = nil }
+        if case .installmentRefund = kind { draft.accountID = nil }
+        if case .reimbursementReceipt = kind { draft.accountID = nil }
+    }
+    /// The category direction each kind requires, or nil when the kind carries no category.
+    static func categoryDirection(_ kind: TransactionKind) -> CategoryDirection? {
+        switch kind { case .income: .income; case .expense, .creditPurchase: .expense; default: nil }
+    }
+    /// Credit purchases post to a credit account; every other kind uses a non-credit account.
+    static func requiresCreditAccount(_ kind: TransactionKind) -> Bool { kind == .creditPurchase }
+    /// The destination-account role: transfers name a non-credit target, repayments a credit
+    /// target, and these are not interchangeable; every other kind has no destination.
+    static func destinationRole(_ kind: TransactionKind) -> Int {
+        switch kind { case .transfer: 1; case .repayment: 2; default: 0 }
     }
     public func rotateCreateKey() { if editing == nil { idempotencyKey = UUID() } }
     public func apply(preferences: RecordingPreferences, accounts: [AccountDTO]) {
@@ -296,6 +347,47 @@ public final class TransactionEditorModel {
             guard let source = draft.accountID, let destination = draft.destinationAccountID, draft.creditCycleID != nil else { return "请选择付款账户、信用账户和目标账期。" }
             if source == destination { return "付款账户和信用账户不能相同。" }
         case .installmentFee, .installmentRefund, .reimbursementReceipt: return "系统流水不能手工创建或编辑。"
+        }
+        return nil
+    }
+    /// Type/direction consistency for the chosen references, checked where the account and category
+    /// objects are available. Only fires when a reference is present but wrong-typed for the kind,
+    /// so it defends against a stale reference surviving a kind switch without rejecting empty ones
+    /// (those are `validate`'s job).
+    public static func validateReferences(
+        _ draft: TransactionDraft, accounts: [AccountDTO], categories: [CategoryDTO]
+    ) -> String? {
+        func account(_ id: UUID?) -> AccountDTO? { id.flatMap { id in accounts.first { $0.id == id } } }
+        func category(_ id: UUID?) -> CategoryDTO? {
+            id.flatMap { id in categories.first { $0.id == id } }
+        }
+        switch draft.kind {
+        case .expense, .income:
+            if let category = category(draft.categoryID), category.direction != categoryDirection(draft.kind) {
+                return "所选分类方向与记账类型不一致。"
+            }
+            if account(draft.accountID)?.kind == .credit {
+                return "收支请使用现金或储蓄账户；信用卡消费应选择“信用消费”。"
+            }
+        case .creditPurchase:
+            if let category = category(draft.categoryID), category.direction != .expense {
+                return "信用消费只能选择支出分类。"
+            }
+            if let account = account(draft.accountID), account.kind != .credit {
+                return "信用消费必须选择信用账户。"
+            }
+        case .transfer:
+            if account(draft.accountID)?.kind == .credit || account(draft.destinationAccountID)?.kind == .credit {
+                return "转账的转出和转入账户都不能是信用账户。"
+            }
+        case .repayment:
+            if account(draft.accountID)?.kind == .credit {
+                return "还款的付款账户不能是信用账户。"
+            }
+            if let destination = account(draft.destinationAccountID), destination.kind != .credit {
+                return "还款的目标账户必须是信用账户。"
+            }
+        case .installmentFee, .installmentRefund, .reimbursementReceipt: break
         }
         return nil
     }

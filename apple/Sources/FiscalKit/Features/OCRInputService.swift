@@ -29,12 +29,8 @@ public struct VisionOCRService: Sendable {
     request.usesLanguageCorrection = true
 
     do {
-      let observations = try await request.perform(on: imageData).sorted { left, right in
-        let verticalDifference = left.boundingBox.origin.y - right.boundingBox.origin.y
-        if abs(verticalDifference) > 0.02 { return verticalDifference > 0 }
-        return left.boundingBox.origin.x < right.boundingBox.origin.x
-      }
-      let lines = observations.compactMap { $0.topCandidates(1).first?.string }
+      let observations = try await request.perform(on: imageData)
+      let lines = Self.readingOrder(observations).compactMap { $0.topCandidates(1).first?.string }
       return try Self.result(lines: lines)
     } catch let error as OCRInputError {
       throw error
@@ -43,6 +39,25 @@ public struct VisionOCRService: Sendable {
     } catch {
       throw OCRInputError.recognitionFailed
     }
+  }
+
+  /// Reading order via deterministic row clustering. A direct tolerance comparator
+  /// (`abs(Δy) > 0.02`) is not transitive, so `sorted(by:)` would be undefined (and can trap in
+  /// debug) on dense small text; group observations into rows against each row's top anchor and
+  /// sort within a row left-to-right instead (L2).
+  static func readingOrder(_ observations: [RecognizedTextObservation]) -> [RecognizedTextObservation] {
+    let tolerance = 0.02
+    let topDown = observations.sorted { $0.boundingBox.origin.y > $1.boundingBox.origin.y }
+    var rows: [[RecognizedTextObservation]] = []
+    for observation in topDown {
+      if let anchor = rows.last?.first?.boundingBox.origin.y,
+        anchor - observation.boundingBox.origin.y <= tolerance {
+        rows[rows.count - 1].append(observation)
+      } else {
+        rows.append([observation])
+      }
+    }
+    return rows.flatMap { $0.sorted { $0.boundingBox.origin.x < $1.boundingBox.origin.x } }
   }
 
   public static func result(lines: [String]) throws -> OCRTextResult {

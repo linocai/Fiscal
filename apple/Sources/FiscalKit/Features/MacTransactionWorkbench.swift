@@ -21,6 +21,7 @@ public struct MacTransactionWorkbench: View {
   @State private var optionsError: String?
   @State private var batchCategoryID: UUID?
   @State private var confirmBatch = false
+  @State private var filterDraft = TransactionsModel.FilterDraft()
   @FocusState private var searchFocused: Bool
 
   public init(
@@ -124,7 +125,7 @@ public struct MacTransactionWorkbench: View {
       Text("已载入 \(model.totalCount) 笔")
         .font(.caption).foregroundStyle(FiscalColor.tertiary)
       Spacer(minLength: 12)
-      Button { showFilters.toggle() } label: {
+      Button { if !showFilters { filterDraft = model.currentFilterDraft() }; showFilters.toggle() } label: {
         Label("筛选", systemImage: model.hasAdvancedFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
       }
       .buttonStyle(.borderless)
@@ -144,7 +145,7 @@ public struct MacTransactionWorkbench: View {
       .overlay { RoundedRectangle(cornerRadius: 9).stroke(.separator.opacity(0.5)) }
       if compact {
         Button { showInspectorInCompactWidth.toggle() } label: {
-          Image(systemName: showsInspector ? "sidebar.right" : "sidebar.right")
+          Image(systemName: showsInspector ? "arrow.right.to.line" : "sidebar.right")
         }
         .help(showsInspector ? "隐藏检查器" : "显示检查器")
         .accessibilityLabel(showsInspector ? "隐藏检查器" : "显示检查器")
@@ -315,40 +316,40 @@ public struct MacTransactionWorkbench: View {
   private var advancedFilters: some View {
     VStack(alignment: .leading, spacing: 14) {
       HStack { Text("高级筛选").font(.headline); Spacer(); Button("清除") { clearFilters() }.buttonStyle(.plain) }
-      Picker("类型", selection: $model.kind) {
+      Picker("类型", selection: $filterDraft.kind) {
         Text("全部").tag(Optional<TransactionKind>.none)
         ForEach(TransactionKind.allCases) { Text($0.title).tag(Optional($0)) }
       }
-      Picker("账户", selection: $model.accountID) {
+      Picker("账户", selection: $filterDraft.accountID) {
         Text("全部").tag(Optional<UUID>.none)
         ForEach(accountOptions) { Text($0.name).tag(Optional($0.id)) }
       }
-      Picker("分类", selection: $model.categoryID) {
+      Picker("分类", selection: $filterDraft.categoryID) {
         Text("全部").tag(Optional<UUID>.none)
         ForEach(categoryOptions) { Text($0.name).tag(Optional($0.id)) }
       }
-      Picker("归类状态", selection: $model.classification) {
+      Picker("归类状态", selection: $filterDraft.classification) {
         ForEach(TransactionClassificationFilter.allCases) { Text($0.title).tag($0) }
       }
-      Picker("来源", selection: $model.source) {
+      Picker("来源", selection: $filterDraft.source) {
         Text("全部").tag(Optional<String>.none)
         Text("手动录入").tag(Optional("manual"))
         Text("AI 文本").tag(Optional("ai_text"))
         Text("截图 OCR").tag(Optional("ocr"))
         Text("系统").tag(Optional("system"))
       }
-      Toggle("限制开始日期", isOn: optionalDateEnabled($model.dateFrom))
-      if model.dateFrom != nil {
-        DatePicker("开始日期", selection: optionalDateValue($model.dateFrom), displayedComponents: .date)
+      Toggle("限制开始日期", isOn: optionalDateEnabled($filterDraft.dateFrom))
+      if filterDraft.dateFrom != nil {
+        DatePicker("开始日期", selection: optionalDateValue($filterDraft.dateFrom), displayedComponents: .date)
       }
-      Toggle("限制结束日期", isOn: optionalDateEnabled($model.dateTo))
-      if model.dateTo != nil {
-        DatePicker("结束日期", selection: optionalDateValue($model.dateTo), displayedComponents: .date)
+      Toggle("限制结束日期", isOn: optionalDateEnabled($filterDraft.dateTo))
+      if filterDraft.dateTo != nil {
+        DatePicker("结束日期", selection: optionalDateValue($filterDraft.dateTo), displayedComponents: .date)
       }
-      Toggle("包含已作废", isOn: $model.includeVoided)
+      Toggle("包含已作废", isOn: $filterDraft.includeVoided)
       HStack {
         Spacer()
-        Button("应用筛选") { showFilters = false; Task { await model.load() } }
+        Button("应用筛选") { showFilters = false; Task { await model.applyFilters(filterDraft) } }
           .buttonStyle(.borderedProminent)
       }
     }
@@ -415,9 +416,9 @@ public struct MacTransactionWorkbench: View {
     }
   }
   private func clearFilters() {
-    model.kind = nil; model.accountID = nil; model.categoryID = nil
-    model.classification = .all; model.source = nil; model.includeVoided = false
-    model.resetDates(); Task { await model.load() }
+    filterDraft = TransactionsModel.FilterDraft()
+    showFilters = false
+    Task { await model.applyFilters(filterDraft) }
   }
   private func loadOptions() async {
     optionsError = nil
