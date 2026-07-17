@@ -1,27 +1,55 @@
 import SwiftUI
 
 public struct AccountsManagementScreen: View {
+    @Environment(\.dismiss) private var dismiss
     @Bindable var model: AccountsModel
+    private let showsCloseButton: Bool
     @State private var editing: AccountDTO?
     @State private var showForm = false
     @State private var pendingDelete: AccountDTO?
     @State private var pendingArchive: AccountDTO?
 
-    public init(model: AccountsModel) { self.model = model }
+    public init(model: AccountsModel, showsCloseButton: Bool = false) {
+        self.model = model
+        self.showsCloseButton = showsCloseButton
+    }
 
     public var body: some View {
         stateContent
             .navigationTitle("账户")
             .toolbar {
+                if showsCloseButton {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button { dismiss() } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .frame(width: 30, height: 30)
+                                .background(FiscalColor.tertiary.opacity(0.12), in: .circle)
+                        }
+                        .buttonStyle(.plain)
+                        .keyboardShortcut(.cancelAction)
+                        .help("关闭")
+                        .accessibilityLabel("关闭账户管理")
+                        .accessibilityIdentifier("mac.accounts.close")
+                    }
+                }
                 ToolbarItem {
                     Menu {
                         Toggle("包含已归档", isOn: $model.includeArchived)
                     } label: {
                         Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
                     }
+                    .menuIndicator(.hidden)
+                    .buttonStyle(FiscalActionButtonStyle(.secondary))
                     .onChange(of: model.includeArchived) { _, _ in Task { await model.load() } }
                 }
-                ToolbarItem { Button { editing = nil; showForm = true } label: { Label("新建账户", systemImage: "plus") } }
+                ToolbarItem {
+                    Button { editing = nil; showForm = true } label: {
+                        Label("新建账户", systemImage: "plus")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(FiscalActionButtonStyle(.secondary))
+                }
             }
         .task { if model.phase == .idle { await model.load() } }
         .sheet(isPresented: $showForm) { AccountEditor(model: model, account: editing) }
@@ -69,7 +97,15 @@ public struct AccountsManagementScreen: View {
                     }
                     Button(account.archivedAt == nil ? "归档" : "恢复", systemImage: account.archivedAt == nil ? "archivebox" : "arrow.uturn.backward") { pendingArchive = account }
                     if account.usageCount == 0 { Button("永久删除", systemImage: "trash", role: .destructive) { pendingDelete = account } }
-                } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(FiscalColor.accent)
+                        .frame(width: 38, height: 34)
+                        .background(FiscalColor.accent.opacity(0.08), in: .rect(cornerRadius: 10))
+                }
+                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
             }
         }
     }

@@ -33,6 +33,20 @@ final class FiscalUITests: XCTestCase {
     keepScreenshot(named: "ios-p2-accounts")
   }
 
+  func testCloudConnectionEntryIsAlwaysTappable() throws {
+    try launchApp()
+    app.buttons["更多"].tap()
+
+    let cloudEntry = app.descendants(matching: .any)["ios.cloudConnection.entry"]
+    XCTAssertTrue(cloudEntry.waitForExistence(timeout: 5))
+    cloudEntry.tap()
+
+    XCTAssertTrue(
+      app.descendants(matching: .any)["ios.cloudConnection.screen"]
+        .waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["连接个人云端"].exists)
+  }
+
   func testP3TransactionListAndRecordSheetUseRealAPI() throws {
     try launchApp()
     XCTAssertEqual(app.tabBars.count, 0)

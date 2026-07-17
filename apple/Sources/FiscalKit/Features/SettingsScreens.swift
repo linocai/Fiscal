@@ -64,6 +64,12 @@ public struct IOSSettingsScreen: View {
             DeviceCaptureSettingsCard(model: capture, openSystemSettings: openSystemSettings)
           }
         }
+        section("AI Provider") {
+          AIProviderSettingsCard(
+            model: model,
+            compact: true
+          )
+        }
         section("AI 自动记账") { AISettingsCard(model: model, compact: true) }
         section("分类与统计") { classificationCard }
         section("数据与缓存") { dataCard }
@@ -332,6 +338,68 @@ public struct CaptureSourceSettingsCard: View {
   }
 #endif
 
+public struct AIProviderSettingsCard: View {
+  @Bindable var model: AISettingsModel
+  let compact: Bool
+
+  public init(model: AISettingsModel, compact: Bool = false) {
+    self.model = model
+    self.compact = compact
+  }
+
+  public var body: some View {
+    FiscalCard(radius: compact ? 18 : 15) {
+      VStack(alignment: .leading, spacing: 14) {
+        HStack(spacing: 12) {
+          FiscalIconTile("sparkles.rectangle.stack", color: FiscalColor.accent)
+          VStack(alignment: .leading, spacing: 3) {
+            Text("OpenAI-compatible").font(.subheadline.weight(.semibold))
+            Text(providerStatus).font(.caption).foregroundStyle(FiscalColor.tertiary)
+          }
+          Spacer()
+          Circle()
+            .fill(model.settings?.providerConfigured == true ? FiscalColor.income : FiscalColor.expense)
+            .frame(width: 8, height: 8).accessibilityHidden(true)
+        }
+        providerField("接口地址，例如 https://api.openai.com/v1", text: $model.providerBaseURL)
+        providerField("模型名称，例如 gpt-4.1-mini", text: $model.providerModel)
+        SecureField(apiKeyPlaceholder, text: $model.providerAPIKey)
+          .textFieldStyle(.plain)
+          .padding(.horizontal, 11).frame(minHeight: 42)
+          .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
+          .accessibilityIdentifier("ai.provider.apiKey")
+        Text("API Key 经 HTTPS 发送后加密保存在个人 VPS；客户端和接口均不会读取明文。")
+          .font(.caption).foregroundStyle(FiscalColor.tertiary)
+          .fixedSize(horizontal: false, vertical: true)
+        Button(model.isSavingProvider ? "正在保存…" : "保存 AI Provider") {
+          Task { await model.saveProvider() }
+        }
+        .buttonStyle(FiscalActionButtonStyle())
+        .disabled(model.isSavingProvider || model.providerSettings == nil)
+        .accessibilityIdentifier("ai.provider.save")
+      }
+      .disabled(model.providerSettings == nil)
+    }
+  }
+
+  private func providerField(_ placeholder: String, text: Binding<String>) -> some View {
+    TextField(placeholder, text: text)
+      .textFieldStyle(.plain).autocorrectionDisabled()
+      .padding(.horizontal, 11).frame(minHeight: 42)
+      .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
+  }
+
+  private var providerStatus: String {
+    if model.providerSettings == nil { return "正在读取服务器配置…" }
+    return model.settings?.providerConfigured == true
+      ? "已配置 · 留空 API Key 将保留原值" : "尚未配置"
+  }
+
+  private var apiKeyPlaceholder: String {
+    model.providerSettings?.apiKeyConfigured == true ? "API Key 已配置 · 留空保留" : "API Key"
+  }
+}
+
 public struct AISettingsCard: View {
   @Bindable var model: AISettingsModel
   let compact: Bool
@@ -419,6 +487,9 @@ public struct MacSettingsScreen: View {
           }
         }
         settingsSection("记账偏好") { recordingPreferencesCard }
+        settingsSection("AI Provider") {
+          AIProviderSettingsCard(model: model)
+        }
         settingsSection("AI 自动记账") { AISettingsCard(model: model) }
         settingsSection("快捷录入来源") {
           VStack(alignment: .leading, spacing: 9) {
@@ -599,13 +670,23 @@ public struct MacSettingsScreen: View {
 public struct DeviceSecuritySettingsCard: View {
   @Bindable var model: DeviceSecurityModel
   let compact: Bool
+  let alwaysAllowsCredentialImport: Bool
+  let onCredentialActivated: () -> Void
   @State private var showRemoveConfirmation = false
   @State private var showIssue = false
   @State private var newDeviceLabel = ""
   @State private var importedDeviceToken = ""
 
-  public init(model: DeviceSecurityModel, compact: Bool = false) {
-    self.model = model; self.compact = compact
+  public init(
+    model: DeviceSecurityModel,
+    compact: Bool = false,
+    alwaysAllowsCredentialImport: Bool = false,
+    onCredentialActivated: @escaping () -> Void = {}
+  ) {
+    self.model = model
+    self.compact = compact
+    self.alwaysAllowsCredentialImport = alwaysAllowsCredentialImport
+    self.onCredentialActivated = onCredentialActivated
   }
 
   public var body: some View {
@@ -640,8 +721,12 @@ public struct DeviceSecuritySettingsCard: View {
               .font(.caption2).foregroundStyle(FiscalColor.tertiary)
           }
           if let device = status.currentDevice { actionArea(status, device: device) }
-        } else if model.phase == .unauthorized {
+        } else if model.phase == .unauthorized || alwaysAllowsCredentialImport {
           importArea
+          if model.phase == .failed {
+            Button("重试读取安全状态") { Task { await model.load() } }
+              .buttonStyle(FiscalActionButtonStyle(.secondary))
+          }
         } else if model.phase == .failed {
           Button("重试读取安全状态") { Task { await model.load() } }
             .buttonStyle(FiscalActionButtonStyle(.secondary))
@@ -680,10 +765,14 @@ public struct DeviceSecuritySettingsCard: View {
       Button(model.isMutating ? "正在激活…" : "激活此设备") {
         let token = importedDeviceToken
         importedDeviceToken = ""
-        Task { await model.installIssuedToken(token) }
+        Task {
+          await model.installIssuedToken(token)
+          if model.phase == .loaded { onCredentialActivated() }
+        }
       }
       .buttonStyle(FiscalActionButtonStyle(.secondary))
       .disabled(model.isMutating || importedDeviceToken.isEmpty)
+      .accessibilityIdentifier("ios.cloudConnection.activate")
     }
   }
 

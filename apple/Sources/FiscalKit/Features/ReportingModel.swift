@@ -84,6 +84,14 @@ public final class ReportingModel {
     await loadAll()
   }
 
+  public func ensureCurrentMonth(now: Date = Date()) async {
+    let range = Self.monthRange(containing: now)
+    guard month != range.month || dateFrom != range.dateFrom || dateTo != range.dateTo else {
+      return
+    }
+    await returnToCurrentMonth(now: now)
+  }
+
   public func loadDrillDown(categoryID: UUID? = nil, accountID: UUID? = nil) async {
     guard lens != .debt else { return }
     drillGeneration += 1

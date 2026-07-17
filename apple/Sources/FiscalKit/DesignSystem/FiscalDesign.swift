@@ -85,10 +85,6 @@ public struct FiscalIconTile: View {
     }
 }
 
-public extension View {
-    func fiscalMonospacedNumbers() -> some View { monospacedDigit() }
-}
-
 public struct FiscalActionButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     public enum Role { case primary, secondary, destructive }

@@ -22,12 +22,16 @@ from fiscal_api.api.p8_schemas import (
     AIProposalPage,
     AIProposalResponse,
     AIProviderResult,
+    AIProviderSettingsReplace,
+    AIProviderSettingsResponse,
     AISettingsReplace,
     AISettingsResponse,
     ProposalSource,
     ProposalStatus,
 )
+from fiscal_api.core.config import Settings
 from fiscal_api.core.errors import APIError
+from fiscal_api.core.provider_credentials import ProviderCredentialCipher
 from fiscal_api.core.time import BUSINESS_TIMEZONE, utc_now
 from fiscal_api.db.models import (
     Account,
@@ -39,8 +43,9 @@ from fiscal_api.db.models import (
     TransactionSource,
 )
 from fiscal_api.repositories.ai import AIRepository
-from fiscal_api.services.ai_provider import AIProvider
+from fiscal_api.services.ai_provider import AIProvider, build_stored_ai_provider
 from fiscal_api.services.common import acquire_mutation_lock, check_version, conflict, not_found
+from fiscal_api.services.security import AuthenticatedDevice
 from fiscal_api.services.transactions import TransactionService
 
 AUTO_AMOUNT_CEILING_MINOR = 100_000
@@ -56,9 +61,17 @@ REQUIRED_CONFIDENCE_FIELDS = (
 
 
 class AIService:
-    def __init__(self, session: AsyncSession, provider: AIProvider) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        provider: AIProvider,
+        runtime_settings: Settings | None = None,
+        credential_cipher: ProviderCredentialCipher | None = None,
+    ) -> None:
         self.session = session
         self.provider = provider
+        self.runtime_settings = runtime_settings
+        self.credential_cipher = credential_cipher
         self.repository = AIRepository(session)
         self.transactions = TransactionService(session)
 
@@ -78,6 +91,49 @@ class AIService:
         settings.updated_at = utc_now()
         await self.session.commit()
         return self._settings_response(settings)
+
+    async def get_provider_settings(self) -> AIProviderSettingsResponse:
+        return self._provider_settings_response(await self.repository.settings())
+
+    async def update_provider_settings(
+        self, replacement: AIProviderSettingsReplace, _actor: AuthenticatedDevice
+    ) -> AIProviderSettingsResponse:
+        if self.runtime_settings is None or self.credential_cipher is None:
+            raise APIError(
+                status_code=503,
+                code="ai_provider_configuration_unavailable",
+                message="AI Provider 配置服务暂时不可用",
+            )
+        if self.runtime_settings.environment in {
+            "staging",
+            "production",
+        } and not replacement.base_url.startswith("https://"):
+            raise APIError(
+                status_code=422,
+                code="ai_provider_https_required",
+                message="生产环境的 AI Provider 必须使用 HTTPS",
+            )
+        await acquire_mutation_lock(self.session)
+        settings = await self.repository.settings(for_update=True)
+        check_version(settings.version, replacement.expected_version)
+        if replacement.api_key is not None:
+            settings.provider_api_key_ciphertext = self.credential_cipher.encrypt(
+                replacement.api_key
+            )
+            settings.provider_key_version = self.credential_cipher.version
+        elif settings.provider_api_key_ciphertext is None:
+            raise APIError(
+                status_code=422,
+                code="ai_provider_api_key_required",
+                message="首次配置 AI Provider 时必须填写 API Key",
+            )
+        settings.provider_kind = replacement.provider
+        settings.provider_base_url = replacement.base_url
+        settings.provider_model = replacement.model
+        settings.version += 1
+        settings.updated_at = utc_now()
+        await self.session.commit()
+        return self._provider_settings_response(settings)
 
     async def create(self, request: AIProposalCreate, key: UUID) -> tuple[AIProposalResponse, bool]:
         request_hash = self._create_request_hash(request)
@@ -102,6 +158,7 @@ class AIService:
             )
 
         normalized = unicodedata.normalize("NFKC", request.text)
+        provider = self._provider_for(settings)
         proposal = AIProposal(
             source=request.source,
             raw_input=request.text,
@@ -110,8 +167,8 @@ class AIService:
             ).hexdigest(),
             create_idempotency_key=key,
             create_request_hash=request_hash,
-            provider=self.provider.provider_id,
-            provider_model=self.provider.model_id,
+            provider=provider.provider_id,
+            provider_model=provider.model_id,
             field_confidences={},
             missing_fields=[],
             reason_codes=[],
@@ -125,7 +182,7 @@ class AIService:
             return self._proposal_response(replay), True
         self.repository.add(proposal)
         await self.session.commit()
-        return await self._parse_and_finalize(proposal.id), False
+        return await self._parse_and_finalize(proposal.id, provider), False
 
     async def get(self, proposal_id: UUID) -> AIProposalResponse:
         return self._proposal_response(await self._required(proposal_id))
@@ -224,11 +281,12 @@ class AIService:
         proposal.status = AIProposalStatus.PROCESSING.value
         proposal.error_code = None
         proposal.error_message = None
-        proposal.provider = self.provider.provider_id
-        proposal.provider_model = self.provider.model_id
+        provider = self._provider_for(await self.repository.settings())
+        proposal.provider = provider.provider_id
+        proposal.provider_model = provider.model_id
         self._touch(proposal)
         await self.session.commit()
-        return await self._parse_and_finalize(proposal.id)
+        return await self._parse_and_finalize(proposal.id, provider)
 
     async def undo(
         self,
@@ -282,7 +340,9 @@ class AIService:
             proposal=self._proposal_response(proposal), transaction=transaction
         )
 
-    async def _parse_and_finalize(self, proposal_id: UUID) -> AIProposalResponse:
+    async def _parse_and_finalize(
+        self, proposal_id: UUID, provider: AIProvider
+    ) -> AIProposalResponse:
         proposal = await self._required(proposal_id)
         accounts = await self.repository.active_accounts()
         categories = await self.repository.active_categories()
@@ -298,7 +358,7 @@ class AIService:
         # Do not hold a database transaction or advisory lock across provider network I/O.
         await self.session.commit()
         try:
-            result = await self.provider.parse(parse_request)
+            result = await provider.parse(parse_request)
         except CancelledError:
             await self._mark_failed(
                 proposal_id,
@@ -512,6 +572,7 @@ class AIService:
         proposal.updated_at = utc_now()
 
     def _settings_response(self, settings: AISettings) -> AISettingsResponse:
+        configured = self._provider_configured(settings)
         return AISettingsResponse(
             auto_execute_enabled=settings.auto_execute_enabled,
             ocr_source_enabled=settings.ocr_source_enabled,
@@ -519,9 +580,65 @@ class AIService:
             auto_execute_limit_minor=settings.auto_execute_limit_minor,
             minimum_confidence_bps=settings.minimum_confidence_bps,
             version=settings.version,
-            provider_configured=self.provider.configured,
-            effective_auto_execute=settings.auto_execute_enabled and self.provider.configured,
+            provider_configured=configured,
+            effective_auto_execute=settings.auto_execute_enabled and configured,
             created_at=settings.created_at,
+            updated_at=settings.updated_at,
+        )
+
+    def _provider_configured(self, settings: AISettings) -> bool:
+        stored = all(
+            (
+                settings.provider_kind == "openai_compatible",
+                settings.provider_base_url,
+                settings.provider_model,
+                settings.provider_api_key_ciphertext,
+                settings.provider_key_version,
+                self.runtime_settings,
+                self.credential_cipher,
+            )
+        )
+        return bool(stored or self.provider.configured)
+
+    def _provider_for(self, settings: AISettings) -> AIProvider:
+        if (
+            settings.provider_kind == "openai_compatible"
+            and settings.provider_base_url is not None
+            and settings.provider_model is not None
+            and settings.provider_api_key_ciphertext is not None
+            and settings.provider_key_version is not None
+            and self.runtime_settings is not None
+            and self.credential_cipher is not None
+        ):
+            try:
+                api_key = self.credential_cipher.decrypt(
+                    settings.provider_api_key_ciphertext,
+                    settings.provider_key_version,
+                )
+            except (ValueError, UnicodeDecodeError):
+                raise APIError(
+                    status_code=503,
+                    code="ai_provider_credential_unavailable",
+                    message="AI Provider 密钥无法解密, 请由管理员重新配置",
+                ) from None
+            return build_stored_ai_provider(
+                base_url=settings.provider_base_url,
+                model=settings.provider_model,
+                api_key=api_key,
+                settings=self.runtime_settings,
+            )
+        return self.provider
+
+    @staticmethod
+    def _provider_settings_response(settings: AISettings) -> AIProviderSettingsResponse:
+        return AIProviderSettingsResponse(
+            provider=(
+                "openai_compatible" if settings.provider_kind == "openai_compatible" else None
+            ),
+            base_url=settings.provider_base_url,
+            model=settings.provider_model,
+            api_key_configured=settings.provider_api_key_ciphertext is not None,
+            version=settings.version,
             updated_at=settings.updated_at,
         )
 

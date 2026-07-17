@@ -17,8 +17,8 @@ struct SpendCard: View {
                         .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.income)
                 }
                 Text(snapshot.spend.formatted())
-                    .font(.system(size: compact ? 26 : 36, weight: .bold, design: .rounded))
-                    .foregroundStyle(FiscalColor.text).fiscalMonospacedNumbers()
+                    .font(.system(size: compact ? 26 : 36, weight: .bold))
+                    .foregroundStyle(FiscalColor.text)
                 if !compact {
                     if snapshot.categories.isEmpty {
                         EmptyInline(symbol: "chart.bar", title: "本月还没有消费记录")
@@ -49,7 +49,7 @@ struct CategoryBar: View {
                     }
             }
             .frame(height: 7)
-            Text(item.amount.formatted()).font(.caption.monospacedDigit()).foregroundStyle(FiscalColor.secondary).frame(width: 82, alignment: .trailing)
+            Text(item.amount.formatted()).font(.caption).foregroundStyle(FiscalColor.secondary).frame(width: 82, alignment: .trailing)
         }
     }
 }
@@ -66,7 +66,7 @@ struct AccountRow: View {
             }
             Spacer(minLength: 8)
             Text(account.amount.formatted())
-                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(account.kind == .credit ? FiscalColor.debt : FiscalColor.text)
         }
     }
@@ -93,7 +93,7 @@ struct ActivityRow: View {
             }
             Spacer(minLength: 8)
             Text(activity.amount.formatted(showPositiveSign: activity.direction == .income))
-                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(activity.direction == .income ? FiscalColor.income : FiscalColor.text)
         }
     }

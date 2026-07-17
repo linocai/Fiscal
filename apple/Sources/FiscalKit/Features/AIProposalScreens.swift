@@ -231,7 +231,7 @@ private struct IOSAIProposalRow: View {
           }
           Spacer()
           Text(proposal.amountMinor.map { Money(minorUnits: $0).formatted() } ?? "金额待确认")
-            .font(.headline.monospacedDigit()).foregroundStyle(FiscalColor.text)
+            .font(.headline).foregroundStyle(FiscalColor.text)
         }
         if !proposal.reviewWarnings.isEmpty {
           Label("需要检查：\(proposal.reviewWarnings.joined(separator: "、"))", systemImage: "exclamationmark.triangle.fill")
@@ -400,7 +400,7 @@ public struct MacAIProposalScreen: View {
                 HStack(spacing: 10) {
                   FiscalIconTile("sparkles", color: FiscalColor.accent)
                   VStack(alignment: .leading, spacing: 3) { Text(proposal.title ?? "待补全提案").font(.subheadline.weight(.semibold)); Text("\(proposal.source.title) · \(proposal.confidenceTitle) · \(proposal.status.title)").font(.caption).foregroundStyle(FiscalColor.tertiary) }
-                  Spacer(); Text(proposal.amountMinor.map { Money(minorUnits: $0).formatted() } ?? "—").font(.subheadline.monospacedDigit())
+                  Spacer(); Text(proposal.amountMinor.map { Money(minorUnits: $0).formatted() } ?? "—").font(.subheadline)
                 }.padding(12).background(model.selectedID == proposal.id ? FiscalColor.accent.opacity(0.09) : FiscalColor.surface, in: .rect(cornerRadius: 12))
               }.buttonStyle(.plain).task { if proposal.id == model.proposals.last?.id { await model.loadMore() } }
             }
@@ -419,7 +419,7 @@ public struct MacAIProposalScreen: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 14) {
           Text(proposal.title ?? "待补全标题").font(.title2.bold())
-          Text(proposal.amountMinor.map { Money(minorUnits: $0).formatted() } ?? "金额待确认").font(.system(size: 28, weight: .bold)).monospacedDigit()
+          Text(proposal.amountMinor.map { Money(minorUnits: $0).formatted() } ?? "金额待确认").font(.system(size: 28, weight: .bold))
           detail("状态", proposal.status.title); detail("置信度", proposal.confidenceTitle); detail("来源", proposal.source.title)
           if let explanation = proposal.explanation { Text(explanation).font(.caption).foregroundStyle(FiscalColor.secondary) }
           if proposal.canReview { Button("确认记账") { Task { await model.execute(proposal) } }.buttonStyle(FiscalActionButtonStyle()); if accounts != nil && categories != nil { Button("编辑") { editing = proposal }.buttonStyle(FiscalActionButtonStyle(.secondary)) }; Button("忽略") { Task { await model.ignore(proposal) } }.buttonStyle(.plain).foregroundStyle(FiscalColor.tertiary) }

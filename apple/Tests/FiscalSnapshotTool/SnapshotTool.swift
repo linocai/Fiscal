@@ -86,6 +86,12 @@ private actor SnapshotAIRepository: AIProposalRepository, AISettingsRepository {
   func update(_ value: AISettingsUpdateRequest) async throws -> AISettingsDTO {
     try await request("ai/settings", method: "PUT", body: value)
   }
+  func getProvider() async throws -> AIProviderSettingsDTO {
+    try await request("ai/provider-settings")
+  }
+  func updateProvider(_ value: AIProviderSettingsUpdateRequest) async throws -> AIProviderSettingsDTO {
+    try await request("ai/provider-settings", method: "PUT", body: value)
+  }
   private func request<Value: Decodable>(_ path: String, query: [String: String?] = [:]) async throws -> Value {
     try await request(path, method: "GET", body: Optional<String>.none, query: query)
   }

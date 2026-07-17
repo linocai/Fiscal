@@ -15,12 +15,16 @@ from fiscal_api.api.p8_schemas import (
     AIParseRequest,
     AIProposalCreate,
     AIProviderResult,
+    AIProviderSettingsReplace,
     AISettingsReplace,
 )
+from fiscal_api.core.config import Settings
 from fiscal_api.core.errors import APIError
+from fiscal_api.core.provider_credentials import ProviderCredentialCipher
 from fiscal_api.db.models import (
     AccountKind,
     AIProposal,
+    AISettings,
     CategoryDirection,
     LedgerTransaction,
     TransactionKind,
@@ -28,8 +32,9 @@ from fiscal_api.db.models import (
 )
 from fiscal_api.services.accounts import AccountService
 from fiscal_api.services.ai import AIService
-from fiscal_api.services.ai_provider import AIProvider
+from fiscal_api.services.ai_provider import AIProvider, DisabledAIProvider
 from fiscal_api.services.categories import CategoryService
+from fiscal_api.services.security import AuthenticatedDevice
 from fiscal_api.services.transactions import TransactionService
 
 TEST_DATABASE_URL = environ.get("FISCAL_TEST_DATABASE_URL")
@@ -117,6 +122,49 @@ async def session() -> AsyncIterator[AsyncSession]:
     async with factory() as value:
         yield value
     await engine.dispose()
+
+
+async def test_active_device_updates_encrypted_provider_configuration(
+    session: AsyncSession,
+) -> None:
+    await seed(session)
+    cipher = ProviderCredentialCipher("test-provider-root-secret-at-least-32-bytes")
+    service = AIService(
+        session,
+        DisabledAIProvider(),
+        runtime_settings=Settings(environment="test"),
+        credential_cipher=cipher,
+    )
+    current = await service.get_provider_settings()
+    device = AuthenticatedDevice(
+        id=uuid4(), label="iPhone", role="device", status="active", version=1
+    )
+    replacement = AIProviderSettingsReplace(
+        base_url="https://api.example.com/v1",
+        model="provider-model",
+        api_key="secret-provider-key",
+        expected_version=current.version,
+    )
+    configured = await service.update_provider_settings(replacement, device)
+    assert configured.api_key_configured
+    assert configured.base_url == "https://api.example.com/v1"
+    row = await session.get(AISettings, 1)
+    assert row is not None and row.provider_api_key_ciphertext is not None
+    assert "secret-provider-key" not in row.provider_api_key_ciphertext
+    assert cipher.decrypt(row.provider_api_key_ciphertext, row.provider_key_version or 0) == (
+        "secret-provider-key"
+    )
+    assert (await service.get_settings()).provider_configured
+
+    retained = await service.update_provider_settings(
+        AIProviderSettingsReplace(
+            base_url="https://api.example.com/v1",
+            model="provider-model-v2",
+            expected_version=configured.version,
+        ),
+        device,
+    )
+    assert retained.api_key_configured and retained.model == "provider-model-v2"
 
 
 async def seed(session: AsyncSession, *, opening: int = 100_000) -> tuple[UUID, UUID, UUID]:

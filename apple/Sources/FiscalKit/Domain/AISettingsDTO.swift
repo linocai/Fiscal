@@ -52,3 +52,38 @@ public struct AISettingsUpdateRequest: Codable, Sendable, Equatable {
     self.expectedVersion = expectedVersion
   }
 }
+
+public struct AIProviderSettingsDTO: Codable, Sendable, Equatable {
+  public let provider: String?
+  public let baseURL: String?
+  public let model: String?
+  public let apiKeyConfigured: Bool
+  public let version: Int
+  public let updatedAt: Date
+  enum CodingKeys: String, CodingKey {
+    case provider, model, version
+    case baseURL = "base_url"
+    case apiKeyConfigured = "api_key_configured"
+    case updatedAt = "updated_at"
+  }
+}
+
+public struct AIProviderSettingsUpdateRequest: Codable, Sendable, Equatable {
+  public let provider = "openai_compatible"
+  public let baseURL: String
+  public let model: String
+  public let apiKey: String?
+  public let expectedVersion: Int
+  enum CodingKeys: String, CodingKey {
+    case provider, model
+    case baseURL = "base_url"
+    case apiKey = "api_key"
+    case expectedVersion = "expected_version"
+  }
+  public init(baseURL: String, model: String, apiKey: String?, expectedVersion: Int) {
+    self.baseURL = baseURL
+    self.model = model
+    self.apiKey = apiKey
+    self.expectedVersion = expectedVersion
+  }
+}

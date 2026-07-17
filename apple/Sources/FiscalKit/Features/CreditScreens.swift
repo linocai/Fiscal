@@ -103,7 +103,7 @@ private struct IOSCreditCycleDetail: View {
     }
     @ViewBuilder private var cycleContent: some View {
         if let cycle = credit.selectedCycle, cycle.id == cycleID {
-            ScrollView { VStack(spacing: 14) { FiscalCard(radius: 20) { VStack(alignment: .leading, spacing: 10) { HStack { Text(cycle.isOpeningCycle ? "期初欠款" : "账期详情").font(.headline); Spacer(); CreditStatusPill(cycle: cycle) }; Text(Money(minorUnits: cycle.remainingMinor).formatted()).font(.system(size: 30, weight: .bold)).foregroundStyle(cycle.isOverdue ? FiscalColor.expense : FiscalColor.debt); if cycle.isOpeningCycle { valueRow("余额日期", cycle.statementDate) } else { valueRow("账期", "\(cycle.periodStart)–\(cycle.periodEnd)") }; valueRow("消费与期初", Money(minorUnits: cycle.amountDueMinor).formatted()); valueRow("已还", Money(minorUnits: cycle.repaidMinor).formatted()); valueRow("还款日", cycle.dueDate); if readOnly { Label("已归档账户 · 只读历史", systemImage: "archivebox").font(.caption).foregroundStyle(FiscalColor.tertiary) } else if cycle.remainingMinor > 0 { Button("全额或部分还款") { showRepayment = true }.buttonStyle(.borderedProminent) } } }; VStack(alignment: .leading, spacing: 10) { Text("本期流水").font(.headline); FiscalCard(radius: 18) { VStack(spacing: 0) { if credit.cycleTransactions.isEmpty { Text("本账期暂无流水").foregroundStyle(FiscalColor.tertiary).frame(maxWidth: .infinity).padding() }; ForEach(credit.cycleTransactions) { item in HStack { Image(systemName: item.kind.symbol).foregroundStyle(item.kind == .repayment ? FiscalColor.income : FiscalColor.debt).accessibilityHidden(true); Text(item.title); Spacer(); Text(Money(minorUnits: item.amountMinor).formatted()).monospacedDigit() }.padding(.vertical, 9).task { if item.id == credit.cycleTransactions.last?.id { await credit.loadMoreTransactions() } }; Divider() } } } } }.padding(16) }.background(FiscalColor.iOSBackground)
+            ScrollView { VStack(spacing: 14) { FiscalCard(radius: 20) { VStack(alignment: .leading, spacing: 10) { HStack { Text(cycle.isOpeningCycle ? "期初欠款" : "账期详情").font(.headline); Spacer(); CreditStatusPill(cycle: cycle) }; Text(Money(minorUnits: cycle.remainingMinor).formatted()).font(.system(size: 30, weight: .bold)).foregroundStyle(cycle.isOverdue ? FiscalColor.expense : FiscalColor.debt); if cycle.isOpeningCycle { valueRow("余额日期", cycle.statementDate) } else { valueRow("账期", "\(cycle.periodStart)–\(cycle.periodEnd)") }; valueRow("消费与期初", Money(minorUnits: cycle.amountDueMinor).formatted()); valueRow("已还", Money(minorUnits: cycle.repaidMinor).formatted()); valueRow("还款日", cycle.dueDate); if readOnly { Label("已归档账户 · 只读历史", systemImage: "archivebox").font(.caption).foregroundStyle(FiscalColor.tertiary) } else if cycle.remainingMinor > 0 { Button("全额或部分还款") { showRepayment = true }.buttonStyle(.borderedProminent) } } }; VStack(alignment: .leading, spacing: 10) { Text("本期流水").font(.headline); FiscalCard(radius: 18) { VStack(spacing: 0) { if credit.cycleTransactions.isEmpty { Text("本账期暂无流水").foregroundStyle(FiscalColor.tertiary).frame(maxWidth: .infinity).padding() }; ForEach(credit.cycleTransactions) { item in HStack { Image(systemName: item.kind.symbol).foregroundStyle(item.kind == .repayment ? FiscalColor.income : FiscalColor.debt).accessibilityHidden(true); Text(item.title); Spacer(); Text(Money(minorUnits: item.amountMinor).formatted()) }.padding(.vertical, 9).task { if item.id == credit.cycleTransactions.last?.id { await credit.loadMoreTransactions() } }; Divider() } } } } }.padding(16) }.background(FiscalColor.iOSBackground)
         } else {
             switch credit.phase {
             case .unauthorized: cycleRetry("设备密钥无效", "key")
@@ -136,7 +136,16 @@ public struct MacAccountsCreditScreen: View {
     public init(accounts: AccountsModel, credit: CreditModel, installments: InstallmentModel, transactions: TransactionsModel, categories: CategoriesModel) { self.accounts = accounts; self.credit = credit; self.installments = installments; self.transactions = transactions; self.categories = categories }
     public var body: some View {
         VStack(spacing: 0) {
-            HStack { Text("账户").font(.system(size: 22, weight: .bold)); Spacer(); Button("管理账户") { showManagement = true }.buttonStyle(.bordered) }.padding(.horizontal, 20).frame(height: 54).background(FiscalColor.surface)
+            HStack {
+                Text("账户").font(.system(size: 22, weight: .bold))
+                Spacer()
+                Button { showManagement = true } label: {
+                    Label("管理账户", systemImage: "slider.horizontal.3")
+                }
+                .buttonStyle(FiscalActionButtonStyle(.secondary))
+                .accessibilityIdentifier("mac.accounts.manage")
+            }
+            .padding(.horizontal, 20).frame(height: 62).background(FiscalColor.surface)
             if let creditError {
                 HStack {
                     Label(creditError, systemImage: "wifi.exclamationmark")
@@ -150,7 +159,10 @@ public struct MacAccountsCreditScreen: View {
         }.background(FiscalColor.macBackground)
         .onAppear { Task { await reload() } }
         .onChange(of: showManagement) { wasShowing, isShowing in if wasShowing && !isShowing { Task { await reload() } } }
-        .sheet(isPresented: $showManagement) { NavigationStack { AccountsManagementScreen(model: accounts) }.frame(width: 620, height: 620) }
+        .sheet(isPresented: $showManagement) {
+            NavigationStack { AccountsManagementScreen(model: accounts, showsCloseButton: true) }
+                .frame(width: 680, height: 700)
+        }
         .sheet(item: $repayCycle) { cycle in TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit, initialKind: .repayment, creditAccountID: cycle.accountID, cycleID: cycle.id, amountMinor: cycle.remainingMinor) }
         .sheet(isPresented: $showInstallmentEdit) { if let plan = installments.selectedPlan, let purchase = installments.selectedPurchase { InstallmentEditorSheet(installments: installments, plan: plan, purchase: purchase, accounts: accounts, categories: categories) } }
         .sheet(isPresented: $showInstallmentSettlement) { if let plan = installments.selectedPlan { InstallmentSettlementSheet(installments: installments, plan: plan, accounts: accounts) } }
@@ -191,7 +203,7 @@ public struct MacAccountsCreditScreen: View {
             Label("账户汇总超出可表示范围，请检查异常余额", systemImage: "exclamationmark.triangle.fill").foregroundStyle(FiscalColor.expense).padding(16).frame(maxWidth: .infinity, alignment: .leading).background(FiscalColor.surface, in: .rect(cornerRadius: 14))
         }
     }
-    private func stat(_ title: String, _ amount: Int64, _ color: Color) -> some View { VStack(alignment: .leading, spacing: 6) { Text(title).font(.caption).foregroundStyle(FiscalColor.tertiary); Text(Money(minorUnits: amount).formatted()).font(.title3.bold()).foregroundStyle(color).monospacedDigit() }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(FiscalColor.surface, in: .rect(cornerRadius: 14)) }
+    private func stat(_ title: String, _ amount: Int64, _ color: Color) -> some View { VStack(alignment: .leading, spacing: 6) { Text(title).font(.caption).foregroundStyle(FiscalColor.tertiary); Text(Money(minorUnits: amount).formatted()).font(.title3.bold()).foregroundStyle(color) }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(FiscalColor.surface, in: .rect(cornerRadius: 14)) }
     private func accountCard(_ account: AccountDTO) -> some View {
         Button {
             guard account.kind == .credit else { return }

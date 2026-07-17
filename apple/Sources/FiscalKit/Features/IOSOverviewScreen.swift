@@ -58,7 +58,7 @@ public struct IOSOverviewScreen: View {
         FiscalCard(radius: 22) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack { Text("可用余额").font(.subheadline.weight(.semibold)).foregroundStyle(FiscalColor.secondary); Spacer(); Text("账户").font(.subheadline.weight(.semibold)).foregroundStyle(FiscalColor.accent) }
-                Text(snapshot.available.formatted()).font(.system(size: 33, weight: .bold, design: .rounded)).fiscalMonospacedNumbers().foregroundStyle(FiscalColor.text)
+                Text(snapshot.available.formatted()).font(.system(size: 33, weight: .bold)).foregroundStyle(FiscalColor.text)
                 Text("净资产 \(snapshot.netWorth.formatted())").font(.caption).foregroundStyle(FiscalColor.secondary)
                 Divider().opacity(0.35)
                 if snapshot.accounts.isEmpty { EmptyInline(symbol: "wallet.bifold", title: "还没有账户") }
@@ -79,7 +79,7 @@ public struct IOSOverviewScreen: View {
                     Text("流入 \(snapshot.cashIn.formatted()) · 流出 \(snapshot.cashOut.formatted())").font(.caption).foregroundStyle(FiscalColor.tertiary).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Text(snapshot.cashNet.formatted(showPositiveSign: snapshot.cashNet.minorUnits > 0)).font(.subheadline.bold().monospacedDigit()).foregroundStyle(snapshot.cashNet.minorUnits >= 0 ? FiscalColor.income : FiscalColor.expense)
+                Text(snapshot.cashNet.formatted(showPositiveSign: snapshot.cashNet.minorUnits > 0)).font(.subheadline.bold()).foregroundStyle(snapshot.cashNet.minorUnits >= 0 ? FiscalColor.income : FiscalColor.expense)
             }
         }
     }

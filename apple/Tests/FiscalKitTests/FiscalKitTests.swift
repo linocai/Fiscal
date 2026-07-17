@@ -42,6 +42,24 @@ struct FiscalKitP8Tests {
     #expect(object["shortcut_text_source_enabled"] as? Bool == true)
   }
 
+  @Test("AI provider settings never decode or echo an API key")
+  func providerSettingsContract() throws {
+    let data = Data(#"{"provider":"openai_compatible","base_url":"https://api.openai.com/v1","model":"gpt-4.1-mini","api_key_configured":true,"version":4,"updated_at":"2026-07-17T01:30:00Z"}"#.utf8)
+    let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+    let settings = try decoder.decode(AIProviderSettingsDTO.self, from: data)
+    #expect(settings.apiKeyConfigured)
+    #expect(settings.baseURL == "https://api.openai.com/v1")
+
+    let request = AIProviderSettingsUpdateRequest(
+      baseURL: settings.baseURL!, model: settings.model!, apiKey: "sk-example-secret",
+      expectedVersion: settings.version)
+    let object = try #require(
+      JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
+    #expect(object["provider"] as? String == "openai_compatible")
+    #expect(object["api_key"] as? String == "sk-example-secret")
+    #expect(object["expected_version"] as? Int == 4)
+  }
+
   @Test("Undo payload binds both proposal and ledger versions")
   func undoPayload() throws {
     let request = AIProposalUndoRequest(expectedVersion: 4, expectedTransactionVersion: 2)

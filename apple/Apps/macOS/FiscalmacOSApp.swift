@@ -1,4 +1,5 @@
 import FiscalKit
+import AppKit
 import SwiftUI
 
 @main
@@ -47,7 +48,13 @@ struct FiscalmacOSApp: App {
         WindowGroup {
             MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, aiProposals: aiProposals, aiSettings: aiSettings, deviceSecurity: deviceSecurity, recordingPreferences: recordingPreferences, cache: .shared)
                 .tint(FiscalColor.accent)
-                .frame(minWidth: 760, minHeight: 560)
+                .frame(minWidth: 1_040, minHeight: 700)
+                .background(
+                    WindowSizeLimits(
+                        minimum: NSSize(width: 1_040, height: 700),
+                        maximum: NSSize(width: 1_600, height: 920)
+                    )
+                )
                 .task {
                     await connection.configure(bootstrapToken: APIConfiguration.bootstrapDeviceToken())
                     _ = await deviceSecurity.recoverPendingRotation()
@@ -61,6 +68,47 @@ struct FiscalmacOSApp: App {
                 }
         }
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 940, height: 700)
+        .defaultSize(width: 1_280, height: 820)
+    }
+}
+
+private struct WindowSizeLimits: NSViewRepresentable {
+    let minimum: NSSize
+    let maximum: NSSize
+
+    func makeNSView(context: Context) -> NSView {
+        SizeLimitView(minimum: minimum, maximum: maximum)
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private final class SizeLimitView: NSView {
+    private let minimum: NSSize
+    private let maximum: NSSize
+
+    init(minimum: NSSize, maximum: NSSize) {
+        self.minimum = minimum
+        self.maximum = maximum
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let window else { return }
+        window.contentMinSize = minimum
+        window.contentMaxSize = maximum
+        let contentSize = window.contentLayoutRect.size
+        if contentSize.width > maximum.width || contentSize.height > maximum.height {
+            window.setContentSize(
+                NSSize(
+                    width: min(contentSize.width, maximum.width),
+                    height: min(contentSize.height, maximum.height)
+                )
+            )
+        }
     }
 }

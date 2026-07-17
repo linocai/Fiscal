@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Annotated, Literal
+from urllib.parse import urlparse
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
@@ -108,6 +109,41 @@ class AISettingsReplace(P8Model):
     auto_execute_limit_minor: SafeAutoLimit
     minimum_confidence_bps: SafeConfidenceBPS
     expected_version: Annotated[StrictInt, Field(ge=1)]
+
+
+class AIProviderSettingsResponse(P8Model):
+    provider: Literal["openai_compatible"] | None
+    base_url: str | None
+    model: str | None
+    api_key_configured: bool
+    version: int
+    updated_at: datetime
+
+
+class AIProviderSettingsReplace(P8Model):
+    provider: Literal["openai_compatible"] = "openai_compatible"
+    base_url: str = Field(min_length=8, max_length=500)
+    model: str = Field(min_length=1, max_length=200)
+    api_key: str | None = Field(default=None, min_length=8, max_length=4096)
+    expected_version: Annotated[StrictInt, Field(ge=1)]
+
+    @field_validator("base_url")
+    @classmethod
+    def valid_provider_url(cls, value: str) -> str:
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("base_url must be an absolute HTTP(S) URL")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("base_url must not contain credentials, query, or fragment")
+        return value.rstrip("/")
+
+    @field_validator("model")
+    @classmethod
+    def normalized_model(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("model must not be blank")
+        return value
 
 
 class AIProposalCreate(P8Model):

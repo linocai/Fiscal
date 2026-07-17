@@ -10,11 +10,22 @@ from pydantic import SecretStr, ValidationError
 from fiscal_api.api.p8_schemas import AICandidate, AIParseRequest
 from fiscal_api.core.config import Settings
 from fiscal_api.core.errors import APIError
+from fiscal_api.core.provider_credentials import ProviderCredentialCipher
 from fiscal_api.services.ai_provider import DisabledAIProvider, OpenAICompatibleProvider
 
 ACCOUNT_ID = UUID("00000000-0000-0000-0000-000000000001")
 CATEGORY_ID = UUID("00000000-0000-0000-0000-000000000002")
 SECRET = "provider-secret-that-must-not-leak"  # noqa: S105
+
+
+def test_provider_credentials_encrypt_round_trip_without_plaintext() -> None:
+    cipher = ProviderCredentialCipher("root-secret-with-at-least-thirty-two-bytes")
+    encrypted = cipher.encrypt(SECRET)
+    assert SECRET not in encrypted
+    assert cipher.decrypt(encrypted, cipher.version) == SECRET
+
+    with pytest.raises(ValueError):
+        cipher.decrypt(encrypted, cipher.version + 1)
 
 
 def parse_request(text: str = "午餐 20 元") -> AIParseRequest:

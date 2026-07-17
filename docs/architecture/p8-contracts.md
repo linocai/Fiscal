@@ -11,13 +11,13 @@ Date: 2026-07-16
 - Only stable IDs already present in the supplied candidate lists may survive normalization. Invented, archived, wrong-kind, or wrong-direction references never reach automatic execution.
 - Every confirmed or automatic write calls the existing `TransactionService`; AI never duplicates posting, balance, credit-cycle, category-usage, revision, limit, or chronological validation.
 - AI-created ledger rows use the trusted internal source `ai_text`. Public transaction requests cannot choose a source. `ai_text` rows are ordinary user records after creation and remain editable, voidable, and restorable; `system` rows remain protected.
-- Provider URL, model, and API key are server environment configuration. The key is a `SecretStr`, is never returned to clients or persisted in proposal payloads, and is never included in logs/errors. The app controls behavior settings only.
+- Provider URL, model, and API key can be configured from Settings on any active authenticated device. The API key is encrypted with AES-GCM before database storage, is never returned to clients or persisted in proposal payloads, and is never included in logs/errors. Environment configuration remains a backward-compatible fallback until an in-app configuration is saved.
 
 ## Provider Boundary
 
 `AIProvider` is an async protocol accepting a bounded `AIParseRequest` and returning `AIProviderResult`. P8 provides a disabled adapter and one OpenAI-compatible JSON adapter. Tests inject a deterministic fake provider; no test performs a real model request.
 
-Provider input is limited to 2,000 Unicode characters after rejecting NUL/control characters. HTTP timeout and response-size limits are mandatory. Base URL is never request-controlled; production configuration requires HTTPS. A disabled or incomplete provider does not block API startup or existing proposal/settings reads.
+Provider input is limited to 2,000 Unicode characters after rejecting NUL/control characters. HTTP timeout and response-size limits are mandatory. The settings endpoint validates an absolute URL without embedded credentials, queries, or fragments; production configuration requires HTTPS. A disabled or incomplete provider does not block API startup or existing proposal/settings reads.
 
 Stable errors:
 

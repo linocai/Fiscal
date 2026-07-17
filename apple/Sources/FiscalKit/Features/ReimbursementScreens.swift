@@ -39,7 +39,6 @@ private struct ReimbursementTotals: View {
     VStack(alignment: .leading, spacing: 3) {
       Text(label).font(.caption).foregroundStyle(FiscalColor.tertiary)
       Text(Money(minorUnits: amount).formatted()).font(.headline).foregroundStyle(color)
-        .monospacedDigit()
     }.frame(maxWidth: .infinity, alignment: .leading)
   }
 }
@@ -131,7 +130,6 @@ private struct ReimbursementTotals: View {
       VStack(alignment: .leading) {
         Text(title).font(.caption2).foregroundStyle(FiscalColor.tertiary)
         Text(Money(minorUnits: value).formatted()).font(.subheadline.bold()).foregroundStyle(color)
-          .monospacedDigit()
       }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private func claimCard(_ claim: ReimbursementClaimDTO) -> some View {
@@ -304,7 +302,6 @@ private struct ReimbursementTotals: View {
                 }
                 Spacer()
                 Text(Money(minorUnits: allocation.amountMinor).formatted()).fontWeight(.semibold)
-                  .monospacedDigit()
               }.padding(.vertical, 9)
             }
           }
@@ -337,7 +334,7 @@ private struct ReimbursementTotals: View {
               Spacer()
               Text("+" + Money(minorUnits: receipt.amountMinor).formatted()).foregroundStyle(
                 receipt.voidedAt == nil ? FiscalColor.income : FiscalColor.tertiary
-              ).monospacedDigit()
+              )
               if claim.archivedAt == nil {
                 Menu {
                   if receipt.voidedAt == nil {
@@ -400,7 +397,7 @@ private struct ReimbursementTotals: View {
     private func value(_ title: String, _ amount: Int64) -> some View {
       VStack(alignment: .leading) {
         Text(title).font(.caption2).foregroundStyle(FiscalColor.tertiary)
-        Text(Money(minorUnits: amount).formatted()).font(.caption.bold()).monospacedDigit()
+        Text(Money(minorUnits: amount).formatted()).font(.caption.bold())
       }.frame(maxWidth: .infinity, alignment: .leading)
     }
   }
@@ -540,7 +537,7 @@ public struct ReimbursementReceiptEditor: View {
     }
   }
   private func receiptValue(_ title: String, _ amount: Int64) -> some View {
-    HStack { Text(title).foregroundStyle(FiscalColor.secondary); Spacer(); Text(Money(minorUnits: amount).formatted()).fontWeight(.semibold).monospacedDigit() }.font(.subheadline)
+    HStack { Text(title).foregroundStyle(FiscalColor.secondary); Spacer(); Text(Money(minorUnits: amount).formatted()).fontWeight(.semibold) }.font(.subheadline)
   }
   private var request: ReimbursementReceiptRequest? {
     guard let partyID, let accountID, let amountMinor = Int64(amount), amountMinor > 0,
@@ -668,7 +665,7 @@ public struct ReimbursementClaimEditor: View {
                       )
                       .foregroundStyle(FiscalColor.secondary)
                       Spacer()
-                      Text(Money(minorUnits: allocation.amountMinor).formatted()).monospacedDigit()
+                      Text(Money(minorUnits: allocation.amountMinor).formatted())
                     }
                   } else if isLockedAllocation(allocation.serverID) {
                     HStack {
@@ -1019,11 +1016,11 @@ public struct ReimbursementClaimEditor: View {
           }.labelsHidden().pickerStyle(.menu).frame(maxWidth: .infinity, alignment: .leading)
         }
         Text(Money(minorUnits: allocationReceivedMinor(allocation.wrappedValue.serverID)).formatted())
-          .font(.caption).monospacedDigit().foregroundStyle(FiscalColor.secondary)
+          .font(.caption).foregroundStyle(FiscalColor.secondary)
           .frame(width: 82, alignment: .trailing)
         if frozen {
           Text(Money(minorUnits: allocation.wrappedValue.amountMinor).formatted())
-            .monospacedDigit().frame(width: 116, alignment: .trailing)
+            .frame(width: 116, alignment: .trailing)
         } else {
           HStack(spacing: 3) {
             Text("¥").foregroundStyle(FiscalColor.tertiary)
@@ -1031,7 +1028,7 @@ public struct ReimbursementClaimEditor: View {
               "0.00",
               text: amountTextBinding(
                 allocation, minimum: lockedReceivedMinor(allocation.wrappedValue.serverID)))
-              .textFieldStyle(.plain).multilineTextAlignment(.trailing).monospacedDigit()
+              .textFieldStyle(.plain).multilineTextAlignment(.trailing)
           }
           .padding(.horizontal, 8).frame(width: 116, height: 32)
           .background(FiscalColor.surface, in: .rect(cornerRadius: 8))
@@ -1087,12 +1084,12 @@ public struct ReimbursementClaimEditor: View {
             HStack {
               Text("释放").foregroundStyle(FiscalColor.tertiary)
               Spacer()
-              Text(Money(minorUnits: preview.releasedMinor).formatted()).monospacedDigit()
+              Text(Money(minorUnits: preview.releasedMinor).formatted())
             }
             HStack {
               Text("新增").foregroundStyle(FiscalColor.tertiary)
               Spacer()
-              Text(Money(minorUnits: preview.newlyClaimedMinor).formatted()).monospacedDigit()
+              Text(Money(minorUnits: preview.newlyClaimedMinor).formatted())
             }
             ForEach(preview.warnings, id: \.self) {
               Label($0, systemImage: "exclamationmark.triangle.fill")
@@ -1160,7 +1157,7 @@ public struct ReimbursementClaimEditor: View {
         Text(label).font(.caption).foregroundStyle(FiscalColor.tertiary)
         Spacer()
         Text(Money(minorUnits: amountMinor).formatted())
-          .font(.system(size: 14, weight: .semibold)).monospacedDigit().foregroundStyle(color)
+          .font(.system(size: 14, weight: .semibold)).foregroundStyle(color)
       }
     }
 

@@ -14,11 +14,13 @@ from fiscal_api.api.p8_schemas import (
     AIProposalRetryRequest,
     AIProposalUndoRequest,
     AIProposalVersionRequest,
+    AIProviderSettingsReplace,
+    AIProviderSettingsResponse,
     AISettingsReplace,
     AISettingsResponse,
     ProposalStatus,
 )
-from fiscal_api.core.security import require_device_token
+from fiscal_api.core.security import AuthenticatedDeviceDependency, require_device_token
 
 router = APIRouter(
     prefix="/ai",
@@ -37,6 +39,20 @@ async def update_ai_settings(
     replacement: AISettingsReplace, service: AIServiceDependency
 ) -> AISettingsResponse:
     return await service.update_settings(replacement)
+
+
+@router.get("/provider-settings", response_model=AIProviderSettingsResponse)
+async def get_ai_provider_settings(service: AIServiceDependency) -> AIProviderSettingsResponse:
+    return await service.get_provider_settings()
+
+
+@router.put("/provider-settings", response_model=AIProviderSettingsResponse)
+async def update_ai_provider_settings(
+    replacement: AIProviderSettingsReplace,
+    actor: AuthenticatedDeviceDependency,
+    service: AIServiceDependency,
+) -> AIProviderSettingsResponse:
+    return await service.update_provider_settings(replacement, actor)
 
 
 @router.post(

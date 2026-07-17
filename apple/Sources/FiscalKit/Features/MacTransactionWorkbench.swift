@@ -7,10 +7,8 @@ public struct MacTransactionWorkbench: View {
   private let categories: CategoriesModel
   private let credit: CreditModel?
   private let installments: InstallmentModel?
-  private let preferences: RecordingPreferences?
 
   @State private var selection = Set<UUID>()
-  @State private var showCreate = false
   @State private var editing: TransactionDTO?
   @State private var pendingVoid: TransactionDTO?
   @State private var installmentPurchase: TransactionDTO?
@@ -38,7 +36,6 @@ public struct MacTransactionWorkbench: View {
     self.categories = categories
     self.credit = credit
     self.installments = installments
-    self.preferences = preferences
     let initialAccounts = accounts.accounts
     let initialCategories = categories.categories.flatMap { [$0] + $0.children }
     _accountOptions = State(initialValue: initialAccounts)
@@ -83,11 +80,6 @@ public struct MacTransactionWorkbench: View {
     .onChange(of: model.transactions.map(\.id)) { _, visible in
       selection.formIntersection(Set(visible))
     }
-    .sheet(isPresented: $showCreate) {
-      TransactionEditorSheet(
-        transactions: model, accounts: accounts, categories: categories, credit: credit,
-        preferences: preferences)
-    }
     .sheet(item: $editing) {
       TransactionEditorSheet(
         transactions: model, accounts: accounts, categories: categories, credit: credit,
@@ -130,7 +122,7 @@ public struct MacTransactionWorkbench: View {
     HStack(spacing: 12) {
       Text("流水").font(.title2.bold())
       Text("已载入 \(model.totalCount) 笔")
-        .font(.caption).foregroundStyle(FiscalColor.tertiary).monospacedDigit()
+        .font(.caption).foregroundStyle(FiscalColor.tertiary)
       Spacer(minLength: 12)
       Button { showFilters.toggle() } label: {
         Label("筛选", systemImage: model.hasAdvancedFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
@@ -157,8 +149,6 @@ public struct MacTransactionWorkbench: View {
         .help(showsInspector ? "隐藏检查器" : "显示检查器")
         .accessibilityLabel(showsInspector ? "隐藏检查器" : "显示检查器")
       }
-      Button { showCreate = true } label: { Label("记一笔", systemImage: "plus") }
-        .buttonStyle(.borderedProminent)
     }
     .padding(.horizontal, 18).frame(height: 54).background(.background)
     .overlay(alignment: .bottom) { Divider() }
@@ -190,7 +180,7 @@ public struct MacTransactionWorkbench: View {
   private var transactionTable: some View {
     Table(model.transactions, selection: $selection) {
       TableColumn("日期") { item in
-        Text(shortDate(item.businessDate)).monospacedDigit().foregroundStyle(FiscalColor.tertiary)
+        Text(shortDate(item.businessDate)).foregroundStyle(FiscalColor.tertiary)
       }.width(min: 54, ideal: 64, max: 72)
       TableColumn("摘要") { item in
         HStack(spacing: 7) {
@@ -215,7 +205,7 @@ public struct MacTransactionWorkbench: View {
       TableColumn("来源") { Text(sourceName($0.source)).foregroundStyle(FiscalColor.tertiary) }
         .width(min: 52, ideal: 62, max: 72)
       TableColumn("金额") { item in
-        amountText(item).fontWeight(.semibold).foregroundStyle(kindColor(item.kind)).monospacedDigit()
+        amountText(item).fontWeight(.semibold).foregroundStyle(kindColor(item.kind))
       }.width(min: 88, ideal: 100, max: 116)
     }
     .tableStyle(.inset(alternatesRowBackgrounds: false))
@@ -250,7 +240,7 @@ public struct MacTransactionWorkbench: View {
           }
         }
         amountText(item).font(.largeTitle.bold()).foregroundStyle(kindColor(item.kind))
-          .monospacedDigit().padding(.vertical, 14)
+          .padding(.vertical, 14)
         Divider()
         detail("类型", item.kind.title)
         detail("分类", categoryName(item))
@@ -367,7 +357,6 @@ public struct MacTransactionWorkbench: View {
 
   private var keyboardActions: some View {
     Group {
-      Button("") { showCreate = true }.keyboardShortcut("n", modifiers: .command)
       Button("") { searchFocused = true }.keyboardShortcut("f", modifiers: .command)
       Button("") { if let item = editableSelectedTransaction { editing = item } }
         .keyboardShortcut("e", modifiers: .command)

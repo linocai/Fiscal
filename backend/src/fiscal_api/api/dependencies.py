@@ -5,6 +5,7 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from fiscal_api.core.config import Settings, get_settings
+from fiscal_api.core.provider_credentials import ProviderCredentialCipher
 from fiscal_api.db.readiness import ReadinessCheck
 from fiscal_api.services.accounts import AccountService
 from fiscal_api.services.ai import AIService
@@ -69,8 +70,17 @@ def get_ai_provider(settings: Annotated[Settings, Depends(get_settings)]) -> AIP
 AIProviderDependency = Annotated[AIProvider, Depends(get_ai_provider)]
 
 
-def get_ai_service(session: SessionDependency, provider: AIProviderDependency) -> AIService:
-    return AIService(session, provider)
+def get_ai_service(
+    session: SessionDependency,
+    provider: AIProviderDependency,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> AIService:
+    return AIService(
+        session,
+        provider,
+        runtime_settings=settings,
+        credential_cipher=ProviderCredentialCipher.from_settings(settings),
+    )
 
 
 def get_device_token_service(

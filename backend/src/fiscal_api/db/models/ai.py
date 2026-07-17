@@ -58,6 +58,11 @@ class AISettings(Base):
         BigInteger, nullable=False, default=100_000
     )
     minimum_confidence_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=9_000)
+    provider_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    provider_base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    provider_model: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    provider_api_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_key_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now

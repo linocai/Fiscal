@@ -60,7 +60,7 @@ public struct MacOverviewScreen: View {
                         FiscalIconTile(item.symbol, color: item.direction == .income ? FiscalColor.income : FiscalColor.accent)
                         VStack(alignment: .leading, spacing: 2) { Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(2); Text(item.detail).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(2) }
                         Spacer()
-                        Text(item.amount.formatted(showPositiveSign: item.direction == .income)).font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(item.direction == .income ? FiscalColor.income : FiscalColor.text)
+                        Text(item.amount.formatted(showPositiveSign: item.direction == .income)).font(.subheadline.weight(.semibold)).foregroundStyle(item.direction == .income ? FiscalColor.income : FiscalColor.text)
                     }
                 }
             }
@@ -71,7 +71,7 @@ public struct MacOverviewScreen: View {
         FiscalCard(radius: 15) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack { Text("账户概览").font(.headline); Spacer(); Text("查看全部").font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.accent) }
-                Text(snapshot.available.formatted()).font(.system(size: 25, weight: .bold, design: .rounded)).monospacedDigit()
+                Text(snapshot.available.formatted()).font(.system(size: 25, weight: .bold))
                 Text("可用余额 · 净资产 \(snapshot.netWorth.formatted())").font(.caption).foregroundStyle(FiscalColor.tertiary)
                 Divider().overlay(FiscalColor.separator)
                 if snapshot.accounts.isEmpty { EmptyInline(symbol: "wallet.bifold", title: "还没有账户") }
@@ -87,7 +87,7 @@ public struct MacOverviewScreen: View {
         FiscalCard(radius: 15) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack { FiscalIconTile("arrow.up.arrow.down", color: FiscalColor.reimbursement); Text("现金流").font(.headline); Spacer(); Text("查看全部").font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.accent) }
-                HStack { Text("本月净额").font(.caption).foregroundStyle(FiscalColor.secondary); Spacer(); Text(snapshot.cashNet.formatted(showPositiveSign: true)).font(.subheadline.bold().monospacedDigit()).foregroundStyle(FiscalColor.income) }
+                HStack { Text("本月净额").font(.caption).foregroundStyle(FiscalColor.secondary); Spacer(); Text(snapshot.cashNet.formatted(showPositiveSign: true)).font(.subheadline.bold()).foregroundStyle(FiscalColor.income) }
                 Text("未来账期与计划现金流将在 P7 接入正式账本计算服务。").font(.caption).foregroundStyle(FiscalColor.tertiary).fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -122,7 +122,7 @@ private struct MetricCard: View {
         FiscalCard(radius: 15) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(label).font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
-                Text(amount.formatted(showPositiveSign: positive && amount.minorUnits > 0)).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(color).monospacedDigit().lineLimit(1).minimumScaleFactor(0.72)
+                Text(amount.formatted(showPositiveSign: positive && amount.minorUnits > 0)).font(.system(size: 24, weight: .bold)).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.72)
                 Text(detail).font(.caption2).foregroundStyle(FiscalColor.tertiary).lineLimit(1)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }

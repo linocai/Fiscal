@@ -30,7 +30,7 @@ Status: frozen for construction
 
 ## Production secrets and encryption boundary
 
-- Database credentials, token pepper and AI provider key live only in `/etc/fiscal/fiscal.env`, owned by root and readable by the `fiscal` group. They never enter releases, Git, backups, CLI arguments or Apple bundles.
+- Database credentials and token pepper live only in `/etc/fiscal/fiscal.env`, owned by root and readable by the `fiscal` group. An AI provider key entered by an active Apple device crosses HTTPS once, is encrypted with AES-GCM using a key derived from the server-only pepper, and is stored only as ciphertext in PostgreSQL. Provider keys never enter releases, Git, CLI arguments or Apple bundles and are never returned by the API; database backups may contain only their ciphertext.
 - TLS protects data in transit between Apple clients and Nginx. PostgreSQL storage and backups rely on server/cloud storage controls; application data is readable by the service to calculate reports and send selected text to the configured AI provider.
 - Therefore Fiscal is not end-to-end encrypted and exposes no control claiming otherwise. Settings describes the real transport, storage, AI and Keychain boundaries.
 

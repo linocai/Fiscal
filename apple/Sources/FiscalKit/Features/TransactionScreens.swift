@@ -8,7 +8,7 @@ private struct TransactionAmount: View {
     let transaction: TransactionDTO
     var body: some View {
         Text(prefix + Money(minorUnits: transaction.amountMinor).formatted())
-            .font(.body.weight(.semibold)).foregroundStyle(transaction.kind.color).monospacedDigit()
+            .font(.body.weight(.semibold)).foregroundStyle(transaction.kind.color)
     }
     private var prefix: String { switch transaction.kind { case .expense, .creditPurchase, .installmentFee: "−"; case .income, .installmentRefund, .reimbursementReceipt: "+"; case .transfer, .repayment: "" } }
 }
@@ -851,7 +851,7 @@ public struct MacTransactionsScreen: View {
             filterChip("全部", kind: nil)
             ForEach(TransactionKind.allCases) { filterChip($0.title, kind: $0) }
             Spacer(minLength: 8)
-            Text("共 \(model.transactions.count) 笔").font(.system(size: 12)).foregroundStyle(FiscalColor.tertiary).monospacedDigit()
+            Text("共 \(model.transactions.count) 笔").font(.system(size: 12)).foregroundStyle(FiscalColor.tertiary)
             if model.undoTransaction != nil {
                 Button("撤销") { Task { _ = await model.undoVoid() } }.buttonStyle(.plain)
                     .font(.system(size: 12, weight: .semibold)).foregroundStyle(FiscalColor.accent).keyboardShortcut("z", modifiers: .command)
@@ -907,7 +907,7 @@ public struct MacTransactionsScreen: View {
     private func transactionRow(_ item: TransactionDTO) -> some View {
         Button { model.selectedID = item.id } label: {
             HStack(spacing: 10) {
-                Text(shortDate(item.businessDate)).font(.system(size: 12)).foregroundStyle(FiscalColor.tertiary).monospacedDigit().frame(width: 50, alignment: .leading)
+                Text(shortDate(item.businessDate)).font(.system(size: 12)).foregroundStyle(FiscalColor.tertiary).frame(width: 50, alignment: .leading)
                 HStack(spacing: 9) {
                     Image(systemName: item.kind.symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(item.kind.color)
                         .frame(width: 26, height: 26).background(item.kind.color.opacity(0.12), in: .rect(cornerRadius: 7))
@@ -915,7 +915,7 @@ public struct MacTransactionsScreen: View {
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 Text(categoryName(item)).font(.system(size: 12.5)).foregroundStyle(FiscalColor.secondary).lineLimit(1).frame(width: 64, alignment: .leading)
                 Text(accountName(item)).font(.system(size: 12.5)).foregroundStyle(FiscalColor.secondary).lineLimit(1).frame(width: 86, alignment: .leading)
-                amountText(item).font(.system(size: 13, weight: .semibold)).foregroundStyle(item.kind.color).monospacedDigit().frame(width: 92, alignment: .trailing)
+                amountText(item).font(.system(size: 13, weight: .semibold)).foregroundStyle(item.kind.color).frame(width: 92, alignment: .trailing)
             }
             .padding(.horizontal, 20).frame(height: 45)
             .background(model.selectedID == item.id ? FiscalColor.accent.opacity(0.10) : Color.clear).contentShape(.rect)
@@ -935,7 +935,7 @@ public struct MacTransactionsScreen: View {
                             Text(sourceName(item.source)).font(.system(size: 12)).foregroundStyle(FiscalColor.tertiary).padding(.top, 1)
                         }
                     }
-                    amountText(item).font(.system(size: 30, weight: .bold)).tracking(-0.8).foregroundStyle(item.kind.color).monospacedDigit().padding(.top, 16).padding(.bottom, 12)
+                    amountText(item).font(.system(size: 30, weight: .bold)).tracking(-0.8).foregroundStyle(item.kind.color).padding(.top, 16).padding(.bottom, 12)
                     Divider().opacity(0.6)
                     detailRow("类型", item.kind.title)
                     detailRow("分类", categoryName(item))
@@ -947,7 +947,7 @@ public struct MacTransactionsScreen: View {
                     ForEach(item.postings) { posting in
                         HStack {
                             Text(accountNames[posting.accountID] ?? "账户").lineLimit(1); Spacer()
-                            Text(Money(minorUnits: posting.amountMinor).formatted(showPositiveSign: true)).monospacedDigit()
+                            Text(Money(minorUnits: posting.amountMinor).formatted(showPositiveSign: true))
                         }.font(.system(size: 12.5)).foregroundStyle(FiscalColor.secondary).padding(.vertical, 5)
                     }
                     if item.kind == .creditPurchase && item.installmentPlanID == nil { Button("创建分期计划") { installmentPurchase = item }.buttonStyle(.borderedProminent).padding(.top, 16) }

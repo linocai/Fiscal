@@ -173,3 +173,15 @@ def build_ai_provider(settings: Settings) -> AIProvider:
         timeout_seconds=settings.ai_provider_timeout_seconds,
         max_response_bytes=settings.ai_provider_max_response_bytes,
     )
+
+
+def build_stored_ai_provider(
+    *, base_url: str, model: str, api_key: str, settings: Settings
+) -> AIProvider:
+    return OpenAICompatibleProvider(
+        base_url=base_url,
+        model=model,
+        api_key=api_key,
+        timeout_seconds=settings.ai_provider_timeout_seconds,
+        max_response_bytes=settings.ai_provider_max_response_bytes,
+    )

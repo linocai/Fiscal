@@ -45,6 +45,7 @@ struct MacRootView: View {
     let cache: HTTPResponseCache
     @State private var section: MacSection = .overview
     @State private var showCategories = false
+    @State private var showRecordSheet = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -91,6 +92,15 @@ struct MacRootView: View {
             NavigationStack { CategoriesManagementScreen(model: categories) }
                 .frame(width: 660, height: 680)
         }
+        .sheet(isPresented: $showRecordSheet) {
+            TransactionEditorSheet(
+                transactions: transactions,
+                accounts: accounts,
+                categories: categories,
+                credit: credit,
+                preferences: recordingPreferences
+            )
+        }
     }
 
     private var sidebar: some View {
@@ -111,6 +121,30 @@ struct MacRootView: View {
                     }
                 }.buttonStyle(.plain)
             }
+            Button { showRecordSheet = true } label: {
+                VStack(spacing: 5) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .bold))
+                    Text("记一笔")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(width: 84, height: 52)
+                .background(
+                    LinearGradient(
+                        colors: [FiscalColor.accent, FiscalColor.accentDark],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: .rect(cornerRadius: 14)
+                )
+                .shadow(color: FiscalColor.accent.opacity(0.28), radius: 8, y: 4)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("n", modifiers: .command)
+            .help("记一笔（⌘N）")
+            .accessibilityIdentifier("mac.globalRecord")
+            .padding(.top, 4)
             Spacer()
         }
         .frame(width: 110)

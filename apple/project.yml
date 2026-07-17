@@ -11,8 +11,8 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     GENERATE_INFOPLIST_FILE: YES
-    MARKETING_VERSION: 1.0.0
-    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.1.0
+    CURRENT_PROJECT_VERSION: 4
 targets:
   FiscalKit:
     type: framework
@@ -47,7 +47,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal
         PRODUCT_NAME: Fiscal
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        DEVELOPMENT_TEAM: J6H3FXT658
+        DEVELOPMENT_TEAM: HX73DFL88G
         CODE_SIGN_STYLE: Automatic
       configs:
         Debug:
