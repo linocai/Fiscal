@@ -143,8 +143,8 @@ public struct IOSReportingOverviewScreen: View {
         HStack(spacing: 12) {
           FiscalIconTile("arrow.up.arrow.down", color: FiscalColor.reimbursement)
           VStack(alignment: .leading, spacing: 3) {
-            Text("本月实际现金流").font(.headline)
-            Text("流入 \(Money(minorUnits: value.cashFlow.inflowMinor).formatted()) · 流出 \(Money(minorUnits: value.cashFlow.outflowMinor).formatted())")
+            Text("未来 30 天现金流").font(.headline)
+            Text("预计流入 \(Money(minorUnits: value.cashFlow.inflowMinor).formatted()) · 预计流出 \(Money(minorUnits: value.cashFlow.outflowMinor).formatted())")
               .font(.caption).foregroundStyle(FiscalColor.tertiary).fixedSize(horizontal: false, vertical: true)
           }
           Spacer()
@@ -361,7 +361,7 @@ public struct MacReportingOverviewScreen: View {
               spacing: 12
             ) {
               metricButton("本月消费", value.spending.grossConsumptionMinor, FiscalColor.text) { navigate(.spending) }
-              metricButton("现金流净额", value.cashFlow.netMinor, value.cashFlow.netMinor >= 0 ? FiscalColor.income : FiscalColor.expense) { navigate(.cashFlow) }
+              metricButton("未来 30 天现金流", value.cashFlow.netMinor, value.cashFlow.netMinor >= 0 ? FiscalColor.income : FiscalColor.expense) { navigate(.cashFlow) }
               metricButton("信用应还", value.currentCreditDebtMinor, FiscalColor.debt) { navigate(.debt) }
               metricButton("报销待回款", value.reimbursementOutstandingMinor, FiscalColor.reimbursement) { navigate(nil) }
             }
