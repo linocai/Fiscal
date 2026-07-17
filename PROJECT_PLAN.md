@@ -2,7 +2,7 @@
 
 > 计划版本：v0.4（施工权威版）
 > 日期：2026-07-17
-> 状态：P15 已完成；P16 v1.2.0 前端全量审查修复已立项
+> 状态：P16 v1.2.0 前端全量审查修复已完成（待用户目视/真机验收后 tag）
 > 旧项目参考：`/Users/linotsai/Lino/LinoFinance`
 > 前端视觉合同：`design_handoff_fiscal_app/Fiscal Prototype.dc.html` 与同目录 `README.md`
 
@@ -1032,8 +1032,9 @@ Back Tap
 
 ## 16. 当前状态
 
-- 当前施工位置：P16 v1.2.0 前端全量审查修复已立项（见 §12 P16）；输入为 `archive/frontend-audit-2026-07-17.md`，按 B1 死代码→B2 基础设施→B3 横向模式→B4 逐模块→B5 收口五批次施工，等待 build。
-- [2026-07-17] 立项 P16：把前端全量审查 41 项（H1–H4 / M1–M15 / L1–L19 / D1–D3）编入 v1.2.0 修复批次，`MARKETING_VERSION` 计划 1.1.0→1.2.0；已核实下一 Phase 编号为 P16（docs/qa 已有 p1–p15），D3 确认为预览专用假数据不上线。
+- 当前施工位置：P16 v1.2.0 前端全量审查修复已完成（见 §12 P16）；41 项全部落地——已修 33 项、疑似核实成立并修 8 项中的 7 项（M13/L1/L2/L7/L8/L14/L17）、疑似核实不成立不修 1 项（L9，客户端已与后端状态机一致）、裁决项按默认执行 3 项（D3 删、L14 顺手修、L19 现金流时区记录不修）。验收记录见 `docs/qa/p16/results.md`。
+- [2026-07-17] 立项 P16：把前端全量审查 41 项（H1–H4 / M1–M15 / L1–L19 / D1–D3）编入 v1.2.0 修复批次，`MARKETING_VERSION` 1.1.0→1.2.0；已核实下一 Phase 编号为 P16（docs/qa 已有 p1–p15），D3 确认为预览专用假数据不上线。
+- [2026-07-17] 完成 P16：B1 死代码→B2 基础设施→B3 横向模式→B4 逐模块→B5 收口五批次逐批 `swift test` 通过（78 passed，含新增 P16 基础设施/横向/交易单测；顺带修复了一处既有基线夹具缺 `AIProposalDTO.target` 的失败）；含 View 改动批次与收口跑 iOS+macOS App target 构建；`MARKETING_VERSION` 1.1.0→1.2.0、`CURRENT_PROJECT_VERSION` 9→10，双端 Debug 与签名 Release 构建通过。高危金额路径（H4/M5/M7/L6/L7）已加针对性单测与契约核实；真机/模拟器交互与截图、真实写入手动核对留用户最终验收。
 - P15 V1.1 月度现金流批量编辑日期修复已完成；验收记录见 `docs/qa/p15/results.md`。
 
 - P15 完成证据：生产车贷系列已从不可变创建修订恢复为 2026-09-22 至 2029-09-22 共 37 期、37 个不同日期，全部为每期 ¥2,533 出账；恢复没有写正式流水。后端已部署提交 `da102009a0ed`，Ruff、strict Pyright、132 passed / 95 skipped 无数据库测试、4 passed PostgreSQL 集成测试和双端构建均通过；V1.1.0 Build 9 已替换 macOS 应用并安装到实体 iPhone。
