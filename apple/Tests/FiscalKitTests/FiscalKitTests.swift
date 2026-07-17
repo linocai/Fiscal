@@ -7,7 +7,7 @@ import Testing
 struct FiscalKitP8Tests {
   @Test("AI proposal decodes strict integer confidence and authoritative pending count")
   func proposalContract() throws {
-    let data = Data(#"{"items":[{"id":"00000000-0000-0000-0000-000000000081","source":"text","text":"午餐 28 元","content_fingerprint":"abc","provider":"fake","model":"fixture","kind":"expense","amount_minor":2800,"occurred_at":"2026-07-16T04:00:00Z","title":"午餐","note":null,"account_id":"00000000-0000-0000-0000-000000000082","category_id":"00000000-0000-0000-0000-000000000083","destination_account_id":null,"credit_cycle_id":null,"field_confidences":{"kind":9500,"amount_minor":9600,"occurred_at":9300,"title":9400,"note":9000,"account_id":9200,"category_id":9100,"destination_account_id":9000},"overall_confidence_bps":9300,"missing_fields":[],"reason_codes":["manual_confirmation_required"],"explanation":"匹配现有账户和分类","status":"pending","error_code":null,"error_message":null,"transaction_id":null,"transaction_version":null,"version":2,"created_at":"2026-07-16T04:00:00Z","updated_at":"2026-07-16T04:00:00Z","executed_at":null,"ignored_at":null,"undone_at":null}],"next_cursor":null,"pending_count":7}"#.utf8)
+    let data = Data(#"{"items":[{"id":"00000000-0000-0000-0000-000000000081","source":"text","text":"午餐 28 元","content_fingerprint":"abc","provider":"fake","model":"fixture","target":"transaction","kind":"expense","amount_minor":2800,"occurred_at":"2026-07-16T04:00:00Z","title":"午餐","note":null,"account_id":"00000000-0000-0000-0000-000000000082","category_id":"00000000-0000-0000-0000-000000000083","destination_account_id":null,"credit_cycle_id":null,"field_confidences":{"kind":9500,"amount_minor":9600,"occurred_at":9300,"title":9400,"note":9000,"account_id":9200,"category_id":9100,"destination_account_id":9000},"overall_confidence_bps":9300,"missing_fields":[],"reason_codes":["manual_confirmation_required"],"explanation":"匹配现有账户和分类","status":"pending","error_code":null,"error_message":null,"transaction_id":null,"transaction_version":null,"version":2,"created_at":"2026-07-16T04:00:00Z","updated_at":"2026-07-16T04:00:00Z","executed_at":null,"ignored_at":null,"undone_at":null}],"next_cursor":null,"pending_count":7}"#.utf8)
     let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
     let page = try decoder.decode(AIProposalPage.self, from: data)
     #expect(page.pendingCount == 7)
@@ -103,18 +103,6 @@ struct FiscalKitTests {
   @Test("Money uses integer minor units")
   func moneyDecimal() {
     #expect(Money(minorUnits: 12_345).decimal == Decimal(string: "123.45"))
-  }
-
-  @Test("Overview derives cash net")
-  func derivesCashNet() {
-    #expect(OverviewSnapshot.sample.cashNet.minorUnits == 368_670)
-  }
-
-  @Test("All required presentation states are available")
-  func presentationStates() {
-    #expect(
-      Set(OverviewFixture.allCases.map(\.rawValue))
-        == Set(["normal", "empty", "loading", "offline", "unauthorized", "longContent"]))
   }
 
   @Test("System status decodes the backend contract")
