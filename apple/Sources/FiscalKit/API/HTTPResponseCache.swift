@@ -46,6 +46,10 @@ public actor HTTPResponseCache {
     entries[key] = Entry(data: data, expiresAt: now.addingTimeInterval(min(ttl, 30)), storedAt: now)
   }
 
+  public func remove(_ key: String) {
+    entries.removeValue(forKey: key)
+  }
+
   public func removeAll() {
     entries.removeAll(keepingCapacity: false)
   }

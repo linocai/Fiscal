@@ -89,6 +89,7 @@
 		A306C34BEC185CD5FE479DF0 /* MoneyFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCB93673B1BC323E17CA866A /* MoneyFormat.swift */; };
 		A336173A53CFCB17588F8CB0 /* MasterDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 549791302DE4F9854A26918B /* MasterDataModels.swift */; };
 		A3382FD8082374C7FBF38CD1 /* ReportingModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83EEBE7F74FA862A373C393A /* ReportingModel.swift */; };
+		A4A5F02D3C37B425F476E6B4 /* P16InfrastructureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 882403E1F959EBCF7E11F243 /* P16InfrastructureTests.swift */; };
 		A93A8DAFC29E991E35413859 /* TransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0067D7F4A0681CA61009D6 /* TransactionRepository.swift */; };
 		A980958002502D76EE6189C6 /* DeviceSecurityRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971383DF03B4FB6974955E6F /* DeviceSecurityRepository.swift */; };
 		AEB258C3DF48989FDDC59B2B /* OverviewSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 185A49CF04897A7803A09434 /* OverviewSnapshot.swift */; };
@@ -260,6 +261,7 @@
 		7B76007E6901E55864724E2F /* InstallmentScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentScreens.swift; sourceTree = "<group>"; };
 		804F88664C4025B50AD0FC75 /* FiscalKitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalKitTests.swift; sourceTree = "<group>"; };
 		83EEBE7F74FA862A373C393A /* ReportingModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportingModel.swift; sourceTree = "<group>"; };
+		882403E1F959EBCF7E11F243 /* P16InfrastructureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P16InfrastructureTests.swift; sourceTree = "<group>"; };
 		9654628B5C1FF4264957DEA3 /* TransactionScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionScreens.swift; sourceTree = "<group>"; };
 		971383DF03B4FB6974955E6F /* DeviceSecurityRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSecurityRepository.swift; sourceTree = "<group>"; };
 		9A3AB4BE7E4F9C491EEA3497 /* ReimbursementRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimbursementRepository.swift; sourceTree = "<group>"; };
@@ -456,6 +458,7 @@
 				23BD6A03B99F7398A9E508A6 /* P10InfrastructureTests.swift */,
 				1E62F028D5C7F476391834BF /* P10MacWorkbenchTests.swift */,
 				5DFD347A403BBE5D74B1F7F0 /* P11SecurityTests.swift */,
+				882403E1F959EBCF7E11F243 /* P16InfrastructureTests.swift */,
 			);
 			name = FiscalKitTests;
 			path = Tests/FiscalKitTests;
@@ -735,6 +738,7 @@
 				93D596E390E747EF3060EEAB /* P10InfrastructureTests.swift in Sources */,
 				D7D2D318157502A371C00E48 /* P10MacWorkbenchTests.swift in Sources */,
 				2EAE26195F0E9BA6687B253E /* P11SecurityTests.swift in Sources */,
+				A4A5F02D3C37B425F476E6B4 /* P16InfrastructureTests.swift in Sources */,
 				8C3520FB72EC576D0544255C /* P9InputTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -43,7 +43,10 @@ public actor APITransport {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let responseCache: HTTPResponseCache
-    private var inFlightGETs: [String: Task<(Data, HTTPURLResponse), Error>] = [:]
+    /// Monotonic marker bumped on every successful mutation. A GET only writes its response back
+    /// to the cache if this is unchanged from when the GET was issued, so a read that was already
+    /// in flight when a mutation cleared the cache can never re-poison it with pre-mutation data.
+    private var cacheGeneration: UInt64 = 0
 
     public init(baseURL: URL, session: URLSession = .shared, tokenStore: KeychainTokenStore = .init(), responseCache: HTTPResponseCache = .shared) {
         self.baseURL = baseURL; self.session = session; self.tokenProvider = { try await tokenStore.read() }; self.responseCache = responseCache
@@ -63,9 +66,8 @@ public actor APITransport {
         _ path: String, method: String = "GET", query: [URLQueryItem] = [], headers: [String: String] = [:],
         authorizationToken: String? = nil, body: Body? = Optional<String>.none
     ) async throws -> Response {
-        var components = URLComponents(url: baseURL.appending(path: "api/v1/\(path)"), resolvingAgainstBaseURL: false)!
-        if !query.isEmpty { components.queryItems = query }
-        var request = URLRequest(url: components.url!); request.httpMethod = method; request.timeoutInterval = 15
+        var request = URLRequest(url: try Self.endpointURL(baseURL: baseURL, path: path, query: query))
+        request.httpMethod = method; request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
         let token: String?
@@ -74,38 +76,47 @@ public actor APITransport {
         if let token, !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body { request.httpBody = try encoder.encode(body); request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         let cacheKey = request.httpMethod == "GET" ? cacheKey(for: request, token: token) : nil
-        if let cacheKey, let data = await responseCache.data(for: cacheKey) {
-            do { return try decoder.decode(Response.self, from: data) } catch { throw FiscalAPIError.invalidResponse }
+        if let cacheKey, let cached = await responseCache.data(for: cacheKey) {
+            if let decoded = try? decoder.decode(Response.self, from: cached) { return decoded }
+            // Poisoned cache entry (undecodable body): evict it and fall through to the network
+            // instead of failing every read for the rest of the TTL.
+            await responseCache.remove(cacheKey)
         }
-        let (data, http) = try await perform(request, cacheKey: cacheKey)
+        let startGeneration = cacheGeneration
+        let (data, http) = try await perform(request)
         guard (200..<300).contains(http.statusCode) else {
             let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
             if http.statusCode == 401 { throw FiscalAPIError.unauthorized(detail) }
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
-        if let cacheKey { await responseCache.store(data, for: cacheKey) }
-        else { await responseCache.removeAll() }
+        if let cacheKey {
+            // GET: decode before caching so an undecodable body never gets stored, and only cache
+            // if no mutation bumped the generation while this read was in flight (M14).
+            let decoded: Response
+            do { decoded = try decoder.decode(Response.self, from: data) }
+            catch { throw FiscalAPIError.invalidResponse }
+            if cacheGeneration == startGeneration { await responseCache.store(data, for: cacheKey) }
+            return decoded
+        }
+        // Mutation: invalidate every cache entry on success regardless of body decodability.
+        cacheGeneration &+= 1
+        await responseCache.removeAll()
         do { return try decoder.decode(Response.self, from: data) } catch { throw FiscalAPIError.invalidResponse }
     }
 
     public func requestNoContent(_ path: String, method: String, query: [URLQueryItem] = []) async throws {
-        var components = URLComponents(url: baseURL.appending(path: "api/v1/\(path)"), resolvingAgainstBaseURL: false)!
-        if !query.isEmpty { components.queryItems = query }
-        var request = URLRequest(url: components.url!); request.httpMethod = method; request.timeoutInterval = 15
+        var request = URLRequest(url: try Self.endpointURL(baseURL: baseURL, path: path, query: query))
+        request.httpMethod = method; request.timeoutInterval = 15
         if let token = try await tokenProvider(), !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response): (Data, URLResponse)
-        do { (data, response) = try await session.data(for: request) }
-        catch is CancellationError { throw CancellationError() }
-        catch let error as URLError where error.code == .cancelled { throw CancellationError() }
-        catch { throw FiscalAPIError.transport(error.localizedDescription) }
-        guard let http = response as? HTTPURLResponse else { throw FiscalAPIError.invalidResponse }
+        let (data, http) = try await perform(request)
         guard (200..<300).contains(http.statusCode) else {
             let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
             if http.statusCode == 401 { throw FiscalAPIError.unauthorized(detail) }
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
+        cacheGeneration &+= 1
         await responseCache.removeAll()
     }
 
@@ -115,19 +126,14 @@ public actor APITransport {
         query: [URLQueryItem] = [],
         accept: String = "application/octet-stream"
     ) async throws -> Data {
-        var components = URLComponents(
-            url: baseURL.appending(path: "api/v1/\(path)"),
-            resolvingAgainstBaseURL: false)!
-        if !query.isEmpty { components.queryItems = query }
-        guard let url = components.url else { throw FiscalAPIError.invalidResponse }
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: try Self.endpointURL(baseURL: baseURL, path: path, query: query))
         request.httpMethod = "GET"
         request.timeoutInterval = 30
         request.setValue(accept, forHTTPHeaderField: "Accept")
         if let token = try await tokenProvider(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        let (data, http) = try await perform(request, cacheKey: nil)
+        let (data, http) = try await perform(request)
         guard (200..<300).contains(http.statusCode) else {
             let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
             if http.statusCode == 401 { throw FiscalAPIError.unauthorized(detail) }
@@ -142,25 +148,30 @@ public actor APITransport {
         return "\(request.url?.absoluteString ?? "")|\(tokenScope)"
     }
 
-    private func perform(_ request: URLRequest, cacheKey: String?) async throws -> (Data, HTTPURLResponse) {
-        if let cacheKey, let existing = inFlightGETs[cacheKey] { return try await existing.value }
-        let task = Task<(Data, HTTPURLResponse), Error> {
-            do {
-                let (data, response) = try await session.data(for: request)
-                guard let http = response as? HTTPURLResponse else { throw FiscalAPIError.invalidResponse }
-                return (data, http)
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch let error as URLError where error.code == .cancelled {
-                throw CancellationError()
-            } catch let error as FiscalAPIError {
-                throw error
-            } catch {
-                throw FiscalAPIError.transport(error.localizedDescription)
-            }
+    /// Builds the endpoint URL, percent-encoding literal "+" so it round-trips as "+" rather than
+    /// being read as a space by the server's form-style query parser (e.g. FastAPI `parse_qsl`).
+    static func endpointURL(baseURL: URL, path: String, query: [URLQueryItem]) throws -> URL {
+        var components = URLComponents(
+            url: baseURL.appending(path: "api/v1/\(path)"), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty {
+            components.queryItems = query
+            components.percentEncodedQuery = components.percentEncodedQuery?
+                .replacingOccurrences(of: "+", with: "%2B")
         }
-        if let cacheKey { inFlightGETs[cacheKey] = task }
-        defer { if let cacheKey { inFlightGETs.removeValue(forKey: cacheKey) } }
-        return try await task.value
+        guard let url = components.url else { throw FiscalAPIError.invalidResponse }
+        return url
+    }
+
+    /// Structured, cancellable network call. Because `session.data(for:)` is awaited directly in
+    /// the caller's task, cancelling that task (e.g. a disappearing view) cancels the request.
+    private func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let data: Data
+        let response: URLResponse
+        do { (data, response) = try await session.data(for: request) }
+        catch is CancellationError { throw CancellationError() }
+        catch let error as URLError where error.code == .cancelled { throw CancellationError() }
+        catch { throw FiscalAPIError.transport(error.localizedDescription) }
+        guard let http = response as? HTTPURLResponse else { throw FiscalAPIError.invalidResponse }
+        return (data, http)
     }
 }
