@@ -1,8 +1,8 @@
 # Fiscal · PROJECT_PLAN
 
-> 计划版本：v0.3（施工权威版）
-> 日期：2026-07-16
-> 状态：P11 已获用户放行，P12 施工中
+> 计划版本：v0.4（施工权威版）
+> 日期：2026-07-17
+> 状态：P15 已完成；P16 v1.2.0 前端全量审查修复已立项
 > 旧项目参考：`/Users/linotsai/Lino/LinoFinance`
 > 前端视觉合同：`design_handoff_fiscal_app/Fiscal Prototype.dc.html` 与同目录 `README.md`
 
@@ -543,7 +543,7 @@ AI 输出结构化数据，不直接写数据库。至少包含：
 
 ---
 
-## 12. P1–P12 施工计划
+## 12. P1–P16 施工计划
 
 ### 12.1 固定施工循环
 
@@ -793,6 +793,152 @@ Back Tap
 
 验收：2026-09 至 2029-09 的 37 期车贷均为每月 22 日、每期 ¥2,533 出账；重复日期消失，未生成或修改任何正式流水。
 
+### P16：v1.2.0 前端全量审查修复与发版收口
+
+目标：修复 `archive/frontend-audit-2026-07-17.md` 全部 41 项（H1–H4 / M1–M15 / L1–L19 / D1–D3）并完成 v1.2.0 版本收口。本期为修复型 Phase，不重构架构、不改后端契约（除非疑似项核实后确需）；审查行号为快照，施工一律以符号定位为准。全部问题都要落地——疑似项须先核实再修，若核实后判断不修必须在本文件写明理由留用户裁决，不得无声砍掉。
+
+修复原则（审查 §五 横向规律，按模式统一扫，勿逐条各修各的）：
+
+1. 双端防护不对称：作废校验、valid 校验、selection 收敛、错误横幅——漏的几乎都在 iOS；修一处必对照 mac 另一端。
+2. 预览/派生状态不随输入失效：报销预览、分期 eligibility、报表 drillDown 同一模式。
+3. 缺 generation 竞态守卫：照抄仓内正确样板 `ReportingModel`、`InstallmentModel.loadAccount`。
+4. 错误提示链路：iOS 多个 sheet 内无错误展示区，错误写在被遮挡的主界面上。
+   不重复排查审查 §六「确认无问题」清单（分页去重、乐观版本号、Money/CNYAmountParser 边界、iso8601 解码、Keychain、各薄传输层等）。
+
+高危区（金额/记账写入路径）：**H4、M5、M7、L6、L7**。改动后必须跑针对性 `swift test`，并手动走一遍真实 posting/回款/还款/入账路径，确认写入方向与金额正确后才算通过。
+
+批次门禁：每批次后跑 `swift test`（FiscalKitTests）；凡改 SwiftUI View 的批次，收口前必须 `xcodebuild` 跑 iOS 与 macOS App target（只跑 SwiftPM build/test 不暴露 View 层问题）。UI 行为类修复的手动/截图确认点写在各批验收里。
+
+#### 批次 B1 · 死代码清理（先行，缩小后续 diff 面）
+
+涉及文件：`TransactionScreens.swift`、`ReportingScreens.swift`、`SharedOverviewComponents.swift`、`IOSOverviewScreen.swift`、`MacOverviewScreen.swift`、`PreviewSupport/OverviewFixtures.swift`。
+
+- **D1** 删 `MacTransactionsScreen`（全仓无引用，mac 走 Workbench）；其内藏 bug 随删除消失，无需单修。
+- **D2** 删 `IOSCashFlowScreen` / `MacCashFlowScreen`（无构造点，且污染共享 lens）。
+- **D3** 总览 fixture 预览专用集：已核实 live 首页由 `IOSReportingOverviewScreen` / `MacReportingOverviewScreen`（`ReportingScreens.swift`）渲染真实数据，`IOSOverviewScreen` / `MacOverviewScreen` / `OverviewFixtures` 及仅被其引用的 `SpendCard` / `CategoryBar` / `AccountRow` / `ActivityRow` 为预览专用假数据（硬编码「较上月 ↓ 8.2%」「7月1日–14日」「AI 角标恒 1」，不上线）。默认删除该预览集；**必须保留**被真实报表总览复用的 `EmptyInline` 与 public `ConnectionBadge`（随文件删除则迁至 `FiscalDesign.swift` 或 `ReportingScreens.swift`）。若用户希望保留为将来「离线预览」脚手架，则改为读 `snapshot.period` / `snapshot.previousMonthDelta` / 真实 pending count，二选一——删/留请用户裁决，默认删。
+
+验收：全仓无对已删符号的引用；`swift test` 通过；双端 `xcodebuild` 通过；真实首页总览显示不变。
+
+#### 批次 B2 · 基础设施层（`APITransport` 集中改）
+
+涉及文件：`API/APITransport.swift`、`API/HTTPResponseCache.swift`、`Domain/TransactionDTO.swift`；入口 `Data/TransactionRepository.swift`、`Data/ReimbursementRepository.swift`。
+
+- **M14** 在途 GET + 变更并发击穿缓存失效不变量：用缓存 epoch/generation 标记——变更成功 `removeAll()` 后，变更前发起的在途 GET 完成不得写回缓存；变更后同 URL GET 不得并入变更前的在途任务。对照 `HTTPResponseCache.swift` 注释承诺的不变量。
+- **M15** GET 先入缓存后解码 → 改为解码成功后再 `store`；缓存命中路径解码失败时删除该坏条目并回源网络，不再 30 秒内反复抛 `invalidResponse`。
+- **L15** 查询参数 `+` 不转义：对 `queryItems` 值 percent-encode（`+`→`%2B`），使 FastAPI `parse_qsl` 不解成空格。回归「7+1」「C++」搜索（入口 `TransactionRepository` / `ReimbursementRepository`）。
+- **L16** 请求不响应调用方取消：把 `request`/取数路径改为结构化并发（与可取消的 `requestNoContent` 一致），视图销毁即取消，现有取消映射真正生效。
+- **L17【疑似】** `TransactionDTO` 用 `decode(Optional.self)` → `decodeIfPresent`。核实手段：对照后端 transaction 响应 schema（`backend/src/fiscal_api`）是否可能省略键而非发 null；无论结论，`decodeIfPresent` 更稳健且无副作用，建议直接改。
+
+验收：M14/M15/L15 补最小缓存并发、坏报文、查询转义单测并通过；`swift test` 全绿。本批触及全部网络路径，B2 后双端 smoke 一次确认无回归（本批无 View 改动，Release build 归 B5）。
+
+#### 批次 B3 · 横向模式修复（按根因成组）
+
+**B3-1 竞态 generation 守卫组**（§五.3，样板 `ReportingModel` / `InstallmentModel.loadAccount`）— 文件 `CashFlowModel.swift`、`ReimbursementModel.swift`、`InstallmentModel.swift`、`CreditModel.swift`。
+
+- **M12** `CashFlowModel.loadHistory()` 加 generation 守卫 + 校验 `history.month == historyMonth`，消除翻页乱序（标题新月/列表旧月）。
+- **L10** `ReimbursementModel.previewReceipt` / `previewReceiptReplacement` 加 generation 守卫，迟到响应不覆盖已失效预览。
+- **L13** `InstallmentModel` / `CreditModel` 的 `CancellationError` 分支重置 phase 缺守卫：旧请求取消不得把新请求 phase 打回 `.idle`；连带删除 `CreditModel.task` 死代码（从未赋值，`task?.cancel()` 空转）。
+
+**B3-2 预览/派生状态失效组**（§五.2）— 文件 `ReimbursementScreens.swift`、`ReimbursementModel.swift`、`InstallmentScreens.swift`、`InstallmentModel.swift`。
+
+- **M6** 报销预览跨编辑会话泄漏：编辑器 dismiss 时清 `receiptPreview` / `claimPreview`，重开 sheet 不显示上一张单预览、按钮不误变「确认到账」。
+- **M11** 分期创建复用过期 eligibility：新请求前清空 `InstallmentModel.eligibility`，并校验 `eligibility.purchaseTransactionID == purchase.id`，消费 B 请求失败不得沿用消费 A 的额度/起始账单日选项。
+
+**B3-3 iOS 错误展示链路组**（§五.4）— 文件 `ReimbursementScreens.swift`、`TransactionScreens.swift`、`AIProposalScreens.swift`、`AIProposalModel.swift`、`AISettingsModel.swift`。
+
+- **H2** iOS 报销 `compactEditor` 全篇不渲染 `model.message`：补 iOS 错误 banner（对照 mac `macMessageBanner`），`create`/`preview`/`update` 失败在 sheet 内可见。
+- **M4** iOS 批量分类失败错误被 sheet 遮挡：sheet 内加错误展示区，不再只写被遮挡的主界面 banner/alert。
+- **L3** AI 提案 `loadMore` 不过滤 `CancellationError` 致视图销毁弹红条：加 `catch is CancellationError {}`（对照 Credit/InstallmentModel）。
+- **L4** AI 提案编辑器金额无效保存静默：guard return 处补错误提示。
+- **L5** AI 设置保存成功后补充 GET 失败误报「保存失败」：区分「保存已成功」与「回读失败」，成功不返回 false（避免重试撞 `expected_version` 冲突）；`saveProvider` 补 generation 守卫。
+
+验收：H2/M4 手动制造失败（版本冲突/金额超限/网络断）确认 sheet 内可见错误（截图）；L3 快速打开又离开 AI 提案不弹红条；B3-1/B3-2 连续快速翻页/切换消费无标题列表错配、无跨会话预览残留；`swift test` 通过。
+
+#### 批次 B4 · 逐模块点修
+
+**B4-1 交易** — 文件 `TransactionModels.swift`、`TransactionScreens.swift`、`MacTransactionWorkbench.swift`。
+
+- **H4【高危·金额写入】** 切换交易类型残留不兼容分类/账户：`changeKind` 按新方向清理 `categoryID`（支出↔收入）、`destinationAccountID`（转账↔还款信用错配）、非信用 `accountID`（收入→信用消费）；`validate` 增加方向/账户类型一致性校验，不只查非空。
+- **M1** iOS 已作废流水仍可编辑/再作废/建分期：可编辑条件补 `voidedAt == nil`（对照 `MacTransactionWorkbench` 已有）。
+- **M2** 高级筛选双向绑定 model：筛选草稿与已应用状态解耦，关闭 sheet/popover 不改已应用筛选，只有「应用」才 `load`，图标激活态与列表口径一致；双端同修。
+- **M3** iOS 批量选择 `selectedIDs` 不随刷新收敛：刷新后 `formIntersection` 可见集（对照 Workbench）；全失效时 `batchClassify` 给明确提示而非静默 false。
+- **L7【高危·金额写入·疑似】** 新建还款 `cycleID` 不在 `cycleOptions` 时超额校验被跳过。核实手段：走「新建还款」路径确认 `cyclesForRepayment(retaining:)` 只对编辑保留账期、新建选中账期可能落在 options 外致 guard 跳过；确认后让超额校验覆盖新建路径。
+- **L11** iOS「清除筛选」不重置 kind、不触发 reload：清除时一并清 `kind` 并 `load`；或从 `hasAdvancedFilters` 移除无 UI 控件的 `kind`，消除图标常亮。
+- **L12** loadOptions 重试成功覆盖用户已手选类型/账户：修正 `didApplyPreferences` 语义，重试成功不再 `apply(preferences:)` 覆盖用户手选。
+- **L14【疑似】** 分页 `isLoadingMore` 竞态窗口。核实手段：确认被取消旧请求的 defer 是否清掉新请求置的 true；已有去重兜底，若核实仅极短窗口且去重完全覆盖，可提议降级为观察项（写明理由留裁决），否则按请求归属再清 flag。
+
+验收：H4 手动切换各类型组合，Picker 不残留错误引用、写入方向与金额正确（金额路径重点核）；M1/M2/M3 双端行为一致；`swift test` 通过。
+
+**B4-2 报销** — 文件 `ReimbursementScreens.swift`、`ReimbursementModel.swift`。
+
+- **H1** iOS 报销筛选出空结果被困空态：空态分支也渲染 `filterChips`（或把筛选条移出 `model.claims` 非空分支），空态提供清除筛选入口，「已取消」等筛选返回 0 条可恢复；修正误导文案（非「新建报销单后…」）。
+- **M5【高危·金额写入】** iOS「确认保存」不校验 valid + 非法金额文本不使预览失效：`amountTextBinding` 解析后回写 `parties`/触发 `onChange`，非法文本使 `claimPreview` 失效；「确认保存」加 `!valid` 禁用（对照 mac 926 行）。同属 §五.2 预览失效模式。
+- **M7【高危·金额写入】** 回款按「分」、报销单按「元」单位不一致（易 100 倍错）：回款金额统一走 `CNYAmountParser` 按元解析、按元预填，去掉 `Int64(amount)` 当分；iOS 用支持小数点的键盘。
+- **L9【疑似】** 已取消报销单仍可编辑/作废回款。核实手段：对照报销状态机确认 cancelled 态菜单是否应禁用（对照已拦截的 `matrixFrozen` 与「恢复回款」）；确认后菜单条件补 cancelled 判断。
+
+验收：H1 手动筛「已取消」得空态仍可清筛选（截图）；M7 回款与报销单同一金额录入单位一致、无 100 倍偏差（金额路径重点核）；`swift test` 通过。
+
+**B4-3 报表** — 文件 `ReportingModel.swift`、`ReportingScreens.swift`、`ReportingDTO.swift`。
+
+- **H3** 报表页 init 里改共享模型致口径被随机重置：把 `model.lens = …` 移出 `IOSReportsScreen.init`（改为 `.task`/`onAppear` 幂等设置或由调用方一次性传入），消除父视图 body 重算重置用户选择与「视图更新期间改 @Observable」反模式。
+- **M8** 切换 lens 不清 drillDown：`lens` 加 `didSet` 清 `drillCategoryID`/drillDown 列表（§五.2），「加载更多」不再用新 lens + 残留 drill 发混口径请求。
+- **M9** 总览页出现即重置报表月份：总览 `ensureCurrentMonth` 与报表页已选月份解耦（独立 month 状态，或 ensureCurrentMonth 不动报表已选月），翻历史月后瞄总览不被重置、下钻不被清。
+
+验收：mac 下钻后切现金流不混列；翻历史月→看总览→回报表月份保持；`swift test` 通过。
+
+**B4-4 主数据 / 分期 / 现金流** — 文件 `MasterDataScreens.swift`、`MasterDataModels.swift`、`InstallmentScreens.swift`、`CashFlowScreens.swift`、`CashFlowModel.swift`。
+
+- **M10** 新建信用账户不动 Stepper 必然校验失败：Stepper Binding 的 `?? 1` 回退回写 draft（或 `statementDay`/`dueDay` 给合法初值），UI 显示与 validate 一致。
+- **M13【疑似】** 编辑手动现金流项丢备注。核实手段：对照后端 PUT 语义 `backend/src/fiscal_api/api/routes/cash_flow.py`（`PUT /cash-flow-items/{id}` → `CashFlowReplace`）、`services/cash_flow.py:207 update` 与 `api/p13_schemas.py:85 CashFlowReplace`，确认是否全量替换致缺省 note 被清；确认后 `CashFlowEditorSheet` 补备注框或 `seed()` 透传 `item.note`。
+- **L1【疑似】** 分期编辑器强解包 `purchase.accountID!` / `categoryID!`（DTO 为 `UUID?`）。核实手段：确认信用消费业务上是否保证 account/category 非空；无论结论改为守卫式解包/早返回，杜绝 nil 崩溃。
+- **L6【高危·金额写入】** 现金流转账入账缺转入账户校验：`destinationID` 非空且 `!= accountID` 才可提交（对照 `EditorSheet:451`）。
+- **L8【疑似】** 系统现金流项编辑器把 expected 静默改 confirmed。核实手段：对照 `CashFlowSystemReplace`（`api/p13_schemas.py:123`）与 `services/cash_flow.py:241` update system 及现金流状态机，确认 `initialValue: item.status == .completed ? .completed : .confirmed` 保存时是否真改状态；确认后保留原 expected 态或让用户显式选择。
+
+验收：新建信用账户按显示的账单日/还款日通过校验；现金流转账入账缺/同账户被拦；M13/L8 按后端语义确认后修；`swift test` 通过。
+
+**B4-5 杂项 / 显示细节** — 文件 `OCRInputService.swift`、`DeviceSecurityModel.swift`、`SettingsScreens.swift`、`ReportingScreens.swift`、`TransactionScreens.swift`、`MacTransactionWorkbench.swift`、`MoneyFormat.swift`、`ReimbursementScreens.swift`、`ReportingDTO.swift`。
+
+- **L2【疑似】** OCR 行排序比较器违反严格弱序。核实手段：密集小字样例验证 `sorted(by:)` 是否错序/触发 debug 断言；改为按容差聚类分行后排序或确定性主键排序。
+- **L18** `removeCurrentDevice` 部分失败留死 token 且提示误导：服务器已撤销但 Keychain 删除失败时更新 phase/status 并引导，避免此后全 401 无出路。
+- **L19 显示细节一组**：
+  - CSV 导出文件名 UTC 日期差一天 → 用 Asia/Shanghai（`SettingsScreens.swift`）。
+  - 「净额才显示 +」`contains("净额")` 字符串 hack 且双端不一致 → 改结构化判断（`ReportingScreens.swift`）。
+  - 负号 iOS U+2212 vs mac/Money ASCII `-` 不一致 → 统一（`TransactionScreens.swift` / `MacTransactionWorkbench.swift` / `MoneyFormat.swift`）。
+  - Workbench 检查器按钮三元两支同图标 → 修为开/合两个图标（`MacTransactionWorkbench.swift`）。
+  - iOS 报销 compactEditor 误用 `FiscalColor.macBackground` → 改 iOS 背景（`ReimbursementScreens.swift`）。
+  - 现金流日期钉死 Asia/Shanghai（东八区内无实害）→ **判断不修**，记为已知项；仅当日后统一时区策略时一并处理（留裁决）。
+  - 负债页 `cycles.prefix(4)` 形同虚设 / `DebtReport.cycles` 全量无 UI 使用【疑似，取决服务端语义】→ 核实 `ReportingDTO` 服务端是否只填 `nextDueCycle` 单元素；确认后删无用 `prefix(4)` 或补 UI，二选一并写明。
+
+验收：CSV 文件名按北京时间；双端负号/净额符号一致；`swift test` 通过。
+
+#### 批次 B5 · 版本收口
+
+- 版本号：`apple/project.yml` 的 `settings.base.MARKETING_VERSION` 1.1.0 → 1.2.0（改后重新生成工程）；`CURRENT_PROJECT_VERSION` 9 → 10（build，随发版惯例，builder 定）。
+- 全量门禁：`swift test`（FiscalKitTests）全绿；`xcodebuild` 跑 iOS 与 macOS App target Release 构建通过；双端 run + 主流程 + 各修复点截图巡检（沿用既有 phase 收口惯例）。
+- 记录：本文件 §16 加 P16 完成行；按既有惯例产出 `docs/qa/p16/results.md` 验收记录（含双端截图与门禁结果、疑似项裁决结论）。
+- 建议（可选收尾）：把审查 §五 四条横向规律（双端不对称 / 预览失效 / generation 守卫 / 错误链路）写入新建的项目根 `CLAUDE.md`，防止后续重新引入；跨项目通用条目才回写 `~/.claude/CLAUDE.md`。
+- git 提交/推送、上云由 builder 自理，动作记一行。
+
+验收：双端 v1.2.0 Release 构建装机可启动；41 项均有对应修复或（疑似/判断不修项）明确裁决记录；用户最终目视/真机验收后 tag。
+
+#### P16 覆盖对照（防无声砍掉）
+
+| 批次 | 覆盖项 |
+|---|---|
+| B1 死代码 | D1 D2 D3 |
+| B2 基础设施 | M14 M15 L15 L16 L17 |
+| B3-1 generation | M12 L10 L13 |
+| B3-2 预览失效 | M6 M11 |
+| B3-3 iOS 错误链路 | H2 M4 L3 L4 L5 |
+| B4-1 交易 | H4 M1 M2 M3 L7 L11 L12 L14 |
+| B4-2 报销 | H1 M5 M7 L9 |
+| B4-3 报表 | H3 M8 M9 |
+| B4-4 主数据/分期/现金流 | M10 M13 L1 L6 L8 |
+| B4-5 杂项/显示 | L2 L18 L19 |
+| B5 收口 | 版本号 + 双端门禁 + 记录 |
+
+疑似项（先核实再修）：M13 L1 L2 L7 L8 L9 L14 L17；判断不修需写理由留裁决：D3 删/留、L14 是否降观察项、L19 现金流时区。
+
 ### 12.2 关键用户验收节点
 
 | 节点 | 用户主要验收内容 |
@@ -804,6 +950,7 @@ Back Tap
 | P9 | Back Tap/OCR/AI 是否形成真实日常闭环 |
 | P10 | 双端是否达到成品质感和复杂状态完整度 |
 | P12 | 历史数据、金额和生产环境是否可放心切换 |
+| P16 | v1.2.0：审查高/中问题是否修复，双端主流程与金额写入是否正确 |
 
 施工顺序的核心约束：先把统一账本和编辑做正确，再建设信用、分期和报销；业务口径稳定后建设报表；手工账本可靠后才允许 AI 自动写账；真实历史迁移永远放在新系统稳定之后。
 
@@ -885,7 +1032,9 @@ Back Tap
 
 ## 16. 当前状态
 
-- 当前施工位置：P15 V1.1 月度现金流批量编辑日期修复已完成；验收记录见 `docs/qa/p15/results.md`。
+- 当前施工位置：P16 v1.2.0 前端全量审查修复已立项（见 §12 P16）；输入为 `archive/frontend-audit-2026-07-17.md`，按 B1 死代码→B2 基础设施→B3 横向模式→B4 逐模块→B5 收口五批次施工，等待 build。
+- [2026-07-17] 立项 P16：把前端全量审查 41 项（H1–H4 / M1–M15 / L1–L19 / D1–D3）编入 v1.2.0 修复批次，`MARKETING_VERSION` 计划 1.1.0→1.2.0；已核实下一 Phase 编号为 P16（docs/qa 已有 p1–p15），D3 确认为预览专用假数据不上线。
+- P15 V1.1 月度现金流批量编辑日期修复已完成；验收记录见 `docs/qa/p15/results.md`。
 
 - P15 完成证据：生产车贷系列已从不可变创建修订恢复为 2026-09-22 至 2029-09-22 共 37 期、37 个不同日期，全部为每期 ¥2,533 出账；恢复没有写正式流水。后端已部署提交 `da102009a0ed`，Ruff、strict Pyright、132 passed / 95 skipped 无数据库测试、4 passed PostgreSQL 集成测试和双端构建均通过；V1.1.0 Build 9 已替换 macOS 应用并安装到实体 iPhone。
 
