@@ -264,7 +264,12 @@ final class FiscalUITests: XCTestCase {
     keepScreenshot(named: "ios-p7-overview")
 
     app.buttons["现金流"].tap()
-    XCTAssertTrue(app.staticTexts["现金流摘要"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["本月实际现金流"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["入账现金流"].exists)
+    XCTAssertTrue(app.staticTexts["出账现金流"].exists)
+    XCTAssertTrue(app.staticTexts["净现金流"].exists)
+    XCTAssertFalse(app.buttons["上个月"].exists)
+    XCTAssertFalse(app.buttons["下个月"].exists)
     XCTAssertTrue(app.staticTexts["本月账户收支"].exists)
     XCTAssertEqual(app.tabBars.count, 0)
     waitForVisualStability()

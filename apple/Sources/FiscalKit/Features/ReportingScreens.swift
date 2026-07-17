@@ -228,26 +228,34 @@ public struct IOSCashFlowScreen: View {
   public var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 14) {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 3) {
           Text("现金流").font(.system(size: 32, weight: .bold))
-          ReportPeriodControl(model: model).frame(maxWidth: .infinity, alignment: .trailing)
+          Text("本月实时收支").font(.subheadline).foregroundStyle(FiscalColor.tertiary)
         }
         ReportingNotice(model: model)
         if let report = model.cashFlow {
-          Text("现金流摘要").font(.headline).padding(.horizontal, 3)
+          Text("本月实际现金流").font(.headline).padding(.horizontal, 3)
+          FiscalCard(radius: 20) {
+            VStack(spacing: 0) {
+              reportAmountRow("入账现金流", report.actual.inflowMinor, FiscalColor.income)
+              Divider().opacity(0.35)
+              reportAmountRow("出账现金流", report.actual.outflowMinor, FiscalColor.expense)
+              Divider().opacity(0.35)
+              reportAmountRow(
+                "净现金流", report.actual.netMinor,
+                report.actual.netMinor >= 0 ? FiscalColor.income : FiscalColor.expense)
+            }
+          }
+          Text("未来 30 天预测").font(.headline).padding(.horizontal, 3)
           FiscalCard(radius: 20) {
             VStack(spacing: 0) {
               let forecastNet =
                 report.forecast.expectedReceiptInflowMinor - report.forecast.exactDueOutflowMinor
-              reportAmountRow("未来 30 天预测净额", forecastNet, forecastNet >= 0 ? FiscalColor.income : FiscalColor.expense)
+              reportAmountRow("预测净额", forecastNet, forecastNet >= 0 ? FiscalColor.income : FiscalColor.expense)
               Divider().opacity(0.35)
               reportAmountRow("预计到账", report.forecast.expectedReceiptInflowMinor, FiscalColor.income)
               Divider().opacity(0.35)
               reportAmountRow("精确应还", report.forecast.exactDueOutflowMinor, FiscalColor.expense)
-              Divider().opacity(0.35)
-              reportAmountRow("本月实际流入", report.actual.inflowMinor, FiscalColor.income)
-              Divider().opacity(0.35)
-              reportAmountRow("本月实际流出", report.actual.outflowMinor, FiscalColor.expense)
             }
           }
           Text("未来将要发生").font(.headline).padding(.horizontal, 3)
@@ -268,6 +276,7 @@ public struct IOSCashFlowScreen: View {
         else { ContentUnavailableView("现金流暂不可用", systemImage: "arrow.up.arrow.down") }
       }.padding(16)
     }.background(FiscalColor.iOSBackground.ignoresSafeArea())
+      .task { await model.ensureCurrentMonth() }
   }
 }
 
@@ -451,17 +460,38 @@ public struct MacCashFlowScreen: View {
   public init(model: ReportingModel) { self.model = model }
   public var body: some View {
     VStack(spacing: 0) {
-      HStack { Text("现金流").font(.system(size: 22, weight: .bold)); Spacer(); ReportPeriodControl(model: model) }.padding(.horizontal, 20).frame(height: 54).background(FiscalColor.surface)
+      HStack {
+        VStack(alignment: .leading, spacing: 2) {
+          Text("现金流").font(.system(size: 22, weight: .bold))
+          Text("本月实时收支").font(.caption).foregroundStyle(FiscalColor.tertiary)
+        }
+        Spacer()
+      }.padding(.horizontal, 20).frame(height: 58).background(FiscalColor.surface)
       if let report = model.cashFlow {
         HStack(alignment: .top, spacing: 16) {
-          FiscalCard(radius: 15) { VStack(alignment: .leading, spacing: 12) { Text("未来现金流").font(.headline); Text("仅显示有正式日期来源的预测").font(.caption).foregroundStyle(FiscalColor.tertiary); if report.forecast.events.isEmpty { ContentUnavailableView("未来 30 天无权威事件", systemImage: "calendar.badge.checkmark") } else { forecastRows(report.forecast.events) } } }.frame(maxWidth: .infinity)
+          FiscalCard(radius: 15) {
+            VStack(alignment: .leading, spacing: 14) {
+              Text("本月实际现金流").font(.headline)
+              HStack(spacing: 18) {
+                ReportMetric(label: "入账现金流", amount: report.actual.inflowMinor, color: FiscalColor.income)
+                ReportMetric(label: "出账现金流", amount: report.actual.outflowMinor, color: FiscalColor.expense)
+              }
+              Divider()
+              ReportMetric(
+                label: "净现金流", amount: report.actual.netMinor,
+                color: report.actual.netMinor >= 0 ? FiscalColor.income : FiscalColor.expense)
+              Text("内部转账不计入全局流入与流出。")
+                .font(.caption).foregroundStyle(FiscalColor.tertiary)
+            }
+          }.frame(maxWidth: .infinity)
           VStack(spacing: 16) {
             FiscalCard(radius: 15) { VStack(alignment: .leading, spacing: 13) { ReportMetric(label: "未来 30 天预测净额", amount: report.forecast.expectedReceiptInflowMinor - report.forecast.exactDueOutflowMinor, color: FiscalColor.reimbursement); Divider(); HStack { Text("预计到账"); Spacer(); Text(Money(minorUnits: report.forecast.expectedReceiptInflowMinor).formatted()).foregroundStyle(FiscalColor.income) }; HStack { Text("精确应还"); Spacer(); Text(Money(minorUnits: report.forecast.exactDueOutflowMinor).formatted()).foregroundStyle(FiscalColor.expense) } } }
-            FiscalCard(radius: 15) { VStack(alignment: .leading, spacing: 10) { Text("本月实际").font(.headline); ReportMetric(label: "实际净额", amount: report.actual.netMinor, color: report.actual.netMinor >= 0 ? FiscalColor.income : FiscalColor.expense); Text("内部转账不膨胀全局流入流出。预测不会写入账本。").font(.caption).foregroundStyle(FiscalColor.tertiary) } }
+            FiscalCard(radius: 15) { VStack(alignment: .leading, spacing: 12) { Text("未来现金流").font(.headline); Text("仅显示有正式日期来源的预测").font(.caption).foregroundStyle(FiscalColor.tertiary); if report.forecast.events.isEmpty { ContentUnavailableView("未来 30 天无权威事件", systemImage: "calendar.badge.checkmark") } else { forecastRows(report.forecast.events) } } }
           }.frame(width: 270)
         }.padding(18)
       } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
     }.background(FiscalColor.macBackground)
+      .task { await model.ensureCurrentMonth() }
   }
 }
 
