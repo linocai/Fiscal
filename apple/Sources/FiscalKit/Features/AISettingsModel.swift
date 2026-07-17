@@ -58,8 +58,14 @@ public final class AISettingsModel {
         expectedVersion: settings.version))
       guard current == generation else { return false }
       apply(value)
-      applyProvider(try await repository.getProvider())
-      phase = .loaded; return true
+      phase = .loaded
+      // A failed supplementary provider re-read must not be reported as a save failure, or a
+      // retry would collide with the already-incremented expected_version.
+      if let provider = try? await repository.getProvider() {
+        guard current == generation else { return true }
+        applyProvider(provider)
+      }
+      return true
     } catch { guard current == generation else { return false }; fail(error); return false }
   }
 
@@ -74,6 +80,7 @@ public final class AISettingsModel {
     if !providerSettings.apiKeyConfigured && providerAPIKey.isEmpty {
       message = "首次配置必须填写 API Key。"; return false
     }
+    generation += 1; let current = generation
     isSavingProvider = true; message = nil; conflictDetected = false
     defer { isSavingProvider = false }
     do {
@@ -83,13 +90,18 @@ public final class AISettingsModel {
         apiKey: providerAPIKey.isEmpty ? nil : providerAPIKey,
         expectedVersion: providerSettings.version
       ))
+      guard current == generation else { return false }
       providerAPIKey = ""
       applyProvider(value)
-      apply(try await repository.get())
       phase = .loaded
       message = "AI Provider 已安全保存到服务器。"
+      // As with save(), a failed supplementary settings re-read must not undo the success.
+      if let settingsValue = try? await repository.get() {
+        guard current == generation else { return true }
+        apply(settingsValue)
+      }
       return true
-    } catch { fail(error); return false }
+    } catch { guard current == generation else { return false }; fail(error); return false }
   }
 
   private func apply(_ value: AISettingsDTO) {

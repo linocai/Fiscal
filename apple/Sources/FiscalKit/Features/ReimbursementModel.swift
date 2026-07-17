@@ -30,6 +30,7 @@ public final class ReimbursementModel {
   private var generation = 0
   private var previewedClaimRequest: ReimbursementClaimReplacementRequest?
   private var claimPreviewGeneration = 0
+  private var receiptPreviewGeneration = 0
   private var previewedReceiptRequest: ReimbursementReceiptRequest?
   private var previewedReceiptReplacement: ReimbursementReceiptReplacementRequest?
 
@@ -229,14 +230,19 @@ public final class ReimbursementModel {
 
   public func previewReceipt(_ request: ReimbursementReceiptRequest) async -> Bool {
     guard let claim = selectedClaim else { return false }
+    receiptPreviewGeneration += 1
+    let current = receiptPreviewGeneration
     receiptPreview = nil
     message = nil
     do {
-      receiptPreview = try await repository.receiptPreview(
+      let preview = try await repository.receiptPreview(
         id: nil, claimID: claim.id, create: request, replace: nil)
+      guard current == receiptPreviewGeneration, selectedClaim?.id == claim.id else { return false }
+      receiptPreview = preview
       previewedReceiptRequest = request
       return true
     } catch {
+      guard current == receiptPreviewGeneration else { return false }
       apply(error, preserving: true)
       return false
     }
@@ -265,14 +271,19 @@ public final class ReimbursementModel {
     _ receipt: ReimbursementReceiptDTO, request: ReimbursementReceiptReplacementRequest
   ) async -> Bool {
     guard let claim = selectedClaim else { return false }
+    receiptPreviewGeneration += 1
+    let current = receiptPreviewGeneration
     receiptPreview = nil
     message = nil
     do {
-      receiptPreview = try await repository.receiptPreview(
+      let preview = try await repository.receiptPreview(
         id: receipt.id, claimID: claim.id, create: nil, replace: request)
+      guard current == receiptPreviewGeneration, selectedClaim?.id == claim.id else { return false }
+      receiptPreview = preview
       previewedReceiptReplacement = request
       return true
     } catch {
+      guard current == receiptPreviewGeneration else { return false }
       apply(error, preserving: true)
       return false
     }
@@ -315,6 +326,7 @@ public final class ReimbursementModel {
     previewedClaimRequest = nil
   }
   public func invalidateReceiptPreview() {
+    receiptPreviewGeneration += 1
     receiptPreview = nil
     previewedReceiptRequest = nil
     previewedReceiptReplacement = nil

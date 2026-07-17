@@ -60,7 +60,7 @@ public final class InstallmentModel {
             let loadedPurchase = try await purchase
             guard current == generation else { return }
             selectedPlan = plan; selectedPurchase = loadedPurchase; phase = .loaded
-        } catch is CancellationError { phase = .idle }
+        } catch is CancellationError { if current == generation { phase = .idle } }
         catch { guard current == generation else { return }; apply(error, preserving: false) }
     }
 
@@ -76,8 +76,13 @@ public final class InstallmentModel {
 
     public func checkEligibility(transactionID: UUID) async {
         generation += 1; let current = generation; phase = .loading; message = nil
-        do { let value = try await repository.eligibility(transactionID: transactionID); guard current == generation else { return }; eligibility = value; phase = .loaded }
-        catch is CancellationError { phase = .idle } catch { guard current == generation else { return }; apply(error, preserving: false) }
+        eligibility = nil  // Drop any prior purchase's eligibility so a failed check can't reuse it.
+        do {
+            let value = try await repository.eligibility(transactionID: transactionID)
+            guard current == generation, value.purchaseTransactionID == transactionID else { return }
+            eligibility = value; phase = .loaded
+        }
+        catch is CancellationError { if current == generation { phase = .idle } } catch { guard current == generation else { return }; apply(error, preserving: false) }
     }
 
     @discardableResult public func loadCycleOptions(transactionID: UUID) async -> Bool {

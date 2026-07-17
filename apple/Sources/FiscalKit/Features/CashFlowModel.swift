@@ -14,6 +14,7 @@ public final class FutureCashFlowModel {
   public var showingHistory = false
   public private(set) var historyMonth: String
   private let repository: any FutureCashFlowRepository
+  private var historyGeneration = 0
 
   public init(repository: any FutureCashFlowRepository, now: Date = Date()) {
     self.repository = repository
@@ -29,8 +30,21 @@ public final class FutureCashFlowModel {
   }
 
   public func loadHistory() async {
-    do { history = try await repository.history(month: historyMonth) }
-    catch is CancellationError {} catch { apply(error) }
+    historyGeneration += 1
+    let current = historyGeneration
+    let month = historyMonth
+    do {
+      let fetched = try await repository.history(month: month)
+      // Ignore a late response from a superseded page so the title (new month) and the list
+      // (old month) can never disagree during rapid paging.
+      guard current == historyGeneration, month == historyMonth, fetched.month == month else {
+        return
+      }
+      history = fetched
+    } catch is CancellationError {} catch {
+      guard current == historyGeneration else { return }
+      apply(error)
+    }
   }
 
   public func moveHistoryMonth(_ offset: Int) async {

@@ -271,6 +271,7 @@ public struct AIProposalEditorScreen: View {
   @State private var cycleOptions: [CreditCycleDTO] = []
   @State private var cycleError: String?
   @State private var cycleGeneration = 0
+  @State private var amountError: String?
 
   public init(model: AIProposalModel, proposal: AIProposalDTO, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil) {
     self.model = model; self.proposal = proposal; self.accounts = accounts; self.categories = categories; self.credit = credit
@@ -287,6 +288,8 @@ public struct AIProposalEditorScreen: View {
                 .pickerStyle(.menu).frame(maxWidth: .infinity, alignment: .leading)
               TextField("标题", text: $draft.title).textFieldStyle(.plain).padding(12).background(FiscalColor.iOSBackground, in: .rect(cornerRadius: 10))
               TextField("金额（元）", text: $amountText).textFieldStyle(.plain).padding(12).background(FiscalColor.iOSBackground, in: .rect(cornerRadius: 10))
+                .onChange(of: amountText) { _, _ in amountError = nil }
+              if let amountError { Label(amountError, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(FiscalColor.expense).frame(maxWidth: .infinity, alignment: .leading) }
               DatePicker("发生时间", selection: $draft.occurredAt)
               accountFields
               TextField("备注", text: $draft.note, axis: .vertical).textFieldStyle(.plain).padding(12).background(FiscalColor.iOSBackground, in: .rect(cornerRadius: 10))
@@ -346,7 +349,10 @@ public struct AIProposalEditorScreen: View {
     } catch { guard current == cycleGeneration else { return }; cycleError = (error as? FiscalAPIError)?.displayMessage ?? error.localizedDescription }
   }
   private func save() {
-    guard let amount = CNYAmountParser.minorUnits(amountText), amount > 0 else { return }
+    guard let amount = CNYAmountParser.minorUnits(amountText), amount > 0 else {
+      amountError = "请输入有效金额（必须大于 0）。"; return
+    }
+    amountError = nil
     draft.amountMinor = amount
     Task { if await model.update(proposal, draft: draft) { dismiss() } }
   }

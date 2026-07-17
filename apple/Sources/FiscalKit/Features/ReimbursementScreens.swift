@@ -517,6 +517,7 @@ public struct ReimbursementReceiptEditor: View {
         _, _ in model.invalidateReceiptPreview()
       }
     }.reimbursementEditorFrame(width: 520, height: 600)
+    .onDisappear { model.invalidateReceiptPreview() }
   }
   private var receiptActionTitle: String {
     if model.isMutating { return "保存中…" }
@@ -611,6 +612,12 @@ public struct ReimbursementClaimEditor: View {
         }))
   }
   public var body: some View {
+    // Clearing the shared claim preview on dismiss stops a cancelled edit from leaking its
+    // preview (and the "确认保存" button state) into the next claim's editor session.
+    editorBody.onDisappear { model.invalidateClaimPreview() }
+  }
+
+  @ViewBuilder private var editorBody: some View {
     #if os(macOS)
       macEditor
     #else
@@ -733,6 +740,12 @@ public struct ReimbursementClaimEditor: View {
                 }
               }
             }
+          }
+          if let message = model.message {
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+              .font(.subheadline).foregroundStyle(FiscalColor.expense).padding(13)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .background(FiscalColor.expense.opacity(0.09), in: .rect(cornerRadius: 14))
           }
         }.padding(20)
       }.background(FiscalColor.macBackground).navigationTitle(editing == nil ? "新建报销单" : "编辑报销单")

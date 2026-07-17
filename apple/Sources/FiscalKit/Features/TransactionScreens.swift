@@ -678,6 +678,12 @@ public struct IOSTransactionsScreen: View {
                         Label("收入和支出不能在同一批次归入一个分类。", systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(FiscalColor.expense)
                     }
+                    if let message = model.message {
+                        Label(message, systemImage: "exclamationmark.triangle.fill")
+                            .font(.subheadline).foregroundStyle(FiscalColor.expense).padding(13)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(FiscalColor.expense.opacity(0.09), in: .rect(cornerRadius: 14))
+                    }
                 }.padding(16)
             }.background(FiscalColor.iOSBackground).navigationTitle("批量重新分类")
                 .safeAreaInset(edge: .bottom) {

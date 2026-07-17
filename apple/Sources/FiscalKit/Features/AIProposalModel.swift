@@ -71,6 +71,7 @@ public final class AIProposalModel {
       let known = Set(proposals.map(\.id))
       proposals += page.items.filter { !known.contains($0.id) }
       nextCursor = page.nextCursor; pendingCount = page.pendingCount
+    } catch is CancellationError {
     } catch { if current == generation { refreshMessage = display(error) } }
   }
 

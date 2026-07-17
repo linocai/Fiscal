@@ -17,28 +17,27 @@ public final class CreditModel {
     public private(set) var loadingMore = false
     private let repository: any CreditRepository
     private var generation = 0
-    private var task: Task<Void, Never>?
 
     public init(repository: any CreditRepository) { self.repository = repository }
 
     public func loadAccounts() async {
-        generation += 1; let current = generation; task?.cancel(); let hadData = !accounts.isEmpty
+        generation += 1; let current = generation; let hadData = !accounts.isEmpty
         if !hadData { phase = .loading }; message = nil; refreshMessage = nil
         do {
             let values = try await repository.listAccounts(); guard current == generation, !Task.isCancelled else { return }
             accounts = values; phase = values.isEmpty ? .empty : .loaded
-        } catch is CancellationError { if !hadData { phase = .idle } }
+        } catch is CancellationError { if current == generation, !hadData { phase = .idle } }
         catch { guard current == generation else { return }; apply(error, preserving: hadData) }
     }
 
     public func loadAccount(_ id: UUID) async {
-        generation += 1; let current = generation; task?.cancel(); phase = .loading; message = nil
+        generation += 1; let current = generation; phase = .loading; message = nil
         do {
             async let summary = repository.account(id: id)
             async let page = repository.cycles(accountID: id, cursor: nil, limit: 20)
             let (loadedSummary, loadedPage) = try await (summary, page); guard current == generation else { return }
             selectedAccount = loadedSummary; cycles = loadedPage.items; nextCycleCursor = loadedPage.nextCursor; phase = .loaded
-        } catch is CancellationError { phase = .idle } catch { guard current == generation else { return }; apply(error, preserving: selectedAccount?.accountID == id) }
+        } catch is CancellationError { if current == generation { phase = .idle } } catch { guard current == generation else { return }; apply(error, preserving: selectedAccount?.accountID == id) }
     }
 
     public func loadCycle(_ id: UUID) async {
@@ -49,7 +48,7 @@ public final class CreditModel {
             async let page = repository.transactions(cycleID: id, cursor: nil, limit: 50)
             let (loadedCycle, loadedPage) = try await (cycle, page); guard current == generation else { return }
             selectedCycle = loadedCycle; cycleTransactions = loadedPage.items; nextTransactionCursor = loadedPage.nextCursor; phase = .loaded
-        } catch is CancellationError { phase = .idle } catch { guard current == generation else { return }; apply(error, preserving: false) }
+        } catch is CancellationError { if current == generation { phase = .idle } } catch { guard current == generation else { return }; apply(error, preserving: false) }
     }
 
     public func loadMoreCycles() async {

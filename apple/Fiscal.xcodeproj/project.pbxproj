@@ -35,6 +35,7 @@
 		2A6C366F90678183C6E76FEB /* InstallmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */; };
 		2EAE26195F0E9BA6687B253E /* P11SecurityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DFD347A403BBE5D74B1F7F0 /* P11SecurityTests.swift */; };
 		3010D4B8CF583CCB83B9C0CF /* MasterDataScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40E7C412779E444B2EBDB328 /* MasterDataScreens.swift */; };
+		349DEB01407F18F33E6E7F50 /* P16HorizontalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D97882660F312713851BCE4 /* P16HorizontalTests.swift */; };
 		3524B93E10107CBA714E981E /* AIProposalScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71C4B21663391E2601CBC53 /* AIProposalScreens.swift */; };
 		38CD903D4D58CFE2A8C209D0 /* MasterDataScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40E7C412779E444B2EBDB328 /* MasterDataScreens.swift */; };
 		3A2A0B10963D95C372BD4924 /* SystemStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = F05017C6B56940B011F6E23E /* SystemStatus.swift */; };
@@ -241,6 +242,7 @@
 		3538F320E00777E2D3ED3BBD /* CashFlowScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashFlowScreens.swift; sourceTree = "<group>"; };
 		36C53CFB1B3FBC363B77ED08 /* OCRInputService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRInputService.swift; sourceTree = "<group>"; };
 		40E7C412779E444B2EBDB328 /* MasterDataScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasterDataScreens.swift; sourceTree = "<group>"; };
+		4D97882660F312713851BCE4 /* P16HorizontalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P16HorizontalTests.swift; sourceTree = "<group>"; };
 		4EA7703B5970A868EC31D996 /* AIProposalRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProposalRepository.swift; sourceTree = "<group>"; };
 		500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTokenStore.swift; sourceTree = "<group>"; };
 		50AE5EE92E61AC85DDE507B3 /* CreditDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditDTO.swift; sourceTree = "<group>"; };
@@ -458,6 +460,7 @@
 				23BD6A03B99F7398A9E508A6 /* P10InfrastructureTests.swift */,
 				1E62F028D5C7F476391834BF /* P10MacWorkbenchTests.swift */,
 				5DFD347A403BBE5D74B1F7F0 /* P11SecurityTests.swift */,
+				4D97882660F312713851BCE4 /* P16HorizontalTests.swift */,
 				882403E1F959EBCF7E11F243 /* P16InfrastructureTests.swift */,
 			);
 			name = FiscalKitTests;
@@ -738,6 +741,7 @@
 				93D596E390E747EF3060EEAB /* P10InfrastructureTests.swift in Sources */,
 				D7D2D318157502A371C00E48 /* P10MacWorkbenchTests.swift in Sources */,
 				2EAE26195F0E9BA6687B253E /* P11SecurityTests.swift in Sources */,
+				349DEB01407F18F33E6E7F50 /* P16HorizontalTests.swift in Sources */,
 				A4A5F02D3C37B425F476E6B4 /* P16InfrastructureTests.swift in Sources */,
 				8C3520FB72EC576D0544255C /* P9InputTests.swift in Sources */,
 			);
