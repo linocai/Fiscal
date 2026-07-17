@@ -241,14 +241,15 @@ private struct IOSAIProposalRow: View {
         }
         if proposal.canReview {
           HStack(spacing: 8) {
-            Button("确认记账", action: execute).buttonStyle(FiscalActionButtonStyle())
+            Button(proposal.target.executeTitle, action: execute).buttonStyle(FiscalActionButtonStyle())
             Button("编辑", action: edit).buttonStyle(FiscalActionButtonStyle(.secondary))
             Button("忽略", action: ignore).buttonStyle(.plain).font(.subheadline.weight(.semibold)).foregroundStyle(FiscalColor.tertiary).frame(minHeight: 42)
           }.disabled(proposal.status != .pending)
         } else if proposal.status == .failed {
           Button("重新识别", action: retry).buttonStyle(FiscalActionButtonStyle(.secondary))
         } else if proposal.status == .executed {
-          Button("撤销这笔 AI 记账", action: undo).buttonStyle(FiscalActionButtonStyle(.secondary))
+          Button(proposal.target == .cashFlow ? "取消这条未来现金流" : "撤销这笔 AI 记账", action: undo)
+            .buttonStyle(FiscalActionButtonStyle(.secondary))
         }
       }
     }.accessibilityIdentifier("ai.proposal.\(proposal.id.uuidString)")
@@ -399,7 +400,7 @@ public struct MacAIProposalScreen: View {
               Button { model.selectedID = proposal.id } label: {
                 HStack(spacing: 10) {
                   FiscalIconTile("sparkles", color: FiscalColor.accent)
-                  VStack(alignment: .leading, spacing: 3) { Text(proposal.title ?? "待补全提案").font(.subheadline.weight(.semibold)); Text("\(proposal.source.title) · \(proposal.confidenceTitle) · \(proposal.status.title)").font(.caption).foregroundStyle(FiscalColor.tertiary) }
+                  VStack(alignment: .leading, spacing: 3) { Text(proposal.title ?? "待补全提案").font(.subheadline.weight(.semibold)); Text("\(proposal.target.title) · \(proposal.source.title) · \(proposal.confidenceTitle) · \(proposal.status.title)").font(.caption).foregroundStyle(FiscalColor.tertiary) }
                   Spacer(); Text(proposal.amountMinor.map { Money(minorUnits: $0).formatted() } ?? "—").font(.subheadline)
                 }.padding(12).background(model.selectedID == proposal.id ? FiscalColor.accent.opacity(0.09) : FiscalColor.surface, in: .rect(cornerRadius: 12))
               }.buttonStyle(.plain).task { if proposal.id == model.proposals.last?.id { await model.loadMore() } }
@@ -420,11 +421,11 @@ public struct MacAIProposalScreen: View {
         VStack(alignment: .leading, spacing: 14) {
           Text(proposal.title ?? "待补全标题").font(.title2.bold())
           Text(proposal.amountMinor.map { Money(minorUnits: $0).formatted() } ?? "金额待确认").font(.system(size: 28, weight: .bold))
-          detail("状态", proposal.status.title); detail("置信度", proposal.confidenceTitle); detail("来源", proposal.source.title)
+          detail("目标", proposal.target.title); detail("状态", proposal.status == .executed ? proposal.target.executedTitle : proposal.status.title); detail("置信度", proposal.confidenceTitle); detail("来源", proposal.source.title)
           if let explanation = proposal.explanation { Text(explanation).font(.caption).foregroundStyle(FiscalColor.secondary) }
-          if proposal.canReview { Button("确认记账") { Task { await model.execute(proposal) } }.buttonStyle(FiscalActionButtonStyle()); if accounts != nil && categories != nil { Button("编辑") { editing = proposal }.buttonStyle(FiscalActionButtonStyle(.secondary)) }; Button("忽略") { Task { await model.ignore(proposal) } }.buttonStyle(.plain).foregroundStyle(FiscalColor.tertiary) }
+          if proposal.canReview { Button(proposal.target.executeTitle) { Task { await model.execute(proposal) } }.buttonStyle(FiscalActionButtonStyle()); if accounts != nil && categories != nil { Button("编辑") { editing = proposal }.buttonStyle(FiscalActionButtonStyle(.secondary)) }; Button("忽略") { Task { await model.ignore(proposal) } }.buttonStyle(.plain).foregroundStyle(FiscalColor.tertiary) }
           else if proposal.status == .failed { Button("重新识别") { Task { await model.retry(proposal) } }.buttonStyle(FiscalActionButtonStyle(.secondary)) }
-          else if proposal.status == .executed { Button("撤销这笔 AI 记账") { Task { await model.undo(proposal) } }.buttonStyle(FiscalActionButtonStyle(.secondary)) }
+          else if proposal.status == .executed { Button(proposal.target == .cashFlow ? "取消这条未来现金流" : "撤销这笔 AI 记账") { Task { await model.undo(proposal) } }.buttonStyle(FiscalActionButtonStyle(.secondary)) }
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
       }.background(FiscalColor.surface)
     } else { ContentUnavailableView("选择一条提案", systemImage: "sparkles") }

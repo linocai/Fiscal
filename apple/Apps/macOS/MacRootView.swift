@@ -38,6 +38,7 @@ struct MacRootView: View {
     let installments: InstallmentModel
     let reimbursements: ReimbursementModel
     let reports: ReportingModel
+    let cashFlow: FutureCashFlowModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
     let deviceSecurity: DeviceSecurityModel
@@ -46,6 +47,7 @@ struct MacRootView: View {
     @State private var section: MacSection = .overview
     @State private var showCategories = false
     @State private var showRecordSheet = false
+    @State private var repaymentItem: FutureCashFlowItem?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -59,13 +61,17 @@ struct MacRootView: View {
                         section = destination == .cashFlow ? .cashFlow : .reports
                     }
                 } else if section == .accounts {
-                    MacAccountsCreditScreen(accounts: accounts, credit: credit, installments: installments, transactions: transactions, categories: categories)
+                    MacAccountsCreditScreen(accounts: accounts, credit: credit, installments: installments, transactions: transactions, categories: categories, cashFlow: cashFlow)
                 } else if section == .transactions {
                     MacTransactionWorkbench(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments, preferences: recordingPreferences)
                 } else if section == .reimbursement {
                     MacReimbursementsScreen(model: reimbursements, accounts: accounts)
                 } else if section == .cashFlow {
-                    MacCashFlowScreen(model: reports)
+                    MacFutureCashFlowScreen(
+                        model: cashFlow, accounts: accounts, categories: categories,
+                        confirmRepayment: { repaymentItem = $0 },
+                        markReceived: { _ in section = .reimbursement }
+                    )
                 } else if section == .reports {
                     MacReportsScreen(model: reports)
                 } else if section == .ai {
@@ -100,6 +106,15 @@ struct MacRootView: View {
                 credit: credit,
                 preferences: recordingPreferences
             )
+        }
+        .sheet(item: $repaymentItem) { item in
+            TransactionEditorSheet(
+                transactions: transactions, accounts: accounts, categories: categories,
+                credit: credit, initialKind: .repayment, creditAccountID: item.accountID,
+                cycleID: item.systemReferenceID, amountMinor: item.plannedAmountMinor,
+                preferences: recordingPreferences
+            )
+            .frame(width: 560, height: 680)
         }
     }
 

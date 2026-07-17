@@ -38,7 +38,7 @@ public struct MacOverviewScreen: View {
     private var summaryGrid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 12) {
             MetricCard(label: "本月消费", amount: snapshot.spend, detail: "较上月 ↓ 8.2%", color: FiscalColor.text)
-            MetricCard(label: "现金流净额", amount: snapshot.cashNet, detail: "本月实际流入与流出", color: FiscalColor.income, positive: true)
+            MetricCard(label: "未来 30 天现金流", amount: snapshot.cashNet, detail: "预计流入减预计流出", color: snapshot.cashNet.minorUnits >= 0 ? FiscalColor.income : FiscalColor.expense, positive: true)
             MetricCard(label: "信用应还", amount: snapshot.creditDue, detail: "最近还款日 07-22", color: FiscalColor.debt)
             MetricCard(label: "报销待回款", amount: snapshot.reimbursementDue, detail: "预计 ~07-18", color: FiscalColor.reimbursement)
         }
@@ -86,9 +86,9 @@ public struct MacOverviewScreen: View {
     private var cashFlowCard: some View {
         FiscalCard(radius: 15) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack { FiscalIconTile("arrow.up.arrow.down", color: FiscalColor.reimbursement); Text("现金流").font(.headline); Spacer(); Text("查看全部").font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.accent) }
-                HStack { Text("本月净额").font(.caption).foregroundStyle(FiscalColor.secondary); Spacer(); Text(snapshot.cashNet.formatted(showPositiveSign: true)).font(.subheadline.bold()).foregroundStyle(FiscalColor.income) }
-                Text("未来账期与计划现金流将在 P7 接入正式账本计算服务。").font(.caption).foregroundStyle(FiscalColor.tertiary).fixedSize(horizontal: false, vertical: true)
+                HStack { FiscalIconTile("arrow.up.arrow.down", color: FiscalColor.reimbursement); Text("未来 30 天现金流").font(.headline); Spacer(); Text("查看全部").font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.accent) }
+                HStack { Text("预计净额").font(.caption).foregroundStyle(FiscalColor.secondary); Spacer(); Text(snapshot.cashNet.formatted(showPositiveSign: true)).font(.subheadline.bold()).foregroundStyle(snapshot.cashNet.minorUnits >= 0 ? FiscalColor.income : FiscalColor.expense) }
+                Text("只统计等待入账的计划、信用账期和报销事项。").font(.caption).foregroundStyle(FiscalColor.tertiary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }

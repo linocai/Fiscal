@@ -22,13 +22,15 @@ public final class AIProposalModel {
   private let repository: any AIProposalRepository
   private let transactions: TransactionsModel?
   private let reports: ReportingModel?
+  private let cashFlow: FutureCashFlowModel?
   private var generation = 0
 
   public init(
     repository: any AIProposalRepository, transactions: TransactionsModel? = nil,
-    reports: ReportingModel? = nil
+    reports: ReportingModel? = nil, cashFlow: FutureCashFlowModel? = nil
   ) {
     self.repository = repository; self.transactions = transactions; self.reports = reports
+    self.cashFlow = cashFlow
   }
   public var selected: AIProposalDTO? { proposals.first { $0.id == selectedID } }
 
@@ -133,7 +135,8 @@ public final class AIProposalModel {
     }
   }
   public func undo(_ proposal: AIProposalDTO) async -> Bool {
-    guard let transactionVersion = proposal.transactionVersion else {
+    let transactionVersion = proposal.transactionVersion
+    guard proposal.target == .cashFlow || transactionVersion != nil else {
       message = "缺少流水版本，无法安全撤销。"; return false
     }
     return await mutate(proposal, refreshLedger: true) {
@@ -159,7 +162,8 @@ public final class AIProposalModel {
       if refreshLedger {
         async let transactionRefresh: Void = transactions?.load() ?? ()
         async let reportRefresh: Void = reports?.loadAll() ?? ()
-        _ = await (transactionRefresh, reportRefresh)
+        async let cashFlowRefresh: Void = cashFlow?.load() ?? ()
+        _ = await (transactionRefresh, reportRefresh, cashFlowRefresh)
       }
       return true
     } catch {

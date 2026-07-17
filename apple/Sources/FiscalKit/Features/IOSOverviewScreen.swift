@@ -75,8 +75,8 @@ public struct IOSOverviewScreen: View {
             HStack(spacing: 12) {
                 FiscalIconTile("arrow.up.arrow.down", color: FiscalColor.reimbursement)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("本月现金流").font(.subheadline.weight(.semibold)).foregroundStyle(FiscalColor.text)
-                    Text("流入 \(snapshot.cashIn.formatted()) · 流出 \(snapshot.cashOut.formatted())").font(.caption).foregroundStyle(FiscalColor.tertiary).fixedSize(horizontal: false, vertical: true)
+                    Text("未来 30 天现金流").font(.subheadline.weight(.semibold)).foregroundStyle(FiscalColor.text)
+                    Text("预计流入 \(snapshot.cashIn.formatted()) · 预计流出 \(snapshot.cashOut.formatted())").font(.caption).foregroundStyle(FiscalColor.tertiary).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 Text(snapshot.cashNet.formatted(showPositiveSign: snapshot.cashNet.minorUnits > 0)).font(.subheadline.bold()).foregroundStyle(snapshot.cashNet.minorUnits >= 0 ? FiscalColor.income : FiscalColor.expense)

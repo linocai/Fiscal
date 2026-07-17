@@ -216,6 +216,9 @@ class ReportingService:
             forecast_days=30,
             today=self._today(),
         )
+        from fiscal_api.services.cash_flow import CashFlowService
+
+        future_cash = await CashFlowService(self.session).active()
         debt = await self.debt(as_of=self._today())
         accounts = await self.repository.accounts()
         asset_accounts = [item for item in accounts.values() if item.kind in {"cash", "debit"}]
@@ -242,9 +245,9 @@ class ReportingService:
             reimbursement_outstanding_minor=reimbursement_outstanding,
             spending=OverviewSpendingSummary(**self._spending_values(spending)),
             cash_flow=OverviewCashFlowSummary(
-                inflow_minor=cash.inflow_minor,
-                outflow_minor=cash.outflow_minor,
-                net_minor=cash.net_minor,
+                inflow_minor=future_cash.summary.inflow_minor,
+                outflow_minor=future_cash.summary.outflow_minor,
+                net_minor=future_cash.summary.net_minor,
             ),
             uncategorized_count=spending.uncategorized.transaction_count,
             uncategorized_amount_minor=spending.uncategorized.net_consumption_minor,

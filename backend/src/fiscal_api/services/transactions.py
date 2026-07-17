@@ -117,6 +117,21 @@ class TransactionService:
             commit=commit,
         )
 
+    async def create_cash_flow(
+        self,
+        draft: TransactionDraft,
+        idempotency_key: UUID,
+        *,
+        commit: bool = True,
+    ) -> TransactionResponse:
+        """Atomically materialize one confirmed future item into the ledger."""
+        return await self._create(
+            draft,
+            idempotency_key,
+            source=TransactionSource.CASH_FLOW,
+            commit=commit,
+        )
+
     async def _create(
         self,
         draft: TransactionDraft,
@@ -520,13 +535,22 @@ class TransactionService:
         )
         response = self._response(transaction, list(transaction.postings))
         self._add_revision(transaction, RevisionEvent.VOIDED, response)
+        from fiscal_api.services.cash_flow import CashFlowService
+
+        await CashFlowService(self.session).sync_linked_transaction(transaction.id, voided=True)
         if commit:
             await self.session.commit()
         else:
             await self.session.flush()
         return response
 
-    async def restore(self, transaction_id: UUID, expected_version: int) -> TransactionResponse:
+    async def restore(
+        self,
+        transaction_id: UUID,
+        expected_version: int,
+        *,
+        commit: bool = True,
+    ) -> TransactionResponse:
         await acquire_mutation_lock(self.session)
         transaction = await self._required(transaction_id, for_update=True)
         await self._assert_generic_mutation_allowed(transaction)
@@ -548,7 +572,13 @@ class TransactionService:
         )
         response = self._response(transaction, list(transaction.postings))
         self._add_revision(transaction, RevisionEvent.RESTORED, response)
-        await self.session.commit()
+        from fiscal_api.services.cash_flow import CashFlowService
+
+        await CashFlowService(self.session).sync_linked_transaction(transaction.id, voided=False)
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
         return response
 
     async def summary(

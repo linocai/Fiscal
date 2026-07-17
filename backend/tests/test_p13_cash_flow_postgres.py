@@ -1,0 +1,153 @@
+from collections.abc import AsyncIterator
+from datetime import UTC, date, datetime
+from os import environ
+from uuid import uuid4
+
+import pytest
+import pytest_asyncio
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from fiscal_api.api.p2_schemas import AccountDraft, CategoryDraft
+from fiscal_api.api.p13_schemas import CashFlowDraft, CashFlowSettlementDraft
+from fiscal_api.db.models import (
+    AccountKind,
+    CashFlowDirection,
+    CashFlowItem,
+    CashFlowRecurrence,
+    CashFlowStatus,
+    CategoryDirection,
+    LedgerTransaction,
+)
+from fiscal_api.services.accounts import AccountService
+from fiscal_api.services.cash_flow import CashFlowService
+from fiscal_api.services.categories import CategoryService
+from fiscal_api.services.transactions import TransactionService
+
+TEST_DATABASE_URL = environ.get("FISCAL_TEST_DATABASE_URL")
+pytestmark = pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
+
+
+@pytest_asyncio.fixture
+async def session() -> AsyncIterator[AsyncSession]:
+    assert TEST_DATABASE_URL is not None
+    engine = create_async_engine(TEST_DATABASE_URL)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "TRUNCATE cash_flow_item_revisions, cash_flow_items, cash_flow_series, "
+                "transaction_revisions, postings, transactions, credit_cycles, categories, "
+                "accounts CASCADE"
+            )
+        )
+    async with factory() as database_session:
+        yield database_session
+    await engine.dispose()
+
+
+async def seed(session: AsyncSession):  # type: ignore[no-untyped-def]
+    account = await AccountService(session).create(
+        AccountDraft(name="银行卡", kind=AccountKind.DEBIT, opening_balance_minor=0)
+    )
+    category = await CategoryService(session).create(
+        CategoryDraft(
+            name="工资",
+            direction=CategoryDirection.INCOME,
+            icon="banknote",
+            color_hex="#3366FF",
+        )
+    )
+    return account, category
+
+
+async def test_monthly_create_is_idempotent_and_settle_creates_one_ledger_row(
+    session: AsyncSession,
+) -> None:
+    account, category = await seed(session)
+    service = CashFlowService(session)
+    create_key = uuid4()
+    draft = CashFlowDraft(
+        title="工资",
+        direction=CashFlowDirection.INFLOW,
+        planned_amount_minor=500_000,
+        expected_date=date(2026, 7, 21),
+        account_id=account.id,
+        category_id=category.id,
+        recurrence=CashFlowRecurrence.MONTHLY,
+        recurrence_end_date=date(2026, 12, 21),
+    )
+    first = await service.create(draft, create_key)
+    replay = await service.create(draft, create_key)
+    assert len(first.items) == 6
+    assert [item.id for item in replay.items] == [item.id for item in first.items]
+
+    item = first.items[0]
+    assert item.manual_item_id is not None
+    confirmed = await service.confirm(item.manual_item_id, item.version)
+    settle_key = uuid4()
+    settled = await service.settle(
+        item.manual_item_id,
+        CashFlowSettlementDraft(
+            expected_version=confirmed.version,
+            actual_amount_minor=510_000,
+            occurred_at=datetime(2026, 7, 21, 9, 0, tzinfo=UTC),
+            account_id=account.id,
+            category_id=category.id,
+        ),
+        settle_key,
+    )
+    replay_settlement = await service.settle(
+        item.manual_item_id,
+        CashFlowSettlementDraft(
+            expected_version=confirmed.version,
+            actual_amount_minor=510_000,
+            occurred_at=datetime(2026, 7, 21, 9, 0, tzinfo=UTC),
+            account_id=account.id,
+            category_id=category.id,
+        ),
+        settle_key,
+    )
+    assert settled.status is CashFlowStatus.SETTLED
+    assert replay_settlement.linked_transaction_id == settled.linked_transaction_id
+    assert settled.actual_amount_minor == 510_000
+    assert await session.scalar(select(func.count()).select_from(LedgerTransaction)) == 1
+
+
+async def test_void_and_restore_keep_cash_flow_and_ledger_in_sync(session: AsyncSession) -> None:
+    account, category = await seed(session)
+    service = CashFlowService(session)
+    created = await service.create(
+        CashFlowDraft(
+            title="奖金",
+            direction=CashFlowDirection.INFLOW,
+            planned_amount_minor=100_000,
+            expected_date=date(2026, 8, 1),
+            account_id=account.id,
+            category_id=category.id,
+        ),
+        uuid4(),
+    )
+    item = created.items[0]
+    assert item.manual_item_id is not None
+    confirmed = await service.confirm(item.manual_item_id, item.version)
+    settled = await service.settle(
+        item.manual_item_id,
+        CashFlowSettlementDraft(
+            expected_version=confirmed.version,
+            actual_amount_minor=100_000,
+            occurred_at=datetime(2026, 8, 1, 0, 0, tzinfo=UTC),
+            account_id=account.id,
+            category_id=category.id,
+        ),
+        uuid4(),
+    )
+    assert settled.linked_transaction_id is not None
+    ledger = TransactionService(session)
+    transaction = await ledger.get(settled.linked_transaction_id)
+    voided = await ledger.void(transaction.id, transaction.version)
+    reopened = await session.get(CashFlowItem, item.manual_item_id)
+    assert reopened is not None and reopened.status == CashFlowStatus.CONFIRMED.value
+    await ledger.restore(voided.id, voided.version)
+    restored = await session.get(CashFlowItem, item.manual_item_id)
+    assert restored is not None and restored.status == CashFlowStatus.SETTLED.value

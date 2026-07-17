@@ -135,8 +135,12 @@ public enum AIInputFeedback {
 
   public static func success(for proposal: AIProposalDTO) -> String {
     switch proposal.status {
-    case .executed: "已自动记账：\(proposal.title ?? "新流水")。"
-    case .pending: "已加入 AI 待确认，请在 Fiscal 中检查。"
+    case .executed: proposal.target == .cashFlow
+      ? "已创建未来现金流：\(proposal.title ?? "新计划")。"
+      : "已自动记账：\(proposal.title ?? "新流水")。"
+    case .pending: proposal.target == .cashFlow
+      ? "已生成未来现金流提案，请人工确认。"
+      : "已加入 AI 待确认，请在 Fiscal 中检查。"
     case .processing: "已收到，Fiscal 正在识别。"
     case .failed: "识别失败，已保留在 AI 队列中。"
     case .ignored: "该提案已忽略。"

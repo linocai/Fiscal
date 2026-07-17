@@ -28,6 +28,14 @@ public enum AIProposalSource: String, Codable, Sendable {
   }
 }
 
+public enum AIProposalTarget: String, Codable, Sendable {
+  case transaction
+  case cashFlow = "cash_flow"
+  public var title: String { self == .cashFlow ? "未来现金流" : "正式流水" }
+  public var executeTitle: String { self == .cashFlow ? "创建现金流" : "确认记账" }
+  public var executedTitle: String { self == .cashFlow ? "已创建现金流" : "已记账" }
+}
+
 public struct AIProposalDTO: Codable, Sendable, Equatable, Identifiable {
   public let id: UUID
   public let source: AIProposalSource
@@ -35,6 +43,7 @@ public struct AIProposalDTO: Codable, Sendable, Equatable, Identifiable {
   public let contentFingerprint: String
   public let provider: String?
   public let model: String?
+  public let target: AIProposalTarget
   public let status: AIProposalStatus
   public let kind: TransactionKind?
   public let amountMinor: Int64?
@@ -54,6 +63,8 @@ public struct AIProposalDTO: Codable, Sendable, Equatable, Identifiable {
   public let errorMessage: String?
   public let transactionID: UUID?
   public let transactionVersion: Int?
+  public let cashFlowItemID: UUID?
+  public let cashFlowItemVersion: Int?
   public let version: Int
   public let createdAt: Date
   public let updatedAt: Date
@@ -62,7 +73,7 @@ public struct AIProposalDTO: Codable, Sendable, Equatable, Identifiable {
   public let undoneAt: Date?
 
   enum CodingKeys: String, CodingKey {
-    case id, source, text, status, kind, title, note, version, explanation, provider, model
+    case id, source, text, status, kind, title, note, version, explanation, provider, model, target
     case contentFingerprint = "content_fingerprint"
     case amountMinor = "amount_minor"
     case occurredAt = "occurred_at"
@@ -77,6 +88,8 @@ public struct AIProposalDTO: Codable, Sendable, Equatable, Identifiable {
     case errorMessage = "error_message"
     case transactionID = "transaction_id"
     case transactionVersion = "transaction_version"
+    case cashFlowItemID = "cash_flow_item_id"
+    case cashFlowItemVersion = "cash_flow_item_version"
     case createdAt = "created_at"
     case updatedAt = "updated_at"
     case executedAt = "executed_at"
@@ -97,7 +110,7 @@ public struct AIProposalDTO: Codable, Sendable, Equatable, Identifiable {
       "unknown_category": "分类已失效", "unknown_destination_account": "目标账户已失效",
       "account_kind_mismatch": "账户类型不匹配", "category_direction_mismatch": "分类方向不匹配",
       "ledger_validation_failed": "未通过账本安全校验", "manual_confirmation_required": "需要人工确认",
-      "user_edited": "已由你修改",
+      "user_edited": "已由你修改", "future_cash_flow_requires_confirmation": "未来计划必须人工确认",
     ]
     let missing = missingFields.map { "缺少\(labels[$0] ?? $0)" }
     return missing + reasonCodes.map { labels[$0] ?? "需要人工检查" }
@@ -156,19 +169,23 @@ public struct AIProposalReplacementRequest: Encodable, Sendable {
 public struct AIProposalActionResponse: Codable, Sendable, Equatable {
   public let proposal: AIProposalDTO
   public let transaction: TransactionDTO?
-  public init(proposal: AIProposalDTO, transaction: TransactionDTO?) {
-    self.proposal = proposal; self.transaction = transaction
+  public let cashFlowItem: FutureCashFlowItem?
+  enum CodingKeys: String, CodingKey { case proposal, transaction; case cashFlowItem = "cash_flow_item" }
+  public init(
+    proposal: AIProposalDTO, transaction: TransactionDTO?, cashFlowItem: FutureCashFlowItem? = nil
+  ) {
+    self.proposal = proposal; self.transaction = transaction; self.cashFlowItem = cashFlowItem
   }
 }
 
 public struct AIProposalUndoRequest: Codable, Sendable, Equatable {
   public let expectedVersion: Int
-  public let expectedTransactionVersion: Int
+  public let expectedTransactionVersion: Int?
   enum CodingKeys: String, CodingKey {
     case expectedVersion = "expected_version"
     case expectedTransactionVersion = "expected_transaction_version"
   }
-  public init(expectedVersion: Int, expectedTransactionVersion: Int) {
+  public init(expectedVersion: Int, expectedTransactionVersion: Int?) {
     self.expectedVersion = expectedVersion
     self.expectedTransactionVersion = expectedTransactionVersion
   }

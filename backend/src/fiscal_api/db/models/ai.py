@@ -39,6 +39,11 @@ class AIProposalStatus(StrEnum):
     UNDONE = "undone"
 
 
+class AIProposalTarget(StrEnum):
+    TRANSACTION = "transaction"
+    CASH_FLOW = "cash_flow"
+
+
 class AISettings(Base):
     __tablename__ = "ai_settings"
     __table_args__ = (
@@ -98,17 +103,27 @@ class AIProposal(Base):
             "transaction_version IS NULL OR transaction_version >= 1",
             name="transaction_version_positive",
         ),
+        CheckConstraint("target IN ('transaction','cash_flow')", name="valid_target"),
         CheckConstraint(
-            "((status IN ('executed','undone')) = (transaction_id IS NOT NULL))",
-            name="transaction_state",
+            "(status IN ('executed','undone') AND "
+            "((transaction_id IS NOT NULL)::int + (cash_flow_item_id IS NOT NULL)::int) = 1) "
+            "OR (status NOT IN ('executed','undone') AND transaction_id IS NULL "
+            "AND cash_flow_item_id IS NULL)",
+            name="execution_state",
         ),
         CheckConstraint(
             "((transaction_id IS NULL AND transaction_version IS NULL) OR "
             "(transaction_id IS NOT NULL AND transaction_version IS NOT NULL))",
             name="transaction_version_state",
         ),
+        CheckConstraint(
+            "((cash_flow_item_id IS NULL AND cash_flow_item_version IS NULL) OR "
+            "(cash_flow_item_id IS NOT NULL AND cash_flow_item_version IS NOT NULL))",
+            name="cash_flow_version_state",
+        ),
         UniqueConstraint("create_idempotency_key", name="uq_ai_proposals_create_idempotency_key"),
         UniqueConstraint("transaction_id", name="uq_ai_proposals_transaction_id"),
+        UniqueConstraint("cash_flow_item_id", name="uq_ai_proposals_cash_flow_item_id"),
         Index("ix_ai_proposals_fingerprint", "content_fingerprint"),
         Index(
             "ix_ai_proposals_pending_timeline",
@@ -127,6 +142,7 @@ class AIProposal(Base):
     create_request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     provider: Mapped[str | None] = mapped_column(String(40), nullable=True)
     provider_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    target: Mapped[str] = mapped_column(String(16), nullable=False, default="transaction")
 
     kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
     amount_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
@@ -161,6 +177,10 @@ class AIProposal(Base):
         Uuid, ForeignKey("transactions.id", ondelete="RESTRICT"), nullable=True
     )
     transaction_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cash_flow_item_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("cash_flow_items.id", ondelete="RESTRICT"), nullable=True
+    )
+    cash_flow_item_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     parsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ignored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

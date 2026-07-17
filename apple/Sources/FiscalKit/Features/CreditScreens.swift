@@ -38,8 +38,9 @@ public struct IOSCreditAccountsScreen: View {
     @Bindable var credit: CreditModel
     @Bindable var installments: InstallmentModel
     let transactions: TransactionsModel; let accounts: AccountsModel; let categories: CategoriesModel
+    let cashFlow: FutureCashFlowModel
     @State private var archivedCreditAccounts: [AccountDTO] = []
-    public init(credit: CreditModel, installments: InstallmentModel, transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel) { self.credit = credit; self.installments = installments; self.transactions = transactions; self.accounts = accounts; self.categories = categories }
+    public init(credit: CreditModel, installments: InstallmentModel, transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, cashFlow: FutureCashFlowModel) { self.credit = credit; self.installments = installments; self.transactions = transactions; self.accounts = accounts; self.categories = categories; self.cashFlow = cashFlow }
     public var body: some View {
         Group {
             switch credit.phase {
@@ -51,14 +52,14 @@ public struct IOSCreditAccountsScreen: View {
             case .offline: retry("无法连接个人 VPS", "wifi.slash")
             case .failed: retry(credit.message ?? "读取失败", "exclamationmark.triangle")
             case .loaded:
-                ScrollView { LazyVStack(spacing: 14) { ForEach(credit.accounts) { summary in NavigationLink { IOSCreditAccountDetail(credit: credit, installments: installments, accountID: summary.accountID, transactions: transactions, accounts: accounts, categories: categories) } label: { accountCard(summary) }.buttonStyle(.plain) }; if !archivedCreditAccounts.isEmpty { Text("已归档信用账户").font(.headline).frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8); ForEach(archivedCreditAccounts) { account in NavigationLink { IOSCreditAccountDetail(credit: credit, installments: installments, accountID: account.id, transactions: transactions, accounts: accounts, categories: categories, readOnly: true) } label: { archivedAccountCard(account) }.buttonStyle(.plain) } } }.padding(16) }.background(FiscalColor.iOSBackground)
+                ScrollView { LazyVStack(spacing: 14) { ForEach(credit.accounts) { summary in NavigationLink { IOSCreditAccountDetail(credit: credit, installments: installments, accountID: summary.accountID, transactions: transactions, accounts: accounts, categories: categories, cashFlow: cashFlow) } label: { accountCard(summary) }.buttonStyle(.plain) }; if !archivedCreditAccounts.isEmpty { Text("已归档信用账户").font(.headline).frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8); ForEach(archivedCreditAccounts) { account in NavigationLink { IOSCreditAccountDetail(credit: credit, installments: installments, accountID: account.id, transactions: transactions, accounts: accounts, categories: categories, cashFlow: cashFlow, readOnly: true) } label: { archivedAccountCard(account) }.buttonStyle(.plain) } } }.padding(16) }.background(FiscalColor.iOSBackground)
             }
         }
         .navigationTitle("信用账期与分期").onAppear { Task { await reload() } }.refreshable { await reload() }
     }
     private func archivedAccountCard(_ account: AccountDTO) -> some View { FiscalCard(radius: 20) { HStack { FiscalIconTile("archivebox.fill", color: FiscalColor.tertiary); VStack(alignment: .leading, spacing: 4) { Text(account.name).font(.headline); Text("已归档 · 只读历史").font(.caption).foregroundStyle(FiscalColor.tertiary) }; Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary).accessibilityHidden(true) } } }
-    private var archivedOnlyList: some View { ScrollView { LazyVStack(alignment: .leading, spacing: 14) { Text("已归档信用账户").font(.headline); ForEach(archivedCreditAccounts) { account in NavigationLink { IOSCreditAccountDetail(credit: credit, installments: installments, accountID: account.id, transactions: transactions, accounts: accounts, categories: categories, readOnly: true) } label: { archivedAccountCard(account) }.buttonStyle(.plain) } }.padding(16) }.background(FiscalColor.iOSBackground) }
-    private func reload() async { async let summaries: Void = credit.loadAccounts(); async let options = accounts.transactionOptions(); if let values = try? await options { archivedCreditAccounts = values.filter { $0.kind == .credit && $0.archivedAt != nil } }; await summaries }
+    private var archivedOnlyList: some View { ScrollView { LazyVStack(alignment: .leading, spacing: 14) { Text("已归档信用账户").font(.headline); ForEach(archivedCreditAccounts) { account in NavigationLink { IOSCreditAccountDetail(credit: credit, installments: installments, accountID: account.id, transactions: transactions, accounts: accounts, categories: categories, cashFlow: cashFlow, readOnly: true) } label: { archivedAccountCard(account) }.buttonStyle(.plain) } }.padding(16) }.background(FiscalColor.iOSBackground) }
+    private func reload() async { async let summaries: Void = credit.loadAccounts(); async let future: Void = cashFlow.load(); async let options = accounts.transactionOptions(); if let values = try? await options { archivedCreditAccounts = values.filter { $0.kind == .credit && $0.archivedAt != nil } }; _ = await (summaries, future) }
     private func accountCard(_ value: CreditAccountSummaryDTO) -> some View {
         FiscalCard(radius: 20) { VStack(alignment: .leading, spacing: 13) { HStack { FiscalIconTile("creditcard.fill", color: FiscalColor.debt); VStack(alignment: .leading, spacing: 3) { Text(value.name).font(.headline); Text(value.lastFour.map { "尾号 \($0)" } ?? "信用账户").font(.caption).foregroundStyle(FiscalColor.tertiary) }; Spacer(); if value.hasOverdueCycle { Text("有逾期").font(.caption2.bold()).foregroundStyle(FiscalColor.expense) }; Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary).accessibilityHidden(true) }; HStack(alignment: .firstTextBaseline) { VStack(alignment: .leading) { Text("当前欠款").font(.caption).foregroundStyle(FiscalColor.tertiary); Text(Money(minorUnits: value.currentDebtMinor).formatted()).font(.title2.bold()).foregroundStyle(FiscalColor.debt) }; Spacer(); VStack(alignment: .trailing) { Text("可用额度").font(.caption).foregroundStyle(FiscalColor.tertiary); Text(Money(minorUnits: value.availableCreditMinor).formatted()).font(.subheadline.weight(.semibold)) } }; if value.activeInstallmentCount > 0 { Label("\(value.activeInstallmentCount) 个分期 · 未来计划毛额 \(Money(minorUnits: value.futureScheduledGrossMinor).formatted())", systemImage: "calendar.badge.clock").font(.caption).foregroundStyle(FiscalColor.debt) }; if value.openingConfigurationRequired { Label("请确认期初欠款日期；未知期初部分不判断到期或还款", systemImage: "calendar.badge.exclamationmark").font(.caption).foregroundStyle(FiscalColor.debt) }; if value.overLimitMinor > 0 { Label("已超额度 \(Money(minorUnits: value.overLimitMinor).formatted())", systemImage: "exclamationmark.triangle.fill").font(.caption.bold()).foregroundStyle(FiscalColor.expense) }; if let cycle = value.nextDueCycle { HStack { CreditStatusPill(cycle: cycle); Spacer(); Text("\(cycle.dueDate) 前还 \(Money(minorUnits: cycle.remainingMinor).formatted())").font(.caption).foregroundStyle(FiscalColor.secondary) } } } }
     }
@@ -68,18 +69,20 @@ public struct IOSCreditAccountsScreen: View {
 private struct IOSCreditAccountDetail: View {
     @Bindable var credit: CreditModel
     @Bindable var installments: InstallmentModel
-    let accountID: UUID; let transactions: TransactionsModel; let accounts: AccountsModel; let categories: CategoriesModel
+    let accountID: UUID; let transactions: TransactionsModel; let accounts: AccountsModel; let categories: CategoriesModel; let cashFlow: FutureCashFlowModel
     @State private var repayCycle: CreditCycleDTO?
     let readOnly: Bool
-    init(credit: CreditModel, installments: InstallmentModel, accountID: UUID, transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, readOnly: Bool = false) { self.credit = credit; self.installments = installments; self.accountID = accountID; self.transactions = transactions; self.accounts = accounts; self.categories = categories; self.readOnly = readOnly }
+    init(credit: CreditModel, installments: InstallmentModel, accountID: UUID, transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, cashFlow: FutureCashFlowModel, readOnly: Bool = false) { self.credit = credit; self.installments = installments; self.accountID = accountID; self.transactions = transactions; self.accounts = accounts; self.categories = categories; self.cashFlow = cashFlow; self.readOnly = readOnly }
     var body: some View {
-        Group { if credit.phase == .loading && credit.selectedAccount?.accountID != accountID { ProgressView("正在读取账期…") } else if let summary = credit.selectedAccount, summary.accountID == accountID { ScrollView { VStack(spacing: 14) { if readOnly { Label("已归档账户 · 只读历史", systemImage: "archivebox").font(.caption).foregroundStyle(FiscalColor.tertiary).frame(maxWidth: .infinity, alignment: .leading) }; debtCard(summary); if let cycle = summary.nextDueCycle ?? summary.currentCycle { cycleCard(cycle, prominent: true) }; installmentCards; if !credit.cycles.isEmpty { VStack(alignment: .leading, spacing: 10) { Text("历史账期").font(.headline); ForEach(credit.cycles) { cycle in NavigationLink { IOSCreditCycleDetail(credit: credit, cycleID: cycle.id, transactions: transactions, accounts: accounts, categories: categories, readOnly: readOnly) } label: { cycleRow(cycle) }.buttonStyle(.plain).task { if cycle.id == credit.cycles.last?.id { await credit.loadMoreCycles() } } } }.padding(16).background(FiscalColor.surface, in: .rect(cornerRadius: 18)) } }.padding(16) }.background(FiscalColor.iOSBackground) } else { ContentUnavailableView("账期读取失败", systemImage: "exclamationmark.triangle", description: Text(credit.message ?? "请重试。")) } }
-        .navigationTitle(credit.selectedAccount?.name ?? "信用账户").onAppear { Task { async let c: Void = credit.loadAccount(accountID); async let i: Void = installments.loadAccount(accountID); _ = await (c, i) } }
+        Group { if credit.phase == .loading && credit.selectedAccount?.accountID != accountID { ProgressView("正在读取账期…") } else if let summary = credit.selectedAccount, summary.accountID == accountID { ScrollView { VStack(spacing: 14) { if readOnly { Label("已归档账户 · 只读历史", systemImage: "archivebox").font(.caption).foregroundStyle(FiscalColor.tertiary).frame(maxWidth: .infinity, alignment: .leading) }; debtCard(summary); futureCashFlowCard; if let cycle = summary.nextDueCycle ?? summary.currentCycle { cycleCard(cycle, prominent: true) }; installmentCards; if !credit.cycles.isEmpty { VStack(alignment: .leading, spacing: 10) { Text("历史账期").font(.headline); ForEach(credit.cycles) { cycle in NavigationLink { IOSCreditCycleDetail(credit: credit, cycleID: cycle.id, transactions: transactions, accounts: accounts, categories: categories, readOnly: readOnly) } label: { cycleRow(cycle) }.buttonStyle(.plain).task { if cycle.id == credit.cycles.last?.id { await credit.loadMoreCycles() } } } }.padding(16).background(FiscalColor.surface, in: .rect(cornerRadius: 18)) } }.padding(16) }.background(FiscalColor.iOSBackground) } else { ContentUnavailableView("账期读取失败", systemImage: "exclamationmark.triangle", description: Text(credit.message ?? "请重试。")) } }
+        .navigationTitle(credit.selectedAccount?.name ?? "信用账户").onAppear { Task { async let c: Void = credit.loadAccount(accountID); async let i: Void = installments.loadAccount(accountID); async let f: Void = cashFlow.load(); _ = await (c, i, f) } }
         .sheet(item: $repayCycle) { cycle in TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit, initialKind: .repayment, creditAccountID: accountID, cycleID: cycle.id, amountMinor: cycle.remainingMinor) }
     }
     private func debtCard(_ value: CreditAccountSummaryDTO) -> some View { FiscalCard(radius: 20) { VStack(alignment: .leading, spacing: 10) { Text("当前信用负债").font(.caption).foregroundStyle(FiscalColor.tertiary); Text(Money(minorUnits: value.currentDebtMinor).formatted()).font(.system(size: 31, weight: .bold)).foregroundStyle(FiscalColor.debt); ProgressView(value: Double(min(value.currentDebtMinor, value.creditLimitMinor)), total: Double(max(1, value.creditLimitMinor))).tint(value.overLimitMinor > 0 ? FiscalColor.expense : FiscalColor.debt); HStack { Text("额度 \(Money(minorUnits: value.creditLimitMinor).formatted())"); Spacer(); Text("可用 \(Money(minorUnits: value.availableCreditMinor).formatted())") }.font(.caption).foregroundStyle(FiscalColor.secondary); if value.overLimitMinor > 0 { Label("超出额度 \(Money(minorUnits: value.overLimitMinor).formatted())，新增消费已暂停", systemImage: "exclamationmark.triangle.fill").font(.caption.bold()).foregroundStyle(FiscalColor.expense) }; if value.openingConfigurationRequired { Label("请在账户编辑中确认期初日期；正常账期仍可还，未知期初部分不可还", systemImage: "calendar.badge.exclamationmark").font(.caption).foregroundStyle(FiscalColor.debt) } } } }
     private func cycleCard(_ cycle: CreditCycleDTO, prominent: Bool) -> some View { FiscalCard(radius: 20) { VStack(alignment: .leading, spacing: 12) { HStack { Text(cycle.isOpeningCycle ? "期初欠款" : "本期应还").font(.headline); Spacer(); CreditStatusPill(cycle: cycle) }; Text(Money(minorUnits: cycle.remainingMinor).formatted()).font(.system(size: 30, weight: .bold)).foregroundStyle(cycle.isOverdue ? FiscalColor.expense : FiscalColor.debt); Text(cycle.isOpeningCycle ? "余额日期 \(cycle.statementDate) · 到期日 \(cycle.dueDate)" : "账期 \(cycle.periodStart)–\(cycle.periodEnd) · 还款日 \(cycle.dueDate)").font(.caption).foregroundStyle(FiscalColor.secondary); HStack { if !readOnly { Button("全额还款") { repayCycle = cycle }.buttonStyle(.borderedProminent).disabled(cycle.remainingMinor == 0) }; NavigationLink("查看明细") { IOSCreditCycleDetail(credit: credit, cycleID: cycle.id, transactions: transactions, accounts: accounts, categories: categories, readOnly: readOnly) }.buttonStyle(.bordered) } } } }
     private func cycleRow(_ cycle: CreditCycleDTO) -> some View { HStack { VStack(alignment: .leading, spacing: 4) { Text(cycle.isOpeningCycle ? "期初欠款 · 余额日期 \(cycle.statementDate)" : "\(cycle.periodStart)–\(cycle.periodEnd)").font(.subheadline.weight(.medium)); Text("到期日 \(cycle.dueDate)").font(.caption).foregroundStyle(FiscalColor.tertiary) }; Spacer(); VStack(alignment: .trailing, spacing: 4) { Text(Money(minorUnits: cycle.remainingMinor).formatted()).font(.subheadline.weight(.semibold)); CreditStatusPill(cycle: cycle) }; Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary).accessibilityHidden(true) }.padding(.vertical, 6) }
+    private var futureItems: [FutureCashFlowItem] { cashFlow.active?.items.filter { $0.accountID == accountID || $0.destinationAccountID == accountID } ?? [] }
+    private var futureCashFlowCard: some View { FiscalCard(radius: 18) { VStack(alignment: .leading, spacing: 9) { Text("未来现金流").font(.headline); if futureItems.isEmpty { Text("暂无等待入账事项").font(.caption).foregroundStyle(FiscalColor.tertiary) } else { ForEach(futureItems.prefix(5)) { item in HStack { VStack(alignment: .leading, spacing: 2) { Text(item.title).font(.subheadline.weight(.medium)); Text("\(item.expectedDate) · \(item.status.title)").font(.caption).foregroundStyle(FiscalColor.tertiary) }; Spacer(); Text(Money(minorUnits: item.plannedAmountMinor).formatted()).font(.subheadline.weight(.semibold)).foregroundStyle(item.direction == .inflow ? FiscalColor.income : FiscalColor.debt) } } } } } }
     @ViewBuilder private var installmentCards: some View {
         if installments.loadedAccountID == accountID, let error = installmentError {
             FiscalCard(radius: 18) { VStack(alignment: .leading, spacing: 8) { Label(error, systemImage: "wifi.exclamationmark").foregroundStyle(FiscalColor.expense); Button("重试") { Task { await installments.loadAccount(accountID) } }.buttonStyle(.bordered) } }
@@ -124,6 +127,7 @@ public struct MacAccountsCreditScreen: View {
     @Bindable var credit: CreditModel
     @Bindable var installments: InstallmentModel
     let transactions: TransactionsModel; let categories: CategoriesModel
+    let cashFlow: FutureCashFlowModel
     @State private var selectedCreditID: UUID?
     @State private var showManagement = false
     @State private var repayCycle: CreditCycleDTO?
@@ -133,7 +137,7 @@ public struct MacAccountsCreditScreen: View {
     @State private var showInstallmentSettlement = false
     @State private var showInstallmentCancellation = false
     @State private var showInstallmentReverse = false
-    public init(accounts: AccountsModel, credit: CreditModel, installments: InstallmentModel, transactions: TransactionsModel, categories: CategoriesModel) { self.accounts = accounts; self.credit = credit; self.installments = installments; self.transactions = transactions; self.categories = categories }
+    public init(accounts: AccountsModel, credit: CreditModel, installments: InstallmentModel, transactions: TransactionsModel, categories: CategoriesModel, cashFlow: FutureCashFlowModel) { self.accounts = accounts; self.credit = credit; self.installments = installments; self.transactions = transactions; self.categories = categories; self.cashFlow = cashFlow }
     public var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -269,6 +273,15 @@ public struct MacAccountsCreditScreen: View {
                         Label("存在逾期账期", systemImage: "exclamationmark.triangle.fill").foregroundStyle(FiscalColor.expense)
                     }
                     Divider()
+                    Text("未来现金流").font(.headline)
+                    if selectedFutureItems.isEmpty {
+                        Text("暂无等待入账事项").font(.caption).foregroundStyle(FiscalColor.tertiary)
+                    } else {
+                        ForEach(selectedFutureItems.prefix(5)) { item in
+                            HStack { VStack(alignment: .leading, spacing: 2) { Text(item.title).fontWeight(.medium); Text("\(item.expectedDate) · \(item.status.title)").foregroundStyle(FiscalColor.tertiary) }; Spacer(); Text(Money(minorUnits: item.plannedAmountMinor).formatted()).fontWeight(.semibold).foregroundStyle(item.direction == .inflow ? FiscalColor.income : FiscalColor.debt) }.font(.caption).padding(10).background(FiscalColor.macBackground, in: .rect(cornerRadius: 10))
+                        }
+                    }
+                    Divider()
                     Text("账期").font(.headline)
                     ForEach(credit.cycles) { cycle in
                         VStack(alignment: .leading, spacing: 7) {
@@ -323,12 +336,14 @@ public struct MacAccountsCreditScreen: View {
     private func reload() async {
         async let activeAccounts: Void = accounts.load()
         async let summaries: Void = credit.loadAccounts()
+        async let future: Void = cashFlow.load()
         async let options = accounts.transactionOptions()
         if let values = try? await options { archivedCreditAccounts = values.filter { $0.kind == .credit && $0.archivedAt != nil } }
-        _ = await (activeAccounts, summaries)
+        _ = await (activeAccounts, summaries, future)
         if let selectedCreditID { async let selectedCredit: Void = credit.loadAccount(selectedCreditID); async let selectedInstallments: Void = installments.loadAccount(selectedCreditID); _ = await (selectedCredit, selectedInstallments) }
     }
     private var selectedAccountIsArchived: Bool { archivedCreditAccounts.contains { $0.id == selectedCreditID } }
+    private var selectedFutureItems: [FutureCashFlowItem] { guard let selectedCreditID else { return [] }; return cashFlow.active?.items.filter { $0.accountID == selectedCreditID || $0.destinationAccountID == selectedCreditID } ?? [] }
     private var installmentError: String? { switch installments.phase { case .unauthorized, .offline, .failed: installments.message ?? "分期读取失败"; default: installments.refreshMessage } }
 }
 #endif

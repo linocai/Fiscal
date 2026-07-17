@@ -12,6 +12,7 @@ from fiscal_api.api.p3_schemas import (
     TransactionDraft,
     TransactionResponse,
 )
+from fiscal_api.api.p13_schemas import CashFlowItemResponse
 from fiscal_api.db.models import TransactionKind
 
 ConfidenceBPS = Annotated[StrictInt, Field(ge=0, le=10_000)]
@@ -19,6 +20,7 @@ SafeConfidenceBPS = Annotated[StrictInt, Field(ge=9_000, le=10_000)]
 SafeAutoLimit = Annotated[StrictInt, Field(ge=1, le=100_000)]
 ProposalStatus = Literal["processing", "pending", "executed", "failed", "ignored", "undone"]
 ProposalSource = Literal["text", "ocr", "shortcut_text"]
+ProposalTarget = Literal["transaction", "cash_flow"]
 AIField = Literal[
     "kind",
     "amount_minor",
@@ -167,6 +169,7 @@ class AIProposalResponse(P8Model):
     content_fingerprint: str
     provider: str | None
     model: str | None
+    target: ProposalTarget
     kind: TransactionKind | None
     amount_minor: int | None
     occurred_at: datetime | None
@@ -186,6 +189,8 @@ class AIProposalResponse(P8Model):
     error_message: str | None
     transaction_id: UUID | None
     transaction_version: int | None
+    cash_flow_item_id: UUID | None
+    cash_flow_item_version: int | None
     version: int
     created_at: datetime
     updated_at: datetime
@@ -214,9 +219,10 @@ class AIProposalRetryRequest(AIProposalVersionRequest):
 
 
 class AIProposalUndoRequest(AIProposalVersionRequest):
-    expected_transaction_version: Annotated[StrictInt, Field(ge=1)]
+    expected_transaction_version: Annotated[StrictInt, Field(ge=1)] | None = None
 
 
 class AIProposalMutationResponse(P8Model):
     proposal: AIProposalResponse
     transaction: TransactionResponse | None = None
+    cash_flow_item: CashFlowItemResponse | None = None

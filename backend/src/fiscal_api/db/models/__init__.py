@@ -1,5 +1,21 @@
 from fiscal_api.db.models.account import Account, AccountKind
-from fiscal_api.db.models.ai import AIProposal, AIProposalSource, AIProposalStatus, AISettings
+from fiscal_api.db.models.ai import (
+    AIProposal,
+    AIProposalSource,
+    AIProposalStatus,
+    AIProposalTarget,
+    AISettings,
+)
+from fiscal_api.db.models.cash_flow import (
+    CashFlowDirection,
+    CashFlowItem,
+    CashFlowItemRevision,
+    CashFlowRecurrence,
+    CashFlowRevisionEvent,
+    CashFlowSeries,
+    CashFlowSource,
+    CashFlowStatus,
+)
 from fiscal_api.db.models.category import Category, CategoryDirection
 from fiscal_api.db.models.credit import CreditCycle, CreditCycleStatus
 from fiscal_api.db.models.installment import (
@@ -45,9 +61,18 @@ __all__ = [
     "AIProposal",
     "AIProposalSource",
     "AIProposalStatus",
+    "AIProposalTarget",
     "AISettings",
     "Account",
     "AccountKind",
+    "CashFlowDirection",
+    "CashFlowItem",
+    "CashFlowItemRevision",
+    "CashFlowRecurrence",
+    "CashFlowRevisionEvent",
+    "CashFlowSeries",
+    "CashFlowSource",
+    "CashFlowStatus",
     "Category",
     "CategoryDirection",
     "CreditCycle",

@@ -28,7 +28,9 @@ from fiscal_api.api.p8_schemas import (
     AISettingsResponse,
     ProposalSource,
     ProposalStatus,
+    ProposalTarget,
 )
+from fiscal_api.api.p13_schemas import CashFlowDraft, CashFlowMutationScope
 from fiscal_api.core.config import Settings
 from fiscal_api.core.errors import APIError
 from fiscal_api.core.provider_credentials import ProviderCredentialCipher
@@ -37,13 +39,17 @@ from fiscal_api.db.models import (
     Account,
     AIProposal,
     AIProposalStatus,
+    AIProposalTarget,
     AISettings,
+    CashFlowDirection,
+    CashFlowSource,
     Category,
     TransactionKind,
     TransactionSource,
 )
 from fiscal_api.repositories.ai import AIRepository
 from fiscal_api.services.ai_provider import AIProvider, build_stored_ai_provider
+from fiscal_api.services.cash_flow import CashFlowService
 from fiscal_api.services.common import acquire_mutation_lock, check_version, conflict, not_found
 from fiscal_api.services.security import AuthenticatedDevice
 from fiscal_api.services.transactions import TransactionService
@@ -214,6 +220,7 @@ class AIService:
         check_version(proposal.version, expected_version)
         self._require_status(proposal, AIProposalStatus.PENDING)
         self._apply_draft(proposal, draft)
+        proposal.target = self._proposal_target(proposal, draft.kind).value
         proposal.field_confidences = AIFieldConfidences(
             kind=10_000,
             amount_minor=10_000,
@@ -239,16 +246,45 @@ class AIService:
         if (
             proposal.status == AIProposalStatus.EXECUTED.value
             and expected_version == proposal.version - 1
-            and proposal.transaction_id is not None
         ):
-            transaction = await self.transactions.get(proposal.transaction_id)
+            transaction = (
+                await self.transactions.get(proposal.transaction_id)
+                if proposal.transaction_id is not None
+                else None
+            )
+            cash_flow_item = (
+                await CashFlowService(self.session).get(proposal.cash_flow_item_id)
+                if proposal.cash_flow_item_id is not None
+                else None
+            )
             response = AIProposalMutationResponse(
-                proposal=self._proposal_response(proposal), transaction=transaction
+                proposal=self._proposal_response(proposal),
+                transaction=transaction,
+                cash_flow_item=cash_flow_item,
             )
             await self.session.commit()
             return response
         check_version(proposal.version, expected_version)
         self._require_status(proposal, AIProposalStatus.PENDING)
+        if proposal.target == AIProposalTarget.CASH_FLOW.value:
+            created = await CashFlowService(self.session).create(
+                self._cash_flow_draft(proposal),
+                self._cash_flow_key(proposal.id),
+                source=CashFlowSource.AI_TEXT,
+            )
+            item = created.items[0]
+            if item.manual_item_id is None:
+                raise RuntimeError("AI cash flow proposal created no manual item")
+            proposal = await self._required(proposal_id, for_update=True)
+            proposal.status = AIProposalStatus.EXECUTED.value
+            proposal.cash_flow_item_id = item.manual_item_id
+            proposal.cash_flow_item_version = item.version
+            proposal.executed_at = utc_now()
+            self._touch(proposal)
+            await self.session.commit()
+            return AIProposalMutationResponse(
+                proposal=self._proposal_response(proposal), cash_flow_item=item
+            )
         draft = self._draft(proposal)
         transaction = await self.transactions.create_ai(
             draft,
@@ -292,10 +328,36 @@ class AIService:
         self,
         proposal_id: UUID,
         expected_version: int,
-        expected_transaction_version: int,
+        expected_transaction_version: int | None,
     ) -> AIProposalMutationResponse:
         await acquire_mutation_lock(self.session)
         proposal = await self._required(proposal_id, for_update=True)
+        if proposal.cash_flow_item_id is not None:
+            if proposal.status == AIProposalStatus.UNDONE.value:
+                item = await CashFlowService(self.session).get(proposal.cash_flow_item_id)
+                await self.session.commit()
+                return AIProposalMutationResponse(
+                    proposal=self._proposal_response(proposal), cash_flow_item=item
+                )
+            check_version(proposal.version, expected_version)
+            self._require_status(proposal, AIProposalStatus.EXECUTED)
+            if proposal.cash_flow_item_version is None:
+                raise RuntimeError("AI cash flow proposal is missing its item version")
+            cancelled = await CashFlowService(self.session).cancel(
+                proposal.cash_flow_item_id,
+                proposal.cash_flow_item_version,
+                CashFlowMutationScope.OCCURRENCE,
+            )
+            item = cancelled.items[0]
+            proposal = await self._required(proposal_id, for_update=True)
+            proposal.status = AIProposalStatus.UNDONE.value
+            proposal.cash_flow_item_version = item.version
+            proposal.undone_at = utc_now()
+            self._touch(proposal)
+            await self.session.commit()
+            return AIProposalMutationResponse(
+                proposal=self._proposal_response(proposal), cash_flow_item=item
+            )
         if (
             proposal.status == AIProposalStatus.UNDONE.value
             and expected_version == proposal.version - 1
@@ -319,6 +381,8 @@ class AIService:
         self._require_status(proposal, AIProposalStatus.EXECUTED)
         if proposal.transaction_id is None:
             raise RuntimeError("executed AI proposal has no transaction")
+        if expected_transaction_version is None:
+            conflict("ai_undo_transaction_version_required", "缺少流水版本, 无法安全撤销")
         current = await self.transactions.get(proposal.transaction_id)
         if (
             proposal.transaction_version != current.version
@@ -472,12 +536,20 @@ class AIService:
         proposal.overall_confidence_bps = result.overall_confidence_bps
         proposal.missing_fields = list(result.missing_fields)
         proposal.reason_codes = reasons
+        proposal.target = self._proposal_target(proposal, kind).value
+        if proposal.target == AIProposalTarget.CASH_FLOW.value:
+            proposal.reason_codes = [
+                *proposal.reason_codes,
+                "future_cash_flow_requires_confirmation",
+            ]
         proposal.explanation = result.explanation
         proposal.error_code = None
         proposal.error_message = None
 
     @staticmethod
     def _auto_eligible(proposal: AIProposal, settings: AISettings) -> bool:
+        if proposal.target == AIProposalTarget.CASH_FLOW.value:
+            return False
         if not settings.auto_execute_enabled:
             return False
         if proposal.source == "ocr" and not settings.ocr_source_enabled:
@@ -545,6 +617,46 @@ class AIService:
             category_id=proposal.category_id,
             destination_account_id=proposal.destination_account_id,
             credit_cycle_id=proposal.credit_cycle_id,
+        )
+
+    @staticmethod
+    def _cash_flow_draft(proposal: AIProposal) -> CashFlowDraft:
+        draft = AIService._draft(proposal)
+        direction = {
+            TransactionKind.INCOME: CashFlowDirection.INFLOW,
+            TransactionKind.EXPENSE: CashFlowDirection.OUTFLOW,
+            TransactionKind.TRANSFER: CashFlowDirection.TRANSFER,
+        }.get(draft.kind)
+        if direction is None:
+            conflict("ai_cash_flow_kind_invalid", "该 AI 提案不能创建未来现金流")
+        return CashFlowDraft(
+            title=draft.title,
+            note=draft.note,
+            direction=direction,
+            planned_amount_minor=draft.amount_minor,
+            expected_date=draft.occurred_at.astimezone(BUSINESS_TIMEZONE).date(),
+            account_id=draft.account_id,
+            destination_account_id=draft.destination_account_id,
+            category_id=draft.category_id,
+        )
+
+    @staticmethod
+    def _proposal_target(proposal: AIProposal, kind: TransactionKind | None) -> AIProposalTarget:
+        if kind not in {TransactionKind.INCOME, TransactionKind.EXPENSE, TransactionKind.TRANSFER}:
+            return AIProposalTarget.TRANSACTION
+        business_today = utc_now().astimezone(BUSINESS_TIMEZONE).date()
+        future_date = (
+            proposal.occurred_at is not None
+            and proposal.occurred_at.astimezone(BUSINESS_TIMEZONE).date() > business_today
+        )
+        planned_language = any(
+            marker in proposal.raw_input
+            for marker in ("计划", "预计", "将于", "下个月", "下周", "未来", "每月")
+        )
+        return (
+            AIProposalTarget.CASH_FLOW
+            if future_date or planned_language
+            else AIProposalTarget.TRANSACTION
         )
 
     @staticmethod
@@ -651,6 +763,7 @@ class AIService:
             content_fingerprint=proposal.content_fingerprint,
             provider=proposal.provider,
             model=proposal.provider_model,
+            target=cast(ProposalTarget, proposal.target),
             kind=TransactionKind(proposal.kind) if proposal.kind is not None else None,
             amount_minor=proposal.amount_minor,
             occurred_at=proposal.occurred_at,
@@ -670,6 +783,8 @@ class AIService:
             error_message=proposal.error_message,
             transaction_id=proposal.transaction_id,
             transaction_version=proposal.transaction_version,
+            cash_flow_item_id=proposal.cash_flow_item_id,
+            cash_flow_item_version=proposal.cash_flow_item_version,
             version=proposal.version,
             created_at=proposal.created_at,
             updated_at=proposal.updated_at,
@@ -688,6 +803,10 @@ class AIService:
     @staticmethod
     def _transaction_key(proposal_id: UUID) -> UUID:
         return uuid5(NAMESPACE_URL, f"fiscal-ai-text:{proposal_id}")
+
+    @staticmethod
+    def _cash_flow_key(proposal_id: UUID) -> UUID:
+        return uuid5(NAMESPACE_URL, f"fiscal-ai-cash-flow:{proposal_id}")
 
     @staticmethod
     def _ledger_source(proposal: AIProposal) -> TransactionSource:

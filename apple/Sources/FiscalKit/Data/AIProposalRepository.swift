@@ -9,7 +9,7 @@ public protocol AIProposalRepository: Sendable {
   func update(id: UUID, request: AIProposalReplacementRequest) async throws -> AIProposalDTO
   func action(id: UUID, action: String, expectedVersion: Int) async throws
     -> AIProposalActionResponse
-  func undo(id: UUID, expectedVersion: Int, expectedTransactionVersion: Int) async throws
+  func undo(id: UUID, expectedVersion: Int, expectedTransactionVersion: Int?) async throws
     -> AIProposalActionResponse
 }
 
@@ -20,7 +20,7 @@ public extension AIProposalRepository {
     guard source == .text else { throw FiscalAPIError.invalidResponse }
     return try await create(text: text, idempotencyKey: idempotencyKey)
   }
-  func undo(id: UUID, expectedVersion: Int, expectedTransactionVersion: Int) async throws
+  func undo(id: UUID, expectedVersion: Int, expectedTransactionVersion: Int?) async throws
     -> AIProposalActionResponse
   { throw FiscalAPIError.invalidResponse }
 }
@@ -65,9 +65,9 @@ public actor RemoteAIProposalRepository: AIProposalRepository {
     let proposal: AIProposalDTO = try await transport.request(
       "ai/proposals/\(id)/\(action)", method: "POST",
       body: VersionRequest(version: expectedVersion))
-    return AIProposalActionResponse(proposal: proposal, transaction: nil)
+    return AIProposalActionResponse(proposal: proposal, transaction: nil, cashFlowItem: nil)
   }
-  public func undo(id: UUID, expectedVersion: Int, expectedTransactionVersion: Int) async throws
+  public func undo(id: UUID, expectedVersion: Int, expectedTransactionVersion: Int?) async throws
     -> AIProposalActionResponse
   {
     try await transport.request(

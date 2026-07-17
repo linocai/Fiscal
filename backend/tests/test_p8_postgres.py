@@ -25,6 +25,7 @@ from fiscal_api.db.models import (
     AccountKind,
     AIProposal,
     AISettings,
+    CashFlowItem,
     CategoryDirection,
     LedgerTransaction,
     TransactionKind,
@@ -53,11 +54,13 @@ class FakeProvider(AIProvider):
         confidence: int = 9_500,
         kind: TransactionKind = TransactionKind.EXPENSE,
         failures: int = 0,
+        occurred_at: datetime | None = None,
     ) -> None:
         self.amount = amount
         self.confidence = confidence
         self.kind = kind
         self.failures = failures
+        self.occurred_at = occurred_at or datetime(2026, 7, 16, 4, tzinfo=UTC)
         self.calls = 0
 
     async def parse(self, request: AIParseRequest) -> AIProviderResult:
@@ -73,7 +76,7 @@ class FakeProvider(AIProvider):
         return AIProviderResult(
             kind=self.kind,
             amount_minor=self.amount,
-            occurred_at=datetime(2026, 7, 16, 4, tzinfo=UTC),
+            occurred_at=self.occurred_at,
             title="AI 午餐" if self.kind is TransactionKind.EXPENSE else "AI 收入",
             account_id=account.id,
             category_id=category.id if category is not None else None,
@@ -101,7 +104,8 @@ async def session() -> AsyncIterator[AsyncSession]:
     async with engine.begin() as connection:
         await connection.execute(
             text(
-                "TRUNCATE ai_proposals, ai_settings, reimbursement_operations, "
+                "TRUNCATE ai_proposals, ai_settings, cash_flow_item_revisions, cash_flow_items, "
+                "cash_flow_series, reimbursement_operations, "
                 "reimbursement_receipt_revisions, reimbursement_claim_revisions, "
                 "reimbursement_receipt_allocations, reimbursement_receipts, "
                 "reimbursement_allocations, reimbursement_parties, reimbursement_claims, "
@@ -485,3 +489,44 @@ async def test_repayment_requires_human_cycle_edit_then_executes_as_ai_text(
     assert executed.transaction is not None
     assert executed.transaction.kind is TransactionKind.REPAYMENT
     assert executed.transaction.source == "ai_text"
+
+
+async def test_future_ai_proposal_requires_confirmation_and_creates_only_cash_flow(
+    session: AsyncSession,
+) -> None:
+    await seed(session)
+    service = AIService(
+        session,
+        FakeProvider(occurred_at=datetime(2026, 8, 1, 4, tzinfo=UTC)),
+    )
+    settings = await service.get_settings()
+    await service.update_settings(
+        AISettingsReplace(
+            auto_execute_enabled=True,
+            ocr_source_enabled=False,
+            shortcut_text_source_enabled=False,
+            auto_execute_limit_minor=100_000,
+            minimum_confidence_bps=9_000,
+            expected_version=settings.version,
+        )
+    )
+
+    pending, _replay = await service.create(
+        AIProposalCreate(source="text", text="计划 8 月 1 日午餐 20 元"), uuid4()
+    )
+    assert pending.target == "cash_flow"
+    assert pending.status == "pending"
+    assert pending.transaction_id is None
+    assert "future_cash_flow_requires_confirmation" in pending.reason_codes
+
+    executed = await service.execute(pending.id, pending.version)
+    assert executed.transaction is None
+    assert executed.cash_flow_item is not None
+    assert executed.cash_flow_item.status == "expected"
+    assert executed.proposal.cash_flow_item_id is not None
+    assert await session.scalar(select(text("count(*)")).select_from(LedgerTransaction)) == 0
+
+    undone = await service.undo(executed.proposal.id, executed.proposal.version, None)
+    assert undone.cash_flow_item is not None
+    assert undone.cash_flow_item.status == "cancelled"
+    assert await session.scalar(select(text("count(*)")).select_from(CashFlowItem)) == 1

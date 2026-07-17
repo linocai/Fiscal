@@ -18,6 +18,7 @@ struct IOSRootView: View {
     let installments: InstallmentModel
     let reimbursements: ReimbursementModel
     let reports: ReportingModel
+    let cashFlow: FutureCashFlowModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
     let deviceSecurity: DeviceSecurityModel
@@ -26,6 +27,7 @@ struct IOSRootView: View {
     @State private var showRecordSheet = false
     @State private var morePath: [IOSMoreDestination] = []
     @State private var showAIProposals = false
+    @State private var repaymentItem: FutureCashFlowItem?
 
     var body: some View {
         Group {
@@ -46,8 +48,15 @@ struct IOSRootView: View {
                     )
                 }
             case .transactions: NavigationStack { IOSTransactionsScreen(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments) }
-            case .cashFlow: NavigationStack { IOSCashFlowScreen(model: reports) }
-            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, aiProposals: aiProposals, aiSettings: aiSettings, deviceSecurity: deviceSecurity, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true })
+            case .cashFlow:
+                NavigationStack {
+                    IOSFutureCashFlowScreen(
+                        model: cashFlow, accounts: accounts, categories: categories,
+                        confirmRepayment: { repaymentItem = $0 },
+                        markReceived: { _ in morePath = [.reimbursements]; selection = .more }
+                    )
+                }
+            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, deviceSecurity: deviceSecurity, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true })
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -57,6 +66,14 @@ struct IOSRootView: View {
         }
         .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit, preferences: recordingPreferences) }
         .sheet(isPresented: $showAIProposals) { IOSAIProposalSheet(model: aiProposals, accounts: accounts, categories: categories, credit: credit) }
+        .sheet(item: $repaymentItem) { item in
+            TransactionEditorSheet(
+                transactions: transactions, accounts: accounts, categories: categories,
+                credit: credit, initialKind: .repayment, creditAccountID: item.accountID,
+                cycleID: item.systemReferenceID, amountMinor: item.plannedAmountMinor,
+                preferences: recordingPreferences
+            )
+        }
     }
 
     private var tabBar: some View {
@@ -107,6 +124,7 @@ private struct IOSMoreScreen: View {
     let installments: InstallmentModel
     let reimbursements: ReimbursementModel
     let reports: ReportingModel
+    let cashFlow: FutureCashFlowModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
     let deviceSecurity: DeviceSecurityModel
@@ -161,7 +179,7 @@ private struct IOSMoreScreen: View {
                 switch destination {
                 case .accounts: AccountsManagementScreen(model: accounts)
                 case .categories: CategoriesManagementScreen(model: categories)
-                case .credit: IOSCreditAccountsScreen(credit: credit, installments: installments, transactions: transactions, accounts: accounts, categories: categories)
+                case .credit: IOSCreditAccountsScreen(credit: credit, installments: installments, transactions: transactions, accounts: accounts, categories: categories, cashFlow: cashFlow)
                 case .reimbursements: IOSReimbursementsScreen(model: reimbursements, accounts: accounts)
                 case .reports(let lens): IOSReportsScreen(model: reports, initialLens: lens)
                 case .cloudConnection:

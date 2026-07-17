@@ -10,6 +10,7 @@ from fiscal_api.db.readiness import ReadinessCheck
 from fiscal_api.services.accounts import AccountService
 from fiscal_api.services.ai import AIService
 from fiscal_api.services.ai_provider import AIProvider, build_ai_provider
+from fiscal_api.services.cash_flow import CashFlowService
 from fiscal_api.services.categories import CategoryService
 from fiscal_api.services.credit import CreditService
 from fiscal_api.services.installments import InstallmentService
@@ -41,6 +42,10 @@ def get_account_service(session: SessionDependency) -> AccountService:
 
 def get_category_service(session: SessionDependency) -> CategoryService:
     return CategoryService(session)
+
+
+def get_cash_flow_service(session: SessionDependency) -> CashFlowService:
+    return CashFlowService(session)
 
 
 def get_transaction_service(session: SessionDependency) -> TransactionService:
@@ -91,6 +96,7 @@ def get_device_token_service(
 
 AccountServiceDependency = Annotated[AccountService, Depends(get_account_service)]
 CategoryServiceDependency = Annotated[CategoryService, Depends(get_category_service)]
+CashFlowServiceDependency = Annotated[CashFlowService, Depends(get_cash_flow_service)]
 TransactionServiceDependency = Annotated[TransactionService, Depends(get_transaction_service)]
 CreditServiceDependency = Annotated[CreditService, Depends(get_credit_service)]
 InstallmentServiceDependency = Annotated[InstallmentService, Depends(get_installment_service)]

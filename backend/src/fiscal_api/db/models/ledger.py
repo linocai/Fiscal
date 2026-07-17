@@ -52,6 +52,7 @@ class TransactionSource(StrEnum):
     AI_TEXT = "ai_text"
     OCR = "ocr"
     LEGACY_IMPORT = "legacy_import"
+    CASH_FLOW = "cash_flow"
 
 
 class LedgerTransaction(Base):
@@ -63,7 +64,7 @@ class LedgerTransaction(Base):
             name="valid_kind",
         ),
         CheckConstraint(
-            "source IN ('manual', 'system', 'ai_text', 'ocr', 'legacy_import')",
+            "source IN ('manual', 'system', 'ai_text', 'ocr', 'legacy_import', 'cash_flow')",
             name="valid_source",
         ),
         CheckConstraint("version >= 1", name="version_positive"),
