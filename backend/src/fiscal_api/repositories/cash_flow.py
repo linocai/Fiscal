@@ -5,7 +5,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from fiscal_api.db.models import CashFlowItem, CashFlowItemRevision, CashFlowSeries
+from fiscal_api.db.models import (
+    CashFlowItem,
+    CashFlowItemRevision,
+    CashFlowSeries,
+    CashFlowSystemOverride,
+)
 
 
 class CashFlowRepository:
@@ -20,6 +25,44 @@ class CashFlowRepository:
 
     def add_revision(self, revision: CashFlowItemRevision) -> None:
         self.session.add(revision)
+
+    def add_system_override(self, item: CashFlowSystemOverride) -> None:
+        self.session.add(item)
+
+    async def system_override(
+        self, system_kind: str, reference_id: UUID, *, for_update: bool = False
+    ) -> CashFlowSystemOverride | None:
+        statement = select(CashFlowSystemOverride).where(
+            CashFlowSystemOverride.system_kind == system_kind,
+            CashFlowSystemOverride.system_reference_id == reference_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self.session.scalar(statement)
+
+    async def system_overrides(self) -> list[CashFlowSystemOverride]:
+        return list((await self.session.scalars(select(CashFlowSystemOverride))).all())
+
+    async def system_history(
+        self, start: date, end_exclusive: date
+    ) -> list[CashFlowSystemOverride]:
+        return list(
+            (
+                await self.session.scalars(
+                    select(CashFlowSystemOverride)
+                    .where(
+                        CashFlowSystemOverride.status == "completed",
+                        CashFlowSystemOverride.completed_at.is_not(None),
+                        CashFlowSystemOverride.completed_at >= start,
+                        CashFlowSystemOverride.completed_at < end_exclusive,
+                    )
+                    .order_by(
+                        CashFlowSystemOverride.completed_at.desc(),
+                        CashFlowSystemOverride.id.desc(),
+                    )
+                )
+            ).all()
+        )
 
     async def get(self, item_id: UUID, *, for_update: bool = False) -> CashFlowItem | None:
         statement = (

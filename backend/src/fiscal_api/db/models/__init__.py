@@ -15,6 +15,7 @@ from fiscal_api.db.models.cash_flow import (
     CashFlowSeries,
     CashFlowSource,
     CashFlowStatus,
+    CashFlowSystemOverride,
 )
 from fiscal_api.db.models.category import Category, CategoryDirection
 from fiscal_api.db.models.credit import CreditCycle, CreditCycleStatus
@@ -73,6 +74,7 @@ __all__ = [
     "CashFlowSeries",
     "CashFlowSource",
     "CashFlowStatus",
+    "CashFlowSystemOverride",
     "Category",
     "CategoryDirection",
     "CreditCycle",

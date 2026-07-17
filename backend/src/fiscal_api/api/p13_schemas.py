@@ -120,6 +120,32 @@ class CashFlowSettlementDraft(APIModel):
         return value
 
 
+class CashFlowSystemReplace(APIModel):
+    title: str = Field(min_length=1, max_length=120)
+    note: str | None = Field(default=None, max_length=500)
+    planned_amount_minor: PositiveMinorUnits
+    expected_date: date
+    status: CashFlowStatus
+    expected_version: StrictInt = Field(ge=1)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def trim_title(cls, value: str) -> str:
+        return clean_required(value)
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def trim_note(cls, value: str | None) -> str | None:
+        return clean_note(value)
+
+    @field_validator("status")
+    @classmethod
+    def valid_status(cls, value: CashFlowStatus) -> CashFlowStatus:
+        if value not in {CashFlowStatus.CONFIRMED, CashFlowStatus.COMPLETED}:
+            raise ValueError("system cash flow status must be confirmed or completed")
+        return value
+
+
 class CashFlowItemResponse(APIModel):
     id: str
     manual_item_id: UUID | None = None

@@ -8,6 +8,9 @@ public protocol FutureCashFlowRepository: Sendable {
   func confirm(id: UUID, version: Int) async throws -> FutureCashFlowItem
   func cancel(id: UUID, version: Int, scope: FutureCashFlowMutationScope) async throws -> FutureCashFlowCreateResponse
   func settle(id: UUID, request: FutureCashFlowSettlement, idempotencyKey: UUID) async throws -> FutureCashFlowItem
+  func updateSystem(
+    kind: FutureCashFlowSystemKind, referenceID: UUID, request: FutureCashFlowSystemReplace
+  ) async throws -> FutureCashFlowItem
 }
 
 public actor RemoteFutureCashFlowRepository: FutureCashFlowRepository {
@@ -58,5 +61,14 @@ public actor RemoteFutureCashFlowRepository: FutureCashFlowRepository {
     try await transport.request(
       "cash-flow-items/\(id.uuidString)/settle", method: "POST",
       headers: ["Idempotency-Key": idempotencyKey.uuidString], body: request)
+  }
+
+  public func updateSystem(
+    kind: FutureCashFlowSystemKind, referenceID: UUID,
+    request: FutureCashFlowSystemReplace
+  ) async throws -> FutureCashFlowItem {
+    try await transport.request(
+      "cash-flow-system-items/\(kind.rawValue)/\(referenceID.uuidString)",
+      method: "PUT", body: request)
   }
 }

@@ -33,6 +33,7 @@ class CashFlowStatus(StrEnum):
     CONFIRMED = "confirmed"
     SETTLED = "settled"
     CANCELLED = "cancelled"
+    COMPLETED = "completed"
 
 
 class CashFlowSource(StrEnum):
@@ -175,3 +176,43 @@ class CashFlowItemRevision(Base):
     )
 
     item: Mapped[CashFlowItem] = relationship("CashFlowItem", back_populates="revisions")
+
+
+class CashFlowSystemOverride(Base):
+    __tablename__ = "cash_flow_system_overrides"
+    __table_args__ = (
+        CheckConstraint(
+            "system_kind IN ('credit_cycle', 'reimbursement')", name="valid_system_kind"
+        ),
+        CheckConstraint("direction IN ('inflow', 'outflow')", name="valid_direction"),
+        CheckConstraint("status IN ('confirmed', 'completed')", name="valid_status"),
+        CheckConstraint("planned_amount_minor > 0", name="planned_amount_positive"),
+        CheckConstraint("version >= 1", name="version_positive"),
+        CheckConstraint("char_length(title) BETWEEN 1 AND 120", name="title_length"),
+        CheckConstraint("note IS NULL OR char_length(note) <= 500", name="note_length"),
+        UniqueConstraint(
+            "system_kind", "system_reference_id", name="uq_cash_flow_system_override_source"
+        ),
+        Index("ix_cash_flow_system_override_history", "status", "completed_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    system_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    system_reference_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    direction: Mapped[str] = mapped_column(String(16), nullable=False)
+    planned_amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    expected_date: Mapped[date] = mapped_column(Date, nullable=False)
+    account_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="confirmed")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )

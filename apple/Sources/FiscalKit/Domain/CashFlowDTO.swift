@@ -8,8 +8,8 @@ public enum FutureCashFlowDirection: String, Codable, Sendable, CaseIterable, Id
 }
 
 public enum FutureCashFlowStatus: String, Codable, Sendable {
-  case expected, confirmed, settled, cancelled
-  public var title: String { switch self { case .expected: "预计"; case .confirmed: "已确认"; case .settled: "已入账"; case .cancelled: "已取消" } }
+  case expected, confirmed, settled, cancelled, completed
+  public var title: String { switch self { case .expected: "预计"; case .confirmed: "已确认"; case .settled: "已入账"; case .cancelled: "已取消"; case .completed: "已完成" } }
 }
 
 public enum FutureCashFlowAction: String, Codable, Sendable {
@@ -166,5 +166,20 @@ public struct FutureCashFlowSettlement: Codable, Sendable {
     expectedVersion = version; actualAmountMinor = amountMinor; self.occurredAt = occurredAt
     self.accountID = accountID; self.destinationAccountID = destinationAccountID
     self.categoryID = categoryID; self.title = title; self.note = note
+  }
+}
+
+public struct FutureCashFlowSystemReplace: Codable, Sendable {
+  public let title: String
+  public let note: String?
+  public let plannedAmountMinor: Int64
+  public let expectedDate: String
+  public let status: FutureCashFlowStatus
+  public let expectedVersion: Int
+  enum CodingKeys: String, CodingKey {
+    case title, note, status
+    case plannedAmountMinor = "planned_amount_minor"
+    case expectedDate = "expected_date"
+    case expectedVersion = "expected_version"
   }
 }

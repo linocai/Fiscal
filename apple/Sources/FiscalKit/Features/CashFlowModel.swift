@@ -58,6 +58,20 @@ public final class FutureCashFlowModel {
     }
   }
 
+  public func updateSystem(
+    _ item: FutureCashFlowItem, title: String, note: String?, amountMinor: Int64,
+    expectedDate: String, status: FutureCashFlowStatus
+  ) async -> Bool {
+    guard let kind = item.systemKind, let referenceID = item.systemReferenceID else { return false }
+    return await mutate {
+      _ = try await self.repository.updateSystem(
+        kind: kind, referenceID: referenceID,
+        request: FutureCashFlowSystemReplace(
+          title: title, note: note, plannedAmountMinor: amountMinor,
+          expectedDate: expectedDate, status: status, expectedVersion: item.version))
+    }
+  }
+
   public func confirm(_ item: FutureCashFlowItem) async {
     guard let id = item.manualItemID else { return }
     _ = await mutate { _ = try await self.repository.confirm(id: id, version: item.version) }

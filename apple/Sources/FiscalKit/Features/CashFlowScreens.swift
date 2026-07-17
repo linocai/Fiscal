@@ -43,12 +43,20 @@ public struct IOSFutureCashFlowScreen: View {
     .refreshable { if model.showingHistory { await model.loadHistory() } else { await model.load() } }
     .task { await model.load() }
     .sheet(item: $editor) { target in
-      CashFlowEditorSheet(
-        model: model, accounts: accounts, categories: categories,
-        item: target.item)
+      editorSheet(target)
     }
     .sheet(item: $settling) { item in
       CashFlowSettlementSheet(model: model, accounts: accounts, categories: categories, item: item)
+    }
+  }
+
+  @ViewBuilder private func editorSheet(_ target: CashFlowEditorTarget) -> some View {
+    if let item = target.systemItem {
+      CashFlowSystemEditorSheet(model: model, item: item)
+    } else {
+      CashFlowEditorSheet(
+        model: model, accounts: accounts, categories: categories,
+        item: target.manualItem)
     }
   }
 
@@ -104,7 +112,7 @@ public struct IOSFutureCashFlowScreen: View {
       ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
         if index > 0 { Divider().padding(.leading, 48).opacity(0.4) }
         CashFlowItemRow(
-          item: item, edit: { editor = .edit(item) }, settle: { settling = item },
+          item: item, edit: { editor = item.systemKind == nil ? .manual(item) : .system(item) }, settle: { settling = item },
           confirm: { Task { await model.confirm(item) } },
           cancel: { Task { await model.cancel(item, scope: .occurrence) } },
           confirmRepayment: { confirmRepayment(item) }, markReceived: { markReceived(item) })
@@ -159,13 +167,24 @@ public struct MacFutureCashFlowScreen: View {
     }.background(FiscalColor.macBackground)
       .task { await model.load() }
       .sheet(item: $editor) { target in
-        CashFlowEditorSheet(model: model, accounts: accounts, categories: categories, item: target.item)
-          .frame(width: 560, height: 650)
+        editorSheet(target)
       }
       .sheet(item: $settling) { item in
         CashFlowSettlementSheet(model: model, accounts: accounts, categories: categories, item: item)
           .frame(width: 520, height: 520)
       }
+  }
+
+  @ViewBuilder private func editorSheet(_ target: CashFlowEditorTarget) -> some View {
+    if let item = target.systemItem {
+      CashFlowSystemEditorSheet(model: model, item: item)
+        .frame(width: 520, height: 430)
+    } else {
+      CashFlowEditorSheet(
+        model: model, accounts: accounts, categories: categories,
+        item: target.manualItem)
+        .frame(width: 560, height: 650)
+    }
   }
 
   @ViewBuilder private var activeBody: some View {
@@ -210,7 +229,7 @@ public struct MacFutureCashFlowScreen: View {
       ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
         if index > 0 { Divider().padding(.leading, 50).opacity(0.4) }
         CashFlowItemRow(
-          item: item, edit: { editor = .edit(item) }, settle: { settling = item },
+          item: item, edit: { editor = item.systemKind == nil ? .manual(item) : .system(item) }, settle: { settling = item },
           confirm: { Task { await model.confirm(item) } },
           cancel: { Task { await model.cancel(item, scope: .occurrence) } },
           confirmRepayment: { confirmRepayment(item) }, markReceived: { markReceived(item) })
@@ -230,21 +249,21 @@ private struct CashFlowItemRow: View {
   let markReceived: () -> Void
 
   var body: some View {
-    HStack(spacing: 12) {
-      FiscalIconTile(item.direction.symbol, color: color)
-      VStack(alignment: .leading, spacing: 3) {
-        HStack(spacing: 6) {
-          Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(2)
-          if item.isOverdue { Text("逾期").font(.caption2.bold()).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 2).background(FiscalColor.expense, in: .capsule) }
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(spacing: 12) {
+        FiscalIconTile(item.direction.symbol, color: color)
+        VStack(alignment: .leading, spacing: 3) {
+          HStack(spacing: 6) {
+            Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+            if item.isOverdue { Text("逾期").font(.caption2.bold()).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 2).background(FiscalColor.expense, in: .capsule) }
+          }
+          Text("\(item.expectedDate) · \(item.status.title)").font(.caption).foregroundStyle(FiscalColor.tertiary)
         }
-        Text("\(item.expectedDate) · \(item.status.title)").font(.caption).foregroundStyle(FiscalColor.tertiary)
-      }
-      Spacer()
-      VStack(alignment: .trailing, spacing: 5) {
+        Spacer()
         Text(Money(minorUnits: item.plannedAmountMinor).formatted(showPositiveSign: item.direction == .inflow))
           .font(.subheadline.bold()).fontDesign(.rounded).foregroundStyle(color)
-        actions
       }
+      HStack { Spacer(); actions }
     }.padding(.vertical, 10).contentShape(.rect)
   }
 
@@ -254,10 +273,10 @@ private struct CashFlowItemRow: View {
       if item.actions.contains(.settle) { Button("入账", action: settle).buttonStyle(.borderedProminent) }
       if item.actions.contains(.confirmRepayment) { Button("确认还款", action: confirmRepayment).buttonStyle(.borderedProminent) }
       if item.actions.contains(.markReceived) { Button("标记到账", action: markReceived).buttonStyle(.borderedProminent) }
-      if item.actions.contains(.edit) || item.actions.contains(.cancel) {
+      if item.actions.contains(.edit) { Button("编辑", action: edit).buttonStyle(.bordered) }
+      if item.actions.contains(.cancel) {
         Menu {
-          if item.actions.contains(.edit) { Button("编辑", action: edit) }
-          if item.actions.contains(.cancel) { Button("取消事项", role: .destructive, action: cancel) }
+          Button("取消事项", role: .destructive, action: cancel)
         } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton)
       }
       if let transactionID = item.linkedTransactionID {
@@ -269,9 +288,76 @@ private struct CashFlowItemRow: View {
 }
 
 private enum CashFlowEditorTarget: Identifiable {
-  case new, edit(FutureCashFlowItem)
-  var id: String { switch self { case .new: "new"; case .edit(let item): item.id } }
-  var item: FutureCashFlowItem? { if case .edit(let item) = self { item } else { nil } }
+  case new, manual(FutureCashFlowItem), system(FutureCashFlowItem)
+  var id: String { switch self { case .new: "new"; case .manual(let item), .system(let item): item.id } }
+  var manualItem: FutureCashFlowItem? { if case .manual(let item) = self { item } else { nil } }
+  var systemItem: FutureCashFlowItem? { if case .system(let item) = self { item } else { nil } }
+}
+
+private struct CashFlowSystemEditorSheet: View {
+  @Environment(\.dismiss) private var dismiss
+  let model: FutureCashFlowModel
+  let item: FutureCashFlowItem
+  @State private var title: String
+  @State private var note: String
+  @State private var amount: String
+  @State private var expectedDate: Date
+  @State private var status: FutureCashFlowStatus
+  @State private var validation: String?
+
+  init(model: FutureCashFlowModel, item: FutureCashFlowItem) {
+    self.model = model; self.item = item
+    _title = State(initialValue: item.title)
+    _note = State(initialValue: item.note ?? "")
+    _amount = State(initialValue: String(format: "%.2f", Double(item.plannedAmountMinor) / 100))
+    _expectedDate = State(initialValue: FutureCashFlowModel.date(item.expectedDate) ?? Date())
+    _status = State(initialValue: item.status == .completed ? .completed : .confirmed)
+  }
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        Section("事项") {
+          TextField("名称", text: $title)
+          TextField("预计金额", text: $amount)
+            #if os(iOS)
+            .keyboardType(.decimalPad)
+            #endif
+          DatePicker("预计日期", selection: $expectedDate, displayedComponents: .date)
+          TextField("备注（可选）", text: $note, axis: .vertical).lineLimit(2...4)
+        }
+        Section("状态") {
+          Picker("处理状态", selection: $status) {
+            Text("待处理").tag(FutureCashFlowStatus.confirmed)
+            Text("已完成").tag(FutureCashFlowStatus.completed)
+          }.pickerStyle(.segmented)
+          Text(status == .completed ? "移入历史，不生成流水，也不改变账户余额。" : "重新显示在待处理列表中。")
+            .font(.caption).foregroundStyle(FiscalColor.tertiary)
+        }
+        if let validation { Text(validation).foregroundStyle(FiscalColor.expense) }
+      }
+      .navigationTitle("编辑现金流")
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("保存") { Task { await save() } }.disabled(model.isMutating)
+        }
+      }
+    }
+  }
+
+  private func save() async {
+    let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !cleaned.isEmpty, let minor = CNYAmountParser.minorUnits(amount), minor > 0 else {
+      validation = "请填写名称和正确金额。"; return
+    }
+    let success = await model.updateSystem(
+      item, title: cleaned,
+      note: note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : note,
+      amountMinor: minor, expectedDate: FutureCashFlowModel.dayString(expectedDate),
+      status: status)
+    if success { dismiss() } else { validation = model.message }
+  }
 }
 
 private struct CashFlowEditorSheet: View {
@@ -313,7 +399,7 @@ private struct CashFlowEditorSheet: View {
         }
         if item == nil {
           Section("计划") { Toggle("每月重复", isOn: $monthly); if monthly { DatePicker("结束日期", selection: $endDate, displayedComponents: .date) } }
-        } else if item?.seriesID != nil {
+        } else if item?.seriesID != nil && item?.status != .settled && item?.status != .cancelled {
           Section("修改范围") { Picker("范围", selection: $scope) { Text("仅本次").tag(FutureCashFlowMutationScope.occurrence); Text("本次及以后").tag(FutureCashFlowMutationScope.thisAndFuture) } }
         }
         if let validation { Text(validation).foregroundStyle(FiscalColor.expense) }

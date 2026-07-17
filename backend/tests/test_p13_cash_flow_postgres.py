@@ -9,7 +9,13 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from fiscal_api.api.p2_schemas import AccountDraft, CategoryDraft
-from fiscal_api.api.p13_schemas import CashFlowDraft, CashFlowSettlementDraft
+from fiscal_api.api.p13_schemas import (
+    CashFlowAction,
+    CashFlowDraft,
+    CashFlowSettlementDraft,
+    CashFlowSystemKind,
+    CashFlowSystemReplace,
+)
 from fiscal_api.db.models import (
     AccountKind,
     CashFlowDirection,
@@ -36,7 +42,8 @@ async def session() -> AsyncIterator[AsyncSession]:
     async with engine.begin() as connection:
         await connection.execute(
             text(
-                "TRUNCATE cash_flow_item_revisions, cash_flow_items, cash_flow_series, "
+                "TRUNCATE cash_flow_system_overrides, cash_flow_item_revisions, "
+                "cash_flow_items, cash_flow_series, "
                 "transaction_revisions, postings, transactions, credit_cycles, categories, "
                 "accounts CASCADE"
             )
@@ -151,3 +158,58 @@ async def test_void_and_restore_keep_cash_flow_and_ledger_in_sync(session: Async
     await ledger.restore(voided.id, voided.version)
     restored = await session.get(CashFlowItem, item.manual_item_id)
     assert restored is not None and restored.status == CashFlowStatus.SETTLED.value
+
+
+async def test_system_item_can_be_edited_completed_and_reopened_without_ledger_write(
+    session: AsyncSession,
+) -> None:
+    credit = await AccountService(session).create(
+        AccountDraft(
+            name="白条",
+            kind=AccountKind.CREDIT,
+            opening_balance_minor=47_751,
+            credit_limit_minor=1_000_000,
+            statement_day=1,
+            due_day=11,
+            opening_balance_as_of_date=date(2026, 6, 1),
+            opening_due_date=date(2026, 6, 11),
+        )
+    )
+    service = CashFlowService(session)
+    active = await service.active()
+    item = next(value for value in active.items if value.account_id == credit.id)
+    assert item.system_reference_id is not None
+    assert CashFlowAction.EDIT in item.actions
+
+    completed = await service.update_system(
+        CashFlowSystemKind.CREDIT_CYCLE,
+        item.system_reference_id,
+        CashFlowSystemReplace(
+            title="白条 6 月账单",
+            planned_amount_minor=47_751,
+            expected_date=date(2026, 6, 11),
+            status=CashFlowStatus.COMPLETED,
+            expected_version=item.version,
+        ),
+    )
+    assert completed.status is CashFlowStatus.COMPLETED
+    assert not any(value.id == item.id for value in (await service.active()).items)
+    history = await service.history("2026-07")
+    historical = next(value for value in history.items if value.id == item.id)
+    assert historical.title == "白条 6 月账单"
+    assert historical.actions == [CashFlowAction.EDIT]
+    assert await session.scalar(select(func.count()).select_from(LedgerTransaction)) == 0
+
+    reopened = await service.update_system(
+        CashFlowSystemKind.CREDIT_CYCLE,
+        item.system_reference_id,
+        CashFlowSystemReplace(
+            title="白条 6 月账单",
+            planned_amount_minor=47_751,
+            expected_date=date(2026, 6, 11),
+            status=CashFlowStatus.CONFIRMED,
+            expected_version=completed.version,
+        ),
+    )
+    assert reopened.status is CashFlowStatus.CONFIRMED
+    assert any(value.id == item.id for value in (await service.active()).items)

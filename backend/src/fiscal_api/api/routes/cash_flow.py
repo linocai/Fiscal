@@ -13,6 +13,8 @@ from fiscal_api.api.p13_schemas import (
     CashFlowItemResponse,
     CashFlowReplace,
     CashFlowSettlementDraft,
+    CashFlowSystemKind,
+    CashFlowSystemReplace,
     CashFlowVersionRequest,
 )
 from fiscal_api.core.security import require_device_token
@@ -57,6 +59,19 @@ async def update(
     item_id: UUID, request: CashFlowReplace, service: CashFlowServiceDependency
 ) -> CashFlowCreateResponse:
     return await service.update(item_id, request)
+
+
+@router.put(
+    "/cash-flow-system-items/{system_kind}/{reference_id}",
+    response_model=CashFlowItemResponse,
+)
+async def update_system(
+    system_kind: CashFlowSystemKind,
+    reference_id: UUID,
+    request: CashFlowSystemReplace,
+    service: CashFlowServiceDependency,
+) -> CashFlowItemResponse:
+    return await service.update_system(system_kind, reference_id, request)
 
 
 @router.post("/cash-flow-items/{item_id}/confirm", response_model=CashFlowItemResponse)

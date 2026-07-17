@@ -23,6 +23,7 @@ from fiscal_api.api.p13_schemas import (
     CashFlowSettlementDraft,
     CashFlowSummary,
     CashFlowSystemKind,
+    CashFlowSystemReplace,
 )
 from fiscal_api.core.time import BUSINESS_TIMEZONE, utc_now
 from fiscal_api.db.models import (
@@ -34,6 +35,7 @@ from fiscal_api.db.models import (
     CashFlowSeries,
     CashFlowSource,
     CashFlowStatus,
+    CashFlowSystemOverride,
     Category,
     TransactionKind,
 )
@@ -97,6 +99,11 @@ class CashFlowService:
             await self._manual_response(item, self._today())
             for item in await self.repository.history(start, end)
         ]
+        items.extend(
+            self._system_override_response(item, self._today())
+            for item in await self.repository.system_history(start, end)
+        )
+        items.sort(key=lambda item: (item.expected_date, item.id), reverse=True)
         return CashFlowHistoryResponse(month=month_value, items=items)
 
     async def get(self, item_id: UUID) -> CashFlowItemResponse:
@@ -201,8 +208,14 @@ class CashFlowService:
         await acquire_mutation_lock(self.session)
         item = await self._required(item_id, for_update=True)
         check_version(item.version, request.expected_version)
-        if item.status not in {CashFlowStatus.EXPECTED.value, CashFlowStatus.CONFIRMED.value}:
-            conflict("cash_flow_not_editable", "Only pending cash flow items can be edited")
+        if (
+            item.status not in {CashFlowStatus.EXPECTED.value, CashFlowStatus.CONFIRMED.value}
+            and request.scope is not CashFlowMutationScope.OCCURRENCE
+        ):
+            conflict(
+                "cash_flow_completed_scope_invalid",
+                "Completed cash flow records may only be edited individually",
+            )
         await self._validate_references(request)
         targets = await self._targets(item, request.scope)
         if request.scope is CashFlowMutationScope.THIS_AND_FUTURE and item.series_id is not None:
@@ -227,6 +240,61 @@ class CashFlowService:
         return CashFlowCreateResponse(
             items=[await self._manual_response(target, self._today()) for target in targets]
         )
+
+    async def update_system(
+        self,
+        system_kind: CashFlowSystemKind,
+        reference_id: UUID,
+        request: CashFlowSystemReplace,
+    ) -> CashFlowItemResponse:
+        await acquire_mutation_lock(self.session)
+        override = await self.repository.system_override(
+            system_kind.value, reference_id, for_update=True
+        )
+        if override is not None:
+            check_version(override.version, request.expected_version)
+        elif request.expected_version != 1:
+            conflict("version_conflict", "The cash flow item changed on another device")
+
+        base = next(
+            (
+                item
+                for item in await self._raw_system_items(self._today(), account_id=None)
+                if item.system_kind is system_kind and item.system_reference_id == reference_id
+            ),
+            None,
+        )
+        if base is None and override is None:
+            not_found("cash_flow_system_item_not_found", "The system cash flow item was not found")
+
+        completed_at = utc_now() if request.status is CashFlowStatus.COMPLETED else None
+        if override is None:
+            assert base is not None
+            override = CashFlowSystemOverride(
+                system_kind=system_kind.value,
+                system_reference_id=reference_id,
+                title=request.title,
+                note=request.note,
+                direction=base.direction.value,
+                planned_amount_minor=request.planned_amount_minor,
+                expected_date=request.expected_date,
+                account_id=base.account_id,
+                status=request.status.value,
+                version=2,
+                completed_at=completed_at,
+            )
+            self.repository.add_system_override(override)
+        else:
+            override.title = request.title
+            override.note = request.note
+            override.planned_amount_minor = request.planned_amount_minor
+            override.expected_date = request.expected_date
+            override.status = request.status.value
+            override.completed_at = completed_at
+            override.version += 1
+            override.updated_at = utc_now()
+        await self.session.commit()
+        return self._system_override_response(override, self._today())
 
     async def confirm(self, item_id: UUID, expected_version: int) -> CashFlowItemResponse:
         await acquire_mutation_lock(self.session)
@@ -324,6 +392,28 @@ class CashFlowService:
     async def _system_items(
         self, today: date, *, account_id: UUID | None
     ) -> list[CashFlowItemResponse]:
+        raw = await self._raw_system_items(today, account_id=account_id)
+        overrides = {
+            (item.system_kind, item.system_reference_id): item
+            for item in await self.repository.system_overrides()
+        }
+        result: list[CashFlowItemResponse] = []
+        for item in raw:
+            assert item.system_kind is not None and item.system_reference_id is not None
+            override = overrides.get((item.system_kind.value, item.system_reference_id))
+            if override is not None:
+                if override.status == CashFlowStatus.COMPLETED.value:
+                    continue
+                result.append(self._system_override_response(override, today))
+            else:
+                result.append(
+                    item.model_copy(update={"actions": [*item.actions, CashFlowAction.EDIT]})
+                )
+        return result
+
+    async def _raw_system_items(
+        self, today: date, *, account_id: UUID | None
+    ) -> list[CashFlowItemResponse]:
         result: list[CashFlowItemResponse] = []
         debt = await ReportingService(self.session).debt(as_of=today)
         for cycle in debt.cycles:
@@ -385,6 +475,39 @@ class CashFlowService:
             )
         return result
 
+    @staticmethod
+    def _system_override_response(
+        item: CashFlowSystemOverride, today: date
+    ) -> CashFlowItemResponse:
+        kind = CashFlowSystemKind(item.system_kind)
+        status = CashFlowStatus(item.status)
+        domain_action = (
+            CashFlowAction.CONFIRM_REPAYMENT
+            if kind is CashFlowSystemKind.CREDIT_CYCLE
+            else CashFlowAction.MARK_RECEIVED
+        )
+        actions = [CashFlowAction.EDIT]
+        if status is CashFlowStatus.CONFIRMED:
+            actions.insert(0, domain_action)
+        return CashFlowItemResponse(
+            id=f"{item.system_kind}:{item.system_reference_id}",
+            system_kind=kind,
+            system_reference_id=item.system_reference_id,
+            title=item.title,
+            note=item.note,
+            direction=CashFlowDirection(item.direction),
+            planned_amount_minor=item.planned_amount_minor,
+            expected_date=item.expected_date,
+            account_id=item.account_id,
+            status=status,
+            source="system",
+            version=item.version,
+            is_overdue=status is CashFlowStatus.CONFIRMED and item.expected_date < today,
+            actions=actions,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+        )
+
     async def _manual_response(self, item: CashFlowItem, today: date) -> CashFlowItemResponse:
         actual_amount: int | None = None
         actual_date: date | None = None
@@ -400,6 +523,8 @@ class CashFlowService:
             actions = [CashFlowAction.CONFIRM, CashFlowAction.EDIT, CashFlowAction.CANCEL]
         elif status is CashFlowStatus.CONFIRMED:
             actions = [CashFlowAction.SETTLE, CashFlowAction.EDIT, CashFlowAction.CANCEL]
+        else:
+            actions = [CashFlowAction.EDIT]
         return CashFlowItemResponse(
             id=str(item.id),
             manual_item_id=item.id,
