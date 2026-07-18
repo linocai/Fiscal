@@ -46,6 +46,7 @@
 		47AB207089C1F68AF4078C10 /* AISettingsDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A96FD3E04393BDF8D525167 /* AISettingsDTO.swift */; };
 		47DD9F8FF2D3DFEECA226CD4 /* AIInputSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18FCC6EB2E38FE0813B18CB8 /* AIInputSubmission.swift */; };
 		49D8529A3FAB5F351AAD7078 /* CashFlowScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3538F320E00777E2D3ED3BBD /* CashFlowScreens.swift */; };
+		4ABBAD1418CC4B242D0FC182 /* P17Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDD9FF6DB6523DE10952C11 /* P17Tests.swift */; };
 		4B862841FABAAF8631C459E9 /* CreditScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA464751FCA42DDEA8005314 /* CreditScreens.swift */; };
 		4E8E488F5194E9A013CF1ABD /* AIProposalRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA7703B5970A868EC31D996 /* AIProposalRepository.swift */; };
 		4FEA18DD0F6BFB141B18BE6F /* FiscalShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128E44B859F89927A62EEE28 /* FiscalShortcuts.swift */; };
@@ -296,6 +297,7 @@
 		E38857D295F340534E49F652 /* ConnectionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionModel.swift; sourceTree = "<group>"; };
 		E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FiscalKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		EA464751FCA42DDEA8005314 /* CreditScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditScreens.swift; sourceTree = "<group>"; };
+		EDDD9FF6DB6523DE10952C11 /* P17Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P17Tests.swift; sourceTree = "<group>"; };
 		EF39C6F2744F63EE814A73F2 /* ReimbursementDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimbursementDTO.swift; sourceTree = "<group>"; };
 		F05017C6B56940B011F6E23E /* SystemStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemStatus.swift; sourceTree = "<group>"; };
 		F41296659AE4F2333D274669 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -465,6 +467,7 @@
 				4D97882660F312713851BCE4 /* P16HorizontalTests.swift */,
 				882403E1F959EBCF7E11F243 /* P16InfrastructureTests.swift */,
 				1676E1FA15119C8A6F267C3E /* P16TransactionTests.swift */,
+				EDDD9FF6DB6523DE10952C11 /* P17Tests.swift */,
 			);
 			name = FiscalKitTests;
 			path = Tests/FiscalKitTests;
@@ -747,6 +750,7 @@
 				349DEB01407F18F33E6E7F50 /* P16HorizontalTests.swift in Sources */,
 				A4A5F02D3C37B425F476E6B4 /* P16InfrastructureTests.swift in Sources */,
 				45D0800DE7AADBA868775192 /* P16TransactionTests.swift in Sources */,
+				4ABBAD1418CC4B242D0FC182 /* P17Tests.swift in Sources */,
 				8C3520FB72EC576D0544255C /* P9InputTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1108,7 +1112,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -1130,7 +1134,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 1.2.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1297,7 +1301,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1313,7 +1317,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 1.2.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

@@ -14,7 +14,7 @@ from pydantic import (
     model_validator,
 )
 
-from fiscal_api.db.models import AccountKind, CategoryDirection
+from fiscal_api.db.models import AccountKind, CategoryDirection, CreditCycleMode
 
 
 def trimmed(value: str) -> str:
@@ -45,6 +45,7 @@ class AccountDraft(APIModel):
     credit_limit_minor: PositiveMinorUnits | None = None
     statement_day: StrictInt | None = Field(default=None, ge=1, le=28)
     due_day: StrictInt | None = Field(default=None, ge=1, le=28)
+    cycle_mode: CreditCycleMode | None = None
     opening_balance_as_of_date: date | None = None
     opening_due_date: date | None = None
 
@@ -59,6 +60,7 @@ class AccountPatch(APIModel):
     credit_limit_minor: PositiveMinorUnits | None = None
     statement_day: StrictInt | None = Field(default=None, ge=1, le=28)
     due_day: StrictInt | None = Field(default=None, ge=1, le=28)
+    cycle_mode: CreditCycleMode | None = None
     opening_balance_as_of_date: date | None = None
     opening_due_date: date | None = None
 
@@ -81,6 +83,7 @@ class AccountResponse(APIModel):
     credit_limit_minor: int | None
     statement_day: int | None
     due_day: int | None
+    cycle_mode: CreditCycleMode | None
     opening_balance_as_of_date: date | None
     opening_due_date: date | None
     sort_order: int

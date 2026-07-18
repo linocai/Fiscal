@@ -5,7 +5,13 @@ from fastapi import APIRouter, Depends, Query
 
 from fiscal_api.api.dependencies import CreditServiceDependency, TransactionServiceDependency
 from fiscal_api.api.p3_schemas import TransactionPage
-from fiscal_api.api.p4_schemas import CreditAccountSummary, CreditCyclePage, CreditCycleResponse
+from fiscal_api.api.p4_schemas import (
+    CreditAccountSummary,
+    CreditCyclePage,
+    CreditCycleResponse,
+    CreditScheduleChangeRequest,
+    CreditScheduleChangeResult,
+)
 from fiscal_api.core.security import require_device_token
 
 router = APIRouter(
@@ -24,6 +30,30 @@ async def get_credit_account(
     account_id: UUID, service: CreditServiceDependency
 ) -> CreditAccountSummary:
     return await service.get_account(account_id)
+
+
+@router.post(
+    "/credit-accounts/{account_id}/schedule-change-preview",
+    response_model=CreditScheduleChangeResult,
+)
+async def preview_credit_schedule_change(
+    account_id: UUID,
+    request: CreditScheduleChangeRequest,
+    service: CreditServiceDependency,
+) -> CreditScheduleChangeResult:
+    return await service.preview_schedule_change(account_id, request)
+
+
+@router.post(
+    "/credit-accounts/{account_id}/schedule-change",
+    response_model=CreditScheduleChangeResult,
+)
+async def apply_credit_schedule_change(
+    account_id: UUID,
+    request: CreditScheduleChangeRequest,
+    service: CreditServiceDependency,
+) -> CreditScheduleChangeResult:
+    return await service.apply_schedule_change(account_id, request)
 
 
 @router.get("/credit-accounts/{account_id}/cycles", response_model=CreditCyclePage)

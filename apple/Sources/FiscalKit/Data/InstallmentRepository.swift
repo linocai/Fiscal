@@ -7,6 +7,8 @@ public protocol InstallmentRepository: Sendable {
     func cycleOptions(transactionID: UUID, months: Int) async throws -> [InstallmentCycleOption]
     func liabilities(accountID: UUID?) async throws -> InstallmentLiabilities
     func create(_ request: InstallmentCreateRequest, idempotencyKey: UUID) async throws -> InstallmentPlanDTO
+    func previewPurchase(_ request: InstallmentPurchaseCreateRequest) async throws -> InstallmentPurchasePreviewDTO
+    func createPurchase(_ request: InstallmentPurchaseCreateRequest, idempotencyKey: UUID) async throws -> InstallmentPurchaseCreateResponse
     func preview(id: UUID, request: InstallmentReplacementRequest) async throws -> InstallmentPlanChangePreview
     func update(id: UUID, request: InstallmentReplacementRequest) async throws -> InstallmentPlanDTO
     func settlementPreview(id: UUID, request: InstallmentSettlementRequest) async throws -> InstallmentSettlementPreview
@@ -15,6 +17,15 @@ public protocol InstallmentRepository: Sendable {
     func reverseSettlement(id: UUID, request: InstallmentOperationRequest, idempotencyKey: UUID) async throws -> InstallmentReverseResult
     func cancellationPreview(id: UUID, request: InstallmentOperationRequest) async throws -> InstallmentCancellationPreview
     func cancelFuture(id: UUID, request: InstallmentOperationRequest, idempotencyKey: UUID) async throws -> InstallmentCancellationResult
+}
+
+public extension InstallmentRepository {
+    func previewPurchase(_ request: InstallmentPurchaseCreateRequest) async throws -> InstallmentPurchasePreviewDTO {
+        throw URLError(.unsupportedURL)
+    }
+    func createPurchase(_ request: InstallmentPurchaseCreateRequest, idempotencyKey: UUID) async throws -> InstallmentPurchaseCreateResponse {
+        throw URLError(.unsupportedURL)
+    }
 }
 
 public actor RemoteInstallmentRepository: InstallmentRepository {
@@ -40,6 +51,12 @@ public actor RemoteInstallmentRepository: InstallmentRepository {
     }
     public func create(_ request: InstallmentCreateRequest, idempotencyKey: UUID) async throws -> InstallmentPlanDTO {
         try await transport.request("installment-plans", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString], body: request)
+    }
+    public func previewPurchase(_ request: InstallmentPurchaseCreateRequest) async throws -> InstallmentPurchasePreviewDTO {
+        try await transport.request("installment-purchases/preview", method: "POST", body: request)
+    }
+    public func createPurchase(_ request: InstallmentPurchaseCreateRequest, idempotencyKey: UUID) async throws -> InstallmentPurchaseCreateResponse {
+        try await transport.request("installment-purchases", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString], body: request)
     }
     public func preview(id: UUID, request: InstallmentReplacementRequest) async throws -> InstallmentPlanChangePreview {
         try await transport.request("installment-plans/\(id)/preview", method: "POST", body: request)

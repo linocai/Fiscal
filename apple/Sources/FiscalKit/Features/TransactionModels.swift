@@ -40,14 +40,15 @@ public final class TransactionsModel {
     private let accounts: AccountsModel?
     private let categories: CategoriesModel?
     private let credit: CreditModel?
+    private let cashFlow: FutureCashFlowModel?
     private var debounceTask: Task<Void, Never>?
     private var pageTask: Task<TransactionPage, Error>?
     private var moreTask: Task<TransactionPage, Error>?
     private var generation = 0
     private var loadMoreToken = 0
 
-    public init(repository: any TransactionRepository, accounts: AccountsModel? = nil, categories: CategoriesModel? = nil, credit: CreditModel? = nil) {
-        self.repository = repository; self.accounts = accounts; self.categories = categories; self.credit = credit
+    public init(repository: any TransactionRepository, accounts: AccountsModel? = nil, categories: CategoriesModel? = nil, credit: CreditModel? = nil, cashFlow: FutureCashFlowModel? = nil) {
+        self.repository = repository; self.accounts = accounts; self.categories = categories; self.credit = credit; self.cashFlow = cashFlow
     }
     public var selected: TransactionDTO? { transactions.first { $0.id == selectedID } }
     public var totalCount: Int { transactions.count }
@@ -235,7 +236,8 @@ public final class TransactionsModel {
         async let accountRefresh: Void = accounts?.load() ?? ()
         async let categoryRefresh: Void = categories?.load() ?? ()
         async let creditRefresh: Void = credit?.refreshCurrentSelection() ?? ()
-        _ = await (accountRefresh, categoryRefresh, creditRefresh)
+        async let cashFlowRefresh: Void = cashFlow?.load() ?? ()
+        _ = await (accountRefresh, categoryRefresh, creditRefresh, cashFlowRefresh)
     }
     private func apply(_ error: Error, preservingData: Bool) {
         let text = display(error); message = text

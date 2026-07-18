@@ -20,6 +20,7 @@ public struct TransactionEditorSheet: View {
     let accounts: AccountsModel
     let categories: CategoriesModel
     let credit: CreditModel?
+    let installments: InstallmentModel?
     let preferences: RecordingPreferences?
     let appliesPreferences: Bool
     @State private var editor: TransactionEditorModel
@@ -35,9 +36,16 @@ public struct TransactionEditorSheet: View {
     @State private var referenceValidation: String?
     @FocusState private var focusedField: FocusedField?
     @State private var didApplyPreferences = false
+    @State private var usesInstallments = false
+    @State private var installmentCount = 3
+    @State private var installmentFeeText = "0"
+    @State private var installmentFeeCategoryID: UUID?
+    @State private var installmentFeeOccurredAt = Date()
+    @State private var previewedInstallmentRequest: InstallmentPurchaseCreateRequest?
+    @State private var installmentValidation: String?
 
-    public init(transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil, editing: TransactionDTO? = nil, initialKind: TransactionKind? = nil, creditAccountID: UUID? = nil, cycleID: UUID? = nil, amountMinor: Int64? = nil, preferences: RecordingPreferences? = nil) {
-        self.transactions = transactions; self.accounts = accounts; self.categories = categories; self.credit = credit; self.preferences = preferences
+    public init(transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil, installments: InstallmentModel? = nil, editing: TransactionDTO? = nil, initialKind: TransactionKind? = nil, creditAccountID: UUID? = nil, cycleID: UUID? = nil, amountMinor: Int64? = nil, preferences: RecordingPreferences? = nil) {
+        self.transactions = transactions; self.accounts = accounts; self.categories = categories; self.credit = credit; self.installments = installments; self.preferences = preferences
         appliesPreferences = editing == nil && initialKind == nil && preferences != nil
         let model = TransactionEditorModel(editing: editing)
         if let initialKind { model.changeKind(initialKind) }
@@ -57,6 +65,7 @@ public struct TransactionEditorSheet: View {
                             editorField("金额", symbol: "yensign", prompt: "例如 38.50") {
                                 TextField("金额，例如 38.50", text: $editor.amountText)
                                     .focused($focusedField, equals: .amount)
+                                    .onChange(of: editor.amountText) { _, _ in invalidateInstallmentPreview() }
 #if os(iOS)
                                     .keyboardType(.decimalPad)
 #endif
@@ -99,7 +108,7 @@ public struct TransactionEditorSheet: View {
             .task { await loadOptions() }
         }
         .frame(minWidth: 380, idealWidth: 440, minHeight: 520, idealHeight: 620)
-        .interactiveDismissDisabled(transactions.isMutating)
+        .interactiveDismissDisabled(transactions.isMutating || installments?.isMutating == true)
         .alert("账期将重新计算", isPresented: $confirmCycleRecalculation) {
             Button("取消", role: .cancel) {}
             Button("继续保存") { performSave() }
@@ -151,7 +160,7 @@ public struct TransactionEditorSheet: View {
                 HStack { Label(optionsError, systemImage: "wifi.exclamationmark").foregroundStyle(FiscalColor.expense); Spacer(); Button("重试") { Task { await loadOptions() } }.buttonStyle(FiscalActionButtonStyle(.secondary)) }
             }
         }
-        if let message = referenceValidation ?? repaymentValidation ?? editor.validationMessage ?? transactions.message {
+        if let message = referenceValidation ?? repaymentValidation ?? installmentValidation ?? editor.validationMessage ?? installments?.message ?? transactions.message {
             Label(message, systemImage: "exclamationmark.triangle.fill")
                 .font(.subheadline).foregroundStyle(FiscalColor.expense).padding(13)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -162,11 +171,11 @@ public struct TransactionEditorSheet: View {
         Button {
             focusedField = nil; requestSave()
         } label: {
-            Text(transactions.isMutating ? "保存中…" : (editor.editing == nil ? "保存这笔流水" : "保存修改"))
+            Text((transactions.isMutating || installments?.isMutating == true) ? "保存中…" : (editor.editing == nil ? "保存这笔流水" : "保存修改"))
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(FiscalActionButtonStyle())
-        .disabled(transactions.isMutating || loadingOptions || optionsError != nil)
+        .disabled(transactions.isMutating || installments?.isMutating == true || loadingOptions || optionsError != nil)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16).padding(.vertical, 10)
         .background(.regularMaterial)
@@ -228,6 +237,43 @@ public struct TransactionEditorSheet: View {
             Picker("信用账户", selection: $editor.draft.accountID) { Text("请选择").tag(Optional<UUID>.none); ForEach(creditAccounts) { Text($0.name).tag(Optional($0.id)) } }
             Divider().opacity(0.35)
             Picker("支出分类", selection: $editor.draft.categoryID) { Text("请选择").tag(Optional<UUID>.none); ForEach(eligibleCategories) { Text($0.name).tag(Optional($0.id)) } }
+            if editor.editing == nil, installments != nil {
+                Divider().opacity(0.35)
+                Toggle("分期付款", isOn: $usesInstallments)
+                    .onChange(of: usesInstallments) { _, _ in invalidateInstallmentPreview() }
+                if usesInstallments {
+                    Stepper("期数：\(installmentCount)", value: $installmentCount, in: 2...60)
+                        .onChange(of: installmentCount) { _, _ in invalidateInstallmentPreview() }
+                    TextField("总手续费", text: $installmentFeeText)
+#if os(iOS)
+                        .keyboardType(.decimalPad)
+#endif
+                        .onChange(of: installmentFeeText) { _, _ in invalidateInstallmentPreview() }
+                    if installmentFeeMinor > 0 {
+                        Picker("手续费分类", selection: $installmentFeeCategoryID) {
+                            Text("请选择").tag(Optional<UUID>.none)
+                            ForEach(eligibleCategories) { Text($0.name).tag(Optional($0.id)) }
+                        }
+                        DatePicker("手续费确认时间", selection: $installmentFeeOccurredAt)
+                    }
+                    Button("预览分期计划") { previewInstallment() }
+                        .buttonStyle(.bordered)
+                    if let preview = installments?.purchasePreview,
+                       previewedInstallmentRequest == installmentRequest() {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("首期账单日 \(preview.startStatementDate)")
+                                .font(.caption.weight(.semibold))
+                            ForEach(preview.periods) { period in
+                                HStack {
+                                    Text("第 \(period.sequence) 期 · \(period.dueDate)")
+                                    Spacer()
+                                    Text(Money(minorUnits: period.amountDueMinor).formatted())
+                                }.font(.caption).foregroundStyle(FiscalColor.secondary)
+                            }
+                        }
+                    }
+                }
+            }
             Text("账期由服务器根据发生日期自动归属。若编辑后账期变化，保存结果会显示新的账期。").font(.caption).foregroundStyle(FiscalColor.tertiary)
             }
         }
@@ -288,6 +334,12 @@ public struct TransactionEditorSheet: View {
             return
         }
         referenceValidation = nil
+        if usesInstallments, editor.editing == nil {
+            guard let request = installmentRequest(), request == previewedInstallmentRequest else {
+                installmentValidation = "请先预览当前分期计划。"
+                return
+            }
+        }
         if let editing = editor.editing,
            editing.kind == .creditPurchase,
            editor.draft.kind == .creditPurchase,
@@ -311,6 +363,31 @@ public struct TransactionEditorSheet: View {
             }
         }
         repaymentValidation = nil
+        if usesInstallments, editor.editing == nil, let installments,
+           let preview = installments.purchasePreview,
+           let request = installmentRequest() {
+            let createRequest = InstallmentPurchaseCreateRequest(
+                purchase: request.purchase, installmentCount: request.installmentCount,
+                totalFeeMinor: request.totalFeeMinor,
+                feeCategoryID: request.feeCategoryID,
+                feeOccurredAt: request.feeOccurredAt,
+                startStatementDate: preview.startStatementDate)
+            Task {
+                if let result = await installments.createPurchase(
+                    createRequest, idempotencyKey: editor.idempotencyKey)
+                {
+                    if let cycleID = result.purchase.creditCycleID,
+                       let cycle = try? await credit?.cycleSummary(id: cycleID) {
+                        savedCycleDescription = "\(cycle.periodStart)–\(cycle.periodEnd)（账单日 \(cycle.statementDate)）· \(result.plan.installmentCount) 期"
+                    } else {
+                        savedCycleDescription = "已创建 \(result.plan.installmentCount) 期分期计划"
+                    }
+                } else if transactions.shouldRotateCreateKeyAfterFailure {
+                    editor.rotateCreateKey()
+                }
+            }
+            return
+        }
         Task {
             let succeeded = await transactions.save(draft: editor.draft, editing: editor.editing, idempotencyKey: editor.idempotencyKey)
             if succeeded, editor.draft.kind == .creditPurchase,
@@ -323,6 +400,31 @@ public struct TransactionEditorSheet: View {
             } else if succeeded { completeSuccessfulSave() }
             else if transactions.shouldRotateCreateKeyAfterFailure { editor.rotateCreateKey() }
         }
+    }
+    private var installmentFeeMinor: Int64 { CNYAmountParser.minorUnits(installmentFeeText) ?? -1 }
+    private func installmentRequest() -> InstallmentPurchaseCreateRequest? {
+        guard editor.draft.kind == .creditPurchase, editor.draft.amountMinor > 0,
+              installmentFeeMinor >= 0,
+              installmentFeeMinor == 0 || installmentFeeCategoryID != nil else { return nil }
+        return InstallmentPurchaseCreateRequest(
+            purchase: editor.draft, installmentCount: installmentCount,
+            totalFeeMinor: installmentFeeMinor,
+            feeCategoryID: installmentFeeMinor == 0 ? nil : installmentFeeCategoryID,
+            feeOccurredAt: installmentFeeMinor == 0 ? nil : installmentFeeOccurredAt)
+    }
+    private func previewInstallment() {
+        guard editor.prepare(), let installments, let request = installmentRequest() else {
+            installmentValidation = "请先完整填写信用消费和分期信息。"
+            return
+        }
+        installmentValidation = nil
+        Task {
+            if await installments.previewPurchase(request) { previewedInstallmentRequest = request }
+            else { installmentValidation = installments.message }
+        }
+    }
+    private func invalidateInstallmentPreview() {
+        previewedInstallmentRequest = nil; installmentValidation = nil
     }
     private func loadOptions() async {
         loadingOptions = true; optionsError = nil
@@ -449,7 +551,7 @@ public struct IOSTransactionsScreen: View {
                 }
             }
         }
-        .sheet(item: $editing) { TransactionEditorSheet(transactions: model, accounts: accounts, categories: categories, credit: credit, editing: $0) }
+        .sheet(item: $editing) { TransactionEditorSheet(transactions: model, accounts: accounts, categories: categories, credit: credit, installments: installments, editing: $0) }
         .sheet(item: $installmentPurchase) { if let installments { InstallmentCreateSheet(installments: installments, purchase: $0, categories: categories) } }
         .sheet(isPresented: $showAdvancedFilters) { advancedFilterSheet }
         .sheet(isPresented: $showBatchClassification) { batchClassificationSheet }

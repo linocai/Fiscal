@@ -71,6 +71,18 @@ class TransactionService:
             commit=True,
         )
 
+    async def create_credit_purchase(
+        self, draft: TransactionDraft, idempotency_key: UUID, *, commit: bool
+    ) -> TransactionResponse:
+        if draft.kind is not TransactionKind.CREDIT_PURCHASE:
+            invalid("invalid_transaction_configuration", "Expected a credit purchase")
+        return await self._create(
+            draft,
+            idempotency_key,
+            source=TransactionSource.MANUAL,
+            commit=commit,
+        )
+
     async def create_ai_text(
         self,
         draft: TransactionDraft,

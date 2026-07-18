@@ -7,6 +7,18 @@ public enum AccountKind: String, Codable, Sendable, CaseIterable, Identifiable {
     public var symbol: String { switch self { case .cash: "banknote"; case .debit: "creditcard"; case .credit: "creditcard.fill" } }
 }
 
+public enum CreditCycleMode: String, Codable, Sendable, CaseIterable, Identifiable {
+    case statementDayCutoff = "statement_day_cutoff"
+    case previousCalendarMonth = "previous_calendar_month"
+    public var id: Self { self }
+    public var title: String {
+        switch self {
+        case .statementDayCutoff: "账单日截止"
+        case .previousCalendarMonth: "上个自然月"
+        }
+    }
+}
+
 public struct AccountDTO: Codable, Sendable, Equatable, Identifiable {
     public let id: UUID
     public let name: String
@@ -20,6 +32,7 @@ public struct AccountDTO: Codable, Sendable, Equatable, Identifiable {
     public let creditLimitMinor: Int64?
     public let statementDay: Int?
     public let dueDay: Int?
+    public var cycleMode: CreditCycleMode? = nil
     public let sortOrder: Int
     public let archivedAt: Date?
     public let usageCount: Int
@@ -37,6 +50,7 @@ public struct AccountDTO: Codable, Sendable, Equatable, Identifiable {
         case creditLimitMinor = "credit_limit_minor"
         case statementDay = "statement_day"
         case dueDay = "due_day"
+        case cycleMode = "cycle_mode"
         case sortOrder = "sort_order"
         case archivedAt = "archived_at"
         case usageCount = "usage_count"
@@ -56,6 +70,7 @@ public struct AccountDraft: Codable, Sendable, Equatable {
     public var creditLimitMinor: Int64?
     public var statementDay: Int?
     public var dueDay: Int?
+    public var cycleMode: CreditCycleMode = .statementDayCutoff
 
     public init() {}
     public init(account: AccountDTO) {
@@ -63,11 +78,12 @@ public struct AccountDraft: Codable, Sendable, Equatable {
         openingBalanceMinor = account.openingBalanceMinor; creditLimitMinor = account.creditLimitMinor
         openingBalanceAsOfDate = account.openingBalanceAsOfDate; openingDueDate = account.openingDueDate
         statementDay = account.statementDay; dueDay = account.dueDay
+        cycleMode = account.cycleMode ?? .statementDayCutoff
     }
     enum CodingKeys: String, CodingKey {
         case name, kind, institution
         case lastFour = "last_four"; case openingBalanceMinor = "opening_balance_minor"; case openingBalanceAsOfDate = "opening_balance_as_of_date"; case openingDueDate = "opening_due_date"; case creditLimitMinor = "credit_limit_minor"
-        case statementDay = "statement_day"; case dueDay = "due_day"
+        case statementDay = "statement_day"; case dueDay = "due_day"; case cycleMode = "cycle_mode"
     }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -76,6 +92,47 @@ public struct AccountDraft: Codable, Sendable, Equatable {
         try c.encode(openingBalanceMinor, forKey: .openingBalanceMinor); try c.encode(creditLimitMinor, forKey: .creditLimitMinor)
         try c.encode(openingBalanceAsOfDate, forKey: .openingBalanceAsOfDate); try c.encode(openingDueDate, forKey: .openingDueDate)
         try c.encode(statementDay, forKey: .statementDay); try c.encode(dueDay, forKey: .dueDay)
+        try c.encode(kind == .credit ? cycleMode : nil, forKey: .cycleMode)
+    }
+}
+
+public struct CreditScheduleChangeRequest: Codable, Sendable, Equatable {
+    public let expectedVersion: Int
+    public let cycleMode: CreditCycleMode
+    public let statementDay: Int
+    public let dueDay: Int
+    enum CodingKeys: String, CodingKey {
+        case expectedVersion = "expected_version"
+        case cycleMode = "cycle_mode"
+        case statementDay = "statement_day"
+        case dueDay = "due_day"
+    }
+    public init(expectedVersion: Int, cycleMode: CreditCycleMode, statementDay: Int, dueDay: Int) {
+        self.expectedVersion = expectedVersion; self.cycleMode = cycleMode
+        self.statementDay = statementDay; self.dueDay = dueDay
+    }
+}
+
+public struct CreditScheduleChangeResult: Codable, Sendable, Equatable {
+    public let accountID: UUID
+    public let cycleMode: CreditCycleMode
+    public let statementDay: Int
+    public let dueDay: Int
+    public let affectedCycleCount: Int
+    public let purchaseCount: Int
+    public let repaymentCount: Int
+    public let installmentPeriodCount: Int
+    public let conflicts: [String]
+    enum CodingKeys: String, CodingKey {
+        case accountID = "account_id"
+        case cycleMode = "cycle_mode"
+        case statementDay = "statement_day"
+        case dueDay = "due_day"
+        case affectedCycleCount = "affected_cycle_count"
+        case purchaseCount = "purchase_count"
+        case repaymentCount = "repayment_count"
+        case installmentPeriodCount = "installment_period_count"
+        case conflicts
     }
 }
 
@@ -176,6 +233,7 @@ public struct VersionedAccountDraft: Codable, Sendable {
         try c.encode(draft.openingBalanceMinor, forKey: .init("opening_balance_minor")); try c.encode(draft.creditLimitMinor, forKey: .init("credit_limit_minor"))
         try c.encode(draft.openingBalanceAsOfDate, forKey: .init("opening_balance_as_of_date")); try c.encode(draft.openingDueDate, forKey: .init("opening_due_date"))
         try c.encode(draft.statementDay, forKey: .init("statement_day")); try c.encode(draft.dueDay, forKey: .init("due_day"))
+        try c.encode(draft.kind == .credit ? draft.cycleMode : nil, forKey: .init("cycle_mode"))
     }
 }
 

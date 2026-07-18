@@ -240,6 +240,11 @@ class CashFlowService:
         reference_id: UUID,
         request: CashFlowSystemReplace,
     ) -> CashFlowItemResponse:
+        if system_kind is CashFlowSystemKind.CREDIT_CYCLE:
+            conflict(
+                "cash_flow_credit_projection_read_only",
+                "Credit repayment cash flow is derived from ledger debt and cannot be edited",
+            )
         await acquire_mutation_lock(self.session)
         override = await self.repository.system_override(
             system_kind.value, reference_id, for_update=True
@@ -399,9 +404,10 @@ class CashFlowService:
                     continue
                 result.append(self._system_override_response(override, today))
             else:
-                result.append(
-                    item.model_copy(update={"actions": [*item.actions, CashFlowAction.EDIT]})
-                )
+                actions = list(item.actions)
+                if item.system_kind is not CashFlowSystemKind.CREDIT_CYCLE:
+                    actions.append(CashFlowAction.EDIT)
+                result.append(item.model_copy(update={"actions": actions}))
         return result
 
     async def _raw_system_items(

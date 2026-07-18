@@ -30,6 +30,9 @@ from fiscal_api.api.p5_schemas import (
     InstallmentPlanPreview,
     InstallmentPlanResponse,
     InstallmentPlanStatus,
+    InstallmentPurchaseCreate,
+    InstallmentPurchaseCreateResponse,
+    InstallmentPurchasePreview,
     InstallmentReplacement,
     InstallmentReverseSettlementPreview,
     InstallmentReverseSettlementResult,
@@ -44,6 +47,7 @@ from fiscal_api.db.models import (
     AccountKind,
     Category,
     CreditCycle,
+    CreditCycleMode,
     CreditCycleStatus,
     InstallmentLedgerLink,
     InstallmentOperation,
@@ -69,7 +73,8 @@ from fiscal_api.services.common import (
     not_found,
 )
 from fiscal_api.services.credit import (
-    cycle_calendar,
+    credit_schedule,
+    ensure_cycle_for_statement,
     ensure_regular_cycle,
     validate_credit_invariants,
 )
@@ -95,7 +100,9 @@ class InstallmentService:
     def _today() -> date:
         return utc_now().astimezone(BUSINESS_TIMEZONE).date()
 
-    async def create(self, request: InstallmentCreate, key: UUID) -> InstallmentPlanResponse:
+    async def create(
+        self, request: InstallmentCreate, key: UUID, *, commit: bool = True
+    ) -> InstallmentPlanResponse:
         await acquire_mutation_lock(self.session)
         request_hash = self._hash(request)
         replay = await self.repository.plan_for_idempotency(key)
@@ -230,7 +237,81 @@ class InstallmentService:
                     snapshot=fee_response.model_dump(mode="json"),
                 )
             )
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
+        return response
+
+    async def preview_purchase(
+        self, request: InstallmentPurchaseCreate
+    ) -> InstallmentPurchasePreview:
+        key = uuid4()
+        nested = await self.session.begin_nested()
+        try:
+            created = await self._create_purchase(request, key, commit=False)
+            periods = [self._period_preview_from_response(item) for item in created.plan.periods]
+            return InstallmentPurchasePreview(
+                purchase_amount_minor=created.purchase.amount_minor,
+                total_fee_minor=created.plan.fee_minor,
+                total_financed_minor=created.plan.total_financed_minor,
+                start_statement_date=created.plan.start_statement_date,
+                periods=periods,
+            )
+        finally:
+            if nested.is_active:
+                await nested.rollback()
+
+    async def create_purchase(
+        self, request: InstallmentPurchaseCreate, key: UUID
+    ) -> InstallmentPurchaseCreateResponse:
+        try:
+            return await self._create_purchase(request, key, commit=True)
+        except Exception:
+            await self.session.rollback()
+            raise
+
+    async def _create_purchase(
+        self, request: InstallmentPurchaseCreate, key: UUID, *, commit: bool
+    ) -> InstallmentPurchaseCreateResponse:
+        purchase = await self.transaction_service.create_credit_purchase(
+            request.purchase, key, commit=False
+        )
+        account = await self.session.get(Account, request.purchase.account_id)
+        if account is None or account.statement_day is None or account.due_day is None:
+            invalid("invalid_installment_schedule", "Credit account schedule is missing")
+        purchase_date = (
+            ensure_utc(request.purchase.occurred_at).astimezone(BUSINESS_TIMEZONE).date()
+        )
+        natural = credit_schedule(
+            purchase_date,
+            account.statement_day,
+            account.due_day,
+            CreditCycleMode(account.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF.value),
+        ).statement_date
+        start = request.start_statement_date or natural
+        if start < natural or start.day != account.statement_day:
+            invalid(
+                "invalid_installment_schedule",
+                "Installment start must be an eligible statement date",
+            )
+        plan = await self.create(
+            InstallmentCreate(
+                purchase_transaction_id=purchase.id,
+                installment_count=request.installment_count,
+                total_fee_minor=request.total_fee_minor,
+                fee_category_id=request.fee_category_id,
+                fee_occurred_at=request.fee_occurred_at,
+                start_statement_date=start,
+            ),
+            key,
+            commit=False,
+        )
+        response = InstallmentPurchaseCreateResponse(purchase=purchase, plan=plan)
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
         return response
 
     async def get(self, plan_id: UUID) -> InstallmentPlanResponse:
@@ -316,9 +397,12 @@ class InstallmentService:
         assert account.statement_day is not None and account.due_day is not None
         anchor = natural.statement_date
         if plan is not None:
-            current_statement = cycle_calendar(
-                self._today(), account.statement_day, account.due_day
-            )[1]
+            current_statement = credit_schedule(
+                self._today(),
+                account.statement_day,
+                account.due_day,
+                CreditCycleMode(account.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF.value),
+            ).statement_date
             anchor = max(anchor, current_statement)
         result: list[InstallmentCycleOption] = []
         for offset in range(months):
@@ -432,7 +516,12 @@ class InstallmentService:
             ensure_utc(request.purchase.occurred_at).astimezone(BUSINESS_TIMEZONE).date()
         )
         assert account.statement_day is not None and account.due_day is not None
-        natural_statement = cycle_calendar(purchase_date, account.statement_day, account.due_day)[1]
+        natural_statement = credit_schedule(
+            purchase_date,
+            account.statement_day,
+            account.due_day,
+            CreditCycleMode(account.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF.value),
+        ).statement_date
         if natural_statement < self._today() or request.start_statement_date < natural_statement:
             invalid("purchase_not_eligible", "Replacement purchase cycle must remain open")
         if request.total_fee_minor:
@@ -1360,7 +1449,9 @@ class InstallmentService:
         result: list[CreditCycle] = []
         for offset in range(count):
             statement = _shift_statement_month(start, offset, account.statement_day)
-            result.append(await ensure_regular_cycle(self.credit_repository, account, statement))
+            result.append(
+                await ensure_cycle_for_statement(self.credit_repository, account, statement)
+            )
         return result
 
     async def _validated_settlement_inputs(

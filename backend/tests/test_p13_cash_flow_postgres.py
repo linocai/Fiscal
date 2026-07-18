@@ -18,6 +18,7 @@ from fiscal_api.api.p13_schemas import (
     CashFlowSystemKind,
     CashFlowSystemReplace,
 )
+from fiscal_api.core.errors import APIError
 from fiscal_api.db.models import (
     AccountKind,
     CashFlowDirection,
@@ -216,7 +217,7 @@ async def test_void_and_restore_keep_cash_flow_and_ledger_in_sync(session: Async
     assert restored is not None and restored.status == CashFlowStatus.SETTLED.value
 
 
-async def test_system_item_can_be_edited_completed_and_reopened_without_ledger_write(
+async def test_credit_system_item_is_read_only_and_requires_a_real_repayment(
     session: AsyncSession,
 ) -> None:
     credit = await AccountService(session).create(
@@ -235,37 +236,20 @@ async def test_system_item_can_be_edited_completed_and_reopened_without_ledger_w
     active = await service.active()
     item = next(value for value in active.items if value.account_id == credit.id)
     assert item.system_reference_id is not None
-    assert CashFlowAction.EDIT in item.actions
+    assert item.actions == [CashFlowAction.CONFIRM_REPAYMENT]
 
-    completed = await service.update_system(
-        CashFlowSystemKind.CREDIT_CYCLE,
-        item.system_reference_id,
-        CashFlowSystemReplace(
-            title="白条 6 月账单",
-            planned_amount_minor=47_751,
-            expected_date=date(2026, 6, 11),
-            status=CashFlowStatus.COMPLETED,
-            expected_version=item.version,
-        ),
-    )
-    assert completed.status is CashFlowStatus.COMPLETED
-    assert not any(value.id == item.id for value in (await service.active()).items)
-    history = await service.history("2026-07")
-    historical = next(value for value in history.items if value.id == item.id)
-    assert historical.title == "白条 6 月账单"
-    assert historical.actions == [CashFlowAction.EDIT]
-    assert await session.scalar(select(func.count()).select_from(LedgerTransaction)) == 0
-
-    reopened = await service.update_system(
-        CashFlowSystemKind.CREDIT_CYCLE,
-        item.system_reference_id,
-        CashFlowSystemReplace(
-            title="白条 6 月账单",
-            planned_amount_minor=47_751,
-            expected_date=date(2026, 6, 11),
-            status=CashFlowStatus.CONFIRMED,
-            expected_version=completed.version,
-        ),
-    )
-    assert reopened.status is CashFlowStatus.CONFIRMED
+    with pytest.raises(APIError) as caught:
+        await service.update_system(
+            CashFlowSystemKind.CREDIT_CYCLE,
+            item.system_reference_id,
+            CashFlowSystemReplace(
+                title="白条 6 月账单",
+                planned_amount_minor=47_751,
+                expected_date=date(2026, 6, 11),
+                status=CashFlowStatus.COMPLETED,
+                expected_version=item.version,
+            ),
+        )
+    assert caught.value.code == "cash_flow_credit_projection_read_only"
     assert any(value.id == item.id for value in (await service.active()).items)
+    assert await session.scalar(select(func.count()).select_from(LedgerTransaction)) == 0

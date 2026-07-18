@@ -84,7 +84,7 @@ public struct MacTransactionWorkbench: View {
     .sheet(item: $editing) {
       TransactionEditorSheet(
         transactions: model, accounts: accounts, categories: categories, credit: credit,
-        editing: $0)
+        installments: installments, editing: $0)
     }
     .sheet(item: $installmentPurchase) {
       if let installments {

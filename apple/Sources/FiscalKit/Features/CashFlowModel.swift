@@ -14,6 +14,7 @@ public final class FutureCashFlowModel {
   public var showingHistory = false
   public private(set) var historyMonth: String
   private let repository: any FutureCashFlowRepository
+  private var activeGeneration = 0
   private var historyGeneration = 0
 
   public init(repository: any FutureCashFlowRepository, now: Date = Date()) {
@@ -22,11 +23,18 @@ public final class FutureCashFlowModel {
   }
 
   public func load() async {
+    activeGeneration += 1
+    let current = activeGeneration
     phase = active == nil ? .loading : .loaded; message = nil
     do {
-      active = try await repository.active(accountID: nil)
+      let fetched = try await repository.active(accountID: nil)
+      guard current == activeGeneration else { return }
+      active = fetched
       phase = active?.items.isEmpty == true ? .empty : .loaded
-    } catch is CancellationError {} catch { apply(error) }
+    } catch is CancellationError {} catch {
+      guard current == activeGeneration else { return }
+      apply(error)
+    }
   }
 
   public func loadHistory() async {

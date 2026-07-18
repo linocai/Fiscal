@@ -44,6 +44,29 @@ public final class AccountsModel {
         } catch { apply(error); return false }
     }
 
+    public func previewScheduleChange(draft: AccountDraft, account: AccountDTO) async -> CreditScheduleChangeResult? {
+        guard let request = scheduleRequest(draft: draft, account: account) else {
+            message = "信用账期配置不完整。"; return nil
+        }
+        isMutating = true; defer { isMutating = false }
+        do { return try await repository.previewScheduleChange(id: account.id, request: request) }
+        catch { apply(error); return nil }
+    }
+
+    public func applyScheduleChange(draft: AccountDraft, account: AccountDTO) async -> Bool {
+        guard let request = scheduleRequest(draft: draft, account: account) else {
+            message = "信用账期配置不完整。"; return false
+        }
+        isMutating = true; defer { isMutating = false }
+        do {
+            let result = try await repository.applyScheduleChange(id: account.id, request: request)
+            guard result.conflicts.isEmpty else { message = result.conflicts.joined(separator: "、"); return false }
+            let refreshed = try await repository.get(id: account.id)
+            _ = try await repository.update(id: account.id, version: refreshed.version, draft: draft)
+            await load(); return true
+        } catch { apply(error); return false }
+    }
+
     public func archiveOrRestore(_ account: AccountDTO) async {
         isMutating = true; defer { isMutating = false }
         do { if account.archivedAt == nil { _ = try await repository.archive(account) } else { _ = try await repository.restore(account) }; await load() }
@@ -84,6 +107,13 @@ public final class AccountsModel {
             } else if draft.openingBalanceAsOfDate != nil || draft.openingDueDate != nil { return "期初欠款为零时不应填写期初日期。" }
         }
         return nil
+    }
+
+    private func scheduleRequest(draft: AccountDraft, account: AccountDTO) -> CreditScheduleChangeRequest? {
+        guard let statementDay = draft.statementDay, let dueDay = draft.dueDay else { return nil }
+        return CreditScheduleChangeRequest(
+            expectedVersion: account.version, cycleMode: draft.cycleMode,
+            statementDay: statementDay, dueDay: dueDay)
     }
 
     private static func shanghaiDate(_ value: String) -> Date? {

@@ -17,6 +17,9 @@ from fiscal_api.api.p5_schemas import (
     InstallmentPlanPage,
     InstallmentPlanResponse,
     InstallmentPlanStatus,
+    InstallmentPurchaseCreate,
+    InstallmentPurchaseCreateResponse,
+    InstallmentPurchasePreview,
     InstallmentReplacement,
     InstallmentReverseSettlementPreview,
     InstallmentReverseSettlementResult,
@@ -27,6 +30,27 @@ from fiscal_api.api.p5_schemas import (
 from fiscal_api.core.security import require_device_token
 
 router = APIRouter(tags=["installments"], dependencies=[Depends(require_device_token)])
+
+
+@router.post("/installment-purchases/preview", response_model=InstallmentPurchasePreview)
+async def preview_installment_purchase(
+    request: InstallmentPurchaseCreate,
+    service: InstallmentServiceDependency,
+) -> InstallmentPurchasePreview:
+    return await service.preview_purchase(request)
+
+
+@router.post(
+    "/installment-purchases",
+    response_model=InstallmentPurchaseCreateResponse,
+    status_code=http_status.HTTP_201_CREATED,
+)
+async def create_installment_purchase(
+    request: InstallmentPurchaseCreate,
+    service: InstallmentServiceDependency,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+) -> InstallmentPurchaseCreateResponse:
+    return await service.create_purchase(request, idempotency_key)
 
 
 @router.get("/installment-plans", response_model=InstallmentPlanPage)

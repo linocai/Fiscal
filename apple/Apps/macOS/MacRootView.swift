@@ -49,6 +49,7 @@ struct MacRootView: View {
     @State private var showCategories = false
     @State private var showRecordSheet = false
     @State private var repaymentItem: FutureCashFlowItem?
+    @State private var creditCycleItem: FutureCashFlowItem?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -71,6 +72,7 @@ struct MacRootView: View {
                     MacFutureCashFlowScreen(
                         model: cashFlow, accounts: accounts, categories: categories,
                         confirmRepayment: { repaymentItem = $0 },
+                        viewCreditCycle: { creditCycleItem = $0 },
                         markReceived: { _ in section = .reimbursement }
                     )
                 } else if section == .reports {
@@ -105,6 +107,7 @@ struct MacRootView: View {
                 accounts: accounts,
                 categories: categories,
                 credit: credit,
+                installments: installments,
                 preferences: recordingPreferences
             )
         }
@@ -116,6 +119,12 @@ struct MacRootView: View {
                 preferences: recordingPreferences
             )
             .frame(width: 560, height: 680)
+        }
+        .sheet(item: $creditCycleItem) { item in
+            if let cycleID = item.systemReferenceID {
+                CreditCycleProjectionSheet(credit: credit, cycleID: cycleID)
+                    .frame(width: 560, height: 680)
+            }
         }
     }
 

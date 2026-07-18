@@ -254,5 +254,87 @@ class CreditRepository:
             is not None
         )
 
+    async def cycle_has_repayment(self, cycle_id: UUID) -> bool:
+        return bool(
+            await self.session.scalar(
+                select(
+                    exists().where(
+                        LedgerTransaction.credit_cycle_id == cycle_id,
+                        LedgerTransaction.kind == "repayment",
+                        LedgerTransaction.voided_at.is_(None),
+                    )
+                )
+            )
+        )
+
     async def delete_cycle(self, cycle: CreditCycle) -> None:
         await self.session.delete(cycle)
+
+    async def transactions_for_cycles(self, cycle_ids: list[UUID]) -> list[LedgerTransaction]:
+        if not cycle_ids:
+            return []
+        return list(
+            (
+                await self.session.scalars(
+                    select(LedgerTransaction).where(
+                        LedgerTransaction.credit_cycle_id.in_(cycle_ids)
+                    )
+                )
+            ).all()
+        )
+
+    async def periods_for_cycles(self, cycle_ids: list[UUID]) -> list[InstallmentPeriod]:
+        if not cycle_ids:
+            return []
+        return list(
+            (
+                await self.session.scalars(
+                    select(InstallmentPeriod).where(
+                        or_(
+                            InstallmentPeriod.scheduled_cycle_id.in_(cycle_ids),
+                            InstallmentPeriod.effective_cycle_id.in_(cycle_ids),
+                        )
+                    )
+                )
+            ).all()
+        )
+
+    async def plans_for_start_cycles(self, cycle_ids: list[UUID]) -> list[InstallmentPlan]:
+        if not cycle_ids:
+            return []
+        return list(
+            (
+                await self.session.scalars(
+                    select(InstallmentPlan).where(InstallmentPlan.start_cycle_id.in_(cycle_ids))
+                )
+            ).all()
+        )
+
+    async def cycle_is_referenced(self, cycle_id: UUID) -> bool:
+        transaction = await self.session.scalar(
+            select(LedgerTransaction.id)
+            .where(LedgerTransaction.credit_cycle_id == cycle_id)
+            .limit(1)
+        )
+        if transaction is not None:
+            return True
+        period = await self.session.scalar(
+            select(InstallmentPeriod.id)
+            .where(
+                or_(
+                    InstallmentPeriod.scheduled_cycle_id == cycle_id,
+                    InstallmentPeriod.effective_cycle_id == cycle_id,
+                )
+            )
+            .limit(1)
+        )
+        if period is not None:
+            return True
+        return (
+            await self.session.scalar(
+                select(InstallmentPlan.id)
+                .where(InstallmentPlan.start_cycle_id == cycle_id)
+                .limit(1)
+            )
+            is not None
+        )

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, m
 from fiscal_api.api.installment_types import InstallmentPlanStatus
 from fiscal_api.api.p3_schemas import (
     MAX_MINOR_UNITS,
+    TransactionDraft,
     TransactionResponse,
     clean_note,
     clean_required,
@@ -128,6 +129,40 @@ class InstallmentCreate(APIModel):
         if self.fee_occurred_at is not None and self.fee_occurred_at.utcoffset() is None:
             raise ValueError("fee_occurred_at must include a timezone")
         return self
+
+
+class InstallmentPurchaseCreate(APIModel):
+    purchase: TransactionDraft
+    installment_count: StrictInt = Field(default=3, ge=2, le=60)
+    total_fee_minor: NonnegativeMinor = 0
+    fee_category_id: UUID | None = None
+    fee_occurred_at: datetime | None = None
+    start_statement_date: date | None = None
+
+    @model_validator(mode="after")
+    def validate_purchase(self) -> "InstallmentPurchaseCreate":
+        if self.purchase.kind.value != "credit_purchase":
+            raise ValueError("installment purchase must be a credit purchase")
+        if (self.total_fee_minor > 0) != (
+            self.fee_category_id is not None and self.fee_occurred_at is not None
+        ):
+            raise ValueError(
+                "positive fee requires fee_category_id and fee_occurred_at; zero fee forbids both"
+            )
+        return self
+
+
+class InstallmentPurchasePreview(APIModel):
+    purchase_amount_minor: int
+    total_fee_minor: int
+    total_financed_minor: int
+    start_statement_date: date
+    periods: list[InstallmentPeriodPreview]
+
+
+class InstallmentPurchaseCreateResponse(APIModel):
+    purchase: TransactionResponse
+    plan: InstallmentPlanResponse
 
 
 class InstallmentPurchaseReplacement(APIModel):

@@ -103,6 +103,52 @@ public struct InstallmentPeriodPreview: Codable, Sendable, Equatable, Identifiab
     }
 }
 
+public struct InstallmentPurchaseCreateRequest: Codable, Sendable, Equatable {
+    public let purchase: TransactionDraft
+    public let installmentCount: Int
+    public let totalFeeMinor: Int64
+    public let feeCategoryID: UUID?
+    public let feeOccurredAt: Date?
+    public let startStatementDate: String?
+    public init(
+        purchase: TransactionDraft, installmentCount: Int = 3, totalFeeMinor: Int64 = 0,
+        feeCategoryID: UUID? = nil, feeOccurredAt: Date? = nil,
+        startStatementDate: String? = nil
+    ) {
+        self.purchase = purchase; self.installmentCount = installmentCount
+        self.totalFeeMinor = totalFeeMinor; self.feeCategoryID = feeCategoryID
+        self.feeOccurredAt = feeOccurredAt; self.startStatementDate = startStatementDate
+    }
+    enum CodingKeys: String, CodingKey {
+        case purchase
+        case installmentCount = "installment_count"
+        case totalFeeMinor = "total_fee_minor"
+        case feeCategoryID = "fee_category_id"
+        case feeOccurredAt = "fee_occurred_at"
+        case startStatementDate = "start_statement_date"
+    }
+}
+
+public struct InstallmentPurchasePreviewDTO: Codable, Sendable, Equatable {
+    public let purchaseAmountMinor: Int64
+    public let totalFeeMinor: Int64
+    public let totalFinancedMinor: Int64
+    public let startStatementDate: String
+    public let periods: [InstallmentPeriodPreview]
+    enum CodingKeys: String, CodingKey {
+        case periods
+        case purchaseAmountMinor = "purchase_amount_minor"
+        case totalFeeMinor = "total_fee_minor"
+        case totalFinancedMinor = "total_financed_minor"
+        case startStatementDate = "start_statement_date"
+    }
+}
+
+public struct InstallmentPurchaseCreateResponse: Codable, Sendable, Equatable {
+    public let purchase: TransactionDTO
+    public let plan: InstallmentPlanDTO
+}
+
 public struct InstallmentPlanDTO: Codable, Sendable, Equatable, Identifiable {
     public let id: UUID
     public let purchaseTransactionID: UUID

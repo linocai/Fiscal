@@ -32,7 +32,7 @@ class CreditCycle(Base):
     __tablename__ = "credit_cycles"
     __table_args__ = (
         CheckConstraint("period_start <= period_end", name="valid_period"),
-        CheckConstraint("statement_date = period_end", name="statement_matches_period"),
+        CheckConstraint("statement_date >= period_end", name="statement_not_before_period_end"),
         CheckConstraint("due_date >= statement_date", name="due_not_before_statement"),
         CheckConstraint("version = 1", name="immutable_version"),
         UniqueConstraint(

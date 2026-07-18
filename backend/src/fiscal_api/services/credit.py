@@ -4,6 +4,7 @@ import base64
 import json
 from calendar import monthrange
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, timedelta
 from uuid import UUID
 
@@ -13,12 +14,23 @@ from fiscal_api.api.p4_schemas import (
     CreditAccountSummary,
     CreditCyclePage,
     CreditCycleResponse,
+    CreditScheduleChangeRequest,
+    CreditScheduleChangeResult,
 )
+from fiscal_api.core.errors import APIError
 from fiscal_api.core.time import BUSINESS_TIMEZONE, ensure_utc, utc_now
-from fiscal_api.db.models import Account, AccountKind, CreditCycle, CreditCycleStatus
+from fiscal_api.db.models import (
+    Account,
+    AccountKind,
+    CreditCycle,
+    CreditCycleMode,
+    CreditCycleStatus,
+    TransactionKind,
+)
 from fiscal_api.repositories.credit import CreditRepository
 from fiscal_api.services.common import (
     acquire_mutation_lock,
+    check_version,
     checked_int64,
     conflict,
     not_found,
@@ -32,21 +44,60 @@ def _shift_month(value: date, delta: int, day: int) -> date:
     return date(year, month, min(day, monthrange(year, month)[1]))
 
 
+@dataclass(frozen=True)
+class CreditSchedule:
+    period_start: date
+    period_end: date
+    statement_date: date
+    due_date: date
+
+
+def schedule_for_statement(
+    statement_date: date,
+    statement_day: int,
+    due_day: int,
+    cycle_mode: CreditCycleMode,
+) -> CreditSchedule:
+    if statement_date.day != statement_day:
+        raise ValueError("statement_date does not match statement_day")
+    if cycle_mode is CreditCycleMode.PREVIOUS_CALENDAR_MONTH:
+        previous = _shift_month(statement_date, -1, 1)
+        period_start = date(previous.year, previous.month, 1)
+        period_end = date(
+            previous.year, previous.month, monthrange(previous.year, previous.month)[1]
+        )
+    else:
+        period_end = statement_date
+        period_start = _shift_month(statement_date, -1, statement_day) + timedelta(days=1)
+    due_date = (
+        date(statement_date.year, statement_date.month, due_day)
+        if due_day > statement_day
+        else _shift_month(statement_date, 1, due_day)
+    )
+    return CreditSchedule(period_start, period_end, statement_date, due_date)
+
+
+def credit_schedule(
+    business_date: date,
+    statement_day: int,
+    due_day: int,
+    cycle_mode: CreditCycleMode = CreditCycleMode.STATEMENT_DAY_CUTOFF,
+) -> CreditSchedule:
+    if cycle_mode is CreditCycleMode.PREVIOUS_CALENDAR_MONTH:
+        statement_date = _shift_month(business_date.replace(day=1), 1, statement_day)
+    elif business_date.day <= statement_day:
+        statement_date = date(business_date.year, business_date.month, statement_day)
+    else:
+        statement_date = _shift_month(business_date, 1, statement_day)
+    return schedule_for_statement(statement_date, statement_day, due_day, cycle_mode)
+
+
 def cycle_calendar(
     business_date: date, statement_day: int, due_day: int
 ) -> tuple[date, date, date]:
-    if business_date.day <= statement_day:
-        period_end = date(business_date.year, business_date.month, statement_day)
-    else:
-        period_end = _shift_month(business_date, 1, statement_day)
-    previous_end = _shift_month(period_end, -1, statement_day)
-    period_start = previous_end + timedelta(days=1)
-    due_date = (
-        date(period_end.year, period_end.month, due_day)
-        if due_day > statement_day
-        else _shift_month(period_end, 1, due_day)
-    )
-    return period_start, period_end, due_date
+    """Backward-compatible cutoff calendar used by released callers and tests."""
+    value = credit_schedule(business_date, statement_day, due_day)
+    return value.period_start, value.period_end, value.due_date
 
 
 async def ensure_regular_cycle(
@@ -61,48 +112,34 @@ async def ensure_regular_cycle(
             return cycle
     if account.statement_day is None or account.due_day is None:
         raise RuntimeError("credit account schedule is missing")
-    start, end, due = cycle_calendar(business_date, account.statement_day, account.due_day)
+    mode = CreditCycleMode(account.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF.value)
+    schedule = credit_schedule(business_date, account.statement_day, account.due_day, mode)
+    return await ensure_cycle_for_statement(repository, account, schedule.statement_date)
 
-    ends_to_create = {end}
-    if normal:
-        minimum = min(item.period_end for item in normal)
-        maximum = max(item.period_end for item in normal)
-        if end > maximum:
-            cursor = _shift_month(maximum, 1, account.statement_day)
-            while cursor <= end:
-                ends_to_create.add(cursor)
-                cursor = _shift_month(cursor, 1, account.statement_day)
-        elif end < minimum:
-            cursor = _shift_month(minimum, -1, account.statement_day)
-            while cursor >= end:
-                ends_to_create.add(cursor)
-                cursor = _shift_month(cursor, -1, account.statement_day)
 
-    result: CreditCycle | None = None
-    for cycle_end in sorted(ends_to_create):
-        cycle_start = _shift_month(cycle_end, -1, account.statement_day) + timedelta(days=1)
-        existing = await repository.cycle_for_period(account.id, cycle_start, cycle_end)
-        if existing is None:
-            cycle_due = (
-                date(cycle_end.year, cycle_end.month, account.due_day)
-                if account.due_day > account.statement_day
-                else _shift_month(cycle_end, 1, account.due_day)
-            )
-            existing = CreditCycle(
-                account_id=account.id,
-                period_start=cycle_start,
-                period_end=cycle_end,
-                statement_date=cycle_end,
-                due_date=cycle_due,
-                is_opening_cycle=False,
-            )
-            repository.add_cycle(existing)
-            await repository.session.flush()
-        if cycle_end == end:
-            result = existing
-    if result is None:
-        raise RuntimeError(f"failed to create credit cycle {start}...{end} due {due}")
-    return result
+async def ensure_cycle_for_statement(
+    repository: CreditRepository, account: Account, statement_date: date
+) -> CreditCycle:
+    if account.statement_day is None or account.due_day is None:
+        raise RuntimeError("credit account schedule is missing")
+    mode = CreditCycleMode(account.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF.value)
+    schedule = schedule_for_statement(statement_date, account.statement_day, account.due_day, mode)
+    existing = await repository.cycle_for_period(
+        account.id, schedule.period_start, schedule.period_end
+    )
+    if existing is not None:
+        return existing
+    existing = CreditCycle(
+        account_id=account.id,
+        period_start=schedule.period_start,
+        period_end=schedule.period_end,
+        statement_date=schedule.statement_date,
+        due_date=schedule.due_date,
+        is_opening_cycle=False,
+    )
+    repository.add_cycle(existing)
+    await repository.session.flush()
+    return existing
 
 
 async def sync_opening_cycle(repository: CreditRepository, account: Account) -> CreditCycle | None:
@@ -212,6 +249,155 @@ class CreditService:
         await self.session.commit()
         return response
 
+    async def preview_schedule_change(
+        self, account_id: UUID, request: CreditScheduleChangeRequest
+    ) -> CreditScheduleChangeResult:
+        nested = await self.session.begin_nested()
+        try:
+            return await self._change_schedule(account_id, request, commit=False)
+        except APIError as error:
+            return CreditScheduleChangeResult(
+                account_id=account_id,
+                cycle_mode=request.cycle_mode,
+                statement_day=request.statement_day,
+                due_day=request.due_day,
+                affected_cycle_count=0,
+                purchase_count=0,
+                repayment_count=0,
+                installment_period_count=0,
+                conflicts=[f"{error.code}: {error.message}"],
+            )
+        finally:
+            if nested.is_active:
+                await nested.rollback()
+
+    async def apply_schedule_change(
+        self, account_id: UUID, request: CreditScheduleChangeRequest
+    ) -> CreditScheduleChangeResult:
+        try:
+            return await self._change_schedule(account_id, request, commit=True)
+        except Exception:
+            await self.session.rollback()
+            raise
+
+    async def _change_schedule(
+        self,
+        account_id: UUID,
+        request: CreditScheduleChangeRequest,
+        *,
+        commit: bool,
+    ) -> CreditScheduleChangeResult:
+        await acquire_mutation_lock(self.session)
+        account = await self.repository.account(account_id, for_update=True)
+        if account is None or account.kind != AccountKind.CREDIT.value:
+            not_found("credit_account_not_found", "The credit account does not exist")
+        check_version(account.version, request.expected_version)
+        cycles = await self.repository.cycles(account.id)
+        amounts = await self.repository.amounts([item.id for item in cycles])
+        affected: list[CreditCycle] = []
+        for item in cycles:
+            purchase, repaid = amounts.get(item.id, (0, 0))
+            if not item.is_opening_cycle and purchase - repaid > 0:
+                affected.append(item)
+        affected_ids = [item.id for item in affected]
+        transactions = await self.repository.transactions_for_cycles(affected_ids)
+        periods = await self.repository.periods_for_cycles(affected_ids)
+        plans = await self.repository.plans_for_start_cycles(affected_ids)
+        affected_by_id = {item.id: item for item in affected}
+        for period in periods:
+            cycle = affected_by_id.get(period.effective_cycle_id)
+            if cycle is not None and (
+                cycle.statement_date < self._today()
+                or await self.repository.cycle_has_repayment(cycle.id)
+            ):
+                conflict(
+                    "installment_period_locked",
+                    "A locked installment period cannot move to another credit schedule",
+                )
+        purchase_count = sum(
+            item.kind == TransactionKind.CREDIT_PURCHASE.value for item in transactions
+        )
+        repayment_count = sum(item.kind == TransactionKind.REPAYMENT.value for item in transactions)
+
+        account.cycle_mode = request.cycle_mode.value
+        account.statement_day = request.statement_day
+        account.due_day = request.due_day
+        account.version += 1
+        account.updated_at = utc_now()
+        await self.session.flush()
+
+        by_id = affected_by_id
+        replacements: dict[UUID, CreditCycle] = {}
+
+        async def replacement(cycle_id: UUID) -> CreditCycle:
+            known = replacements.get(cycle_id)
+            if known is not None:
+                return known
+            old = by_id[cycle_id]
+            statement = date(
+                old.statement_date.year, old.statement_date.month, request.statement_day
+            )
+            created = await ensure_cycle_for_statement(self.repository, account, statement)
+            replacements[cycle_id] = created
+            return created
+
+        for transaction in transactions:
+            if transaction.kind == TransactionKind.CREDIT_PURCHASE.value:
+                business_date = (
+                    ensure_utc(transaction.occurred_at).astimezone(BUSINESS_TIMEZONE).date()
+                )
+                schedule = credit_schedule(
+                    business_date,
+                    request.statement_day,
+                    request.due_day,
+                    request.cycle_mode,
+                )
+                target = await ensure_cycle_for_statement(
+                    self.repository, account, schedule.statement_date
+                )
+            else:
+                assert transaction.credit_cycle_id is not None
+                target = await replacement(transaction.credit_cycle_id)
+            if transaction.credit_cycle_id != target.id:
+                transaction.credit_cycle_id = target.id
+                transaction.version += 1
+                transaction.updated_at = utc_now()
+
+        for period in periods:
+            if period.scheduled_cycle_id in by_id:
+                period.scheduled_cycle_id = (await replacement(period.scheduled_cycle_id)).id
+            if period.effective_cycle_id in by_id:
+                period.effective_cycle_id = (await replacement(period.effective_cycle_id)).id
+            period.version += 1
+            period.updated_at = utc_now()
+
+        for plan in plans:
+            plan.start_cycle_id = (await replacement(plan.start_cycle_id)).id
+            plan.version += 1
+            plan.updated_at = utc_now()
+
+        await self.session.flush()
+        await validate_credit_invariants(self.repository, {account.id})
+        for cycle in affected:
+            is_replacement = cycle.id in {item.id for item in replacements.values()}
+            if not is_replacement and not await self.repository.cycle_is_referenced(cycle.id):
+                await self.repository.delete_cycle(cycle)
+        await self.session.flush()
+        result = CreditScheduleChangeResult(
+            account_id=account.id,
+            cycle_mode=request.cycle_mode,
+            statement_day=request.statement_day,
+            due_day=request.due_day,
+            affected_cycle_count=len(affected),
+            purchase_count=purchase_count,
+            repayment_count=repayment_count,
+            installment_period_count=len(periods),
+            conflicts=[],
+        )
+        if commit:
+            await self.session.commit()
+        return result
+
     async def list_cycles(
         self, account_id: UUID, *, cursor: str | None, limit: int
     ) -> CreditCyclePage:
@@ -306,6 +492,9 @@ class CreditService:
             opening_configuration_required=unresolved,
             statement_day=account.statement_day,
             due_day=account.due_day,
+            cycle_mode=CreditCycleMode(
+                account.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF.value
+            ),
             current_cycle=current_response,
             next_due_cycle=next_due,
             has_overdue_cycle=any(item.is_overdue for item in responses),

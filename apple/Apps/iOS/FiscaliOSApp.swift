@@ -26,15 +26,15 @@ struct FiscaliOSApp: App {
         let accounts = AccountsModel(repository: RemoteAccountRepository(transport: transport))
         let categories = CategoriesModel(repository: RemoteCategoryRepository(transport: transport))
         let credit = CreditModel(repository: RemoteCreditRepository(transport: transport))
+        let cashFlow = FutureCashFlowModel(repository: RemoteFutureCashFlowRepository(transport: transport))
         let transactionRepository = RemoteTransactionRepository(transport: transport)
-        let transactions = TransactionsModel(repository: transactionRepository, accounts: accounts, categories: categories, credit: credit)
-        let installments = InstallmentModel(repository: RemoteInstallmentRepository(transport: transport), transactions: transactionRepository, credit: credit, transactionList: transactions)
+        let transactions = TransactionsModel(repository: transactionRepository, accounts: accounts, categories: categories, credit: credit, cashFlow: cashFlow)
+        let installments = InstallmentModel(repository: RemoteInstallmentRepository(transport: transport), transactions: transactionRepository, credit: credit, transactionList: transactions, cashFlow: cashFlow)
         let reimbursements = ReimbursementModel(repository: RemoteReimbursementRepository(transport: transport), transactions: transactions, accounts: accounts)
         let reports = ReportingModel(repository: RemoteReportingRepository(transport: transport))
         // A dedicated overview model so the always-current-month home view never resets the month
         // (or drill-down) the user navigated to on the reports page.
         let overview = ReportingModel(repository: RemoteReportingRepository(transport: transport))
-        let cashFlow = FutureCashFlowModel(repository: RemoteFutureCashFlowRepository(transport: transport))
         let aiProposals = AIProposalModel(repository: RemoteAIProposalRepository(transport: transport), transactions: transactions, reports: reports, cashFlow: cashFlow)
         _connection = State(initialValue: ConnectionModel(client: SystemStatusClient(baseURL: baseURL, tokenStore: tokenStore)))
         _deviceSecurity = State(initialValue: DeviceSecurityModel(

@@ -11,6 +11,7 @@ public final class InstallmentModel {
     public private(set) var eligibility: InstallmentEligibility?
     public private(set) var cycleOptions: [InstallmentCycleOption] = []
     public private(set) var changePreview: InstallmentPlanChangePreview?
+    public private(set) var purchasePreview: InstallmentPurchasePreviewDTO?
     public private(set) var settlementPreview: InstallmentSettlementPreview?
     public private(set) var cancellationPreview: InstallmentCancellationPreview?
     public private(set) var reversePreview: InstallmentReversePreview?
@@ -27,14 +28,15 @@ public final class InstallmentModel {
     private let transactions: any TransactionRepository
     private let credit: CreditModel?
     private let transactionList: TransactionsModel?
+    private let cashFlow: FutureCashFlowModel?
     private var generation = 0
     private var previewedChangeRequest: InstallmentReplacementRequest?
     private var previewedSettlementRequest: InstallmentSettlementRequest?
     private var previewedCancellationRequest: InstallmentOperationRequest?
     private var previewedReverseRequest: InstallmentOperationRequest?
 
-    public init(repository: any InstallmentRepository, transactions: any TransactionRepository, credit: CreditModel? = nil, transactionList: TransactionsModel? = nil) {
-        self.repository = repository; self.transactions = transactions; self.credit = credit; self.transactionList = transactionList
+    public init(repository: any InstallmentRepository, transactions: any TransactionRepository, credit: CreditModel? = nil, transactionList: TransactionsModel? = nil, cashFlow: FutureCashFlowModel? = nil) {
+        self.repository = repository; self.transactions = transactions; self.credit = credit; self.transactionList = transactionList; self.cashFlow = cashFlow
     }
 
     public func loadAccount(_ accountID: UUID) async {
@@ -96,6 +98,24 @@ public final class InstallmentModel {
         store(plan); await refreshAfterMutation(accountID: plan.creditAccountID); return plan
     }
 
+    public func previewPurchase(_ request: InstallmentPurchaseCreateRequest) async -> Bool {
+        message = nil; purchasePreview = nil
+        do { purchasePreview = try await repository.previewPurchase(request); return true }
+        catch is CancellationError { return false }
+        catch { apply(error, preserving: true); return false }
+    }
+
+    public func createPurchase(
+        _ request: InstallmentPurchaseCreateRequest, idempotencyKey: UUID
+    ) async -> InstallmentPurchaseCreateResponse? {
+        guard let result: InstallmentPurchaseCreateResponse = await mutate({
+            try await repository.createPurchase(request, idempotencyKey: idempotencyKey)
+        }) else { return nil }
+        store(result.plan); purchasePreview = nil
+        await refreshAfterMutation(accountID: result.plan.creditAccountID)
+        return result
+    }
+
     public func preview(_ request: InstallmentReplacementRequest) async -> Bool {
         guard let id = selectedPlan?.id else { return false }
         message = nil; changePreview = nil
@@ -154,7 +174,7 @@ public final class InstallmentModel {
     }
 
     public func clearPreviews() {
-        changePreview = nil; settlementPreview = nil; cancellationPreview = nil; reversePreview = nil
+        purchasePreview = nil; changePreview = nil; settlementPreview = nil; cancellationPreview = nil; reversePreview = nil
         previewedChangeRequest = nil; previewedSettlementRequest = nil; previewedCancellationRequest = nil; previewedReverseRequest = nil
     }
     public func invalidateChangePreview(message: String? = nil) { changePreview = nil; previewedChangeRequest = nil; if let message { self.message = message } }
@@ -181,6 +201,7 @@ public final class InstallmentModel {
         async let projection = repository.liabilities(accountID: accountID)
         async let creditRefresh: Void = refreshCredit(accountID: accountID)
         async let transactionRefresh: Void = transactionList?.load() ?? ()
+        async let cashFlowRefresh: Void = cashFlow?.load() ?? ()
         do {
             let (loadedPage, loadedProjection) = try await (page, projection)
             if loadedAccountID == nil || loadedAccountID == accountID {
@@ -189,7 +210,7 @@ public final class InstallmentModel {
                 phase = plans.isEmpty ? .empty : .loaded
             }
         } catch { refreshMessage = display(error) }
-        _ = await (creditRefresh, transactionRefresh)
+        _ = await (creditRefresh, transactionRefresh, cashFlowRefresh)
     }
 
     private func refreshCredit(accountID: UUID) async {

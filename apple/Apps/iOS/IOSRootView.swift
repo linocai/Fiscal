@@ -29,6 +29,7 @@ struct IOSRootView: View {
     @State private var morePath: [IOSMoreDestination] = []
     @State private var showAIProposals = false
     @State private var repaymentItem: FutureCashFlowItem?
+    @State private var creditCycleItem: FutureCashFlowItem?
 
     var body: some View {
         Group {
@@ -54,6 +55,7 @@ struct IOSRootView: View {
                     IOSFutureCashFlowScreen(
                         model: cashFlow, accounts: accounts, categories: categories,
                         confirmRepayment: { repaymentItem = $0 },
+                        viewCreditCycle: { creditCycleItem = $0 },
                         markReceived: { _ in morePath = [.reimbursements]; selection = .more }
                     )
                 }
@@ -65,7 +67,7 @@ struct IOSRootView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if selection != .more || morePath.isEmpty { tabBar }
         }
-        .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit, preferences: recordingPreferences) }
+        .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments, preferences: recordingPreferences) }
         .sheet(isPresented: $showAIProposals) { IOSAIProposalSheet(model: aiProposals, accounts: accounts, categories: categories, credit: credit) }
         .sheet(item: $repaymentItem) { item in
             TransactionEditorSheet(
@@ -74,6 +76,11 @@ struct IOSRootView: View {
                 cycleID: item.systemReferenceID, amountMinor: item.plannedAmountMinor,
                 preferences: recordingPreferences
             )
+        }
+        .sheet(item: $creditCycleItem) { item in
+            if let cycleID = item.systemReferenceID {
+                CreditCycleProjectionSheet(credit: credit, cycleID: cycleID)
+            }
         }
     }
 

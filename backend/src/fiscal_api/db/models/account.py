@@ -15,6 +15,11 @@ class AccountKind(StrEnum):
     CREDIT = "credit"
 
 
+class CreditCycleMode(StrEnum):
+    STATEMENT_DAY_CUTOFF = "statement_day_cutoff"
+    PREVIOUS_CALENDAR_MONTH = "previous_calendar_month"
+
+
 class Account(MutableResourceMixin, Base):
     __tablename__ = "accounts"
     __table_args__ = (
@@ -27,6 +32,7 @@ class Account(MutableResourceMixin, Base):
         CheckConstraint(
             "(kind = 'credit' AND credit_limit_minor > 0 "
             "AND statement_day BETWEEN 1 AND 28 AND due_day BETWEEN 1 AND 28 "
+            "AND cycle_mode IN ('statement_day_cutoff', 'previous_calendar_month') "
             "AND opening_balance_minor >= 0 "
             "AND ((opening_balance_minor = 0 AND opening_balance_as_of_date IS NULL "
             "AND opening_due_date IS NULL) OR (opening_balance_minor > 0 "
@@ -34,7 +40,7 @@ class Account(MutableResourceMixin, Base):
             "OR (opening_balance_as_of_date IS NOT NULL AND opening_due_date IS NOT NULL "
             "AND opening_due_date >= opening_balance_as_of_date))))) "
             "OR (kind IN ('cash', 'debit') AND credit_limit_minor IS NULL "
-            "AND statement_day IS NULL AND due_day IS NULL "
+            "AND statement_day IS NULL AND due_day IS NULL AND cycle_mode IS NULL "
             "AND opening_balance_as_of_date IS NULL AND opening_due_date IS NULL)",
             name="kind_configuration",
         ),
@@ -56,5 +62,6 @@ class Account(MutableResourceMixin, Base):
     credit_limit_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     statement_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
     due_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cycle_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     opening_balance_as_of_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     opening_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)

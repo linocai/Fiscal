@@ -1,10 +1,10 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from fiscal_api.api.p5_schemas import InstallmentPeriodResponse, InstallmentTeaser
-from fiscal_api.db.models import CreditCycleStatus
+from fiscal_api.db.models import CreditCycleMode, CreditCycleStatus
 
 
 class APIModel(BaseModel):
@@ -51,9 +51,29 @@ class CreditAccountSummary(APIModel):
     opening_configuration_required: bool
     statement_day: int
     due_day: int
+    cycle_mode: CreditCycleMode
     current_cycle: CreditCycleResponse
     next_due_cycle: CreditCycleResponse | None
     has_overdue_cycle: bool
     active_installment_count: int = 0
     future_scheduled_gross_minor: int = 0
     next_installment: InstallmentTeaser | None = None
+
+
+class CreditScheduleChangeRequest(APIModel):
+    expected_version: StrictInt = Field(ge=1)
+    cycle_mode: CreditCycleMode
+    statement_day: StrictInt = Field(ge=1, le=28)
+    due_day: StrictInt = Field(ge=1, le=28)
+
+
+class CreditScheduleChangeResult(APIModel):
+    account_id: UUID
+    cycle_mode: CreditCycleMode
+    statement_day: int
+    due_day: int
+    affected_cycle_count: int
+    purchase_count: int
+    repayment_count: int
+    installment_period_count: int
+    conflicts: list[str] = []

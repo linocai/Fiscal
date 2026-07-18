@@ -126,6 +126,7 @@ private struct AccountEditor: View {
     @State private var openingAsOf: String
     @State private var openingDue: String
     @State private var validation: String?
+    @State private var schedulePreview: CreditScheduleChangeResult?
     @FocusState private var focusedField: Field?
 
     init(model: AccountsModel, account: AccountDTO?) {
@@ -171,6 +172,14 @@ private struct AccountEditor: View {
                                     Text("用于真实表达导入欠款是否已到期，不会自动猜测。").font(.caption).foregroundStyle(FiscalColor.tertiary)
                                 }
                                 Divider().opacity(0.35)
+                                Picker("账期模式", selection: $draft.cycleMode) {
+                                    ForEach(CreditCycleMode.allCases) { Text($0.title).tag($0) }
+                                }
+                                Text(draft.cycleMode == .previousCalendarMonth
+                                     ? "每个账单统计上一个完整自然月。"
+                                     : "账单日同时作为本期消费的截止日。")
+                                    .font(.caption).foregroundStyle(FiscalColor.tertiary)
+                                Divider().opacity(0.35)
                                 Stepper("账单日：\(draft.statementDay ?? 1)", value: Binding(get: { draft.statementDay ?? 1 }, set: { draft.statementDay = $0 }), in: 1...28)
                                 Divider().opacity(0.35)
                                 Stepper("还款日：\(draft.dueDay ?? 1)", value: Binding(get: { draft.dueDay ?? 1 }, set: { draft.dueDay = $0 }), in: 1...28)
@@ -190,6 +199,20 @@ private struct AccountEditor: View {
             }
             .safeAreaInset(edge: .bottom) { primaryBar(model.isMutating ? "保存中…" : "保存账户", disabled: model.isMutating) { focusedField = nil; save() } }
         }.fiscalEditorFrame(width: 380, height: 520)
+        .alert("应用账期规则变更？", isPresented: Binding(
+            get: { schedulePreview != nil }, set: { if !$0 { schedulePreview = nil } })) {
+            Button("取消", role: .cancel) { schedulePreview = nil }
+            Button("应用并重算") { applyScheduleChange() }
+                .disabled(schedulePreview?.conflicts.isEmpty == false)
+        } message: {
+            if let preview = schedulePreview {
+                if preview.conflicts.isEmpty {
+                    Text("将重算 \(preview.affectedCycleCount) 个未结清账期、\(preview.purchaseCount) 笔消费、\(preview.repaymentCount) 笔还款和 \(preview.installmentPeriodCount) 个分期期次；已结清历史保持不变。")
+                } else {
+                    Text("发现冲突：\(preview.conflicts.joined(separator: "、"))。没有写入任何变更。")
+                }
+            }
+        }
     }
     private func editorSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) { Text(title).font(.headline).padding(.horizontal, 3); FiscalCard(radius: 18) { content() } }
@@ -212,7 +235,27 @@ private struct AccountEditor: View {
         else { draft.creditLimitMinor = nil; draft.statementDay = nil; draft.dueDay = nil; draft.openingBalanceAsOfDate = nil; draft.openingDueDate = nil }
         validation = AccountsModel.validate(draft)
         guard validation == nil else { return }
-        Task { if await model.save(draft: draft, editing: account) { dismiss() } else { validation = model.message } }
+        if let account, scheduleChanged(from: account) {
+            Task {
+                schedulePreview = await model.previewScheduleChange(draft: draft, account: account)
+                if schedulePreview == nil { validation = model.message }
+            }
+        } else {
+            Task { if await model.save(draft: draft, editing: account) { dismiss() } else { validation = model.message } }
+        }
+    }
+    private func scheduleChanged(from account: AccountDTO) -> Bool {
+        account.kind == .credit && (
+            draft.cycleMode != (account.cycleMode ?? .statementDayCutoff)
+            || draft.statementDay != account.statementDay || draft.dueDay != account.dueDay)
+    }
+    private func applyScheduleChange() {
+        guard let account else { return }
+        schedulePreview = nil
+        Task {
+            if await model.applyScheduleChange(draft: draft, account: account) { dismiss() }
+            else { validation = model.message }
+        }
     }
     private static func major(_ minor: Int64) -> String { NSDecimalNumber(decimal: Decimal(minor) / 100).stringValue }
 }

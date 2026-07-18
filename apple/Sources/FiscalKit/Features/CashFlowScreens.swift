@@ -6,6 +6,7 @@ public struct IOSFutureCashFlowScreen: View {
   let accounts: AccountsModel
   let categories: CategoriesModel
   let confirmRepayment: (FutureCashFlowItem) -> Void
+  let viewCreditCycle: (FutureCashFlowItem) -> Void
   let markReceived: (FutureCashFlowItem) -> Void
   @State private var editor: CashFlowEditorTarget?
   @State private var settling: FutureCashFlowItem?
@@ -13,10 +14,12 @@ public struct IOSFutureCashFlowScreen: View {
   public init(
     model: FutureCashFlowModel, accounts: AccountsModel, categories: CategoriesModel,
     confirmRepayment: @escaping (FutureCashFlowItem) -> Void,
+    viewCreditCycle: @escaping (FutureCashFlowItem) -> Void,
     markReceived: @escaping (FutureCashFlowItem) -> Void
   ) {
     self.model = model; self.accounts = accounts; self.categories = categories
-    self.confirmRepayment = confirmRepayment; self.markReceived = markReceived
+    self.confirmRepayment = confirmRepayment; self.viewCreditCycle = viewCreditCycle
+    self.markReceived = markReceived
   }
 
   public var body: some View {
@@ -115,6 +118,7 @@ public struct IOSFutureCashFlowScreen: View {
           item: item, edit: { editor = item.systemKind == nil ? .manual(item) : .system(item) }, settle: { settling = item },
           confirm: { Task { await model.confirm(item) } },
           cancel: { Task { await model.cancel(item, scope: .occurrence) } },
+          viewCreditCycle: { viewCreditCycle(item) },
           confirmRepayment: { confirmRepayment(item) }, markReceived: { markReceived(item) })
       }
     }
@@ -128,6 +132,7 @@ public struct MacFutureCashFlowScreen: View {
   let accounts: AccountsModel
   let categories: CategoriesModel
   let confirmRepayment: (FutureCashFlowItem) -> Void
+  let viewCreditCycle: (FutureCashFlowItem) -> Void
   let markReceived: (FutureCashFlowItem) -> Void
   @State private var editor: CashFlowEditorTarget?
   @State private var settling: FutureCashFlowItem?
@@ -135,10 +140,12 @@ public struct MacFutureCashFlowScreen: View {
   public init(
     model: FutureCashFlowModel, accounts: AccountsModel, categories: CategoriesModel,
     confirmRepayment: @escaping (FutureCashFlowItem) -> Void,
+    viewCreditCycle: @escaping (FutureCashFlowItem) -> Void,
     markReceived: @escaping (FutureCashFlowItem) -> Void
   ) {
     self.model = model; self.accounts = accounts; self.categories = categories
-    self.confirmRepayment = confirmRepayment; self.markReceived = markReceived
+    self.confirmRepayment = confirmRepayment; self.viewCreditCycle = viewCreditCycle
+    self.markReceived = markReceived
   }
 
   public var body: some View {
@@ -232,6 +239,7 @@ public struct MacFutureCashFlowScreen: View {
           item: item, edit: { editor = item.systemKind == nil ? .manual(item) : .system(item) }, settle: { settling = item },
           confirm: { Task { await model.confirm(item) } },
           cancel: { Task { await model.cancel(item, scope: .occurrence) } },
+          viewCreditCycle: { viewCreditCycle(item) },
           confirmRepayment: { confirmRepayment(item) }, markReceived: { markReceived(item) })
       }
     }
@@ -239,12 +247,115 @@ public struct MacFutureCashFlowScreen: View {
 }
 #endif
 
+public struct CreditCycleProjectionSheet: View {
+  @Environment(\.dismiss) private var dismiss
+  @Bindable var credit: CreditModel
+  let cycleID: UUID
+
+  public init(credit: CreditModel, cycleID: UUID) {
+    self.credit = credit; self.cycleID = cycleID
+  }
+
+  public var body: some View {
+    NavigationStack {
+      Group {
+        if let cycle = credit.selectedCycle, cycle.id == cycleID {
+          ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+              FiscalCard(radius: 18) {
+                VStack(alignment: .leading, spacing: 9) {
+                  Text("剩余应还").font(.caption).foregroundStyle(FiscalColor.tertiary)
+                  Text(Money(minorUnits: cycle.remainingMinor).formatted())
+                    .font(.system(size: 30, weight: .bold)).foregroundStyle(FiscalColor.debt)
+                  projectionRow("消费与期初", Money(minorUnits: cycle.amountDueMinor).formatted())
+                  projectionRow("已还", Money(minorUnits: cycle.repaidMinor).formatted())
+                  projectionRow("账期", "\(cycle.periodStart)–\(cycle.periodEnd)")
+                  projectionRow("还款日", cycle.dueDate)
+                }
+              }
+              if !cycle.installmentPeriods.isEmpty {
+                if !installmentPurchases.isEmpty {
+                  Text("分期原始消费").font(.headline)
+                  FiscalCard(radius: 18) {
+                    VStack(spacing: 8) {
+                      ForEach(installmentPurchases) { item in
+                        HStack {
+                          Text(item.title).lineLimit(2)
+                          Spacer()
+                          Text(Money(minorUnits: item.amountMinor).formatted()).fontWeight(.semibold)
+                        }.font(.subheadline)
+                      }
+                      Text("原始消费只计一次负债；现金流按下面各期金额投影。")
+                        .font(.caption).foregroundStyle(FiscalColor.tertiary)
+                    }
+                  }
+                }
+                Text("本期分期").font(.headline)
+                FiscalCard(radius: 18) {
+                  VStack(spacing: 9) {
+                    ForEach(cycle.installmentPeriods) { period in
+                      HStack {
+                        Text("第 \(period.sequence) 期")
+                        Spacer()
+                        Text(Money(minorUnits: period.amountDueMinor).formatted())
+                          .fontWeight(.semibold)
+                      }.font(.subheadline)
+                    }
+                  }
+                }
+              }
+              Text("本期普通流水与还款").font(.headline)
+              FiscalCard(radius: 18) {
+                VStack(spacing: 0) {
+                  if ordinaryTransactions.isEmpty {
+                    Text("本账期暂无普通流水").foregroundStyle(FiscalColor.tertiary)
+                      .frame(maxWidth: .infinity).padding()
+                  }
+                  ForEach(Array(ordinaryTransactions.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Divider().opacity(0.35) }
+                    HStack {
+                      Text(item.title).lineLimit(2)
+                      Spacer()
+                      Text(Money(minorUnits: item.amountMinor).formatted()).fontWeight(.semibold)
+                    }.font(.subheadline).padding(.vertical, 8)
+                  }
+                }
+              }
+              Text("现金流金额由这些流水与分期期次汇总得出，只能从流水或分期计划修改。")
+                .font(.caption).foregroundStyle(FiscalColor.tertiary)
+            }.padding(16)
+          }
+        } else if credit.phase == .failed || credit.phase == .offline || credit.phase == .unauthorized {
+          ContentUnavailableView("账期读取失败", systemImage: "exclamationmark.triangle", description: Text(credit.message ?? "请重试。"))
+        } else {
+          ProgressView("正在读取账期…")
+        }
+      }
+      .navigationTitle("查看账期")
+      .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+      .task { await credit.loadCycle(cycleID) }
+    }
+  }
+
+  private func projectionRow(_ title: String, _ value: String) -> some View {
+    HStack { Text(title).foregroundStyle(FiscalColor.tertiary); Spacer(); Text(value).fontWeight(.medium) }
+      .font(.subheadline)
+  }
+  private var installmentPurchases: [TransactionDTO] {
+    credit.cycleTransactions.filter { $0.installmentPlanID != nil && $0.kind == .creditPurchase }
+  }
+  private var ordinaryTransactions: [TransactionDTO] {
+    credit.cycleTransactions.filter { $0.installmentPlanID == nil }
+  }
+}
+
 private struct CashFlowItemRow: View {
   let item: FutureCashFlowItem
   let edit: () -> Void
   let settle: () -> Void
   let confirm: () -> Void
   let cancel: () -> Void
+  let viewCreditCycle: () -> Void
   let confirmRepayment: () -> Void
   let markReceived: () -> Void
 
@@ -271,9 +382,12 @@ private struct CashFlowItemRow: View {
     HStack(spacing: 8) {
       if item.actions.contains(.confirm) { Button("确认", action: confirm) }
       if item.actions.contains(.settle) { Button("入账", action: settle).buttonStyle(.borderedProminent) }
-      if item.actions.contains(.confirmRepayment) { Button("确认还款", action: confirmRepayment).buttonStyle(.borderedProminent) }
+      if item.systemKind == .creditCycle { Button("查看账期", action: viewCreditCycle).buttonStyle(.bordered) }
+      if item.actions.contains(.confirmRepayment) { Button("去还款", action: confirmRepayment).buttonStyle(.borderedProminent) }
       if item.actions.contains(.markReceived) { Button("标记到账", action: markReceived).buttonStyle(.borderedProminent) }
-      if item.actions.contains(.edit) { Button("编辑", action: edit).buttonStyle(.bordered) }
+      if item.actions.contains(.edit), item.systemKind != .creditCycle {
+        Button("编辑", action: edit).buttonStyle(.bordered)
+      }
       if item.actions.contains(.cancel) {
         Menu {
           Button("取消事项", role: .destructive, action: cancel)

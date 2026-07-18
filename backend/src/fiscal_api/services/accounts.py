@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fiscal_api.api.p2_schemas import AccountDraft, AccountPatch, AccountResponse
 from fiscal_api.core.errors import APIError
 from fiscal_api.core.time import BUSINESS_TIMEZONE, utc_now
-from fiscal_api.db.models import Account, AccountKind
+from fiscal_api.db.models import Account, AccountKind, CreditCycleMode
 from fiscal_api.repositories.accounts import AccountRepository
 from fiscal_api.repositories.credit import CreditRepository
 from fiscal_api.services.common import (
@@ -56,12 +56,18 @@ class AccountService:
 
     async def create(self, draft: AccountDraft, *, commit: bool = True) -> AccountResponse:
         await acquire_p2_mutation_lock(self.session)
+        cycle_mode = (
+            draft.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF
+            if draft.kind is AccountKind.CREDIT
+            else None
+        )
         self._validate_configuration(
             kind=draft.kind,
             opening=draft.opening_balance_minor,
             limit=draft.credit_limit_minor,
             statement_day=draft.statement_day,
             due_day=draft.due_day,
+            cycle_mode=cycle_mode,
             opening_as_of=draft.opening_balance_as_of_date,
             opening_due=draft.opening_due_date,
             today=utc_now().astimezone(BUSINESS_TIMEZONE).date(),
@@ -77,6 +83,7 @@ class AccountService:
             credit_limit_minor=draft.credit_limit_minor,
             statement_day=draft.statement_day,
             due_day=draft.due_day,
+            cycle_mode=cycle_mode.value if cycle_mode is not None else None,
             opening_balance_as_of_date=draft.opening_balance_as_of_date,
             opening_due_date=draft.opening_due_date,
             sort_order=await self.repository.next_sort_order(),
@@ -107,11 +114,17 @@ class AccountService:
         limit = updates.get("credit_limit_minor", account.credit_limit_minor)
         statement_day = updates.get("statement_day", account.statement_day)
         due_day = updates.get("due_day", account.due_day)
+        cycle_mode = updates.get("cycle_mode", account.cycle_mode)
         opening_as_of = updates.get(
             "opening_balance_as_of_date", account.opening_balance_as_of_date
         )
         opening_due = updates.get("opening_due_date", account.opening_due_date)
-        schedule_changed = statement_day != account.statement_day or due_day != account.due_day
+        schedule_changed = (
+            statement_day != account.statement_day
+            or due_day != account.due_day
+            or (cycle_mode.value if isinstance(cycle_mode, CreditCycleMode) else cycle_mode)
+            != account.cycle_mode
+        )
         if (
             account.kind == AccountKind.CREDIT.value
             and schedule_changed
@@ -127,6 +140,7 @@ class AccountService:
             limit=limit,
             statement_day=statement_day,
             due_day=due_day,
+            cycle_mode=cycle_mode,
             opening_as_of=opening_as_of,
             opening_due=opening_due,
             today=utc_now().astimezone(BUSINESS_TIMEZONE).date(),
@@ -137,7 +151,11 @@ class AccountService:
         ):
             conflict("account_name_conflict", "An active account already uses this name")
         for field, value in updates.items():
-            setattr(account, field, value.value if isinstance(value, AccountKind) else value)
+            setattr(
+                account,
+                field,
+                value.value if isinstance(value, (AccountKind, CreditCycleMode)) else value,
+            )
         self._touch(account)
         try:
             if kind is AccountKind.CREDIT:
@@ -245,6 +263,7 @@ class AccountService:
         limit: int | None,
         statement_day: int | None,
         due_day: int | None,
+        cycle_mode: CreditCycleMode | str | None,
         opening_as_of: date | None,
         opening_due: date | None,
         today: date,
@@ -260,6 +279,7 @@ class AccountService:
                 and 1 <= statement_day <= 28
                 and due_day is not None
                 and 1 <= due_day <= 28
+                and cycle_mode is not None
                 and opening >= 0
                 and (
                     (opening == 0 and opening_as_of is None and opening_due is None)
@@ -277,6 +297,7 @@ class AccountService:
                 limit is None
                 and statement_day is None
                 and due_day is None
+                and cycle_mode is None
                 and opening_as_of is None
                 and opening_due is None
             )

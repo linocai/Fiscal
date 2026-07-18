@@ -1,4 +1,4 @@
-from fiscal_api.db.models.account import Account, AccountKind
+from fiscal_api.db.models.account import Account, AccountKind, CreditCycleMode
 from fiscal_api.db.models.ai import (
     AIProposal,
     AIProposalSource,
@@ -78,6 +78,7 @@ __all__ = [
     "Category",
     "CategoryDirection",
     "CreditCycle",
+    "CreditCycleMode",
     "CreditCycleStatus",
     "DeviceToken",
     "DeviceTokenRole",

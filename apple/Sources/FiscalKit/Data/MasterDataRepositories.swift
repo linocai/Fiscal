@@ -9,6 +9,13 @@ public protocol AccountRepository: Sendable {
     func restore(_ account: AccountDTO) async throws -> AccountDTO
     func delete(_ account: AccountDTO) async throws
     func reorder(ids: [UUID]) async throws -> [AccountDTO]
+    func previewScheduleChange(id: UUID, request: CreditScheduleChangeRequest) async throws -> CreditScheduleChangeResult
+    func applyScheduleChange(id: UUID, request: CreditScheduleChangeRequest) async throws -> CreditScheduleChangeResult
+}
+
+public extension AccountRepository {
+    func previewScheduleChange(id: UUID, request: CreditScheduleChangeRequest) async throws -> CreditScheduleChangeResult { throw URLError(.unsupportedURL) }
+    func applyScheduleChange(id: UUID, request: CreditScheduleChangeRequest) async throws -> CreditScheduleChangeResult { throw URLError(.unsupportedURL) }
 }
 
 public actor RemoteAccountRepository: AccountRepository {
@@ -24,6 +31,12 @@ public actor RemoteAccountRepository: AccountRepository {
     public func restore(_ account: AccountDTO) async throws -> AccountDTO { try await transport.request("accounts/\(account.id)/restore", method: "POST", body: VersionRequest(version: account.version)) }
     public func delete(_ account: AccountDTO) async throws { try await transport.requestNoContent("accounts/\(account.id)", method: "DELETE", query: [.init(name: "expected_version", value: String(account.version))]) }
     public func reorder(ids: [UUID]) async throws -> [AccountDTO] { try await transport.request("accounts/order", method: "PUT", body: OrderedIDsRequest(orderedIDs: ids)) }
+    public func previewScheduleChange(id: UUID, request: CreditScheduleChangeRequest) async throws -> CreditScheduleChangeResult {
+        try await transport.request("credit-accounts/\(id)/schedule-change-preview", method: "POST", body: request)
+    }
+    public func applyScheduleChange(id: UUID, request: CreditScheduleChangeRequest) async throws -> CreditScheduleChangeResult {
+        try await transport.request("credit-accounts/\(id)/schedule-change", method: "POST", body: request)
+    }
 }
 
 public protocol CategoryRepository: Sendable {
