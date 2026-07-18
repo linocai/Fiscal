@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "6B57E8E3B1B1BCCC75962CB5"
-               BuildableName = "Fiscal.app"
+               BuildableName = "FiscalmacOS.app"
                BlueprintName = "FiscalmacOS"
                ReferencedContainer = "container:Fiscal.xcodeproj">
             </BuildableReference>
@@ -33,7 +33,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "6B57E8E3B1B1BCCC75962CB5"
-            BuildableName = "Fiscal.app"
+            BuildableName = "FiscalmacOS.app"
             BlueprintName = "FiscalmacOS"
             ReferencedContainer = "container:Fiscal.xcodeproj">
          </BuildableReference>
@@ -81,7 +81,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "6B57E8E3B1B1BCCC75962CB5"
-            BuildableName = "Fiscal.app"
+            BuildableName = "FiscalmacOS.app"
             BlueprintName = "FiscalmacOS"
             ReferencedContainer = "container:Fiscal.xcodeproj">
          </BuildableReference>
@@ -100,7 +100,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "6B57E8E3B1B1BCCC75962CB5"
-            BuildableName = "Fiscal.app"
+            BuildableName = "FiscalmacOS.app"
             BlueprintName = "FiscalmacOS"
             ReferencedContainer = "container:Fiscal.xcodeproj">
          </BuildableReference>

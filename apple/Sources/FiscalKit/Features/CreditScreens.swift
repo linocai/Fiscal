@@ -66,14 +66,14 @@ public struct IOSCreditAccountsScreen: View {
     private func retry(_ title: String, _ symbol: String) -> some View { ContentUnavailableView { Label(title, systemImage: symbol) } description: { Text(credit.message ?? "不会使用预览数据替代。") } actions: { Button("重试") { Task { await credit.loadAccounts() } } } }
 }
 
-private struct IOSCreditAccountDetail: View {
+public struct IOSCreditAccountDetail: View {
     @Bindable var credit: CreditModel
     @Bindable var installments: InstallmentModel
     let accountID: UUID; let transactions: TransactionsModel; let accounts: AccountsModel; let categories: CategoriesModel; let cashFlow: FutureCashFlowModel
     @State private var repayCycle: CreditCycleDTO?
     let readOnly: Bool
-    init(credit: CreditModel, installments: InstallmentModel, accountID: UUID, transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, cashFlow: FutureCashFlowModel, readOnly: Bool = false) { self.credit = credit; self.installments = installments; self.accountID = accountID; self.transactions = transactions; self.accounts = accounts; self.categories = categories; self.cashFlow = cashFlow; self.readOnly = readOnly }
-    var body: some View {
+    public init(credit: CreditModel, installments: InstallmentModel, accountID: UUID, transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, cashFlow: FutureCashFlowModel, readOnly: Bool = false) { self.credit = credit; self.installments = installments; self.accountID = accountID; self.transactions = transactions; self.accounts = accounts; self.categories = categories; self.cashFlow = cashFlow; self.readOnly = readOnly }
+    public var body: some View {
         Group { if credit.phase == .loading && credit.selectedAccount?.accountID != accountID { ProgressView("正在读取账期…") } else if let summary = credit.selectedAccount, summary.accountID == accountID { ScrollView { VStack(spacing: 14) { if readOnly { Label("已归档账户 · 只读历史", systemImage: "archivebox").font(.caption).foregroundStyle(FiscalColor.tertiary).frame(maxWidth: .infinity, alignment: .leading) }; debtCard(summary); futureCashFlowCard; if let cycle = summary.nextDueCycle ?? summary.currentCycle { cycleCard(cycle, prominent: true) }; installmentCards; if !credit.cycles.isEmpty { VStack(alignment: .leading, spacing: 10) { Text("历史账期").font(.headline); ForEach(credit.cycles) { cycle in NavigationLink { IOSCreditCycleDetail(credit: credit, cycleID: cycle.id, transactions: transactions, accounts: accounts, categories: categories, readOnly: readOnly) } label: { cycleRow(cycle) }.buttonStyle(.plain).task { if cycle.id == credit.cycles.last?.id { await credit.loadMoreCycles() } } } }.padding(16).background(FiscalColor.surface, in: .rect(cornerRadius: 18)) } }.padding(16) }.background(FiscalColor.iOSBackground) } else { ContentUnavailableView("账期读取失败", systemImage: "exclamationmark.triangle", description: Text(credit.message ?? "请重试。")) } }
         .navigationTitle(credit.selectedAccount?.name ?? "信用账户").onAppear { Task { async let c: Void = credit.loadAccount(accountID); async let i: Void = installments.loadAccount(accountID); async let f: Void = cashFlow.load(); _ = await (c, i, f) } }
         .sheet(item: $repayCycle) { cycle in TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit, initialKind: .repayment, creditAccountID: accountID, cycleID: cycle.id, amountMinor: cycle.remainingMinor) }
@@ -137,7 +137,7 @@ public struct MacAccountsCreditScreen: View {
     @State private var showInstallmentSettlement = false
     @State private var showInstallmentCancellation = false
     @State private var showInstallmentReverse = false
-    public init(accounts: AccountsModel, credit: CreditModel, installments: InstallmentModel, transactions: TransactionsModel, categories: CategoriesModel, cashFlow: FutureCashFlowModel) { self.accounts = accounts; self.credit = credit; self.installments = installments; self.transactions = transactions; self.categories = categories; self.cashFlow = cashFlow }
+    public init(accounts: AccountsModel, credit: CreditModel, installments: InstallmentModel, transactions: TransactionsModel, categories: CategoriesModel, cashFlow: FutureCashFlowModel, initialCreditAccountID: UUID? = nil) { self.accounts = accounts; self.credit = credit; self.installments = installments; self.transactions = transactions; self.categories = categories; self.cashFlow = cashFlow; _selectedCreditID = State(initialValue: initialCreditAccountID) }
     public var body: some View {
         VStack(spacing: 0) {
             HStack {

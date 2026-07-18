@@ -29,14 +29,15 @@ public final class InstallmentModel {
     private let credit: CreditModel?
     private let transactionList: TransactionsModel?
     private let cashFlow: FutureCashFlowModel?
+    private let reporting: ReportingInvalidationCoordinator?
     private var generation = 0
     private var previewedChangeRequest: InstallmentReplacementRequest?
     private var previewedSettlementRequest: InstallmentSettlementRequest?
     private var previewedCancellationRequest: InstallmentOperationRequest?
     private var previewedReverseRequest: InstallmentOperationRequest?
 
-    public init(repository: any InstallmentRepository, transactions: any TransactionRepository, credit: CreditModel? = nil, transactionList: TransactionsModel? = nil, cashFlow: FutureCashFlowModel? = nil) {
-        self.repository = repository; self.transactions = transactions; self.credit = credit; self.transactionList = transactionList; self.cashFlow = cashFlow
+    public init(repository: any InstallmentRepository, transactions: any TransactionRepository, credit: CreditModel? = nil, transactionList: TransactionsModel? = nil, cashFlow: FutureCashFlowModel? = nil, reporting: ReportingInvalidationCoordinator? = nil) {
+        self.repository = repository; self.transactions = transactions; self.credit = credit; self.transactionList = transactionList; self.cashFlow = cashFlow; self.reporting = reporting
     }
 
     public func loadAccount(_ accountID: UUID) async {
@@ -202,6 +203,7 @@ public final class InstallmentModel {
         async let creditRefresh: Void = refreshCredit(accountID: accountID)
         async let transactionRefresh: Void = transactionList?.load() ?? ()
         async let cashFlowRefresh: Void = cashFlow?.load() ?? ()
+        async let reportingRefresh: Void = reporting?.refresh() ?? ()
         do {
             let (loadedPage, loadedProjection) = try await (page, projection)
             if loadedAccountID == nil || loadedAccountID == accountID {
@@ -210,7 +212,7 @@ public final class InstallmentModel {
                 phase = plans.isEmpty ? .empty : .loaded
             }
         } catch { refreshMessage = display(error) }
-        _ = await (creditRefresh, transactionRefresh, cashFlowRefresh)
+        _ = await (creditRefresh, transactionRefresh, cashFlowRefresh, reportingRefresh)
     }
 
     private func refreshCredit(accountID: UUID) async {

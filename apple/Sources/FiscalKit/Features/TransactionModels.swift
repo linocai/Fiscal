@@ -41,14 +41,15 @@ public final class TransactionsModel {
     private let categories: CategoriesModel?
     private let credit: CreditModel?
     private let cashFlow: FutureCashFlowModel?
+    private let reporting: ReportingInvalidationCoordinator?
     private var debounceTask: Task<Void, Never>?
     private var pageTask: Task<TransactionPage, Error>?
     private var moreTask: Task<TransactionPage, Error>?
     private var generation = 0
     private var loadMoreToken = 0
 
-    public init(repository: any TransactionRepository, accounts: AccountsModel? = nil, categories: CategoriesModel? = nil, credit: CreditModel? = nil, cashFlow: FutureCashFlowModel? = nil) {
-        self.repository = repository; self.accounts = accounts; self.categories = categories; self.credit = credit; self.cashFlow = cashFlow
+    public init(repository: any TransactionRepository, accounts: AccountsModel? = nil, categories: CategoriesModel? = nil, credit: CreditModel? = nil, cashFlow: FutureCashFlowModel? = nil, reporting: ReportingInvalidationCoordinator? = nil) {
+        self.repository = repository; self.accounts = accounts; self.categories = categories; self.credit = credit; self.cashFlow = cashFlow; self.reporting = reporting
     }
     public var selected: TransactionDTO? { transactions.first { $0.id == selectedID } }
     public var totalCount: Int { transactions.count }
@@ -237,7 +238,8 @@ public final class TransactionsModel {
         async let categoryRefresh: Void = categories?.load() ?? ()
         async let creditRefresh: Void = credit?.refreshCurrentSelection() ?? ()
         async let cashFlowRefresh: Void = cashFlow?.load() ?? ()
-        _ = await (accountRefresh, categoryRefresh, creditRefresh, cashFlowRefresh)
+        async let reportingRefresh: Void = reporting?.refresh() ?? ()
+        _ = await (accountRefresh, categoryRefresh, creditRefresh, cashFlowRefresh, reportingRefresh)
     }
     private func apply(_ error: Error, preservingData: Bool) {
         let text = display(error); message = text

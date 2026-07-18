@@ -3,7 +3,7 @@ import SwiftUI
 
 private enum IOSTab: Hashable { case overview, transactions, cashFlow, more }
 private enum IOSMoreDestination: Hashable {
-    case accounts, categories, credit, reimbursements
+    case accounts, categories, credit, creditAccount(UUID), reimbursements
     case reports(ReportLens)
     case cloudConnection, settings
 }
@@ -41,6 +41,10 @@ struct IOSRootView: View {
                         pendingProposalCount: aiProposals.pendingCount,
                         openAI: { showAIProposals = true },
                         openCashFlow: { selection = .cashFlow },
+                        openAccounts: { morePath = [.accounts]; selection = .more },
+                        openCreditAccount: { accountID in
+                            morePath = [.creditAccount(accountID)]; selection = .more
+                        },
                         openReport: { lens in morePath = [.reports(lens)]; selection = .more },
                         openUncategorized: {
                             transactions.classification = .uncategorized
@@ -186,7 +190,7 @@ private struct IOSMoreScreen: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("ios.cloudConnection.entry")
-                    FiscalCard(radius: 20) { VStack(spacing: 0) { NavigationLink(value: IOSMoreDestination.reimbursements) { row("报销", symbol: "doc.text", detail: "多人 · 分次到账", color: FiscalColor.reimbursement) }.buttonStyle(.plain); Divider(); NavigationLink(value: IOSMoreDestination.reports(.spending)) { row("报表", symbol: "list.bullet.rectangle", detail: "消费 · 负债", color: FiscalColor.accent) }.buttonStyle(.plain); Divider(); Button(action: openAI) { badgeRow("AI 待确认", symbol: "sparkles", count: aiProposals.pendingCount) }.buttonStyle(.plain); Divider(); NavigationLink(value: IOSMoreDestination.settings) { row("设置", symbol: "gearshape", detail: "偏好 · AI · 数据", color: FiscalColor.secondary) }.buttonStyle(.plain) } }
+                    FiscalCard(radius: 20) { VStack(spacing: 0) { NavigationLink(value: IOSMoreDestination.reimbursements) { row("报销", symbol: "doc.text", detail: "多人 · 分次到账", color: FiscalColor.reimbursement) }.buttonStyle(.plain); Divider(); NavigationLink(value: IOSMoreDestination.reports(.spending)) { row("报表", symbol: "list.bullet.rectangle", detail: "消费", color: FiscalColor.accent) }.buttonStyle(.plain); Divider(); Button(action: openAI) { badgeRow("AI 待确认", symbol: "sparkles", count: aiProposals.pendingCount) }.buttonStyle(.plain); Divider(); NavigationLink(value: IOSMoreDestination.settings) { row("设置", symbol: "gearshape", detail: "偏好 · AI · 数据", color: FiscalColor.secondary) }.buttonStyle(.plain) } }
                 }.padding(16)
             }
             .background(FiscalColor.iOSBackground).navigationTitle("更多")
@@ -195,6 +199,8 @@ private struct IOSMoreScreen: View {
                 case .accounts: AccountsManagementScreen(model: accounts)
                 case .categories: CategoriesManagementScreen(model: categories)
                 case .credit: IOSCreditAccountsScreen(credit: credit, installments: installments, transactions: transactions, accounts: accounts, categories: categories, cashFlow: cashFlow)
+                case .creditAccount(let accountID):
+                    IOSCreditAccountDetail(credit: credit, installments: installments, accountID: accountID, transactions: transactions, accounts: accounts, categories: categories, cashFlow: cashFlow)
                 case .reimbursements: IOSReimbursementsScreen(model: reimbursements, accounts: accounts)
                 case .reports(let lens): IOSReportsScreen(model: reports, initialLens: lens)
                 case .cloudConnection:

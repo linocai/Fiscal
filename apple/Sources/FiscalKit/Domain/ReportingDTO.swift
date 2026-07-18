@@ -417,6 +417,7 @@ public struct OverviewReport: Codable, Sendable, Equatable {
   public let uncategorizedAmountMinor: Int64
   public let recentTransactions: [TransactionDTO]
   public let forecast: ForecastSummary
+  public let creditDueEvents: [OverviewCreditDueEvent]
   enum CodingKeys: String, CodingKey {
     case meta
     case accountValueMinor = "account_value_minor"
@@ -428,10 +429,26 @@ public struct OverviewReport: Codable, Sendable, Equatable {
     case uncategorizedAmountMinor = "uncategorized_amount_minor"
     case recentTransactions = "recent_transactions"
     case forecast
+    case creditDueEvents = "credit_due_events"
   }
   public var scope: ReportMeta { meta }
   public var coverage: ReportCoverage { .init(classifiedMinor: max(0, spending.netConsumptionMinor - uncategorizedAmountMinor), uncategorizedMinor: uncategorizedAmountMinor, uncategorizedCount: uncategorizedCount, isComplete: uncategorizedCount == 0) }
   public var forecastEvents: [ForecastEvent] { forecast.events }
+}
+public struct OverviewCreditDueEvent: Codable, Sendable, Equatable, Identifiable {
+  public var id: String { "\(accountID.uuidString):\(dueDate)" }
+  public let accountID: UUID
+  public let accountName: String
+  public let dueDate: String
+  public let remainingMinor: Int64
+  public let cycleIDs: [UUID]
+  enum CodingKeys: String, CodingKey {
+    case accountID = "account_id"
+    case accountName = "account_name"
+    case dueDate = "due_date"
+    case remainingMinor = "remaining_minor"
+    case cycleIDs = "cycle_ids"
+  }
 }
 public struct OverviewCashFlow: Codable, Sendable, Equatable {
   public let inflowMinor: Int64

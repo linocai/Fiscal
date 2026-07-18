@@ -255,11 +255,19 @@ async def test_reporting_lenses_overview_forecast_and_hierarchy(session: AsyncSe
     assert overview.spending.model_dump() == {
         name: getattr(spending, name) for name in type(overview.spending).model_fields
     }
-    assert overview.cash_flow.inflow_minor == cash_flow.inflow_minor
-    assert overview.cash_flow.outflow_minor == cash_flow.outflow_minor
+    # Overview cash flow is the independent future-action projection, not the historical month.
+    # P18 keeps that legacy field compatible while adding the credit-only due aggregation below.
     assert overview.current_credit_debt_minor == debt.current_credit_debt_minor
     assert overview.reimbursement_outstanding_minor == 600
-    assert len(overview.recent_transactions) <= 5
+    assert len(overview.recent_transactions) <= 10
+    assert len(overview.credit_due_events) == 1
+    credit_due = overview.credit_due_events[0]
+    assert (credit_due.account_id, credit_due.due_date, credit_due.remaining_minor) == (
+        credit.id,
+        date(2026, 7, 22),
+        1_500,
+    )
+    assert len(credit_due.cycle_ids) == 1
 
 
 async def test_report_drill_down_pagination_filters_and_shanghai_edges(

@@ -27,6 +27,7 @@ from fiscal_api.api.p7_schemas import (
     ForecastEvent,
     ForecastSummary,
     OverviewCashFlowSummary,
+    OverviewCreditDueEvent,
     OverviewReport,
     OverviewSpendingSummary,
     ReportDrillDownPage,
@@ -57,6 +58,8 @@ from fiscal_api.services.common import INT64_MIN, checked_int64, invalid
 
 SPENDING_KINDS = {"expense", "credit_purchase", "installment_fee"}
 MONTH_PATTERN = re.compile(r"^(\d{4})-(\d{2})$")
+OVERVIEW_RECENT_TRANSACTION_LIMIT = 10
+OVERVIEW_CREDIT_DUE_WINDOW_DAYS = 30
 
 
 @dataclass(frozen=True)
@@ -236,7 +239,7 @@ class ReportingService:
 
         recent = [
             TransactionService.snapshot_response(item, list(item.postings))
-            for item in transactions[:5]
+            for item in transactions[:OVERVIEW_RECENT_TRANSACTION_LIMIT]
         ]
         return OverviewReport(
             meta=self._meta(start, end),
@@ -253,6 +256,10 @@ class ReportingService:
             uncategorized_amount_minor=spending.uncategorized.net_consumption_minor,
             recent_transactions=recent,
             forecast=cash.forecast,
+            credit_due_events=self._overview_credit_due_events(
+                cycles=debt.cycles,
+                today=self._today(),
+            ),
         )
 
     async def drill_down(
@@ -717,6 +724,7 @@ class ReportingService:
                             color_hex=child.color_hex,
                         )
                     )
+            child_rows.sort(key=lambda item: self._spending_bucket_sort_key(item, categories))
             if not rollup:
                 continue
             direct = self._bucket(
@@ -741,7 +749,45 @@ class ReportingService:
                     **values.model_dump(),
                 )
             )
+        result.sort(key=lambda item: self._spending_bucket_sort_key(item, categories))
         return result
+
+    @staticmethod
+    def _category_stable_key(category: Category) -> tuple[int, datetime, UUID]:
+        return (category.sort_order, category.created_at, category.id)
+
+    def _spending_bucket_sort_key(
+        self, item: SpendingBucket, categories: dict[UUID, Category]
+    ) -> tuple[int, tuple[int, datetime, UUID]]:
+        category_id = item.category_id
+        assert category_id is not None
+        return (-item.personal_realized_minor, self._category_stable_key(categories[category_id]))
+
+    @staticmethod
+    def _overview_credit_due_events(
+        *, cycles: list[DebtCycleRow], today: date
+    ) -> list[OverviewCreditDueEvent]:
+        date_to_exclusive = today + timedelta(days=OVERVIEW_CREDIT_DUE_WINDOW_DAYS)
+        grouped: dict[tuple[UUID, date], list[DebtCycleRow]] = defaultdict(list)
+        for cycle in cycles:
+            if cycle.remaining_minor <= 0 or not today <= cycle.due_date < date_to_exclusive:
+                continue
+            grouped[(cycle.account_id, cycle.due_date)].append(cycle)
+        events: list[OverviewCreditDueEvent] = []
+        for (account_id, due_date), members in grouped.items():
+            ordered = sorted(members, key=lambda item: item.cycle_id)
+            events.append(
+                OverviewCreditDueEvent(
+                    account_id=account_id,
+                    account_name=ordered[0].account_name,
+                    due_date=due_date,
+                    remaining_minor=ReportingService._checked_sum(
+                        item.remaining_minor for item in ordered
+                    ),
+                    cycle_ids=[item.cycle_id for item in ordered],
+                )
+            )
+        return sorted(events, key=lambda item: (item.due_date, item.account_name, item.account_id))
 
     def _cash_line(
         self,

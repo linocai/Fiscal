@@ -27,6 +27,7 @@ public final class ReimbursementModel {
   private let repository: any ReimbursementRepository
   private let transactions: TransactionsModel?
   private let accounts: AccountsModel?
+  private let reporting: ReportingInvalidationCoordinator?
   private var generation = 0
   private var previewedClaimRequest: ReimbursementClaimReplacementRequest?
   private var claimPreviewGeneration = 0
@@ -36,11 +37,12 @@ public final class ReimbursementModel {
 
   public init(
     repository: any ReimbursementRepository, transactions: TransactionsModel? = nil,
-    accounts: AccountsModel? = nil
+    accounts: AccountsModel? = nil, reporting: ReportingInvalidationCoordinator? = nil
   ) {
     self.repository = repository
     self.transactions = transactions
     self.accounts = accounts
+    self.reporting = reporting
   }
 
   public func load() async {
@@ -358,6 +360,7 @@ public final class ReimbursementModel {
     async let totals = repository.summary(dateFrom: nil, dateTo: nil)
     async let transactionRefresh: Void = transactions?.load() ?? ()
     async let accountRefresh: Void = accounts?.load() ?? ()
+    async let reportingRefresh: Void = reporting?.refresh() ?? ()
     do {
       let (claim, claimsPage, receiptPage, loadedSummary) = try await (
         detail, page, receipts, totals
@@ -370,7 +373,7 @@ public final class ReimbursementModel {
       summary = loadedSummary
       phase = .loaded
     } catch { refreshMessage = display(error) }
-    _ = await (transactionRefresh, accountRefresh)
+    _ = await (transactionRefresh, accountRefresh, reportingRefresh)
   }
   private func apply(_ error: Error, preserving: Bool) {
     let text = display(error)

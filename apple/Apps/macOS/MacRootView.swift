@@ -50,6 +50,7 @@ struct MacRootView: View {
     @State private var showRecordSheet = false
     @State private var repaymentItem: FutureCashFlowItem?
     @State private var creditCycleItem: FutureCashFlowItem?
+    @State private var selectedCreditAccountID: UUID?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -57,13 +58,13 @@ struct MacRootView: View {
             Divider().opacity(0.45)
             Group {
                 if section == .overview {
-                    MacReportingOverviewScreen(model: overview) { destination in
-                        guard let destination else { section = .reimbursement; return }
+                    MacReportingOverviewScreen(model: overview, navigate: { destination in
+                        guard let destination else { section = .accounts; return }
                         reports.lens = destination
                         section = destination == .cashFlow ? .cashFlow : .reports
-                    }
+                    }, openCreditAccount: { accountID in selectedCreditAccountID = accountID; section = .accounts })
                 } else if section == .accounts {
-                    MacAccountsCreditScreen(accounts: accounts, credit: credit, installments: installments, transactions: transactions, categories: categories, cashFlow: cashFlow)
+                    MacAccountsCreditScreen(accounts: accounts, credit: credit, installments: installments, transactions: transactions, categories: categories, cashFlow: cashFlow, initialCreditAccountID: selectedCreditAccountID)
                 } else if section == .transactions {
                     MacTransactionWorkbench(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments, preferences: recordingPreferences)
                 } else if section == .reimbursement {

@@ -188,6 +188,14 @@ class OverviewCashFlowSummary(CashFlowAmounts):
     pass
 
 
+class OverviewCreditDueEvent(APIModel):
+    account_id: UUID
+    account_name: str
+    due_date: date
+    remaining_minor: int
+    cycle_ids: list[UUID] = Field(default_factory=lambda: list[UUID]())
+
+
 class OverviewReport(APIModel):
     meta: ReportMeta
     account_value_minor: int
@@ -201,6 +209,9 @@ class OverviewReport(APIModel):
         default_factory=lambda: list[TransactionResponse]()
     )
     forecast: ForecastSummary
+    credit_due_events: list[OverviewCreditDueEvent] = Field(
+        default_factory=lambda: list[OverviewCreditDueEvent]()
+    )
 
 
 class ReportLineItem(APIModel):

@@ -21,15 +21,15 @@ public final class AIProposalModel {
 
   private let repository: any AIProposalRepository
   private let transactions: TransactionsModel?
-  private let reports: ReportingModel?
+  private let reporting: ReportingInvalidationCoordinator?
   private let cashFlow: FutureCashFlowModel?
   private var generation = 0
 
   public init(
     repository: any AIProposalRepository, transactions: TransactionsModel? = nil,
-    reports: ReportingModel? = nil, cashFlow: FutureCashFlowModel? = nil
+    reporting: ReportingInvalidationCoordinator? = nil, cashFlow: FutureCashFlowModel? = nil
   ) {
-    self.repository = repository; self.transactions = transactions; self.reports = reports
+    self.repository = repository; self.transactions = transactions; self.reporting = reporting
     self.cashFlow = cashFlow
   }
   public var selected: AIProposalDTO? { proposals.first { $0.id == selectedID } }
@@ -162,7 +162,7 @@ public final class AIProposalModel {
       await load()
       if refreshLedger {
         async let transactionRefresh: Void = transactions?.load() ?? ()
-        async let reportRefresh: Void = reports?.loadAll() ?? ()
+        async let reportRefresh: Void = reporting?.refresh() ?? ()
         async let cashFlowRefresh: Void = cashFlow?.load() ?? ()
         _ = await (transactionRefresh, reportRefresh, cashFlowRefresh)
       }

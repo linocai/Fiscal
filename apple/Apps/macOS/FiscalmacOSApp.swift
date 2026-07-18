@@ -28,14 +28,15 @@ struct FiscalmacOSApp: App {
         let credit = CreditModel(repository: RemoteCreditRepository(transport: transport))
         let cashFlow = FutureCashFlowModel(repository: RemoteFutureCashFlowRepository(transport: transport))
         let transactionRepository = RemoteTransactionRepository(transport: transport)
-        let transactions = TransactionsModel(repository: transactionRepository, accounts: accounts, categories: categories, credit: credit, cashFlow: cashFlow)
-        let installments = InstallmentModel(repository: RemoteInstallmentRepository(transport: transport), transactions: transactionRepository, credit: credit, transactionList: transactions, cashFlow: cashFlow)
-        let reimbursements = ReimbursementModel(repository: RemoteReimbursementRepository(transport: transport), transactions: transactions, accounts: accounts)
         let reports = ReportingModel(repository: RemoteReportingRepository(transport: transport))
         // A dedicated overview model so the always-current-month home view never resets the month
         // (or drill-down) the user navigated to on the reports page.
         let overview = ReportingModel(repository: RemoteReportingRepository(transport: transport))
-        let aiProposals = AIProposalModel(repository: RemoteAIProposalRepository(transport: transport), transactions: transactions, reports: reports, cashFlow: cashFlow)
+        let reporting = ReportingInvalidationCoordinator(overview: overview, spending: reports)
+        let transactions = TransactionsModel(repository: transactionRepository, accounts: accounts, categories: categories, credit: credit, cashFlow: cashFlow, reporting: reporting)
+        let installments = InstallmentModel(repository: RemoteInstallmentRepository(transport: transport), transactions: transactionRepository, credit: credit, transactionList: transactions, cashFlow: cashFlow, reporting: reporting)
+        let reimbursements = ReimbursementModel(repository: RemoteReimbursementRepository(transport: transport), transactions: transactions, accounts: accounts, reporting: reporting)
+        let aiProposals = AIProposalModel(repository: RemoteAIProposalRepository(transport: transport), transactions: transactions, reporting: reporting, cashFlow: cashFlow)
         _connection = State(initialValue: ConnectionModel(client: SystemStatusClient(baseURL: baseURL, tokenStore: tokenStore)))
         _deviceSecurity = State(initialValue: DeviceSecurityModel(
             repository: RemoteDeviceSecurityRepository(transport: transport), tokenStore: tokenStore))
@@ -68,8 +69,8 @@ struct FiscalmacOSApp: App {
                     _ = await deviceSecurity.recoverPendingRotation()
                     await connection.refresh()
                     if case .connected = connection.phase {
-                        async let reportLoad: Void = reports.loadAll()
-                        async let overviewLoad: Void = overview.loadAll()
+                        async let reportLoad: Void = reports.loadSpending()
+                        async let overviewLoad: Void = overview.loadOverview()
                         async let cashFlowLoad: Void = cashFlow.load()
                         async let proposalLoad: Void = aiProposals.load()
                         async let settingsLoad: Void = aiSettings.load()
