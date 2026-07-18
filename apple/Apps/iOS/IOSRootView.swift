@@ -66,7 +66,7 @@ struct IOSRootView: View {
                         markReceived: { _ in morePath = [.reimbursements]; selection = .more }
                     )
                 }
-            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, deviceSecurity: deviceSecurity, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true })
+            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, deviceSecurity: deviceSecurity, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true })
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -143,6 +143,7 @@ private struct IOSMoreScreen: View {
     let installments: InstallmentModel
     let reimbursements: ReimbursementModel
     let reports: ReportingModel
+    let overview: ReportingModel
     let cashFlow: FutureCashFlowModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
@@ -202,7 +203,7 @@ private struct IOSMoreScreen: View {
                 case .creditAccount(let accountID):
                     IOSCreditAccountDetail(credit: credit, installments: installments, accountID: accountID, transactions: transactions, accounts: accounts, categories: categories, cashFlow: cashFlow)
                 case .reimbursements: IOSReimbursementsScreen(model: reimbursements, accounts: accounts)
-                case .reports(let lens): IOSReportsScreen(model: reports, initialLens: lens)
+                case .reports: IOSReportsScreen(model: reports)
                 case .cloudConnection:
                     IOSCloudConnectionScreen(
                         security: deviceSecurity,
@@ -245,10 +246,14 @@ private struct IOSMoreScreen: View {
     private func refreshCloudContent() async {
         await connection.refresh()
         guard case .connected = connection.phase else { return }
-        async let reportLoad: Void = reports.loadAll()
+        // Overview and spending reports live in separate ReportingModel instances (P18); refresh
+        // both here — loadAll() on one instance would leave the overview tab stale and let the two
+        // loads race each other's shared phase.
+        async let overviewLoad: Void = overview.loadOverview()
+        async let reportLoad: Void = reports.loadSpending()
         async let proposalLoad: Void = aiProposals.load()
         async let settingsLoad: Void = aiSettings.load()
-        _ = await (reportLoad, proposalLoad, settingsLoad)
+        _ = await (overviewLoad, reportLoad, proposalLoad, settingsLoad)
     }
     private func row(_ title: String, symbol: String, detail: String, color: Color) -> some View {
         HStack(spacing: 12) { FiscalIconTile(symbol, color: color); Text(title).font(.headline); Spacer(); Text(detail).font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(1); Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(FiscalColor.tertiary) }

@@ -247,9 +247,8 @@ public struct IOSReportingOverviewScreen: View {
 
 public struct IOSReportsScreen: View {
   let model: ReportingModel
-  public init(model: ReportingModel, initialLens: ReportLens = .spending) {
+  public init(model: ReportingModel) {
     self.model = model
-    _ = initialLens
   }
   public var body: some View {
     IOSSpendingReportContent(model: model)
@@ -799,23 +798,13 @@ private func reportColor(_ hex: String?, fallback: Color = FiscalColor.tertiary)
   }
 }
 
-@MainActor private func accountRows(_ values: [CashFlowAccountRow], model: ReportingModel) -> some View {
-  VStack(spacing: 0) {
-    ForEach(values) { row in
-      Button { model.lens = .cashFlow; Task { await model.loadDrillDown(accountID: row.accountID) } } label: {
-        HStack { Text(row.name).font(.subheadline.weight(.semibold)); Spacer(); Text("+\(Money(minorUnits: row.metrics.inflowMinor).formatted())").foregroundStyle(FiscalColor.income); Text("-\(Money(minorUnits: row.metrics.outflowMinor).formatted())").foregroundStyle(FiscalColor.expense); Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary).accessibilityHidden(true) }.padding(.vertical, 11)
-      }.buttonStyle(.plain); Divider().opacity(0.35)
-    }
-  }
-}
-
 @MainActor
 private func drillDownRows(_ page: ReportDrillDownPage, model: ReportingModel) -> some View {
   VStack(spacing: 0) {
     HStack {
       VStack(alignment: .leading, spacing: 2) {
         Text("贡献明细").font(.headline)
-        Text(model.lens == .spending ? "按原消费日期与分类归因" : "按实际现金账户变动")
+        Text("按原消费日期与分类归因")
           .font(.caption).foregroundStyle(FiscalColor.tertiary)
       }
       Spacer()
@@ -829,10 +818,7 @@ private func drillDownRows(_ page: ReportDrillDownPage, model: ReportingModel) -
     } else {
       ForEach(page.items) { item in
         HStack(spacing: 10) {
-          FiscalIconTile(
-            item.kind.symbol,
-            color: model.lens == .cashFlow && item.signedAmountMinor > 0
-              ? FiscalColor.income : FiscalColor.accent)
+          FiscalIconTile(item.kind.symbol, color: FiscalColor.accent)
           VStack(alignment: .leading, spacing: 2) {
             Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(2)
             Text(
@@ -841,13 +827,9 @@ private func drillDownRows(_ page: ReportDrillDownPage, model: ReportingModel) -
               .font(.caption).foregroundStyle(FiscalColor.tertiary).lineLimit(2)
           }
           Spacer()
-          Text(
-            Money(minorUnits: item.signedAmountMinor).formatted(
-              showPositiveSign: model.lens == .cashFlow && item.signedAmountMinor > 0))
+          Text(Money(minorUnits: item.signedAmountMinor).formatted())
             .font(.subheadline.bold())
-            .foregroundStyle(
-              model.lens == .cashFlow && item.signedAmountMinor > 0
-                ? FiscalColor.income : FiscalColor.text)
+            .foregroundStyle(FiscalColor.text)
         }.frame(minHeight: 52)
         Divider().padding(.leading, 45).opacity(0.35)
       }
