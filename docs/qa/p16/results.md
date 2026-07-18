@@ -55,3 +55,11 @@ H4 / M5 / M7 / L6 / L7 均为金额或记账写入路径。已完成：
 
 - 双端 run + 主流程 + 各修复点截图巡检、以及高危金额路径的真实写入手动核对，留用户在真机/模拟器完成（与 P12–P15「用户最终目视/真机验收后 tag」一致）。
 - v1.2.0 tag 待用户验收后打。
+
+## 发版记录（2026-07-18）
+
+- 用户裁定：跳过独立 review，直接发版；iOS 用户自装。
+- tag `v1.2.0` 已打并推送。
+- macOS 签名 Release Build 10：`xcodebuild -scheme FiscalmacOS -configuration Release` BUILD SUCCEEDED；安装前后 `codesign --verify --deep --strict` 均通过。
+- 换包：旧包（1.1.0 Build 9）经 `ditto` 备份为 `/Applications/Fiscal-build9-backup.app`，新包 `ditto` 安装至 `/Applications/Fiscal.app`，启动验证通过（1.2.0 / 10）。
+- 高危金额路径（H4/M5/M7/L6/L7）的真机手动核对转为发版后用户日常使用验证；如异常可用备份包回退。
