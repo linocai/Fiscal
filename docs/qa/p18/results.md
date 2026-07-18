@@ -30,7 +30,7 @@
 | Release bundle 版本 | macOS：`1.2.3 (12)`；iOS：`1.2.3 (12)` |
 | HZ 部署 dry run / apply | 通过：服务器以 revision `0be5165f4eec450d7833c4d5165e4ed114993ce3` 创建 release、备份、校验 Alembic head `20260718_0015`、切换并重启服务 |
 | HZ 冒烟 | 通过：服务器 readiness、公开 `/api/v1/health/live`、已授权 overview（10 条流水、4 条 `credit_due_events`）与消费分类 drill-down |
-| iPhone 安装 | Caeieo（iPhone 16）已安装 `com.linotsai.fiscal`；Kurisu（iPhone Air）两次失败（远程安装服务超时/IXRemoteError 5） |
+| iPhone 设备检查 | 两台均为 available/paired。Caeieo（iPhone 16）已安装 `com.linotsai.fiscal`；Kurisu（iPhone Air）的 Build 12 安装两次失败（远程安装服务超时/IXRemoteError 5），其既有 bundle 的启动也因锁屏被系统拒绝，故不能作为 Build 12 验收。 |
 | macOS 替换与视觉 | `/Applications/Fiscal-build11-backup.app` 已由 1.2.1 (11) 备份；`/Applications/Fiscal.app` 已替换为签名 1.2.3 (12) 并启动。重启旧进程后，生产总览截图见 [`screenshots/macos-overview.png`](screenshots/macos-overview.png)：现金余额、10 条流水与 4 条信用应还均可见且未裁切。 |
 
 ## 已知基线债务
@@ -41,7 +41,7 @@
 
 - 使用生产等价数据完成 iOS Simulator/macOS 总览、消费、分类下钻、4 条与超过 4 条应还、空/加载/错误和归档账户深链截图，并验证 1040×700、1280×820 Mac 窗口。
 - revision `0be5165f4eec450d7833c4d5165e4ed114993ce3` 已推送并部署至 HZ；备份、Alembic head、readiness、公开 liveness、已授权 overview 与消费下钻真实 API 均已验证。
-- macOS 1.2.3 (12) 已安装并能启动，保留 `/Applications/Fiscal-build11-backup.app` 作为 Build 11 回退；生产总览截图已留存。两台已配对 iPhone 的 Build 12 安装、启动和核心流程验收仍未完成：Caeieo 已安装但设备锁定，最近一次启动仍被系统拒绝；Kurisu 的远程安装协调服务不可用。解锁/恢复两台设备后重试，并将截图与部署 revision 追加至本文件。
+- macOS 1.2.3 (12) 已安装并能启动，保留 `/Applications/Fiscal-build11-backup.app` 作为 Build 11 回退；生产总览截图已留存。两台已配对 iPhone 的 Build 12 启动和核心流程验收仍未完成：两台最新启动尝试均因锁屏被系统拒绝；Kurisu 此前的 Build 12 远程安装还受安装协调服务不可用阻塞。请解锁两台 iPhone、保持与此 Mac 的可用连接后重试 Caeieo 启动及 Kurisu Build 12 安装/启动，并将截图追加至本文件；此前不得创建 tag。
 - 以上完成后才创建并推送 `v1.2.3` tag。
 
 ## 回退位置
