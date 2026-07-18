@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
@@ -57,6 +57,7 @@ class ReportingRepository:
         occurred_from: datetime | None = None,
         occurred_to_exclusive: datetime | None = None,
         kinds: set[str] | None = None,
+        excluded_category_ids: set[UUID] | None = None,
     ) -> list[LedgerTransaction]:
         statement = (
             select(LedgerTransaction)
@@ -69,6 +70,13 @@ class ReportingRepository:
             statement = statement.where(LedgerTransaction.occurred_at < occurred_to_exclusive)
         if kinds is not None:
             statement = statement.where(LedgerTransaction.kind.in_(kinds))
+        if excluded_category_ids:
+            statement = statement.where(
+                or_(
+                    LedgerTransaction.category_id.is_(None),
+                    LedgerTransaction.category_id.not_in(excluded_category_ids),
+                )
+            )
         statement = statement.order_by(
             LedgerTransaction.occurred_at.desc(), LedgerTransaction.id.desc()
         )
@@ -81,6 +89,7 @@ class ReportingRepository:
         occurred_to_exclusive: datetime,
         kinds: set[str],
         category_ids: set[UUID] | None,
+        excluded_category_ids: set[UUID] | None,
         account_id: UUID | None,
         cursor_time: datetime | None,
         cursor_id: UUID | None,
@@ -98,6 +107,13 @@ class ReportingRepository:
         )
         if category_ids is not None:
             statement = statement.where(LedgerTransaction.category_id.in_(category_ids))
+        if excluded_category_ids:
+            statement = statement.where(
+                or_(
+                    LedgerTransaction.category_id.is_(None),
+                    LedgerTransaction.category_id.not_in(excluded_category_ids),
+                )
+            )
         if account_id is not None:
             statement = statement.join(Posting).where(Posting.account_id == account_id)
         if cursor_time is not None and cursor_id is not None:
@@ -120,6 +136,7 @@ class ReportingRepository:
         occurred_to_exclusive: datetime,
         account_id: UUID | None,
         category_ids: set[UUID] | None,
+        excluded_category_ids: set[UUID] | None,
         cursor_time: datetime | None,
         cursor_id: UUID | None,
         limit: int,
@@ -139,6 +156,13 @@ class ReportingRepository:
             statement = statement.where(Posting.account_id == account_id)
         if category_ids is not None:
             statement = statement.where(LedgerTransaction.category_id.in_(category_ids))
+        if excluded_category_ids:
+            statement = statement.where(
+                or_(
+                    LedgerTransaction.category_id.is_(None),
+                    LedgerTransaction.category_id.not_in(excluded_category_ids),
+                )
+            )
         if cursor_time is not None and cursor_id is not None:
             statement = statement.where(
                 (LedgerTransaction.occurred_at < cursor_time)

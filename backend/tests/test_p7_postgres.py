@@ -270,6 +270,77 @@ async def test_reporting_lenses_overview_forecast_and_hierarchy(session: AsyncSe
     assert len(credit_due.cycle_ids) == 1
 
 
+async def test_balancing_category_is_excluded_from_every_report_caliber(
+    session: AsyncSession,
+) -> None:
+    bank, _cash, _credit, _root, _child, _income = await seed_reporting(session)
+    categories = CategoryService(session)
+    balancing = await categories.create(
+        CategoryDraft(
+            name="平账",
+            direction=CategoryDirection.EXPENSE,
+            icon="equal.circle",
+            color_hex="#777777",
+        )
+    )
+    balancing_child = await categories.create(
+        CategoryDraft(
+            name="迁移校准",
+            direction=CategoryDirection.EXPENSE,
+            icon="arrow.triangle.2.circlepath",
+            color_hex="#888888",
+            parent_id=balancing.id,
+        )
+    )
+    ledger = TransactionService(session)
+    for amount, category_id, title in (
+        (223, balancing.id, "直接平账"),
+        (777, balancing_child.id, "子分类平账"),
+    ):
+        await ledger.create(
+            TransactionDraft(
+                kind=TransactionKind.EXPENSE,
+                amount_minor=amount,
+                occurred_at="2026-07-12T12:00:00+08:00",  # type: ignore[arg-type]
+                title=title,
+                account_id=bank.id,
+                category_id=category_id,
+            ),
+            uuid4(),
+        )
+
+    reports = ReportingService(session)
+    spending = await reports.spending(date_from=date(2026, 7, 1), date_to=date(2026, 7, 31))
+    assert spending.gross_consumption_minor == 3_200
+    assert balancing.id not in {item.category_id for item in spending.categories}
+
+    cash_flow = await reports.cash_flow(
+        date_from=date(2026, 7, 1),
+        date_to=date(2026, 7, 31),
+        forecast_days=30,
+        today=date(2026, 7, 15),
+    )
+    assert (cash_flow.inflow_minor, cash_flow.outflow_minor, cash_flow.net_minor) == (
+        5_000,
+        1_700,
+        3_300,
+    )
+
+    for lens in (ReportLens.SPENDING, ReportLens.CASH_FLOW):
+        for category_id in (balancing.id, balancing_child.id):
+            drill_down = await reports.drill_down(
+                lens=lens,
+                date_from=date(2026, 7, 1),
+                date_to=date(2026, 7, 31),
+                category_id=category_id,
+                account_id=None,
+                cursor=None,
+                limit=50,
+            )
+            assert drill_down.items == []
+            assert drill_down.next_cursor is None
+
+
 async def test_report_drill_down_pagination_filters_and_shanghai_edges(
     session: AsyncSession,
 ) -> None:

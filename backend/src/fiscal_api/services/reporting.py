@@ -95,14 +95,20 @@ class _CashFlowProjection(TypedDict):
 
 
 class ReportingService:
+    EXCLUDED_CATEGORY_NAMES = frozenset({"平账"})
+
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.repository = ReportingRepository(session)
 
     async def spending(self, *, date_from: date | None, date_to: date | None) -> SpendingReport:
         start, end = self._range(date_from, date_to)
-        facts = await self._spending_facts(start, end)
         categories = await self.repository.categories()
+        facts = await self._spending_facts(
+            start,
+            end,
+            excluded_category_ids=self._excluded_category_ids(categories),
+        )
         totals = self._sum_spending(facts)
         uncategorized_facts = [item for item in facts if item.transaction.category_id is None]
         uncategorized = self._bucket(
@@ -280,6 +286,9 @@ class ReportingService:
         cursor_time, cursor_id = self._decode_cursor(cursor, lens)
         categories = await self.repository.categories()
         accounts = await self.repository.accounts()
+        excluded_category_ids = self._excluded_category_ids(categories)
+        if category_id in excluded_category_ids:
+            return ReportDrillDownPage(items=[], next_cursor=None)
         if lens is ReportLens.CASH_FLOW:
             category_ids: set[UUID] | None = None
             if category_id is not None:
@@ -294,6 +303,7 @@ class ReportingService:
                 occurred_to_exclusive=occurred_to,
                 account_id=account_id,
                 category_ids=category_ids,
+                excluded_category_ids=excluded_category_ids,
                 cursor_time=cursor_time,
                 cursor_id=cursor_id,
                 limit=limit,
@@ -321,6 +331,7 @@ class ReportingService:
             occurred_to_exclusive=occurred_to,
             kinds=SPENDING_KINDS,
             category_ids=category_ids,
+            excluded_category_ids=excluded_category_ids,
             account_id=account_id,
             cursor_time=cursor_time,
             cursor_id=cursor_id,
@@ -336,12 +347,19 @@ class ReportingService:
         )
         return ReportDrillDownPage(items=items, next_cursor=next_cursor)
 
-    async def _spending_facts(self, start: date, end: date) -> list[_SpendingFact]:
+    async def _spending_facts(
+        self,
+        start: date,
+        end: date,
+        *,
+        excluded_category_ids: set[UUID],
+    ) -> list[_SpendingFact]:
         occurred_from, occurred_to = self._bounds(start, end)
         transactions = await self.repository.transactions(
             occurred_from=occurred_from,
             occurred_to_exclusive=occurred_to,
             kinds=SPENDING_KINDS,
+            excluded_category_ids=excluded_category_ids,
         )
         return await self._facts_for_transactions(transactions)
 
@@ -384,8 +402,11 @@ class ReportingService:
 
     async def _cash_flow_actual(self, start: date, end: date) -> _CashFlowProjection:
         occurred_from, occurred_to = self._bounds(start, end)
+        categories = await self.repository.categories()
         transactions = await self.repository.transactions(
-            occurred_from=occurred_from, occurred_to_exclusive=occurred_to
+            occurred_from=occurred_from,
+            occurred_to_exclusive=occurred_to,
+            excluded_category_ids=self._excluded_category_ids(categories),
         )
         accounts = await self.repository.accounts()
         external_in = external_out = transfer_in = transfer_out = 0
@@ -471,6 +492,21 @@ class ReportingService:
             "accounts": account_rows,
             "trend": trend,
         }
+
+    @classmethod
+    def _excluded_category_ids(cls, categories: dict[UUID, Category]) -> set[UUID]:
+        excluded = {
+            item.id for item in categories.values() if item.name in cls.EXCLUDED_CATEGORY_NAMES
+        }
+        while True:
+            children = {
+                item.id
+                for item in categories.values()
+                if item.parent_id is not None and item.parent_id in excluded
+            }
+            if children <= excluded:
+                return excluded
+            excluded.update(children)
 
     async def _forecast(self, today: date, days: int) -> ForecastSummary:
         date_to_exclusive = today + timedelta(days=days)
