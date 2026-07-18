@@ -146,6 +146,15 @@ class CashFlowSystemReplace(APIModel):
         return value
 
 
+class CashFlowCreditCyclePart(APIModel):
+    cycle_id: UUID
+    remaining_minor: int
+    period_start: date
+    period_end: date
+    statement_date: date
+    due_date: date
+
+
 class CashFlowItemResponse(APIModel):
     id: str
     manual_item_id: UUID | None = None
@@ -168,6 +177,7 @@ class CashFlowItemResponse(APIModel):
     actual_date: date | None = None
     is_overdue: bool
     actions: list[CashFlowAction]
+    credit_cycle_parts: list[CashFlowCreditCyclePart] = []
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

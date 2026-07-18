@@ -11,10 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fiscal_api.api.p3_schemas import TransactionDraft
+from fiscal_api.api.p7_schemas import DebtCycleRow
 from fiscal_api.api.p13_schemas import (
     CashFlowAction,
     CashFlowActiveResponse,
     CashFlowCreateResponse,
+    CashFlowCreditCyclePart,
     CashFlowDraft,
     CashFlowHistoryResponse,
     CashFlowItemResponse,
@@ -415,26 +417,48 @@ class CashFlowService:
     ) -> list[CashFlowItemResponse]:
         result: list[CashFlowItemResponse] = []
         debt = await ReportingService(self.session).debt(as_of=today)
+        credit_groups: dict[tuple[UUID, date], list[DebtCycleRow]] = {}
         for cycle in debt.cycles:
             if cycle.remaining_minor <= 0 or (
                 account_id is not None and cycle.account_id != account_id
             ):
                 continue
+            credit_groups.setdefault((cycle.account_id, cycle.due_date), []).append(cycle)
+        for (credit_account_id, due_date), untyped_cycles in credit_groups.items():
+            cycles = sorted(untyped_cycles, key=lambda item: (item.statement_date, item.cycle_id))
+            first = cycles[0]
+            amount = self._sum(item.remaining_minor for item in cycles)
+            item_id = (
+                f"credit_cycle:{first.cycle_id}"
+                if len(cycles) == 1
+                else f"credit_cycles:{credit_account_id}:{due_date.isoformat()}"
+            )
             result.append(
                 CashFlowItemResponse(
-                    id=f"credit_cycle:{cycle.cycle_id}",
+                    id=item_id,
                     system_kind=CashFlowSystemKind.CREDIT_CYCLE,
-                    system_reference_id=cycle.cycle_id,
-                    title=f"{cycle.account_name} 账单应还",
+                    system_reference_id=first.cycle_id,
+                    title=f"{first.account_name} 账单应还",
                     direction=CashFlowDirection.OUTFLOW,
-                    planned_amount_minor=cycle.remaining_minor,
-                    expected_date=cycle.due_date,
-                    account_id=cycle.account_id,
+                    planned_amount_minor=amount,
+                    expected_date=due_date,
+                    account_id=credit_account_id,
                     status=CashFlowStatus.CONFIRMED,
                     source="system",
                     version=1,
-                    is_overdue=cycle.due_date < today,
+                    is_overdue=due_date < today,
                     actions=[CashFlowAction.CONFIRM_REPAYMENT],
+                    credit_cycle_parts=[
+                        CashFlowCreditCyclePart(
+                            cycle_id=item.cycle_id,
+                            remaining_minor=item.remaining_minor,
+                            period_start=item.period_start,
+                            period_end=item.period_end,
+                            statement_date=item.statement_date,
+                            due_date=item.due_date,
+                        )
+                        for item in cycles
+                    ],
                 )
             )
         party_values: dict[UUID, tuple[ReimbursementFact, int]] = {}

@@ -38,6 +38,21 @@ public struct FutureCashFlowSummary: Codable, Sendable, Equatable {
   }
 }
 
+public struct FutureCashFlowCreditCyclePart: Codable, Sendable, Equatable, Identifiable {
+  public var id: UUID { cycleID }
+  public let cycleID: UUID
+  public let remainingMinor: Int64
+  public let periodStart: String
+  public let periodEnd: String
+  public let statementDate: String
+  public let dueDate: String
+  enum CodingKeys: String, CodingKey {
+    case cycleID = "cycle_id"; case remainingMinor = "remaining_minor"
+    case periodStart = "period_start"; case periodEnd = "period_end"
+    case statementDate = "statement_date"; case dueDate = "due_date"
+  }
+}
+
 public struct FutureCashFlowItem: Codable, Sendable, Equatable, Identifiable {
   public let id: String
   public let manualItemID: UUID?
@@ -60,10 +75,12 @@ public struct FutureCashFlowItem: Codable, Sendable, Equatable, Identifiable {
   public let actualDate: String?
   public let isOverdue: Bool
   public let actions: [FutureCashFlowAction]
+  public var creditCycleParts: [FutureCashFlowCreditCyclePart] = []
   public let createdAt: Date?
   public let updatedAt: Date?
   enum CodingKeys: String, CodingKey {
     case id, title, note, direction, status, source, version, actions
+    case creditCycleParts = "credit_cycle_parts"
     case manualItemID = "manual_item_id"; case systemKind = "system_kind"
     case systemReferenceID = "system_reference_id"; case seriesID = "series_id"
     case plannedAmountMinor = "planned_amount_minor"; case expectedDate = "expected_date"

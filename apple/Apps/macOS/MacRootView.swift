@@ -71,7 +71,10 @@ struct MacRootView: View {
                 } else if section == .cashFlow {
                     MacFutureCashFlowScreen(
                         model: cashFlow, accounts: accounts, categories: categories,
-                        confirmRepayment: { repaymentItem = $0 },
+                        confirmRepayment: {
+                            if $0.creditCycleParts.count > 1 { creditCycleItem = $0 }
+                            else { repaymentItem = $0 }
+                        },
                         viewCreditCycle: { creditCycleItem = $0 },
                         markReceived: { _ in section = .reimbursement }
                     )
@@ -121,7 +124,12 @@ struct MacRootView: View {
             .frame(width: 560, height: 680)
         }
         .sheet(item: $creditCycleItem) { item in
-            if let cycleID = item.systemReferenceID {
+            if item.creditCycleParts.count > 1 {
+                CreditCashFlowGroupSheet(
+                    item: item, credit: credit, transactions: transactions,
+                    accounts: accounts, categories: categories)
+                    .frame(width: 560, height: 680)
+            } else if let cycleID = item.systemReferenceID {
                 CreditCycleProjectionSheet(credit: credit, cycleID: cycleID)
                     .frame(width: 560, height: 680)
             }

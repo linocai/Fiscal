@@ -257,3 +257,44 @@ async def test_atomic_failure_rolls_back_purchase_and_schedule_change_rebinds(
         if value.system_kind is CashFlowSystemKind.CREDIT_CYCLE
     )
     assert (item.expected_date, item.planned_amount_minor) == (date(2026, 8, 8), 12_345)
+
+
+async def test_cash_flow_groups_opening_and_regular_cycles_by_account_and_due_date(
+    session: AsyncSession,
+) -> None:
+    account = await AccountService(session).create(
+        AccountDraft(
+            name="同日汇总卡",
+            kind=AccountKind.CREDIT,
+            opening_balance_minor=5_000,
+            credit_limit_minor=100_000,
+            statement_day=1,
+            due_day=8,
+            cycle_mode=CreditCycleMode.PREVIOUS_CALENDAR_MONTH,
+            opening_balance_as_of_date=date(2026, 7, 1),
+            opening_due_date=date(2026, 8, 8),
+        )
+    )
+    category = await expense_category(session)
+    await TransactionService(session).create(
+        TransactionDraft(
+            kind=TransactionKind.CREDIT_PURCHASE,
+            amount_minor=3_000,
+            occurred_at=datetime(2026, 7, 15, 4, tzinfo=UTC),
+            title="同日普通消费",
+            account_id=account.id,
+            category_id=category.id,
+        ),
+        uuid4(),
+    )
+    items = [
+        item
+        for item in (await CashFlowService(session).active(account_id=account.id)).items
+        if item.system_kind is CashFlowSystemKind.CREDIT_CYCLE
+    ]
+    assert len(items) == 1
+    assert (items[0].expected_date, items[0].planned_amount_minor) == (
+        date(2026, 8, 8),
+        8_000,
+    )
+    assert sorted(part.remaining_minor for part in items[0].credit_cycle_parts) == [3_000, 5_000]

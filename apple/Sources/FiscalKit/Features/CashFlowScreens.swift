@@ -247,6 +247,76 @@ public struct MacFutureCashFlowScreen: View {
 }
 #endif
 
+public struct CreditCashFlowGroupSheet: View {
+  @Environment(\.dismiss) private var dismiss
+  let item: FutureCashFlowItem
+  let credit: CreditModel
+  let transactions: TransactionsModel
+  let accounts: AccountsModel
+  let categories: CategoriesModel
+  @State private var viewing: FutureCashFlowCreditCyclePart?
+  @State private var repaying: FutureCashFlowCreditCyclePart?
+
+  public init(
+    item: FutureCashFlowItem, credit: CreditModel, transactions: TransactionsModel,
+    accounts: AccountsModel, categories: CategoriesModel
+  ) {
+    self.item = item; self.credit = credit; self.transactions = transactions
+    self.accounts = accounts; self.categories = categories
+  }
+
+  public var body: some View {
+    NavigationStack {
+      ScrollView {
+        VStack(alignment: .leading, spacing: 14) {
+          FiscalCard(radius: 18) {
+            VStack(alignment: .leading, spacing: 7) {
+              Text("同日汇总应还").font(.caption).foregroundStyle(FiscalColor.tertiary)
+              Text(Money(minorUnits: item.plannedAmountMinor).formatted())
+                .font(.system(size: 30, weight: .bold)).foregroundStyle(FiscalColor.debt)
+              Text("\(item.expectedDate) · \(item.creditCycleParts.count) 个真实账期")
+                .font(.caption).foregroundStyle(FiscalColor.secondary)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+          }
+          Text("账期组成").font(.headline)
+          ForEach(item.creditCycleParts) { part in
+            FiscalCard(radius: 18) {
+              VStack(alignment: .leading, spacing: 9) {
+                HStack {
+                  VStack(alignment: .leading, spacing: 3) {
+                    Text("\(part.periodStart)–\(part.periodEnd)").font(.subheadline.weight(.semibold))
+                    Text("账单日 \(part.statementDate) · 还款日 \(part.dueDate)")
+                      .font(.caption).foregroundStyle(FiscalColor.tertiary)
+                  }
+                  Spacer()
+                  Text(Money(minorUnits: part.remainingMinor).formatted()).fontWeight(.semibold)
+                }
+                HStack {
+                  Button("查看账期") { viewing = part }.buttonStyle(.bordered)
+                  Button("去还款") { repaying = part }.buttonStyle(.borderedProminent)
+                }
+              }
+            }
+          }
+          Text("同一还款日只在现金流中显示一次；还款仍逐个真实账期生成流水。")
+            .font(.caption).foregroundStyle(FiscalColor.tertiary)
+        }.padding(16)
+      }
+      .navigationTitle(item.title)
+      .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+      .sheet(item: $viewing) { part in
+        CreditCycleProjectionSheet(credit: credit, cycleID: part.cycleID)
+      }
+      .sheet(item: $repaying) { part in
+        TransactionEditorSheet(
+          transactions: transactions, accounts: accounts, categories: categories,
+          credit: credit, initialKind: .repayment, creditAccountID: item.accountID,
+          cycleID: part.cycleID, amountMinor: part.remainingMinor)
+      }
+    }
+  }
+}
+
 public struct CreditCycleProjectionSheet: View {
   @Environment(\.dismiss) private var dismiss
   @Bindable var credit: CreditModel

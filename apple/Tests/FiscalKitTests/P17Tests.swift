@@ -49,4 +49,13 @@ struct FiscalKitP17Tests {
     #expect(object["statement_day"] as? Int == 1)
     #expect(object["due_day"] as? Int == 8)
   }
+
+  @Test("Credit cash flow carries separately repayable cycle parts")
+  func groupedCreditProjection() throws {
+    let data = Data(#"{"id":"credit_cycles:00000000-0000-0000-0000-000000017001:2026-08-08","manual_item_id":null,"system_kind":"credit_cycle","system_reference_id":"00000000-0000-0000-0000-000000017011","series_id":null,"title":"工商3576 账单应还","note":null,"direction":"outflow","planned_amount_minor":194472,"expected_date":"2026-08-08","account_id":"00000000-0000-0000-0000-000000017001","destination_account_id":null,"category_id":null,"status":"confirmed","source":"system","version":1,"linked_transaction_id":null,"actual_amount_minor":null,"actual_date":null,"is_overdue":false,"actions":["confirm_repayment"],"credit_cycle_parts":[{"cycle_id":"00000000-0000-0000-0000-000000017011","remaining_minor":179767,"period_start":"2026-05-15","period_end":"2026-05-15","statement_date":"2026-05-15","due_date":"2026-08-08"},{"cycle_id":"00000000-0000-0000-0000-000000017012","remaining_minor":14705,"period_start":"2026-06-26","period_end":"2026-07-25","statement_date":"2026-07-25","due_date":"2026-08-08"}],"created_at":null,"updated_at":null}"#.utf8)
+    let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+    let item = try decoder.decode(FutureCashFlowItem.self, from: data)
+    #expect(item.creditCycleParts.count == 2)
+    #expect(item.creditCycleParts.map(\.remainingMinor).reduce(0, +) == item.plannedAmountMinor)
+  }
 }
