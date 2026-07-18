@@ -200,8 +200,12 @@ class OverviewReport(APIModel):
     meta: ReportMeta
     account_value_minor: int
     current_credit_debt_minor: int
+    monthly_income_minor: int
     reimbursement_outstanding_minor: int
     spending: OverviewSpendingSummary
+    top_spending_categories: list[SpendingCategoryRoot] = Field(
+        default_factory=lambda: list[SpendingCategoryRoot]()
+    )
     cash_flow: OverviewCashFlowSummary
     uncategorized_count: int
     uncategorized_amount_minor: int

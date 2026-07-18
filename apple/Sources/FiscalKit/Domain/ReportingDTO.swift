@@ -410,8 +410,10 @@ public struct OverviewReport: Codable, Sendable, Equatable {
   public let meta: ReportMeta
   public let accountValueMinor: Int64
   public let currentCreditDebtMinor: Int64
+  public let monthlyIncomeMinor: Int64
   public let reimbursementOutstandingMinor: Int64
   public let spending: SpendingMetrics
+  public let topSpendingCategories: [SpendingCategoryRoot]
   public let cashFlow: OverviewCashFlow
   public let uncategorizedCount: Int
   public let uncategorizedAmountMinor: Int64
@@ -422,7 +424,9 @@ public struct OverviewReport: Codable, Sendable, Equatable {
     case meta
     case accountValueMinor = "account_value_minor"
     case currentCreditDebtMinor = "current_credit_debt_minor"
+    case monthlyIncomeMinor = "monthly_income_minor"
     case reimbursementOutstandingMinor = "reimbursement_outstanding_minor"
+    case topSpendingCategories = "top_spending_categories"
     case spending
     case cashFlow = "cash_flow"
     case uncategorizedCount = "uncategorized_count"

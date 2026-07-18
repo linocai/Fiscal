@@ -62,7 +62,11 @@ struct MacRootView: View {
                         guard let destination else { section = .accounts; return }
                         reports.lens = destination
                         section = destination == .cashFlow ? .cashFlow : .reports
-                    }, openCreditAccount: { accountID in selectedCreditAccountID = accountID; section = .accounts })
+                    }, openCreditAccount: { accountID in selectedCreditAccountID = accountID; section = .accounts }, openUncategorized: {
+                        transactions.classification = .uncategorized
+                        section = .transactions
+                        Task { await transactions.load() }
+                    })
                 } else if section == .accounts {
                     MacAccountsCreditScreen(accounts: accounts, credit: credit, installments: installments, transactions: transactions, categories: categories, cashFlow: cashFlow, initialCreditAccountID: selectedCreditAccountID)
                 } else if section == .transactions {

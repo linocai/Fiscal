@@ -258,6 +258,8 @@ async def test_reporting_lenses_overview_forecast_and_hierarchy(session: AsyncSe
     # Overview cash flow is the independent future-action projection, not the historical month.
     # P18 keeps that legacy field compatible while adding the credit-only due aggregation below.
     assert overview.current_credit_debt_minor == debt.current_credit_debt_minor
+    assert overview.monthly_income_minor == 5_000
+    assert [item.category_id for item in overview.top_spending_categories] == [root.id]
     assert overview.reimbursement_outstanding_minor == 600
     assert len(overview.recent_transactions) <= 10
     assert len(overview.credit_due_events) == 1

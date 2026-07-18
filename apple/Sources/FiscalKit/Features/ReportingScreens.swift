@@ -168,9 +168,14 @@ public struct IOSReportingOverviewScreen: View {
         }
       }
     }.buttonStyle(.plain)
-    Button(action: openAccounts) { FiscalCard(radius: 18) {
-      ReportMetric(label: "现金余额", amount: value.accountValueMinor, color: FiscalColor.income, detail: "现金与储蓄卡余额")
-    } }.buttonStyle(.plain)
+    HStack(spacing: 12) {
+      Button(action: openAccounts) { FiscalCard(radius: 18) {
+        ReportMetric(label: "现金余额", amount: value.accountValueMinor, color: FiscalColor.income, detail: "现金与储蓄卡")
+      } }.buttonStyle(.plain)
+      FiscalCard(radius: 18) {
+        ReportMetric(label: "本月收入", amount: value.monthlyIncomeMinor, color: FiscalColor.income, detail: "工资、租金等收入")
+      }
+    }
     if !value.coverage.isComplete {
       Button(action: openUncategorized) {
         HStack(spacing: 10) {
@@ -187,6 +192,7 @@ public struct IOSReportingOverviewScreen: View {
       .buttonStyle(.plain)
       .accessibilityHint("打开待归类流水")
     }
+    OverviewSpendingRankingCard(value: value, openReport: { openReport(.spending) })
     if !value.creditDueEvents.isEmpty {
       VStack(alignment: .leading, spacing: 9) {
         Text("未来 30 天信用应还").font(.headline)
@@ -280,13 +286,71 @@ private struct IOSSpendingSummary: View {
   }
 }
 
+private struct OverviewSpendingRankingCard: View {
+  let value: OverviewReport
+  let openReport: () -> Void
+  var fillsHeight = false
+
+  var body: some View {
+    Button(action: openReport) {
+      FiscalCard(radius: 15) {
+        VStack(alignment: .leading, spacing: 10) {
+          HStack {
+            Text("本月消费排行").font(.headline)
+            Spacer()
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(FiscalColor.tertiary)
+          }
+          if value.topSpendingCategories.isEmpty {
+            EmptyInline(symbol: "chart.bar", title: "本月暂无已归类消费")
+          } else {
+            ForEach(Array(value.topSpendingCategories.prefix(3).enumerated()), id: \.element.id) { index, category in
+              if index > 0 { Divider().opacity(0.35) }
+              HStack(spacing: 10) {
+                Text(String(index + 1)).font(.caption.bold()).foregroundStyle(FiscalColor.accent)
+                  .frame(width: 22, height: 22).background(FiscalColor.accent.opacity(0.10), in: .circle)
+                Text(category.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 2) {
+                  Text(Money(minorUnits: category.personalRealizedMinor).formatted())
+                    .font(.subheadline.weight(.semibold))
+                  Text("\(share(category.personalRealizedMinor)) · \(category.transactionCount) 笔")
+                    .font(.caption2).foregroundStyle(FiscalColor.tertiary)
+                }
+              }
+              .padding(.vertical, 4)
+            }
+          }
+        }
+        .frame(
+          maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil,
+          alignment: .topLeading)
+      }
+    }
+    .buttonStyle(.plain)
+    .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil)
+  }
+
+  private func share(_ amount: Int64) -> String {
+    guard value.spending.personalRealizedMinor > 0 else { return "—" }
+    return "\(Int((Double(amount) * 100 / Double(value.spending.personalRealizedMinor)).rounded()))%"
+  }
+}
+
 #if os(macOS)
 public struct MacReportingOverviewScreen: View {
   let model: ReportingModel
   let navigate: (ReportLens?) -> Void
   let openCreditAccount: (UUID) -> Void
+  let openUncategorized: () -> Void
   @State private var showAllCreditDues = false
-  public init(model: ReportingModel, navigate: @escaping (ReportLens?) -> Void, openCreditAccount: @escaping (UUID) -> Void = { _ in }) { self.model = model; self.navigate = navigate; self.openCreditAccount = openCreditAccount }
+  public init(
+    model: ReportingModel, navigate: @escaping (ReportLens?) -> Void,
+    openCreditAccount: @escaping (UUID) -> Void = { _ in },
+    openUncategorized: @escaping () -> Void = {}
+  ) {
+    self.model = model; self.navigate = navigate; self.openCreditAccount = openCreditAccount
+    self.openUncategorized = openUncategorized
+  }
   public var body: some View {
     GeometryReader { proxy in
       let compact = proxy.size.width < 1_020
@@ -308,16 +372,19 @@ public struct MacReportingOverviewScreen: View {
                 repeating: GridItem(.flexible(), spacing: 12), count: compact ? 2 : 4),
               spacing: 12
             ) {
-              metricButton("本月自己承担", value.spending.personalRealizedMinor, FiscalColor.text) { navigate(.spending) }
-              metricButton("现金余额", value.accountValueMinor, FiscalColor.income) { navigate(nil) }
-              metricButton("当前信用负债", value.currentCreditDebtMinor, FiscalColor.debt) { navigate(nil) }
-              metricButton("待归类", value.uncategorizedAmountMinor, FiscalColor.reimbursement) { navigate(.spending) }
+              metricButton("本月消费", value.spending.grossConsumptionMinor, FiscalColor.text, detail: "查看消费报表") { navigate(.spending) }
+              metricButton("现金余额", value.accountValueMinor, FiscalColor.income, detail: "现金与储蓄卡余额") { navigate(nil) }
+              metricButton("当前信用负债", value.currentCreditDebtMinor, FiscalColor.debt, detail: "查看信用账户") { navigate(nil) }
+              metricCard("本月收入", value.monthlyIncomeMinor, FiscalColor.income, detail: "工资、租金等真实收入")
+            }
+            if value.uncategorizedCount > 0 {
+              uncategorizedNotice(value)
             }
             if compact {
               VStack(spacing: 16) {
                 recentCard(value)
                 HStack(alignment: .top, spacing: 16) {
-                  spendingCard(value)
+                  OverviewSpendingRankingCard(value: value, openReport: { navigate(.spending) }, fillsHeight: true)
                   forecastCard(value)
                 }
               }
@@ -325,7 +392,7 @@ public struct MacReportingOverviewScreen: View {
               HStack(alignment: .top, spacing: 16) {
                 recentCard(value)
                 VStack(spacing: 16) {
-                  spendingCard(value)
+                  OverviewSpendingRankingCard(value: value, openReport: { navigate(.spending) }, fillsHeight: true)
                   forecastCard(value)
                 }
                 .frame(width: min(340, max(280, proxy.size.width * 0.23)))
@@ -352,8 +419,26 @@ public struct MacReportingOverviewScreen: View {
       }
     }
   }
-  private func metricButton(_ label: String, _ amount: Int64, _ color: Color, showsSign: Bool = false, action: @escaping () -> Void) -> some View {
-    Button(action: action) { FiscalCard(radius: 15) { ReportMetric(label: label, amount: amount, color: color, detail: "查看口径与明细", showsSign: showsSign) } }.buttonStyle(.plain)
+  private func metricButton(_ label: String, _ amount: Int64, _ color: Color, detail: String, showsSign: Bool = false, action: @escaping () -> Void) -> some View {
+    Button(action: action) { metricCard(label, amount, color, detail: detail, showsSign: showsSign) }.buttonStyle(.plain)
+  }
+  private func metricCard(_ label: String, _ amount: Int64, _ color: Color, detail: String, showsSign: Bool = false) -> some View {
+    FiscalCard(radius: 15) { ReportMetric(label: label, amount: amount, color: color, detail: detail, showsSign: showsSign) }
+  }
+  private func uncategorizedNotice(_ value: OverviewReport) -> some View {
+    Button(action: openUncategorized) {
+      HStack(spacing: 9) {
+        Image(systemName: "questionmark.circle.fill").accessibilityHidden(true)
+        Text("\(value.uncategorizedCount) 笔待归类 · \(Money(minorUnits: value.uncategorizedAmountMinor).formatted())")
+        Spacer()
+        Text("去处理").foregroundStyle(FiscalColor.accent)
+        Image(systemName: "chevron.right").accessibilityHidden(true)
+      }
+      .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.debt).padding(11)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(FiscalColor.debt.opacity(0.09), in: .rect(cornerRadius: 12))
+    }
+    .buttonStyle(.plain)
   }
   private func recentCard(_ value: OverviewReport) -> some View {
     FiscalCard(radius: 15) {
@@ -370,20 +455,6 @@ public struct MacReportingOverviewScreen: View {
           }
           .frame(height: 32)
         }
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-  }
-  private func spendingCard(_ value: OverviewReport) -> some View {
-    FiscalCard(radius: 15) {
-      VStack(alignment: .leading, spacing: 9) {
-        Text("消费口径").font(.headline)
-        Spacer(minLength: 8)
-        ReportMetric(label: "本月自己承担", amount: value.spending.personalRealizedMinor, color: FiscalColor.text)
-        Text("已扣商家退款和已到账报销；未到账报销仍计入本人承担。")
-          .font(.caption).foregroundStyle(FiscalColor.tertiary)
-        Spacer(minLength: 8)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }

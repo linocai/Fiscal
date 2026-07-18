@@ -219,6 +219,7 @@ class ReportingService:
     async def overview(self, *, month: str | None) -> OverviewReport:
         start, end = self._month_range(month)
         spending = await self.spending(date_from=start, date_to=end)
+        monthly_income = await self._monthly_income_minor(start, end)
         cash = await self.cash_flow(
             date_from=start,
             date_to=end,
@@ -251,8 +252,10 @@ class ReportingService:
             meta=self._meta(start, end),
             account_value_minor=account_value,
             current_credit_debt_minor=debt.current_credit_debt_minor,
+            monthly_income_minor=monthly_income,
             reimbursement_outstanding_minor=reimbursement_outstanding,
             spending=OverviewSpendingSummary(**self._spending_values(spending)),
+            top_spending_categories=spending.categories[:3],
             cash_flow=OverviewCashFlowSummary(
                 inflow_minor=future_cash.summary.inflow_minor,
                 outflow_minor=future_cash.summary.outflow_minor,
@@ -267,6 +270,31 @@ class ReportingService:
                 today=self._today(),
             ),
         )
+
+    async def _monthly_income_minor(self, start: date, end: date) -> int:
+        occurred_from, occurred_to = self._bounds(start, end)
+        categories = await self.repository.categories()
+        transactions = await self.repository.transactions(
+            occurred_from=occurred_from,
+            occurred_to_exclusive=occurred_to,
+            kinds={TransactionKind.INCOME.value},
+            excluded_category_ids=self._excluded_category_ids(categories),
+        )
+        accounts = await self.repository.accounts()
+        total = 0
+        for transaction in transactions:
+            for posting in transaction.postings:
+                account = accounts.get(posting.account_id)
+                if (
+                    account is not None
+                    and account.kind in {AccountKind.CASH.value, AccountKind.DEBIT.value}
+                    and posting.amount_minor > 0
+                ):
+                    total = checked_int64(
+                        total + posting.amount_minor,
+                        label="monthly income",
+                    )
+        return total
 
     async def drill_down(
         self,
