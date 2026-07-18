@@ -28,6 +28,9 @@
 | macOS/iOS Release build | 通过 |
 | `codesign --verify --deep --strict` | macOS 与 iOS Release `.app` 通过 |
 | Release bundle 版本 | macOS：`1.2.3 (12)`；iOS：`1.2.3 (12)` |
+| 部署 dry run | 通过：revision `0309bd957e05de46824b4e23255f82b0201786da`，未修改生产状态 |
+| iPhone 安装 | Caeieo（iPhone 16）已安装 `com.linotsai.fiscal`；Kurisu（iPhone Air）两次失败（远程安装服务超时/IXRemoteError 5） |
+| macOS 替换 | `/Applications/Fiscal-build11-backup.app` 已由 1.2.1 (11) 备份；`/Applications/Fiscal.app` 已替换为签名 1.2.3 (12) 并启动（PID 823） |
 
 ## 已知基线债务
 
@@ -36,8 +39,8 @@
 ## 发布前仍需人工证据
 
 - 使用生产等价数据完成 iOS Simulator/macOS 总览、消费、分类下钻、4 条与超过 4 条应还、空/加载/错误和归档账户深链截图，并验证 1040×700、1280×820 Mac 窗口。
-- 提交并推送已验证 revision；执行 HZ 部署脚本 dry run 与 apply，核对备份、readiness、公开 liveness、已授权 overview 与消费下钻真实 API。
-- 备份并替换 `/Applications/Fiscal.app`，完成两台已配对 iPhone 的 Build 12 安装、启动和核心流程验收；将截图与部署 revision 追加至本文件。
+- revision `0309bd957e05de46824b4e23255f82b0201786da` 已推送，部署 dry run 已完成。HZ operator SSH target 未写入仓库，必须在已授权 HZ 主机以该 revision 运行 `sudo infra/production/scripts/deploy.sh --source /path/to/Fiscal --apply`；随后核对备份、readiness、公开 liveness、已授权 overview 与消费下钻真实 API。
+- macOS 1.2.3 (12) 已安装并能启动，保留 `/Applications/Fiscal-build11-backup.app` 作为 Build 11 回退。仍须完成其生产总览/消费下钻截图。两台已配对 iPhone 的 Build 12 安装、启动和核心流程验收仍未完成：Caeieo 已安装但设备锁定，启动被系统拒绝；Kurisu 的远程安装协调服务不可用。解锁/恢复两台设备后重试，并将截图与部署 revision 追加至本文件。
 - 以上完成后才创建并推送 `v1.2.3` tag。
 
 ## 回退位置
