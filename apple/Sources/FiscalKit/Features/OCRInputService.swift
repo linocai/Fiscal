@@ -86,7 +86,7 @@ public enum OCRInputError: Error, LocalizedError, Sendable, Equatable {
     case .photoAccessDenied: "Fiscal 没有照片读取权限，请在系统设置中允许访问照片。"
     case .photoAccessRestricted: "当前设备限制了照片访问，无法读取最新截图。"
     case .noScreenshot: "可访问的照片中没有截图；若使用受限访问，请先把目标截图加入允许列表。"
-    case .screenshotTooOld: "最新截图已超过 10 分钟，请重新截屏或直接把图片传给快捷指令。"
+    case .screenshotTooOld: "最新截图已超过 10 分钟，请重新截屏后再运行快捷指令。"
     case .screenshotUnavailable: "最新截图暂时无法读取，请确认它已从 iCloud 下载。"
     case .invalidImage: "传入的图片无法读取。"
     case .noText: "截图中没有识别到文字。"

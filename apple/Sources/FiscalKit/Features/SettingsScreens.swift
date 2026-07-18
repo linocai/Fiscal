@@ -310,7 +310,7 @@ public struct CaptureSourceSettingsCard: View {
           VStack(alignment: .leading, spacing: 8) {
             Label("Back Tap 需手工配置", systemImage: "hand.tap")
               .font(.subheadline.weight(.semibold))
-            Text("推荐在快捷指令中先执行“截屏”，再把图片传给“用截图记账”；随后到系统设置 → 辅助功能 → 触控 → 轻点背面绑定该快捷指令。Fiscal 无法读取或替你修改 Back Tap 状态。")
+            Text("推荐在快捷指令中先执行“截屏”，再执行无需传参的“用截图记账”；Fiscal 会自行读取最近 10 分钟内的最新截图。随后到系统设置 → 辅助功能 → 触控 → 轻点背面绑定该快捷指令。Fiscal 无法读取或替你修改 Back Tap 状态。")
               .font(.caption).foregroundStyle(FiscalColor.tertiary)
               .fixedSize(horizontal: false, vertical: true)
           }

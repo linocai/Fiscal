@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from typing import Protocol
+from urllib.parse import urlparse
 
 import httpx
 from pydantic import ValidationError
@@ -132,7 +133,7 @@ class OpenAICompatibleProvider:
 
     def _payload(self, request: AIParseRequest) -> dict[str, object]:
         data = request.model_dump(mode="json")
-        return {
+        payload: dict[str, object] = {
             "model": self.model_id,
             "temperature": 0,
             "max_tokens": 1_000,
@@ -158,6 +159,13 @@ class OpenAICompatibleProvider:
                 },
             ],
         }
+        hostname = (urlparse(self.base_url).hostname or "").lower()
+        if hostname == "bigmodel.cn" or hostname.endswith(".bigmodel.cn"):
+            # GLM-5.x enables chain-of-thought by default. This endpoint is a bounded JSON
+            # extraction task, so spending the response budget on reasoning can leave an empty
+            # or truncated `content` field that cannot satisfy the schema.
+            payload["thinking"] = {"type": "disabled"}
+        return payload
 
 
 def build_ai_provider(settings: Settings) -> AIProvider:

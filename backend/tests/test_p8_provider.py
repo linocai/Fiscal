@@ -108,6 +108,25 @@ async def test_provider_treats_prompt_injection_as_bounded_data() -> None:
     assert result.amount_minor == 2_000
 
 
+async def test_bigmodel_payload_disables_default_thinking_for_json_extraction() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["thinking"] == {"type": "disabled"}
+        assert payload["response_format"] == {"type": "json_object"}
+        return envelope(valid_result())
+
+    bigmodel = OpenAICompatibleProvider(
+        base_url="https://open.bigmodel.cn/api/paas/v4",
+        model="glm-5.2",
+        api_key=SECRET,
+        timeout_seconds=1,
+        max_response_bytes=4_096,
+        transport=httpx.MockTransport(handler),
+    )
+    result = await bigmodel.parse(parse_request())
+    assert result.amount_minor == 2_000
+
+
 @pytest.mark.parametrize("status", [429, 500, 503])
 async def test_provider_maps_upstream_failure_without_leaking_body(status: int) -> None:
     async def handler(_request: httpx.Request) -> httpx.Response:
