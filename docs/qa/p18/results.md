@@ -10,6 +10,7 @@
 - 消费根/子分类均按 `personal_realized_minor` 降序，稳定分类顺序只用于并列时打破平局。
 - 「平账」分类及其所有后代只保留为账本和余额事实，从消费、现金流统计、总览消费及两种口径的明细下钻中统一排除。
 - iOS/macOS 均展示现金余额、4 条内联信用应还和超过 4 条的完整列表；信用应还进入相应信用账户。报表仅消费口径，支持月份、分类金额/占比/笔数和流水下钻。
+- 总览主卡固定为本月消费、现金余额、当前信用负债、本月真实 `income` 收入；待归类只在非零时显示处理提醒。消费排行复用消费报表排序与实际个人承担口径，展示 Top 3 的金额、占比和笔数。
 - 写入后由共享 `ReportingInvalidationCoordinator` 同时刷新总览与消费报表；消费选月不因总览刷新改变。
 
 ## 自动门禁
@@ -29,10 +30,10 @@
 | macOS/iOS Release build | 通过 |
 | `codesign --verify --deep --strict` | macOS 与 iOS Release `.app` 通过 |
 | Release bundle 版本 | macOS：`1.2.3 (12)`；iOS：`1.2.3 (12)` |
-| HZ 部署 dry run / apply | 通过：平账口径修复以 revision `bf23c4ee83f4de8819c0244363a42243f0396854` 创建 release；备份 `fiscal-20260718T052840Z.dump` 校验通过，Alembic head 保持 `20260718_0015`，切换并重启服务 |
-| HZ 冒烟 | 通过：readiness、公开 liveness、已授权 overview、消费报告及消费/现金流下钻；7 月平账 ¥17,192.95 已排除，总览/报表消费 ¥3,815.21、实际个人承担 ¥3,315.21，平账分类不返回且两种下钻均为 0；现金余额 ¥22,262.07、信用负债 ¥25,592.17 不变 |
+| HZ 部署 dry run / apply | 通过：最新总览 revision `480626be60e3cb9c17b4838f35da3ca1991abf60` 创建 release；备份 `fiscal-20260718T055419Z.dump` 校验通过，Alembic head 保持 `20260718_0015`，切换并重启服务 |
+| HZ 冒烟 | 通过：readiness、公开 liveness 与已授权 overview；7 月本月消费 ¥3,815.21、本月真实收入 ¥13,917.73、待归类 0，Top 3 为餐饮 ¥1,019.58 / AI工具 ¥852.02 / 数码 ¥639.00，10 条流水与 4 条信用应还保持完整 |
 | iPhone 设备检查 | 两台均为 available/paired。Caeieo（iPhone 16）已安装 `com.linotsai.fiscal`；Kurisu（iPhone Air）的 Build 12 安装两次失败（远程安装服务超时/IXRemoteError 5），其既有 bundle 的启动也因锁屏被系统拒绝，故不能作为 Build 12 验收。 |
-| macOS 替换与视觉 | `/Applications/Fiscal-build11-backup.app` 已由 1.2.1 (11) 备份；`/Applications/Fiscal.app` 已替换为签名 1.2.3 (12) 并启动。重启旧进程后，生产总览截图见 [`screenshots/macos-overview.png`](screenshots/macos-overview.png)：现金余额、10 条流水与 4 条信用应还均可见且未裁切。 |
+| macOS 替换与视觉 | `/Applications/Fiscal.app` 已替换为最新签名 1.2.3 (12) 并启动，上一 Build 12 保存在 `/Applications/Fiscal-pre-overview-hotfix-backup.app`。生产总览截图见 [`screenshots/macos-overview-income-ranking.png`](screenshots/macos-overview-income-ranking.png)：本月消费/收入不重复，Top 3 清晰，待归类 0 不占卡片，10 条流水与 4 条信用应还均未裁切。 |
 
 ## 已知基线债务
 
@@ -41,7 +42,7 @@
 ## 发布前仍需人工证据
 
 - 使用生产等价数据完成 iOS Simulator/macOS 总览、消费、分类下钻、4 条与超过 4 条应还、空/加载/错误和归档账户深链截图，并验证 1040×700、1280×820 Mac 窗口。
-- revision `bf23c4ee83f4de8819c0244363a42243f0396854` 已推送并部署至 HZ；备份、Alembic head、readiness、公开 liveness、已授权 overview、消费报告与两种口径下钻真实 API 均已验证。
+- revision `480626be60e3cb9c17b4838f35da3ca1991abf60` 已推送并部署至 HZ；备份、Alembic head、readiness、公开 liveness 与新增本月收入/Top 3 overview 字段真实 API 均已验证。
 - macOS 1.2.3 (12) 已安装并能启动，保留 `/Applications/Fiscal-build11-backup.app` 作为 Build 11 回退；生产总览截图已留存。两台已配对 iPhone 的 Build 12 启动和核心流程验收仍未完成：两台最新启动尝试均因锁屏被系统拒绝；Kurisu 此前的 Build 12 远程安装还受安装协调服务不可用阻塞。请解锁两台 iPhone、保持与此 Mac 的可用连接后重试 Caeieo 启动及 Kurisu Build 12 安装/启动，并将截图追加至本文件；此前不得创建 tag。
 - 以上完成后才创建并推送 `v1.2.3` tag。
 
