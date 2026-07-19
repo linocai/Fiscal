@@ -240,11 +240,17 @@ private struct IOSAIProposalRow: View {
           Text(explanation).font(.caption).foregroundStyle(FiscalColor.secondary)
         }
         if proposal.canReview {
+          let blockers = proposal.executionBlockers
           HStack(spacing: 8) {
             Button(proposal.target.executeTitle, action: execute).buttonStyle(FiscalActionButtonStyle())
+              .disabled(!blockers.isEmpty)
             Button("编辑", action: edit).buttonStyle(FiscalActionButtonStyle(.secondary))
             Button("忽略", action: ignore).buttonStyle(.plain).font(.subheadline.weight(.semibold)).foregroundStyle(FiscalColor.tertiary).frame(minHeight: 42)
           }.disabled(proposal.status != .pending)
+          if !blockers.isEmpty {
+            Text("先编辑补全：\(blockers.joined(separator: "、"))")
+              .font(.caption).foregroundStyle(FiscalColor.tertiary)
+          }
         } else if proposal.status == .failed {
           Button("重新识别", action: retry).buttonStyle(FiscalActionButtonStyle(.secondary))
         } else if proposal.status == .executed {
@@ -416,7 +422,13 @@ public struct MacAIProposalScreen: View {
         Divider()
         inspector.frame(width: 310)
       }
-    }.background(FiscalColor.macBackground).task { if model.phase == .idle { await model.load() } }
+    }.background(FiscalColor.macBackground).task {
+      if model.phase == .idle { await model.load() }
+      // The inspector renders account/category names; this screen can be the first one opened,
+      // so make sure master data is present instead of falling back to id prefixes.
+      if let accounts, accounts.accounts.isEmpty { await accounts.load() }
+      if let categories, categories.categories.isEmpty { await categories.load() }
+    }
       .sheet(item: $editing) { proposal in
         if let accounts, let categories { AIProposalEditorScreen(model: model, proposal: proposal, accounts: accounts, categories: categories, credit: credit).frame(minWidth: 520, minHeight: 580) }
       }
@@ -430,13 +442,24 @@ public struct MacAIProposalScreen: View {
           detail("目标", proposal.target.title); detail("状态", proposal.status == .executed ? proposal.target.executedTitle : proposal.status.title); detail("置信度", proposal.confidenceTitle); detail("来源", proposal.source.title)
           if let accounts { detail("账户", accountName(proposal.accountID, in: accounts)) }
           if let categories { detail("分类", categoryName(proposal.categoryID, in: categories)) }
+          if !proposal.reviewWarnings.isEmpty {
+            Label("需要检查：\(proposal.reviewWarnings.joined(separator: "、"))", systemImage: "exclamationmark.triangle.fill")
+              .font(.caption).foregroundStyle(FiscalColor.debt).fixedSize(horizontal: false, vertical: true)
+          }
           if let explanation = proposal.explanation { Text(explanation).font(.caption).foregroundStyle(FiscalColor.secondary) }
           if let text = model.refreshMessage ?? model.message {
             Label(text, systemImage: "exclamationmark.triangle.fill").font(.caption)
               .foregroundStyle(FiscalColor.expense).frame(maxWidth: .infinity, alignment: .leading)
               .padding(12).background(FiscalColor.expense.opacity(0.08), in: .rect(cornerRadius: 12))
           }
-          if proposal.canReview { Button(model.isMutating ? "处理中…" : proposal.target.executeTitle) { Task { await model.execute(proposal) } }.buttonStyle(FiscalActionButtonStyle()).disabled(model.isMutating); if accounts != nil && categories != nil { Button("编辑") { editing = proposal }.buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating) }; Button("忽略") { Task { await model.ignore(proposal) } }.buttonStyle(.plain).foregroundStyle(FiscalColor.tertiary).disabled(model.isMutating) }
+          if proposal.canReview {
+            let blockers = proposal.executionBlockers
+            Button(model.isMutating ? "处理中…" : proposal.target.executeTitle) { Task { await model.execute(proposal) } }.buttonStyle(FiscalActionButtonStyle()).disabled(model.isMutating || !blockers.isEmpty)
+            if !blockers.isEmpty {
+              Text("先编辑补全：\(blockers.joined(separator: "、"))")
+                .font(.caption).foregroundStyle(FiscalColor.tertiary)
+            }
+            if accounts != nil && categories != nil { Button("编辑") { editing = proposal }.buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating) }; Button("忽略") { Task { await model.ignore(proposal) } }.buttonStyle(.plain).foregroundStyle(FiscalColor.tertiary).disabled(model.isMutating) }
           else if proposal.status == .failed { Button("重新识别") { Task { await model.retry(proposal) } }.buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating) }
           else if proposal.status == .executed { Button(proposal.target == .cashFlow ? "取消这条未来现金流" : "撤销这笔 AI 记账") { Task { await model.undo(proposal) } }.buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating) }
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)

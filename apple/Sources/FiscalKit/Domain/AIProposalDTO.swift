@@ -109,6 +109,7 @@ public struct AIProposalDTO: Codable, Sendable, Equatable, Identifiable {
       "forbidden_kind": "类型不能由 AI 生成", "unknown_account": "账户已失效",
       "unknown_category": "分类已失效", "unknown_destination_account": "目标账户已失效",
       "account_kind_mismatch": "账户类型不匹配", "category_direction_mismatch": "分类方向不匹配",
+      "destination_kind_mismatch": "目标账户类型不匹配",
       "ledger_validation_failed": "未通过账本安全校验", "manual_confirmation_required": "需要人工确认",
       "user_edited": "已由你修改", "future_cash_flow_requires_confirmation": "未来计划必须人工确认",
     ]
@@ -116,6 +117,22 @@ public struct AIProposalDTO: Codable, Sendable, Equatable, Identifiable {
     return missing + reasonCodes.map { labels[$0] ?? "需要人工检查" }
   }
   public var canReview: Bool { status == .pending }
+  /// Fields the server's execute validation will reject as missing for a ledger proposal.
+  /// Mirrors `_draft`/`_create` requirements so the confirm button can be gated instead of
+  /// letting a doomed request 4xx. Cash-flow proposals follow different rules and never block.
+  public var executionBlockers: [String] {
+    guard target == .transaction else { return [] }
+    var blockers: [String] = []
+    if kind == nil { blockers.append("类型") }
+    if !(amountMinor.map { $0 > 0 } ?? false) { blockers.append("金额") }
+    if occurredAt == nil { blockers.append("发生时间") }
+    if (title ?? "").isEmpty { blockers.append("标题") }
+    if accountID == nil { blockers.append("账户") }
+    if kind == .transfer || kind == .repayment, destinationAccountID == nil {
+      blockers.append("目标账户")
+    }
+    return blockers
+  }
   public var draft: TransactionDraft {
     var value = TransactionDraft()
     value.kind = kind ?? .expense

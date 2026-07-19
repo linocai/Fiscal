@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from fiscal_api.db.models import AIProposal, AISettings
+from fiscal_api.db.models import Account, AIProposal, AISettings, Category, TransactionKind
 from fiscal_api.services.ai import REQUIRED_CONFIDENCE_FIELDS, AIService
 
 
@@ -96,3 +96,71 @@ def test_p9_source_switch_is_rechecked_before_automatic_execution() -> None:
     assert not AIService._auto_eligible(value, current)
     current.shortcut_text_source_enabled = True
     assert AIService._auto_eligible(value, current)
+
+
+def _parse_result(**overrides):  # type: ignore[no-untyped-def]
+    from fiscal_api.api.p8_schemas import AIFieldConfidences, AIProviderResult
+
+    values = {
+        "kind": TransactionKind.CREDIT_PURCHASE,
+        "amount_minor": 500,
+        "occurred_at": datetime(2026, 7, 19, tzinfo=UTC),
+        "title": "农夫山泉安吉智能生活",
+        "confidences": AIFieldConfidences(),
+        "overall_confidence_bps": 9_200,
+    }
+    values.update(overrides)
+    return AIProviderResult(**values)
+
+
+def _apply(result, accounts=(), categories=()):  # type: ignore[no-untyped-def]
+    value = proposal()
+    service = AIService(None, provider=None)  # type: ignore[arg-type]
+    service._apply_provider_result(value, result, list(accounts), list(categories))
+    return value
+
+
+def test_parse_blanks_non_credit_account_for_credit_purchase() -> None:
+    wallet = Account(id=uuid4(), kind="cash")
+    result = _parse_result(account_id=wallet.id)
+    value = _apply(result, accounts=[wallet])
+    assert value.account_id is None
+    assert "account_kind_mismatch" in value.reason_codes
+
+
+def test_parse_keeps_credit_account_for_credit_purchase() -> None:
+    huabei = Account(id=uuid4(), kind="credit")
+    result = _parse_result(account_id=huabei.id)
+    value = _apply(result, accounts=[huabei])
+    assert value.account_id == huabei.id
+    assert "account_kind_mismatch" not in value.reason_codes
+
+
+def test_parse_blanks_wrong_direction_category_for_credit_purchase() -> None:
+    huabei = Account(id=uuid4(), kind="credit")
+    salary = Category(id=uuid4(), direction="income")
+    result = _parse_result(account_id=huabei.id, category_id=salary.id)
+    value = _apply(result, accounts=[huabei], categories=[salary])
+    assert value.category_id is None
+    assert "category_direction_mismatch" in value.reason_codes
+
+
+def test_parse_checks_transfer_and_repayment_account_kinds() -> None:
+    huabei = Account(id=uuid4(), kind="credit")
+    wallet = Account(id=uuid4(), kind="cash")
+    transfer = _parse_result(
+        kind=TransactionKind.TRANSFER, account_id=huabei.id, destination_account_id=huabei.id
+    )
+    value = _apply(transfer, accounts=[huabei, wallet])
+    assert value.account_id is None
+    assert value.destination_account_id is None
+    assert "account_kind_mismatch" in value.reason_codes
+    assert "destination_kind_mismatch" in value.reason_codes
+
+    repayment = _parse_result(
+        kind=TransactionKind.REPAYMENT, account_id=wallet.id, destination_account_id=huabei.id
+    )
+    value = _apply(repayment, accounts=[huabei, wallet])
+    assert value.account_id == wallet.id
+    assert value.destination_account_id == huabei.id
+    assert "account_kind_mismatch" not in value.reason_codes

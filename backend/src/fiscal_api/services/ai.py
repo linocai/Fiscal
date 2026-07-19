@@ -523,6 +523,27 @@ class AIService:
             if category is not None and category.direction != kind.value:
                 category_id = None
                 reasons.append("category_direction_mismatch")
+        elif kind is TransactionKind.CREDIT_PURCHASE:
+            account = active_accounts.get(account_id) if account_id is not None else None
+            category = active_categories.get(category_id) if category_id is not None else None
+            if account is not None and account.kind != "credit":
+                account_id = None
+                reasons.append("account_kind_mismatch")
+            if category is not None and category.direction != "expense":
+                category_id = None
+                reasons.append("category_direction_mismatch")
+        elif kind is TransactionKind.TRANSFER or kind is TransactionKind.REPAYMENT:
+            account = active_accounts.get(account_id) if account_id is not None else None
+            if account is not None and account.kind not in {"cash", "debit"}:
+                account_id = None
+                reasons.append("account_kind_mismatch")
+            destination = (
+                active_accounts.get(destination_id) if destination_id is not None else None
+            )
+            required = {"credit"} if kind is TransactionKind.REPAYMENT else {"cash", "debit"}
+            if destination is not None and destination.kind not in required:
+                destination_id = None
+                reasons.append("destination_kind_mismatch")
         proposal.kind = kind.value if kind is not None else None
         proposal.amount_minor = result.amount_minor
         proposal.currency = "CNY" if result.amount_minor is not None else None
