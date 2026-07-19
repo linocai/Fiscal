@@ -6,12 +6,12 @@ final class FiscalUITests: XCTestCase {
 
   private func launchApp() throws {
     continueAfterFailure = false
-    let token = try XCTUnwrap(
-      ProcessInfo.processInfo.environment["FISCAL_UI_TEST_DEVICE_TOKEN"],
-      "Set FISCAL_UI_TEST_DEVICE_TOKEN for authenticated integration UI tests."
+    let accessKey = try XCTUnwrap(
+      ProcessInfo.processInfo.environment["FISCAL_UI_TEST_ACCESS_KEY"],
+      "Set FISCAL_UI_TEST_ACCESS_KEY for authenticated integration UI tests."
     )
     app = XCUIApplication()
-    app.launchEnvironment["FISCAL_DEVICE_TOKEN"] = token
+    app.launchEnvironment["FISCAL_ACCESS_KEY"] = accessKey
     app.launch()
   }
 

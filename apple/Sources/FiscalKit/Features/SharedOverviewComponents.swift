@@ -29,7 +29,7 @@ public struct ConnectionBadge: View {
             case .connected:
                 Circle().fill(FiscalColor.income).frame(width: 7, height: 7); Text("已连接")
             case .unauthorized:
-                Circle().fill(FiscalColor.debt).frame(width: 7, height: 7); Text("需要设备密钥")
+                Circle().fill(FiscalColor.debt).frame(width: 7, height: 7); Text("需要访问口令")
             case .offline:
                 Circle().fill(FiscalColor.expense).frame(width: 7, height: 7); Text("离线")
             }

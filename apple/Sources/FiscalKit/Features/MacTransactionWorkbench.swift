@@ -166,7 +166,7 @@ public struct MacTransactionWorkbench: View {
           systemImage: model.hasFilters ? "line.3.horizontal.decrease.circle" : "list.bullet.rectangle",
           description: Text(model.hasFilters ? "调整搜索或筛选条件后重试。" : "按 ⌘N 记录第一笔。"))
       case .unauthorized:
-        retryState("设备密钥无效", symbol: "key")
+        retryState("访问口令无效", symbol: "key")
       case .offline:
         retryState("无法连接个人 VPS", symbol: "wifi.slash")
       case .failed:

@@ -70,7 +70,7 @@ public struct AccountsManagementScreen: View {
         switch model.phase {
         case .idle, .loading: ProgressView("正在读取账户…").frame(maxWidth: .infinity, maxHeight: .infinity)
         case .empty: ContentUnavailableView("还没有账户", systemImage: "wallet.bifold", description: Text("新建现金、储蓄卡或信用卡账户。"))
-        case .unauthorized: retryState("设备密钥无效", symbol: "key")
+        case .unauthorized: retryState("访问口令无效", symbol: "key")
         case .offline: retryState("无法连接个人 VPS", symbol: "wifi.slash")
         case .failed: retryState(model.message ?? "加载失败", symbol: "exclamationmark.triangle")
         case .loaded:
@@ -307,7 +307,7 @@ public struct CategoriesManagementScreen: View {
         switch model.phase {
         case .idle, .loading: ProgressView("正在读取分类…").frame(maxWidth: .infinity, maxHeight: .infinity)
         case .empty: ContentUnavailableView("还没有分类", systemImage: "tag", description: Text("建立收入或支出分类，最多两级。"))
-        case .unauthorized: retry("设备密钥无效", "key")
+        case .unauthorized: retry("访问口令无效", "key")
         case .offline: retry("无法连接个人 VPS", "wifi.slash")
         case .failed: retry(model.message ?? "加载失败", "exclamationmark.triangle")
         case .loaded:

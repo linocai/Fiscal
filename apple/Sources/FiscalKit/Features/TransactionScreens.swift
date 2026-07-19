@@ -596,7 +596,7 @@ public struct IOSTransactionsScreen: View {
         switch model.phase {
         case .idle, .loading: ProgressView("正在读取流水…").frame(maxWidth: .infinity, maxHeight: .infinity)
         case .empty: ContentUnavailableView(model.search.isEmpty && model.kind == nil ? "还没有流水" : "没有匹配的流水", systemImage: "list.bullet.rectangle", description: Text("使用底部中央按钮记录收入、支出、转账或信用交易。"))
-        case .unauthorized: retry("设备密钥无效", "key")
+        case .unauthorized: retry("访问口令无效", "key")
         case .offline: retry("无法连接个人 VPS", "wifi.slash")
         case .failed: retry(model.message ?? "读取失败", "exclamationmark.triangle")
         case .loaded:

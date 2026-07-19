@@ -48,7 +48,7 @@ public struct IOSCreditAccountsScreen: View {
             case .empty:
                 if archivedCreditAccounts.isEmpty { ContentUnavailableView("还没有信用账户", systemImage: "creditcard", description: Text("先在账户中添加信用卡及账单日、还款日。")) }
                 else { archivedOnlyList }
-            case .unauthorized: retry("设备密钥无效", "key")
+            case .unauthorized: retry("访问口令无效", "key")
             case .offline: retry("无法连接个人 VPS", "wifi.slash")
             case .failed: retry(credit.message ?? "读取失败", "exclamationmark.triangle")
             case .loaded:
@@ -109,7 +109,7 @@ private struct IOSCreditCycleDetail: View {
             ScrollView { VStack(spacing: 14) { FiscalCard(radius: 20) { VStack(alignment: .leading, spacing: 10) { HStack { Text(cycle.isOpeningCycle ? "期初欠款" : "账期详情").font(.headline); Spacer(); CreditStatusPill(cycle: cycle) }; Text(Money(minorUnits: cycle.remainingMinor).formatted()).font(.system(size: 30, weight: .bold)).foregroundStyle(cycle.isOverdue ? FiscalColor.expense : FiscalColor.debt); if cycle.isOpeningCycle { valueRow("余额日期", cycle.statementDate) } else { valueRow("账期", "\(cycle.periodStart)–\(cycle.periodEnd)") }; valueRow("消费与期初", Money(minorUnits: cycle.amountDueMinor).formatted()); valueRow("已还", Money(minorUnits: cycle.repaidMinor).formatted()); valueRow("还款日", cycle.dueDate); if readOnly { Label("已归档账户 · 只读历史", systemImage: "archivebox").font(.caption).foregroundStyle(FiscalColor.tertiary) } else if cycle.remainingMinor > 0 { Button("全额或部分还款") { showRepayment = true }.buttonStyle(.borderedProminent) } } }; VStack(alignment: .leading, spacing: 10) { Text("本期流水").font(.headline); FiscalCard(radius: 18) { VStack(spacing: 0) { if credit.cycleTransactions.isEmpty { Text("本账期暂无流水").foregroundStyle(FiscalColor.tertiary).frame(maxWidth: .infinity).padding() }; ForEach(credit.cycleTransactions) { item in HStack { Image(systemName: item.kind.symbol).foregroundStyle(item.kind == .repayment ? FiscalColor.income : FiscalColor.debt).accessibilityHidden(true); Text(item.title); Spacer(); Text(Money(minorUnits: item.amountMinor).formatted()) }.padding(.vertical, 9).task { if item.id == credit.cycleTransactions.last?.id { await credit.loadMoreTransactions() } }; Divider() } } } } }.padding(16) }.background(FiscalColor.iOSBackground)
         } else {
             switch credit.phase {
-            case .unauthorized: cycleRetry("设备密钥无效", "key")
+            case .unauthorized: cycleRetry("访问口令无效", "key")
             case .offline: cycleRetry("无法连接个人 VPS", "wifi.slash")
             case .failed: cycleRetry(credit.message ?? "账期读取失败", "exclamationmark.triangle")
             default: ProgressView("正在读取账期明细…").frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -176,7 +176,7 @@ public struct MacAccountsCreditScreen: View {
     private var creditError: String? {
         if let refresh = credit.refreshMessage { return refresh }
         switch credit.phase {
-        case .unauthorized: return credit.message ?? "设备密钥无效"
+        case .unauthorized: return credit.message ?? "访问口令无效"
         case .offline: return credit.message ?? "无法连接个人 VPS"
         case .failed: return credit.message ?? "信用账期读取失败"
         default: return nil

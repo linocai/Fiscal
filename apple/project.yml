@@ -35,9 +35,6 @@ targets:
         FISCAL_API_BASE_URL: "$(FISCAL_API_BASE_URL)"
         NSPhotoLibraryUsageDescription: "Fiscal 读取你允许访问的截图，在设备端识别记账文字；图片不会上传。"
         PHPhotoLibraryPreventAutomaticLimitedAccessAlert: true
-        CFBundleURLTypes:
-          - CFBundleURLName: com.linotsai.fiscal.pairing
-            CFBundleURLSchemes: [fiscal]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIApplicationSceneManifest:
@@ -127,7 +124,7 @@ schemes:
       targets:
         - FiscalUITests
       environmentVariables:
-        FISCAL_UI_TEST_DEVICE_TOKEN: integration-device-token
+        FISCAL_UI_TEST_ACCESS_KEY: integration-device-token
         FISCAL_QA_SCREENSHOT_DIR: "$(SRCROOT)/../docs/qa/p10/screenshots"
   FiscalmacOS:
     build:
@@ -139,5 +136,5 @@ schemes:
       targets:
         - FiscalKitTests
       environmentVariables:
-        FISCAL_UI_TEST_DEVICE_TOKEN: integration-device-token
+        FISCAL_UI_TEST_ACCESS_KEY: integration-device-token
         FISCAL_QA_SCREENSHOT_DIR: "$(SRCROOT)/../docs/qa/p10/screenshots"
