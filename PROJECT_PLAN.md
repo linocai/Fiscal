@@ -1,8 +1,8 @@
 # Fiscal · PROJECT_PLAN
 
 > 计划版本：v0.4（施工权威版）
-> 日期：2026-07-17
-> 状态：P18 v1.2.3 总览与消费报表收敛已立项，待 builder 施工
+> 日期：2026-07-19
+> 状态：P19 v1.2.4 云端连接鉴权全重做（个人访问口令）A–E 施工完成、transition 部署上线（1.2.4 / Build 17），待用户在 mac Build 17 设访问口令
 > 旧项目参考：`/Users/linotsai/Lino/LinoFinance`
 > 前端视觉合同：`design_handoff_fiscal_app/Fiscal Prototype.dc.html` 与同目录 `README.md`
 
@@ -1021,6 +1021,131 @@ Back Tap
 - 2026-07-18：追加 v1.2.3 平账口径修复。「平账」分类及其后代保留流水与账户影响，但从总览消费、消费报表、现金流统计和对应下钻统一排除；生产 revision `bf23c4ee83f4de8819c0244363a42243f0396854` 已完成备份、部署与真实 API 对账。
 - 2026-07-18：追加 v1.2.3 总览卡片收敛。本月消费改用原始消费总额；移除固定待归类卡和重复的个人承担卡，新增仅统计 `income` 流水的本月收入及复用消费报表排序的 Top 3；双端实现、签名构建、Mac 安装和生产 revision `480626be60e3cb9c17b4838f35da3ca1991abf60` 已验证。
 
+### P19：v1.2.4 云端连接鉴权全重做（个人访问口令）
+
+**状态：A–E 施工完成，v1.2.4 / Build 17 已发布并 transition 部署上线**（生产 alembic head `20260719_0016`、`access_credential=0` 凭证行未建、3 个旧 device token 仍可连；新端点 `/auth/*` 上线，旧 `/device-tokens`、`/system/security-status` 已 404）。验收记录见 `docs/qa/p19/results.md`。**设访问口令为用户动作（口令用户自选），待用户在 mac Build 17「访问口令卡」完成——完成后旧鉴权层永久关闭、两台 iPhone 装 Build 17 后凭 iCloud/口令恢复。** 用户已拍板「全部换光」，本期只把已定设计拆成可施工 Plan，不重开方案讨论。
+
+彻底废除 P11 的「按设备一次性密钥」模型——签发 / 60 分钟 pending 窗口 / 粘贴 / 扫码 / 轮换 / 设备列表 / `fiscal://pair` QR（含今天刚加的 commit `8a310b7`）——改为「个人访问口令 + iCloud 同步 access_key」。`device_tokens` 表本期**保留**（下个版本再清），但其全部 API 端点与客户端 UI 本期删除。
+
+铁律：迁移期间生产**不允许出现 mac 与 iOS 同时连不上的窗口**。device token 只在「设口令」那一刻被永久关闭，且该动作必须由已装好 P19 的 mac 自身发起（发起后 mac 立刻持有 access_key，连接不中断）；旧版 iPhone 在自身升级到 P19 前的短暂掉线是可接受的（此刻 mac 仍在线）。
+
+#### 目标模型（已定，不重议）
+
+1. **口令即连接**：用户自设一个口令。任何设备连接 = 输一次口令 → `POST /api/v1/auth/session {passphrase}` → 返回 opaque `access_key` → 存入 **iCloud 同步钥匙串**（`kSecAttrSynchronizable = true`，可用性用非 ThisDeviceOnly 的 `kSecAttrAccessibleAfterFirstUnlock`，新 service `com.linotsai.fiscal.access`）→ 之后所有请求 `Authorization: Bearer <access_key>`。重装 / 换机凭 iCloud 同步自动恢复；丢了就重输口令。
+2. **服务端凭证**：单行凭证（`access_credential`）。口令用慢哈希存储；`access_key` 只存哈希 + `credential_generation`。改口令（需旧口令）→ `credential_generation += 1` → 全部旧 `access_key` 立即失效（全局吊销，O(1)，不必逐行删）。
+3. **迁移无死角（transition 模式）**：凭证行不存在时，旧 device-token 鉴权继续有效；凭证行一旦存在，鉴权层永久只认口令 / access_key，device token 立即全灭。「设口令」端点在 transition 期用旧 device token 鉴权（mac 操作），成功即建凭证行（`generation=1`）、返回首个 access_key、关闭旧鉴权层；此后改口令只认旧口令。
+4. **Apple 端**：新 `AccessKeyStore`（同步钥匙串）；`APITransport` 改读它；未授权态双端统一为「输入访问口令」一屏；mac 设置里换成「访问口令卡」（设口令 / 改口令 / 上次轮换时间）；iOS 云连接页改为口令页。删除 `DeviceSecurityModel`、`DeviceSecurityRepository`、`PairingLink` / `PairingQRCode`、`KeychainTokenStore` 的 pending 轮换机制、`onOpenURL` 与 `fiscal://` URL scheme。
+
+#### 安全底线（写死，逐条验收）
+
+- 口令与 access_key **仅经 TLS** 传输（生产走 nginx HTTPS；`NSAllowsLocalNetworking` 仅 Debug 本地生效）。
+- 口令只存 **PBKDF2-HMAC-SHA256 慢哈希**派生值 + **每行随机盐**；access_key 只存 **HMAC-SHA256(pepper) 摘要**；两者都不落明文、不落日志。
+- access_key **只在** 登录 / 设口令 / 改口令 三个响应体出现，其它端点（含 `/auth/status`）一律不回显；口令任何情况下不回显、不进 `error.details`。
+- 登录与改口令接入既有 `RateLimiter.check_failed_auth`（`rate_limit_failed_auth_per_minute`），按来源 IP 每次尝试消费一次桶；PBKDF2 迭代本身构成额外速率下限。
+- 慢哈希参数写明：**PBKDF2-HMAC-SHA256、盐 16 字节、迭代默认 600000、派生 32 字节、`hmac.compare_digest` 常量时间比较**；口令长度 8–128、存前 NFC 归一。已核实 `backend/pyproject.toml` 仓内**无** passlib / argon2，按用户指示用 stdlib `hashlib.pbkdf2_hmac`，**不新增依赖**（`cryptography` 已在依赖但本期用不到）。新增设置 `FISCAL_PASSPHRASE_KDF_ITERATIONS`（默认 600000，`Settings` 校验区间 100000–2000000）；复用既有 `FISCAL_TOKEN_PEPPER` 作 access_key 摘要密钥（生产已强制 ≥32 字节）。
+- 核对请求日志中间件（`core/middleware.py`）不记录 `/api/v1/auth/*` 请求体；确认 `APIError.details` 在登录 / 设口令失败分支不含口令。
+
+#### 接口契约（前后端分离，写死）
+
+新增路由文件 `backend/src/fiscal_api/api/routes/auth.py`（前缀 `/auth`，挂进 `api/router.py`），schema 放 `api/auth_schemas.py`：
+
+- `POST /api/v1/auth/session` — 登录换 access_key。**无鉴权**（公开），按来源 IP 限速。仅当凭证行存在时有效；口令正确 → `200 {"access_key":"fiscal_ak_v1_…","credential_generation":N}`（新建一条 `access_key`，`generation=当前`，只存摘要）；口令错误 → 消费 failed-auth 桶 → `401 {code:"invalid_passphrase"}`；凭证行不存在 → `409 {code:"passphrase_not_set"}`。
+- `POST /api/v1/auth/passphrase/initialize` — transition 期设口令。**鉴权 = 旧 device-token bearer**，且仅当凭证行**不存在**时可用。Body `{"passphrase":"<8–128>"}`。成功 → 建凭证行 `generation=1`、铸首个 access_key、**永久关闭 device-token 层** → `200 {"access_key":…,"credential_generation":1}`；凭证行已存在 → `409 {code:"passphrase_already_set"}`。
+- `POST /api/v1/auth/passphrase/change` — 改口令。**鉴权 = 当前 access_key bearer**。Body `{"old_passphrase":…,"new_passphrase":"<8–128>"}`。旧口令校验（慢哈希）通过 → `generation += 1`（连调用方在内的全部 access_key 立即失效）、写新盐 + 新哈希、更新 `last_rotated_at`、为调用方铸一枚新 access_key → `200 {"access_key":…,"credential_generation":N+1}`；旧口令错 → 消费 failed-auth 桶 → `401 {code:"invalid_passphrase"}`。
+- `GET /api/v1/auth/status` — 卡片/口令页状态。**鉴权 = 当前 access_key（transition 期兼容旧 device token）**。返回 `{authentication_mode:"passphrase"|"transition_device_token", passphrase_set:bool, credential_generation:int|null, last_rotated_at:datetime|null, active_access_key_count:int, server_time, rate_limits:{…}}`。**不含任何 access_key / 口令**。
+- **受保护业务路由路径不变**，但鉴权依赖改为：凭证行存在 → 只认 access_key；凭证行不存在 → 认旧 device token（transition）。
+- **删除**：`/api/v1/device-tokens`（list/issue/rotate/activate/revoke 全部）、`/api/v1/system/security-status`。`/api/v1/system/operations-status`（备份/磁盘/恢复事实）**保留不动**。
+
+#### 依赖顺序与实施块
+
+**P19-A · 后端凭证与鉴权核心（transition 双通道）** — 涉及 `core/config.py`、`core/security.py`、`services/security.py`、`api/dependencies.py`、`api/router.py`、`main.py`、`api/routes/system.py`、`api/p11_schemas.py`；新增 `core/access_keys.py`（KDF + access_key 生成/摘要/格式校验）、`db/models/access.py`（`AccessCredential`、`AccessKey`）、`repositories/access.py`、`services/access.py`、`api/routes/auth.py`、`api/auth_schemas.py`、`alembic/versions/<新>_access_credential.py`（`down_revision="20260718_0015"`，保留 `device_tokens` 表，带 upgrade/downgrade）、`cli/access.py`（`initialize` / `reset-passphrase`，见 P19-E）。
+
+- 建 `AccessCredential`（`id`、`passphrase_hash bytes`、`passphrase_salt bytes(16)`、`kdf_iterations int`、`credential_generation int≥1`、`created_at`、`updated_at`、`last_rotated_at`）与 `AccessKey`（`id`、`key_digest bytes(32) unique`、`key_fingerprint char(12)`、`credential_generation int`、`created_at`、`last_used_at`；可选 `label`）。access_key 格式 `fiscal_ak_v1_` + `secrets.token_urlsafe(32)`，摘要走 `hmac.digest(pepper, raw, "sha256")`（复用 device-token 的 pepper 模式）。
+- 改鉴权依赖（`core/security.py`）：**先查凭证行**——存在则只走 access_key 校验（查 `key_digest`，且 `access_key.credential_generation == credential.credential_generation` 才放行，否则 401，实现全局吊销）；不存在则回落现有 device-token 校验（transition，保留 `services/security.py::authenticate`）。access_key 认证成功同样接 `check_authenticated` 读写/AI 限速。
+- `services/security.py`：**删除** `issue_device`/`prepare_rotation`/`activate`/`revoke`/`list_visible`/`counts`/`current` 等设备生命周期方法（连同 `api/routes/device_tokens.py`、`p11_schemas.py` 里 issue/rotate/activate/revoke/list/SecurityStatus 相关 request/response、`DeviceTokenSummary` 对客户端的暴露）；**保留** `authenticate`（transition 期 device-token 校验仍需）与 `db/models/security.py`（表保留）。`api/router.py` 摘掉 `device_tokens.router`、加 `auth.router`。
+- `main.py` 启动守卫改为：生产环境要求 **（凭证行存在）或（≥1 个 active device token）**，避免设口令后旧令牌清零却拒绝启动。
+- `core/config.py` 加 `FISCAL_PASSPHRASE_KDF_ITERATIONS`（默认 600000 + 区间校验）与口令长度常量；`token_pending_ttl_minutes` 变为遗留未用，保留设置与校验不动以免连锁改动。
+- 测试处置（`tests/test_security.py` 8 项 / `tests/test_p11_security.py` 3 项）：**改写**——删掉 issue/rotate/activate/revoke/list 相关用例；**保留并续用** transition 期 device-token 仍通过、静态令牌（local/test）、failed-auth 限速类用例；**新增** `tests/test_access_credential.py`：transition 设口令（旧 token 授权）成功即关闭 device-token 层、登录成功/失败 + 限速、access_key 认证受保护路由、改口令需旧口令、generation+1 全局吊销旧 key、启动守卫认凭证行、`/auth/status` 不含密文。
+
+验收：全新库跑通「transition 期旧 device token 正常 → mac 用旧 token 调 `initialize` 设口令 → 同一 token 再调受保护路由得 401（旧层已关）→ 用口令 `session` 得 access_key 调通 → 改口令后旧 access_key 全 401、新 access_key 通」；错误口令触发 failed-auth 限速；`ruff format --check`、`ruff check`、`pyright`、`pytest`、含 PostgreSQL 组与 `alembic upgrade/downgrade` 往返全绿。
+
+**P19-B · Apple 凭证存储与传输层** — 涉及 `Data/KeychainTokenStore.swift`、`API/APITransport.swift`、`API/SystemStatus.swift`、`API/APIConfiguration.swift`、`Features/ConnectionModel.swift`、`Domain/SecurityDTO.swift`；新增 `Data/AccessKeyStore.swift`、`Data/AuthRepository.swift`、`Features/PassphraseModel.swift`；删除 `Features/PairingLink.swift`、`Features/DeviceSecurityModel.swift`、`Data/DeviceSecurityRepository.swift`。
+
+- `AccessKeyStore`（actor，protocol `AccessKeyStoring`）：`read/save/delete`，`kSecClassGenericPassword`、`kSecAttrService="com.linotsai.fiscal.access"`、`kSecAttrSynchronizable=true`、`kSecAttrAccessibleAfterFirstUnlock`（**非** ThisDeviceOnly），iOS 传 team access group `HX73DFL88G.com.linotsai.fiscal`、mac 传 nil（沿用今天 07-19 快修的 access group 经验）。无任何 pending 机制。
+- `APITransport`：`init` 的凭证 seam 从 `KeychainTokenStore` 换 `AccessKeyStore`（保留 `token:` 非持久 seam 供工具/测试）；`FiscalAPIError.unauthorized.displayMessage` 文案「设备密钥无效，请重新配置。」→「访问口令无效或已更改，请重新输入。」。`SystemStatusClient` 同步换 `AccessKeyStore`，`saveBootstrapTokenIfMissing` → `saveBootstrapAccessKeyIfMissing`。
+- `PassphraseModel`（`@MainActor @Observable`，取代 `DeviceSecurityModel`）：phase `idle/loading/loaded/unauthorized/failed`；`login(passphrase)` → `session` → 存 access_key → reload；`initializePassphrase(new)`（transition：经**旧 device-token 桥接**授权，见下）→ 存 access_key；`changePassphrase(old,new)` → 存新 access_key；`loadStatus()` 读 `/auth/status` + `/operations-status`。所有 async load 带 `generation += 1; let current = …; guard current == generation`（§四.3），`CancellationError` 分支也守卫；iOS sheet/页内有错误展示区（§四.4）。
+- `AuthRepository`（取代 `DeviceSecurityRepository`）：`session(passphrase)`、`initialize(legacyToken)`、`change(old,new)`、`status()`、`operations()`。
+- `Domain/SecurityDTO.swift`：删 `DeviceTokenSummary`/`IssuedDeviceToken`/`Activated`/`Revoked`/`DeviceTokenListResponse`/`SecurityStatusDTO` 的设备字段，新增 `AccessCredentialStatus`（映射 `/auth/status`）与登录/改口令响应 DTO；`OperationsStatusDTO` 及备份/磁盘/恢复子结构**保留**。
+- **transition 桥接**：`initializePassphrase` 一次性读旧 `KeychainTokenStore`（默认 group / iOS 沿用 07-19 的 access group）取 device token 作 bearer 调 `initialize`，成功后一律走 `AccessKeyStore`。因此 `KeychainTokenStore` 本期**保留** `read/save/delete`（删掉 pending 系列方法），标注为「过渡遗留，下个版本随 device_tokens 一并删」。
+
+验收：`FiscalKitTests` 新增 `AccessKeyStore`（synchronizable 属性 / service 名 / save-read-delete / 无 pending）与 `PassphraseModel`（登录、未授权→口令、改口令、generation 失效后转 unauthorized）单测通过；全仓无对 `PairingLink`/`DeviceSecurityModel`/`DeviceSecurityRepository`/pending 的引用；`swift test` 全绿。
+
+**P19-C · 双端未授权 / 口令 UI 与设置卡** — 涉及 `Features/SettingsScreens.swift`、`Apps/iOS/IOSRootView.swift`、`Apps/iOS/FiscaliOSApp.swift`、`Apps/macOS/FiscalmacOSApp.swift`、`Apps/macOS/MacRootView.swift`。
+
+- iOS：`IOSCloudConnectionScreen` 改「访问口令页」——未授权显示「输入访问口令」登录表单（`SecureField` + 登录按钮 + sheet 内错误区）；已连接显示「改口令（旧+新）」+「上次更新口令 `last_rotated_at`」+ ops/备份事实 + 限流 + 更新后的安全边界文案。删除粘贴一次性密钥 / 扫码 / 签发 / 设备列表 / 轮换全部 UI。`IOSMoreDestination.cloudConnection` 入口标题/副标题文案改口令语义。
+- mac：`DeviceSecuritySettingsCard` → 「访问口令卡」（`MacSettingsScreen` 的「账户与同步」段）：transition（`passphrase_set=false` 且本机有旧 token）显示「设置访问口令」（新口令+确认→`initialize`）；已授权显示「改口令」+「上次更新口令」+ ops 事实 + 限流 + 安全边界文案；未授权显示「输入访问口令」登录。删除设备列表 / 签发新设备 / 轮换本机密钥 / 移除设备 UI。
+- 双端未授权态统一为同一「输入访问口令」组件（对照现有未授权样板改造，§四.1 双端对称）。安全边界文案更新：去掉「设备密钥」「端到端加密」措辞，改述「HTTPS 传输；访问口令仅存慢哈希，access_key 存 iCloud 同步钥匙串仅本人 Apple ID 可同步；服务端需计算报表与处理所选 AI 文本，故不宣称端到端加密」。
+- `FiscaliOSApp` / `FiscalmacOSApp`：`KeychainTokenStore` → `AccessKeyStore`（iOS 带 access group）；`DeviceSecurityModel` → `PassphraseModel`；`ConnectionModel.configure(bootstrapToken:)` → `configure(bootstrapAccessKey:)`；**删除** `onOpenURL` / `PairingLink.token(from:)` / `recoverPendingRotation` 调用。
+
+验收：`xcodebuild` 跑 `FiscaliOS`（generic iOS Simulator）与 `FiscalmacOS`（platform=macOS）App target 通过；双端未授权→输入口令→连接、已连接→改口令→自动续连 截图；mac transition 设口令截图；全程 sheet/页内可见错误横幅（造版本/口令错误验证）。
+
+**P19-D · 测试 / 工具 / schemes / 文案 grep 收口** — 涉及 `Tests/FiscalKitTests/P11SecurityTests.swift`、`Tests/FiscalKitTests/P19PairingTests.swift`、`Tests/FiscalUITests/FiscalUITests.swift`、`Tests/FiscalSnapshotTool/SnapshotTool.swift`、`project.yml`。
+
+- **删** `P19PairingTests.swift`（配对链接不复存在）；`P11SecurityTests.swift` 改写为 `AccessKeyStore` + `PassphraseModel` + 传输鉴权用例（P19-B 已列）。`P16InfrastructureTests` 用的是 `APITransport(token:)` 非持久 seam，**不动**。
+- `FiscalUITests`：`launchApp` 注入的 `FISCAL_DEVICE_TOKEN` seam 改为写入 `AccessKeyStore` 的 access_key seam（本地/test 后端仍走静态令牌校验，注入值 = 后端静态令牌，鉴权不破）；`testCloudConnectionEntryIsAlwaysTappable` 等断言里的「连接个人云端 / 粘贴一次性设备密钥」文案与 identifier 同步改口令页；`testP7…` 里已废的报表旧文案若命中一并核对（P18 已改）。
+- `FiscalSnapshotTool`：`APITransport(baseURL:token:)` 非持久 seam 仍可用，`FISCAL_DEVICE_TOKEN` 环境读取保留（值语义变为「access_key 或静态令牌」）；env 名可选改 `FISCAL_ACCESS_KEY`，非必需。
+- `project.yml`：schemes 段 `FISCAL_UI_TEST_DEVICE_TOKEN` 环境变量与 `APIConfiguration.bootstrapDeviceToken`/`FISCAL_DEVICE_TOKEN` 读取端一起改名或至少重指向 access_key seam（保持注入值与本地后端静态令牌一致）；**删除** iOS `info.properties` 里的 `CFBundleURLTypes`（`fiscal` scheme），随后 `cd apple && xcodegen generate`（会重写 xcodeproj 与 Info.plist，手改 plist 会被覆盖；重生成顺带改 scheme 文件，用 `git checkout -- Fiscal.xcodeproj/xcshareddata/xcschemes/` 还原噪声后仅保留本期真实的 env 改动）。
+- **全仓文案 grep 收口**：`设备密钥`、`签发`、`轮换`（设备语境）、`粘贴一次性`、`配对`、`pair`、`fiscal://`、`一次性设备密钥`——扫 `apple/`、后端用户可见串、`docs/`、`~/hz_info.md`，不留半新半旧说明。
+
+验收：`swift test`（FiscalKitTests）全绿；双端 `xcodebuild` 通过；grep 清单在生产代码/文案里归零（历史 §12 P11–P18 计划叙述属存档，不改）。
+
+**P19-E · 版本、迁移、门禁、生产部署与发布** — 涉及 `apple/project.yml`、`infra/production/production.env.example`、`infra/production/scripts/`、`infra/production/README.md`、`~/hz_info.md`、`docs/qa/p19/results.md`。
+
+- 版本：`MARKETING_VERSION` 1.2.3→**1.2.4**、`CURRENT_PROJECT_VERSION` 16→**17**；`xcodegen generate` 后两端 Info plist / Release 产物都报 `1.2.4 (17)`。
+- 运维恢复路径（无用户体系，必须给「忘记口令」出路）：`cli/access.py` 提供 `initialize`（stdin 读口令，建凭证行 `generation=1`，作为 mac-app 路径的操作端/兜底）与 `reset-passphrase`（stdin 读新口令，强制改并 `generation+1` 全局吊销——唯一的忘记口令恢复手段）；`infra/production/production.env.example` 加 `FISCAL_PASSPHRASE_KDF_ITERATIONS`，保留 `FISCAL_TOKEN_PEPPER`，注记 `FISCAL_TOKEN_PENDING_TTL_MINUTES` 为遗留未用；`README.md` 补设口令/改口令/恢复步骤，`~/hz_info.md` 更新为口令模型事实（非敏感：已启用口令鉴权、旧 operator/`kkk` 等 device token 已随设口令全灭、device_tokens 表留待下版清理）。
+- **迁移顺序与「零双端断连」验证点**（严格按序，每步验证过再下一步）：
+  1. 提交并推送已验证 revision → HZ 跑 `deploy.sh` dry-run 再 `--apply`（transition 模式：凭证行尚不存在，双通道生效）。**验证**：升级前备份 + `alembic head` 前进到新 revision + readiness + 公网 liveness；**旧版 mac 与两台旧版 iPhone 仍能用旧 device token 正常连接**（此刻不得有人掉线）。
+  2. 装 P19 mac 包（`ditto` 备份旧 `.app` 再换）→ 在 mac「访问口令卡」用旧 token 桥接调 `initialize` 设口令（或 HZ 上 `cli access initialize` 兜底）。**验证**：mac 立即用口令换到 access_key 并调通 `reports/overview`；同一旧 device token 再打受保护路由得 401（旧层已永久关闭）——**mac 全程在线，无窗口**。
+  3. 逐台装 P19 iPhone 包 → 每台或经 iCloud 钥匙串自动恢复 access_key、或输一次口令 `session` 换本机 access_key。**验证**：两台各自启动、总览与消费下钻正常。旧版 iPhone 在自身升级前的短暂掉线可接受（mac 在线）。
+  4. **记录**：旧 device token（`kkk` 等孤儿）此刻全部失效；device_tokens 表保留，标注下版清理。
+- 全量门禁：后端 §验证清单 1；Apple `swift test` + 双端 Debug + 两个签名 Release build + `codesign --verify --deep --strict`；应用回退仅在 `alembic head` 与目标 revision 相同前提下用既有 `rollback.sh`，否则按 runbook 从已验证备份恢复。
+- 发布：生产 + mac + 两台 iPhone 的证据落 `docs/qa/p19/results.md` 后，`§16` 更新为发布证据、打并推 `v1.2.4` tag。git 提交/推送、部署、装机由 builder 自理，动作各记一行。
+
+#### P19 覆盖对照（防无声砍掉）
+
+| 事项 | 落点 |
+|---|---|
+| 废除签发/pending/粘贴/扫码/轮换/设备列表/QR（含 8a310b7） | A（后端端点+服务）· B（删 PairingLink/DeviceSecurityModel）· C（删 UI）· D（删 P19PairingTests） |
+| 口令→session→access_key→iCloud 同步钥匙串 | A（`/auth/session`+凭证表）· B（`AccessKeyStore`+`PassphraseModel`） |
+| 慢哈希（stdlib PBKDF2，无新依赖）+ generation 全局吊销 | A（`core/access_keys.py`+`services/access.py`+改口令） |
+| transition 双通道 + 设口令关旧层 + 改口令认旧口令 | A（鉴权依赖+`initialize`/`change`）· B（旧 token 桥接） |
+| device_tokens 表保留、端点+UI 删除 | A（保 model/authenticate，删路由/服务方法）· C（删卡片 UI） |
+| 未授权「输入口令」双端统一 + mac 访问口令卡 + iOS 口令页 | C |
+| 登录限速 + 安全底线（TLS/不落日志/不回显/参数写死） | A（限速+日志核对）· 安全底线小节 |
+| `FiscalUITests` + scheme `FISCAL_UI_TEST_DEVICE_TOKEN` | D |
+| `FiscalSnapshotTool` token 直连 | D |
+| 文案清扫 grep（含 hz_info.md） | D（代码/文案）· E（hz_info） |
+| 后端 P11 security 测试保留/改写 | A（保 transition/静态/限速用例，删设备生命周期，新增凭证用例） |
+| xcodegen 重生成 + Info.plist（删 URL scheme）不手改 | D（删 CFBundleURLTypes）· E（版本号后重生成） |
+| 迁移「零双端断连」验证点 | E（4 步顺序 + 每步验证） |
+| 版本 1.2.4(17) + tag + 部署 + 换包 | E |
+
+#### 验证与发布清单
+
+1. 后端：`cd backend && uv lock --check && uv sync --frozen --offline && uv run --frozen ruff format --check . && uv run --frozen ruff check . && uv run --frozen pyright && uv run --frozen pytest && uv run --frozen alembic upgrade head --sql`；再跑含 access_credential 迁移往返（upgrade→downgrade→upgrade）与 PostgreSQL 鉴权组。
+2. Apple：`cd apple && xcodegen generate`（还原 scheme 噪声）；先 `xcodebuild -project Fiscal.xcodeproj -scheme FiscalmacOS -destination 'platform=macOS,arch=arm64' test -only-testing:FiscalKitTests`，再 iOS generic Simulator 与 macOS App target Debug build，收口两个签名 Release build + `codesign --verify --deep --strict`。
+3. 鉴权真实链路：本地一次性 Postgres 跑 transition→设口令→登录→改口令→全局吊销矩阵；双端截图未授权口令页、已连接改口令、mac 设口令、错误口令限速提示。
+4. 生产：committed revision 走 `deploy.sh` dry-run→`--apply`，严格按上文「迁移顺序与零双端断连验证点」四步执行并留证。
+5. 发布：证据落 `docs/qa/p19/results.md`，`§16` 更新，打并推 `v1.2.4` tag。
+
+#### 用户网页操作清单
+
+**无。** 本期不涉及任何必须经网页开通/提交的外部能力；口令由用户在 App 内自设/输入，签名、HZ 部署与双端装机走既有受控脚本/签名流程。
+
+#### 计划变更日志
+
+- 2026-07-19：创建 P19 / v1.2.4 云端连接鉴权全重做。废除 P11 设备一次性密钥模型（含 8a310b7 的 PairingLink/QR），改为「个人访问口令 + iCloud 同步 access_key」：stdlib PBKDF2 慢哈希存口令、HMAC 摘要存 access_key、改口令 generation+1 全局吊销、transition 双通道保证迁移零双端断连；device_tokens 表保留、端点与 UI 删除；MARKETING 1.2.4 / Build 17。
+
 ### 12.2 关键用户验收节点
 
 | 节点 | 用户主要验收内容 |
@@ -1034,6 +1159,7 @@ Back Tap
 | P12 | 历史数据、金额和生产环境是否可放心切换 |
 | P16 | v1.2.0：审查高/中问题是否修复，双端主流程与金额写入是否正确 |
 | P18 | v1.2.3：总览现金/应还是否直观，消费报表是否只保留正确口径且双端导航、下钻和生产安装正确 |
+| P19 | v1.2.4：设/输访问口令是否顺手，迁移后 mac 全程在线、iPhone 凭 iCloud 或口令恢复连接，改口令能全局吊销旧 access_key（transition 部署已上线、旧端在线已验；设口令与双端装机后由用户补录验收） |
 
 施工顺序的核心约束：先把统一账本和编辑做正确，再建设信用、分期和报销；业务口径稳定后建设报表；手工账本可靠后才允许 AI 自动写账；真实历史迁移永远放在新系统稳定之后。
 
@@ -1115,6 +1241,8 @@ Back Tap
 
 ## 16. 当前状态
 
+- [2026-07-19] 立项 **P19 · v1.2.4 云端连接鉴权全重做**（详见 §12 「### P19」）：用户拍板「全部换光」，废除 P11 设备一次性密钥模型（签发/pending/粘贴/扫码/轮换/设备列表 + 8a310b7 的 PairingLink/QR 全删），改为「个人访问口令 + iCloud 同步 access_key」；stdlib PBKDF2 慢哈希（不引新依赖，已核实无 passlib/argon2）、HMAC 摘要 access_key、改口令 generation+1 全局吊销、transition 双通道保证迁移零双端断连；`device_tokens` 表保留下版再清、端点与 UI 本期删除。整期属鉴权高危区，五块（A 后端核心 / B Apple 存储传输 / C 双端口令 UI / D 测试工具 schemes 文案 / E 版本迁移部署）逐块跑门禁。MARKETING 1.2.4 / Build 17，收口打 `v1.2.4` tag。**待 builder 施工。**
+- [2026-07-19] **完成 P19 · v1.2.4 施工与发布（transition 部署上线）**。A–E 五块落地（commit `4e496df`/`f417067`/`c1dbd4f`/`6c80814`/`39e9cbc`）：后端个人访问口令 + iCloud 同步 access_key，stdlib PBKDF2 慢哈希、HMAC 摘要、改口令 generation+1 全局吊销、transition 双通道；Apple `AccessKeyStore`/`PassphraseModel`/口令 UI，删 `PairingLink`/`DeviceSecurityModel`/`fiscal://`；门禁全绿（后端 ruff/pyright/pytest 绿灯 144、新增 access_credential 5 例 + 迁移往返；Apple FiscalKitTests 84、双端 Debug build、两个签名 Release 1.2.4/17 + `codesign --deep --strict`）；全 PostgreSQL 组 11 项失败经 P19 前 `main` 比对证实为既有基线、零新增回归。生产推 `main` 39e9cbc → `deploy.sh --apply --public-smoke`：升级前备份 `fiscal-20260719T101319Z.dump`、迁移 `20260718_0015→20260719_0016`、公网 liveness live；transition 验证过关（`access_credential=0`、旧 3 token 仍连、`/auth/*` 上线、旧端点 404）。mac 换包 Build 17（`ditto` 备份 + 验签 + 启动）。打并推 `v1.2.4` tag。**设访问口令与 iPhone 装机由用户完成（口令自选）；`device_tokens` 表下版清理。** 验收记录 `docs/qa/p19/results.md`。
 - 当前施工位置：**P18 v1.2.3（Build 12，实体 iPhone 验收待完成）**。总览 10 条最近流水、现金余额、按账户+还款日聚合的未来 30 天信用应还，以及双端消费报表/下钻已完成实现和自动验证；本期无 migration。默认后端全量、P7/P17/P18 PostgreSQL 定向组、Swift 测试、双端签名 Release 构建、HZ 部署/真实 API、macOS 安装与总览截图已留证于 `docs/qa/p18/results.md`。一台 iPhone 已安装但锁定、另一台安装服务不可用；两台真机启动/核心流程验收和 `v1.2.3` tag 尚未完成，不能宣称发布。
 - P18 已定边界：报销待回款只从总览卡移除，报销领域和兼容字段保留；独立现金流页保留，报表中的现金流/负债切换和前端删除；总览与消费模型保持独立但由共享失效协调器刷新，杜绝月末 `as_of` 提前计算当前信用状态。
 - P17 v1.2.1（Build 11）为已发布历史：以信用流水/账期为唯一金额真相，信用还款现金流改为不可编辑的动态投影；「记一笔·信用消费」内原子创建交易分期；账户新增普通账单日截止/上个自然月两种账期模式。旧 `credit_cycle` 现金流覆盖已清除并按真实剩余负债核对；已结清历史不重写，未结清账期通过预览+原子应用重算。
