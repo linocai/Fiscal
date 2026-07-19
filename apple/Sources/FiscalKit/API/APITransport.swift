@@ -33,7 +33,7 @@ public enum FiscalAPIError: Error, Sendable, Equatable {
     case invalidResponse
     case transport(String)
     public var code: String? { switch self { case .unauthorized(let d): d?.code; case .domain(_, let d): d.code; default: nil } }
-    public var displayMessage: String { switch self { case .unauthorized: "设备密钥无效，请重新配置。"; case .domain(_, let d): d.message; case .invalidResponse: "服务器响应无法解析。"; case .transport: "无法连接个人 VPS。" } }
+    public var displayMessage: String { switch self { case .unauthorized: "访问口令无效或已更改，请重新输入。"; case .domain(_, let d): d.message; case .invalidResponse: "服务器响应无法解析。"; case .transport: "无法连接个人 VPS。" } }
 }
 
 public actor APITransport {
@@ -48,8 +48,8 @@ public actor APITransport {
     /// in flight when a mutation cleared the cache can never re-poison it with pre-mutation data.
     private var cacheGeneration: UInt64 = 0
 
-    public init(baseURL: URL, session: URLSession = .shared, tokenStore: KeychainTokenStore = .init(), responseCache: HTTPResponseCache = .shared) {
-        self.baseURL = baseURL; self.session = session; self.tokenProvider = { try await tokenStore.read() }; self.responseCache = responseCache
+    public init(baseURL: URL, session: URLSession = .shared, accessKeyStore: AccessKeyStore = .init(), responseCache: HTTPResponseCache = .shared) {
+        self.baseURL = baseURL; self.session = session; self.tokenProvider = { try await accessKeyStore.read() }; self.responseCache = responseCache
         encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
     }

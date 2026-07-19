@@ -1,265 +1,210 @@
 import Foundation
+import Security
 import Testing
+
 @testable import FiscalKit
 
-@Suite("FiscalKit P11 device security")
-struct P11SecurityTests {
-  @Test("Rotation promotes the candidate only after server activation") @MainActor
-  func rotationCommitsInTwoPhases() async throws {
-    let fixture = SecurityFixture(activation: .succeeds)
-    let model = DeviceSecurityModel(repository: fixture.repository, tokenStore: fixture.store)
-    await model.load()
-    await fixture.events.clear()
-
-    await model.rotateCurrent()
-
-    let events = await fixture.events.values
-    #expect(Array(events.prefix(4)) == [
-      "prepare:7", "save-pending:candidate-key", "activate:candidate-key:1", "promote-pending",
-    ])
-    #expect(await fixture.store.activeToken == "candidate-key")
-    #expect(await fixture.store.pendingToken == nil)
-    #expect(model.message == "设备密钥已安全轮换，旧密钥已由服务器撤销")
-  }
-
-  @Test("A lost activation response is confirmed with the candidate before promotion") @MainActor
-  func ambiguousActivationIsRecovered() async {
-    let fixture = SecurityFixture(activation: .commitsThenLosesResponse)
-    let model = DeviceSecurityModel(repository: fixture.repository, tokenStore: fixture.store)
-    await model.load()
-    await fixture.events.clear()
-
-    await model.rotateCurrent()
-
-    let events = await fixture.events.values
-    #expect(Array(events.prefix(5)) == [
-      "prepare:7", "save-pending:candidate-key", "activate:candidate-key:1",
-      "status:candidate-key", "promote-pending",
-    ])
-    #expect(await fixture.store.activeToken == "candidate-key")
-    #expect(await fixture.store.pendingToken == nil)
-    #expect(model.message == "设备密钥已安全轮换，旧密钥已由服务器撤销")
-  }
-
-  @Test("An unconfirmed activation keeps both the old key and pending candidate") @MainActor
-  func failedActivationPreservesRecoveryState() async {
-    let fixture = SecurityFixture(activation: .failsUnconfirmed)
-    let model = DeviceSecurityModel(repository: fixture.repository, tokenStore: fixture.store)
-    await model.load()
-    await fixture.events.clear()
-
-    await model.rotateCurrent()
-
-    #expect(await fixture.events.values == [
-      "prepare:7", "save-pending:candidate-key", "activate:candidate-key:1",
-      "status:candidate-key",
-    ])
-    #expect(await fixture.store.activeToken == "old-key")
-    #expect(await fixture.store.pendingToken?.token == "candidate-key")
-    #expect(model.message == "设备密钥轮换尚未确认，原密钥仍会保留")
-  }
-
-  @Test("A newly issued raw token can be explicitly cleared after its one-time display") @MainActor
-  func issuedRawTokenCanBeCleared() async {
-    let fixture = SecurityFixture(activation: .succeeds)
-    let model = DeviceSecurityModel(repository: fixture.repository, tokenStore: fixture.store)
-
-    await model.issueDevice(label: "  iPad mini  ")
-    #expect(model.issuedDeviceToken?.deviceToken == "candidate-key")
-    #expect(await fixture.events.values.first == "issue:iPad mini")
-
-    model.clearIssuedToken()
-    #expect(model.issuedDeviceToken == nil)
-  }
-
-  @Test("A transferred pending token activates before becoming the device's active key") @MainActor
-  func transferredTokenInstallsSafely() async {
-    let fixture = SecurityFixture(activation: .succeeds, activeToken: nil)
-    let model = DeviceSecurityModel(repository: fixture.repository, tokenStore: fixture.store)
-
-    await model.installIssuedToken("fiscal_dt_v1_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ")
-
-    #expect(Array((await fixture.events.values).prefix(3)) == [
-      "save-pending:fiscal_dt_v1_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
-      "activate:fiscal_dt_v1_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ:1",
-      "promote-pending",
-    ])
-    #expect(await fixture.store.activeToken == "fiscal_dt_v1_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ")
-    #expect(model.message == "新设备密钥已激活并安全存入 Keychain")
-  }
-}
-
-private struct SecurityFixture {
-  let events: SecurityEventLog
-  let repository: SecurityRepositoryMock
-  let store: DeviceTokenStoreMock
-
-  init(activation: SecurityRepositoryMock.ActivationBehavior, activeToken: String? = "old-key") {
-    let events = SecurityEventLog()
-    self.events = events
-    repository = SecurityRepositoryMock(events: events, activation: activation)
-    store = DeviceTokenStoreMock(events: events, activeToken: activeToken)
-  }
-}
-
-private actor SecurityEventLog {
-  private var storage: [String] = []
-  var values: [String] { storage }
-  func append(_ value: String) { storage.append(value) }
-  func clear() { storage.removeAll() }
-}
-
-private actor DeviceTokenStoreMock: DeviceTokenStoring {
-  private(set) var activeToken: String?
-  private(set) var pendingToken: PendingDeviceToken?
-  private let events: SecurityEventLog
-
-  init(events: SecurityEventLog, activeToken: String?) {
-    self.events = events
-    self.activeToken = activeToken
-  }
-
-  func read() async throws -> String? { activeToken }
-
-  func save(_ token: String) async throws {
-    await events.append("save-active:\(token)")
-    activeToken = token
-  }
-
-  func delete() async throws {
-    await events.append("delete-active")
-    activeToken = nil
-  }
-
-  func savePending(_ pending: PendingDeviceToken) async throws {
-    await events.append("save-pending:\(pending.token)")
-    pendingToken = pending
-  }
-
-  func readPending() async throws -> PendingDeviceToken? { pendingToken }
-
-  func deletePending() async throws {
-    await events.append("delete-pending")
-    pendingToken = nil
-  }
-
-  func promotePending() async throws {
-    guard let pendingToken else { throw SecurityTestError.missingPendingToken }
-    await events.append("promote-pending")
-    activeToken = pendingToken.token
-    self.pendingToken = nil
-  }
-}
-
-private actor SecurityRepositoryMock: DeviceSecurityRepository {
-  enum ActivationBehavior: Sendable {
-    case succeeds
-    case commitsThenLosesResponse
-    case failsUnconfirmed
-  }
-
-  private let events: SecurityEventLog
-  private let activation: ActivationBehavior
-  private var serverActivatedCandidate = false
-
-  init(events: SecurityEventLog, activation: ActivationBehavior) {
-    self.events = events
-    self.activation = activation
-  }
-
-  func securityStatus(authorizationToken: String?) async throws -> SecurityStatusDTO {
-    await events.append("status:\(authorizationToken ?? "active")")
-    if authorizationToken == "candidate-key" {
-      guard serverActivatedCandidate else { throw SecurityTestError.candidateNotActive }
-      return Self.status(current: Self.candidate(status: .active, version: 2))
+@Suite("FiscalKit P19 access passphrase")
+struct P19AccessPassphraseTests {
+    @Test("Access keys are stored in the iCloud-synchronized keychain, not device-bound")
+    func accessKeyStoreUsesSynchronizableKeychain() {
+        let query = AccessKeyStore.keychainQuery(
+            service: "com.linotsai.fiscal.access", account: "access-key",
+            accessGroup: "HX73DFL88G.com.linotsai.fiscal")
+        #expect(query[kSecAttrSynchronizable as String] as? Bool == true)
+        #expect((query[kSecAttrService as String] as? String) == "com.linotsai.fiscal.access")
+        #expect((query[kSecAttrAccount as String] as? String) == "access-key")
+        #expect(
+            (query[kSecAttrAccessGroup as String] as? String) == "HX73DFL88G.com.linotsai.fiscal")
+        let accessible = query[kSecAttrAccessible as String]
+        #expect((accessible as! CFString) == kSecAttrAccessibleAfterFirstUnlock)
+        // Device-bound accessibility cannot synchronize; make sure we did not pick it.
+        #expect((accessible as! CFString) != kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }
-    return Self.status(current: Self.activeDevice)
-  }
 
-  func list() async throws -> [DeviceTokenSummary] {
-    await events.append("list")
-    return [Self.activeDevice]
-  }
-
-  func operationsStatus() async throws -> OperationsStatusDTO {
-    await events.append("operations")
-    return OperationsStatusDTO(
-      serviceVersion: "0.1.0", releaseRevision: String(repeating: "a", count: 40),
-      database: "ready", alembicRevision: "20260716_0010",
-      releaseAlembicRevision: "20260716_0010", schemaState: "current",
-      backup: BackupOperationStatus(
-        state: "verified", createdAt: Self.timestamp, ageHours: 1,
-        durationSeconds: 3, sizeBytes: 1024),
-      restore: RestoreOperationStatus(
-        state: "verified", checkedAt: Self.timestamp, ageHours: 2, durationSeconds: 8),
-      disk: DiskOperationStatus(
-        state: "healthy", checkedAt: Self.timestamp, usedPercent: 21,
-        warningPercent: 75, failurePercent: 85))
-  }
-
-  func issue(label: String) async throws -> IssuedDeviceToken {
-    await events.append("issue:\(label)")
-    return Self.issuedCandidate
-  }
-
-  func prepareRotation(expectedVersion: Int) async throws -> IssuedDeviceToken {
-    await events.append("prepare:\(expectedVersion)")
-    return Self.issuedCandidate
-  }
-
-  func activate(token: String, expectedVersion: Int) async throws -> ActivatedDeviceToken {
-    await events.append("activate:\(token):\(expectedVersion)")
-    switch activation {
-    case .succeeds:
-      serverActivatedCandidate = true
-      return ActivatedDeviceToken(
-        token: Self.candidate(status: .active, version: 2),
-        revokedPredecessorID: Self.activeDevice.id)
-    case .commitsThenLosesResponse:
-      serverActivatedCandidate = true
-      throw SecurityTestError.responseLost
-    case .failsUnconfirmed:
-      throw SecurityTestError.activationFailed
+    @Test("A default access-key store carries no access group (macOS uses the implicit group)")
+    func defaultAccessKeyStoreQueryOmitsAccessGroup() {
+        let query = AccessKeyStore.keychainQuery(
+            service: "com.linotsai.fiscal.access", account: "access-key", accessGroup: nil)
+        #expect(query[kSecAttrAccessGroup as String] == nil)
     }
-  }
 
-  func revoke(id: UUID, expectedVersion: Int) async throws -> DeviceTokenSummary {
-    await events.append("revoke:\(id):\(expectedVersion)")
-    return Self.activeDevice
-  }
+    @Test("Entering the passphrase mints and stores an access key and reaches the connected state")
+    @MainActor
+    func loginStoresAccessKeyAndConnects() async {
+        let store = AccessKeyStoreMock()
+        let repo = AuthRepositoryMock(store: store, legacyToken: nil, passphrase: "opensesame")
+        let model = PassphraseModel(
+            repository: repo, accessKeyStore: store, legacyTokenStore: LegacyTokenStoreMock(nil))
 
-  private static let activeID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
-  private static let candidateID = UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!
-  private static let timestamp = Date(timeIntervalSince1970: 1_752_681_600)
+        await model.loadStatus()
+        #expect(model.phase == .unauthorized)
 
-  private static let activeDevice = DeviceTokenSummary(
-    id: activeID, label: "My Mac", role: .operator, status: .active,
-    fingerprint: "old-fingerprint", version: 7, createdAt: timestamp,
-    activatedAt: timestamp, lastUsedAt: timestamp, expiresAt: nil)
+        await model.login(passphrase: "wrong-passphrase")
+        #expect(model.phase == .unauthorized)
+        #expect(await store.value == nil)
 
-  private static var issuedCandidate: IssuedDeviceToken {
-    IssuedDeviceToken(deviceToken: "candidate-key", token: candidate(status: .pending, version: 1))
-  }
+        await model.login(passphrase: "opensesame")
+        #expect(model.isConnected)
+        #expect(model.phase == .loaded)
+        #expect(await store.value?.hasPrefix("fiscal_ak_v1_") == true)
+    }
 
-  private static func candidate(status: DeviceTokenStatus, version: Int) -> DeviceTokenSummary {
-    DeviceTokenSummary(
-      id: candidateID, label: "My Mac", role: .operator, status: status,
-      fingerprint: "candidate-fingerprint", version: version, createdAt: timestamp,
-      activatedAt: status == .active ? timestamp : nil, lastUsedAt: nil, expiresAt: nil)
-  }
+    @Test("Transition: a legacy device token bridges the one-time set-passphrase call") @MainActor
+    func initializeBridgesLegacyTokenAndClosesTransition() async {
+        let store = AccessKeyStoreMock()
+        let legacy = LegacyTokenStoreMock("fiscal_dt_v1_legacy")
+        let repo = AuthRepositoryMock(
+            store: store, legacyToken: "fiscal_dt_v1_legacy", passphrase: nil)
+        let model = PassphraseModel(
+            repository: repo, accessKeyStore: store, legacyTokenStore: legacy)
 
-  private static func status(current: DeviceTokenSummary) -> SecurityStatusDTO {
-    SecurityStatusDTO(
-      authenticationMode: "database", serverTime: timestamp, currentDevice: current,
-      tokenCounts: DeviceTokenCounts(active: 1, pending: 0),
-      rateLimits: DeviceRateLimits(
-        readPerMinute: 120, writePerMinute: 30, aiPerMinute: 10, failedAuthPerMinute: 10))
-  }
+        await model.loadStatus()
+        // No access key yet, but the legacy token bridges status: transition, not unauthorized.
+        #expect(model.isTransition)
+        #expect(model.status?.passphraseSet == false)
+
+        await model.initializePassphrase("brand-new-passphrase")
+        #expect(model.isConnected)
+        #expect(model.status?.passphraseSet == true)
+        #expect(await store.value?.hasPrefix("fiscal_ak_v1_") == true)
+        #expect(model.message == "访问口令已设定，本机已切换到口令连接")
+    }
+
+    @Test("Changing the passphrase rotates the stored access key and stays connected") @MainActor
+    func changeRotatesAccessKey() async {
+        let store = AccessKeyStoreMock()
+        let repo = AuthRepositoryMock(store: store, legacyToken: nil, passphrase: "opensesame")
+        let model = PassphraseModel(
+            repository: repo, accessKeyStore: store, legacyTokenStore: LegacyTokenStoreMock(nil))
+        await model.login(passphrase: "opensesame")
+        let firstKey = await store.value
+
+        await model.changePassphrase(old: "opensesame", new: "second-passphrase")
+        #expect(model.isConnected)
+        #expect(model.message == "访问口令已更新，其它设备需重新输入新口令")
+        let rotatedKey = await store.value
+        #expect(rotatedKey != nil)
+        #expect(rotatedKey != firstKey)
+        // The old passphrase no longer works; the new one does.
+        await model.login(passphrase: "opensesame")
+        #expect(model.message == "访问口令无效或已更改，请重新输入。")
+    }
+
+    @Test("A globally revoked access key drops the model into the unauthorized state") @MainActor
+    func globalRevocationForcesUnauthorized() async {
+        let store = AccessKeyStoreMock()
+        let repo = AuthRepositoryMock(store: store, legacyToken: nil, passphrase: "opensesame")
+        let model = PassphraseModel(
+            repository: repo, accessKeyStore: store, legacyTokenStore: LegacyTokenStoreMock(nil))
+        await model.login(passphrase: "opensesame")
+        #expect(model.isConnected)
+
+        // Another device changed the passphrase: the generation bumped and this key is revoked.
+        await repo.externallyChangePassphrase()
+        await model.loadStatus()
+        #expect(model.phase == .unauthorized)
+        #expect(model.isConnected == false)
+    }
 }
 
-private enum SecurityTestError: Error {
-  case responseLost
-  case activationFailed
-  case candidateNotActive
-  case missingPendingToken
+private actor AccessKeyStoreMock: AccessKeyStoring {
+    private(set) var value: String?
+    init(_ value: String? = nil) { self.value = value }
+    func read() -> String? { value }
+    func save(_ accessKey: String) { value = accessKey }
+    func delete() { value = nil }
+}
+
+private actor LegacyTokenStoreMock: DeviceTokenStoring {
+    private var token: String?
+    init(_ token: String?) { self.token = token }
+    func read() -> String? { token }
+    func save(_ token: String) { self.token = token }
+    func delete() { token = nil }
+}
+
+private actor AuthRepositoryMock: AuthRepositoryProtocol {
+    private let store: AccessKeyStoreMock
+    private let legacyToken: String?
+    private var passphrase: String?
+    private var generation = 1
+    private var validKeys: Set<String> = []
+    private var counter = 0
+
+    init(store: AccessKeyStoreMock, legacyToken: String?, passphrase: String?) {
+        self.store = store
+        self.legacyToken = legacyToken
+        self.passphrase = passphrase
+    }
+
+    func externallyChangePassphrase() {
+        generation += 1
+        validKeys.removeAll()
+    }
+
+    func session(passphrase: String) throws -> AccessKeyResponse {
+        guard self.passphrase != nil else { throw conflict("passphrase_not_set") }
+        guard passphrase == self.passphrase else { throw unauthorized("invalid_passphrase") }
+        return mint()
+    }
+
+    func initialize(passphrase: String, legacyToken: String) throws -> AccessKeyResponse {
+        guard self.passphrase == nil else { throw conflict("passphrase_already_set") }
+        guard legacyToken == self.legacyToken else { throw FiscalAPIError.unauthorized(nil) }
+        self.passphrase = passphrase
+        return mint()
+    }
+
+    func change(oldPassphrase: String, newPassphrase: String) throws -> AccessKeyResponse {
+        guard passphrase != nil else { throw conflict("passphrase_not_set") }
+        guard oldPassphrase == passphrase else { throw unauthorized("invalid_passphrase") }
+        generation += 1
+        validKeys.removeAll()
+        passphrase = newPassphrase
+        return mint()
+    }
+
+    func status(authorizationToken: String?) async throws -> AccessCredentialStatus {
+        let token: String?
+        if let authorizationToken { token = authorizationToken } else { token = await store.read() }
+        if let token, validKeys.contains(token) { return statusDTO(passphraseSet: true) }
+        if let token, token == legacyToken, passphrase == nil {
+            return statusDTO(passphraseSet: false)
+        }
+        throw FiscalAPIError.unauthorized(nil)
+    }
+
+    func operations(authorizationToken: String?) async throws -> OperationsStatusDTO {
+        throw FiscalAPIError.unauthorized(nil)
+    }
+
+    private func mint() -> AccessKeyResponse {
+        counter += 1
+        let key = "fiscal_ak_v1_key\(counter)"
+        validKeys.insert(key)
+        return AccessKeyResponse(accessKey: key, credentialGeneration: generation)
+    }
+
+    private func statusDTO(passphraseSet: Bool) -> AccessCredentialStatus {
+        AccessCredentialStatus(
+            authenticationMode: passphraseSet ? "passphrase" : "transition_device_token",
+            passphraseSet: passphraseSet,
+            credentialGeneration: passphraseSet ? generation : nil,
+            lastRotatedAt: nil,
+            activeAccessKeyCount: passphraseSet ? validKeys.count : 0,
+            serverTime: Date(timeIntervalSince1970: 1_752_681_600),
+            rateLimits: RateLimits(
+                readPerMinute: 120, writePerMinute: 30, aiPerMinute: 10, failedAuthPerMinute: 10))
+    }
+
+    private func unauthorized(_ code: String) -> FiscalAPIError {
+        .unauthorized(APIErrorDetail(code: code, message: code, details: nil, requestID: "test"))
+    }
+
+    private func conflict(_ code: String) -> FiscalAPIError {
+        .domain(
+            status: 409,
+            detail: APIErrorDetail(code: code, message: code, details: nil, requestID: "test"))
+    }
 }

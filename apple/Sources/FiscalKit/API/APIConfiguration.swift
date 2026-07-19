@@ -12,8 +12,10 @@ public enum APIConfiguration {
         return URL(string: "https://fiscal.invalid")!
     }
 
-    /// Optional one-time QA bootstrap. Xcode scheme/environment values are never bundled in the app.
-    public static func bootstrapDeviceToken(environment: [String: String] = ProcessInfo.processInfo.environment) -> String? {
-        environment["FISCAL_DEVICE_TOKEN"]
+    /// Optional one-time QA bootstrap access key. Xcode scheme/environment values are never
+    /// bundled in the app. Against a local/test backend the injected value equals the backend's
+    /// static token, so static-token authentication still accepts it.
+    public static func bootstrapAccessKey(environment: [String: String] = ProcessInfo.processInfo.environment) -> String? {
+        environment["FISCAL_ACCESS_KEY"]
     }
 }

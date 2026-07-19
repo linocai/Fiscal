@@ -1,44 +1,6 @@
 import Foundation
 
-public enum DeviceTokenRole: String, Codable, Sendable, CaseIterable {
-    case device, `operator`
-    public var title: String { self == .operator ? "运维设备" : "普通设备" }
-}
-
-public enum DeviceTokenStatus: String, Codable, Sendable {
-    case pending, active, revoked
-    public var title: String {
-        switch self { case .pending: "待激活"; case .active: "有效"; case .revoked: "已撤销" }
-    }
-}
-
-public struct DeviceTokenSummary: Codable, Sendable, Identifiable, Equatable {
-    public let id: UUID
-    public let label: String
-    public let role: DeviceTokenRole
-    public let status: DeviceTokenStatus
-    public let fingerprint: String
-    public let version: Int
-    public let createdAt: Date
-    public let activatedAt: Date?
-    public let lastUsedAt: Date?
-    public let expiresAt: Date?
-
-    enum CodingKeys: String, CodingKey {
-        case id, label, role, status, fingerprint, version
-        case createdAt = "created_at"
-        case activatedAt = "activated_at"
-        case lastUsedAt = "last_used_at"
-        case expiresAt = "expires_at"
-    }
-}
-
-public struct DeviceTokenCounts: Codable, Sendable, Equatable {
-    public let active: Int
-    public let pending: Int
-}
-
-public struct DeviceRateLimits: Codable, Sendable, Equatable {
+public struct RateLimits: Codable, Sendable, Equatable {
     public let readPerMinute: Int
     public let writePerMinute: Int
     public let aiPerMinute: Int
@@ -52,18 +14,35 @@ public struct DeviceRateLimits: Codable, Sendable, Equatable {
     }
 }
 
-public struct SecurityStatusDTO: Codable, Sendable, Equatable {
+/// Response of `/auth/session`, `/auth/passphrase/initialize`, and `/auth/passphrase/change`.
+/// The access key appears only in these three responses and is stored, never displayed.
+public struct AccessKeyResponse: Codable, Sendable, Equatable {
+    public let accessKey: String
+    public let credentialGeneration: Int
+
+    enum CodingKeys: String, CodingKey {
+        case accessKey = "access_key"
+        case credentialGeneration = "credential_generation"
+    }
+}
+
+/// Response of `/auth/status`. Never carries an access key or passphrase.
+public struct AccessCredentialStatus: Codable, Sendable, Equatable {
     public let authenticationMode: String
+    public let passphraseSet: Bool
+    public let credentialGeneration: Int?
+    public let lastRotatedAt: Date?
+    public let activeAccessKeyCount: Int
     public let serverTime: Date
-    public let currentDevice: DeviceTokenSummary?
-    public let tokenCounts: DeviceTokenCounts
-    public let rateLimits: DeviceRateLimits
+    public let rateLimits: RateLimits
 
     enum CodingKeys: String, CodingKey {
         case authenticationMode = "authentication_mode"
+        case passphraseSet = "passphrase_set"
+        case credentialGeneration = "credential_generation"
+        case lastRotatedAt = "last_rotated_at"
+        case activeAccessKeyCount = "active_access_key_count"
         case serverTime = "server_time"
-        case currentDevice = "current_device"
-        case tokenCounts = "token_counts"
         case rateLimits = "rate_limits"
     }
 }
@@ -134,27 +113,4 @@ public struct OperationsStatusDTO: Codable, Sendable, Equatable {
         case schemaState = "schema_state"
         case backup, restore, disk
     }
-}
-
-public struct DeviceTokenListResponse: Codable, Sendable, Equatable {
-    public let items: [DeviceTokenSummary]
-}
-
-public struct IssuedDeviceToken: Codable, Sendable, Equatable {
-    public let deviceToken: String
-    public let token: DeviceTokenSummary
-    enum CodingKeys: String, CodingKey { case deviceToken = "device_token"; case token }
-}
-
-public struct ActivatedDeviceToken: Codable, Sendable, Equatable {
-    public let token: DeviceTokenSummary
-    public let revokedPredecessorID: UUID?
-    enum CodingKeys: String, CodingKey {
-        case token
-        case revokedPredecessorID = "revoked_predecessor_id"
-    }
-}
-
-public struct RevokedDeviceToken: Codable, Sendable, Equatable {
-    public let token: DeviceTokenSummary
 }

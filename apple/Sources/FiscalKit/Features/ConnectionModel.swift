@@ -30,12 +30,12 @@ public final class ConnectionModel {
         }
     }
 
-    public func configure(bootstrapToken: String?) async {
-        if let bootstrapToken, !bootstrapToken.isEmpty {
+    public func configure(bootstrapAccessKey: String?) async {
+        if let bootstrapAccessKey, !bootstrapAccessKey.isEmpty {
             do {
-                try await client.saveBootstrapTokenIfMissing(bootstrapToken)
+                try await client.saveBootstrapAccessKeyIfMissing(bootstrapAccessKey)
             } catch {
-                phase = .offline("无法安全保存设备密钥")
+                phase = .offline("无法安全保存访问凭证")
                 return
             }
         }

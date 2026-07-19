@@ -24,7 +24,7 @@ public struct TransactionCSVDocument: FileDocument {
 #if os(iOS)
 public struct IOSSettingsScreen: View {
   @Bindable var model: AISettingsModel
-  let security: DeviceSecurityModel?
+  let passphrase: PassphraseModel?
   @Bindable var preferences: RecordingPreferences
   let accounts: AccountsModel
   let transactions: TransactionsModel
@@ -41,7 +41,7 @@ public struct IOSSettingsScreen: View {
   @Environment(\.openURL) private var openURL
   public init(
     model: AISettingsModel,
-    security: DeviceSecurityModel? = nil,
+    passphrase: PassphraseModel? = nil,
     preferences: RecordingPreferences,
     accounts: AccountsModel,
     transactions: TransactionsModel,
@@ -49,7 +49,7 @@ public struct IOSSettingsScreen: View {
     openCategories: @escaping () -> Void = {},
     openReports: @escaping () -> Void = {}
   ) {
-    self.model = model; self.security = security; self.preferences = preferences; self.accounts = accounts
+    self.model = model; self.passphrase = passphrase; self.preferences = preferences; self.accounts = accounts
     self.transactions = transactions; self.cache = cache
     self.openCategories = openCategories; self.openReports = openReports
   }
@@ -79,7 +79,7 @@ public struct IOSSettingsScreen: View {
       .task { if model.phase == .idle { await model.load() } }
       .task { await capture.refresh() }
       .task { await loadLocalState() }
-      .task { await security?.load() }
+      .task { await passphrase?.loadStatus() }
       .fileExporter(
         isPresented: $showCSVExporter,
         document: csvDocument,
@@ -174,7 +174,7 @@ public struct IOSSettingsScreen: View {
   }
 
   @ViewBuilder private var securityCard: some View {
-    if let security { DeviceSecuritySettingsCard(model: security, compact: true) }
+    if let passphrase { PassphraseSettingsCard(model: passphrase, compact: true) }
     else { securityUnavailableCard(radius: 18) }
   }
 
@@ -447,7 +447,7 @@ public struct AISettingsCard: View {
 #if os(macOS)
 public struct MacSettingsScreen: View {
   @Bindable var model: AISettingsModel
-  let security: DeviceSecurityModel?
+  let passphrase: PassphraseModel?
   @Bindable var preferences: RecordingPreferences
   let accounts: AccountsModel
   let cache: HTTPResponseCache
@@ -463,7 +463,7 @@ public struct MacSettingsScreen: View {
 
   public init(
     model: AISettingsModel,
-    security: DeviceSecurityModel? = nil,
+    passphrase: PassphraseModel? = nil,
     preferences: RecordingPreferences,
     accounts: AccountsModel,
     transactions: TransactionsModel,
@@ -471,7 +471,7 @@ public struct MacSettingsScreen: View {
     openCategories: @escaping () -> Void = {},
     openReports: @escaping () -> Void = {}
   ) {
-    self.model = model; self.security = security; self.preferences = preferences; self.accounts = accounts
+    self.model = model; self.passphrase = passphrase; self.preferences = preferences; self.accounts = accounts
     self.transactions = transactions; self.cache = cache
     self.openCategories = openCategories; self.openReports = openReports
   }
@@ -508,7 +508,7 @@ public struct MacSettingsScreen: View {
       }.frame(maxWidth: 760).padding(22).frame(maxWidth: .infinity, alignment: .top)
     }
     .background(FiscalColor.macBackground)
-    .task { if model.phase == .idle { await model.load() }; await loadLocalState(); await security?.load() }
+    .task { if model.phase == .idle { await model.load() }; await loadLocalState(); await passphrase?.loadStatus() }
     .fileExporter(
       isPresented: $showCSVExporter,
       document: csvDocument,
@@ -608,7 +608,7 @@ public struct MacSettingsScreen: View {
   }
 
   @ViewBuilder private var securityCard: some View {
-    if let security { DeviceSecuritySettingsCard(model: security) }
+    if let passphrase { PassphraseSettingsCard(model: passphrase) }
     else { securityUnavailableCard(radius: 15) }
   }
 
@@ -667,27 +667,27 @@ public struct MacSettingsScreen: View {
 }
 #endif
 
-public struct DeviceSecuritySettingsCard: View {
-  @Bindable var model: DeviceSecurityModel
+public struct PassphraseSettingsCard: View {
+  @Bindable var model: PassphraseModel
   let compact: Bool
-  let alwaysAllowsCredentialImport: Bool
-  let onCredentialActivated: () -> Void
-  @State private var showRemoveConfirmation = false
-  @State private var showIssue = false
-  @State private var newDeviceLabel = ""
-  @State private var importedDeviceToken = ""
-  @FocusState private var credentialFieldFocused: Bool
+  let onConnected: () -> Void
+  @State private var loginPassphrase = ""
+  @State private var newPassphrase = ""
+  @State private var confirmPassphrase = ""
+  @State private var oldPassphrase = ""
+  @State private var rotatedNewPassphrase = ""
+  @State private var showChange = false
+  @State private var localError: String?
+  @FocusState private var loginFocused: Bool
 
   public init(
-    model: DeviceSecurityModel,
+    model: PassphraseModel,
     compact: Bool = false,
-    alwaysAllowsCredentialImport: Bool = false,
-    onCredentialActivated: @escaping () -> Void = {}
+    onConnected: @escaping () -> Void = {}
   ) {
     self.model = model
     self.compact = compact
-    self.alwaysAllowsCredentialImport = alwaysAllowsCredentialImport
-    self.onCredentialActivated = onCredentialActivated
+    self.onConnected = onConnected
   }
 
   public var body: some View {
@@ -702,93 +702,205 @@ public struct DeviceSecuritySettingsCard: View {
           Spacer()
           if model.phase == .loading { ProgressView().controlSize(.small) }
         }
-        if let status = model.status {
+        if model.isConnected, let status = model.status {
           Divider().opacity(0.35)
-          if let device = status.currentDevice {
-            currentDevice(device)
-            Divider().opacity(0.35)
-          }
+          lastRotatedRow(status)
           if let operations = model.operations {
-            operationsFacts(operations)
             Divider().opacity(0.35)
+            operationsFacts(operations)
           }
-          VStack(alignment: .leading, spacing: 5) {
-            Label("真实安全边界", systemImage: "lock.shield")
-              .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
-            Text("HTTPS 保护传输；设备密钥仅存本机 Keychain，服务器只保存加盐摘要。服务端需要计算报表并处理所选 AI 文本，因此不宣称端到端加密。")
-              .font(.caption).foregroundStyle(FiscalColor.tertiary)
-              .fixedSize(horizontal: false, vertical: true)
-            Text("限流：读取 \(status.rateLimits.readPerMinute)/分 · 写入 \(status.rateLimits.writePerMinute)/分 · AI \(status.rateLimits.aiPerMinute)/分")
-              .font(.caption2).foregroundStyle(FiscalColor.tertiary)
-          }
-          if let device = status.currentDevice { actionArea(status, device: device) }
-        } else if model.phase == .unauthorized || alwaysAllowsCredentialImport {
-          importArea
-          if model.phase == .failed {
-            Button("重试读取安全状态") { Task { await model.load() } }
-              .buttonStyle(FiscalActionButtonStyle(.secondary))
-          }
+          Divider().opacity(0.35)
+          securityBoundary(status)
+          Divider().opacity(0.35)
+          changeArea
+        } else if model.isTransition {
+          Divider().opacity(0.35)
+          setPassphraseArea
+        } else if model.phase == .unauthorized {
+          Divider().opacity(0.35)
+          loginArea
         } else if model.phase == .failed {
-          Button("重试读取安全状态") { Task { await model.load() } }
+          Button("重试读取连接状态") { Task { await model.loadStatus() } }
             .buttonStyle(FiscalActionButtonStyle(.secondary))
         }
-        if let message = model.message {
+        if let message = localError ?? model.message {
           Text(message).font(.caption).foregroundStyle(FiscalColor.secondary)
         }
       }
     }
-    .alert("移除此设备密钥？", isPresented: $showRemoveConfirmation) {
-      Button("取消", role: .cancel) {}
-      Button("移除", role: .destructive) { Task { await model.removeCurrentDevice() } }
-    } message: {
-      Text("服务器会立即撤销此密钥，并从本机 Keychain 删除。此操作不是退出登录。")
-    }
   }
 
   private var statusLine: String {
-    guard let status = model.status else {
-      return model.phase == .loading ? "正在核验服务器与设备密钥…" : "尚未读取生产安全状态"
+    if model.isConnected, let status = model.status {
+      return "口令连接 · \(status.activeAccessKeyCount) 个有效 access_key"
     }
-    return "\(status.authenticationMode == "database" ? "数据库密钥" : status.authenticationMode) · \(status.tokenCounts.active) 个有效设备"
+    if model.isTransition { return "过渡期 · 旧设备凭证仍在连接，请设置访问口令" }
+    switch model.phase {
+    case .loading: return "正在核验服务器与访问口令…"
+    case .unauthorized: return "输入访问口令以连接"
+    default: return "尚未连接个人云端"
+    }
   }
 
-  private var importArea: some View {
-    VStack(alignment: .leading, spacing: 11) {
-      Label("设备密钥无效或已移除", systemImage: "key.slash")
-        .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.expense)
-      Text("在已授权的 Mac 上签发新设备密钥，再通过通用剪贴板或其他安全方式粘贴到这里。密钥激活后只保存在本机 Keychain。")
+  private func lastRotatedRow(_ status: AccessCredentialStatus) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 12) {
+      FiscalIconTile("key.horizontal", color: FiscalColor.reimbursement)
+      VStack(alignment: .leading, spacing: 3) {
+        Text("访问口令已启用").font(.subheadline.weight(.semibold))
+        Text(rotatedDescription(status.lastRotatedAt))
+          .font(.caption).foregroundStyle(FiscalColor.tertiary)
+      }
+      Spacer()
+    }
+  }
+
+  private func rotatedDescription(_ date: Date?) -> String {
+    guard let date else { return "自设定后未更新过口令" }
+    return "上次更新口令 \(date.formatted(.relative(presentation: .named)))"
+  }
+
+  private func securityBoundary(_ status: AccessCredentialStatus) -> some View {
+    VStack(alignment: .leading, spacing: 5) {
+      Label("真实安全边界", systemImage: "lock.shield")
+        .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
+      Text("HTTPS 传输；访问口令仅存慢哈希；access_key 存 iCloud 同步钥匙串，仅本人 Apple ID 可同步。服务端需要计算报表并处理所选 AI 文本，因此不宣称端到端加密。")
         .font(.caption).foregroundStyle(FiscalColor.tertiary)
         .fixedSize(horizontal: false, vertical: true)
-      SecureField("粘贴一次性设备密钥", text: $importedDeviceToken)
-        .textFieldStyle(.plain).font(.caption.monospaced())
+      Text("限流：读取 \(status.rateLimits.readPerMinute)/分 · 写入 \(status.rateLimits.writePerMinute)/分 · AI \(status.rateLimits.aiPerMinute)/分")
+        .font(.caption2).foregroundStyle(FiscalColor.tertiary)
+    }
+  }
+
+  private var loginArea: some View {
+    VStack(alignment: .leading, spacing: 11) {
+      Label("输入访问口令", systemImage: "key")
+        .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
+      Text("输入你设定的访问口令即可连接。连接凭证会安全存入 iCloud 同步钥匙串，换机或重装可自动恢复。")
+        .font(.caption).foregroundStyle(FiscalColor.tertiary)
+        .fixedSize(horizontal: false, vertical: true)
+      SecureField("访问口令", text: $loginPassphrase)
+        .textFieldStyle(.plain)
         .padding(.horizontal, 11).frame(minHeight: 40)
         .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
-        .focused($credentialFieldFocused)
+        .focused($loginFocused)
         .submitLabel(.go)
-        .onSubmit(activateImportedCredential)
-      Button(action: activateImportedCredential) {
+        .onSubmit(submitLogin)
+        .accessibilityIdentifier("cloudConnection.passphraseField")
+      Button(action: submitLogin) {
         HStack(spacing: 8) {
           if model.isMutating { ProgressView().controlSize(.small) }
-          Text(model.isMutating ? "正在激活…" : "激活此设备")
+          Text(model.isMutating ? "正在连接…" : "连接")
         }
         .frame(maxWidth: .infinity, minHeight: 48)
         .contentShape(.rect)
       }
       .buttonStyle(FiscalActionButtonStyle())
-      .disabled(model.isMutating || importedDeviceToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-      .accessibilityIdentifier("ios.cloudConnection.activate")
+      .disabled(model.isMutating || loginPassphrase.isEmpty)
+      .accessibilityIdentifier("cloudConnection.login")
     }
   }
 
-  private func activateImportedCredential() {
-    let token = importedDeviceToken.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !model.isMutating, !token.isEmpty else { return }
+  private var setPassphraseArea: some View {
+    VStack(alignment: .leading, spacing: 11) {
+      Label("设置访问口令", systemImage: "key.horizontal")
+        .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
+      Text("为个人云端设定一个访问口令。设定后本机立即切换到口令连接，旧的设备连接凭证全部作废。其它设备输入同一口令即可连接。")
+        .font(.caption).foregroundStyle(FiscalColor.tertiary)
+        .fixedSize(horizontal: false, vertical: true)
+      SecureField("新访问口令（8–128 位）", text: $newPassphrase)
+        .textFieldStyle(.plain)
+        .padding(.horizontal, 11).frame(minHeight: 40)
+        .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
+      SecureField("再次输入新口令", text: $confirmPassphrase)
+        .textFieldStyle(.plain)
+        .padding(.horizontal, 11).frame(minHeight: 40)
+        .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
+      Button(action: submitInitialize) {
+        HStack(spacing: 8) {
+          if model.isMutating { ProgressView().controlSize(.small) }
+          Text(model.isMutating ? "正在设定…" : "设置访问口令")
+        }
+        .frame(maxWidth: .infinity, minHeight: 48)
+        .contentShape(.rect)
+      }
+      .buttonStyle(FiscalActionButtonStyle())
+      .disabled(model.isMutating || newPassphrase.isEmpty || confirmPassphrase.isEmpty)
+      .accessibilityIdentifier("cloudConnection.setPassphrase")
+    }
+  }
+
+  @ViewBuilder private var changeArea: some View {
+    if showChange {
+      VStack(alignment: .leading, spacing: 11) {
+        Label("更新访问口令", systemImage: "arrow.triangle.2.circlepath")
+          .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
+        Text("更新后，所有设备（含本机以外）上的现有连接立即失效，需要用新口令重新连接。")
+          .font(.caption).foregroundStyle(FiscalColor.tertiary)
+          .fixedSize(horizontal: false, vertical: true)
+        SecureField("当前访问口令", text: $oldPassphrase)
+          .textFieldStyle(.plain)
+          .padding(.horizontal, 11).frame(minHeight: 40)
+          .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
+        SecureField("新访问口令（8–128 位）", text: $rotatedNewPassphrase)
+          .textFieldStyle(.plain)
+          .padding(.horizontal, 11).frame(minHeight: 40)
+          .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
+        HStack(spacing: 10) {
+          Button("取消") { showChange = false; oldPassphrase = ""; rotatedNewPassphrase = "" }
+            .buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating)
+          Button(model.isMutating ? "更新中…" : "更新访问口令", action: submitChange)
+            .buttonStyle(FiscalActionButtonStyle())
+            .disabled(model.isMutating || oldPassphrase.isEmpty || rotatedNewPassphrase.isEmpty)
+        }
+      }
+    } else {
+      Button("更新访问口令") { showChange = true }
+        .buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating)
+        .accessibilityIdentifier("cloudConnection.showChange")
+    }
+  }
+
+  private func submitLogin() {
+    let passphrase = loginPassphrase
+    guard !model.isMutating, !passphrase.isEmpty else { return }
+    localError = nil
     Task {
-      await model.installIssuedToken(token)
-      guard model.phase == .loaded else { return }
-      importedDeviceToken = ""
-      credentialFieldFocused = false
-      onCredentialActivated()
+      await model.login(passphrase: passphrase)
+      guard model.isConnected else { return }
+      loginPassphrase = ""
+      loginFocused = false
+      onConnected()
+    }
+  }
+
+  private func submitInitialize() {
+    guard !model.isMutating, !newPassphrase.isEmpty else { return }
+    guard newPassphrase == confirmPassphrase else {
+      localError = "两次输入的访问口令不一致"
+      return
+    }
+    localError = nil
+    let passphrase = newPassphrase
+    Task {
+      await model.initializePassphrase(passphrase)
+      guard model.isConnected else { return }
+      newPassphrase = ""
+      confirmPassphrase = ""
+      onConnected()
+    }
+  }
+
+  private func submitChange() {
+    guard !model.isMutating, !oldPassphrase.isEmpty, !rotatedNewPassphrase.isEmpty else { return }
+    localError = nil
+    let old = oldPassphrase
+    let new = rotatedNewPassphrase
+    Task {
+      await model.changePassphrase(old: old, new: new)
+      guard model.isConnected, model.message != nil else { return }
+      oldPassphrase = ""
+      rotatedNewPassphrase = ""
+      showChange = false
     }
   }
 
@@ -850,75 +962,6 @@ public struct DeviceSecuritySettingsCard: View {
     }
   }
 
-  private func currentDevice(_ device: DeviceTokenSummary) -> some View {
-    HStack(alignment: .top, spacing: 12) {
-      FiscalIconTile(device.role == .operator ? "wrench.and.screwdriver" : "iphone", color: FiscalColor.reimbursement)
-      VStack(alignment: .leading, spacing: 3) {
-        Text(device.label).font(.subheadline.weight(.semibold))
-        Text("\(device.role.title) · 指纹 \(device.fingerprint) · \(device.status.title)")
-          .font(.caption).foregroundStyle(FiscalColor.tertiary)
-        if let lastUsedAt = device.lastUsedAt {
-          Text("最近使用 \(lastUsedAt.formatted(.relative(presentation: .named)))")
-            .font(.caption2).foregroundStyle(FiscalColor.tertiary)
-        }
-      }
-      Spacer()
-    }
-  }
-
-  @ViewBuilder private func actionArea(_ status: SecurityStatusDTO, device: DeviceTokenSummary) -> some View {
-    Divider().opacity(0.35)
-    if showIssue, device.role == .operator {
-      HStack {
-        TextField("新设备名称", text: $newDeviceLabel).textFieldStyle(.plain)
-          .padding(.horizontal, 11).frame(minHeight: 38)
-          .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
-        Button("签发") { Task { await model.issueDevice(label: newDeviceLabel); newDeviceLabel = "" } }
-          .buttonStyle(FiscalActionButtonStyle(.secondary))
-      }
-    }
-    if let issued = model.issuedDeviceToken {
-      VStack(alignment: .leading, spacing: 7) {
-        Text("一次性新设备密钥").font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.expense)
-        HStack(alignment: .top, spacing: 12) {
-          PairingQRCode(token: issued.deviceToken)
-          VStack(alignment: .leading, spacing: 7) {
-            Text("用 iPhone 相机扫码即可直接在 Fiscal 中激活；也可以复制密钥手动粘贴。")
-              .font(.caption).foregroundStyle(FiscalColor.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-            Text(issued.deviceToken).font(.caption.monospaced()).textSelection(.enabled)
-              .lineLimit(2).padding(9).frame(maxWidth: .infinity, alignment: .leading)
-              .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 9))
-          }
-        }
-        HStack {
-          Button("复制密钥") { copy(issued.deviceToken) }
-          Button("我已安全保存") { model.clearIssuedToken() }
-        }.font(.caption.weight(.semibold)).buttonStyle(.plain).foregroundStyle(FiscalColor.accent)
-      }
-    }
-    HStack(spacing: 10) {
-      Button(model.isMutating ? "处理中…" : "安全轮换本机密钥") {
-        Task { await model.rotateCurrent() }
-      }.buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating)
-      if device.role == .operator {
-        Button(showIssue ? "取消签发" : "签发新设备") { showIssue.toggle() }
-          .buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating)
-      }
-      Spacer()
-      Button("移除此设备密钥", role: .destructive) { showRemoveConfirmation = true }
-        .buttonStyle(.plain).foregroundStyle(FiscalColor.expense).disabled(model.isMutating)
-    }
-  }
-
-  private func copy(_ value: String) {
-#if os(iOS)
-    UIPasteboard.general.string = value
-#elseif os(macOS)
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(value, forType: .string)
-#endif
-  }
 }
 
 @MainActor
@@ -928,7 +971,7 @@ private func securityUnavailableCard(radius: CGFloat) -> some View {
       FiscalIconTile("server.rack", color: FiscalColor.accent)
       VStack(alignment: .leading, spacing: 4) {
         Text("个人 VPS · 云端优先").font(.subheadline.weight(.semibold))
-        Text("当前渲染环境没有连接设备密钥服务，不会伪造备份或安全状态。")
+        Text("当前渲染环境没有连接访问口令服务，不会伪造备份或安全状态。")
           .font(.caption).foregroundStyle(FiscalColor.tertiary)
       }
     }

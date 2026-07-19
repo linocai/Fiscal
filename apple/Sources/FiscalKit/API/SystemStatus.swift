@@ -25,12 +25,12 @@ public enum APIClientError: Error, Sendable, Equatable {
 public actor SystemStatusClient {
     private let baseURL: URL
     private let session: URLSession
-    private let tokenStore: KeychainTokenStore
+    private let accessKeyStore: AccessKeyStore
 
-    public init(baseURL: URL, session: URLSession = .shared, tokenStore: KeychainTokenStore = .init()) {
+    public init(baseURL: URL, session: URLSession = .shared, accessKeyStore: AccessKeyStore = .init()) {
         self.baseURL = baseURL
         self.session = session
-        self.tokenStore = tokenStore
+        self.accessKeyStore = accessKeyStore
     }
 
     public func fetch() async throws -> SystemStatus {
@@ -38,8 +38,8 @@ public actor SystemStatusClient {
         var request = URLRequest(url: url)
         request.timeoutInterval = 12
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = try await tokenStore.read(), !token.isEmpty {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if let key = try await accessKeyStore.read(), !key.isEmpty {
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         }
         let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw APIClientError.invalidResponse }
@@ -50,9 +50,9 @@ public actor SystemStatusClient {
         return try JSONDecoder.fiscal.decode(SystemStatus.self, from: data)
     }
 
-    public func saveBootstrapTokenIfMissing(_ token: String) async throws {
-        guard try await tokenStore.read() == nil else { return }
-        try await tokenStore.save(token)
+    public func saveBootstrapAccessKeyIfMissing(_ accessKey: String) async throws {
+        guard try await accessKeyStore.read() == nil else { return }
+        try await accessKeyStore.save(accessKey)
     }
 }
 

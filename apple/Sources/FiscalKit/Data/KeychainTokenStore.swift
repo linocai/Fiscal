@@ -6,35 +6,24 @@ public enum TokenStoreError: Error, Sendable {
     case malformedData
 }
 
-public struct PendingDeviceToken: Codable, Sendable, Equatable {
-    public let token: String
-    public let expectedVersion: Int
-    public let deviceID: UUID?
-
-    public init(token: String, expectedVersion: Int, deviceID: UUID? = nil) {
-        self.token = token; self.expectedVersion = expectedVersion; self.deviceID = deviceID
-    }
-}
-
 public protocol DeviceTokenStoring: Sendable {
     func read() async throws -> String?
     func save(_ token: String) async throws
     func delete() async throws
-    func savePending(_ pending: PendingDeviceToken) async throws
-    func readPending() async throws -> PendingDeviceToken?
-    func deletePending() async throws
-    func promotePending() async throws
 }
 
+/// Transition-only legacy device-token store. The passphrase model reads a still-valid device
+/// token here to bridge the one-time `initialize` call that sets the access passphrase; after
+/// that the app uses `AccessKeyStore` exclusively. Kept alongside the retained `device_tokens`
+/// table and scheduled for removal in the next release. The pending-rotation machinery is gone.
 public actor KeychainTokenStore: DeviceTokenStoring {
     private let service: String
     private let account: String
     private let accessGroup: String?
 
     /// `accessGroup` pins items to an explicit keychain access group (iOS passes the
-    /// team-qualified app group) so tokens stay addressable across signing/install variants
-    /// instead of relying on the implicit default group. macOS passes nil — Developer ID
-    /// signing manages groups differently and the implicit group is stable there.
+    /// team-qualified app group) so tokens stay addressable across signing/install variants.
+    /// macOS passes nil — the implicit group is stable under Developer ID signing there.
     public init(
         service: String = "com.linotsai.fiscal.api",
         account: String = "device-token",
@@ -61,85 +50,33 @@ public actor KeychainTokenStore: DeviceTokenStoring {
 
     public func save(_ token: String) throws {
         let data = Data(token.utf8)
-        let status = SecItemUpdate(baseQuery as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        let status = SecItemUpdate(
+            baseQuery as CFDictionary, [kSecValueData as String: data] as CFDictionary)
         if status == errSecItemNotFound {
             var item = baseQuery
             item[kSecValueData as String] = data
             let addStatus = SecItemAdd(item as CFDictionary, nil)
-            guard addStatus == errSecSuccess else { throw TokenStoreError.unexpectedStatus(addStatus) }
+            guard addStatus == errSecSuccess else {
+                throw TokenStoreError.unexpectedStatus(addStatus)
+            }
         } else if status != errSecSuccess {
             throw TokenStoreError.unexpectedStatus(status)
         }
     }
 
     public func delete() throws {
-        try delete(account: account)
-    }
-
-    public func savePending(_ pending: PendingDeviceToken) throws {
-        try saveData(JSONEncoder().encode(pending), account: pendingAccount)
-    }
-
-    public func readPending() throws -> PendingDeviceToken? {
-        guard let data = try readData(account: pendingAccount) else { return nil }
-        do { return try JSONDecoder().decode(PendingDeviceToken.self, from: data) }
-        catch { throw TokenStoreError.malformedData }
-    }
-
-    public func deletePending() throws {
-        try delete(account: pendingAccount)
-    }
-
-    public func promotePending() throws {
-        guard let pending = try readPending() else { throw TokenStoreError.malformedData }
-        try save(pending.token)
-        try deletePending()
-    }
-
-    private var pendingAccount: String { "\(account).pending-rotation" }
-
-    private func readData(account: String) throws -> Data? {
-        var query = baseQuery(account: account)
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess else { throw TokenStoreError.unexpectedStatus(status) }
-        guard let data = item as? Data else { throw TokenStoreError.malformedData }
-        return data
-    }
-
-    private func saveData(_ data: Data, account: String) throws {
-        let query = baseQuery(account: account)
-        let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-        if status == errSecItemNotFound {
-            var item = query
-            item[kSecValueData as String] = data
-            let addStatus = SecItemAdd(item as CFDictionary, nil)
-            guard addStatus == errSecSuccess else { throw TokenStoreError.unexpectedStatus(addStatus) }
-        } else if status != errSecSuccess {
-            throw TokenStoreError.unexpectedStatus(status)
-        }
-    }
-
-    private func delete(account: String) throws {
-        let status = SecItemDelete(baseQuery(account: account) as CFDictionary)
+        let status = SecItemDelete(baseQuery as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw TokenStoreError.unexpectedStatus(status)
         }
     }
 
     private var baseQuery: [String: Any] {
-        baseQuery(account: account)
-    }
-
-    private func baseQuery(account: String) -> [String: Any] {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
         if let accessGroup {
             query[kSecAttrAccessGroup as String] = accessGroup
