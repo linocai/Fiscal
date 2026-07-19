@@ -14,13 +14,13 @@ from fiscal_api.api.p2_schemas import (
     CategorySplitRequest,
     VersionRequest,
 )
-from fiscal_api.core.security import require_device_token
+from fiscal_api.core.security import require_authenticated
 from fiscal_api.db.models import CategoryDirection
 
 router = APIRouter(
     prefix="/categories",
     tags=["categories"],
-    dependencies=[Depends(require_device_token)],
+    dependencies=[Depends(require_authenticated)],
 )
 
 

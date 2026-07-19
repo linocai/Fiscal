@@ -20,12 +20,12 @@ from fiscal_api.api.p8_schemas import (
     AISettingsResponse,
     ProposalStatus,
 )
-from fiscal_api.core.security import AuthenticatedDeviceDependency, require_device_token
+from fiscal_api.core.security import AuthenticatedDependency, require_authenticated
 
 router = APIRouter(
     prefix="/ai",
     tags=["ai"],
-    dependencies=[Depends(require_device_token)],
+    dependencies=[Depends(require_authenticated)],
 )
 
 
@@ -49,7 +49,7 @@ async def get_ai_provider_settings(service: AIServiceDependency) -> AIProviderSe
 @router.put("/provider-settings", response_model=AIProviderSettingsResponse)
 async def update_ai_provider_settings(
     replacement: AIProviderSettingsReplace,
-    actor: AuthenticatedDeviceDependency,
+    actor: AuthenticatedDependency,
     service: AIServiceDependency,
 ) -> AIProviderSettingsResponse:
     return await service.update_provider_settings(replacement, actor)

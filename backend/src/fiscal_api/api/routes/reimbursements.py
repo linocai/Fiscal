@@ -24,10 +24,10 @@ from fiscal_api.api.p6_schemas import (
     ReimbursementSummary,
     ReimbursementVersionRequest,
 )
-from fiscal_api.core.security import require_device_token
+from fiscal_api.core.security import require_authenticated
 from fiscal_api.db.models import ReimbursementClaimStatus
 
-router = APIRouter(tags=["reimbursements"], dependencies=[Depends(require_device_token)])
+router = APIRouter(tags=["reimbursements"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/reimbursement-claims", response_model=ReimbursementClaimPage)

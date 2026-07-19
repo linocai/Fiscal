@@ -11,6 +11,7 @@ from fiscal_api.core.errors import install_error_handlers
 from fiscal_api.core.logging import configure_logging
 from fiscal_api.core.middleware import install_request_middleware
 from fiscal_api.core.rate_limit import RateLimiter
+from fiscal_api.db.models.access import AccessCredential
 from fiscal_api.db.models.security import DeviceToken, DeviceTokenStatus
 from fiscal_api.db.readiness import ReadinessCheck, build_readiness_check
 from fiscal_api.db.session import create_engine, create_session_factory
@@ -32,14 +33,20 @@ def create_app(
         app.state.rate_limiter = RateLimiter(resolved_settings)
         if resolved_settings.uses_database_device_tokens:
             async with app.state.session_factory() as session:
+                credential_count = await session.scalar(
+                    select(func.count()).select_from(AccessCredential)
+                )
                 active_tokens = await session.scalar(
                     select(func.count())
                     .select_from(DeviceToken)
                     .where(DeviceToken.status == DeviceTokenStatus.ACTIVE)
                 )
-                if not active_tokens:
+                # Transition-safe: an access passphrase credential OR (before it is
+                # set) at least one active device token keeps deployments bootable.
+                if not credential_count and not active_tokens:
                     raise RuntimeError(
-                        "Database token authentication requires at least one active device token"
+                        "Authentication requires an access passphrase credential "
+                        "or at least one active device token"
                     )
         yield
         await engine.dispose()

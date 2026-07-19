@@ -13,12 +13,12 @@ from fiscal_api.api.p7_schemas import (
     ReportLens,
     SpendingReport,
 )
-from fiscal_api.core.security import require_device_token
+from fiscal_api.core.security import require_authenticated
 
 router = APIRouter(
     prefix="/reports",
     tags=["reports"],
-    dependencies=[Depends(require_device_token)],
+    dependencies=[Depends(require_authenticated)],
 )
 
 

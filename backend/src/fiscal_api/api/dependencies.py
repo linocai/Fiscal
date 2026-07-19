@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from fiscal_api.core.config import Settings, get_settings
 from fiscal_api.core.provider_credentials import ProviderCredentialCipher
 from fiscal_api.db.readiness import ReadinessCheck
+from fiscal_api.services.access import AccessService
 from fiscal_api.services.accounts import AccountService
 from fiscal_api.services.ai import AIService
 from fiscal_api.services.ai_provider import AIProvider, build_ai_provider
@@ -94,6 +95,12 @@ def get_device_token_service(
     return DeviceTokenService(session, settings)
 
 
+def get_access_service(
+    session: SessionDependency, settings: Annotated[Settings, Depends(get_settings)]
+) -> AccessService:
+    return AccessService(session, settings)
+
+
 AccountServiceDependency = Annotated[AccountService, Depends(get_account_service)]
 CategoryServiceDependency = Annotated[CategoryService, Depends(get_category_service)]
 CashFlowServiceDependency = Annotated[CashFlowService, Depends(get_cash_flow_service)]
@@ -104,3 +111,4 @@ ReimbursementServiceDependency = Annotated[ReimbursementService, Depends(get_rei
 ReportingServiceDependency = Annotated[ReportingService, Depends(get_reporting_service)]
 AIServiceDependency = Annotated[AIService, Depends(get_ai_service)]
 DeviceTokenServiceDependency = Annotated[DeviceTokenService, Depends(get_device_token_service)]
+AccessServiceDependency = Annotated[AccessService, Depends(get_access_service)]

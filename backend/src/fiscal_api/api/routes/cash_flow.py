@@ -17,9 +17,9 @@ from fiscal_api.api.p13_schemas import (
     CashFlowSystemReplace,
     CashFlowVersionRequest,
 )
-from fiscal_api.core.security import require_device_token
+from fiscal_api.core.security import require_authenticated
 
-router = APIRouter(tags=["cash-flow"], dependencies=[Depends(require_device_token)])
+router = APIRouter(tags=["cash-flow"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/cash-flow-items", response_model=CashFlowActiveResponse)

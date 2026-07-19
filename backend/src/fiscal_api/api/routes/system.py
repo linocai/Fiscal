@@ -5,29 +5,19 @@ from sqlalchemy import text
 from starlette import status
 
 from fiscal_api import __version__
-from fiscal_api.api.dependencies import (
-    DeviceTokenServiceDependency,
-    ReadinessDependency,
-    SessionDependency,
-)
-from fiscal_api.api.p11_schemas import (
-    OperationsStatusResponse,
-    RateLimitPolicy,
-    SecurityStatusResponse,
-    TokenCounts,
-)
-from fiscal_api.api.routes.device_tokens import device_token_summary
+from fiscal_api.api.dependencies import ReadinessDependency, SessionDependency
+from fiscal_api.api.p11_schemas import OperationsStatusResponse
 from fiscal_api.api.schemas import SystemStatusResponse
 from fiscal_api.core.config import Settings, get_settings
 from fiscal_api.core.errors import APIError
 from fiscal_api.core.operations import OperationsStatusReader, read_release_metadata
-from fiscal_api.core.security import AuthenticatedDeviceDependency, require_device_token
+from fiscal_api.core.security import require_authenticated
 from fiscal_api.core.time import utc_now
 
 router = APIRouter(
     prefix="/system",
     tags=["system"],
-    dependencies=[Depends(require_device_token)],
+    dependencies=[Depends(require_authenticated)],
 )
 
 
@@ -94,26 +84,4 @@ async def operations_status(
         backup=reader.backup(),
         restore=reader.restore(),
         disk=reader.disk(),
-    )
-
-
-@router.get("/security-status", response_model=SecurityStatusResponse)
-async def security_status(
-    actor: AuthenticatedDeviceDependency,
-    service: DeviceTokenServiceDependency,
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> SecurityStatusResponse:
-    active, pending = await service.counts() if actor.persistent else (0, 0)
-    current = await service.current(actor)
-    return SecurityStatusResponse(
-        authentication_mode="database" if settings.uses_database_device_tokens else "static",
-        server_time=utc_now(),
-        current_device=device_token_summary(current) if current is not None else None,
-        token_counts=TokenCounts(active=active, pending=pending),
-        rate_limits=RateLimitPolicy(
-            read_per_minute=settings.rate_limit_read_per_minute,
-            write_per_minute=settings.rate_limit_write_per_minute,
-            ai_per_minute=settings.rate_limit_ai_per_minute,
-            failed_auth_per_minute=settings.rate_limit_failed_auth_per_minute,
-        ),
     )

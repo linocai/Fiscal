@@ -27,9 +27,9 @@ from fiscal_api.api.p5_schemas import (
     InstallmentSettlementRequest,
     InstallmentSettlementResult,
 )
-from fiscal_api.core.security import require_device_token
+from fiscal_api.core.security import require_authenticated
 
-router = APIRouter(tags=["installments"], dependencies=[Depends(require_device_token)])
+router = APIRouter(tags=["installments"], dependencies=[Depends(require_authenticated)])
 
 
 @router.post("/installment-purchases/preview", response_model=InstallmentPurchasePreview)

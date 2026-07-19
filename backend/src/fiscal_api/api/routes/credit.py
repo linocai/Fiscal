@@ -12,11 +12,11 @@ from fiscal_api.api.p4_schemas import (
     CreditScheduleChangeRequest,
     CreditScheduleChangeResult,
 )
-from fiscal_api.core.security import require_device_token
+from fiscal_api.core.security import require_authenticated
 
 router = APIRouter(
     tags=["credit"],
-    dependencies=[Depends(require_device_token)],
+    dependencies=[Depends(require_authenticated)],
 )
 
 

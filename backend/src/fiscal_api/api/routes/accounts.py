@@ -12,12 +12,12 @@ from fiscal_api.api.p2_schemas import (
     AccountResponse,
     VersionRequest,
 )
-from fiscal_api.core.security import require_device_token
+from fiscal_api.core.security import require_authenticated
 
 router = APIRouter(
     prefix="/accounts",
     tags=["accounts"],
-    dependencies=[Depends(require_device_token)],
+    dependencies=[Depends(require_authenticated)],
 )
 
 

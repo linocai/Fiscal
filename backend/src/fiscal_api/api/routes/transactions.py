@@ -19,13 +19,13 @@ from fiscal_api.api.p10_schemas import (
     BatchCategoryResponse,
     TransactionClassification,
 )
-from fiscal_api.core.security import require_device_token
+from fiscal_api.core.security import require_authenticated
 from fiscal_api.db.models import TransactionKind, TransactionSource
 
 router = APIRouter(
     prefix="/transactions",
     tags=["transactions"],
-    dependencies=[Depends(require_device_token)],
+    dependencies=[Depends(require_authenticated)],
 )
 
 

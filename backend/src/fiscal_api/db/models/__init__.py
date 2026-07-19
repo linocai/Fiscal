@@ -1,3 +1,4 @@
+from fiscal_api.db.models.access import AccessCredential, AccessKey
 from fiscal_api.db.models.account import Account, AccountKind, CreditCycleMode
 from fiscal_api.db.models.ai import (
     AIProposal,
@@ -64,6 +65,8 @@ __all__ = [
     "AIProposalStatus",
     "AIProposalTarget",
     "AISettings",
+    "AccessCredential",
+    "AccessKey",
     "Account",
     "AccountKind",
     "CashFlowDirection",

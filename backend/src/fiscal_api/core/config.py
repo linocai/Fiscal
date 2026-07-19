@@ -25,7 +25,10 @@ class Settings(BaseSettings):
     device_token: SecretStr | None = None
     token_pepper: SecretStr | None = None
     token_pepper_version: int = 1
+    # Legacy device-token setting: unused since the passphrase model landed, kept
+    # (with its validation) so the transition does not trigger a settings change.
     token_pending_ttl_minutes: int = 60
+    passphrase_kdf_iterations: int = 600_000
     rate_limit_read_per_minute: int = 120
     rate_limit_write_per_minute: int = 30
     rate_limit_ai_per_minute: int = 10
@@ -53,6 +56,8 @@ class Settings(BaseSettings):
             raise ValueError("FISCAL_TOKEN_PEPPER_VERSION must be positive")
         if not 5 <= self.token_pending_ttl_minutes <= 60:
             raise ValueError("FISCAL_TOKEN_PENDING_TTL_MINUTES must be between 5 and 60")
+        if not 100_000 <= self.passphrase_kdf_iterations <= 2_000_000:
+            raise ValueError("FISCAL_PASSPHRASE_KDF_ITERATIONS must be between 100000 and 2000000")
         for name, value in (
             ("read", self.rate_limit_read_per_minute),
             ("write", self.rate_limit_write_per_minute),
