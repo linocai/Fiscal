@@ -880,9 +880,17 @@ public struct DeviceSecuritySettingsCard: View {
     if let issued = model.issuedDeviceToken {
       VStack(alignment: .leading, spacing: 7) {
         Text("一次性新设备密钥").font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.expense)
-        Text(issued.deviceToken).font(.caption.monospaced()).textSelection(.enabled)
-          .lineLimit(2).padding(9).frame(maxWidth: .infinity, alignment: .leading)
-          .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 9))
+        HStack(alignment: .top, spacing: 12) {
+          PairingQRCode(token: issued.deviceToken)
+          VStack(alignment: .leading, spacing: 7) {
+            Text("用 iPhone 相机扫码即可直接在 Fiscal 中激活；也可以复制密钥手动粘贴。")
+              .font(.caption).foregroundStyle(FiscalColor.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+            Text(issued.deviceToken).font(.caption.monospaced()).textSelection(.enabled)
+              .lineLimit(2).padding(9).frame(maxWidth: .infinity, alignment: .leading)
+              .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 9))
+          }
+        }
         HStack {
           Button("复制密钥") { copy(issued.deviceToken) }
           Button("我已安全保存") { model.clearIssuedToken() }

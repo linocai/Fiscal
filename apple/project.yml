@@ -12,7 +12,7 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     GENERATE_INFOPLIST_FILE: YES
     MARKETING_VERSION: 1.2.3
-    CURRENT_PROJECT_VERSION: 15
+    CURRENT_PROJECT_VERSION: 16
 targets:
   FiscalKit:
     type: framework
@@ -35,6 +35,9 @@ targets:
         FISCAL_API_BASE_URL: "$(FISCAL_API_BASE_URL)"
         NSPhotoLibraryUsageDescription: "Fiscal 读取你允许访问的截图，在设备端识别记账文字；图片不会上传。"
         PHPhotoLibraryPreventAutomaticLimitedAccessAlert: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.linotsai.fiscal.pairing
+            CFBundleURLSchemes: [fiscal]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIApplicationSceneManifest:

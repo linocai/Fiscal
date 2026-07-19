@@ -29,10 +29,20 @@ public protocol DeviceTokenStoring: Sendable {
 public actor KeychainTokenStore: DeviceTokenStoring {
     private let service: String
     private let account: String
+    private let accessGroup: String?
 
-    public init(service: String = "com.linotsai.fiscal.api", account: String = "device-token") {
+    /// `accessGroup` pins items to an explicit keychain access group (iOS passes the
+    /// team-qualified app group) so tokens stay addressable across signing/install variants
+    /// instead of relying on the implicit default group. macOS passes nil — Developer ID
+    /// signing manages groups differently and the implicit group is stable there.
+    public init(
+        service: String = "com.linotsai.fiscal.api",
+        account: String = "device-token",
+        accessGroup: String? = nil
+    ) {
         self.service = service
         self.account = account
+        self.accessGroup = accessGroup
     }
 
     public func read() throws -> String? {
@@ -125,11 +135,15 @@ public actor KeychainTokenStore: DeviceTokenStoring {
     }
 
     private func baseQuery(account: String) -> [String: Any] {
-        [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
+        if let accessGroup {
+            query[kSecAttrAccessGroup as String] = accessGroup
+        }
+        return query
     }
 }

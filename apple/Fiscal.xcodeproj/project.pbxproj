@@ -17,6 +17,7 @@
 		0E59ACB97BECD3181F51A92F /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */; };
 		0EA71BEA24FBFE8ACA3D11F0 /* DeviceSecurityModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34B636F2703D084EF6931D7 /* DeviceSecurityModel.swift */; };
 		0F4039AAAB4DF5A9E1453CF4 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; };
+		1413D49D626230FDA1E8DC46 /* PairingLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE5C14AD45F01FA733E9C2C5 /* PairingLink.swift */; };
 		15BB0F18A42867A3156A607C /* FiscalDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1164C772E643D0CF6996CB1 /* FiscalDesign.swift */; };
 		16C11D0F2A385F40A9CA246A /* TransactionScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9654628B5C1FF4264957DEA3 /* TransactionScreens.swift */; };
 		176EB9254474739905284C8E /* ReimbursementRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A3AB4BE7E4F9C491EEA3497 /* ReimbursementRepository.swift */; };
@@ -50,6 +51,7 @@
 		4B862841FABAAF8631C459E9 /* CreditScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA464751FCA42DDEA8005314 /* CreditScreens.swift */; };
 		4E8E488F5194E9A013CF1ABD /* AIProposalRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA7703B5970A868EC31D996 /* AIProposalRepository.swift */; };
 		4FEA18DD0F6BFB141B18BE6F /* FiscalShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128E44B859F89927A62EEE28 /* FiscalShortcuts.swift */; };
+		50D4189B7022F9B8A47B6629 /* P19PairingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A501C0B311DE09A6C2FBA5 /* P19PairingTests.swift */; };
 		546512E139DB1A8B3B31F4A9 /* AIProposalModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E485063B64D3CA0E90E279 /* AIProposalModel.swift */; };
 		567CAF05B26BB5E256E6CDED /* P18ReportingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F388265D8ABA7AB1219DA2A1 /* P18ReportingTests.swift */; };
 		57EA19B5230ACCC35A5BFCD1 /* SettingsScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA34BB566D8135E012268007 /* SettingsScreens.swift */; };
@@ -139,6 +141,7 @@
 		E7AFE36F01F57CCED68F06B4 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; };
 		EB941A8C4F43A67DDF71A0D0 /* InstallmentModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61975243C0F4B54528AB4EB5 /* InstallmentModel.swift */; };
 		EC7C9011E02301DF54E04B1D /* TransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0067D7F4A0681CA61009D6 /* TransactionRepository.swift */; };
+		ED4F6C3491461391B305CD51 /* PairingLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE5C14AD45F01FA733E9C2C5 /* PairingLink.swift */; };
 		F18F1E77D5C1D3AA9202F2E8 /* HTTPResponseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0ED0C883C88E2A203C4CB4B /* HTTPResponseCache.swift */; };
 		F1A543480EE639BDA7DA8B0F /* RecordingPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D523C9CDC1C09EDA86539B22 /* RecordingPreferences.swift */; };
 		F75284CCBBC1D7F4D2CED316 /* SharedOverviewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8C3E571ECB6E946D838BB2 /* SharedOverviewComponents.swift */; };
@@ -289,6 +292,7 @@
 		C34B636F2703D084EF6931D7 /* DeviceSecurityModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSecurityModel.swift; sourceTree = "<group>"; };
 		CEFA5476A70C105AA1026F18 /* MacTransactionWorkbench.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacTransactionWorkbench.swift; sourceTree = "<group>"; };
 		D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentRepository.swift; sourceTree = "<group>"; };
+		D4A501C0B311DE09A6C2FBA5 /* P19PairingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P19PairingTests.swift; sourceTree = "<group>"; };
 		D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
 		D523C9CDC1C09EDA86539B22 /* RecordingPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingPreferences.swift; sourceTree = "<group>"; };
 		D633D5077E7D71031EF35843 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -299,6 +303,7 @@
 		E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FiscalKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		EA464751FCA42DDEA8005314 /* CreditScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditScreens.swift; sourceTree = "<group>"; };
 		EDDD9FF6DB6523DE10952C11 /* P17Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P17Tests.swift; sourceTree = "<group>"; };
+		EE5C14AD45F01FA733E9C2C5 /* PairingLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingLink.swift; sourceTree = "<group>"; };
 		EF39C6F2744F63EE814A73F2 /* ReimbursementDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimbursementDTO.swift; sourceTree = "<group>"; };
 		F05017C6B56940B011F6E23E /* SystemStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemStatus.swift; sourceTree = "<group>"; };
 		F388265D8ABA7AB1219DA2A1 /* P18ReportingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P18ReportingTests.swift; sourceTree = "<group>"; };
@@ -388,6 +393,7 @@
 				549791302DE4F9854A26918B /* MasterDataModels.swift */,
 				40E7C412779E444B2EBDB328 /* MasterDataScreens.swift */,
 				36C53CFB1B3FBC363B77ED08 /* OCRInputService.swift */,
+				EE5C14AD45F01FA733E9C2C5 /* PairingLink.swift */,
 				D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */,
 				D523C9CDC1C09EDA86539B22 /* RecordingPreferences.swift */,
 				2143E2EC10FFF85034FFD8BB /* ReimbursementModel.swift */,
@@ -471,6 +477,7 @@
 				1676E1FA15119C8A6F267C3E /* P16TransactionTests.swift */,
 				EDDD9FF6DB6523DE10952C11 /* P17Tests.swift */,
 				F388265D8ABA7AB1219DA2A1 /* P18ReportingTests.swift */,
+				D4A501C0B311DE09A6C2FBA5 /* P19PairingTests.swift */,
 			);
 			name = FiscalKitTests;
 			path = Tests/FiscalKitTests;
@@ -755,6 +762,7 @@
 				45D0800DE7AADBA868775192 /* P16TransactionTests.swift in Sources */,
 				4ABBAD1418CC4B242D0FC182 /* P17Tests.swift in Sources */,
 				567CAF05B26BB5E256E6CDED /* P18ReportingTests.swift in Sources */,
+				50D4189B7022F9B8A47B6629 /* P19PairingTests.swift in Sources */,
 				8C3520FB72EC576D0544255C /* P9InputTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -800,6 +808,7 @@
 				A306C34BEC185CD5FE479DF0 /* MoneyFormat.swift in Sources */,
 				BA71137FB7961C822DA900E9 /* OCRInputService.swift in Sources */,
 				AEB258C3DF48989FDDC59B2B /* OverviewSnapshot.swift in Sources */,
+				1413D49D626230FDA1E8DC46 /* PairingLink.swift in Sources */,
 				B6DE74EF3CF5E14A638D02F9 /* PlaceholderScreen.swift in Sources */,
 				F1A543480EE639BDA7DA8B0F /* RecordingPreferences.swift in Sources */,
 				8F352FC4B0E80F982525AED9 /* ReimbursementDTO.swift in Sources */,
@@ -871,6 +880,7 @@
 				42CF6FAB3A19861566479BE9 /* MoneyFormat.swift in Sources */,
 				790361283016EDBEF8212D3D /* OCRInputService.swift in Sources */,
 				0DB3D38B493F1B22A954DEC2 /* OverviewSnapshot.swift in Sources */,
+				ED4F6C3491461391B305CD51 /* PairingLink.swift in Sources */,
 				F75E5694540328D93F6A9CBE /* PlaceholderScreen.swift in Sources */,
 				5CB9771C2EDBD24B1664C3C7 /* RecordingPreferences.swift in Sources */,
 				E5EA9FB15375AD6F67A32EC4 /* ReimbursementDTO.swift in Sources */,
@@ -1116,7 +1126,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -1305,7 +1315,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

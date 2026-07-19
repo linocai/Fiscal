@@ -21,7 +21,7 @@ struct FiscaliOSApp: App {
 
     init() {
         let baseURL = APIConfiguration.baseURL()
-        let tokenStore = KeychainTokenStore()
+        let tokenStore = KeychainTokenStore(accessGroup: "HX73DFL88G.com.linotsai.fiscal")
         let transport = APITransport(baseURL: baseURL, tokenStore: tokenStore)
         let accounts = AccountsModel(repository: RemoteAccountRepository(transport: transport))
         let categories = CategoriesModel(repository: RemoteCategoryRepository(transport: transport))
@@ -60,16 +60,26 @@ struct FiscaliOSApp: App {
                 .task {
                     await connection.configure(bootstrapToken: APIConfiguration.bootstrapDeviceToken())
                     _ = await deviceSecurity.recoverPendingRotation()
-                    await connection.refresh()
-                    if case .connected = connection.phase {
-                        async let reportLoad: Void = reports.loadSpending()
-                        async let overviewLoad: Void = overview.loadOverview()
-                        async let cashFlowLoad: Void = cashFlow.load()
-                        async let proposalLoad: Void = aiProposals.load()
-                        async let settingsLoad: Void = aiSettings.load()
-                        _ = await (reportLoad, overviewLoad, cashFlowLoad, proposalLoad, settingsLoad)
+                    await refreshConnectedContent()
+                }
+                .onOpenURL { url in
+                    guard let token = PairingLink.token(from: url) else { return }
+                    Task {
+                        await deviceSecurity.installIssuedToken(token)
+                        await refreshConnectedContent()
                     }
                 }
         }
+    }
+
+    private func refreshConnectedContent() async {
+        await connection.refresh()
+        guard case .connected = connection.phase else { return }
+        async let reportLoad: Void = reports.loadSpending()
+        async let overviewLoad: Void = overview.loadOverview()
+        async let cashFlowLoad: Void = cashFlow.load()
+        async let proposalLoad: Void = aiProposals.load()
+        async let settingsLoad: Void = aiSettings.load()
+        _ = await (reportLoad, overviewLoad, cashFlowLoad, proposalLoad, settingsLoad)
     }
 }
