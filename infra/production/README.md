@@ -151,6 +151,25 @@ sudo /opt/fiscal/current/infra/production/scripts/rollback.sh --revision 0123456
 
 It switches only when the target release and live database have exactly the same Alembic head. If they differ, do not run `alembic downgrade`; restore the verified pre-migration dump into a new database, validate it, and deliberately switch the connection.
 
+## Access passphrase (P19)
+
+Since v1.2.4 the client authenticates with a personal access passphrase, not device tokens. Authentication is dual-channel and transition-safe: while no credential row exists the existing device tokens still authenticate, so a freshly deployed transition build never disconnects an in-use client. Setting the passphrase is what permanently closes the device-token layer — from that point only access keys at the current generation are accepted.
+
+Normal path (no server command): on an installed macOS build, open Settings → 账户与同步 → the access-passphrase card and choose 设置访问口令. The app bridges its still-valid device token to `POST /auth/passphrase/initialize`, receives an access key, stores it in the iCloud-synchronized keychain, and stays connected. Other devices then connect by entering the same passphrase (`POST /auth/session`). Changing the passphrase (needs the old one) bumps the credential generation and revokes every existing access key in one write.
+
+Server-side fallback / recovery (the only forgot-passphrase path) reads the passphrase from standard input and never prints or logs it:
+
+```sh
+# One-time set, if the mac-app path is unavailable (creates the credential, generation 1):
+printf '%s\n' "$NEW_PASSPHRASE" | sudo FISCAL_ENV_FILE=/etc/fiscal/fiscal.env \
+  /opt/fiscal/current/infra/production/scripts/... python -m fiscal_api.cli.access initialize
+
+# Forgot-passphrase recovery: force a new passphrase and revoke all access keys (generation+1):
+printf '%s\n' "$NEW_PASSPHRASE" | sudo ... python -m fiscal_api.cli.access reset-passphrase
+```
+
+Run these under the systemd unit's environment (the app role plus `FISCAL_TOKEN_PEPPER` and `FISCAL_PASSPHRASE_KDF_ITERATIONS`). After a reset, every device must reconnect with the new passphrase. The `device_tokens` table is retained this release and is scheduled for removal next release.
+
 ## Backup and restore drill
 
 The backup service creates a custom-format `pg_dump`, validates its archive, writes a SHA-256 manifest and retains 14 local days by default. The restore drill checks that manifest, restores into a disposable database, matches Alembic head, verifies canonical tables and rejects orphan postings, then always drops the drill database.
