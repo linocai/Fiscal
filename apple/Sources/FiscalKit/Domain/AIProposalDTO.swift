@@ -110,6 +110,7 @@ public struct AIProposalDTO: Codable, Sendable, Equatable, Identifiable {
       "unknown_category": "分类已失效", "unknown_destination_account": "目标账户已失效",
       "account_kind_mismatch": "账户类型不匹配", "category_direction_mismatch": "分类方向不匹配",
       "destination_kind_mismatch": "目标账户类型不匹配",
+      "credit_purchase_reclassified": "已按信用账户改为信用消费",
       "ledger_validation_failed": "未通过账本安全校验", "manual_confirmation_required": "需要人工确认",
       "user_edited": "已由你修改", "future_cash_flow_requires_confirmation": "未来计划必须人工确认",
     ]

@@ -164,3 +164,63 @@ def test_parse_checks_transfer_and_repayment_account_kinds() -> None:
     assert value.account_id == wallet.id
     assert value.destination_account_id == huabei.id
     assert "account_kind_mismatch" not in value.reason_codes
+
+
+def test_parse_reclassifies_credit_account_expense_as_credit_purchase() -> None:
+    huabei = Account(id=uuid4(), kind="credit")
+    groceries = Category(id=uuid4(), direction="expense")
+    result = _parse_result(
+        kind=TransactionKind.EXPENSE, account_id=huabei.id, category_id=groceries.id
+    )
+    value = _apply(result, accounts=[huabei], categories=[groceries])
+    assert value.kind == "credit_purchase"
+    assert value.account_id == huabei.id
+    assert value.category_id == groceries.id
+    assert "credit_purchase_reclassified" in value.reason_codes
+    assert "account_kind_mismatch" not in value.reason_codes
+
+
+def test_parse_reclassified_proposal_is_never_auto_executed() -> None:
+    from fiscal_api.api.p8_schemas import AIFieldConfidences
+
+    huabei = Account(id=uuid4(), kind="credit")
+    groceries = Category(id=uuid4(), direction="expense")
+    confident = AIFieldConfidences(**{field: 9_900 for field in REQUIRED_CONFIDENCE_FIELDS})
+    result = _parse_result(
+        kind=TransactionKind.EXPENSE,
+        account_id=huabei.id,
+        category_id=groceries.id,
+        confidences=confident,
+        overall_confidence_bps=9_900,
+    )
+    value = _apply(result, accounts=[huabei], categories=[groceries])
+    wallet = Account(id=uuid4(), kind="cash")
+    plain = _parse_result(
+        kind=TransactionKind.EXPENSE,
+        account_id=wallet.id,
+        category_id=groceries.id,
+        confidences=confident,
+        overall_confidence_bps=9_900,
+    )
+    baseline = _apply(plain, accounts=[wallet, huabei], categories=[groceries])
+    # A same-confidence cash expense is auto-eligible, so the flipped proposal is held back
+    # by the reclassification itself (kind gate + reason code), not by low confidence.
+    assert AIService._auto_eligible(baseline, settings())
+    assert not AIService._auto_eligible(value, settings())
+    assert "credit_purchase_reclassified" in value.reason_codes
+
+
+def test_parse_keeps_cash_expense_and_credit_income_behavior() -> None:
+    wallet = Account(id=uuid4(), kind="cash")
+    huabei = Account(id=uuid4(), kind="credit")
+    expense = _parse_result(kind=TransactionKind.EXPENSE, account_id=wallet.id)
+    value = _apply(expense, accounts=[wallet, huabei])
+    assert value.kind == "expense"
+    assert value.account_id == wallet.id
+    assert "credit_purchase_reclassified" not in value.reason_codes
+
+    income = _parse_result(kind=TransactionKind.INCOME, account_id=huabei.id)
+    value = _apply(income, accounts=[wallet, huabei])
+    assert value.kind == "income"
+    assert value.account_id is None
+    assert "account_kind_mismatch" in value.reason_codes

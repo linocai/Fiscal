@@ -514,6 +514,14 @@ class AIService:
         if destination_id is not None and destination_id not in active_accounts:
             destination_id = None
             reasons.append("unknown_destination_account")
+        if kind is TransactionKind.EXPENSE and account_id is not None:
+            account = active_accounts.get(account_id)
+            if account is not None and account.kind == "credit":
+                # A credit-account payment described as a plain expense (花呗/白条 扣款) IS a
+                # credit purchase in this ledger; reclassify instead of blanking the account
+                # and stranding the proposal. The reason code keeps it out of auto-execution.
+                kind = TransactionKind.CREDIT_PURCHASE
+                reasons.append("credit_purchase_reclassified")
         if kind is TransactionKind.INCOME or kind is TransactionKind.EXPENSE:
             account = active_accounts.get(account_id) if account_id is not None else None
             category = active_categories.get(category_id) if category_id is not None else None
