@@ -22,7 +22,7 @@ struct IOSRootView: View {
     let cashFlow: FutureCashFlowModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
-    let deviceSecurity: DeviceSecurityModel
+    let passphrase: PassphraseModel
     let recordingPreferences: RecordingPreferences
     @State private var selection: IOSTab = .overview
     @State private var showRecordSheet = false
@@ -66,7 +66,7 @@ struct IOSRootView: View {
                         markReceived: { _ in morePath = [.reimbursements]; selection = .more }
                     )
                 }
-            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, deviceSecurity: deviceSecurity, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true })
+            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, passphrase: passphrase, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true })
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,7 +147,7 @@ private struct IOSMoreScreen: View {
     let cashFlow: FutureCashFlowModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
-    let deviceSecurity: DeviceSecurityModel
+    let passphrase: PassphraseModel
     let connection: ConnectionModel
     let recordingPreferences: RecordingPreferences
     let openAI: () -> Void
@@ -206,14 +206,14 @@ private struct IOSMoreScreen: View {
                 case .reports: IOSReportsScreen(model: reports)
                 case .cloudConnection:
                     IOSCloudConnectionScreen(
-                        security: deviceSecurity,
+                        passphrase: passphrase,
                         connection: connection,
                         refreshContent: refreshCloudContent
                     )
                 case .settings:
                     IOSSettingsScreen(
                         model: aiSettings,
-                        security: deviceSecurity,
+                        passphrase: passphrase,
                         preferences: recordingPreferences,
                         accounts: accounts,
                         transactions: transactions,
@@ -236,9 +236,9 @@ private struct IOSMoreScreen: View {
 
     private var cloudEntryDetail: String {
         switch connection.phase {
-        case .connected: "查看设备密钥与同步状态"
-        case .unauthorized: "粘贴一次性设备密钥"
-        case .offline: "重试连接或重新配置密钥"
+        case .connected: "改访问口令与同步状态"
+        case .unauthorized: "输入访问口令连接"
+        case .offline: "重试连接或重新输入访问口令"
         case .idle, .loading: "正在核验个人 VPS"
         }
     }
@@ -266,7 +266,7 @@ private struct IOSMoreScreen: View {
 }
 
 private struct IOSCloudConnectionScreen: View {
-    let security: DeviceSecurityModel
+    let passphrase: PassphraseModel
     let connection: ConnectionModel
     let refreshContent: () async -> Void
 
@@ -275,15 +275,14 @@ private struct IOSCloudConnectionScreen: View {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("连接个人云端").font(.title2.bold())
-                    Text("无需填写服务器地址。粘贴 Mac 签发的一次性设备密钥即可连接。")
+                    Text("无需填写服务器地址。输入你设定的访问口令即可连接；连接凭证会安全存入 iCloud 同步钥匙串。")
                         .font(.subheadline).foregroundStyle(FiscalColor.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                DeviceSecuritySettingsCard(
-                    model: security,
+                PassphraseSettingsCard(
+                    model: passphrase,
                     compact: true,
-                    alwaysAllowsCredentialImport: true,
-                    onCredentialActivated: { Task { await refreshContent() } }
+                    onConnected: { Task { await refreshContent() } }
                 )
             }
             .padding(16)
@@ -293,7 +292,7 @@ private struct IOSCloudConnectionScreen: View {
         .background(FiscalColor.iOSBackground)
         .navigationTitle("云端连接")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await security.load() }
+        .task { await passphrase.loadStatus() }
         .accessibilityIdentifier("ios.cloudConnection.screen")
     }
 }

@@ -42,7 +42,7 @@ struct MacRootView: View {
     let cashFlow: FutureCashFlowModel
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
-    let deviceSecurity: DeviceSecurityModel
+    let passphrase: PassphraseModel
     let recordingPreferences: RecordingPreferences
     let cache: HTTPResponseCache
     @State private var section: MacSection = .overview
@@ -90,7 +90,7 @@ struct MacRootView: View {
                 } else if section == .settings {
                     MacSettingsScreen(
                         model: aiSettings,
-                        security: deviceSecurity,
+                        passphrase: passphrase,
                         preferences: recordingPreferences,
                         accounts: accounts,
                         transactions: transactions,

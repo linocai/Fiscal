@@ -16,13 +16,16 @@ struct FiscalmacOSApp: App {
     @State private var cashFlow: FutureCashFlowModel
     @State private var aiProposals: AIProposalModel
     @State private var aiSettings: AISettingsModel
-    @State private var deviceSecurity: DeviceSecurityModel
+    @State private var passphrase: PassphraseModel
     @State private var recordingPreferences = RecordingPreferences()
 
     init() {
         let baseURL = APIConfiguration.baseURL()
-        let tokenStore = KeychainTokenStore()
-        let transport = APITransport(baseURL: baseURL, tokenStore: tokenStore)
+        let accessKeyStore = AccessKeyStore()
+        // Transition bridge: the still-valid legacy device token authorizes the one-time
+        // set-passphrase call. Removed with the device_tokens table next release.
+        let legacyTokenStore = KeychainTokenStore()
+        let transport = APITransport(baseURL: baseURL, accessKeyStore: accessKeyStore)
         let accounts = AccountsModel(repository: RemoteAccountRepository(transport: transport))
         let categories = CategoriesModel(repository: RemoteCategoryRepository(transport: transport))
         let credit = CreditModel(repository: RemoteCreditRepository(transport: transport))
@@ -37,9 +40,10 @@ struct FiscalmacOSApp: App {
         let installments = InstallmentModel(repository: RemoteInstallmentRepository(transport: transport), transactions: transactionRepository, credit: credit, transactionList: transactions, cashFlow: cashFlow, reporting: reporting)
         let reimbursements = ReimbursementModel(repository: RemoteReimbursementRepository(transport: transport), transactions: transactions, accounts: accounts, reporting: reporting)
         let aiProposals = AIProposalModel(repository: RemoteAIProposalRepository(transport: transport), transactions: transactions, reporting: reporting, cashFlow: cashFlow)
-        _connection = State(initialValue: ConnectionModel(client: SystemStatusClient(baseURL: baseURL, tokenStore: tokenStore)))
-        _deviceSecurity = State(initialValue: DeviceSecurityModel(
-            repository: RemoteDeviceSecurityRepository(transport: transport), tokenStore: tokenStore))
+        _connection = State(initialValue: ConnectionModel(client: SystemStatusClient(baseURL: baseURL, accessKeyStore: accessKeyStore)))
+        _passphrase = State(initialValue: PassphraseModel(
+            repository: RemoteAuthRepository(transport: transport),
+            accessKeyStore: accessKeyStore, legacyTokenStore: legacyTokenStore))
         _accounts = State(initialValue: accounts)
         _categories = State(initialValue: categories)
         _credit = State(initialValue: credit)
@@ -55,7 +59,7 @@ struct FiscalmacOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, deviceSecurity: deviceSecurity, recordingPreferences: recordingPreferences, cache: .shared)
+            MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, passphrase: passphrase, recordingPreferences: recordingPreferences, cache: .shared)
                 .tint(FiscalColor.accent)
                 .frame(minWidth: 1_040, minHeight: 700)
                 .background(
@@ -65,8 +69,7 @@ struct FiscalmacOSApp: App {
                     )
                 )
                 .task {
-                    await connection.configure(bootstrapToken: APIConfiguration.bootstrapDeviceToken())
-                    _ = await deviceSecurity.recoverPendingRotation()
+                    await connection.configure(bootstrapAccessKey: APIConfiguration.bootstrapAccessKey())
                     await connection.refresh()
                     if case .connected = connection.phase {
                         async let reportLoad: Void = reports.loadSpending()
