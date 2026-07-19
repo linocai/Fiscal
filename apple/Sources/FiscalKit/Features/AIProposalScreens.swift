@@ -428,14 +428,29 @@ public struct MacAIProposalScreen: View {
           Text(proposal.title ?? "待补全标题").font(.title2.bold())
           Text(proposal.amountMinor.map { Money(minorUnits: $0).formatted() } ?? "金额待确认").font(.system(size: 28, weight: .bold))
           detail("目标", proposal.target.title); detail("状态", proposal.status == .executed ? proposal.target.executedTitle : proposal.status.title); detail("置信度", proposal.confidenceTitle); detail("来源", proposal.source.title)
+          if let accounts { detail("账户", accountName(proposal.accountID, in: accounts)) }
+          if let categories { detail("分类", categoryName(proposal.categoryID, in: categories)) }
           if let explanation = proposal.explanation { Text(explanation).font(.caption).foregroundStyle(FiscalColor.secondary) }
-          if proposal.canReview { Button(proposal.target.executeTitle) { Task { await model.execute(proposal) } }.buttonStyle(FiscalActionButtonStyle()); if accounts != nil && categories != nil { Button("编辑") { editing = proposal }.buttonStyle(FiscalActionButtonStyle(.secondary)) }; Button("忽略") { Task { await model.ignore(proposal) } }.buttonStyle(.plain).foregroundStyle(FiscalColor.tertiary) }
-          else if proposal.status == .failed { Button("重新识别") { Task { await model.retry(proposal) } }.buttonStyle(FiscalActionButtonStyle(.secondary)) }
-          else if proposal.status == .executed { Button(proposal.target == .cashFlow ? "取消这条未来现金流" : "撤销这笔 AI 记账") { Task { await model.undo(proposal) } }.buttonStyle(FiscalActionButtonStyle(.secondary)) }
+          if let text = model.refreshMessage ?? model.message {
+            Label(text, systemImage: "exclamationmark.triangle.fill").font(.caption)
+              .foregroundStyle(FiscalColor.expense).frame(maxWidth: .infinity, alignment: .leading)
+              .padding(12).background(FiscalColor.expense.opacity(0.08), in: .rect(cornerRadius: 12))
+          }
+          if proposal.canReview { Button(model.isMutating ? "处理中…" : proposal.target.executeTitle) { Task { await model.execute(proposal) } }.buttonStyle(FiscalActionButtonStyle()).disabled(model.isMutating); if accounts != nil && categories != nil { Button("编辑") { editing = proposal }.buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating) }; Button("忽略") { Task { await model.ignore(proposal) } }.buttonStyle(.plain).foregroundStyle(FiscalColor.tertiary).disabled(model.isMutating) }
+          else if proposal.status == .failed { Button("重新识别") { Task { await model.retry(proposal) } }.buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating) }
+          else if proposal.status == .executed { Button(proposal.target == .cashFlow ? "取消这条未来现金流" : "撤销这笔 AI 记账") { Task { await model.undo(proposal) } }.buttonStyle(FiscalActionButtonStyle(.secondary)).disabled(model.isMutating) }
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
       }.background(FiscalColor.surface)
     } else { ContentUnavailableView("选择一条提案", systemImage: "sparkles") }
   }
   private func detail(_ label: String, _ value: String) -> some View { HStack { Text(label).foregroundStyle(FiscalColor.tertiary); Spacer(); Text(value) }.font(.subheadline) }
+  private func accountName(_ id: UUID?, in model: AccountsModel) -> String {
+    guard let id else { return "未匹配账户" }
+    return model.accounts.first { $0.id == id }?.name ?? "账户 \(id.uuidString.prefix(6))"
+  }
+  private func categoryName(_ id: UUID?, in model: CategoriesModel) -> String {
+    guard let id else { return "未匹配分类" }
+    return model.categories.first { $0.id == id }?.name ?? "分类 \(id.uuidString.prefix(6))"
+  }
 }
 #endif
