@@ -763,7 +763,7 @@ public struct PassphraseSettingsCard: View {
     VStack(alignment: .leading, spacing: 5) {
       Label("真实安全边界", systemImage: "lock.shield")
         .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
-      Text("HTTPS 传输；访问口令仅存慢哈希；access_key 存 iCloud 同步钥匙串，仅本人 Apple ID 可同步。服务端需要计算报表并处理所选 AI 文本，因此不宣称端到端加密。")
+      Text("HTTPS 传输；访问口令仅存慢哈希；access_key 存系统钥匙串（iPhone 上经 iCloud 同步，仅本人 Apple ID 可同步）。服务端需要计算报表并处理所选 AI 文本，因此不宣称端到端加密。")
         .font(.caption).foregroundStyle(FiscalColor.tertiary)
         .fixedSize(horizontal: false, vertical: true)
       Text("限流：读取 \(status.rateLimits.readPerMinute)/分 · 写入 \(status.rateLimits.writePerMinute)/分 · AI \(status.rateLimits.aiPerMinute)/分")
@@ -775,7 +775,7 @@ public struct PassphraseSettingsCard: View {
     VStack(alignment: .leading, spacing: 11) {
       Label("输入访问口令", systemImage: "key")
         .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
-      Text("输入你设定的访问口令即可连接。连接凭证会安全存入 iCloud 同步钥匙串，换机或重装可自动恢复。")
+      Text("输入你设定的访问口令即可连接。连接凭证会安全存入系统钥匙串（iPhone 上经 iCloud 同步，换机或重装可自动恢复）。")
         .font(.caption).foregroundStyle(FiscalColor.tertiary)
         .fixedSize(horizontal: false, vertical: true)
       SecureField("访问口令", text: $loginPassphrase)

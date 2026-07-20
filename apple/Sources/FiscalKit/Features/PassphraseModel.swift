@@ -156,7 +156,9 @@ public final class PassphraseModel {
 
     private func display(_ error: Error) -> String {
         if let api = error as? FiscalAPIError { return api.displayMessage }
-        if error is AccessKeyStoreError { return "无法安全写入 iCloud 同步钥匙串中的访问凭证" }
+        if error is AccessKeyStoreError {
+            return "口令已通过服务器验证，但本机保存连接凭证失败；请再试一次连接"
+        }
         if error is TokenStoreError { return "无法读取本机 Keychain 中的旧连接凭证" }
         return error.localizedDescription
     }
