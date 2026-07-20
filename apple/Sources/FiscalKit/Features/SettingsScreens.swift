@@ -174,7 +174,7 @@ public struct IOSSettingsScreen: View {
   }
 
   @ViewBuilder private var securityCard: some View {
-    if let passphrase { PassphraseSettingsCard(model: passphrase, compact: true) }
+    if let passphrase { PassphraseSettingsCard(model: passphrase, compact: true, serverHost: APIConfiguration.baseURL().host) }
     else { securityUnavailableCard(radius: 18) }
   }
 
@@ -608,7 +608,7 @@ public struct MacSettingsScreen: View {
   }
 
   @ViewBuilder private var securityCard: some View {
-    if let passphrase { PassphraseSettingsCard(model: passphrase) }
+    if let passphrase { PassphraseSettingsCard(model: passphrase, serverHost: APIConfiguration.baseURL().host) }
     else { securityUnavailableCard(radius: 15) }
   }
 
@@ -683,12 +683,15 @@ public struct PassphraseSettingsCard: View {
   public init(
     model: PassphraseModel,
     compact: Bool = false,
+    serverHost: String? = nil,
     onConnected: @escaping () -> Void = {}
   ) {
     self.model = model
     self.compact = compact
+    self.serverHost = serverHost
     self.onConnected = onConnected
   }
+  let serverHost: String?
 
   public var body: some View {
     FiscalCard(radius: compact ? 18 : 15) {
@@ -716,12 +719,15 @@ public struct PassphraseSettingsCard: View {
         } else if model.isTransition {
           Divider().opacity(0.35)
           setPassphraseArea
-        } else if model.phase == .unauthorized {
+        } else if model.phase == .unauthorized || model.phase == .failed {
           Divider().opacity(0.35)
+          // Offline can be transient (or a wrong-server build); never strand the user without
+          // the passphrase field — the login attempt itself is the most direct retry.
           loginArea
-        } else if model.phase == .failed {
-          Button("重试读取连接状态") { Task { await model.loadStatus() } }
-            .buttonStyle(FiscalActionButtonStyle(.secondary))
+          if model.phase == .failed {
+            Button("重试读取连接状态") { Task { await model.loadStatus() } }
+              .buttonStyle(FiscalActionButtonStyle(.secondary))
+          }
         }
         if let message = localError ?? model.message {
           Text(message).font(.caption).foregroundStyle(FiscalColor.secondary)
@@ -731,15 +737,22 @@ public struct PassphraseSettingsCard: View {
   }
 
   private var statusLine: String {
+    let base: String
     if model.isConnected, let status = model.status {
-      return "口令连接 · \(status.activeAccessKeyCount) 个有效 access_key"
+      base = "口令连接 · \(status.activeAccessKeyCount) 个有效 access_key"
+    } else if model.isTransition {
+      base = "过渡期 · 旧设备凭证仍在连接，请设置访问口令"
+    } else {
+      switch model.phase {
+      case .loading: base = "正在核验服务器与访问口令…"
+      case .unauthorized: base = "输入访问口令以连接"
+      default: base = "尚未连接个人云端"
+      }
     }
-    if model.isTransition { return "过渡期 · 旧设备凭证仍在连接，请设置访问口令" }
-    switch model.phase {
-    case .loading: return "正在核验服务器与访问口令…"
-    case .unauthorized: return "输入访问口令以连接"
-    default: return "尚未连接个人云端"
-    }
+    // Surfacing the resolved host makes a wrong-server build (e.g. a Debug/localhost install)
+    // a one-glance diagnosis instead of a mystery offline state.
+    if let serverHost { return "\(base) · \(serverHost)" }
+    return base
   }
 
   private func lastRotatedRow(_ status: AccessCredentialStatus) -> some View {

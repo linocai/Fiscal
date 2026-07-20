@@ -282,6 +282,7 @@ private struct IOSCloudConnectionScreen: View {
                 PassphraseSettingsCard(
                     model: passphrase,
                     compact: true,
+                    serverHost: APIConfiguration.baseURL().host,
                     onConnected: { Task { await refreshContent() } }
                 )
             }

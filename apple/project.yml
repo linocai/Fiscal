@@ -12,7 +12,7 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     GENERATE_INFOPLIST_FILE: YES
     MARKETING_VERSION: 1.2.4
-    CURRENT_PROJECT_VERSION: 18
+    CURRENT_PROJECT_VERSION: 19
 targets:
   FiscalKit:
     type: framework
@@ -119,7 +119,10 @@ schemes:
       targets:
         FiscaliOS: all
     run:
-      config: Debug
+      # Device installs happen via plain Xcode Run; Release keeps them pointed at the
+      # production base URL instead of the Debug localhost that stranded v1.2.4(18) installs.
+      # Local-backend iOS development should use a temporary scheme override, not this default.
+      config: Release
     test:
       targets:
         - FiscalUITests
