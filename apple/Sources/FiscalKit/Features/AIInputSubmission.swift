@@ -92,7 +92,7 @@ public actor AIInputSubmissionService {
   public static func shouldPreserveRetryKey(after error: Error) -> Bool {
     guard let api = error as? FiscalAPIError else { return false }
     switch api {
-    case .transport, .invalidResponse: return true
+    case .transport, .invalidResponse, .rateLimited: return true
     case .domain(_, let detail):
       return [
         "ai_provider_not_configured", "ai_provider_unavailable",

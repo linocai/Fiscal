@@ -24,6 +24,8 @@ public final class AIProposalModel {
   private let reporting: ReportingInvalidationCoordinator?
   private let cashFlow: FutureCashFlowModel?
   private var generation = 0
+  private var ledgerRefreshTask: Task<Void, Never>?
+  private var ledgerRefreshPending = false
 
   public init(
     repository: any AIProposalRepository, transactions: TransactionsModel? = nil,
@@ -160,16 +162,31 @@ public final class AIProposalModel {
     do {
       try await operation(); guard current == generation else { return false }
       await load()
-      if refreshLedger {
-        async let transactionRefresh: Void = transactions?.load() ?? ()
-        async let reportRefresh: Void = reporting?.refresh() ?? ()
-        async let cashFlowRefresh: Void = cashFlow?.load() ?? ()
-        _ = await (transactionRefresh, reportRefresh, cashFlowRefresh)
-      }
+      // Ledger/report refreshes run coalesced in the background: holding isMutating through
+      // them kept the confirm button dead for seconds per proposal and turned consecutive
+      // confirms into a request storm against the single-worker VPS.
+      if refreshLedger { scheduleLedgerRefresh() }
       return true
     } catch {
       guard current == generation else { return false }; apply(error, preserving: !proposals.isEmpty)
       return false
+    }
+  }
+
+  /// One background runner drains the pending flag, so any number of rapid confirms ends in at
+  /// most one trailing full refresh instead of one storm each.
+  private func scheduleLedgerRefresh() {
+    ledgerRefreshPending = true
+    guard ledgerRefreshTask == nil else { return }
+    ledgerRefreshTask = Task { [weak self] in
+      while let self, self.ledgerRefreshPending {
+        self.ledgerRefreshPending = false
+        async let transactionRefresh: Void = self.transactions?.load() ?? ()
+        async let reportRefresh: Void = self.reporting?.refresh() ?? ()
+        async let cashFlowRefresh: Void = self.cashFlow?.load() ?? ()
+        _ = await (transactionRefresh, reportRefresh, cashFlowRefresh)
+      }
+      self?.ledgerRefreshTask = nil
     }
   }
   private func beginMutation() {

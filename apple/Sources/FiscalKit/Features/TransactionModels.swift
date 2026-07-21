@@ -177,7 +177,10 @@ public final class TransactionsModel {
 
     public static func shouldPreserveCreateKey(after error: Error) -> Bool {
         guard let api = error as? FiscalAPIError else { return true }
-        return switch api { case .transport, .invalidResponse: true; case .unauthorized, .domain: false }
+        return switch api {
+        case .transport, .invalidResponse, .rateLimited: true
+        case .unauthorized, .domain: false
+        }
     }
 
     /// A detached copy of the filter fields, edited in a sheet/popover and only written back on

@@ -164,3 +164,53 @@ struct P16InfrastructureTests {
     #expect(await cache.snapshot().entryCount == 0)
   }
 }
+
+@Suite("FiscalKit P20 gateway rate limiting", .serialized)
+struct P20RateLimitTests {
+  @Test("A gateway 429 without an API envelope maps to rateLimited, not invalidResponse")
+  func gateway429MapsToRateLimited() async {
+    StubURLProtocol.install { _ in
+      .init(status: 429, body: Data("<html>限流</html>".utf8))
+    }
+    let transport = APITransport(
+      baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
+      responseCache: HTTPResponseCache())
+    do {
+      try await transport.requestNoContent("ai/proposals/x/execute", method: "POST")
+      Issue.record("expected rateLimited")
+    } catch let error as FiscalAPIError {
+      #expect(error == .rateLimited)
+      #expect(error.displayMessage.contains("太频繁"))
+    } catch { Issue.record("unexpected error \(error)") }
+  }
+
+  @Test("An idempotent GET retries once after a gateway 429 and succeeds")
+  func get429RetriesOnce() async throws {
+    StubURLProtocol.install { _ in .init(status: 429, body: Data("busy".utf8)) }
+    let transport = APITransport(
+      baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
+      responseCache: HTTPResponseCache())
+    // First attempt 429s, the stub flips to success before the backoff retry lands.
+    Task {
+      try await Task.sleep(nanoseconds: 400_000_000)
+      StubURLProtocol.install { _ in .init(body: validPage) }
+    }
+    let page: TransactionPage = try await transport.request("transactions")
+    #expect(page.items.isEmpty)
+  }
+
+  @Test("An app-level 429 with a JSON envelope keeps its domain message")
+  func envelope429KeepsDomainDetail() async {
+    let envelope = #"{"error":{"code":"login_rate_limited","message":"稍后再试","request_id":"r"}}"#
+    StubURLProtocol.install { _ in .init(status: 429, body: Data(envelope.utf8)) }
+    let transport = APITransport(
+      baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
+      responseCache: HTTPResponseCache())
+    do {
+      try await transport.requestNoContent("auth/session", method: "POST")
+      Issue.record("expected domain error")
+    } catch let error as FiscalAPIError {
+      #expect(error.code == "login_rate_limited")
+    } catch { Issue.record("unexpected error \(error)") }
+  }
+}

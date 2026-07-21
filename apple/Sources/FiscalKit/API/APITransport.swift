@@ -30,10 +30,13 @@ public struct APIErrorEnvelope: Codable, Sendable, Equatable { public let error:
 public enum FiscalAPIError: Error, Sendable, Equatable {
     case unauthorized(APIErrorDetail?)
     case domain(status: Int, detail: APIErrorDetail)
+    /// A gateway-level 429 (no API error envelope, e.g. the nginx limit_req zones); the app-level
+    /// limiter sends a JSON envelope and stays on the `domain` path with its own message.
+    case rateLimited
     case invalidResponse
     case transport(String)
     public var code: String? { switch self { case .unauthorized(let d): d?.code; case .domain(_, let d): d.code; default: nil } }
-    public var displayMessage: String { switch self { case .unauthorized: "访问口令无效或已更改，请重新输入。"; case .domain(_, let d): d.message; case .invalidResponse: "服务器响应无法解析。"; case .transport: "无法连接个人 VPS。" } }
+    public var displayMessage: String { switch self { case .unauthorized: "访问口令无效或已更改，请重新输入。"; case .domain(_, let d): d.message; case .rateLimited: "操作太频繁，请等几秒再试。"; case .invalidResponse: "服务器响应无法解析。"; case .transport: "无法连接个人 VPS。" } }
 }
 
 public actor APITransport {
@@ -83,10 +86,17 @@ public actor APITransport {
             await responseCache.remove(cacheKey)
         }
         let startGeneration = cacheGeneration
-        let (data, http) = try await perform(request)
+        var (data, http) = try await perform(request)
+        if http.statusCode == 429, cacheKey != nil {
+            // An idempotent read bounced off the gateway limiter; one short-backoff retry absorbs
+            // a refresh burst instead of surfacing an error for a self-healing situation.
+            try await Task.sleep(nanoseconds: 1_200_000_000)
+            (data, http) = try await perform(request)
+        }
         guard (200..<300).contains(http.statusCode) else {
             let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
             if http.statusCode == 401 { throw FiscalAPIError.unauthorized(detail) }
+            if http.statusCode == 429, detail == nil { throw FiscalAPIError.rateLimited }
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
@@ -113,6 +123,7 @@ public actor APITransport {
         guard (200..<300).contains(http.statusCode) else {
             let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
             if http.statusCode == 401 { throw FiscalAPIError.unauthorized(detail) }
+            if http.statusCode == 429, detail == nil { throw FiscalAPIError.rateLimited }
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
@@ -137,6 +148,7 @@ public actor APITransport {
         guard (200..<300).contains(http.statusCode) else {
             let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
             if http.statusCode == 401 { throw FiscalAPIError.unauthorized(detail) }
+            if http.statusCode == 429, detail == nil { throw FiscalAPIError.rateLimited }
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
