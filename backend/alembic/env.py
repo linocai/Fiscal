@@ -5,7 +5,7 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from fiscal_api.core.config import get_settings
+from fiscal_api.core.config import escape_alembic_config_url, get_settings
 from fiscal_api.db import models as _models  # noqa: F401
 from fiscal_api.db.base import Base
 
@@ -18,7 +18,7 @@ if config.config_file_name is not None:
 # production migration URL form, so escape them before storing the value in
 # Alembic's config.  ``get_main_option`` resolves ``%%`` back to ``%`` for the
 # engine and offline SQL paths.
-config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
+config.set_main_option("sqlalchemy.url", escape_alembic_config_url(get_settings().database_url))
 target_metadata = Base.metadata
 
 

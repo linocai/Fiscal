@@ -88,6 +88,12 @@ class Settings(BaseSettings):
         )
 
 
+def escape_alembic_config_url(database_url: str) -> str:
+    """Return a URL safe to store in Alembic's ConfigParser-backed config."""
+
+    return database_url.replace("%", "%%")
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
