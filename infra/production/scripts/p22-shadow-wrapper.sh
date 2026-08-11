@@ -72,9 +72,9 @@ fi
 if [[ -n "$archive_action" ]]; then
   [[ -n "$archive_path" && "$archive_path" == /* ]] || \
     die "--archive must be an absolute path"
-  [[ "$archive_action" != "export" || ! -e "$archive_path" ]] || \
+  [[ "$archive_action" != "export" && "$archive_action" != "roundtrip" || ! -e "$archive_path" ]] || \
     die "archive output already exists and will not be overwritten"
-  [[ "$archive_action" == "export" || -f "$archive_path" ]] || \
+  [[ "$archive_action" == "export" || "$archive_action" == "roundtrip" || -f "$archive_path" ]] || \
     die "archive input must be an existing regular file"
 fi
 

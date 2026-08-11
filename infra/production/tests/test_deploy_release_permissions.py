@@ -108,6 +108,8 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertIn('run_archive "$target_env" fiscal_api.cli.archive "$archive_path" --dry-run', SHADOW_WRAPPER)
         self.assertIn('run_archive "$target_env" fiscal_api.cli.archive "$archive_path" --apply --confirm-empty-target', SHADOW_WRAPPER)
         self.assertIn("--archive-roundtrip", SHADOW_WRAPPER)
+        self.assertIn('"$archive_action" != "roundtrip" || ! -e "$archive_path"', SHADOW_WRAPPER)
+        self.assertIn('"$archive_action" == "roundtrip" || -f "$archive_path"', SHADOW_WRAPPER)
         roundtrip = SHADOW_WRAPPER.index("  roundtrip)")
         roundtrip_block = SHADOW_WRAPPER[roundtrip : SHADOW_WRAPPER.index("    ;;", roundtrip)]
         self.assertLess(roundtrip_block.index("archive_export"), roundtrip_block.index("--dry-run"))
