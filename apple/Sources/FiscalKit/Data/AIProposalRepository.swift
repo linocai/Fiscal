@@ -11,6 +11,9 @@ public protocol AIProposalRepository: Sendable {
     -> AIProposalActionResponse
   func undo(id: UUID, expectedVersion: Int, expectedTransactionVersion: Int?) async throws
     -> AIProposalActionResponse
+  func qualityMetrics() async throws -> AIQualityMetricsResponse
+  func learningRules() async throws -> [AILearningRuleDTO]
+  func revokeLearningRule(id: UUID) async throws -> AILearningRuleDTO
 }
 
 public extension AIProposalRepository {
@@ -23,6 +26,9 @@ public extension AIProposalRepository {
   func undo(id: UUID, expectedVersion: Int, expectedTransactionVersion: Int?) async throws
     -> AIProposalActionResponse
   { throw FiscalAPIError.invalidResponse }
+  func qualityMetrics() async throws -> AIQualityMetricsResponse { throw FiscalAPIError.invalidResponse }
+  func learningRules() async throws -> [AILearningRuleDTO] { throw FiscalAPIError.invalidResponse }
+  func revokeLearningRule(id: UUID) async throws -> AILearningRuleDTO { throw FiscalAPIError.invalidResponse }
 }
 
 public actor RemoteAIProposalRepository: AIProposalRepository {
@@ -75,5 +81,14 @@ public actor RemoteAIProposalRepository: AIProposalRepository {
       body: AIProposalUndoRequest(
         expectedVersion: expectedVersion,
         expectedTransactionVersion: expectedTransactionVersion))
+  }
+  public func qualityMetrics() async throws -> AIQualityMetricsResponse {
+    try await transport.request("ai/quality/metrics")
+  }
+  public func learningRules() async throws -> [AILearningRuleDTO] {
+    try await transport.request("ai/learning-rules")
+  }
+  public func revokeLearningRule(id: UUID) async throws -> AILearningRuleDTO {
+    try await transport.request("ai/learning-rules/\(id)/revoke", method: "POST")
   }
 }

@@ -80,6 +80,7 @@
 		790361283016EDBEF8212D3D /* OCRInputService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C53CFB1B3FBC363B77ED08 /* OCRInputService.swift */; };
 		79595B893A93FD06DF6B4F4A /* CreditScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA464751FCA42DDEA8005314 /* CreditScreens.swift */; };
 		7A3542E65018766E4BA525A2 /* SharedOverviewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8C3E571ECB6E946D838BB2 /* SharedOverviewComponents.swift */; };
+		7A3FB000D4C3035982B21F40 /* AIQualityDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB7D62B3EE4697AFE9931F1 /* AIQualityDTO.swift */; };
 		7EE520DFB774A20C5B4D0184 /* P22RevisionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87CC6A97C83387C1644C9BDA /* P22RevisionTests.swift */; };
 		803947D4FBF8B2BEF726E0A7 /* CreditDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50AE5EE92E61AC85DDE507B3 /* CreditDTO.swift */; };
 		830689914AD7D22FC9F5749F /* TransactionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0752D3D57AD3B99FE1943E05 /* TransactionModels.swift */; };
@@ -96,6 +97,7 @@
 		93C6A4122B8519F18EC43111 /* SecurityDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 231B8C5B49337369E6329110 /* SecurityDTO.swift */; };
 		93D596E390E747EF3060EEAB /* P10InfrastructureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23BD6A03B99F7398A9E508A6 /* P10InfrastructureTests.swift */; };
 		946C85A339DB616A6ECDDC29 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E2FF91C44F1DCC211426631D /* FiscalKit.framework */; };
+		96C49B8507D7AB278386593F /* AIQualityDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB7D62B3EE4697AFE9931F1 /* AIQualityDTO.swift */; };
 		9901DB140E7920082CF106B8 /* AIProposalScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71C4B21663391E2601CBC53 /* AIProposalScreens.swift */; };
 		9E05E23319E13CE50F8BC00A /* ConnectionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E38857D295F340534E49F652 /* ConnectionModel.swift */; };
 		9E8E1EFC3A77580BCC05D1AC /* AuthRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EFCB4FE7E749FF13BD94B3 /* AuthRepository.swift */; };
@@ -316,6 +318,7 @@
 		D861BDB3034B1DF16C4CB8C3 /* ReconciliationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconciliationModel.swift; sourceTree = "<group>"; };
 		D9BB5FDCFCE803A456803360 /* DataRevision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataRevision.swift; sourceTree = "<group>"; };
 		DC1044F202B5617EB844E140 /* ReconciliationRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconciliationRepository.swift; sourceTree = "<group>"; };
+		DEB7D62B3EE4697AFE9931F1 /* AIQualityDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIQualityDTO.swift; sourceTree = "<group>"; };
 		E0B37F87A62073E2D426AC5C /* P9InputTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P9InputTests.swift; sourceTree = "<group>"; };
 		E0D63863F934E27294B1542B /* FiscalKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FiscalKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2FF91C44F1DCC211426631D /* FiscalKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FiscalKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -554,6 +557,7 @@
 			isa = PBXGroup;
 			children = (
 				6A14CCE721BB151FDA4981B9 /* AIProposalDTO.swift */,
+				DEB7D62B3EE4697AFE9931F1 /* AIQualityDTO.swift */,
 				1A96FD3E04393BDF8D525167 /* AISettingsDTO.swift */,
 				F7B88AA31F126B4B8B804315 /* CashFlowDTO.swift */,
 				50AE5EE92E61AC85DDE507B3 /* CreditDTO.swift */,
@@ -804,6 +808,7 @@
 				25F7A3F9B77E2D03F773E6B1 /* AIProposalModel.swift in Sources */,
 				D64D2A140FEB4DC93DFBD670 /* AIProposalRepository.swift in Sources */,
 				9901DB140E7920082CF106B8 /* AIProposalScreens.swift in Sources */,
+				96C49B8507D7AB278386593F /* AIQualityDTO.swift in Sources */,
 				47AB207089C1F68AF4078C10 /* AISettingsDTO.swift in Sources */,
 				044565A02446EA080C44BDE8 /* AISettingsModel.swift in Sources */,
 				A2FC5A547E003382E291D173 /* AISettingsRepository.swift in Sources */,
@@ -882,6 +887,7 @@
 				546512E139DB1A8B3B31F4A9 /* AIProposalModel.swift in Sources */,
 				4E8E488F5194E9A013CF1ABD /* AIProposalRepository.swift in Sources */,
 				3524B93E10107CBA714E981E /* AIProposalScreens.swift in Sources */,
+				7A3FB000D4C3035982B21F40 /* AIQualityDTO.swift in Sources */,
 				B7F5464BC01EB757FA330392 /* AISettingsDTO.swift in Sources */,
 				E2223435EA826D54E8929B16 /* AISettingsModel.swift in Sources */,
 				83469C4C09BE7378492F2B31 /* AISettingsRepository.swift in Sources */,

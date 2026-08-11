@@ -9,6 +9,7 @@
 - `FISCAL_TEST_DATABASE_URL=postgresql+asyncpg:///fiscal_p23_fresh` 的 P8/P23 定向回归：`34 passed`。覆盖原始快照、人工修改 diff、事件顺序、两次稳定证据后才出现 merchant/category、title/account、source-context alias 规则，以及指标 `total = pending + terminal_outcomes`。
 - disposable `fiscal_p23_fresh`：fresh upgrade 到 `20260811_0023`、`0023 → 0022 → head`、offline SQL 均成功；SQL 含三张新表与两条不可变 trigger。
 - Backend static：`ruff check src/fiscal_api …` 与 `pyright` 均通过。
+- Apple：`xcodegen generate`；`FiscalmacOS` `101 tests / 19 suites`（含 P23 指标分母与 explicit-confirmation payload）通过。Release 编译/签名复跑曾受同一 DerivedData build.db 竞争影响，需在无并发 Xcode 构建时重跑后才能记为已验证。
 
 ## 下一步与边界
 

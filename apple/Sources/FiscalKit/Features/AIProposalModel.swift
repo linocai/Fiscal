@@ -15,6 +15,9 @@ public final class AIProposalModel {
   public private(set) var isLoadingMore = false
   public private(set) var isMutating = false
   public private(set) var conflictDetected = false
+  public private(set) var qualityMetrics: [AIQualityMetricsRow] = []
+  public private(set) var learningRules: [AILearningRuleDTO] = []
+  public private(set) var qualityMessage: String?
   public private(set) var shouldRotateCreateKeyAfterFailure = false
   public var selectedID: UUID?
   public private(set) var statusFilter: AIProposalStatus? = .pending
@@ -152,6 +155,23 @@ public final class AIProposalModel {
 
   public func clearMessage() { message = nil; refreshMessage = nil }
   public func clearConflict() { conflictDetected = false }
+
+  public func loadQuality() async {
+    qualityMessage = nil
+    do {
+      async let metrics = repository.qualityMetrics()
+      async let rules = repository.learningRules()
+      let result = try await (metrics, rules)
+      qualityMetrics = result.0.rows; learningRules = result.1
+    } catch { qualityMessage = display(error) }
+  }
+
+  public func revokeRule(_ rule: AILearningRuleDTO) async {
+    do {
+      let value = try await repository.revokeLearningRule(id: rule.id)
+      if let index = learningRules.firstIndex(where: { $0.id == value.id }) { learningRules[index] = value }
+    } catch { qualityMessage = display(error) }
+  }
 
   private func mutate(
     _ proposal: AIProposalDTO, refreshLedger: Bool = false,

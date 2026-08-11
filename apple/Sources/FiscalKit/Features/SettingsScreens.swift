@@ -403,6 +403,7 @@ public struct AIProviderSettingsCard: View {
 public struct AISettingsCard: View {
   @Bindable var model: AISettingsModel
   let compact: Bool
+  @State private var confirmRelaxation = false
   public init(model: AISettingsModel, compact: Bool = false) { self.model = model; self.compact = compact }
   public var body: some View {
     FiscalCard(radius: compact ? 18 : 15) {
@@ -427,17 +428,31 @@ public struct AISettingsCard: View {
           }
           Text("仅普通收入或支出、字段完整且满足服务端安全规则时自动执行；客户端设置不能放宽 ¥1,000 与 90% 的硬边界。")
             .font(.caption).foregroundStyle(FiscalColor.tertiary).fixedSize(horizontal: false, vertical: true)
-          Button(model.isSaving ? "保存中…" : "保存 AI 设置") { Task { await model.save() } }
+          Button(model.isSaving ? "保存中…" : "保存 AI 设置") {
+            if relaxationNeedsConfirmation { confirmRelaxation = true }
+            else { Task { await model.save() } }
+          }
             .buttonStyle(FiscalActionButtonStyle()).disabled(model.isSaving || model.settings == nil)
             .accessibilityIdentifier("ai.settings.save")
         }
       }
+    }.alert("确认放宽自动执行？", isPresented: $confirmRelaxation) {
+      Button("取消", role: .cancel) {}
+      Button("确认放宽") { Task { await model.save(confirmRelaxation: true) } }
+    } message: {
+      Text("这会提高自动记账范围或降低置信度要求；服务端将记录明确确认。")
     }
   }
   private var providerDetail: String {
     guard let settings = model.settings else { return "服务端配置是最终安全边界" }
     if !settings.providerConfigured { return "AI Provider 尚未配置，自动执行不会生效" }
     return settings.effectiveAutoExecute ? "已按服务端安全规则生效" : "当前不会自动执行"
+  }
+  private var relaxationNeedsConfirmation: Bool {
+    guard let settings = model.settings else { return false }
+    return (!settings.autoExecuteEnabled && model.autoExecuteEnabled)
+      || model.autoExecuteLimitMinor > settings.autoExecuteLimitMinor
+      || model.minimumConfidenceBps < settings.minimumConfidenceBps
   }
   private func optionRow<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
     VStack(alignment: .leading, spacing: 8) { Text(title).font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary); content() }

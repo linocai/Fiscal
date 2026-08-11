@@ -71,6 +71,7 @@ public struct AIProposalDTO: Codable, Sendable, Equatable, Identifiable {
   public let executedAt: Date?
   public let ignoredAt: Date?
   public let undoneAt: Date?
+  public let qualityStatus: String?
 
   enum CodingKeys: String, CodingKey {
     case id, source, text, status, kind, title, note, version, explanation, provider, model, target
@@ -95,6 +96,7 @@ public struct AIProposalDTO: Codable, Sendable, Equatable, Identifiable {
     case executedAt = "executed_at"
     case ignoredAt = "ignored_at"
     case undoneAt = "undone_at"
+    case qualityStatus = "quality_status"
   }
 
   public var confidenceTitle: String {

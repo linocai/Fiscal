@@ -31,6 +31,7 @@ public struct AISettingsUpdateRequest: Codable, Sendable, Equatable {
   public let autoExecuteLimitMinor: Int64
   public let minimumConfidenceBps: Int
   public let expectedVersion: Int
+  public let confirmRelaxation: Bool
   enum CodingKeys: String, CodingKey {
     case autoExecuteEnabled = "auto_execute_enabled"
     case ocrSourceEnabled = "ocr_source_enabled"
@@ -38,11 +39,12 @@ public struct AISettingsUpdateRequest: Codable, Sendable, Equatable {
     case autoExecuteLimitMinor = "auto_execute_limit_minor"
     case minimumConfidenceBps = "minimum_confidence_bps"
     case expectedVersion = "expected_version"
+    case confirmRelaxation = "confirm_relaxation"
   }
   public init(
     autoExecuteEnabled: Bool, ocrSourceEnabled: Bool = false,
     shortcutTextSourceEnabled: Bool = false, autoExecuteLimitMinor: Int64,
-    minimumConfidenceBps: Int, expectedVersion: Int
+    minimumConfidenceBps: Int, expectedVersion: Int, confirmRelaxation: Bool = false
   ) {
     self.autoExecuteEnabled = autoExecuteEnabled
     self.ocrSourceEnabled = ocrSourceEnabled
@@ -50,6 +52,7 @@ public struct AISettingsUpdateRequest: Codable, Sendable, Equatable {
     self.autoExecuteLimitMinor = autoExecuteLimitMinor
     self.minimumConfidenceBps = minimumConfidenceBps
     self.expectedVersion = expectedVersion
+    self.confirmRelaxation = confirmRelaxation
   }
 }
 

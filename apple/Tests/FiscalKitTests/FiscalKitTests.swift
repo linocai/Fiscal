@@ -69,6 +69,18 @@ struct FiscalKitP8Tests {
     #expect(object["expected_transaction_version"] as? Int == 2)
   }
 
+  @Test("P23 quality metrics preserve the proposal denominator and settings mark user confirmation")
+  func p23QualityContract() throws {
+    let metrics = Data(#"{"rows":[{"source":"text","provider":"fake","model":"p23-test","prompt_version":"p23-v1","transaction_kind":"expense","amount_band":"<100","total":3,"parse_succeeded":2,"historical_unavailable":1,"confirm_unchanged":1,"confirm_edited":1,"ignored":0,"execute_failed":0,"automatic_execute":0,"manual_execute":2,"undone":0,"provider_retry":0,"final_failure":0,"pending":1,"terminal_outcomes":2}]}"#.utf8)
+    let decoded = try JSONDecoder().decode(AIQualityMetricsResponse.self, from: metrics)
+    #expect(decoded.rows.first?.denominatorConserved == true)
+    let request = AISettingsUpdateRequest(
+      autoExecuteEnabled: true, autoExecuteLimitMinor: 100_000,
+      minimumConfidenceBps: 9_000, expectedVersion: 4, confirmRelaxation: true)
+    let body = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
+    #expect(body["confirm_relaxation"] as? Bool == true)
+  }
+
   @Test("AI text transactions remain ordinary user editable rows")
   func aiTextEditable() throws {
     let data = Data(#"{"id":"00000000-0000-0000-0000-000000000091","kind":"expense","amount_minor":1280,"occurred_at":"2026-07-16T04:00:00Z","business_date":"2026-07-16","title":"午餐","note":null,"category_id":"00000000-0000-0000-0000-000000000092","account_id":"00000000-0000-0000-0000-000000000093","destination_account_id":null,"credit_cycle_id":null,"installment_plan_id":null,"installment_relation":null,"reimbursement_relations":[],"source":"ai_text","postings":[],"version":1,"voided_at":null,"created_at":"2026-07-16T04:00:00Z","updated_at":"2026-07-16T04:00:00Z"}"#.utf8)

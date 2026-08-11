@@ -11,6 +11,7 @@ public struct IOSAIProposalSheet: View {
   @Environment(\.dismiss) private var dismiss
   @State private var editing: AIProposalDTO?
   @State private var showTextEntry = false
+  @State private var showQuality = false
   #if os(iOS)
     @State private var showOCRCapture = false
   #endif
@@ -50,6 +51,7 @@ public struct IOSAIProposalSheet: View {
         ToolbarItem(placement: .primaryAction) {
           Menu {
             Button("文本记账", systemImage: "text.badge.plus") { showTextEntry = true }
+            Button("质量与规则", systemImage: "checklist") { showQuality = true }
             #if os(iOS)
               Button("截图记账", systemImage: "text.viewfinder") { showOCRCapture = true }
             #endif
@@ -68,6 +70,7 @@ public struct IOSAIProposalSheet: View {
         AIProposalEditorScreen(model: model, proposal: proposal, accounts: accounts, categories: categories, credit: credit)
       }
       .sheet(isPresented: $showTextEntry) { AITextEntrySheet(model: model) }
+      .sheet(isPresented: $showQuality) { AIQualityDashboard(model: model) }
       #if os(iOS)
         .sheet(isPresented: $showOCRCapture) { IOSOCRCaptureSheet(model: model) }
       #endif
@@ -257,6 +260,8 @@ private struct IOSAIProposalRow: View {
           Button(proposal.target == .cashFlow ? "取消这条未来现金流" : "撤销这笔 AI 记账", action: undo)
             .buttonStyle(FiscalActionButtonStyle(.secondary))
         }
+        Text(proposal.qualityStatus == "historical_unavailable" ? "历史提案缺少 P23 原始快照。" : "原始判断与最终确认差异已保留，可在质量面板查看。")
+          .font(.caption2).foregroundStyle(FiscalColor.tertiary)
       }
     }.accessibilityIdentifier("ai.proposal.\(proposal.id.uuidString)")
   }
@@ -398,12 +403,13 @@ public struct MacAIProposalScreen: View {
   let categories: CategoriesModel?
   let credit: CreditModel?
   @State private var editing: AIProposalDTO?
+  @State private var showQuality = false
   public init(model: AIProposalModel, accounts: AccountsModel? = nil, categories: CategoriesModel? = nil, credit: CreditModel? = nil) {
     self.model = model; self.accounts = accounts; self.categories = categories; self.credit = credit
   }
   public var body: some View {
     VStack(spacing: 0) {
-      HStack { Text("AI 待确认").font(.system(size: 23, weight: .bold)); Text("\(model.pendingCount)").font(.caption.bold()).foregroundStyle(.white).padding(.horizontal, 8).padding(.vertical, 4).background(FiscalColor.expense, in: .capsule); Picker("提案状态", selection: Binding(get: { model.statusFilter ?? .pending }, set: { status in Task { await model.selectStatus(status) } })) { Text("待确认").tag(AIProposalStatus.pending); Text("失败").tag(AIProposalStatus.failed) }.pickerStyle(.segmented).frame(width: 170); Spacer(); Button("刷新") { Task { await model.load() } }.buttonStyle(.plain).foregroundStyle(FiscalColor.accent) }
+      HStack { Text("AI 待确认").font(.system(size: 23, weight: .bold)); Text("\(model.pendingCount)").font(.caption.bold()).foregroundStyle(.white).padding(.horizontal, 8).padding(.vertical, 4).background(FiscalColor.expense, in: .capsule); Picker("提案状态", selection: Binding(get: { model.statusFilter ?? .pending }, set: { status in Task { await model.selectStatus(status) } })) { Text("待确认").tag(AIProposalStatus.pending); Text("失败").tag(AIProposalStatus.failed) }.pickerStyle(.segmented).frame(width: 170); Spacer(); Button("质量与规则") { showQuality = true }.buttonStyle(.plain).foregroundStyle(FiscalColor.accent); Button("刷新") { Task { await model.load() } }.buttonStyle(.plain).foregroundStyle(FiscalColor.accent) }
         .padding(.horizontal, 20).frame(height: 58).background(FiscalColor.surface)
       HStack(spacing: 0) {
         ScrollView {
@@ -432,6 +438,7 @@ public struct MacAIProposalScreen: View {
       .sheet(item: $editing) { proposal in
         if let accounts, let categories { AIProposalEditorScreen(model: model, proposal: proposal, accounts: accounts, categories: categories, credit: credit).frame(minWidth: 520, minHeight: 580) }
       }
+      .sheet(isPresented: $showQuality) { AIQualityDashboard(model: model).frame(minWidth: 620, minHeight: 500) }
   }
   @ViewBuilder private var inspector: some View {
     if let proposal = model.selected {
@@ -447,6 +454,7 @@ public struct MacAIProposalScreen: View {
               .font(.caption).foregroundStyle(FiscalColor.debt).fixedSize(horizontal: false, vertical: true)
           }
           if let explanation = proposal.explanation { Text(explanation).font(.caption).foregroundStyle(FiscalColor.secondary) }
+          detail("质量", proposal.qualityStatus == "historical_unavailable" ? "历史数据不可用" : "原始判断/确认差异已保留")
           if let text = model.refreshMessage ?? model.message {
             Label(text, systemImage: "exclamationmark.triangle.fill").font(.caption)
               .foregroundStyle(FiscalColor.expense).frame(maxWidth: .infinity, alignment: .leading)
@@ -477,3 +485,44 @@ public struct MacAIProposalScreen: View {
   }
 }
 #endif
+
+private struct AIQualityDashboard: View {
+  @Bindable var model: AIProposalModel
+  @Environment(\.dismiss) private var dismiss
+  var body: some View {
+    NavigationStack {
+      List {
+        Section("质量指标") {
+          if model.qualityMetrics.isEmpty { Text("暂无可统计的 P23 提案。").foregroundStyle(FiscalColor.tertiary) }
+          ForEach(model.qualityMetrics) { row in
+            VStack(alignment: .leading, spacing: 4) {
+              Text("\(row.source.title) · \(row.model ?? "历史模型") · \(row.amountBand)").font(.subheadline.weight(.semibold))
+              Text("解析 \(row.parseSucceeded)/\(row.total) · 未改 \(row.confirmUnchanged) · 已改 \(row.confirmEdited) · 忽略 \(row.ignored) · 自动 \(row.automaticExecute) · 手动 \(row.manualExecute)")
+                .font(.caption).foregroundStyle(FiscalColor.secondary)
+              Text(row.denominatorConserved ? "分母守恒" : "统计等待服务端刷新")
+                .font(.caption2).foregroundStyle(row.denominatorConserved ? FiscalColor.income : FiscalColor.debt)
+            }
+          }
+        }
+        Section("确定性学习规则") {
+          if model.learningRules.isEmpty { Text("规则在同一稳定修正获得两次证据后出现；不会自动创建分类。").foregroundStyle(FiscalColor.tertiary) }
+          ForEach(model.learningRules) { rule in
+            HStack {
+              VStack(alignment: .leading) {
+                Text(rule.ruleKind.title).font(.subheadline.weight(.semibold))
+                Text("\(rule.normalizedKey) · 证据 \(rule.evidenceCount) 次").font(.caption).foregroundStyle(FiscalColor.secondary)
+              }
+              Spacer()
+              if rule.enabled { Button("撤销") { Task { await model.revokeRule(rule) } }.buttonStyle(.borderless) }
+              else { Text("已撤销").font(.caption).foregroundStyle(FiscalColor.tertiary) }
+            }
+          }
+        }
+        if let message = model.qualityMessage { Section { Text(message).foregroundStyle(FiscalColor.expense) } }
+      }
+      .navigationTitle("AI 质量与规则")
+      .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } } }
+      .task { await model.loadQuality() }
+    }
+  }
+}

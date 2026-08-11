@@ -41,7 +41,7 @@ public final class AISettingsModel {
     catch { guard current == generation else { return }; fail(error) }
   }
 
-  public func save() async -> Bool {
+  public func save(confirmRelaxation: Bool = false) async -> Bool {
     guard let settings, !isSaving else { return false }
     guard (1...100_000).contains(autoExecuteLimitMinor),
       (9_000...10_000).contains(minimumConfidenceBps)
@@ -55,7 +55,8 @@ public final class AISettingsModel {
         shortcutTextSourceEnabled: shortcutTextSourceEnabled,
         autoExecuteLimitMinor: autoExecuteLimitMinor,
         minimumConfidenceBps: minimumConfidenceBps,
-        expectedVersion: settings.version))
+        expectedVersion: settings.version,
+        confirmRelaxation: confirmRelaxation))
       guard current == generation else { return false }
       apply(value)
       phase = .loaded
