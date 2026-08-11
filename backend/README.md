@@ -17,15 +17,15 @@ The service listens on port 8000 by default. Its P1 endpoints are:
 
 - `GET /api/v1/health/live`
 - `GET /api/v1/health/ready`
-- `GET /api/v1/system/status` with `Authorization: Bearer <device-token>`
+- `GET /api/v1/system/status` with `Authorization: Bearer <access-key>`
 
-P2 adds device-token-protected account and category master-data routes under
+P2 adds access-key-protected account and category master-data routes under
 `/api/v1/accounts` and `/api/v1/categories`, including archive/restore, safe delete,
 ordering, category merge, and category split. Mutable single-resource requests use an
 `expected_version` for optimistic concurrency. Monetary fields are signed integer CNY minor
 units.
 
-P3 adds the device-token-protected unified ledger at `/api/v1/transactions`. Clients submit
+P3 adds the access-key-protected unified ledger at `/api/v1/transactions`. Clients submit
 semantic income, expense, or transfer drafts with a UUID `Idempotency-Key`; the server owns
 postings, derives balances and Shanghai business dates, supports complete replacement plus
 void/restore, and exposes an income/expense category summary.
@@ -36,12 +36,11 @@ available/over-limit credit, repayment progress, and status are server-derived. 
 debt requires explicit as-of and due dates rather than a fabricated deadline; installments remain
 P5.
 
-P11 replaces static secrets in staging/production with database-backed device keys. Raw keys are
-returned once, while PostgreSQL stores only an HMAC-SHA256 digest and short fingerprint. Operators
-can issue/revoke device keys; ordinary devices can inspect, rotate or remove only themselves. Safe
-rotation keeps the old key active until the Keychain-held successor proves possession. Protected
-`/api/v1/system/security-status` and `/api/v1/system/operations-status` expose real device, schema,
-backup, restore and disk facts without claiming end-to-end encryption.
+P20 finalizes personal passphrase authentication. The server stores only the passphrase slow-hash
+and HMAC-SHA256 access-key digests; a passphrase change increments the credential generation and
+invalidates every older key. The historic device-token bridge has been permanently removed by an
+irreversible migration. Protected `/api/v1/system/operations-status` exposes schema, backup,
+restore and disk facts without claiming end-to-end encryption.
 
 Run quality checks with:
 

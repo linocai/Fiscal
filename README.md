@@ -45,7 +45,7 @@ Foundation endpoints:
 ```sh
 curl http://127.0.0.1:8000/api/v1/health/live
 curl http://127.0.0.1:8000/api/v1/health/ready
-curl -H 'Authorization: Bearer development-device-token-change-me' \
+curl -H 'Authorization: Bearer YOUR_CURRENT_ACCESS_KEY' \
   http://127.0.0.1:8000/api/v1/system/status
 ```
 
@@ -95,7 +95,8 @@ xcodebuild \
   test
 ```
 
-The shared scheme uses the local-only `integration-device-token`; it must match the test API process and is not a production credential.
+The shared scheme injects a local-only access-key fixture for UI tests; it is
+never a production credential.
 
 ## Infrastructure
 

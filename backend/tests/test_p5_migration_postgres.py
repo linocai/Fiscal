@@ -98,12 +98,12 @@ def test_p5_data_blocks_downgrade_and_empty_round_trip(
             command.downgrade(_config(), "20260715_0004")
         asyncio.run(_clear())
         command.downgrade(_config(), "20260715_0004")
-        command.upgrade(_config(), "head")
+        command.upgrade(_config(), "20260811_0019")
     finally:
         try:
             asyncio.run(_clear())
         except DBAPIError:
-            command.upgrade(_config(), "head")
+            command.upgrade(_config(), "20260811_0019")
             asyncio.run(_clear())
-        command.upgrade(_config(), "head")
+        command.upgrade(_config(), "20260811_0019")
         get_settings.cache_clear()

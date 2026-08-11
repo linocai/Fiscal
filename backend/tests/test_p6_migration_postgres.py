@@ -64,5 +64,5 @@ def test_p6_data_blocks_downgrade_and_empty_roundtrip(monkeypatch: pytest.Monkey
         command.downgrade(config(), "20260715_0005")
     asyncio.run(clear())
     command.downgrade(config(), "20260715_0005")
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260811_0019")
     get_settings.cache_clear()

@@ -44,9 +44,8 @@ struct P19AccessPassphraseTests {
     @MainActor
     func loginStoresAccessKeyAndConnects() async {
         let store = AccessKeyStoreMock()
-        let repo = AuthRepositoryMock(store: store, legacyToken: nil, passphrase: "opensesame")
-        let model = PassphraseModel(
-            repository: repo, accessKeyStore: store, legacyTokenStore: LegacyTokenStoreMock(nil))
+        let repo = AuthRepositoryMock(store: store, passphrase: "opensesame")
+        let model = PassphraseModel(repository: repo, accessKeyStore: store)
 
         await model.loadStatus()
         #expect(model.phase == .unauthorized)
@@ -61,33 +60,11 @@ struct P19AccessPassphraseTests {
         #expect(await store.value?.hasPrefix("fiscal_ak_v1_") == true)
     }
 
-    @Test("Transition: a legacy device token bridges the one-time set-passphrase call") @MainActor
-    func initializeBridgesLegacyTokenAndClosesTransition() async {
-        let store = AccessKeyStoreMock()
-        let legacy = LegacyTokenStoreMock("fiscal_dt_v1_legacy")
-        let repo = AuthRepositoryMock(
-            store: store, legacyToken: "fiscal_dt_v1_legacy", passphrase: nil)
-        let model = PassphraseModel(
-            repository: repo, accessKeyStore: store, legacyTokenStore: legacy)
-
-        await model.loadStatus()
-        // No access key yet, but the legacy token bridges status: transition, not unauthorized.
-        #expect(model.isTransition)
-        #expect(model.status?.passphraseSet == false)
-
-        await model.initializePassphrase("brand-new-passphrase")
-        #expect(model.isConnected)
-        #expect(model.status?.passphraseSet == true)
-        #expect(await store.value?.hasPrefix("fiscal_ak_v1_") == true)
-        #expect(model.message == "访问口令已设定，本机已切换到口令连接")
-    }
-
     @Test("Changing the passphrase rotates the stored access key and stays connected") @MainActor
     func changeRotatesAccessKey() async {
         let store = AccessKeyStoreMock()
-        let repo = AuthRepositoryMock(store: store, legacyToken: nil, passphrase: "opensesame")
-        let model = PassphraseModel(
-            repository: repo, accessKeyStore: store, legacyTokenStore: LegacyTokenStoreMock(nil))
+        let repo = AuthRepositoryMock(store: store, passphrase: "opensesame")
+        let model = PassphraseModel(repository: repo, accessKeyStore: store)
         await model.login(passphrase: "opensesame")
         let firstKey = await store.value
 
@@ -105,9 +82,8 @@ struct P19AccessPassphraseTests {
     @Test("A globally revoked access key drops the model into the unauthorized state") @MainActor
     func globalRevocationForcesUnauthorized() async {
         let store = AccessKeyStoreMock()
-        let repo = AuthRepositoryMock(store: store, legacyToken: nil, passphrase: "opensesame")
-        let model = PassphraseModel(
-            repository: repo, accessKeyStore: store, legacyTokenStore: LegacyTokenStoreMock(nil))
+        let repo = AuthRepositoryMock(store: store, passphrase: "opensesame")
+        let model = PassphraseModel(repository: repo, accessKeyStore: store)
         await model.login(passphrase: "opensesame")
         #expect(model.isConnected)
 
@@ -127,25 +103,15 @@ private actor AccessKeyStoreMock: AccessKeyStoring {
     func delete() { value = nil }
 }
 
-private actor LegacyTokenStoreMock: DeviceTokenStoring {
-    private var token: String?
-    init(_ token: String?) { self.token = token }
-    func read() -> String? { token }
-    func save(_ token: String) { self.token = token }
-    func delete() { token = nil }
-}
-
 private actor AuthRepositoryMock: AuthRepositoryProtocol {
     private let store: AccessKeyStoreMock
-    private let legacyToken: String?
     private var passphrase: String?
     private var generation = 1
     private var validKeys: Set<String> = []
     private var counter = 0
 
-    init(store: AccessKeyStoreMock, legacyToken: String?, passphrase: String?) {
+    init(store: AccessKeyStoreMock, passphrase: String?) {
         self.store = store
-        self.legacyToken = legacyToken
         self.passphrase = passphrase
     }
 
@@ -160,13 +126,6 @@ private actor AuthRepositoryMock: AuthRepositoryProtocol {
         return mint()
     }
 
-    func initialize(passphrase: String, legacyToken: String) throws -> AccessKeyResponse {
-        guard self.passphrase == nil else { throw conflict("passphrase_already_set") }
-        guard legacyToken == self.legacyToken else { throw FiscalAPIError.unauthorized(nil) }
-        self.passphrase = passphrase
-        return mint()
-    }
-
     func change(oldPassphrase: String, newPassphrase: String) throws -> AccessKeyResponse {
         guard passphrase != nil else { throw conflict("passphrase_not_set") }
         guard oldPassphrase == passphrase else { throw unauthorized("invalid_passphrase") }
@@ -176,17 +135,13 @@ private actor AuthRepositoryMock: AuthRepositoryProtocol {
         return mint()
     }
 
-    func status(authorizationToken: String?) async throws -> AccessCredentialStatus {
-        let token: String?
-        if let authorizationToken { token = authorizationToken } else { token = await store.read() }
+    func status() async throws -> AccessCredentialStatus {
+        let token = await store.read()
         if let token, validKeys.contains(token) { return statusDTO(passphraseSet: true) }
-        if let token, token == legacyToken, passphrase == nil {
-            return statusDTO(passphraseSet: false)
-        }
         throw FiscalAPIError.unauthorized(nil)
     }
 
-    func operations(authorizationToken: String?) async throws -> OperationsStatusDTO {
+    func operations() async throws -> OperationsStatusDTO {
         throw FiscalAPIError.unauthorized(nil)
     }
 
@@ -199,9 +154,9 @@ private actor AuthRepositoryMock: AuthRepositoryProtocol {
 
     private func statusDTO(passphraseSet: Bool) -> AccessCredentialStatus {
         AccessCredentialStatus(
-            authenticationMode: passphraseSet ? "passphrase" : "transition_device_token",
+            authenticationMode: "passphrase",
             passphraseSet: passphraseSet,
-            credentialGeneration: passphraseSet ? generation : nil,
+            credentialGeneration: generation,
             lastRotatedAt: nil,
             activeAccessKeyCount: passphraseSet ? validKeys.count : 0,
             serverTime: Date(timeIntervalSince1970: 1_752_681_600),

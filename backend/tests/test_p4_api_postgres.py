@@ -3,7 +3,6 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
 
 from fiscal_api.core.config import Settings
 from fiscal_api.main import create_app
@@ -25,7 +24,6 @@ def test_real_api_credit_purchase_and_repayment_smoke() -> None:
         settings=Settings(
             environment="test",
             database_url=TEST_DATABASE_URL,
-            device_token=SecretStr("p4-api-token"),
         ),
         readiness_check=ready,
     )

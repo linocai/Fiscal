@@ -4,7 +4,6 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
 
 from fiscal_api.core.config import Settings
 from fiscal_api.main import create_app
@@ -27,7 +26,6 @@ def test_all_installment_http_gates() -> None:
         settings=Settings(
             environment="test",
             database_url=TEST_DATABASE_URL,
-            device_token=SecretStr("p5-api-token"),
         ),
         readiness_check=ready,
     )
@@ -233,7 +231,6 @@ def test_historical_purchase_options_roll_to_future_and_settlement_preview(
         settings=Settings(
             environment="test",
             database_url=TEST_DATABASE_URL,
-            device_token=SecretStr("p5-history-token"),
         ),
         readiness_check=ready,
     )

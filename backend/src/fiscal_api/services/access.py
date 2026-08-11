@@ -15,11 +15,10 @@ from fiscal_api.core.access_keys import (
 )
 from fiscal_api.core.config import Settings
 from fiscal_api.core.errors import APIError
+from fiscal_api.core.principal import AuthenticatedPrincipal
 from fiscal_api.core.time import utc_now
 from fiscal_api.db.models.access import AccessCredential, AccessKey
-from fiscal_api.db.models.security import DeviceTokenRole, DeviceTokenStatus
 from fiscal_api.repositories.access import AccessRepository
-from fiscal_api.services.security import AuthenticatedDevice
 
 
 @dataclass(frozen=True)
@@ -52,7 +51,7 @@ class AccessService:
 
     async def authenticate_access_key(
         self, raw_key: str, credential: AccessCredential
-    ) -> AuthenticatedDevice | None:
+    ) -> AuthenticatedPrincipal | None:
         if not is_well_formed_access_key(raw_key):
             return None
         row = await self.repository.get_access_key_by_digest(
@@ -64,13 +63,10 @@ class AccessService:
         changed = await self.repository.touch_last_used(row.id, now - timedelta(hours=1), now)
         if changed:
             await self.session.commit()
-        return AuthenticatedDevice(
+        return AuthenticatedPrincipal(
             id=row.id,
             label=row.label or "Access key",
-            role=DeviceTokenRole.OPERATOR,
-            status=DeviceTokenStatus.ACTIVE,
-            version=credential.credential_generation,
-            persistent=True,
+            credential_generation=credential.credential_generation,
         )
 
     async def active_access_key_count(self, generation: int) -> int:
@@ -85,8 +81,7 @@ class AccessService:
     async def initialize(self, passphrase: str) -> MintedAccessKey:
         """Create the credential row (generation 1) and mint the first access key.
 
-        Refuses if a credential already exists; the existence of the credential
-        row is itself the switch that permanently closes the device-token layer.
+        Refuses if a credential already exists.
         """
         existing = await self.repository.get_credential(for_update=True)
         if existing is not None:

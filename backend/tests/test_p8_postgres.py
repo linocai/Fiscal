@@ -20,6 +20,7 @@ from fiscal_api.api.p8_schemas import (
 )
 from fiscal_api.core.config import Settings
 from fiscal_api.core.errors import APIError
+from fiscal_api.core.principal import AuthenticatedPrincipal
 from fiscal_api.core.provider_credentials import ProviderCredentialCipher
 from fiscal_api.db.models import (
     AccountKind,
@@ -35,7 +36,6 @@ from fiscal_api.services.accounts import AccountService
 from fiscal_api.services.ai import AIService
 from fiscal_api.services.ai_provider import AIProvider, DisabledAIProvider
 from fiscal_api.services.categories import CategoryService
-from fiscal_api.services.security import AuthenticatedDevice
 from fiscal_api.services.transactions import TransactionService
 
 TEST_DATABASE_URL = environ.get("FISCAL_TEST_DATABASE_URL")
@@ -140,9 +140,7 @@ async def test_active_device_updates_encrypted_provider_configuration(
         credential_cipher=cipher,
     )
     current = await service.get_provider_settings()
-    device = AuthenticatedDevice(
-        id=uuid4(), label="iPhone", role="device", status="active", version=1
-    )
+    device = AuthenticatedPrincipal(id=uuid4(), label="iPhone", credential_generation=1)
     replacement = AIProviderSettingsReplace(
         base_url="https://api.example.com/v1",
         model="provider-model",

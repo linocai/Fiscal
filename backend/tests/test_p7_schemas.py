@@ -17,7 +17,7 @@ def test_reporting_derived_amounts_reject_int64_overflow() -> None:
 
 
 def test_report_query_contract_rejects_invalid_values(client: TestClient) -> None:
-    auth = {"Authorization": "Bearer test-device-token"}
+    auth = {"Authorization": "Bearer fiscal_ak_v1_test_access_key_0123456789abcdef"}
     invalid_queries = (
         "/api/v1/reports/overview?month=2026-13",
         "/api/v1/reports/spending?date_from=not-a-date",
@@ -34,7 +34,7 @@ def test_report_query_contract_rejects_invalid_values(client: TestClient) -> Non
         assert response.json()["error"]["code"] == "validation_error"
 
 
-def test_report_routes_require_device_authentication(client: TestClient) -> None:
+def test_report_routes_require_access_key(unauthenticated_client: TestClient) -> None:
     paths = (
         "/api/v1/reports/overview",
         "/api/v1/reports/spending",
@@ -44,6 +44,6 @@ def test_report_routes_require_device_authentication(client: TestClient) -> None
     )
 
     for path in paths:
-        response = client.get(path)
+        response = unauthenticated_client.get(path)
         assert response.status_code == 401, (path, response.text)
         assert response.json()["error"]["code"] == "authentication_required"

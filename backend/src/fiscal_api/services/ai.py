@@ -33,6 +33,7 @@ from fiscal_api.api.p8_schemas import (
 from fiscal_api.api.p13_schemas import CashFlowDraft, CashFlowMutationScope
 from fiscal_api.core.config import Settings
 from fiscal_api.core.errors import APIError
+from fiscal_api.core.principal import AuthenticatedPrincipal
 from fiscal_api.core.provider_credentials import ProviderCredentialCipher
 from fiscal_api.core.time import BUSINESS_TIMEZONE, utc_now
 from fiscal_api.db.models import (
@@ -51,7 +52,6 @@ from fiscal_api.repositories.ai import AIRepository
 from fiscal_api.services.ai_provider import AIProvider, build_stored_ai_provider
 from fiscal_api.services.cash_flow import CashFlowService
 from fiscal_api.services.common import acquire_mutation_lock, check_version, conflict, not_found
-from fiscal_api.services.security import AuthenticatedDevice
 from fiscal_api.services.transactions import TransactionService
 
 AUTO_AMOUNT_CEILING_MINOR = 100_000
@@ -102,7 +102,7 @@ class AIService:
         return self._provider_settings_response(await self.repository.settings())
 
     async def update_provider_settings(
-        self, replacement: AIProviderSettingsReplace, _actor: AuthenticatedDevice
+        self, replacement: AIProviderSettingsReplace, _actor: AuthenticatedPrincipal
     ) -> AIProviderSettingsResponse:
         if self.runtime_settings is None or self.credential_cipher is None:
             raise APIError(

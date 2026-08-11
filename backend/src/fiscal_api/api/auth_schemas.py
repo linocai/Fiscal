@@ -14,10 +14,6 @@ class SessionRequest(APIModel):
     passphrase: str = _Passphrase
 
 
-class InitializePassphraseRequest(APIModel):
-    passphrase: str = _Passphrase
-
-
 class ChangePassphraseRequest(APIModel):
     old_passphrase: str = _Passphrase
     new_passphrase: str = _Passphrase
@@ -29,9 +25,9 @@ class AccessKeyResponse(APIModel):
 
 
 class AccessStatusResponse(APIModel):
-    authentication_mode: Literal["passphrase", "transition_device_token"]
+    authentication_mode: Literal["passphrase"]
     passphrase_set: bool
-    credential_generation: int | None
+    credential_generation: int
     last_rotated_at: datetime | None
     active_access_key_count: int
     server_time: datetime

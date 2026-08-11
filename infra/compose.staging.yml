@@ -26,7 +26,6 @@ services:
     environment:
       FISCAL_ENVIRONMENT: staging
       FISCAL_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-fiscal}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/staging.env}@postgres:5432/${POSTGRES_DB:-fiscal}
-      FISCAL_DEVICE_TOKEN: ${FISCAL_DEVICE_TOKEN:?set FISCAL_DEVICE_TOKEN in infra/staging.env}
     depends_on:
       postgres:
         condition: service_healthy

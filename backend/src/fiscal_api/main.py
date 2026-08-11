@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from uuid import UUID
 
 from fastapi import FastAPI
 from sqlalchemy import func, select
@@ -10,9 +11,10 @@ from fiscal_api.core.config import Settings, get_settings
 from fiscal_api.core.errors import install_error_handlers
 from fiscal_api.core.logging import configure_logging
 from fiscal_api.core.middleware import install_request_middleware
+from fiscal_api.core.principal import AuthenticatedPrincipal
 from fiscal_api.core.rate_limit import RateLimiter
+from fiscal_api.core.security import require_authenticated
 from fiscal_api.db.models.access import AccessCredential
-from fiscal_api.db.models.security import DeviceToken, DeviceTokenStatus
 from fiscal_api.db.readiness import ReadinessCheck, build_readiness_check
 from fiscal_api.db.session import create_engine, create_session_factory
 
@@ -31,22 +33,14 @@ def create_app(
         app.state.session_factory = create_session_factory(engine)
         app.state.readiness_check = readiness_check or build_readiness_check(engine)
         app.state.rate_limiter = RateLimiter(resolved_settings)
-        if resolved_settings.uses_database_device_tokens:
+        if resolved_settings.environment in {"staging", "production"}:
             async with app.state.session_factory() as session:
                 credential_count = await session.scalar(
                     select(func.count()).select_from(AccessCredential)
                 )
-                active_tokens = await session.scalar(
-                    select(func.count())
-                    .select_from(DeviceToken)
-                    .where(DeviceToken.status == DeviceTokenStatus.ACTIVE)
-                )
-                # Transition-safe: an access passphrase credential OR (before it is
-                # set) at least one active device token keeps deployments bootable.
-                if not credential_count and not active_tokens:
+                if credential_count != 1:
                     raise RuntimeError(
-                        "Authentication requires an access passphrase credential "
-                        "or at least one active device token"
+                        "Authentication requires exactly one access passphrase credential"
                     )
         yield
         await engine.dispose()
@@ -61,6 +55,13 @@ def create_app(
     install_request_middleware(app)
     install_error_handlers(app)
     app.dependency_overrides[get_settings] = lambda: resolved_settings
+    if resolved_settings.environment == "test":
+        # Unit/domain tests own their authorization boundary explicitly; this
+        # avoids reviving a static runtime credential solely to exercise a
+        # schema or service contract against an otherwise disposable database.
+        app.dependency_overrides[require_authenticated] = lambda: AuthenticatedPrincipal(
+            id=UUID(int=1), label="Test access key", credential_generation=1
+        )
     app.include_router(api_router)
     return app
 

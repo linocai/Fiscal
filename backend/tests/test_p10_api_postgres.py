@@ -5,7 +5,6 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
 
 from fiscal_api.core.config import Settings
 from fiscal_api.main import create_app
@@ -24,7 +23,6 @@ def test_p10_filter_bulk_and_csv_api() -> None:
         settings=Settings(
             environment="test",
             database_url=TEST_DATABASE_URL,
-            device_token=SecretStr("p10-api-token"),
         ),
         readiness_check=ready,
     )
@@ -153,7 +151,6 @@ def test_p10_api_rejects_duplicate_batch_and_invalid_amount_range() -> None:
         settings=Settings(
             environment="test",
             database_url=TEST_DATABASE_URL,
-            device_token=SecretStr("p10-policy-token"),
         ),
         readiness_check=ready,
     )

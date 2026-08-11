@@ -13,7 +13,9 @@ xcodebuild -project Fiscal.xcodeproj -scheme FiscalmacOS test
 
 Debug builds use `http://127.0.0.1:8000` and allow local-network transport for development only. Release builds use `https://fiscal.linotsai.top`. The protected status endpoints are `/api/v1/system/status`, `/api/v1/system/security-status` and `/api/v1/system/operations-status`; bearer device keys are stored as this-device-only Keychain items.
 
-For a one-time local or staging bootstrap, set `FISCAL_DEVICE_TOKEN` in the Xcode Run scheme environment. On launch the app moves it into Keychain; the value is not compiled into the bundle, written to `UserDefaults`, or logged. Remove the scheme value after the first successful launch.
+For a local or staging connection, enter the personal access passphrase in the
+app's cloud-connection screen. The app obtains a generation-scoped access key,
+stores it in Keychain, and never logs the passphrase or key.
 
 ## P11 VPS and device security
 
@@ -39,4 +41,6 @@ Both apps share one server-backed `AIProposalModel` and authoritative `pending_c
 
 ## Integration UI tests
 
-Start a seeded local API whose device token is `integration-device-token`, then run the `FiscaliOS` scheme against a booted simulator. The UI target verifies that no native tab bar exists, navigates through More, and reads account/category hierarchy from the authenticated API. The scheme token is local-test-only and must never be reused for staging or production.
+Start a seeded local API and run the `FiscaliOS` scheme against a booted
+simulator. The UI target injects a local-only access-key fixture; it must never
+be reused for staging or production.

@@ -7,7 +7,6 @@ from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "test", "staging", "production"]
-DEFAULT_DEVELOPMENT_TOKEN = "development-device-token-change-me"  # noqa: S105
 
 
 class Settings(BaseSettings):
@@ -22,12 +21,8 @@ class Settings(BaseSettings):
     service_name: str = "fiscal-api"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     database_url: str = "postgresql+asyncpg://fiscal:fiscal@localhost:5432/fiscal"
-    device_token: SecretStr | None = None
     token_pepper: SecretStr | None = None
     token_pepper_version: int = 1
-    # Legacy device-token setting: unused since the passphrase model landed, kept
-    # (with its validation) so the transition does not trigger a settings change.
-    token_pending_ttl_minutes: int = 60
     passphrase_kdf_iterations: int = 600_000
     rate_limit_read_per_minute: int = 120
     rate_limit_write_per_minute: int = 30
@@ -48,14 +43,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def reject_unsafe_deployed_defaults(self) -> Self:
         if self.environment in {"staging", "production"}:
-            if self.device_token is not None:
-                raise ValueError("FISCAL_DEVICE_TOKEN is forbidden outside local/test")
             if self.token_pepper is None or len(self.token_pepper.get_secret_value().encode()) < 32:
                 raise ValueError("FISCAL_TOKEN_PEPPER must contain at least 32 bytes")
         if self.token_pepper_version < 1:
             raise ValueError("FISCAL_TOKEN_PEPPER_VERSION must be positive")
-        if not 5 <= self.token_pending_ttl_minutes <= 60:
-            raise ValueError("FISCAL_TOKEN_PENDING_TTL_MINUTES must be between 5 and 60")
         if not 100_000 <= self.passphrase_kdf_iterations <= 2_000_000:
             raise ValueError("FISCAL_PASSPHRASE_KDF_ITERATIONS must be between 100000 and 2000000")
         for name, value in (
@@ -89,20 +80,6 @@ class Settings(BaseSettings):
             if self.environment in {"staging", "production"} and parsed.scheme != "https":
                 raise ValueError("FISCAL_AI_PROVIDER_BASE_URL must use HTTPS when deployed")
         return self
-
-    @property
-    def uses_database_device_tokens(self) -> bool:
-        return self.environment in {"staging", "production"}
-
-    @property
-    def legacy_device_token(self) -> str:
-        if self.uses_database_device_tokens:
-            raise RuntimeError("Legacy device tokens are disabled")
-        return (
-            self.device_token.get_secret_value()
-            if self.device_token is not None
-            else DEFAULT_DEVELOPMENT_TOKEN
-        )
 
     @property
     def ai_provider_configured(self) -> bool:

@@ -53,7 +53,7 @@ Verify the public liveness endpoint and the protected status endpoint using the 
 ```sh
 curl --fail --show-error https://fiscal-staging.example.com/api/v1/health/live
 curl --fail --show-error \
-  -H 'Authorization: Bearer YOUR_DEVICE_TOKEN' \
+  -H 'Authorization: Bearer YOUR_CURRENT_ACCESS_KEY' \
   https://fiscal-staging.example.com/api/v1/system/status
 ```
 

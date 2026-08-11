@@ -17,7 +17,6 @@ from fiscal_api.services.credit import CreditService
 from fiscal_api.services.installments import InstallmentService
 from fiscal_api.services.reimbursements import ReimbursementService
 from fiscal_api.services.reporting import ReportingService
-from fiscal_api.services.security import DeviceTokenService
 from fiscal_api.services.transactions import TransactionService
 
 
@@ -89,12 +88,6 @@ def get_ai_service(
     )
 
 
-def get_device_token_service(
-    session: SessionDependency, settings: Annotated[Settings, Depends(get_settings)]
-) -> DeviceTokenService:
-    return DeviceTokenService(session, settings)
-
-
 def get_access_service(
     session: SessionDependency, settings: Annotated[Settings, Depends(get_settings)]
 ) -> AccessService:
@@ -110,5 +103,4 @@ InstallmentServiceDependency = Annotated[InstallmentService, Depends(get_install
 ReimbursementServiceDependency = Annotated[ReimbursementService, Depends(get_reimbursement_service)]
 ReportingServiceDependency = Annotated[ReportingService, Depends(get_reporting_service)]
 AIServiceDependency = Annotated[AIService, Depends(get_ai_service)]
-DeviceTokenServiceDependency = Annotated[DeviceTokenService, Depends(get_device_token_service)]
 AccessServiceDependency = Annotated[AccessService, Depends(get_access_service)]

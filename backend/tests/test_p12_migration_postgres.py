@@ -125,7 +125,7 @@ def test_p12_provenance_migration_legacy_source_and_guarded_downgrade(
     assert TEST_DATABASE_URL is not None
     monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
     get_settings.cache_clear()
-    command.upgrade(_config(), "head")
+    command.upgrade(_config(), "20260811_0019")
     asyncio.run(_clear_p12_rows())
     asyncio.run(_insert_legacy_transaction_and_provenance())
     asyncio.run(_assert_provenance_and_duplicate_guard())
@@ -135,5 +135,5 @@ def test_p12_provenance_migration_legacy_source_and_guarded_downgrade(
 
     asyncio.run(_clear_p12_rows())
     command.downgrade(_config(), "20260716_0010")
-    command.upgrade(_config(), "head")
+    command.upgrade(_config(), "20260811_0019")
     get_settings.cache_clear()

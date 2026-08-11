@@ -66,24 +66,22 @@ sudo infra/production/scripts/deploy.sh --source /path/to/Fiscal --defer-start -
 
 `--defer-start` is rejected once `/opt/fiscal/current` exists and cannot be combined with `--public-smoke`. Every later deployment must use the ordinary restart/health path.
 
-### 6. Import the first operator key
+### 6. Initialize the personal access passphrase
 
-The first operator key is imported locally after the P11 migration. It must use the database-token format `fiscal_dt_v1_` plus a fresh 32-byte URL-safe secret; a bare hexadecimal string is not a valid device token. Generate it on the trusted Mac, keep it in a shell variable, and send it only over SSH standard input:
+Before the first API start, set the personal passphrase through the recovery CLI.
+It reads standard input only, prints no passphrase or access key, and creates
+credential generation 1. Keep the value in the approved password manager; it
+is the recovery secret for every device.
 
 ```sh
-sudo /opt/fiscal/current/infra/production/scripts/bootstrap-operator.sh --label "Primary Mac"
-FIRST_OPERATOR_TOKEN="$(python3 -c \
-  'import secrets; print("fiscal_dt_v1_" + secrets.token_urlsafe(32))')"
-printf '%s\n' "$FIRST_OPERATOR_TOKEN" | ssh HZ_ADMIN_HOST \
-  'sudo /opt/fiscal/current/infra/production/scripts/bootstrap-operator.sh \
-  --label "Primary Mac" --apply'
+printf '%s\n' "$NEW_PASSPHRASE" | sudo -u fiscal sh -c \
+  'set -a; . /etc/fiscal/fiscal.env; set +a; cd /opt/fiscal/current/backend; \
+   exec .venv/bin/python -m fiscal_api.cli.access initialize'
 ```
-
-Replace `HZ_ADMIN_HOST` with the operator's existing SSH target; it is not a repository setting. The raw token is stdin data, never an argument. Before `unset FIRST_OPERATOR_TOKEN`, save that exact value in the approved recovery/password-manager location and inject it once into the Fiscal macOS Keychain/configuration flow. Clear any temporary clipboard immediately. The server cannot recover it later: the database stores only its HMAC digest and fingerprint. The first server-side command is a dry run and consumes no token.
 
 ### 7. Start locally and prove readiness
 
-Only after the operator import succeeds, start the API and verify the dedicated loopback port:
+Only after passphrase initialization succeeds, start the API and verify the dedicated loopback port:
 
 ```sh
 sudo systemctl start fiscal-api.service
@@ -152,11 +150,13 @@ sudo /opt/fiscal/current/infra/production/scripts/rollback.sh --revision 0123456
 
 It switches only when the target release and live database have exactly the same Alembic head. If they differ, do not run `alembic downgrade`; restore the verified pre-migration dump into a new database, validate it, and deliberately switch the connection.
 
-## Access passphrase (P19)
+## Access passphrase (P20 final state)
 
-Since v1.2.4 the client authenticates with a personal access passphrase, not device tokens. Authentication is dual-channel and transition-safe: while no credential row exists the existing device tokens still authenticate, so a freshly deployed transition build never disconnects an in-use client. Setting the passphrase is what permanently closes the device-token layer — from that point only access keys at the current generation are accepted.
-
-Normal path (no server command): on an installed macOS build, open Settings → 账户与同步 → the access-passphrase card and choose 设置访问口令. The app bridges its still-valid device token to `POST /auth/passphrase/initialize`, receives an access key, stores it in the iCloud-synchronized keychain, and stays connected. Other devices then connect by entering the same passphrase (`POST /auth/session`). Changing the passphrase (needs the old one) bumps the credential generation and revokes every existing access key in one write.
+The API accepts only current-generation personal access keys. On an installed
+macOS or iPhone build, open Settings → 账户与同步 and enter the passphrase to
+call `POST /auth/session`; the resulting access key is stored in the system
+Keychain. Changing the passphrase (which needs the old value) bumps credential
+generation and immediately revokes all previous access keys.
 
 Server-side fallback / recovery (the only forgot-passphrase path) reads the passphrase from standard input and never prints or logs it:
 
@@ -169,7 +169,11 @@ printf '%s\n' "$NEW_PASSPHRASE" | sudo FISCAL_ENV_FILE=/etc/fiscal/fiscal.env \
 printf '%s\n' "$NEW_PASSPHRASE" | sudo ... python -m fiscal_api.cli.access reset-passphrase
 ```
 
-Run these under the systemd unit's environment (the app role plus `FISCAL_TOKEN_PEPPER` and `FISCAL_PASSPHRASE_KDF_ITERATIONS`). After a reset, every device must reconnect with the new passphrase. The `device_tokens` table is retained this release and is scheduled for removal next release.
+Run these under the systemd unit's environment (the app role plus
+`FISCAL_TOKEN_PEPPER` and `FISCAL_PASSPHRASE_KDF_ITERATIONS`). After a reset,
+every device must reconnect with the new passphrase. Device-token
+authentication is permanently absent and an Alembic downgrade across that
+boundary is guarded.
 
 ## Backup and restore drill
 

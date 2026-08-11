@@ -4,26 +4,28 @@ from fastapi.testclient import TestClient
 RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
 
 
-def test_system_status_requires_device_token(client: TestClient) -> None:
-    response = client.get("/api/v1/system/status")
+def test_system_status_requires_access_key(unauthenticated_client: TestClient) -> None:
+    response = unauthenticated_client.get("/api/v1/system/status")
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "authentication_required"
 
 
-def test_p2_routes_require_device_token(client: TestClient) -> None:
-    assert client.get("/api/v1/accounts").json()["error"]["code"] == "authentication_required"
-    assert client.get("/api/v1/categories").json()["error"]["code"] == "authentication_required"
+def test_p2_routes_require_access_key(unauthenticated_client: TestClient) -> None:
+    accounts = unauthenticated_client.get("/api/v1/accounts")
+    categories = unauthenticated_client.get("/api/v1/categories")
+    assert accounts.json()["error"]["code"] == "authentication_required"
+    assert categories.json()["error"]["code"] == "authentication_required"
 
 
-def test_system_status_rejects_invalid_device_token(client: TestClient) -> None:
-    response = client.get(
+def test_system_status_rejects_invalid_access_key(unauthenticated_client: TestClient) -> None:
+    response = unauthenticated_client.get(
         "/api/v1/system/status",
         headers={"Authorization": "Bearer incorrect"},
     )
 
     assert response.status_code == 401
-    assert response.json()["error"]["code"] == "invalid_device_token"
+    assert response.json()["error"]["code"] == "invalid_access_key"
 
 
 @pytest.mark.parametrize(
@@ -66,13 +68,13 @@ def test_system_status_rejects_invalid_device_token(client: TestClient) -> None:
         ("POST", f"/api/v1/ai/proposals/{RESOURCE_ID}/undo", {}),
     ],
 )
-def test_p2_route_matrix_rejects_missing_token_before_database_access(
-    client: TestClient,
+def test_p2_route_matrix_rejects_missing_access_key_before_database_access(
+    unauthenticated_client: TestClient,
     method: str,
     path: str,
     body: dict[str, object] | None,
 ) -> None:
-    response = client.request(method, path, json=body)
+    response = unauthenticated_client.request(method, path, json=body)
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "authentication_required"
@@ -100,7 +102,7 @@ def test_patch_rejects_explicit_null_for_required_fields(
     response = client.patch(
         path,
         json=body,
-        headers={"Authorization": "Bearer test-device-token"},
+        headers={"Authorization": "Bearer fiscal_ak_v1_test_access_key_0123456789abcdef"},
     )
 
     assert response.status_code == 422
@@ -115,7 +117,7 @@ def test_account_create_rejects_json_floating_point_money(client: TestClient) ->
             "kind": "cash",
             "opening_balance_minor": 12.5,
         },
-        headers={"Authorization": "Bearer test-device-token"},
+        headers={"Authorization": "Bearer fiscal_ak_v1_test_access_key_0123456789abcdef"},
     )
 
     assert response.status_code == 422
@@ -150,7 +152,7 @@ def test_account_money_rejects_out_of_range_or_nonpositive_limit(
     response = client.post(
         "/api/v1/accounts",
         json=payload,
-        headers={"Authorization": "Bearer test-device-token"},
+        headers={"Authorization": "Bearer fiscal_ak_v1_test_access_key_0123456789abcdef"},
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
@@ -159,7 +161,7 @@ def test_account_money_rejects_out_of_range_or_nonpositive_limit(
 def test_system_status_returns_operational_contract(client: TestClient) -> None:
     response = client.get(
         "/api/v1/system/status",
-        headers={"Authorization": "Bearer test-device-token"},
+        headers={"Authorization": "Bearer fiscal_ak_v1_test_access_key_0123456789abcdef"},
     )
 
     assert response.status_code == 200

@@ -4,7 +4,7 @@ from decimal import Decimal
 import pytest
 from pydantic import BaseModel, SecretStr, ValidationError
 
-from fiscal_api.core.config import DEFAULT_DEVELOPMENT_TOKEN, Settings
+from fiscal_api.core.config import Settings
 from fiscal_api.core.money import CNYAmount, normalize_cny
 from fiscal_api.core.time import BUSINESS_TIMEZONE, UTC, ensure_utc, to_business_time
 
@@ -35,8 +35,6 @@ def test_time_helpers_require_aware_values_and_use_shanghai() -> None:
         ensure_utc(datetime(2026, 7, 14))
 
 
-def test_production_rejects_legacy_tokens_and_requires_strong_pepper() -> None:
-    with pytest.raises(ValidationError, match="forbidden"):
-        Settings(environment="production", device_token=SecretStr(DEFAULT_DEVELOPMENT_TOKEN))
+def test_production_requires_strong_access_key_pepper() -> None:
     with pytest.raises(ValidationError, match="at least 32"):
         Settings(environment="production", token_pepper=SecretStr("short"))

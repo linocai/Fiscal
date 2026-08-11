@@ -73,7 +73,7 @@ def test_p10_uncategorized_upgrade_and_guarded_downgrade(
     assert TEST_DATABASE_URL is not None
     monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
     get_settings.cache_clear()
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260811_0019")
     asyncio.run(clear_ledger())
     asyncio.run(insert_uncategorized())
     with pytest.raises(DBAPIError, match="P10 downgrade blocked"):
@@ -83,5 +83,5 @@ def test_p10_uncategorized_upgrade_and_guarded_downgrade(
     command.downgrade(config(), "20260716_0008")
     with pytest.raises(DBAPIError, match="invalid income/expense posting shape"):
         asyncio.run(insert_uncategorized())
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260811_0019")
     get_settings.cache_clear()

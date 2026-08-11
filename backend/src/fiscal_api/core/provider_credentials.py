@@ -21,12 +21,9 @@ class ProviderCredentialCipher:
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "ProviderCredentialCipher":
-        secret = (
-            settings.token_pepper.get_secret_value()
-            if settings.token_pepper is not None
-            else settings.legacy_device_token
-        )
-        return cls(secret)
+        if settings.token_pepper is None:
+            raise ValueError("FISCAL_TOKEN_PEPPER is required for provider credentials")
+        return cls(settings.token_pepper.get_secret_value())
 
     def encrypt(self, plaintext: str) -> str:
         nonce = os.urandom(12)

@@ -98,14 +98,14 @@ def test_data_bearing_downgrade_aborts_atomically_and_empty_round_trip_succeeds(
 
         asyncio.run(_clear_p4_data())
         command.downgrade(_config(), "20260715_0003")
-        command.upgrade(_config(), "head")
+        command.upgrade(_config(), "20260811_0019")
     finally:
         get_settings.cache_clear()
         # If an assertion fails after the protected downgrade, restore the shared test schema.
         try:
             asyncio.run(_clear_p4_data())
         except DBAPIError:
-            command.upgrade(_config(), "head")
+            command.upgrade(_config(), "20260811_0019")
             asyncio.run(_clear_p4_data())
-        command.upgrade(_config(), "head")
+        command.upgrade(_config(), "20260811_0019")
         get_settings.cache_clear()

@@ -14,7 +14,6 @@
 		07C81CB610412DD379C0101C /* TransactionDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14D2F5B51728A050A74E8E3F /* TransactionDTO.swift */; };
 		095E87EC30FDBE600CB36502 /* CreditRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F6D5C08025FA9E847D78B61 /* CreditRepository.swift */; };
 		0DB3D38B493F1B22A954DEC2 /* OverviewSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 185A49CF04897A7803A09434 /* OverviewSnapshot.swift */; };
-		0E59ACB97BECD3181F51A92F /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */; };
 		0F4039AAAB4DF5A9E1453CF4 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5E548FB37878DDEA0D9A06B /* FiscalKit.framework */; };
 		15BB0F18A42867A3156A607C /* FiscalDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1164C772E643D0CF6996CB1 /* FiscalDesign.swift */; };
 		16C11D0F2A385F40A9CA246A /* TransactionScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9654628B5C1FF4264957DEA3 /* TransactionScreens.swift */; };
@@ -104,7 +103,6 @@
 		B6DE74EF3CF5E14A638D02F9 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */; };
 		B7F5464BC01EB757FA330392 /* AISettingsDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A96FD3E04393BDF8D525167 /* AISettingsDTO.swift */; };
 		BA71137FB7961C822DA900E9 /* OCRInputService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C53CFB1B3FBC363B77ED08 /* OCRInputService.swift */; };
-		BDBC32BC1071C2E175D1E539 /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */; };
 		BE17976A44A851276CF80AFD /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05A497A70BFC7C3E143FE00A /* APIConfiguration.swift */; };
 		BF28273EB1C825AED3B34E8B /* FiscalKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E2FF91C44F1DCC211426631D /* FiscalKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		C2FF5131387EF586283B5E4A /* FiscalNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = A34095B1DD7CB23F5F409164 /* FiscalNotifications.swift */; };
@@ -251,7 +249,6 @@
 		4A5CF78F321F52F87722C386 /* AccessKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessKeyStore.swift; sourceTree = "<group>"; };
 		4D97882660F312713851BCE4 /* P16HorizontalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P16HorizontalTests.swift; sourceTree = "<group>"; };
 		4EA7703B5970A868EC31D996 /* AIProposalRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProposalRepository.swift; sourceTree = "<group>"; };
-		500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTokenStore.swift; sourceTree = "<group>"; };
 		50AE5EE92E61AC85DDE507B3 /* CreditDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditDTO.swift; sourceTree = "<group>"; };
 		524E9B77F58FABD7A662DE07 /* ReportingDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportingDTO.swift; sourceTree = "<group>"; };
 		5407B68FAE8AFB476A8A2C45 /* CreditModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditModel.swift; sourceTree = "<group>"; };
@@ -489,7 +486,6 @@
 				A4C08D3A38FBE37DF6C81120 /* CashFlowRepository.swift */,
 				6F6D5C08025FA9E847D78B61 /* CreditRepository.swift */,
 				D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */,
-				500D93BA4A15042D04A34190 /* KeychainTokenStore.swift */,
 				6A8B134AC6D0F6AF80ECDA80 /* MasterDataRepositories.swift */,
 				9A3AB4BE7E4F9C491EEA3497 /* ReimbursementRepository.swift */,
 				2565D0CD7EC6A2E0C3659D71 /* ReportingRepository.swift */,
@@ -795,7 +791,6 @@
 				26658545C3F7F97DCC2DC110 /* InstallmentModel.swift in Sources */,
 				89087700DD68C77C7175FA1C /* InstallmentRepository.swift in Sources */,
 				9307E589EF04A2D630C49160 /* InstallmentScreens.swift in Sources */,
-				0E59ACB97BECD3181F51A92F /* KeychainTokenStore.swift in Sources */,
 				5F6105347317E351A61F72C1 /* MacTransactionWorkbench.swift in Sources */,
 				B6D9AA5E9C3D3D572F7F3FDE /* MasterDataDTO.swift in Sources */,
 				A336173A53CFCB17588F8CB0 /* MasterDataModels.swift in Sources */,
@@ -867,7 +862,6 @@
 				EB941A8C4F43A67DDF71A0D0 /* InstallmentModel.swift in Sources */,
 				2A6C366F90678183C6E76FEB /* InstallmentRepository.swift in Sources */,
 				1E93660618BFA3172A2C2886 /* InstallmentScreens.swift in Sources */,
-				BDBC32BC1071C2E175D1E539 /* KeychainTokenStore.swift in Sources */,
 				060D12A491DC6B4BB43CDB1E /* MacTransactionWorkbench.swift in Sources */,
 				682F700DD6FD0ACCC4BC1BCD /* MasterDataDTO.swift in Sources */,
 				70083F44D5488D2A90A18600 /* MasterDataModels.swift in Sources */,

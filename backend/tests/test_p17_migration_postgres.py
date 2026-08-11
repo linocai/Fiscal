@@ -80,9 +80,9 @@ def test_p17_upgrade_defaults_old_mode_and_only_clears_credit_overrides(
     assert TEST_DATABASE_URL is not None
     monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
     get_settings.cache_clear()
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260811_0019")
     command.downgrade(config(), "20260717_0014")
     asyncio.run(seed_v14())
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260811_0019")
     assert asyncio.run(upgraded_values()) == ("statement_day_cutoff", 0, 1)
     get_settings.cache_clear()

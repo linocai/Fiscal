@@ -118,7 +118,7 @@ private struct FiscalSnapshotTool {
   static func main() async throws {
     let environment = ProcessInfo.processInfo.environment
     // Value semantics: an access key, or (against a local/test backend) the static token.
-    let token = environment["FISCAL_ACCESS_KEY"] ?? "integration-device-token"
+    let token = environment["FISCAL_ACCESS_KEY"] ?? "fiscal_ak_v1_integration_test_access_key_0123456789abcdef"
     let output = URL(
       fileURLWithPath: environment["FISCAL_QA_SCREENSHOT_DIR"]
         ?? "../docs/qa/p10/screenshots", isDirectory: true)

@@ -22,9 +22,6 @@ struct FiscaliOSApp: App {
     init() {
         let baseURL = APIConfiguration.baseURL()
         let accessKeyStore = AccessKeyStore(accessGroup: "HX73DFL88G.com.linotsai.fiscal")
-        // Transition bridge: the still-valid legacy device token authorizes the one-time
-        // set-passphrase call. Removed with the device_tokens table next release.
-        let legacyTokenStore = KeychainTokenStore(accessGroup: "HX73DFL88G.com.linotsai.fiscal")
         let transport = APITransport(baseURL: baseURL, accessKeyStore: accessKeyStore)
         let accounts = AccountsModel(repository: RemoteAccountRepository(transport: transport))
         let categories = CategoriesModel(repository: RemoteCategoryRepository(transport: transport))
@@ -43,7 +40,7 @@ struct FiscaliOSApp: App {
         _connection = State(initialValue: ConnectionModel(client: SystemStatusClient(baseURL: baseURL, accessKeyStore: accessKeyStore)))
         _passphrase = State(initialValue: PassphraseModel(
             repository: RemoteAuthRepository(transport: transport),
-            accessKeyStore: accessKeyStore, legacyTokenStore: legacyTokenStore))
+            accessKeyStore: accessKeyStore))
         _accounts = State(initialValue: accounts)
         _categories = State(initialValue: categories)
         _credit = State(initialValue: credit)

@@ -7,7 +7,6 @@ from fiscal_api.api.auth_schemas import (
     AccessKeyResponse,
     AccessStatusResponse,
     ChangePassphraseRequest,
-    InitializePassphraseRequest,
     SessionRequest,
 )
 from fiscal_api.api.dependencies import AccessServiceDependency
@@ -60,18 +59,6 @@ async def create_session(
     )
 
 
-@router.post("/passphrase/initialize", response_model=AccessKeyResponse)
-async def initialize_passphrase(
-    payload: InitializePassphraseRequest,
-    _principal: AuthenticatedDependency,
-    service: AccessServiceDependency,
-) -> AccessKeyResponse:
-    minted = await service.initialize(payload.passphrase)
-    return AccessKeyResponse(
-        access_key=minted.raw_key, credential_generation=minted.credential_generation
-    )
-
-
 @router.post("/passphrase/change", response_model=AccessKeyResponse)
 async def change_passphrase(
     request: Request,
@@ -109,24 +96,20 @@ async def auth_status(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AccessStatusResponse:
     credential = await service.get_credential()
-    if credential is not None:
-        return AccessStatusResponse(
-            authentication_mode="passphrase",
-            passphrase_set=True,
-            credential_generation=credential.credential_generation,
-            last_rotated_at=credential.last_rotated_at,
-            active_access_key_count=await service.active_access_key_count(
-                credential.credential_generation
-            ),
-            server_time=utc_now(),
-            rate_limits=_rate_limits(settings),
+    if credential is None:
+        raise APIError(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code="authentication_required",
+            message="The personal access passphrase must be initialized before use",
         )
     return AccessStatusResponse(
-        authentication_mode="transition_device_token",
-        passphrase_set=False,
-        credential_generation=None,
-        last_rotated_at=None,
-        active_access_key_count=0,
+        authentication_mode="passphrase",
+        passphrase_set=True,
+        credential_generation=credential.credential_generation,
+        last_rotated_at=credential.last_rotated_at,
+        active_access_key_count=await service.active_access_key_count(
+            credential.credential_generation
+        ),
         server_time=utc_now(),
         rate_limits=_rate_limits(settings),
     )

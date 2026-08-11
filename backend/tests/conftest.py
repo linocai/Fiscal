@@ -8,7 +8,6 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -47,8 +46,20 @@ async def _truncate_disposable_postgres(database_url: str) -> None:
         await engine.dispose()
 
 
+async def _reset_disposable_postgres_to_base(database_url: str) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(text("DROP SCHEMA public CASCADE"))
+            await connection.execute(text("CREATE SCHEMA public"))
+    finally:
+        await engine.dispose()
+
+
 @pytest.fixture(autouse=True)
-def reset_disposable_postgres_before_each_test(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def reset_disposable_postgres_before_each_test(
+    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> Iterator[None]:
     """Run every PostgreSQL test against a head schema with no leaked data.
 
     Migration tests intentionally finish in older revisions or after protected
@@ -62,8 +73,17 @@ def reset_disposable_postgres_before_each_test(monkeypatch: pytest.MonkeyPatch) 
         return
     monkeypatch.setenv("FISCAL_DATABASE_URL", test_database_url)
     get_settings.cache_clear()
-    command.upgrade(_alembic_config(), "head")
-    asyncio.run(_truncate_disposable_postgres(test_database_url))
+    config = _alembic_config()
+    if request.path.name.endswith("_migration_postgres.py"):
+        # Each historical migration guard needs to begin on the last reversible
+        # revision. P20 is deliberately irreversible, so sharing a current-head
+        # schema would make its guard mask the older guard under test.
+        asyncio.run(_reset_disposable_postgres_to_base(test_database_url))
+        command.stamp(config, "base")
+        command.upgrade(config, "20260811_0019")
+    else:
+        command.upgrade(config, "head")
+        asyncio.run(_truncate_disposable_postgres(test_database_url))
     # P5/P17 fixtures deliberately describe a July 2026 statement calendar.
     # Their eligibility rules are business-date dependent, so pin that single
     # clock in the disposable PostgreSQL suite instead of allowing the wall
@@ -84,12 +104,19 @@ def settings() -> Settings:
     return Settings(
         environment="test",
         database_url="postgresql+asyncpg://unused:unused@localhost/unused",
-        device_token=SecretStr("test-device-token"),
     )
 
 
 @pytest.fixture
 def client(settings: Settings) -> Iterator[TestClient]:
     app = create_app(settings=settings, readiness_check=ready_database)
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def unauthenticated_client() -> Iterator[TestClient]:
+    """Exercise the real missing/malformed access-key boundary without a database."""
+    app = create_app(settings=Settings(environment="local"), readiness_check=ready_database)
     with TestClient(app) as test_client:
         yield test_client

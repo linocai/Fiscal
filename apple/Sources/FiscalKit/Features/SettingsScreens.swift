@@ -672,8 +672,6 @@ public struct PassphraseSettingsCard: View {
   let compact: Bool
   let onConnected: () -> Void
   @State private var loginPassphrase = ""
-  @State private var newPassphrase = ""
-  @State private var confirmPassphrase = ""
   @State private var oldPassphrase = ""
   @State private var rotatedNewPassphrase = ""
   @State private var showChange = false
@@ -716,9 +714,6 @@ public struct PassphraseSettingsCard: View {
           securityBoundary(status)
           Divider().opacity(0.35)
           changeArea
-        } else if model.isTransition {
-          Divider().opacity(0.35)
-          setPassphraseArea
         } else if model.phase == .unauthorized || model.phase == .failed {
           Divider().opacity(0.35)
           // Offline can be transient (or a wrong-server build); never strand the user without
@@ -740,8 +735,6 @@ public struct PassphraseSettingsCard: View {
     let base: String
     if model.isConnected, let status = model.status {
       base = "口令连接 · \(status.activeAccessKeyCount) 个有效 access_key"
-    } else if model.isTransition {
-      base = "过渡期 · 旧设备凭证仍在连接，请设置访问口令"
     } else {
       switch model.phase {
       case .loading: base = "正在核验服务器与访问口令…"
@@ -813,35 +806,6 @@ public struct PassphraseSettingsCard: View {
     }
   }
 
-  private var setPassphraseArea: some View {
-    VStack(alignment: .leading, spacing: 11) {
-      Label("设置访问口令", systemImage: "key.horizontal")
-        .font(.caption.weight(.semibold)).foregroundStyle(FiscalColor.secondary)
-      Text("为个人云端设定一个访问口令。设定后本机立即切换到口令连接，旧的设备连接凭证全部作废。其它设备输入同一口令即可连接。")
-        .font(.caption).foregroundStyle(FiscalColor.tertiary)
-        .fixedSize(horizontal: false, vertical: true)
-      SecureField("新访问口令（8–128 位）", text: $newPassphrase)
-        .textFieldStyle(.plain)
-        .padding(.horizontal, 11).frame(minHeight: 40)
-        .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
-      SecureField("再次输入新口令", text: $confirmPassphrase)
-        .textFieldStyle(.plain)
-        .padding(.horizontal, 11).frame(minHeight: 40)
-        .background(FiscalColor.separator.opacity(0.28), in: .rect(cornerRadius: 10))
-      Button(action: submitInitialize) {
-        HStack(spacing: 8) {
-          if model.isMutating { ProgressView().controlSize(.small) }
-          Text(model.isMutating ? "正在设定…" : "设置访问口令")
-        }
-        .frame(maxWidth: .infinity, minHeight: 48)
-        .contentShape(.rect)
-      }
-      .buttonStyle(FiscalActionButtonStyle())
-      .disabled(model.isMutating || newPassphrase.isEmpty || confirmPassphrase.isEmpty)
-      .accessibilityIdentifier("cloudConnection.setPassphrase")
-    }
-  }
-
   @ViewBuilder private var changeArea: some View {
     if showChange {
       VStack(alignment: .leading, spacing: 11) {
@@ -882,23 +846,6 @@ public struct PassphraseSettingsCard: View {
       guard model.isConnected else { return }
       loginPassphrase = ""
       loginFocused = false
-      onConnected()
-    }
-  }
-
-  private func submitInitialize() {
-    guard !model.isMutating, !newPassphrase.isEmpty else { return }
-    guard newPassphrase == confirmPassphrase else {
-      localError = "两次输入的访问口令不一致"
-      return
-    }
-    localError = nil
-    let passphrase = newPassphrase
-    Task {
-      await model.initializePassphrase(passphrase)
-      guard model.isConnected else { return }
-      newPassphrase = ""
-      confirmPassphrase = ""
       onConnected()
     }
   }

@@ -83,7 +83,7 @@ def test_p8_upgrade_downgrade_restores_complete_validators(
     # rerun the migration's data insert.
     command.downgrade(config(), "20260715_0006")
     # This upgrade exercises asyncpg: each CREATE FUNCTION must be a separate statement.
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260811_0019")
     asyncio.run(clear_p8_data())
     upgraded_shape, upgraded_installment, settings_count = asyncio.run(validator_definitions())
     assert "ai_text" in upgraded_shape
@@ -97,7 +97,7 @@ def test_p8_upgrade_downgrade_restores_complete_validators(
     assert "ai_text" not in restored_shape
     assert "ai_text" not in restored_installment
 
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260811_0019")
     roundtrip_shape, roundtrip_installment, settings_count = asyncio.run(validator_definitions())
     assert "ai_text" in roundtrip_shape
     assert "ai_text" in roundtrip_installment
@@ -130,7 +130,7 @@ def test_p9_downgrade_blocks_non_text_proposals(monkeypatch: pytest.MonkeyPatch)
     assert TEST_DATABASE_URL is not None
     monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
     get_settings.cache_clear()
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260811_0019")
     asyncio.run(clear_p8_data())
     asyncio.run(insert_p9_proposal())
     with pytest.raises(Exception, match="P9 downgrade blocked"):
