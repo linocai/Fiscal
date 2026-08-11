@@ -18,7 +18,7 @@
 - PostgreSQL P22 定向：`5 passed`（含四并发 revision、Archive roundtrip、错误密码/篡改、完整行 duplicate PK/orphan FK preflight、空库未写、CLI stdin/覆盖/partial/AI raw 开关）。
 - Fresh PostgreSQL `fiscal_p22_fresh`：`pytest --junitxml=/tmp/fiscal-p22-fresh.xml`，JUnit `245 tests / 0 failures / 0 errors / 0 skipped`。
 - Alembic disposable `fiscal_p22_migration`：base→`20260811_0022`→`20260811_0021`→head 成功；offline SQL 含 `data_revision` create/seed。
-- Apple: `xcodegen generate`；`FiscalmacOS` 的 `FiscalKitTests` 为 `101 tests / 19 suites` 通过；`FiscaliOS` generic iOS Release build 成功。
+- Apple: `xcodegen generate`；`FiscalmacOS` 的 `FiscalKitTests` 为 `101 tests / 19 suites` 通过；`FiscaliOS` generic iOS Release build 成功；`FiscalmacOS` Release build 成功，产物经 `codesign --verify --deep --strict` 验证。
 
 ## 生产门与风险
 
