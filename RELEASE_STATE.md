@@ -9,14 +9,14 @@ from source code, a historical document, or an earlier release.
 | Field | Current evidenced value |
 | --- | --- |
 | Train | P20 → P21 → P22 → P23 |
-| Candidate source revision | local committed `887ca22`; production deploy blocked before start by SSH banner timeout |
+| Candidate source revision | local committed `887ca22`; production deploy not started after a local SSH alias resolved to proxy fake-IP instead of the canonical HZ target |
 | Candidate app version | `1.3.0 (21)` |
 | Local Alembic head | `20260811_0022` |
 | Deployed source revision | `4686e4492482a060fd9080eed16b74bbfccebd69` |
 | Deployed Alembic head | `20260811_0021` |
 | Authentication mode | generation 2 personal passphrase/access keys only: one credential, three current-generation keys, and no `device_tokens` table |
 | macOS / Kurisu builds and connection | both signed `1.3.0 (21)` packages installed and launched; each cold-started `fiscal://reconciliation` and reached production accounts, checkpoint, diagnosis and attention reads with HTTP 200 |
-| Backup / off-host copy / restore / alert | P22 pre-migration dump `2026-08-11T11:13:06Z` verified; exact `887ca22` encrypted Archive A/B 0022 restore and ledger/report/credit fingerprints verified; production remains 0021 because SSH banner timed out before deploy. Alert receiver is **deferred by user**; off-host provider remains an explicit carried risk |
+| Backup / off-host copy / restore / alert | P22 pre-migration dump `2026-08-11T11:13:06Z` verified; exact `887ca22` encrypted Archive A/B 0022 restore and ledger/report/credit fingerprints verified; production remains 0021 because deploy has not started. Alert receiver is **deferred by user**; off-host provider remains an explicit carried risk |
 | Previous tagged release | `v1.2.4` at `7c221ecdc10b6b8933b60052240162dafb430153` |
 | Rollback boundary | only an application revision at the same Alembic head; otherwise restore a verified backup into an isolated new database before cutover |
 | Tag / push | prohibited until every P20–P23 gate and the seven-day stability observation close |

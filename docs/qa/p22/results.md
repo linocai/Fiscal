@@ -1,6 +1,6 @@
 # P22 · 数据自主与一致性框架
 
-状态：**Automated Verified + Archive Shadow Verified**；`ai_settings` seed 与 credit GET 隐式写入缺口均已修复并通过 fresh shadow 复验。**生产仍为 `4686e449 / 20260811_0021`；因 SSH banner timeout 尚未执行 0022 迁移/部署、QA mutation 或 macOS + Kurisu 物理验收**。不打 tag/push。
+状态：**Automated Verified + Archive Shadow Verified**；`ai_settings` seed 与 credit GET 隐式写入缺口均已修复并通过 fresh shadow 复验。**生产仍为 `4686e449 / 20260811_0021`；尚未执行 0022 迁移/部署、QA mutation 或 macOS + Kurisu 物理验收**。不打 tag/push。
 
 ## 已冻结契约
 
@@ -27,5 +27,5 @@
 - 精确 shadow source：`887ca22`；新验证的迁移前备份 `fiscal-20260811T111306Z.dump`，SHA-256 `deba8fb6ebdc879ff2235cc061fdedc8953b74a6e57e2bc2b72479215e245b8d`，checksum 与 `pg_restore --list` 通过。
 - fresh A/B `20260811T111423Z`：A 由 0021 恢复后升至 0022，B 由 base 升至 0022；Archive export、dry-run（`relationship_errors=0`）与 apply 均通过。双方严格一致：`data_revision=0`、transactions/postings=`184/201`、posting signed/absolute totals=`-974676/18632242`、orphans=`0`、credit cycles=`23`，账本/报表/派生指纹一致。export、dry-run 及比较前后的全表计数、revision 与 credit-cycle ID 快照证明检查本身零写入。
 - 比较证据脚本曾分别因 `/root` 读权限和 Decimal JSON 序列化退出；两次均在证据输出层，并由前后快照证明未改变 A/B。移入受控 workspace 并使用 `default=str` 后比较成功。
-- 生产部署前的三轮有限探测均为 TCP/22 可达但 SSH banner 超时，未进入远程 shell；因此 deploy、0022 migration、QA mutation 和设备验收都未开始。SSH 恢复后必须先重做只读 current/head/service/counts re-anchor，再继续已授权步骤。
+- 部署前三轮探测错用了未配置的本机别名 `fiscal-vps`，其被代理 DNS 映射为 fake-IP `198.18.18.46`；因此 banner timeout 不是生产 SSH 故障证据。直连 DNS-over-HTTPS 复核的正式目标为阿里云杭州 `118.178.122.194` / `fiscal.linotsai.top`。错误探测未进入任何远程 shell，deploy、0022 migration、QA mutation 和设备验收均未开始；重试前必须对真实 IP 和已登记 host key 做只读 re-anchor。
 - 禁止对现库覆盖或 merge；生产门通过后才可安排 macOS 与 Kurisu 真机/签名 Release 验收。

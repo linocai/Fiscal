@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 控制面版本：v1.3.0 施工版 ｜ 更新：2026-08-11 ｜ 状态：P21 已完成。P22 已完成本地自动门与精确 `887ca22` Archive A/B 影子恢复/财务指纹验证；生产仍为 `4686e449 / 20260811_0021`，因 SSH banner timeout 停在部署前。异地备份未配置为 carried risk，真实告警已延期
+> 控制面版本：v1.3.0 施工版 ｜ 更新：2026-08-11 ｜ 状态：P21 已完成。P22 已完成本地自动门与精确 `887ca22` Archive A/B 影子恢复/财务指纹验证；生产仍为 `4686e449 / 20260811_0021`，一次本地 SSH 别名被代理解析到 fake-IP，已纠正为正式阿里云杭州目标并停在部署前。异地备份未配置为 carried risk，真实告警已延期
 > 本文件只保留现行目标、决策、门禁与下一步；历史实施证据以 `docs/qa/p*/results.md`、发布 tag 与 Git 为准，不从本文件追写。
 
 ## 1. 当前事实与 P20 审计起点
@@ -67,7 +67,7 @@
 
 **目标**：用户可完整、可验证地恢复数据；任意正式写入后双端可确定收敛。
 
-**当前状态**：本地 `887ca22` 与 fresh PostgreSQL `249/249` 通过；从新验证备份恢复的 A/B 已完成 0022、加密 Archive export/dry-run/apply 及账本/报表/信用指纹守恒。生产已授权，但 SSH banner 超时使 deploy 未开始；恢复后先只读 re-anchor，再执行 0022、可清理非财务 revision QA 与 Mac/Kurisu 验收。P22 未收口前不进入 P23。
+**当前状态**：本地 `887ca22` 与 fresh PostgreSQL `249/249` 通过；从新验证备份恢复的 A/B 已完成 0022、加密 Archive export/dry-run/apply 及账本/报表/信用指纹守恒。生产已授权，但 deploy 尚未开始；一次本地 SSH 别名被代理映射至 fake-IP，已重新确认正式目标为 `118.178.122.194` / `fiscal.linotsai.top`。下一步先核对已登记 host key 并只读 re-anchor，再执行 0022、可清理非财务 revision QA 与 Mac/Kurisu 验收。P22 未收口前不进入 P23。
 
 - **Fiscal Archive v1 契约**：独立导出密码、加密 payload、版本化 manifest（archive/API schema、导出时间、业务时区/币种、DB revision、实体计数、哈希、AI 原文包含标记）；覆盖账户/分类、ledger/postings、信用/账期/还款、分期、报销/回款、现金流、P21 checkpoint 和必要的 ID/幂等/来源关系；明确排除口令哈希、access key、provider key、环境变量与敏感运行日志。
 - **恢复契约**：选择→解密/哈希/兼容检查→dry run（数量/金额/关系报告）→用户确认→只写入空库/隔离新库→全量一致性验证→切换。v1 禁止合并导入和覆盖现有账本；AI 原始文本默认不出档，只有显式选择才含入加密档。
