@@ -16,7 +16,7 @@ from source code, a historical document, or an earlier release.
 | Deployed Alembic head | `20260811_0020` |
 | Authentication mode | generation 2 personal passphrase/access keys only: one credential, three current-generation keys, and no `device_tokens` table |
 | macOS / Kurisu builds and connection | both signed `1.3.0 (21)` packages installed and launched; each reached production status and current-month overview with HTTP 200 using generation-2 access keys |
-| Backup / off-host copy / restore / alert | post-migration local backup and isolated restore verified at `2026-08-11T08:27:25Z`; off-host copy and alert receiver remain unconfigured external blockers |
+| Backup / off-host copy / restore / alert | post-migration local backup and isolated restore verified at `2026-08-11T08:27:25Z`; alert receiver is **deferred by user** and does not block P21; off-host backup provider remains unconfigured as an explicit carried risk |
 | Previous tagged release | `v1.2.4` at `7c221ecdc10b6b8933b60052240162dafb430153` |
 | Rollback boundary | only an application revision at the same Alembic head; otherwise restore a verified backup into an isolated new database before cutover |
 | Tag / push | prohibited until every P20–P23 gate and the seven-day stability observation close |

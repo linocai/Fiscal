@@ -75,9 +75,10 @@ device action was attempted in this audit.
   invalidated generation-1 access keys. macOS and Kurisu must now reconnect
   with a generation-2 key; the legacy transition remains until old-token
   rejection is also proven.
-- P20-D off-host recovery and real alert delivery: local current-head backup
-  and isolated restore are verified; off-host storage and a real alert receiver
-  remain blocked pending user-selected external service configuration.
+- P20-D local backup and isolated restore are verified. By the user's final
+  decision, the real alert receiver is deferred and no longer blocks P21;
+  off-host storage provider is still unconfigured and is carried forward as an
+  explicit risk rather than claimed complete.
 - Final release status: not releasable; no tag and no push.
 
 ## P20-B local verification — 2026-08-11 CST
@@ -165,10 +166,10 @@ the sentinel and isolated-CLI checks before the successful recovery above.
   were never read or replayed.
 - macOS and Kurisu have both completed the new-build production read path with
   generation-2 access keys. No agent entered or extracted the passphrase.
-- `FISCAL_ALERT_WEBHOOK_URL` is missing or invalid, and no off-host backup unit
-  or provider is configured. Choosing/configuring an alert receiver and an
-  encrypted off-host destination requires a user-selected external service and
-  credentials; no guess or substitute was made.
+- `FISCAL_ALERT_WEBHOOK_URL` is missing or invalid. The user explicitly
+  deferred a real alert receiver, so it does not block P21. No encrypted
+  off-host backup provider is configured; it remains an explicit carried risk,
+  not a completed P20 control.
 
 ## P20 final authentication cleanup and deployment — 2026-08-11 CST
 
@@ -184,7 +185,7 @@ the sentinel and isolated-CLI checks before the successful recovery above.
 | macOS physical gate | exact signed `1.3.0 (21)` installed and launched; production status and current-month overview each returned HTTP 200 at `2026-08-11T16:25:24–25Z` |
 | Kurisu physical gate | after user unlock, the exact installed signed `1.3.0 (21)` launched through CoreDevice; production logged status HTTP 200 at `2026-08-11T16:30:40Z` and current-month overview HTTP 200 at `16:30:41Z` |
 
-P20's automated, production, macOS and Kurisu gates are complete. The only
-remaining blocker is the previously recorded user-selected off-host backup plus
-real alert receiver. No tag or push is permitted, and P21 must not begin until
-that external-service gate closes.
+P20's automated, production, macOS and Kurisu gates are complete. By explicit
+user decision, the alert receiver is deferred and the unconfigured off-host
+backup provider is a carried risk rather than a P21 blocker. P20 is therefore
+approved to hand off into P21. No tag or push is permitted.
