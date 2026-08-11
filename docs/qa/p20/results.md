@@ -51,7 +51,7 @@ At 2026-08-11 CST, from this build host:
 - Exact deployed Git revision and Alembic head.
 - Whether `access_credential` exists, its generation and active access-key
   count; legacy token rejection only after the credential is confirmed.
-- Current macOS and both iPhone bundle/version/build plus successful connection.
+- Current macOS and Kurisu bundle/version/build plus successful connection.
 - Backup age, encrypted off-host copy retention, isolated restore result, and a
   delivered alert from the configured receiver.
 
@@ -61,17 +61,21 @@ device action was attempted in this audit.
 
 ## Current P20 status
 
-- P20-A local/public audit: recorded; controlled production and device portion pending.
+- P20-A local/public audit: recorded; controlled production portion is verified
+  below. User accepted macOS + Kurisu as the physical-device scope; Kurisu is
+  currently offline.
 - P20-B release state source / version: complete locally. `README.md` is an
   entrypoint, `RELEASE_STATE.md` is the compact current manifest, and the
   candidate application version is `1.3.0 (21)`.
 - P20-C/E local implementation: stable balance-adjustment category semantics,
   P10 uncategorized trigger repair, atomic account/credit-schedule update, and
   the complete fresh PostgreSQL automated gate are complete.
-- P20-C authentication cleanup: blocked at its explicit production/device gate;
-  no legacy token table or transition code has been removed.
-- P20-D off-host recovery and real alert delivery: blocked pending user-selected
-  receiver/storage and controlled production operation.
+- P20-C authentication cleanup: macOS access-key authentication is verified,
+  but the legacy transition remains until Kurisu is online with a current access
+  key and the old-token/recovery checks are completed.
+- P20-D off-host recovery and real alert delivery: local current-head backup
+  and isolated restore are verified; off-host storage and a real alert receiver
+  remain blocked pending user-selected external service configuration.
 - Final release status: not releasable; no tag and no push.
 
 ## P20-B local verification — 2026-08-11 CST
@@ -117,3 +121,37 @@ additive field remain valid.
 The Swift gate also found and corrected a pre-existing local compile error in
 the schedule-preview request binding. This did not change the account/credit
 contract; it restores compilation of the already-reviewed preview path.
+
+## P20 production audit, deployment, and recovery — 2026-08-11 CST
+
+| Fact / gate | Result |
+| --- | --- |
+| Initial controlled read | HZ SSH reachable; release `39e9cbcf8851…`, Alembic `20260719_0016`, API ready, and all four local operational timers enabled |
+| Authentication audit | one credential at generation 1, five current-generation access keys, and three legacy device-token rows; no raw credential or token was read or recorded |
+| Exact deployments | `5346716f2c752cc1ccf2123bf842c7c8c3b2ac01` migrated the database through `20260811_0019`; `a41d2991f92e63c3f7b0be3ba9d1fcbdf3e1f277` then deployed the current-head-backup fix |
+| Release / schema / smoke | current release and live database both at `a41d2991…` / `20260811_0019`; service active, loopback readiness and public HTTPS liveness passed |
+| Pre-migration safety backup | verified custom-format dump created before each deployment; latest current-head dump created at `2026-08-11T07:44:10Z` |
+| Ledger invariant after migration | 184 transactions, 201 postings, 0 orphan postings |
+| Isolated recovery | newest current-head dump restored into a disposable database; Alembic head, canonical tables, and orphan-posting check passed in 2 seconds at `2026-08-11T07:44:20Z` |
+| macOS production authentication | signed `1.3.0 (21)` installed after moving `1.2.4 (20)` to `/Applications/Fiscal-build20-backup.app`; the existing Keychain access key reached production `/api/v1/system/status` with HTTP 200 |
+
+The first post-deployment restore drill intentionally surfaced a release-script
+gap: its newest dump was the required *pre*-migration backup at
+`20260719_0016`, so matching it directly against the newly deployed
+`20260811_0019` correctly failed. An isolated diagnostic restore confirmed the
+old dump's head and canonical tables without touching the production database.
+Commit `a41d299` retains that recovery dump and creates a new verified
+current-head backup after a successful migration; its subsequent isolated drill
+passed. Both the failure and the repaired verification are retained as evidence.
+
+### Remaining production and physical-device gates
+
+- Kurisu is detected by Xcode but currently offline, so Build 21 installation,
+  production core-flow verification, and screenshot evidence cannot yet run.
+- Legacy device-token rejection and CLI passphrase-recovery proof are not
+  claimed. The transition layer is intentionally still deployed until macOS and
+  Kurisu final-state access-key evidence is complete.
+- `FISCAL_ALERT_WEBHOOK_URL` is missing or invalid, and no off-host backup unit
+  or provider is configured. Choosing/configuring an alert receiver and an
+  encrypted off-host destination requires a user-selected external service and
+  credentials; no guess or substitute was made.

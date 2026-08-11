@@ -13,7 +13,7 @@
 ## 2. 发布列车与不可变规则
 
 - P20→P21→P22→P23 是同一发布列车：最终唯一版本为 **v1.3.0 / `CURRENT_PROJECT_VERSION=21`**。P20 的首个可构建批次统一升版本；之后所有候选包都保持 1.3.0 (21)，不得再占用 Build 22。
-- 四期全部完成，且自动门禁、生产验证、macOS + 两台实体 iPhone 验收、稳定观察均闭环前：**不得创建 tag、不得 push**。中间只做小而可回退的本地 commit；部署仅允许来自已提交的精确本地 revision。若受控部署无法在不 push 的前提下完成，先停下请求用户裁决。
+- 四期全部完成，且自动门禁、生产验证、macOS + 实体 iPhone **Kurisu** 验收、稳定观察均闭环前：**不得创建 tag、不得 push**。中间只做小而可回退的本地 commit；部署仅允许来自已提交的精确本地 revision。若受控部署无法在不 push 的前提下完成，先停下请求用户裁决。
 - 最终顺序：冻结干净树 → 记录所有 QA 证据 → 创建 `v1.3.0` annotated tag → `git push origin main v1.3.0`。不建 P20/P21/P22 阶段 tag，不追标历史 P18/P19 tag。
 - 每批 commit 必须可编译、范围单一、附自动验证；提交后把 revision/命令/结果写入该期 `docs/qa/pNN/results.md`。不重写历史、不 reset、不以未提交文件部署。
 - 稳定边界：仅 CNY、单人私用；VPS PostgreSQL 是唯一正式真相源，双端原生 SwiftUI 按 `design_handoff_fiscal_app/` 视觉合同实现；不做登录/多人/投资。
@@ -29,23 +29,23 @@
 | P22 | 依赖 P21 | 可恢复 Fiscal Archive、全局 revision、保守离线 | 现有库合并导入、离线写入队列、实时推送 |
 | P23 | 依赖 P22 | AI 原始判断/修正/结果闭环、质量与策略 | AI 聊天、模型训练、绕过正式记账 |
 
-- 每期结束有三类独立证据：Automated Verified（测试/迁移/构建）、Production Verified（精确 revision 的备份、部署/冒烟/数据对账）、Physical Device Verified（macOS 与两台 iPhone 真机主链路、截图）。四期后另有 Observed Stable 观察期；任何一步不得替代另一步。
+- 每期结束有三类独立证据：Automated Verified（测试/迁移/构建）、Production Verified（精确 revision 的备份、部署/冒烟/数据对账）、Physical Device Verified（macOS 与实体 iPhone Kurisu 真机主链路、截图）。四期后另有 Observed Stable 观察期；任何一步不得替代另一步。
 - 全局自动门禁基线：锁文件、格式/静态检查、默认与 fresh PostgreSQL 全量测试、Alembic SQL/往返、Swift 单测、iOS/macOS Debug 与签名 Release 构建、签名验证、相关 UI/视觉回归。具体命令与计数只在本轮实测后记录，不能沿用历史数字。
-- 用户网页操作清单：无固定网页 URL。需要人手的受控动作见 P20（自选/输入访问口令、解锁并安装两台 iPhone）及各期生产部署授权；凭证绝不进聊天、命令参数、git 或 QA 记录。
+- 用户网页操作清单：无固定网页 URL。需要人手的受控动作见 P20（自选/输入访问口令、解锁并安装 Kurisu）及各期生产部署授权；凭证绝不进聊天、命令参数、git 或 QA 记录。
 
 ## 4. P20 · 可信基线收口
 
 **目标**：证明正在运行什么、能否安全发布/恢复，并删除已经完成迁移的过渡层；不把文档修订当成生产验证。
 
-- **P20-A 事实审计（先做）**：只读采集生产 release commit、Alembic head、鉴权模式/凭证行/旧 token 是否仍可用、备份/异地副本/告警接收器状态、macOS 与两台 iPhone 的实际 bundle/build/连接结果；逐项与 HEAD、tag、README、P18/P19 QA 比对，写成带时间和命令的 P20 证据。任何冲突先标风险，不猜测修复结果。
+- **P20-A 事实审计（先做）**：只读采集生产 release commit、Alembic head、鉴权模式/凭证行/旧 token 是否仍可用、备份/异地副本/告警接收器状态、macOS 与 Kurisu 的实际 bundle/build/连接结果；逐项与 HEAD、tag、README、P18/P19 QA 比对，写成带时间和命令的 P20 证据。任何冲突先标风险，不猜测修复结果。
 - **P20-B 发布状态源**：将 README 改为入口说明；新增短的 release manifest/状态契约（生产 revision、DB head、App build、鉴权、设备、备份/恢复/告警最近证据、开放门禁、回退点），并将历史细节保留在各期 QA。状态仅由实际证据更新。
-- **P20-C 鉴权最终态**：先由用户在已装 App 安全设置/确认访问口令；证明 macOS 与两台 iPhone 能以 access key/口令连接、改口令使旧 key 401、忘记口令 CLI 恢复可演练。仅在此门通过后，移除 device-token 表/model/config/认证分支/迁移桥与遗留文档；最终只保留 personal passphrase + generation access key。
+- **P20-C 鉴权最终态**：先由用户在已装 App 安全设置/确认访问口令；证明 macOS 与 Kurisu 能以 access key/口令连接、改口令使旧 key 401、忘记口令 CLI 恢复可演练。仅在此门通过后，移除 device-token 表/model/config/认证分支/迁移桥与遗留文档；最终只保留 personal passphrase + generation access key。
 - **P20-D 发布与恢复**：修复 fresh PostgreSQL 全量组合测试及顺序污染；建立不可豁免的发布状态机和 exact tag/commit 对应关系；配置并实际送达 API、备份、恢复、磁盘告警；完成加密异地副本、保留期、隔离恢复及账本/posting/关键汇总对账，记录 RPO/RTO 和人工 runbook。
 - **P20-E 领域风险收口**：将“平账”从名称匹配改为稳定领域属性且保留历史口径；账户账期设置与其派生变更使用单一事务，预览列出 old/new 日期、受影响账期和逾期变化，禁止静默重排已逾期债务。
 - **契约/兼容**：P20-A/B 不能声称已改生产；鉴权移除是一次不可逆 migration，旧客户端将明确 `authentication_required` 而非降级；平账迁移以稳定 ID/属性回填，名称可改、历史流水及账户影响不变。
 - **施工提交**：A 审计与证据 → B 状态源/版本 1.3.0(21) → C 测试基线与领域修复 → D 鉴权最终迁移 → E 备份/告警/恢复收口；每个 migration 与应用切换分开 commit，均不打 tag。
-- **验收/回退**：所有全量门禁绿；生产事实能从 manifest 重现；异地 dump 恢复到隔离库后 head、数量、posting 与汇总一致；真实告警送达；三设备核心录入/查看成功。认证/迁移失败立刻回到同 head 的旧应用；head 不同则从验证备份恢复新库，绝不盲目 downgrade。
-- **决策门与风险**：必须先完成用户口令/两台 iPhone 动作，才可删除旧鉴权；远程生产写操作在执行时另取授权。最大风险是历史状态漂移和单机备份伪装成 DR，P20 不闭环不得进入 P21。
+- **验收/回退**：所有全量门禁绿；生产事实能从 manifest 重现；异地 dump 恢复到隔离库后 head、数量、posting 与汇总一致；真实告警送达；macOS 与 Kurisu 核心录入/查看成功。认证/迁移失败立刻回到同 head 的旧应用；head 不同则从验证备份恢复新库，绝不盲目 downgrade。
+- **决策门与风险**：必须先完成用户口令/Kurisu 动作，才可删除旧鉴权；远程生产写操作在执行时另取授权。最大风险是历史状态漂移和单机备份伪装成 DR，P20 不闭环不得进入 P21。
 
 ## 5. P21 · 账户核对与财务关注中心
 
@@ -85,9 +85,9 @@
 
 ## 8. v1.3.0 收口、决策与恢复入口
 
-- **最终发布门**：P20–P23 的所有状态必须为 Observed Stable；fresh PostgreSQL 全量零失败；生产 exact revision/head/备份/恢复/告警证据齐；macOS 与两台 iPhone 在生产连通下完成核心录入、核对、导出恢复、AI 链路与截图；README、release manifest、App build、tag 指向一致。任一缺失即只保留 commits，不打 tag/push。
+- **最终发布门**：P20–P23 的所有状态必须为 Observed Stable；fresh PostgreSQL 全量零失败；生产 exact revision/head/备份/恢复/告警证据齐；macOS 与 Kurisu 在生产连通下完成核心录入、核对、导出恢复、AI 链路与截图；README、release manifest、App build、tag 指向一致。任一缺失即只保留 commits，不打 tag/push。
 - **观察期默认值（可翻案）**：生产部署后连续 7 天无 P0/P1 数据正确性、鉴权、恢复或自动执行事故，且每日备份/告警健康，才满足 Observed Stable。
 - **可翻案默认决策**：P21 只做账户/账期内核对，不做独立对账中心；零差额才 reconciled；P22 只支持空库恢复、独立档案密码、只读离线；P23 只做确定性学习且策略只自动收紧；所有默认值可在相应 Phase 的编码前调整，但变更须更新本文件与 QA 契约。
-- **尚需用户动作（非方案决策）**：P20 执行时安全地设定/确认访问口令、解锁并配对两台 iPhone；涉及生产写入、部署、迁移或恢复切换时，由用户按当时风险单独授权。无其他产品方向待拍板。
+- **尚需用户动作（非方案决策）**：P20 执行时安全地设定/确认访问口令、解锁并配对 Kurisu；涉及生产写入、部署、迁移或恢复切换时，由用户按当时风险单独授权。无其他产品方向待拍板。
 - **Backlog（明确不插队）**：投资/订阅、泛化附件、AI 聊天、多人协作、实时 WebSocket、离线写入队列、复杂导入合并、更多仪表盘。它们不提升当前可信性，不进入 v1.3.0。
 - **恢复顺序**：先读本文件 → `git status --short --branch` → P20-A 的最新 QA 证据与生产 manifest → 再决定下一批；若事实不一致，停在审计，不以旧聊天或历史计划覆盖现场。
