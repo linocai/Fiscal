@@ -9,7 +9,7 @@ from source code, a historical document, or an earlier release.
 | Field | Current evidenced value |
 | --- | --- |
 | Train | P20 → P21 → P22 → P23 |
-| Candidate source revision | local committed `a41d2991f92e63c3f7b0be3ba9d1fcbdf3e1f277` |
+| Candidate source revision | local committed `0a7824b` (documentation/evidence only; deployed executable revision remains below) |
 | Candidate app version | `1.3.0 (21)` |
 | Local Alembic head | `20260811_0019` |
 | Deployed source revision | `a41d2991f92e63c3f7b0be3ba9d1fcbdf3e1f277` |
