@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 控制面版本：v1.3.0 施工版 ｜ 更新：2026-08-11 ｜ 状态：P20–P22 已完成。P22 精确 `5330b42` 已生产部署为 `20260811_0022`；post-backup isolated restore、唯一可清理 receipt QA、macOS 与 Kurisu 物理验收均通过。P23 未开始；异地备份未配置为 carried risk，真实告警已延期。
+> 控制面版本：v1.3.0 施工版 ｜ 更新：2026-08-11 ｜ 状态：P20–P22 已完成。P22 精确 `5330b42` 已生产部署为 `20260811_0022`；post-backup isolated restore、唯一可清理 receipt QA、macOS 与 Kurisu 物理验收均通过。P23 的本地 schema/backend 与 Apple 质量入口已提交（`60f553b`、`2ed13f9`）；生产、真实 provider、shadow/deploy 与真机门尚未开始。异地备份未配置为 carried risk，真实告警已延期。
 > 本文件只保留现行目标、决策、门禁与下一步；历史实施证据以 `docs/qa/p*/results.md`、发布 tag 与 Git 为准，不从本文件追写。
 
 ## 1. 当前事实与 P20 审计起点
