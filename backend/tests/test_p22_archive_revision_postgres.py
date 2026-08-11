@@ -78,6 +78,11 @@ def test_p22_archive_crypto_contract_runs_without_postgres() -> None:
         ArchiveService.open(archive, password=uuid4().hex + uuid4().hex)
     with pytest.raises(ArchiveError):
         ArchiveService.open(archive[:-1] + bytes([archive[-1] ^ 1]), password=password)
+    malformed = json.loads(canonical)
+    malformed["entities"]["postings"] = [{"id": "duplicate"}]
+    malformed["entities"]["transactions"] = [{"id": "duplicate"}]
+    with pytest.raises(ArchiveError):
+        ArchiveService.dry_run_report(manifest, malformed)
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")

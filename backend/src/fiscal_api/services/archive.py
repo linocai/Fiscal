@@ -270,6 +270,8 @@ class ArchiveService:
     def dry_run_report(
         manifest: Mapping[str, object], payload: Mapping[str, object]
     ) -> dict[str, object]:
+        ArchiveService._validate_payload(manifest, payload)
+        ArchiveService._validate_relationships(payload)
         entities = _json_object(payload["entities"], error="archive entities are invalid")
         transactions = entities.get("transactions", [])
         postings = entities.get("postings", [])
@@ -294,6 +296,7 @@ class ArchiveService:
             if isinstance(postings, list)
             else 0,
             "provider_reconfiguration_required": True,
+            "relationship_errors": 0,
         }
 
     @staticmethod
