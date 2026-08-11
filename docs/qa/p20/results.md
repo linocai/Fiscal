@@ -66,8 +66,8 @@ device action was attempted in this audit.
   entrypoint, `RELEASE_STATE.md` is the compact current manifest, and the
   candidate application version is `1.3.0 (21)`.
 - P20-C/E local implementation: stable balance-adjustment category semantics,
-  P10 uncategorized trigger repair, and atomic account/credit-schedule update
-  are implemented; full fresh PostgreSQL gate remains open.
+  P10 uncategorized trigger repair, atomic account/credit-schedule update, and
+  the complete fresh PostgreSQL automated gate are complete.
 - P20-C authentication cleanup: blocked at its explicit production/device gate;
   no legacy token table or transition code has been removed.
 - P20-D off-host recovery and real alert delivery: blocked pending user-selected
@@ -87,16 +87,33 @@ device action was attempted in this audit.
 | --- | --- |
 | Backend Ruff + Pyright | passed: formatting clean, lint clean, 0 type errors |
 | Default backend suite | 144 passed, 105 PostgreSQL tests skipped; 1 upstream deprecation warning |
-| Fresh disposable PostgreSQL migration | passed from empty `fiscal_p20_test` through `20260811_0018` |
+| Fresh disposable PostgreSQL migration | passed from empty `fiscal_p20_test` through `20260811_0019` |
 | P10 uncategorized API + renamed balance-adjustment category reports | 2 passed on fresh PostgreSQL |
 | P17 schedule reassignment regression | 1 passed on fresh PostgreSQL |
-| Alembic offline SQL | passed through `20260811_0018` |
+| Alembic offline SQL | passed through `20260811_0019` |
 | macOS FiscalKitTests after contract/UI change | passed: 88 tests in 17 suites |
 
-The attempted full PostgreSQL suite is still red and is not a release waiver.
-It exposed two independent historical defects: P10's later trigger rewrites
-reinstated a category requirement (repaired in `20260811_0018`), and many
-legacy tests encode July 2026 as a still-open period even though the current
-clock is August 2026. The shared migration suite also lacks robust isolation
-after guarded downgrade tests. P20 cannot be marked Automated Verified until
-these remaining test-baseline issues are resolved and rerun from a fresh DB.
+## P20 automated-gate closure — 2026-08-11 CST
+
+| Gate | Result |
+| --- | --- |
+| Backend formatting / lint / type check | `ruff format --check .`, `ruff check .`, and `pyright` passed; 0 type errors |
+| Default backend suite | 144 passed, 105 PostgreSQL tests skipped; 1 upstream deprecation warning |
+| Fresh disposable PostgreSQL suite | newly created `fiscal_p20_test`: **249 passed**, 1 upstream deprecation warning |
+| Alembic fresh + round trip | empty `fiscal_p20_migration`: `base→head→base→head→base→head` passed at `20260811_0019` |
+| Alembic offline SQL | generated through `20260811_0019`; includes one-time `平账` backfill and final `is_balance_adjustment DEFAULT false` |
+| macOS contracts | `FiscalKitTests`: **88 tests in 17 suites passed** |
+| iOS compilation | unsigned Release simulator build (`FiscaliOS`, `CODE_SIGNING_ALLOWED=NO`) passed |
+
+The PostgreSQL suite now resets only the explicitly supplied disposable
+database to `head` and truncates it before each test. This prevents a guarded
+downgrade test from leaking schema/data state into later tests. Its July 2026
+installment/reporting fixtures pin the relevant service business clock at the
+test boundary, preserving their declared open-cycle semantics without changing
+production time behavior. The P20 balance-adjustment field now keeps a server
+default of `false`, so historical raw SQL fixtures/imports that omit the new
+additive field remain valid.
+
+The Swift gate also found and corrected a pre-existing local compile error in
+the schedule-preview request binding. This did not change the account/credit
+contract; it restores compilation of the already-reviewed preview path.

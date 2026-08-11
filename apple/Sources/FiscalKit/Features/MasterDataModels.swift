@@ -45,7 +45,7 @@ public final class AccountsModel {
     }
 
     public func previewScheduleChange(draft: AccountDraft, account: AccountDTO) async -> CreditScheduleChangeResult? {
-        guard scheduleRequest(draft: draft, account: account) != nil else {
+        guard let request = scheduleRequest(draft: draft, account: account) else {
             message = "信用账期配置不完整。"; return nil
         }
         isMutating = true; defer { isMutating = false }
@@ -54,7 +54,7 @@ public final class AccountsModel {
     }
 
     public func applyScheduleChange(draft: AccountDraft, account: AccountDTO) async -> Bool {
-        guard let request = scheduleRequest(draft: draft, account: account) else {
+        guard scheduleRequest(draft: draft, account: account) != nil else {
             message = "信用账期配置不完整。"; return false
         }
         isMutating = true; defer { isMutating = false }
