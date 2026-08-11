@@ -10,6 +10,7 @@ DEPLOY = (SCRIPTS / "deploy.sh").read_text(encoding="utf-8")
 BOOTSTRAP = (SCRIPTS / "bootstrap-host.sh").read_text(encoding="utf-8")
 BOOTSTRAP_PATH = SCRIPTS / "bootstrap-host.sh"
 RESTORE_VERIFY = (SCRIPTS / "restore-verify.sh").read_text(encoding="utf-8")
+SHADOW_WRAPPER = (SCRIPTS / "p22-shadow-wrapper.sh").read_text(encoding="utf-8")
 
 
 class DeployReleasePermissionsTests(unittest.TestCase):
@@ -45,6 +46,13 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertIn("run_as_migrator env", expected_head_block)
         self.assertNotIn("run_as_postgres env", expected_head_block)
         self.assertIn("run_as_postgres pg_restore", RESTORE_VERIFY)
+
+    def test_p22_shadow_wrapper_fixes_workspace_and_cwd_contract(self) -> None:
+        self.assertIn('install -d -o root -g fiscal_migrator -m 0710 "$evidence_parent"', SHADOW_WRAPPER)
+        self.assertIn('install -d -o fiscal_migrator -g fiscal_migrator -m 0700 "$workspace"', SHADOW_WRAPPER)
+        self.assertIn('runuser --user=fiscal_migrator -- test -w "$workspace"', SHADOW_WRAPPER)
+        self.assertIn('cd "$2/backend"', SHADOW_WRAPPER)
+        self.assertIn('rm -f -- "$env_file"', SHADOW_WRAPPER)
 
     def test_release_tree_is_group_readable_before_migrator_preflight(self) -> None:
         ownership = DEPLOY.index('chown -R root:fiscal_release "$temporary_release"')
