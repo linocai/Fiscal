@@ -108,6 +108,16 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertIn('run_archive "$target_env" fiscal_api.cli.archive "$archive_path" --dry-run', SHADOW_WRAPPER)
         self.assertIn('run_archive "$target_env" fiscal_api.cli.archive "$archive_path" --apply --confirm-empty-target', SHADOW_WRAPPER)
 
+    def test_p22_shadow_provisioning_rejects_existing_and_proves_migrator_control(self) -> None:
+        self.assertIn("--provision-target", SHADOW_WRAPPER)
+        self.assertIn('target database already exists and will not be reused', SHADOW_WRAPPER)
+        self.assertIn('createdb --template=template0 --owner=fiscal_migrator "$target_database"', SHADOW_WRAPPER)
+        self.assertIn('fresh target database owner is not fiscal_migrator', SHADOW_WRAPPER)
+        self.assertIn("has_schema_privilege('fiscal_migrator', 'public', 'CREATE')", SHADOW_WRAPPER)
+        self.assertIn('local probe_table="p22_provision_probe_$$"', SHADOW_WRAPPER)
+        self.assertIn('CREATE TABLE $probe_table (id integer); DROP TABLE $probe_table', SHADOW_WRAPPER)
+        self.assertIn('exec "$3" --config alembic.ini upgrade head', SHADOW_WRAPPER)
+
     def test_release_tree_is_group_readable_before_migrator_preflight(self) -> None:
         ownership = DEPLOY.index('chown -R root:fiscal_release "$temporary_release"')
         directories = DEPLOY.index('find "$temporary_release" -type d -exec chmod 0750 {} +')

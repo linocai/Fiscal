@@ -13,6 +13,7 @@ source "$SCRIPT_DIR/lib.sh"
 
 apply=false
 source_preflight=false
+provision_target=false
 archive_action=""
 source_root=""
 target_database=""
@@ -29,13 +30,14 @@ normalize_database() {
 }
 
 usage_error() {
-  die "use exactly one of --source-preflight, --archive-export, --archive-dry-run, or --archive-apply (or omit it for target preflight)"
+  die "use exactly one mode: --source-preflight, --provision-target, --archive-export, --archive-dry-run, or --archive-apply (or omit it for target preflight)"
 }
 
 while (($#)); do
   case "$1" in
     --apply) apply=true ;;
     --source-preflight) source_preflight=true ;;
+    --provision-target) provision_target=true ;;
     --archive-export|--archive-dry-run|--archive-apply)
       [[ -z "$archive_action" ]] || usage_error
       archive_action="${1#--archive-}"
@@ -55,6 +57,8 @@ done
 [[ -n "$evidence_parent" && "$evidence_parent" == /* ]] || \
   die "--evidence-parent must be an absolute path"
 [[ "$source_preflight" != true || -z "$archive_action" ]] || usage_error
+[[ "$provision_target" != true || "$source_preflight" != true ]] || usage_error
+[[ "$provision_target" != true || -z "$archive_action" ]] || usage_error
 
 requires_target=true
 if [[ "$source_preflight" == true || "$archive_action" == "export" ]]; then
@@ -77,6 +81,8 @@ fi
 if [[ "$apply" != true ]]; then
   if [[ -n "$archive_action" ]]; then
     log "P22 shadow wrapper plan: would preflight the exact source/tree/principal and archive-${archive_action} without exposing a DSN or password"
+  elif [[ "$provision_target" == true ]]; then
+    log "P22 shadow wrapper plan: would create and migrate only the scoped fresh target after owner/schema/probe checks"
   elif [[ "$source_preflight" == true ]]; then
     log "P22 shadow wrapper plan: would preflight only the exact source/tree/principal"
   else
@@ -171,6 +177,42 @@ run_target_preflight() {
   ' _ "$target_env" "$source_root" "$source_root/backend/.venv/bin/python" "$source_root/backend/.venv/bin/alembic"
 }
 
+provision_target() {
+  local existing
+  existing="$(
+    run_as_postgres psql --dbname=postgres --no-psqlrc --tuples-only --no-align \
+      --command="SELECT count(*) FROM pg_database WHERE datname = '$target_database'"
+  )"
+  [[ "$existing" == "0" ]] || die "target database already exists and will not be reused"
+
+  run_as_postgres createdb --template=template0 --owner=fiscal_migrator "$target_database"
+
+  local owner_check
+  owner_check="$(
+    run_as_postgres psql --dbname=postgres --no-psqlrc --tuples-only --no-align \
+      --command="SELECT (pg_get_userbyid(datdba) = 'fiscal_migrator')::int FROM pg_database WHERE datname = '$target_database'"
+  )"
+  [[ "$owner_check" == "1" ]] || die "fresh target database owner is not fiscal_migrator"
+
+  local schema_check
+  schema_check="$(
+    run_as_postgres psql --dbname="$target_database" --no-psqlrc --tuples-only --no-align \
+      --command="SELECT (nspowner IS NOT NULL AND has_schema_privilege('fiscal_migrator', 'public', 'CREATE'))::int FROM pg_namespace WHERE nspname = 'public'"
+  )"
+  [[ "$schema_check" == "1" ]] || die "fresh target public schema is not migrator-creatable"
+
+  local probe_table="p22_provision_probe_$$"
+  run_as_migrator psql --dbname="$target_database" --no-psqlrc --set=ON_ERROR_STOP=1 \
+    --command="CREATE TABLE $probe_table (id integer); DROP TABLE $probe_table"
+
+  runuser --user=fiscal_migrator -- bash -c '
+    set -Eeuo pipefail
+    set -a; . "$1"; set +a
+    cd "$2/backend"
+    exec "$3" --config alembic.ini upgrade head
+  ' _ "$target_env" "$source_root" "$source_root/backend/.venv/bin/alembic"
+}
+
 read_archive_password() {
   local archive_password=""
   IFS= read -r archive_password || [[ -n "$archive_password" ]] || die "archive password must be provided on standard input"
@@ -207,6 +249,12 @@ if [[ "$source_preflight" == true ]]; then
 fi
 
 prepare_database_envs
+if [[ "$provision_target" == true ]]; then
+  provision_target
+  run_target_preflight
+  log "P22 shadow target provision passed; only the new scoped target database was created"
+  exit 0
+fi
 if [[ "$requires_target" == true ]]; then
   run_target_preflight
 fi
