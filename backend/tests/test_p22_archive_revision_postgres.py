@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import json
 from concurrent.futures import ThreadPoolExecutor
 from os import environ
 from uuid import uuid4
@@ -14,7 +16,6 @@ from fiscal_api.main import create_app
 from fiscal_api.services.archive import ArchiveError, ArchiveService
 
 TEST_DATABASE_URL = environ.get("FISCAL_TEST_DATABASE_URL")
-pytestmark = pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
 
 
 async def _ready() -> None:
@@ -48,6 +49,38 @@ def _category_payload() -> dict[str, object]:
     }
 
 
+def test_p22_archive_crypto_contract_runs_without_postgres() -> None:
+    entities = {
+        table.name: []
+        for table in Base.metadata.sorted_tables
+        if table.name not in {"access_credential", "access_keys", "data_revision"}
+    }
+    payload = {"entities": entities, "data_revision": 0}
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
+    manifest = {
+        "archive_schema": "fiscal-archive-v1",
+        "api_schema": "fiscal-api-v1",
+        "exported_at": "2026-08-11T00:00:00+00:00",
+        "business_timezone": "Asia/Shanghai",
+        "currency": "CNY",
+        "database_revision": "20260811_0022",
+        "data_revision": 0,
+        "entity_counts": {name: 0 for name in entities},
+        "payload_sha256": hashlib.sha256(canonical).hexdigest(),
+        "includes_ai_raw": False,
+    }
+    password = uuid4().hex + uuid4().hex
+    archive = ArchiveService._seal(password=password, manifest=manifest, payload=canonical)
+    assert ArchiveService.open(archive, password=password)[0] == manifest
+    with pytest.raises(ArchiveError):
+        ArchiveService.open(archive, password=uuid4().hex + uuid4().hex)
+    with pytest.raises(ArchiveError):
+        ArchiveService.open(archive[:-1] + bytes([archive[-1] ^ 1]), password=password)
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
 def test_p22_revision_receipts_are_formal_once_and_concurrent() -> None:
     auth = {"Authorization": "Bearer p22-token"}
     with _client() as client:
@@ -88,7 +121,7 @@ def test_p22_revision_receipts_are_formal_once_and_concurrent() -> None:
             headers={**auth, "Idempotency-Key": key},
             json=transaction_payload,
         )
-        assert replay.status_code == 200, replay.text
+        assert replay.status_code == 201, replay.text
         assert "X-Fiscal-Data-Revision" not in replay.headers
 
         start = client.get("/api/v1/data-revision", headers=auth).json()["revision"]
@@ -104,6 +137,7 @@ def test_p22_revision_receipts_are_formal_once_and_concurrent() -> None:
         assert client.get("/api/v1/data-revision", headers=auth).json()["revision"] == start + 4
 
 
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
 def test_p22_archive_round_trip_rejects_tampering_and_secrets() -> None:
     assert TEST_DATABASE_URL is not None
     auth = {"Authorization": "Bearer p22-token"}
@@ -146,8 +180,19 @@ def test_p22_archive_round_trip_rejects_tampering_and_secrets() -> None:
         engine = create_engine(TEST_DATABASE_URL)
         try:
             async with engine.begin() as connection:
-                tables = [table.name for table in Base.metadata.sorted_tables]
+                tables = list(
+                    (
+                        await connection.scalars(
+                            text(
+                                "SELECT quote_ident(tablename) FROM pg_tables "
+                                "WHERE schemaname = 'public' AND tablename <> 'alembic_version' "
+                                "ORDER BY tablename"
+                            )
+                        )
+                    ).all()
+                )
                 await connection.execute(text(f"TRUNCATE TABLE {', '.join(tables)} CASCADE"))
+                assert await connection.scalar(text("SELECT count(*) FROM accounts")) == 0
                 await ArchiveService.restore_empty_target(
                     connection, manifest=manifest, payload=payload
                 )

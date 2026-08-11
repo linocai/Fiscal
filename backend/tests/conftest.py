@@ -33,7 +33,8 @@ async def _truncate_disposable_postgres(database_url: str) -> None:
                         text(
                             "SELECT format('%I.%I', schemaname, tablename) "
                             "FROM pg_tables WHERE schemaname = 'public' "
-                            "AND tablename <> 'alembic_version' ORDER BY tablename"
+                            "AND tablename NOT IN ('alembic_version', 'data_revision') "
+                            "ORDER BY tablename"
                         )
                     )
                 ).all()
@@ -42,6 +43,12 @@ async def _truncate_disposable_postgres(database_url: str) -> None:
                 await connection.execute(
                     text(f"TRUNCATE TABLE {', '.join(tables)} RESTART IDENTITY CASCADE")
                 )
+            await connection.execute(
+                text(
+                    "INSERT INTO data_revision (id, revision) VALUES (1, 0) "
+                    "ON CONFLICT (id) DO UPDATE SET revision = EXCLUDED.revision"
+                )
+            )
     finally:
         await engine.dispose()
 

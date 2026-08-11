@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import secrets
 import zlib
 from collections.abc import Mapping
 from datetime import date, datetime
@@ -24,7 +25,7 @@ from uuid import UUID
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
-from sqlalchemy import MetaData, Table, delete, select, text
+from sqlalchemy import MetaData, Table, delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from fiscal_api.core.time import BUSINESS_TIMEZONE, utc_now
@@ -146,13 +147,14 @@ class ArchiveService:
             "entity_counts": {name: len(rows) for name, rows in entities.items()},
             "payload_sha256": hashlib.sha256(payload_bytes).hexdigest(),
             "includes_ai_raw": include_ai_raw,
+            "requires_ai_provider_reconfiguration": True,
         }
         return self._seal(password=password, manifest=manifest, payload=payload_bytes), manifest
 
     @staticmethod
     def _seal(*, password: str, manifest: Mapping[str, object], payload: bytes) -> bytes:
-        salt = AESGCM.generate_key(bit_length=128)
-        nonce = AESGCM.generate_key(bit_length=96)
+        salt = secrets.token_bytes(16)
+        nonce = secrets.token_bytes(12)
         key = Scrypt(salt=salt, length=32, n=KDF_N, r=KDF_R, p=KDF_P).derive(
             password.encode("utf-8")
         )
@@ -251,10 +253,16 @@ class ArchiveService:
                 "archive entity set is not supported by this Fiscal version"
             )
         counts = _json_object(manifest["entity_counts"], error="archive entity counts are invalid")
+        if set(counts) != set(entities):
+            raise ArchiveError("archive entity counts do not match entity set")
         for table_name, expected in counts.items():
             rows = entities.get(table_name)
             if not isinstance(expected, int) or not isinstance(rows, list) or len(rows) != expected:
                 raise ArchiveError("archive entity counts do not match manifest")
+            columns = {column.name for column in Base.metadata.tables[table_name].columns}
+            for row in rows:
+                if not isinstance(row, dict) or set(row) != columns:
+                    raise ArchiveError("archive row fields do not match the schema")
         if payload.get("data_revision") != manifest.get("data_revision"):
             raise ArchiveError("archive revision does not match manifest")
 
@@ -278,7 +286,33 @@ class ArchiveService:
             )
             if isinstance(postings, list)
             else 0,
+            "postings_absolute_total_minor": sum(
+                abs(int(row["amount_minor"]))
+                for row in postings
+                if isinstance(row, dict) and "amount_minor" in row
+            )
+            if isinstance(postings, list)
+            else 0,
+            "provider_reconfiguration_required": True,
         }
+
+    @staticmethod
+    def _validate_relationships(payload: Mapping[str, object]) -> None:
+        entities = _json_object(payload["entities"], error="archive entities are invalid")
+        for table in _archive_tables(Base.metadata):
+            rows = cast(list[dict[str, Any]], entities[table.name])
+            primary_keys = tuple(column.name for column in table.primary_key.columns)
+            seen = {tuple(str(row[key]) for key in primary_keys) for row in rows}
+            if len(seen) != len(rows):
+                raise ArchiveError(f"archive has duplicate primary keys ({table.name})")
+            for foreign_key in table.foreign_keys:
+                target = foreign_key.column.table.name
+                target_rows = cast(list[dict[str, Any]], entities[target])
+                target_values = {str(row[foreign_key.column.name]) for row in target_rows}
+                for row in rows:
+                    value = row[foreign_key.parent.name]
+                    if value is not None and str(value) not in target_values:
+                        raise ArchiveError(f"archive has orphan foreign key ({table.name})")
 
     @staticmethod
     async def restore_empty_target(
@@ -289,9 +323,15 @@ class ArchiveService:
     ) -> None:
         """Restore only after a completed dry run and only into an empty data target."""
         ArchiveService._validate_payload(manifest, payload)
+        ArchiveService._validate_relationships(payload)
+        target_revision = await connection.scalar(text("SELECT version_num FROM alembic_version"))
+        if target_revision != manifest["database_revision"]:
+            raise ArchiveCompatibilityError(
+                "restore target database revision does not match archive"
+            )
         tables = _archive_tables(Base.metadata)
         for table in tables:
-            count = await connection.scalar(select(table).with_only_columns(text("count(*)")))
+            count = await connection.scalar(select(func.count()).select_from(table))
             if count:
                 raise ArchiveError(f"restore target is not empty ({table.name})")
         entities = _json_object(payload["entities"], error="archive entities are invalid")
@@ -315,8 +355,9 @@ class ArchiveService:
         await connection.execute(delete(DataRevision).where(DataRevision.id == 1))
         await connection.execute(DataRevision.__table__.insert().values(id=1, revision=revision))
         restored_counts = {
-            table.name: await connection.scalar(select(table).with_only_columns(text("count(*)")))
+            table.name: await connection.scalar(select(func.count()).select_from(table))
             for table in tables
         }
         if restored_counts != manifest["entity_counts"]:
             raise ArchiveError("restored entity counts do not match manifest")
+        ArchiveService._validate_relationships(payload)
