@@ -133,6 +133,13 @@ actual_head="$(run_as_postgres psql --dbname="${FISCAL_BACKUP_DATABASE:-fiscal}"
   --no-psqlrc --tuples-only --no-align --command='SELECT version_num FROM alembic_version')"
 [[ "$actual_head" == "$expected_head" ]] || die "database did not reach the release Alembic head"
 
+# Retain the pre-migration dump for rollback, then make the newest operational
+# backup restorable at the now-deployed schema. Otherwise a restore drill run
+# immediately after a successful migration compares the pre-migration dump to
+# the new release head and fails by construction.
+log "creating and verifying the current-head post-migration backup"
+"$release/infra/production/scripts/backup.sh" --apply
+
 new_link="/opt/fiscal/.current-$short_revision"
 ln -s "$release" "$new_link"
 mv -Tf "$new_link" /opt/fiscal/current

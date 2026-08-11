@@ -131,7 +131,8 @@ If validation fails, point only `/etc/nginx/sites-enabled/fiscal.conf` back to t
 3. installs locked production dependencies;
 4. creates and verifies a pre-migration backup;
 5. runs `alembic upgrade head` explicitly as the least-privilege local `fiscal_migrator` peer role;
-6. atomically switches `/opt/fiscal/current`, restarts the API and checks local readiness/backup freshness.
+6. creates and verifies a current-head backup (the pre-migration dump remains for recovery);
+7. atomically switches `/opt/fiscal/current`, restarts the API and checks local readiness/backup freshness.
 
 Review first, then apply on the server:
 
