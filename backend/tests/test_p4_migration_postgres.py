@@ -1,4 +1,5 @@
 import asyncio
+from datetime import date
 from os import environ
 from pathlib import Path
 
@@ -12,8 +13,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from fiscal_api.api.p2_schemas import AccountDraft
 from fiscal_api.core.config import get_settings
 from fiscal_api.db.models import AccountKind, CreditCycle
+from fiscal_api.repositories.credit import CreditRepository
 from fiscal_api.services.accounts import AccountService
-from fiscal_api.services.credit import CreditService
+from fiscal_api.services.credit import ensure_cycle_for_statement
 
 TEST_DATABASE_URL = environ.get("FISCAL_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -48,7 +50,10 @@ async def _seed_materialized_cycle() -> None:
                 due_day=20,
             )
         )
-        await CreditService(session).get_account(account.id)
+        # P22 credit reads are pure projections; materialize this P4 guard's
+        # data-bearing row through the formal write helper instead.
+        await ensure_cycle_for_statement(CreditRepository(session), account, date(2026, 7, 10))
+        await session.commit()
     await engine.dispose()
 
 

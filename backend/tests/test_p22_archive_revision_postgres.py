@@ -421,6 +421,78 @@ def test_p22_revision_receipts_are_formal_once_and_concurrent() -> None:
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
+def test_p22_credit_get_projection_is_read_only_and_transaction_materializes_once() -> None:
+    auth = {"Authorization": "Bearer p22-token"}
+
+    async def cycle_ids() -> list[str]:
+        assert TEST_DATABASE_URL is not None
+        engine = create_engine(TEST_DATABASE_URL)
+        try:
+            async with engine.connect() as connection:
+                return list(
+                    (
+                        await connection.scalars(
+                            text("SELECT id::text FROM credit_cycles ORDER BY id")
+                        )
+                    ).all()
+                )
+        finally:
+            await engine.dispose()
+
+    with _client() as client:
+        debit = client.post("/api/v1/accounts", headers=auth, json=_account_payload())
+        assert debit.status_code == 201, debit.text
+        credit = client.post(
+            "/api/v1/accounts",
+            headers=auth,
+            json={
+                "name": f"P22 credit {uuid4().hex[:8]}",
+                "kind": "credit",
+                "opening_balance_minor": 0,
+                "credit_limit_minor": 100_000,
+                "statement_day": 10,
+                "due_day": 22,
+            },
+        )
+        assert credit.status_code == 201, credit.text
+        category = client.post("/api/v1/categories", headers=auth, json=_category_payload())
+        assert category.status_code == 201, category.text
+        baseline = client.get("/api/v1/data-revision", headers=auth).json()["revision"]
+        before_cycles = asyncio.run(cycle_ids())
+
+        summary = client.get(f"/api/v1/credit-accounts/{credit.json()['id']}", headers=auth)
+        assert summary.status_code == 200, summary.text
+        assert "X-Fiscal-Data-Revision" not in summary.headers
+        projected_id = summary.json()["current_cycle"]["id"]
+        repeated = client.get(f"/api/v1/credit-accounts/{credit.json()['id']}", headers=auth)
+        assert repeated.status_code == 200
+        assert repeated.json()["current_cycle"]["id"] == projected_id
+        cycle = client.get(f"/api/v1/credit-cycles/{projected_id}", headers=auth)
+        assert cycle.status_code == 200, cycle.text
+        assert cycle.json()["id"] == projected_id
+        assert asyncio.run(cycle_ids()) == before_cycles
+        assert client.get("/api/v1/data-revision", headers=auth).json()["revision"] == baseline
+
+        created = client.post(
+            "/api/v1/transactions",
+            headers={**auth, "Idempotency-Key": str(uuid4())},
+            json={
+                "kind": "credit_purchase",
+                "amount_minor": 100,
+                "occurred_at": "2026-08-11T12:00:00+08:00",
+                "title": "P22 projected credit cycle",
+                "account_id": credit.json()["id"],
+                "category_id": category.json()["id"],
+            },
+        )
+        assert created.status_code == 201, created.text
+        assert created.json()["credit_cycle_id"] == projected_id
+        assert created.headers["X-Fiscal-Data-Revision"] == str(baseline + 1)
+        assert asyncio.run(cycle_ids()) == sorted([*before_cycles, projected_id])
+        assert client.get("/api/v1/data-revision", headers=auth).json()["revision"] == baseline + 1
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
 def test_p22_archive_round_trip_rejects_tampering_and_secrets() -> None:
     assert TEST_DATABASE_URL is not None
     auth = {"Authorization": "Bearer p22-token"}

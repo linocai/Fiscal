@@ -1,4 +1,3 @@
-import asyncio
 from collections.abc import AsyncIterator
 from datetime import date
 from os import environ
@@ -6,17 +5,23 @@ from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from fiscal_api.api.p2_schemas import AccountDraft, AccountPatch, CategoryDraft
 from fiscal_api.api.p3_schemas import TransactionDraft
 from fiscal_api.core.errors import APIError
-from fiscal_api.db.models import Account, AccountKind, CategoryDirection, TransactionKind
+from fiscal_api.db.models import (
+    Account,
+    AccountKind,
+    CategoryDirection,
+    CreditCycle,
+    DataRevision,
+    TransactionKind,
+)
 from fiscal_api.services.accounts import AccountService
 from fiscal_api.services.categories import CategoryService
-from fiscal_api.services.common import acquire_mutation_lock
 from fiscal_api.services.credit import CreditService, cycle_calendar
 from fiscal_api.services.transactions import TransactionService
 
@@ -471,7 +476,10 @@ async def test_materialized_cycle_blocks_kind_change_in_service_and_database(
 ) -> None:
     accounts = AccountService(session)
     credit_id = await credit(accounts, opening=0)
-    await CreditService(session, today=lambda: date(2026, 7, 15)).get_account(credit_id)
+    category_id = await expense_category(CategoryService(session))
+    await TransactionService(session).create(
+        purchase(credit_id, category_id, 100, "2026-07-15T12:00:00+08:00"), uuid4()
+    )
     state = await accounts.get(credit_id)
     with pytest.raises(APIError) as service_error:
         await accounts.update(
@@ -520,24 +528,90 @@ async def test_account_service_guards_int64_even_for_constructed_draft(
     assert_error(overflow, "derived_amount_out_of_range")
 
 
-async def test_get_cycle_waits_for_shared_mutation_lock(session: AsyncSession) -> None:
-    assert TEST_DATABASE_URL is not None
+async def test_credit_reads_project_a_stable_cycle_without_writing(session: AsyncSession) -> None:
     accounts = AccountService(session)
     credit_id = await credit(accounts, opening=0)
-    current = (
-        await CreditService(session, today=lambda: date(2026, 7, 15)).get_account(credit_id)
-    ).current_cycle
+    category_id = await expense_category(CategoryService(session))
+    # This creates one older persisted cycle while leaving today's cycle absent.
+    await TransactionService(session).create(
+        purchase(credit_id, category_id, 100, "2026-06-15T12:00:00+08:00"), uuid4()
+    )
+    # Two otherwise valid historical rows with the same end date exercise the
+    # UUID tie-breaker used by both PostgreSQL and the in-memory projection page.
+    first_tie = UUID(int=1)
+    second_tie = UUID(int=2)
+    session.add_all(
+        [
+            CreditCycle(
+                id=first_tie,
+                account_id=credit_id,
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 6, 10),
+                statement_date=date(2026, 6, 10),
+                due_date=date(2026, 6, 22),
+            ),
+            CreditCycle(
+                id=second_tie,
+                account_id=credit_id,
+                period_start=date(2026, 5, 2),
+                period_end=date(2026, 6, 10),
+                statement_date=date(2026, 6, 10),
+                due_date=date(2026, 6, 22),
+            ),
+        ]
+    )
+    await session.commit()
+    before_ids = list(
+        (
+            await session.scalars(select(CreditCycle.id).where(CreditCycle.account_id == credit_id))
+        ).all()
+    )
+    before_revision = await session.scalar(
+        select(DataRevision.revision).where(DataRevision.id == 1)
+    )
 
-    engine = create_async_engine(TEST_DATABASE_URL)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    async with factory() as lock_session, factory() as read_session:
-        await acquire_mutation_lock(lock_session)
-        task = asyncio.create_task(
-            CreditService(read_session, today=lambda: date(2026, 7, 15)).get_cycle(current.id)
-        )
-        await asyncio.sleep(0.05)
-        assert not task.done()
-        await lock_session.commit()
-        response = await asyncio.wait_for(task, timeout=1)
-        assert response.id == current.id
-    await engine.dispose()
+    service = CreditService(session, today=lambda: date(2026, 7, 15))
+    first = await service.get_account(credit_id)
+    second = await service.get_account(credit_id)
+    assert first.current_cycle.id == second.current_cycle.id
+    projected = await service.get_cycle(first.current_cycle.id)
+    assert projected.id == first.current_cycle.id
+    expected_persisted_order = list(
+        (
+            await session.scalars(
+                select(CreditCycle.id)
+                .where(CreditCycle.account_id == credit_id)
+                .order_by(CreditCycle.period_end.desc(), CreditCycle.id.desc())
+            )
+        ).all()
+    )
+    assert expected_persisted_order.index(second_tie) < expected_persisted_order.index(first_tie)
+    page_ids: list[UUID] = []
+    cursor = None
+    while True:
+        page = await service.list_cycles(credit_id, cursor=cursor, limit=1)
+        page_ids.extend(item.id for item in page.items)
+        if page.next_cursor is None:
+            break
+        cursor = page.next_cursor
+    assert page_ids[0] == first.current_cycle.id
+    assert page_ids[1:] == expected_persisted_order
+
+    after_ids = list(
+        (
+            await session.scalars(select(CreditCycle.id).where(CreditCycle.account_id == credit_id))
+        ).all()
+    )
+    assert after_ids == before_ids
+    assert (
+        await session.scalar(select(DataRevision.revision).where(DataRevision.id == 1))
+        == before_revision
+    )
+
+    created = await TransactionService(session).create(
+        purchase(credit_id, category_id, 100, "2026-07-15T12:00:00+08:00"), uuid4()
+    )
+    assert created.credit_cycle_id == first.current_cycle.id
+    materialized = await service.get_cycle(first.current_cycle.id)
+    assert materialized.created_at == first.current_cycle.created_at
+    assert materialized.updated_at == first.current_cycle.updated_at

@@ -5,8 +5,8 @@ import json
 from calendar import monthrange
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, timedelta
-from uuid import UUID
+from datetime import date, datetime, time, timedelta
+from uuid import UUID, uuid5
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +19,7 @@ from fiscal_api.api.p4_schemas import (
     CreditScheduleChangeResult,
 )
 from fiscal_api.core.errors import APIError
-from fiscal_api.core.time import BUSINESS_TIMEZONE, ensure_utc, utc_now
+from fiscal_api.core.time import BUSINESS_TIMEZONE, UTC, ensure_utc, utc_now
 from fiscal_api.db.models import (
     Account,
     AccountKind,
@@ -101,6 +101,55 @@ def cycle_calendar(
     return value.period_start, value.period_end, value.due_date
 
 
+def regular_cycle_id(account_id: UUID, schedule: CreditSchedule) -> UUID:
+    """Stable identity for a regular cycle that has not yet been materialized.
+
+    A projected read-cycle and the first formal write to that period must refer
+    to the same resource.  Historical rows retain their existing IDs; this is
+    only used when a new regular period has no row yet.
+    """
+
+    return uuid5(
+        account_id,
+        f"fiscal-credit-cycle-v1:{schedule.period_start.isoformat()}:{schedule.period_end.isoformat()}",
+    )
+
+
+def regular_cycle_timestamp(schedule: CreditSchedule) -> datetime:
+    """Stable UTC metadata for both projected and first materialized cycles."""
+
+    return datetime.combine(schedule.statement_date, time.min, tzinfo=BUSINESS_TIMEZONE).astimezone(
+        UTC
+    )
+
+
+def project_current_cycle(
+    account: Account, *, today: date, cycles: list[CreditCycle]
+) -> CreditCycle:
+    """Return today's regular cycle without adding or flushing a database row."""
+
+    for cycle in cycles:
+        if not cycle.is_opening_cycle and cycle.period_start <= today <= cycle.period_end:
+            return cycle
+    if account.statement_day is None or account.due_day is None:
+        raise RuntimeError("credit account schedule is missing")
+    mode = CreditCycleMode(account.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF.value)
+    schedule = credit_schedule(today, account.statement_day, account.due_day, mode)
+    projected_at = regular_cycle_timestamp(schedule)
+    return CreditCycle(
+        id=regular_cycle_id(account.id, schedule),
+        account_id=account.id,
+        period_start=schedule.period_start,
+        period_end=schedule.period_end,
+        statement_date=schedule.statement_date,
+        due_date=schedule.due_date,
+        is_opening_cycle=False,
+        version=1,
+        created_at=projected_at,
+        updated_at=projected_at,
+    )
+
+
 async def ensure_regular_cycle(
     repository: CreditRepository,
     account: Account,
@@ -131,12 +180,15 @@ async def ensure_cycle_for_statement(
     if existing is not None:
         return existing
     existing = CreditCycle(
+        id=regular_cycle_id(account.id, schedule),
         account_id=account.id,
         period_start=schedule.period_start,
         period_end=schedule.period_end,
         statement_date=schedule.statement_date,
         due_date=schedule.due_date,
         is_opening_cycle=False,
+        created_at=regular_cycle_timestamp(schedule),
+        updated_at=regular_cycle_timestamp(schedule),
     )
     repository.add_cycle(existing)
     await repository.session.flush()
@@ -237,18 +289,12 @@ class CreditService:
         self._today = today or (lambda: utc_now().astimezone(BUSINESS_TIMEZONE).date())
 
     async def list_accounts(self) -> list[CreditAccountSummary]:
-        await acquire_mutation_lock(self.session)
         accounts = await self.repository.active_accounts()
-        responses = [await self._account_response(item) for item in accounts]
-        await self.session.commit()
-        return responses
+        return [await self._account_response(item) for item in accounts]
 
     async def get_account(self, account_id: UUID) -> CreditAccountSummary:
-        await acquire_mutation_lock(self.session)
         account = await self._required_account(account_id)
-        response = await self._account_response(account)
-        await self.session.commit()
-        return response
+        return await self._account_response(account)
 
     async def preview_schedule_change(
         self, account_id: UUID, request: CreditScheduleChangeRequest
@@ -441,13 +487,16 @@ class CreditService:
     async def list_cycles(
         self, account_id: UUID, *, cursor: str | None, limit: int
     ) -> CreditCyclePage:
-        await acquire_mutation_lock(self.session)
         account = await self._required_account(account_id)
-        await self._ensure_summary_cycles(account)
         cursor_end, cursor_id = self._decode_cursor(cursor)
-        cycles = await self.repository.cycles(
-            account.id, limit=limit, cursor_end=cursor_end, cursor_id=cursor_id
-        )
+        cycles = await self._cycles_with_projection(account)
+        if cursor_end is not None and cursor_id is not None:
+            cycles = [
+                item
+                for item in cycles
+                if item.period_end < cursor_end
+                or (item.period_end == cursor_end and str(item.id) < str(cursor_id))
+            ]
         has_more = len(cycles) > limit
         page = cycles[:limit]
         amounts = await self.repository.amounts([item.id for item in page])
@@ -458,27 +507,29 @@ class CreditService:
             ],
             next_cursor=self._encode_cursor(page[-1]) if has_more and page else None,
         )
-        await self.session.commit()
         return response
 
     async def get_cycle(self, cycle_id: UUID) -> CreditCycleResponse:
-        await acquire_mutation_lock(self.session)
-        try:
-            cycle = await self.repository.cycle(cycle_id)
-            if cycle is None:
-                not_found("credit_cycle_not_found", "The credit cycle does not exist")
+        cycle = await self.repository.cycle(cycle_id)
+        if cycle is not None:
             account = await self._required_account(cycle.account_id)
-            amounts = await self.repository.amounts([cycle.id])
-            response = await self._cycle_response(cycle, account, amounts.get(cycle.id, (0, 0)))
-            await self.session.commit()
-            return response
-        except Exception:
-            await self.session.rollback()
-            raise
+        else:
+            account = None
+            for candidate in await self.repository.active_accounts():
+                cycles = await self.repository.cycles(candidate.id)
+                projected = project_current_cycle(candidate, today=self._today(), cycles=cycles)
+                if projected.id == cycle_id:
+                    account = candidate
+                    cycle = projected
+                    break
+            if account is None or cycle is None:
+                not_found("credit_cycle_not_found", "The credit cycle does not exist")
+        amounts = await self.repository.amounts([cycle.id])
+        return await self._cycle_response(cycle, account, amounts.get(cycle.id, (0, 0)))
 
     async def _account_response(self, account: Account) -> CreditAccountSummary:
-        current = await self._ensure_summary_cycles(account)
-        cycles = await self.repository.cycles(account.id)
+        cycles = await self._cycles_with_projection(account)
+        current = project_current_cycle(account, today=self._today(), cycles=cycles)
         amounts = await self.repository.amounts([item.id for item in cycles])
         responses = [
             await self._cycle_response(item, account, amounts.get(item.id, (0, 0)))
@@ -545,9 +596,12 @@ class CreditService:
             ),
         )
 
-    async def _ensure_summary_cycles(self, account: Account) -> CreditCycle:
-        await sync_opening_cycle(self.repository, account)
-        return await ensure_regular_cycle(self.repository, account, self._today())
+    async def _cycles_with_projection(self, account: Account) -> list[CreditCycle]:
+        cycles = await self.repository.cycles(account.id)
+        projected = project_current_cycle(account, today=self._today(), cycles=cycles)
+        if not any(item.id == projected.id for item in cycles):
+            cycles.append(projected)
+        return sorted(cycles, key=lambda item: (item.period_end, str(item.id)), reverse=True)
 
     async def _required_account(self, account_id: UUID) -> Account:
         account = await self.repository.account(account_id)
