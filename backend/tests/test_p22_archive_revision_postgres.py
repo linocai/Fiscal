@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
@@ -149,6 +150,10 @@ def test_p22_archive_round_trip_rejects_tampering_and_secrets() -> None:
     password = uuid4().hex + uuid4().hex
     with _client() as client:
         account = client.post("/api/v1/accounts", headers=auth, json=_account_payload()).json()
+        second_account = client.post(
+            "/api/v1/accounts", headers=auth, json=_account_payload()
+        ).json()
+        assert second_account["id"] != account["id"]
         category = client.post("/api/v1/categories", headers=auth, json=_category_payload()).json()
         tx = client.post(
             "/api/v1/transactions",
@@ -181,6 +186,20 @@ def test_p22_archive_round_trip_rejects_tampering_and_secrets() -> None:
     with pytest.raises(ArchiveError):
         ArchiveService.open(archive[:-1] + bytes([archive[-1] ^ 1]), password=password)
 
+    # Mutate a real exported payload so these checks reach relationship
+    # preflight rather than failing earlier on an incomplete synthetic row.
+    duplicate_primary_key = copy.deepcopy(payload)
+    duplicate_primary_key["entities"]["accounts"][1]["id"] = duplicate_primary_key["entities"][
+        "accounts"
+    ][0]["id"]
+    with pytest.raises(ArchiveError, match="duplicate primary keys"):
+        ArchiveService.dry_run_report(manifest, duplicate_primary_key)
+
+    orphan_posting = copy.deepcopy(payload)
+    orphan_posting["entities"]["postings"][0]["transaction_id"] = str(uuid4())
+    with pytest.raises(ArchiveError, match="orphan foreign key"):
+        ArchiveService.dry_run_report(manifest, orphan_posting)
+
     async def restore() -> None:
         engine = create_engine(TEST_DATABASE_URL)
         try:
@@ -196,13 +215,79 @@ def test_p22_archive_round_trip_rejects_tampering_and_secrets() -> None:
                         )
                     ).all()
                 )
+                balance_fingerprint_sql = text(
+                    "SELECT string_agg(id::text || ':' || current_balance::text, ',' ORDER BY id) "
+                    "FROM ("
+                    "  SELECT a.id, a.opening_balance_minor + "
+                    "    CASE WHEN a.kind = 'credit' THEN "
+                    "      -coalesce(sum(p.amount_minor) FILTER (WHERE t.id IS NOT NULL), 0) "
+                    "    ELSE coalesce(sum(p.amount_minor) FILTER (WHERE t.id IS NOT NULL), 0) END "
+                    "    AS current_balance "
+                    "  FROM accounts a "
+                    "  LEFT JOIN postings p ON p.account_id = a.id "
+                    "  LEFT JOIN transactions t ON t.id = p.transaction_id AND t.voided_at IS NULL "
+                    "  GROUP BY a.id, a.opening_balance_minor, a.kind"
+                    ") balances"
+                )
+                report_fingerprint_sql = text(
+                    "SELECT string_agg("
+                    "id::text || ':' || kind || ':' || occurred_at::text || ':' || title, ',' "
+                    "ORDER BY id"
+                    ") FROM transactions"
+                )
+                expected_balance_fingerprint = await connection.scalar(balance_fingerprint_sql)
+                expected_report_fingerprint = await connection.scalar(report_fingerprint_sql)
+                expected_posting_totals = (
+                    await connection.execute(
+                        text(
+                            "SELECT coalesce(sum(amount_minor), 0), "
+                            "coalesce(sum(abs(amount_minor)), 0) FROM postings"
+                        )
+                    )
+                ).one()
                 await connection.execute(text(f"TRUNCATE TABLE {', '.join(tables)} CASCADE"))
                 assert await connection.scalar(text("SELECT count(*) FROM accounts")) == 0
+                with pytest.raises(ArchiveError, match="duplicate primary keys"):
+                    await ArchiveService.restore_empty_target(
+                        connection, manifest=manifest, payload=duplicate_primary_key
+                    )
+                assert await connection.scalar(text("SELECT count(*) FROM accounts")) == 0
+                with pytest.raises(ArchiveError, match="orphan foreign key"):
+                    await ArchiveService.restore_empty_target(
+                        connection, manifest=manifest, payload=orphan_posting
+                    )
+                assert await connection.scalar(text("SELECT count(*) FROM postings")) == 0
+
                 await ArchiveService.restore_empty_target(
                     connection, manifest=manifest, payload=payload
                 )
                 assert await connection.scalar(text("SELECT count(*) FROM transactions")) == 1
                 assert await connection.scalar(text("SELECT count(*) FROM postings")) == 1
+                assert (
+                    await connection.scalar(
+                        text(
+                            "SELECT count(*) FROM postings p "
+                            "LEFT JOIN transactions t ON t.id = p.transaction_id "
+                            "WHERE t.id IS NULL"
+                        )
+                    )
+                    == 0
+                )
+                restored_posting_totals = (
+                    await connection.execute(
+                        text(
+                            "SELECT coalesce(sum(amount_minor), 0), "
+                            "coalesce(sum(abs(amount_minor)), 0) FROM postings"
+                        )
+                    )
+                ).one()
+                assert restored_posting_totals == expected_posting_totals
+                assert (
+                    await connection.scalar(balance_fingerprint_sql) == expected_balance_fingerprint
+                )
+                assert (
+                    await connection.scalar(report_fingerprint_sql) == expected_report_fingerprint
+                )
         finally:
             await engine.dispose()
 
