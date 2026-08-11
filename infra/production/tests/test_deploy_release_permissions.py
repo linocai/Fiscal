@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -72,6 +74,31 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertIn('chmod 0600 "$password_file"', SHADOW_WRAPPER)
         self.assertIn('rm -f -- "$source_env" "$target_env" "$password_file"', SHADOW_WRAPPER)
         self.assertIn('exec "$python_bin" -m "$archive_module" "$@" < "$archive_password"', SHADOW_WRAPPER)
+
+    def test_p22_shadow_controlled_env_overrides_a_hostile_inherited_dsn(self) -> None:
+        controlled_dsn = "postgresql+asyncpg://fiscal_migrator@/fiscal_p22_shadow_test"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            controlled_env = Path(temporary_directory) / "target.env"
+            controlled_env.write_text(f"FISCAL_DATABASE_URL={controlled_dsn}\n", encoding="utf-8")
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-ceu",
+                    'set -a; . "$1"; set +a; printf "%s" "$FISCAL_DATABASE_URL"',
+                    "_",
+                    str(controlled_env),
+                ],
+                check=False,
+                capture_output=True,
+                env={**os.environ, "FISCAL_DATABASE_URL": "postgresql://hostile/service"},
+                text=True,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, controlled_dsn)
+        self.assertIn('unset FISCAL_DATABASE_URL FISCAL_MIGRATION_DATABASE_URL', SHADOW_WRAPPER)
+        self.assertIn('set -a; . "$1"; set +a', SHADOW_WRAPPER)
+        self.assertIn('set -a; . "$database_env"; set +a', SHADOW_WRAPPER)
 
     def test_p22_shadow_archive_modes_keep_source_and_target_contracts_separate(self) -> None:
         self.assertIn('if [[ "$source_preflight" == true || "$archive_action" == "export" ]]; then', SHADOW_WRAPPER)

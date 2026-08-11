@@ -22,6 +22,7 @@ workspace=""
 source_env=""
 target_env=""
 password_file=""
+migration_database_url=""
 
 normalize_database() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
@@ -86,6 +87,10 @@ fi
 
 require_root
 load_fiscal_env
+migration_database_url="${FISCAL_MIGRATION_DATABASE_URL:?missing migration URL}"
+# No child may inherit the application/service DSN loaded from fiscal.env.
+# Archive and target commands receive only a generated, migrator-owned URL.
+unset FISCAL_DATABASE_URL FISCAL_MIGRATION_DATABASE_URL
 [[ ! -e "$evidence_parent" ]] || die "evidence parent already exists"
 
 install -d -o root -g fiscal_migrator -m 0710 "$evidence_parent"
@@ -103,7 +108,7 @@ cleanup() {
 trap cleanup EXIT
 
 prepare_database_envs() {
-  FISCAL_MIGRATION_DATABASE_URL="$FISCAL_MIGRATION_DATABASE_URL" \
+  FISCAL_MIGRATION_DATABASE_URL="$migration_database_url" \
     "$source_root/backend/.venv/bin/python" - "$source_env" "$target_env" "$target_database" <<'PY'
 import os
 import sys
@@ -157,7 +162,7 @@ run_source_preflight() {
 run_target_preflight() {
   runuser --user=fiscal_migrator -- bash -c '
     set -Eeuo pipefail
-    . "$1"
+    set -a; . "$1"; set +a
     cd "$2/backend"
     "$3" -c "from fiscal_api.core.config import Settings; Settings()"
     expected_head="$("$4" --config alembic.ini heads | awk "NR == 1 {print \$1}")"
@@ -189,7 +194,7 @@ run_archive() {
     archive_module="$4"
     archive_password="$5"
     shift 5
-    . "$database_env"
+    set -a; . "$database_env"; set +a
     cd "$source_root/backend"
     exec "$python_bin" -m "$archive_module" "$@" < "$archive_password"
   ' _ "$database_env" "$source_root" "$source_root/backend/.venv/bin/python" "$module" "$password_file" "$@"
