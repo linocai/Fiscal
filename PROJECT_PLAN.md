@@ -81,6 +81,8 @@
 
 **目标**：把 AI 提案的原始判断、人工修正、执行结果和策略效果变为可测量、可回溯、可自动收紧的安全闭环。
 
+**当前状态**：本地 P23 候选 `cac6ab2` 已完成 0023 schema/events/metrics/policy/rules、脱敏 shadow candidate gate 和双端 UI；fresh PostgreSQL 14 全量 251 tests、0023↔0022/离线 SQL、Ruff/Pyright、macOS 101/19 单测、iOS/macOS 独立签名 Release 均通过。生产仍为 `5330b42 / 20260811_0022`，未迁移、未调用真实 Provider、未做 Mac/Kurisu P23 真机门；需单独授权。
+
 - **数据契约**：每个提案保留不可覆盖的原始输入、首次结构化 parse snapshot、最终确认值及字段级 diff；另记录 unchanged/edited confirm、ignored（可选原因）、execute failed、automatic/manual execute、undo、provider retry/final failure。旧提案不伪造历史，标为 `historical_unavailable`。
 - **隐私/领域边界**：原文与快照仅留在 Fiscal 数据库/显式加密 archive，不送第三方分析；质量事件不可编辑且不是面向用户的复杂审计产品。AI 只能调用手工录入同一正式服务、相同校验/幂等/撤销，不能直接写 posting。
 - **指标与策略**：按来源、模型/提示词版本、交易类型、金额区间计算解析成功、无修改确认、字段修改、忽略、失败、撤销、自动撤销、延迟/错误率；策略版本化并记录生效时间。来源/类型的阈值可不同；样本不足不提权，新模型/提示词先跑脱敏 shadow corpus；异常率只能自动收紧/关闭自动执行，放宽需用户确认。

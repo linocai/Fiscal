@@ -1,6 +1,6 @@
 # P23 · AI 质量闭环
 
-状态：**本地 Automated Verified（backend A/B）**；未部署、未迁移生产、未调用真实 AI Provider、未进行真机验收。
+状态：**本地 Automated Verified**；backend、fresh PostgreSQL、迁移往返、双端测试/签名 Release 均通过。未部署、未迁移生产、未调用真实 AI Provider、未进行真机验收。
 
 ## 已验证的本地契约
 
@@ -16,5 +16,6 @@
 
 ## 下一步与边界
 
-- 待完成 Apple 单测、iOS/macOS Release build、完整 fresh PostgreSQL suite，之后才更新本记录状态。
-- 本期只允许本地 disposable PostgreSQL；生产 backup/shadow/deploy、真实 provider 写入、生产 migration 与 Mac/Kurisu 门均需后续明确授权。
+- 本地门已结束；下一步是受控生产前备份、0022→0023 影子迁移/数据指纹、精确 commit 部署、生产冒烟和 Mac/Kurisu 真机验收，需用户明确授权。
+- 任何真实候选模型/提示词替换还需单独允许向当前 Provider 发送脱敏 shadow corpus；只登记 corpus SHA-256、样本数、聚合结果和 evaluator version，不保存语料或凭据。如本次不替换模型/提示词，可不执行该外部调用，但不得声称候选已验证。
+- 不制造财务流水作为 QA。真机 AI 链路仅允许创建可清理提案/质量事件；若需确认成正式流水或执行 undo，必须再有明确用户数据输入。

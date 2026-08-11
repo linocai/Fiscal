@@ -8,10 +8,10 @@ from source code, a historical document, or an earlier release.
 
 | Field | Current evidenced value |
 | --- | --- |
-| Train | P20 → P21 → P22 complete; P23 pending |
-| Candidate source revision | committed and deployed `5330b42a0e95ab1150a9c0abf2676a4443333d53` |
+| Train | P20 → P21 → P22 complete; P23 locally Automated Verified, production pending |
+| Candidate source revision | local P23 candidate `cac6ab2`; deployed production remains `5330b42a0e95ab1150a9c0abf2676a4443333d53` |
 | Candidate app version | `1.3.0 (21)` |
-| Local Alembic head | `20260811_0022` |
+| Local Alembic head | `20260811_0023` |
 | Deployed source revision | `5330b42a0e95ab1150a9c0abf2676a4443333d53` |
 | Deployed Alembic head | `20260811_0022` |
 | Authentication mode | generation 2 personal passphrase/access keys only: one credential, three current-generation keys, and no `device_tokens` table |
