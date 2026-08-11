@@ -41,15 +41,32 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
 
 SessionDependency = Annotated[AsyncSession, Depends(get_session)]
 
+LEDGER_DERIVED_SCOPES = (
+    "ledger",
+    "accounts",
+    "credit",
+    "reimbursements",
+    "cash_flow",
+    "reconciliation",
+    "attention",
+    "reports",
+    "ai",
+)
+
 
 def formal_mutation(*scopes: str) -> DependsParam:
     """Opt a route into the one-receipt formal mutation contract."""
     if not scopes:
         raise ValueError("a formal mutation needs at least one affected scope")
 
-    async def mark(request: Request) -> None:
-        request.state.data_revision_scopes = tuple(dict.fromkeys(scopes))
+    resolved = tuple(dict.fromkeys(scopes))
+    if set(resolved) & {"ledger", "cash_flow", "reimbursements", "ai", "credit"}:
+        resolved = tuple(dict.fromkeys((*resolved, *LEDGER_DERIVED_SCOPES)))
 
+    async def mark(request: Request) -> None:
+        request.state.data_revision_scopes = resolved
+
+    mark.__dict__["fiscal_mutation_scopes"] = resolved
     return Depends(mark)
 
 
