@@ -20,8 +20,8 @@ def request(key: str, path: str, method: str = "GET", body: dict[str, object] | 
     return urlopen(Request(BASE_URL + path, data=data, method=method, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}), timeout=20)
 
 
-def main() -> None:
-    argparse.ArgumentParser(description="Run the single stdin-only P22 production QA receipt check").parse_args()
+def main(argv: list[str] | None = None) -> None:
+    argparse.ArgumentParser(description="Run the single stdin-only P22 production QA receipt check").parse_args(argv)
     key = sys.stdin.readline().strip()
     if not key:
         raise SystemExit("missing bearer key on standard input")
@@ -56,4 +56,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
