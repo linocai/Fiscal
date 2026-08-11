@@ -9,6 +9,7 @@ SCRIPTS = Path(__file__).parents[1] / "scripts"
 DEPLOY = (SCRIPTS / "deploy.sh").read_text(encoding="utf-8")
 BOOTSTRAP = (SCRIPTS / "bootstrap-host.sh").read_text(encoding="utf-8")
 BOOTSTRAP_PATH = SCRIPTS / "bootstrap-host.sh"
+RESTORE_VERIFY = (SCRIPTS / "restore-verify.sh").read_text(encoding="utf-8")
 
 
 class DeployReleasePermissionsTests(unittest.TestCase):
@@ -36,6 +37,14 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         full_bootstrap = BOOTSTRAP.index('[[ "$uv_version" =~')
         self.assertLess(release_access_branch, full_bootstrap)
         self.assertIn('die "/etc/fiscal/fiscal.env metadata changed unexpectedly"', BOOTSTRAP)
+
+    def test_restore_verify_uses_migrator_for_release_alembic_only(self) -> None:
+        expected_head = RESTORE_VERIFY.index('expected_head="$(')
+        expected_head_block = RESTORE_VERIFY[expected_head : RESTORE_VERIFY.index('[[ -n "$actual_head"', expected_head)]
+
+        self.assertIn("run_as_migrator env", expected_head_block)
+        self.assertNotIn("run_as_postgres env", expected_head_block)
+        self.assertIn("run_as_postgres pg_restore", RESTORE_VERIFY)
 
     def test_release_tree_is_group_readable_before_migrator_preflight(self) -> None:
         ownership = DEPLOY.index('chown -R root:fiscal_release "$temporary_release"')
