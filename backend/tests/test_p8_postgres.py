@@ -24,7 +24,9 @@ from fiscal_api.core.principal import AuthenticatedPrincipal
 from fiscal_api.core.provider_credentials import ProviderCredentialCipher
 from fiscal_api.db.models import (
     AccountKind,
+    AILearningRule,
     AIProposal,
+    AIQualityEvent,
     AISettings,
     CashFlowItem,
     CategoryDirection,
@@ -300,6 +302,59 @@ async def test_unedited_ai_undo_is_exactly_replayable(session: AsyncSession) -> 
     assert revisions_after == revisions_before
 
 
+async def test_p23_snapshots_events_metrics_and_two_evidence_rule(session: AsyncSession) -> None:
+    account_id, expense_id, _income_id = await seed(session)
+    service = AIService(session, FakeProvider())
+    first, _ = await service.create(AIProposalCreate(source="text", text="稳定商户 20 元"), uuid4())
+    assert first.quality_status == "available"
+    assert first.initial_parse_snapshot is not None
+    edited = await service.edit(
+        first.id,
+        TransactionDraft(
+            kind=TransactionKind.EXPENSE,
+            amount_minor=2_100,
+            occurred_at=datetime(2026, 7, 16, 4, tzinfo=UTC),
+            title="稳定商户",
+            account_id=account_id,
+            category_id=expense_id,
+        ),
+        first.version,
+    )
+    executed = await service.execute(edited.id, edited.version)
+    assert executed.proposal.final_field_diff is not None
+    assert "amount_minor" in executed.proposal.final_field_diff
+    events = await service.quality_events(first.id)
+    assert [event.event_type for event in events] == ["parsed", "confirm_edited", "manual_execute"]
+
+    second, _ = await service.create(
+        AIProposalCreate(source="text", text="稳定商户 20 元 again"), uuid4()
+    )
+    second_edit = await service.edit(
+        second.id,
+        TransactionDraft(
+            kind=TransactionKind.EXPENSE,
+            amount_minor=2_100,
+            occurred_at=datetime(2026, 7, 16, 4, tzinfo=UTC),
+            title="稳定商户",
+            account_id=account_id,
+            category_id=expense_id,
+        ),
+        second.version,
+    )
+    await service.execute(second_edit.id, second_edit.version)
+    rules = await service.rules()
+    assert {rule.rule_kind for rule in rules} == {
+        "merchant_category",
+        "title_account",
+        "category_alias",
+    }
+    metrics = await service.quality_metrics()
+    assert sum(row.total for row in metrics.rows) == 2
+    assert all(row.total == row.pending + row.terminal_outcomes for row in metrics.rows)
+    assert await session.scalar(select(AIQualityEvent)) is not None
+    assert await session.scalar(select(AILearningRule)) is not None
+
+
 async def test_p9_sources_require_settings_and_replay_after_disable(
     session: AsyncSession,
 ) -> None:
@@ -318,6 +373,7 @@ async def test_p9_sources_require_settings_and_replay_after_disable(
             auto_execute_limit_minor=100_000,
             minimum_confidence_bps=9_000,
             expected_version=settings.version,
+            confirm_relaxation=True,
         )
     )
     ocr_key = uuid4()
@@ -390,6 +446,7 @@ async def test_automatic_execution_boundaries(
             auto_execute_limit_minor=100_000,
             minimum_confidence_bps=9_000,
             expected_version=settings.version,
+            confirm_relaxation=True,
         )
     )
     proposal, _replay = await service.create(
@@ -417,6 +474,7 @@ async def test_ledger_auto_validation_failure_preserves_full_pending_draft(
             auto_execute_limit_minor=100_000,
             minimum_confidence_bps=9_000,
             expected_version=settings.version,
+            confirm_relaxation=True,
         )
     )
     proposal, _replay = await service.create(
@@ -506,6 +564,7 @@ async def test_future_ai_proposal_requires_confirmation_and_creates_only_cash_fl
             auto_execute_limit_minor=100_000,
             minimum_confidence_bps=9_000,
             expected_version=settings.version,
+            confirm_relaxation=True,
         )
     )
 

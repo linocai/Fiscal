@@ -14,8 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fiscal_api.api.p3_schemas import TransactionDraft, TransactionResponse
 from fiscal_api.api.p8_schemas import (
     AICandidate,
+    AIExecutionPolicyReplace,
+    AIExecutionPolicyResponse,
     AIField,
     AIFieldConfidences,
+    AILearningRuleResponse,
     AIParseRequest,
     AIProposalCreate,
     AIProposalMutationResponse,
@@ -24,11 +27,16 @@ from fiscal_api.api.p8_schemas import (
     AIProviderResult,
     AIProviderSettingsReplace,
     AIProviderSettingsResponse,
+    AIQualityEventResponse,
+    AIQualityMetricsResponse,
+    AIQualityMetricsRow,
     AISettingsReplace,
     AISettingsResponse,
+    LearningRuleKind,
     ProposalSource,
     ProposalStatus,
     ProposalTarget,
+    QualityEventType,
 )
 from fiscal_api.api.p13_schemas import CashFlowDraft, CashFlowMutationScope
 from fiscal_api.core.config import Settings
@@ -38,9 +46,13 @@ from fiscal_api.core.provider_credentials import ProviderCredentialCipher
 from fiscal_api.core.time import BUSINESS_TIMEZONE, utc_now
 from fiscal_api.db.models import (
     Account,
+    AIExecutionPolicy,
+    AILearningRule,
     AIProposal,
     AIProposalStatus,
     AIProposalTarget,
+    AIQualityEvent,
+    AIQualityEventType,
     AISettings,
     CashFlowDirection,
     CashFlowSource,
@@ -88,6 +100,13 @@ class AIService:
         await acquire_mutation_lock(self.session)
         settings = await self.repository.settings(for_update=True)
         check_version(settings.version, replacement.expected_version)
+        relaxing = (
+            (not settings.auto_execute_enabled and replacement.auto_execute_enabled)
+            or replacement.auto_execute_limit_minor > settings.auto_execute_limit_minor
+            or replacement.minimum_confidence_bps < settings.minimum_confidence_bps
+        )
+        if relaxing and not replacement.confirm_relaxation:
+            conflict("ai_strategy_confirmation_required", "放宽自动执行策略需用户明确确认")
         settings.auto_execute_enabled = replacement.auto_execute_enabled
         settings.ocr_source_enabled = replacement.ocr_source_enabled
         settings.shortcut_text_source_enabled = replacement.shortcut_text_source_enabled
@@ -97,6 +116,136 @@ class AIService:
         settings.updated_at = utc_now()
         await self.session.commit()
         return self._settings_response(settings)
+
+    async def quality_events(self, proposal_id: UUID) -> list[AIQualityEventResponse]:
+        await self._required(proposal_id)
+        return [
+            self._event_response(event)
+            for event in await self.repository.quality_events(proposal_id)
+        ]
+
+    async def quality_metrics(self) -> AIQualityMetricsResponse:
+        proposals = await self.repository.all_proposals()
+        events = await self.repository.quality_events()
+        by_proposal: dict[UUID, set[str]] = {}
+        for event in events:
+            by_proposal.setdefault(event.proposal_id, set()).add(event.event_type)
+        rows: dict[
+            tuple[str, str | None, str | None, str | None, str | None, str], dict[str, int]
+        ] = {}
+        for proposal in proposals:
+            key = (
+                proposal.source,
+                proposal.provider,
+                proposal.provider_model,
+                proposal.prompt_version,
+                proposal.kind,
+                self._amount_band(proposal.amount_minor),
+            )
+            values = rows.setdefault(
+                key,
+                {
+                    name: 0
+                    for name in (
+                        "total",
+                        "parse_succeeded",
+                        "historical_unavailable",
+                        "confirm_unchanged",
+                        "confirm_edited",
+                        "ignored",
+                        "execute_failed",
+                        "automatic_execute",
+                        "manual_execute",
+                        "undone",
+                        "provider_retry",
+                        "final_failure",
+                        "pending",
+                        "terminal_outcomes",
+                    )
+                },
+            )
+            values["total"] += 1
+            event_types = by_proposal.get(proposal.id, set())
+            if proposal.initial_parse_snapshot is None:
+                values["historical_unavailable"] += 1
+            else:
+                values["parse_succeeded"] += 1
+            for event_type in event_types:
+                if event_type in values:
+                    values[event_type] += 1
+            if (
+                proposal.status == AIProposalStatus.PROCESSING.value
+                or proposal.status == AIProposalStatus.PENDING.value
+            ):
+                values["pending"] += 1
+            else:
+                values["terminal_outcomes"] += 1
+        return AIQualityMetricsResponse(
+            rows=[
+                AIQualityMetricsRow(
+                    source=cast(ProposalSource, key[0]),
+                    provider=key[1],
+                    model=key[2],
+                    prompt_version=key[3],
+                    transaction_kind=key[4],
+                    amount_band=key[5],
+                    **values,
+                )
+                for key, values in sorted(rows.items(), key=lambda item: str(item[0]))
+            ]
+        )
+
+    async def policies(self) -> list[AIExecutionPolicyResponse]:
+        return [self._policy_response(value) for value in await self.repository.policies()]
+
+    async def replace_policy(
+        self, replacement: AIExecutionPolicyReplace
+    ) -> AIExecutionPolicyResponse:
+        await acquire_mutation_lock(self.session)
+        previous = await self.repository.latest_policy()
+        if previous is not None:
+            relaxing = (
+                (not previous.auto_execute_enabled and replacement.auto_execute_enabled)
+                or replacement.auto_execute_limit_minor > previous.auto_execute_limit_minor
+                or replacement.minimum_confidence_bps < previous.minimum_confidence_bps
+            )
+            if relaxing and not replacement.confirm_relaxation:
+                conflict("ai_strategy_confirmation_required", "放宽自动执行策略需用户明确确认")
+        policy = AIExecutionPolicy(
+            version=(previous.version + 1) if previous else 1,
+            source=replacement.source,
+            transaction_kind=replacement.transaction_kind,
+            auto_execute_enabled=replacement.auto_execute_enabled,
+            auto_execute_limit_minor=replacement.auto_execute_limit_minor,
+            minimum_confidence_bps=replacement.minimum_confidence_bps,
+            minimum_sample_size=replacement.minimum_sample_size,
+            change_reason=replacement.change_reason,
+            changed_automatically=False,
+        )
+        self.repository.add_policy(policy)
+        if replacement.source is None and replacement.transaction_kind is None:
+            settings = await self.repository.settings(for_update=True)
+            settings.auto_execute_enabled = replacement.auto_execute_enabled
+            settings.auto_execute_limit_minor = replacement.auto_execute_limit_minor
+            settings.minimum_confidence_bps = replacement.minimum_confidence_bps
+            settings.version += 1
+            settings.updated_at = utc_now()
+        await self.session.commit()
+        return self._policy_response(policy)
+
+    async def rules(self) -> list[AILearningRuleResponse]:
+        return [self._rule_response(value) for value in await self.repository.rules()]
+
+    async def revoke_rule(self, rule_id: UUID) -> AILearningRuleResponse:
+        await acquire_mutation_lock(self.session)
+        rule = await self.repository.rule(rule_id, for_update=True)
+        if rule is None:
+            not_found("ai_learning_rule_not_found", "学习规则不存在")
+        rule.enabled = False
+        rule.revoked_at = utc_now()
+        rule.updated_at = utc_now()
+        await self.session.commit()
+        return self._rule_response(rule)
 
     async def get_provider_settings(self) -> AIProviderSettingsResponse:
         return self._provider_settings_response(await self.repository.settings())
@@ -175,6 +324,7 @@ class AIService:
             create_request_hash=request_hash,
             provider=provider.provider_id,
             provider_model=provider.model_id,
+            prompt_version=settings.prompt_version,
             field_confidences={},
             missing_fields=[],
             reason_codes=[],
@@ -267,11 +417,16 @@ class AIService:
         check_version(proposal.version, expected_version)
         self._require_status(proposal, AIProposalStatus.PENDING)
         if proposal.target == AIProposalTarget.CASH_FLOW.value:
-            created = await CashFlowService(self.session).create(
-                self._cash_flow_draft(proposal),
-                self._cash_flow_key(proposal.id),
-                source=CashFlowSource.AI_TEXT,
-            )
+            try:
+                created = await CashFlowService(self.session).create(
+                    self._cash_flow_draft(proposal),
+                    self._cash_flow_key(proposal.id),
+                    source=CashFlowSource.AI_TEXT,
+                )
+            except APIError as error:
+                await self.session.rollback()
+                await self._record_execute_failure(proposal_id, error.code)
+                raise
             item = created.items[0]
             if item.manual_item_id is None:
                 raise RuntimeError("AI cash flow proposal created no manual item")
@@ -280,19 +435,28 @@ class AIService:
             proposal.cash_flow_item_id = item.manual_item_id
             proposal.cash_flow_item_version = item.version
             proposal.executed_at = utc_now()
+            await self._finalize_confirmation(proposal, automatic=False)
+            self._event(proposal, AIQualityEventType.MANUAL_EXECUTE)
             self._touch(proposal)
             await self.session.commit()
             return AIProposalMutationResponse(
                 proposal=self._proposal_response(proposal), cash_flow_item=item
             )
         draft = self._draft(proposal)
-        transaction = await self.transactions.create_ai(
-            draft,
-            self._transaction_key(proposal.id),
-            self._ledger_source(proposal),
-            commit=False,
-        )
+        try:
+            transaction = await self.transactions.create_ai(
+                draft,
+                self._transaction_key(proposal.id),
+                self._ledger_source(proposal),
+                commit=False,
+            )
+        except APIError as error:
+            await self.session.rollback()
+            await self._record_execute_failure(proposal_id, error.code)
+            raise
         self._mark_executed(proposal, transaction)
+        await self._finalize_confirmation(proposal, automatic=False)
+        self._event(proposal, AIQualityEventType.MANUAL_EXECUTE)
         await self.session.commit()
         return AIProposalMutationResponse(
             proposal=self._proposal_response(proposal), transaction=transaction
@@ -305,6 +469,7 @@ class AIService:
         self._require_status(proposal, AIProposalStatus.PENDING)
         proposal.status = AIProposalStatus.IGNORED.value
         proposal.ignored_at = utc_now()
+        self._event(proposal, AIQualityEventType.IGNORED)
         self._touch(proposal)
         await self.session.commit()
         return self._proposal_response(proposal)
@@ -314,6 +479,7 @@ class AIService:
         proposal = await self._required(proposal_id, for_update=True)
         check_version(proposal.version, expected_version)
         self._require_status(proposal, AIProposalStatus.FAILED)
+        self._event(proposal, AIQualityEventType.PROVIDER_RETRY)
         proposal.status = AIProposalStatus.PROCESSING.value
         proposal.error_code = None
         proposal.error_message = None
@@ -353,6 +519,7 @@ class AIService:
             proposal.status = AIProposalStatus.UNDONE.value
             proposal.cash_flow_item_version = item.version
             proposal.undone_at = utc_now()
+            self._event(proposal, AIQualityEventType.UNDONE)
             self._touch(proposal)
             await self.session.commit()
             return AIProposalMutationResponse(
@@ -398,6 +565,7 @@ class AIService:
         proposal.status = AIProposalStatus.UNDONE.value
         proposal.transaction_version = transaction.version
         proposal.undone_at = utc_now()
+        self._event(proposal, AIQualityEventType.UNDONE)
         self._touch(proposal)
         await self.session.commit()
         return AIProposalMutationResponse(
@@ -440,8 +608,11 @@ class AIService:
         locked = await self._required(proposal_id, for_update=True)
         self._require_status(locked, AIProposalStatus.PROCESSING)
         self._apply_provider_result(locked, result, accounts, categories)
+        await self._apply_deterministic_rules(locked)
+        locked.initial_parse_snapshot = self._snapshot(locked)
         locked.status = AIProposalStatus.PENDING.value
         locked.parsed_at = utc_now()
+        self._event(locked, AIQualityEventType.PARSED)
         self._touch(locked)
         # Persist the normalized draft before attempting the ledger write. TransactionService
         # deliberately rolls its unit of work back on a formal validation error; keeping the
@@ -450,7 +621,7 @@ class AIService:
         await acquire_mutation_lock(self.session)
         locked = await self._required(proposal_id, for_update=True)
         settings = await self.repository.settings()
-        if not self._auto_eligible(locked, settings):
+        if not await self._auto_eligible_for(locked, settings):
             await self.session.commit()
             return self._proposal_response(locked)
         try:
@@ -466,10 +637,13 @@ class AIService:
             locked = await self._required(proposal_id, for_update=True)
             locked.status = AIProposalStatus.PENDING.value
             locked.reason_codes = [*locked.reason_codes, "ledger_validation_failed"]
+            self._event(locked, AIQualityEventType.EXECUTE_FAILED, "ledger_validation_failed")
             self._touch(locked)
             await self.session.commit()
             return self._proposal_response(locked)
         self._mark_executed(locked, transaction)
+        await self._finalize_confirmation(locked, automatic=True)
+        self._event(locked, AIQualityEventType.AUTOMATIC_EXECUTE)
         await self.session.commit()
         return self._proposal_response(locked)
 
@@ -481,8 +655,35 @@ class AIService:
         proposal.status = AIProposalStatus.FAILED.value
         proposal.error_code = error.code
         proposal.error_message = error.message[:200]
+        self._event(proposal, AIQualityEventType.FINAL_FAILURE, error.code)
         self._touch(proposal)
+        await self._auto_close_execution(error.code)
         await self.session.commit()
+
+    async def _auto_close_execution(self, reason: str) -> None:
+        """A failure can tighten local automation, never relax it."""
+        settings = await self.repository.settings(for_update=True)
+        if not settings.auto_execute_enabled:
+            return
+        settings.auto_execute_enabled = False
+        settings.version += 1
+        settings.updated_at = utc_now()
+        previous = await self.repository.latest_policy()
+        self.repository.add_policy(
+            AIExecutionPolicy(
+                version=(previous.version + 1) if previous else 1,
+                auto_execute_enabled=False,
+                auto_execute_limit_minor=min(
+                    settings.auto_execute_limit_minor, AUTO_AMOUNT_CEILING_MINOR
+                ),
+                minimum_confidence_bps=max(
+                    settings.minimum_confidence_bps, AUTO_CONFIDENCE_FLOOR_BPS
+                ),
+                minimum_sample_size=30,
+                change_reason=f"automatic_close:{reason}"[:120],
+                changed_automatically=True,
+            )
+        )
 
     def _apply_provider_result(
         self,
@@ -614,6 +815,41 @@ class AIService:
             and proposal.destination_account_id is None
         )
 
+    async def _auto_eligible_for(self, proposal: AIProposal, settings: AISettings) -> bool:
+        """Select the newest applicable stricter policy without changing legacy defaults."""
+        eligible = self._auto_eligible(proposal, settings)
+        matching = [
+            policy
+            for policy in await self.repository.policies()
+            if (policy.source is None or policy.source == proposal.source)
+            and (policy.transaction_kind is None or policy.transaction_kind == proposal.kind)
+        ]
+        if not matching:
+            return eligible
+        policy = matching[0]
+        if not policy.auto_execute_enabled:
+            return False
+        same_scope = [
+            item
+            for item in await self.repository.all_proposals()
+            if item.source == proposal.source and item.kind == proposal.kind
+        ]
+        if len(same_scope) < policy.minimum_sample_size:
+            return False
+        policy_settings = AISettings(
+            id=1,
+            auto_execute_enabled=policy.auto_execute_enabled,
+            ocr_source_enabled=settings.ocr_source_enabled,
+            shortcut_text_source_enabled=settings.shortcut_text_source_enabled,
+            auto_execute_limit_minor=min(
+                settings.auto_execute_limit_minor, policy.auto_execute_limit_minor
+            ),
+            minimum_confidence_bps=max(
+                settings.minimum_confidence_bps, policy.minimum_confidence_bps
+            ),
+        )
+        return self._auto_eligible(proposal, policy_settings)
+
     @staticmethod
     def _apply_draft(proposal: AIProposal, draft: TransactionDraft) -> None:
         proposal.kind = draft.kind.value
@@ -696,6 +932,151 @@ class AIService:
         proposal.executed_at = utc_now()
         AIService._touch(proposal)
 
+    async def _record_execute_failure(self, proposal_id: UUID, reason: str) -> None:
+        await acquire_mutation_lock(self.session)
+        proposal = await self._required(proposal_id, for_update=True)
+        self._event(proposal, AIQualityEventType.EXECUTE_FAILED, reason)
+        await self._auto_close_execution(reason)
+        await self.session.commit()
+
+    async def _finalize_confirmation(self, proposal: AIProposal, *, automatic: bool) -> None:
+        snapshot = self._snapshot(proposal)
+        proposal.final_confirmed_snapshot = snapshot
+        diff = self._field_diff(proposal.initial_parse_snapshot, snapshot)
+        proposal.final_field_diff = diff
+        if not automatic:
+            self._event(
+                proposal,
+                AIQualityEventType.CONFIRM_EDITED if diff else AIQualityEventType.CONFIRM_UNCHANGED,
+                details={"changed_fields": sorted(diff)},
+            )
+        await self._learn_from_confirmation(proposal)
+
+    async def _learn_from_confirmation(self, proposal: AIProposal) -> None:
+        if not proposal.title:
+            return
+        key = self._normalized_key(proposal.title)
+        candidates = (
+            ("merchant_category", proposal.category_id, None),
+            ("title_account", None, proposal.account_id),
+            ("category_alias", proposal.category_id, None),
+        )
+        for kind, category_id, account_id in candidates:
+            if category_id is None and account_id is None:
+                continue
+            count = await self.repository.evidence_count(
+                title=proposal.title, category_id=category_id, account_id=account_id
+            )
+            if count < 2:
+                continue
+            existing = await self.repository.matching_rule(
+                rule_kind=kind,
+                normalized_key=key,
+                source=proposal.source if kind == "category_alias" else None,
+            )
+            if existing is None:
+                self.repository.add_rule(
+                    AILearningRule(
+                        rule_kind=kind,
+                        normalized_key=key,
+                        source=proposal.source if kind == "category_alias" else None,
+                        category_id=category_id,
+                        account_id=account_id,
+                        evidence_count=count,
+                    )
+                )
+            else:
+                existing.evidence_count = count
+                existing.updated_at = utc_now()
+
+    async def _apply_deterministic_rules(self, proposal: AIProposal) -> None:
+        if not proposal.title:
+            return
+        key = self._normalized_key(proposal.title)
+        category_rule = await self.repository.matching_rule(
+            rule_kind="merchant_category", normalized_key=key, source=None
+        )
+        account_rule = await self.repository.matching_rule(
+            rule_kind="title_account", normalized_key=key, source=None
+        )
+        alias_rule = await self.repository.matching_rule(
+            rule_kind="category_alias", normalized_key=key, source=proposal.source
+        )
+        rule = category_rule or alias_rule
+        if proposal.category_id is None and rule is not None and rule.category_id is not None:
+            proposal.category_id = rule.category_id
+            proposal.reason_codes = [*proposal.reason_codes, f"deterministic_rule:{rule.id}"]
+        if (
+            proposal.account_id is None
+            and account_rule is not None
+            and account_rule.account_id is not None
+        ):
+            proposal.account_id = account_rule.account_id
+            proposal.reason_codes = [
+                *proposal.reason_codes,
+                f"deterministic_rule:{account_rule.id}",
+            ]
+
+    def _event(
+        self,
+        proposal: AIProposal,
+        event_type: AIQualityEventType,
+        reason: str | None = None,
+        details: dict[str, object] | None = None,
+    ) -> None:
+        self.repository.add_quality_event(
+            AIQualityEvent(
+                proposal_id=proposal.id,
+                event_type=event_type.value,
+                reason=reason,
+                details=details or {},
+            )
+        )
+
+    @staticmethod
+    def _snapshot(proposal: AIProposal) -> dict[str, object]:
+        return {
+            "kind": proposal.kind,
+            "amount_minor": proposal.amount_minor,
+            "currency": proposal.currency,
+            "occurred_at": proposal.occurred_at.isoformat() if proposal.occurred_at else None,
+            "title": proposal.title,
+            "note": proposal.note,
+            "account_id": str(proposal.account_id) if proposal.account_id else None,
+            "category_id": str(proposal.category_id) if proposal.category_id else None,
+            "destination_account_id": str(proposal.destination_account_id)
+            if proposal.destination_account_id
+            else None,
+            "credit_cycle_id": str(proposal.credit_cycle_id) if proposal.credit_cycle_id else None,
+            "target": proposal.target,
+        }
+
+    @staticmethod
+    def _field_diff(
+        initial: dict[str, object] | None, final: dict[str, object]
+    ) -> dict[str, object]:
+        if initial is None:
+            return {}
+        return {
+            key: {"from": initial.get(key), "to": value}
+            for key, value in final.items()
+            if initial.get(key) != value
+        }
+
+    @staticmethod
+    def _normalized_key(value: str) -> str:
+        return " ".join(unicodedata.normalize("NFKC", value).casefold().split())[:240]
+
+    @staticmethod
+    def _amount_band(value: int | None) -> str:
+        if value is None:
+            return "unknown"
+        if value < 10_000:
+            return "<100"
+        if value < 100_000:
+            return "100-999.99"
+        return ">=1000"
+
     async def _required(self, proposal_id: UUID, *, for_update: bool = False) -> AIProposal:
         proposal = await self.repository.proposal(proposal_id, for_update=for_update)
         if proposal is None:
@@ -725,6 +1106,49 @@ class AIService:
             effective_auto_execute=settings.auto_execute_enabled and configured,
             created_at=settings.created_at,
             updated_at=settings.updated_at,
+        )
+
+    @staticmethod
+    def _event_response(event: AIQualityEvent) -> AIQualityEventResponse:
+        return AIQualityEventResponse(
+            id=event.id,
+            proposal_id=event.proposal_id,
+            event_type=cast(QualityEventType, event.event_type),
+            reason=event.reason,
+            details=event.details,
+            occurred_at=event.occurred_at,
+        )
+
+    @staticmethod
+    def _policy_response(policy: AIExecutionPolicy) -> AIExecutionPolicyResponse:
+        return AIExecutionPolicyResponse(
+            id=policy.id,
+            version=policy.version,
+            effective_at=policy.effective_at,
+            source=cast(ProposalSource | None, policy.source),
+            transaction_kind=policy.transaction_kind,
+            auto_execute_enabled=policy.auto_execute_enabled,
+            auto_execute_limit_minor=policy.auto_execute_limit_minor,
+            minimum_confidence_bps=policy.minimum_confidence_bps,
+            minimum_sample_size=policy.minimum_sample_size,
+            change_reason=policy.change_reason,
+            changed_automatically=policy.changed_automatically,
+        )
+
+    @staticmethod
+    def _rule_response(rule: AILearningRule) -> AILearningRuleResponse:
+        return AILearningRuleResponse(
+            id=rule.id,
+            rule_kind=cast(LearningRuleKind, rule.rule_kind),
+            normalized_key=rule.normalized_key,
+            source=cast(ProposalSource | None, rule.source),
+            category_id=rule.category_id,
+            account_id=rule.account_id,
+            evidence_count=rule.evidence_count,
+            enabled=rule.enabled,
+            revoked_at=rule.revoked_at,
+            created_at=rule.created_at,
+            updated_at=rule.updated_at,
         )
 
     def _provider_configured(self, settings: AISettings) -> bool:
@@ -820,6 +1244,14 @@ class AIService:
             executed_at=proposal.executed_at,
             ignored_at=proposal.ignored_at,
             undone_at=proposal.undone_at,
+            initial_parse_snapshot=proposal.initial_parse_snapshot,
+            final_confirmed_snapshot=proposal.final_confirmed_snapshot,
+            final_field_diff=proposal.final_field_diff,
+            quality_status=(
+                "available"
+                if proposal.initial_parse_snapshot is not None
+                else "historical_unavailable"
+            ),
         )
 
     @staticmethod

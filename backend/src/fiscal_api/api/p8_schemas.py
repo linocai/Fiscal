@@ -21,6 +21,19 @@ SafeAutoLimit = Annotated[StrictInt, Field(ge=1, le=100_000)]
 ProposalStatus = Literal["processing", "pending", "executed", "failed", "ignored", "undone"]
 ProposalSource = Literal["text", "ocr", "shortcut_text"]
 ProposalTarget = Literal["transaction", "cash_flow"]
+QualityEventType = Literal[
+    "parsed",
+    "confirm_unchanged",
+    "confirm_edited",
+    "ignored",
+    "execute_failed",
+    "automatic_execute",
+    "manual_execute",
+    "undone",
+    "provider_retry",
+    "final_failure",
+]
+LearningRuleKind = Literal["merchant_category", "title_account", "category_alias"]
 AIField = Literal[
     "kind",
     "amount_minor",
@@ -111,6 +124,8 @@ class AISettingsReplace(P8Model):
     auto_execute_limit_minor: SafeAutoLimit
     minimum_confidence_bps: SafeConfidenceBPS
     expected_version: Annotated[StrictInt, Field(ge=1)]
+    # A false/missing value can only preserve or tighten an enabled strategy.
+    confirm_relaxation: bool = False
 
 
 class AIProviderSettingsResponse(P8Model):
@@ -197,6 +212,10 @@ class AIProposalResponse(P8Model):
     executed_at: datetime | None
     ignored_at: datetime | None
     undone_at: datetime | None
+    initial_parse_snapshot: dict[str, object] | None
+    final_confirmed_snapshot: dict[str, object] | None
+    final_field_diff: dict[str, object] | None
+    quality_status: Literal["available", "historical_unavailable"]
 
 
 class AIProposalPage(P8Model):
@@ -226,3 +245,78 @@ class AIProposalMutationResponse(P8Model):
     proposal: AIProposalResponse
     transaction: TransactionResponse | None = None
     cash_flow_item: CashFlowItemResponse | None = None
+
+
+class AIQualityEventResponse(P8Model):
+    id: UUID
+    proposal_id: UUID
+    event_type: QualityEventType
+    reason: str | None
+    details: dict[str, object]
+    occurred_at: datetime
+
+
+class AIQualityMetricsRow(P8Model):
+    source: ProposalSource
+    provider: str | None
+    model: str | None
+    prompt_version: str | None
+    transaction_kind: str | None
+    amount_band: str
+    total: int
+    parse_succeeded: int
+    historical_unavailable: int
+    confirm_unchanged: int
+    confirm_edited: int
+    ignored: int
+    execute_failed: int
+    automatic_execute: int
+    manual_execute: int
+    undone: int
+    provider_retry: int
+    final_failure: int
+    pending: int
+    terminal_outcomes: int
+
+
+class AIQualityMetricsResponse(P8Model):
+    rows: list[AIQualityMetricsRow]
+
+
+class AIExecutionPolicyResponse(P8Model):
+    id: UUID
+    version: int
+    effective_at: datetime
+    source: ProposalSource | None
+    transaction_kind: str | None
+    auto_execute_enabled: bool
+    auto_execute_limit_minor: int
+    minimum_confidence_bps: int
+    minimum_sample_size: int
+    change_reason: str
+    changed_automatically: bool
+
+
+class AIExecutionPolicyReplace(P8Model):
+    source: ProposalSource | None = None
+    transaction_kind: str | None = Field(default=None, max_length=32)
+    auto_execute_enabled: bool
+    auto_execute_limit_minor: SafeAutoLimit
+    minimum_confidence_bps: SafeConfidenceBPS
+    minimum_sample_size: Annotated[StrictInt, Field(ge=1, le=10_000)] = 30
+    change_reason: str = Field(min_length=1, max_length=120)
+    confirm_relaxation: bool = False
+
+
+class AILearningRuleResponse(P8Model):
+    id: UUID
+    rule_kind: LearningRuleKind
+    normalized_key: str
+    source: ProposalSource | None
+    category_id: UUID | None
+    account_id: UUID | None
+    evidence_count: int
+    enabled: bool
+    revoked_at: datetime | None
+    created_at: datetime
+    updated_at: datetime

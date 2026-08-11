@@ -1,10 +1,14 @@
 from fiscal_api.db.models.access import AccessCredential, AccessKey
 from fiscal_api.db.models.account import Account, AccountKind, CreditCycleMode
 from fiscal_api.db.models.ai import (
+    AIExecutionPolicy,
+    AILearningRule,
     AIProposal,
     AIProposalSource,
     AIProposalStatus,
     AIProposalTarget,
+    AIQualityEvent,
+    AIQualityEventType,
     AISettings,
 )
 from fiscal_api.db.models.cash_flow import (
@@ -65,10 +69,14 @@ from fiscal_api.db.models.reimbursement import (
 from fiscal_api.db.models.revision import DataRevision
 
 __all__ = [
+    "AIExecutionPolicy",
+    "AILearningRule",
     "AIProposal",
     "AIProposalSource",
     "AIProposalStatus",
     "AIProposalTarget",
+    "AIQualityEvent",
+    "AIQualityEventType",
     "AISettings",
     "AccessCredential",
     "AccessKey",
