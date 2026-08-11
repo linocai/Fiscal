@@ -28,17 +28,25 @@ fi
 
 require_root
 [[ "$uv_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "invalid uv version"
-for command in useradd getent install runuser pg_dump pg_restore psql nginx python3; do
+for command in groupadd useradd usermod id getent install runuser pg_dump pg_restore psql nginx python3; do
   command -v "$command" >/dev/null || die "required host command is missing: $command"
 done
 /usr/bin/python3 -m venv --help >/dev/null 2>&1 || die "python3-venv is required"
 
+if ! getent group fiscal_release >/dev/null; then
+  groupadd --system fiscal_release
+fi
 if ! getent passwd fiscal >/dev/null; then
   useradd --system --user-group --home-dir /nonexistent --shell /usr/sbin/nologin fiscal
 fi
 if ! getent passwd fiscal_migrator >/dev/null; then
   useradd --system --user-group --home-dir /nonexistent --shell /usr/sbin/nologin fiscal_migrator
 fi
+for account in fiscal fiscal_migrator; do
+  if ! id -nG "$account" | tr ' ' '\n' | grep -qx fiscal_release; then
+    usermod --append --groups fiscal_release "$account"
+  fi
+done
 
 install -d -o root -g fiscal -m 0755 /opt/fiscal /opt/fiscal/releases /opt/fiscal/tools
 install -d -o root -g fiscal -m 0750 /etc/fiscal /var/lib/fiscal/operations

@@ -31,6 +31,9 @@ PostgreSQL must listen only on loopback and use peer authentication for matching
 
 - `fiscal_owner`: NOLOGIN owner capability limited to the Fiscal database;
 - `fiscal_migrator`: local peer LOGIN inheriting the owner role for Alembic DDL;
+- `fiscal_release`: dedicated OS group shared only by `fiscal` and
+  `fiscal_migrator` for read/execute access to immutable release trees. It does
+  not grant access to `/etc/fiscal/fiscal.env`, which remains `root:fiscal`.
 - `fiscal_app`: password LOGIN receiving DML/sequence privileges, no DDL, CREATEDB, CREATEROLE, replication or superuser privilege.
 
 The apply path reads the same application password used in `FISCAL_DATABASE_URL` once from standard input. It never accepts it as an argument:

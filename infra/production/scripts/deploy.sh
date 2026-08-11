@@ -51,6 +51,12 @@ require_root
 load_fiscal_env
 systemctl cat fiscal-api.service >/dev/null 2>&1 || \
   die "install the Fiscal systemd units and run systemctl daemon-reload before deployment"
+getent group fiscal_release >/dev/null || \
+  die "fiscal_release group is missing; run bootstrap-host.sh --apply first"
+for account in fiscal fiscal_migrator; do
+  id -nG "$account" | tr ' ' '\n' | grep -qx fiscal_release || \
+    die "$account must belong to fiscal_release; run bootstrap-host.sh --apply first"
+done
 if [[ "$defer_start" == true ]]; then
   [[ ! -e /opt/fiscal/current && ! -L /opt/fiscal/current ]] || \
     die "--defer-start is restricted to the first installation; current already exists"
@@ -97,12 +103,17 @@ log "running release verification gates without production database access"
   "$uv_bin" sync --frozen --no-dev --no-editable
 )
 
-chown -R root:fiscal "$temporary_release"
-find "$temporary_release" -type d -exec chmod 0755 {} +
+chown -R root:fiscal_release "$temporary_release"
+find "$temporary_release" -type d -exec chmod 0750 {} +
+find "$temporary_release" -type f -perm /111 -exec chmod 0750 {} +
+find "$temporary_release" -type f ! -perm /111 -exec chmod 0640 {} +
 mv -- "$temporary_release" "$release"
 temporary_release=""
 
 runuser --user=fiscal -- "$release/backend/.venv/bin/python" -c 'import fiscal_api'
+run_as_migrator test -r "$release/backend/.venv/bin/alembic"
+run_as_migrator test -x "$release/backend/.venv/bin/python"
+run_as_migrator "$release/backend/.venv/bin/python" -c 'import alembic'
 
 alembic_bin="$release/backend/.venv/bin/alembic"
 alembic_config="$release/backend/alembic.ini"
@@ -115,8 +126,8 @@ expected_head="$(
 [[ -n "$expected_head" ]] || die "unable to determine the release Alembic head"
 printf 'revision=%s\nalembic_head=%s\ncreated_at=%s\n' \
   "$revision" "$expected_head" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$release/RELEASE"
-chown root:fiscal "$release/RELEASE"
-chmod 0644 "$release/RELEASE"
+chown root:fiscal_release "$release/RELEASE"
+chmod 0640 "$release/RELEASE"
 
 log "creating and verifying the mandatory pre-migration backup"
 "$release/infra/production/scripts/backup.sh" --apply
