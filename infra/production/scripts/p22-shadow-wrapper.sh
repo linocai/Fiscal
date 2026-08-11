@@ -15,6 +15,10 @@ source_root=""
 target_database=""
 evidence_parent=""
 
+normalize_target_database() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 while (($#)); do
   case "$1" in
     --apply) apply=true ;;
@@ -30,6 +34,7 @@ done
 [[ -n "$source_root" && -d "$source_root/backend" ]] || die "--source backend is required"
 [[ -n "$evidence_parent" ]] || die "--evidence-parent is required"
 if [[ "$source_preflight" != true ]]; then
+  target_database="$(normalize_target_database "$target_database")"
   [[ "$target_database" =~ ^fiscal_p22_shadow_[a-z0-9_]+$ ]] || \
     die "target must be an explicitly scoped fiscal_p22_shadow database"
 fi

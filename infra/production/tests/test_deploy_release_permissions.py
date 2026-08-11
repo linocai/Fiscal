@@ -57,6 +57,10 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertIn('P22 source/principal preflight passed; no target database was used', SHADOW_WRAPPER)
         self.assertIn('psql --dbname=postgres', SHADOW_WRAPPER)
 
+    def test_p22_shadow_target_normalization_keeps_identifier_whitelist(self) -> None:
+        self.assertIn("tr '[:upper:]' '[:lower:]'", SHADOW_WRAPPER)
+        self.assertIn('^fiscal_p22_shadow_[a-z0-9_]+$', SHADOW_WRAPPER)
+
     def test_release_tree_is_group_readable_before_migrator_preflight(self) -> None:
         ownership = DEPLOY.index('chown -R root:fiscal_release "$temporary_release"')
         directories = DEPLOY.index('find "$temporary_release" -type d -exec chmod 0750 {} +')
