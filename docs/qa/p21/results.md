@@ -1,5 +1,7 @@
 # P21 核对点与 Attention — QA 记录
 
+实施提交：`5c77992`（领域/API/migration 契约）、`ea95a62`（Attention 派生、双端界面、深链与 QA）。
+
 ## 范围与不变量
 
 - 核对点是按 `as_of`（UTC instant，业务日期按 `Asia/Shanghai`）重算的派生读模型；金额均为 minor units。
