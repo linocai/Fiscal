@@ -1,6 +1,6 @@
 # P22 · 数据自主与一致性框架
 
-状态：**Automated Verified + Archive Shadow Verified**；`ai_settings` seed 与 credit GET 隐式写入缺口均已修复并通过 fresh shadow 复验。**生产仍为 `4686e449 / 20260811_0021`；尚未执行 0022 迁移/部署、QA mutation 或 macOS + Kurisu 物理验收**。不打 tag/push。
+状态：**P22 已完成：Automated、Archive Shadow、Production、Physical Device Verified**。生产精确 source 为 `5330b42a0e95ab1150a9c0abf2676a4443333d53`，Alembic `20260811_0022`；不打 tag/push，P23 未开始。
 
 ## 已冻结契约
 
@@ -31,4 +31,7 @@
 - 真实主机以 `deploy@118.178.122.194` 严格 host-key、无代理 re-anchor 后确认仍为 `4686e44 / 0021`、active、ready/public live、`184/201/0`。首次 `887ca22` deploy 在 schema 写入前停止：release tree 是 `root:fiscal` 的 `0640` 文件，而独立 OS `fiscal_migrator` 无法 import Alembic；current/head/数据均未改变，失败 release 保留且不复用。后续 release materialization 改为不接触 environment 文件的专用 `fiscal_release` 组，并在 Alembic 前以该 principal 真实 import preflight；必须以新的已提交 revision 重新 transfer、re-anchor 和 deploy。
 - `2ed26d1` 已成功切换到生产并迁移 `0022`，但其 post-backup isolated restore smoke 暴露 `restore-verify.sh` 将 release Alembic heads 错误地交给 OS `postgres`；该账号不属于专用 release 组，验证库清理后失败，生产仍 `0022 / revision 0 / 184/201/0`。最小修复统一由 `fiscal_migrator` 查询 expected head，保留 `postgres` 仅做 dump/restore/DB 管理；重新部署同 head 并重跑 smoke 前，不做 category QA 或设备验收。
 - `3bb052d` 同 head 切换及 post-backup restore smoke 成功后，真实 access-key API category QA 暴露认证依赖先创建 session、route scope 后设置，导致 create/delete 虽成功却没有 receipt，revision 留在 0。两次唯一 QA category 都立即通过 API 删除并确认无残留，账本/postings未变；此后禁止继续生产写。修复改为 session 在 flush/commit 时从 request state 解析 scopes，并新增不覆盖真实认证依赖的 PostgreSQL regression。fresh PG 定向 P4/P5/P20/P21/P22/route matrix `40 passed`，全量 JUnit `250 / 0 / 0 / 0`；必须以新的已提交 revision 重新做 same-head shadow 和 deploy，再重新执行唯一可清理 QA mutation。
-- 禁止对现库覆盖或 merge；生产门通过后才可安排 macOS 与 Kurisu 真机/签名 Release 验收。
+- 最终 source `5330b42a0e95ab1150a9c0abf2676a4443333d53` 已受控切换到生产；release、Alembic、service/readiness 分别精确为该 revision、`20260811_0022`、active/200。deploy 后 verified backup 为 `fiscal-20260811T123917Z.dump`，其 `restore-verify.sh --apply` 于 `2026-08-11T12:45:10Z` 隔离恢复成功。
+- 唯一生产 QA mutation 由 stdin-only helper 经 Keychain pipe 执行：临时 category create `201` / delete `204` 的 receipt 为 revision `1,2`，两次 scopes 均是完整九项；cleanup 完成。随后直接数据库核验无 QA category，`data_revision=2`、transactions/postings/orphan postings=`184/201/0`。认证 session scope 过早复制、release 权限和 restore expected-head principal 三个门失败均已用最小修复并通过同 head 影子/生产复验；未复用失败 shadow 或秘密。
+- 签名 `1.3.0 (21)` 的 macOS Developer ID 与 iOS development Release 均经 `codesign --verify --deep --strict` 通过。macOS 已保留旧 app 为 `/Applications/Fiscal-pre-p22-backup.app`，安装并启动精确 Release；Kurisu（CoreDevice paired）安装并启动同版本。两端 foreground 都请求生产 `/api/v1/data-revision` 和关联受保护 reads 为 `200`；macOS defaults 与 Kurisu app preference 各自为 `data_revision=2`，终态生产计数仍为 `184/201/0`。
+- 禁止对现库覆盖或 merge；P22 已收口，P23 需单独启动。

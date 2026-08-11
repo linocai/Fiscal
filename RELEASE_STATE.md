@@ -8,15 +8,15 @@ from source code, a historical document, or an earlier release.
 
 | Field | Current evidenced value |
 | --- | --- |
-| Train | P20 → P21 → P22 → P23 |
-| Candidate source revision | local committed `887ca22`; production deploy not started after a local SSH alias resolved to proxy fake-IP instead of the canonical HZ target |
+| Train | P20 → P21 → P22 complete; P23 pending |
+| Candidate source revision | committed and deployed `5330b42a0e95ab1150a9c0abf2676a4443333d53` |
 | Candidate app version | `1.3.0 (21)` |
 | Local Alembic head | `20260811_0022` |
-| Deployed source revision | `4686e4492482a060fd9080eed16b74bbfccebd69` |
-| Deployed Alembic head | `20260811_0021` |
+| Deployed source revision | `5330b42a0e95ab1150a9c0abf2676a4443333d53` |
+| Deployed Alembic head | `20260811_0022` |
 | Authentication mode | generation 2 personal passphrase/access keys only: one credential, three current-generation keys, and no `device_tokens` table |
-| macOS / Kurisu builds and connection | both signed `1.3.0 (21)` packages installed and launched; each cold-started `fiscal://reconciliation` and reached production accounts, checkpoint, diagnosis and attention reads with HTTP 200 |
-| Backup / off-host copy / restore / alert | P22 pre-migration dump `2026-08-11T11:13:06Z` verified; exact `887ca22` encrypted Archive A/B 0022 restore and ledger/report/credit fingerprints verified; production remains 0021 because deploy has not started. Alert receiver is **deferred by user**; off-host provider remains an explicit carried risk |
+| macOS / Kurisu builds and connection | signed `1.3.0 (21)` packages installed and launched; both foreground clients stored revision `2` and reached production data-revision plus protected read paths with HTTP 200 |
+| Backup / off-host copy / restore / alert | P22 post-deploy dump `fiscal-20260811T123917Z.dump` verified and isolated-restored at `2026-08-11T12:45:10Z`; exact Archive shadow A/B and production receipt QA passed. Alert receiver is **deferred by user**; off-host provider remains an explicit carried risk |
 | Previous tagged release | `v1.2.4` at `7c221ecdc10b6b8933b60052240162dafb430153` |
 | Rollback boundary | only an application revision at the same Alembic head; otherwise restore a verified backup into an isolated new database before cutover |
 | Tag / push | prohibited until every P20–P23 gate and the seven-day stability observation close |
