@@ -3,7 +3,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 
-from fiscal_api.api.dependencies import CreditServiceDependency, TransactionServiceDependency
+from fiscal_api.api.dependencies import (
+    CreditServiceDependency,
+    TransactionServiceDependency,
+    formal_mutation,
+)
 from fiscal_api.api.p3_schemas import TransactionPage
 from fiscal_api.api.p4_schemas import (
     CreditAccountSummary,
@@ -47,6 +51,9 @@ async def preview_credit_schedule_change(
 @router.post(
     "/credit-accounts/{account_id}/schedule-change",
     response_model=CreditScheduleChangeResult,
+    dependencies=[
+        formal_mutation("accounts", "credit", "cash_flow", "reconciliation", "attention", "reports")
+    ],
 )
 async def apply_credit_schedule_change(
     account_id: UUID,

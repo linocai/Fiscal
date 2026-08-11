@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query
 from starlette import status as http_status
 
-from fiscal_api.api.dependencies import InstallmentServiceDependency
+from fiscal_api.api.dependencies import InstallmentServiceDependency, formal_mutation
 from fiscal_api.api.p5_schemas import (
     InstallmentActionRequest,
     InstallmentCancellationPreview,
@@ -44,6 +44,9 @@ async def preview_installment_purchase(
     "/installment-purchases",
     response_model=InstallmentPurchaseCreateResponse,
     status_code=http_status.HTTP_201_CREATED,
+    dependencies=[
+        formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports", "attention")
+    ],
 )
 async def create_installment_purchase(
     request: InstallmentPurchaseCreate,
@@ -68,6 +71,9 @@ async def list_installment_plans(
     "/installment-plans",
     response_model=InstallmentPlanResponse,
     status_code=http_status.HTTP_201_CREATED,
+    dependencies=[
+        formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports", "attention")
+    ],
 )
 async def create_installment_plan(
     request: InstallmentCreate,
@@ -96,7 +102,13 @@ async def preview_installment_plan(
     return await service.preview_update(plan_id, request)
 
 
-@router.put("/installment-plans/{plan_id}", response_model=InstallmentPlanResponse)
+@router.put(
+    "/installment-plans/{plan_id}",
+    response_model=InstallmentPlanResponse,
+    dependencies=[
+        formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports", "attention")
+    ],
+)
 async def update_installment_plan(
     plan_id: UUID,
     request: InstallmentReplacement,
@@ -144,6 +156,9 @@ async def preview_cancel_installment_future(
 @router.post(
     "/installment-plans/{plan_id}/settle-early",
     response_model=InstallmentSettlementResult,
+    dependencies=[
+        formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports", "attention")
+    ],
 )
 async def settle_installment_plan(
     plan_id: UUID,
@@ -157,6 +172,9 @@ async def settle_installment_plan(
 @router.post(
     "/installment-plans/{plan_id}/cancel-future",
     response_model=InstallmentCancellationResult,
+    dependencies=[
+        formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports", "attention")
+    ],
 )
 async def cancel_installment_future(
     plan_id: UUID,
@@ -170,6 +188,9 @@ async def cancel_installment_future(
 @router.post(
     "/installment-plans/{plan_id}/reverse-settlement",
     response_model=InstallmentReverseSettlementResult,
+    dependencies=[
+        formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports", "attention")
+    ],
 )
 async def reverse_installment_settlement(
     plan_id: UUID,

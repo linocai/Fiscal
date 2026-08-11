@@ -12,6 +12,9 @@ REQUEST_ID_HEADER = "X-Request-ID"
 VALID_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 logger = structlog.get_logger()
 
+DATA_REVISION_HEADER = "X-Fiscal-Data-Revision"
+DATA_REVISION_SCOPES_HEADER = "X-Fiscal-Affected-Scopes"
+
 
 def install_request_middleware(app: FastAPI) -> None:
     async def request_context(
@@ -26,6 +29,12 @@ def install_request_middleware(app: FastAPI) -> None:
         try:
             response = await call_next(request)
             response.headers[REQUEST_ID_HEADER] = request_id
+            revision = getattr(request.state, "data_revision", None)
+            if revision is not None:
+                response.headers[DATA_REVISION_HEADER] = str(revision)
+                response.headers[DATA_REVISION_SCOPES_HEADER] = ",".join(
+                    getattr(request.state, "data_revision_scopes", ())
+                )
             await logger.ainfo(
                 "request_completed",
                 method=request.method,

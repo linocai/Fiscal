@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query, Response
 from starlette import status
 
-from fiscal_api.api.dependencies import TransactionServiceDependency
+from fiscal_api.api.dependencies import TransactionServiceDependency, formal_mutation
 from fiscal_api.api.p3_schemas import (
     TransactionDraft,
     TransactionPage,
@@ -63,7 +63,24 @@ async def list_transactions(
     )
 
 
-@router.post("", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=TransactionResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        formal_mutation(
+            "ledger",
+            "accounts",
+            "credit",
+            "reimbursements",
+            "cash_flow",
+            "reconciliation",
+            "attention",
+            "reports",
+            "ai",
+        )
+    ],
+)
 async def create_transaction(
     draft: TransactionDraft,
     service: TransactionServiceDependency,
@@ -116,7 +133,11 @@ async def export_transactions_csv(
     )
 
 
-@router.post("/bulk-category", response_model=BatchCategoryResponse)
+@router.post(
+    "/bulk-category",
+    response_model=BatchCategoryResponse,
+    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+)
 async def bulk_category_transactions(
     request: BatchCategoryRequest,
     service: TransactionServiceDependency,
@@ -132,7 +153,23 @@ async def get_transaction(
     return await service.get(transaction_id)
 
 
-@router.put("/{transaction_id}", response_model=TransactionResponse)
+@router.put(
+    "/{transaction_id}",
+    response_model=TransactionResponse,
+    dependencies=[
+        formal_mutation(
+            "ledger",
+            "accounts",
+            "credit",
+            "reimbursements",
+            "cash_flow",
+            "reconciliation",
+            "attention",
+            "reports",
+            "ai",
+        )
+    ],
+)
 async def update_transaction(
     transaction_id: UUID,
     replacement: TransactionReplace,
@@ -146,7 +183,23 @@ async def update_transaction(
     )
 
 
-@router.post("/{transaction_id}/void", response_model=TransactionResponse)
+@router.post(
+    "/{transaction_id}/void",
+    response_model=TransactionResponse,
+    dependencies=[
+        formal_mutation(
+            "ledger",
+            "accounts",
+            "credit",
+            "reimbursements",
+            "cash_flow",
+            "reconciliation",
+            "attention",
+            "reports",
+            "ai",
+        )
+    ],
+)
 async def void_transaction(
     transaction_id: UUID,
     request: TransactionVersionRequest,
@@ -155,7 +208,23 @@ async def void_transaction(
     return await service.void(transaction_id, request.expected_version)
 
 
-@router.post("/{transaction_id}/restore", response_model=TransactionResponse)
+@router.post(
+    "/{transaction_id}/restore",
+    response_model=TransactionResponse,
+    dependencies=[
+        formal_mutation(
+            "ledger",
+            "accounts",
+            "credit",
+            "reimbursements",
+            "cash_flow",
+            "reconciliation",
+            "attention",
+            "reports",
+            "ai",
+        )
+    ],
+)
 async def restore_transaction(
     transaction_id: UUID,
     request: TransactionVersionRequest,

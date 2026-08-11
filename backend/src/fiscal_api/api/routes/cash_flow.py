@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header
 from starlette import status as http_status
 
-from fiscal_api.api.dependencies import CashFlowServiceDependency
+from fiscal_api.api.dependencies import CashFlowServiceDependency, formal_mutation
 from fiscal_api.api.p13_schemas import (
     CashFlowActiveResponse,
     CashFlowCreateResponse,
@@ -40,6 +40,9 @@ async def history(
     "/cash-flow-items",
     response_model=CashFlowCreateResponse,
     status_code=http_status.HTTP_201_CREATED,
+    dependencies=[
+        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
+    ],
 )
 async def create(
     request: CashFlowDraft,
@@ -54,7 +57,13 @@ async def get(item_id: UUID, service: CashFlowServiceDependency) -> CashFlowItem
     return await service.get(item_id)
 
 
-@router.put("/cash-flow-items/{item_id}", response_model=CashFlowCreateResponse)
+@router.put(
+    "/cash-flow-items/{item_id}",
+    response_model=CashFlowCreateResponse,
+    dependencies=[
+        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
+    ],
+)
 async def update(
     item_id: UUID, request: CashFlowReplace, service: CashFlowServiceDependency
 ) -> CashFlowCreateResponse:
@@ -64,6 +73,9 @@ async def update(
 @router.put(
     "/cash-flow-system-items/{system_kind}/{reference_id}",
     response_model=CashFlowItemResponse,
+    dependencies=[
+        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
+    ],
 )
 async def update_system(
     system_kind: CashFlowSystemKind,
@@ -74,21 +86,39 @@ async def update_system(
     return await service.update_system(system_kind, reference_id, request)
 
 
-@router.post("/cash-flow-items/{item_id}/confirm", response_model=CashFlowItemResponse)
+@router.post(
+    "/cash-flow-items/{item_id}/confirm",
+    response_model=CashFlowItemResponse,
+    dependencies=[
+        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
+    ],
+)
 async def confirm(
     item_id: UUID, request: CashFlowVersionRequest, service: CashFlowServiceDependency
 ) -> CashFlowItemResponse:
     return await service.confirm(item_id, request.expected_version)
 
 
-@router.post("/cash-flow-items/{item_id}/cancel", response_model=CashFlowCreateResponse)
+@router.post(
+    "/cash-flow-items/{item_id}/cancel",
+    response_model=CashFlowCreateResponse,
+    dependencies=[
+        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
+    ],
+)
 async def cancel(
     item_id: UUID, request: CashFlowVersionRequest, service: CashFlowServiceDependency
 ) -> CashFlowCreateResponse:
     return await service.cancel(item_id, request.expected_version, request.scope)
 
 
-@router.post("/cash-flow-items/{item_id}/settle", response_model=CashFlowItemResponse)
+@router.post(
+    "/cash-flow-items/{item_id}/settle",
+    response_model=CashFlowItemResponse,
+    dependencies=[
+        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
+    ],
+)
 async def settle(
     item_id: UUID,
     request: CashFlowSettlementDraft,

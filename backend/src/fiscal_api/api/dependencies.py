@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from typing import Annotated, cast
 
 from fastapi import Depends, Request
+from fastapi.params import Depends as DependsParam
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from fiscal_api.core.config import Settings, get_settings
@@ -31,10 +32,25 @@ ReadinessDependency = Annotated[ReadinessCheck, Depends(get_readiness_check)]
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
     factory = cast(async_sessionmaker[AsyncSession], request.app.state.session_factory)
     async with factory() as session:
+        scopes = getattr(request.state, "data_revision_scopes", ())
+        if scopes:
+            session.info["data_revision_scopes"] = scopes
+            session.info["data_revision_request"] = request
         yield session
 
 
 SessionDependency = Annotated[AsyncSession, Depends(get_session)]
+
+
+def formal_mutation(*scopes: str) -> DependsParam:
+    """Opt a route into the one-receipt formal mutation contract."""
+    if not scopes:
+        raise ValueError("a formal mutation needs at least one affected scope")
+
+    async def mark(request: Request) -> None:
+        request.state.data_revision_scopes = tuple(dict.fromkeys(scopes))
+
+    return Depends(mark)
 
 
 def get_account_service(session: SessionDependency) -> AccountService:

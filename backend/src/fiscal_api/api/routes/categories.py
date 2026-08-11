@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response
 from starlette import status
 
-from fiscal_api.api.dependencies import CategoryServiceDependency
+from fiscal_api.api.dependencies import CategoryServiceDependency, formal_mutation
 from fiscal_api.api.p2_schemas import (
     CategoryDraft,
     CategoryMergeRequest,
@@ -33,7 +33,12 @@ async def list_categories(
     return await service.list(direction=direction, include_archived=include_archived)
 
 
-@router.post("", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=CategoryResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+)
 async def create_category(
     draft: CategoryDraft,
     service: CategoryServiceDependency,
@@ -41,7 +46,11 @@ async def create_category(
     return await service.create(draft)
 
 
-@router.put("/order", response_model=list[CategoryResponse])
+@router.put(
+    "/order",
+    response_model=list[CategoryResponse],
+    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+)
 async def order_categories(
     request: CategoryOrderRequest,
     service: CategoryServiceDependency,
@@ -60,7 +69,11 @@ async def get_category(
     return await service.get(category_id)
 
 
-@router.patch("/{category_id}", response_model=CategoryResponse)
+@router.patch(
+    "/{category_id}",
+    response_model=CategoryResponse,
+    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+)
 async def update_category(
     category_id: UUID,
     patch: CategoryPatch,
@@ -69,7 +82,11 @@ async def update_category(
     return await service.update(category_id, patch)
 
 
-@router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+)
 async def delete_category(
     category_id: UUID,
     service: CategoryServiceDependency,
@@ -79,7 +96,11 @@ async def delete_category(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/{category_id}/archive", response_model=CategoryResponse)
+@router.post(
+    "/{category_id}/archive",
+    response_model=CategoryResponse,
+    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+)
 async def archive_category(
     category_id: UUID,
     request: VersionRequest,
@@ -88,7 +109,11 @@ async def archive_category(
     return await service.archive(category_id, request.expected_version)
 
 
-@router.post("/{category_id}/restore", response_model=CategoryResponse)
+@router.post(
+    "/{category_id}/restore",
+    response_model=CategoryResponse,
+    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+)
 async def restore_category(
     category_id: UUID,
     request: VersionRequest,
@@ -97,7 +122,11 @@ async def restore_category(
     return await service.restore(category_id, request.expected_version)
 
 
-@router.post("/{source_id}/merge", response_model=CategoryResponse)
+@router.post(
+    "/{source_id}/merge",
+    response_model=CategoryResponse,
+    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+)
 async def merge_category(
     source_id: UUID,
     request: CategoryMergeRequest,
@@ -111,7 +140,11 @@ async def merge_category(
     )
 
 
-@router.post("/{root_id}/split", response_model=list[CategoryResponse])
+@router.post(
+    "/{root_id}/split",
+    response_model=list[CategoryResponse],
+    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+)
 async def split_category(
     root_id: UUID,
     request: CategorySplitRequest,

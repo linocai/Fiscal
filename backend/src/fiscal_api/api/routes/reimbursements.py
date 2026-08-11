@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query
 from starlette import status as http_status
 
-from fiscal_api.api.dependencies import ReimbursementServiceDependency
+from fiscal_api.api.dependencies import ReimbursementServiceDependency, formal_mutation
 from fiscal_api.api.p6_schemas import (
     ReimbursementCancelPreview,
     ReimbursementClaimDraft,
@@ -56,6 +56,7 @@ async def list_claims(
     "/reimbursement-claims",
     response_model=ReimbursementClaimResponse,
     status_code=http_status.HTTP_201_CREATED,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
 )
 async def create_claim(
     request: ReimbursementClaimDraft,
@@ -79,7 +80,11 @@ async def preview_claim(
     return await service.preview(claim_id, request)
 
 
-@router.put("/reimbursement-claims/{claim_id}", response_model=ReimbursementClaimResponse)
+@router.put(
+    "/reimbursement-claims/{claim_id}",
+    response_model=ReimbursementClaimResponse,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+)
 async def replace_claim(
     claim_id: UUID, request: ReimbursementClaimReplace, service: ReimbursementServiceDependency
 ) -> ReimbursementClaimResponse:
@@ -95,7 +100,11 @@ async def _claim_action(
     return await service.lifecycle(claim_id, request.expected_version, action)
 
 
-@router.post("/reimbursement-claims/{claim_id}/submit", response_model=ReimbursementClaimResponse)
+@router.post(
+    "/reimbursement-claims/{claim_id}/submit",
+    response_model=ReimbursementClaimResponse,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+)
 async def submit(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
 ) -> ReimbursementClaimResponse:
@@ -103,7 +112,9 @@ async def submit(
 
 
 @router.post(
-    "/reimbursement-claims/{claim_id}/retract-submission", response_model=ReimbursementClaimResponse
+    "/reimbursement-claims/{claim_id}/retract-submission",
+    response_model=ReimbursementClaimResponse,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
 )
 async def retract(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
@@ -121,7 +132,9 @@ async def cancel_preview(
 
 
 @router.post(
-    "/reimbursement-claims/{claim_id}/cancel-outstanding", response_model=ReimbursementClaimResponse
+    "/reimbursement-claims/{claim_id}/cancel-outstanding",
+    response_model=ReimbursementClaimResponse,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
 )
 async def cancel(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
@@ -129,28 +142,44 @@ async def cancel(
     return await _claim_action(claim_id, request, service, "cancel_outstanding")
 
 
-@router.post("/reimbursement-claims/{claim_id}/reopen", response_model=ReimbursementClaimResponse)
+@router.post(
+    "/reimbursement-claims/{claim_id}/reopen",
+    response_model=ReimbursementClaimResponse,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+)
 async def reopen(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
 ) -> ReimbursementClaimResponse:
     return await _claim_action(claim_id, request, service, "reopen")
 
 
-@router.post("/reimbursement-claims/{claim_id}/void", response_model=ReimbursementClaimResponse)
+@router.post(
+    "/reimbursement-claims/{claim_id}/void",
+    response_model=ReimbursementClaimResponse,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+)
 async def void(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
 ) -> ReimbursementClaimResponse:
     return await _claim_action(claim_id, request, service, "void")
 
 
-@router.post("/reimbursement-claims/{claim_id}/restore", response_model=ReimbursementClaimResponse)
+@router.post(
+    "/reimbursement-claims/{claim_id}/restore",
+    response_model=ReimbursementClaimResponse,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+)
 async def restore(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
 ) -> ReimbursementClaimResponse:
     return await _claim_action(claim_id, request, service, "restore")
 
 
-@router.post("/reimbursement-claims/{claim_id}/archive", response_model=ReimbursementClaimResponse)
+@router.post(
+    "/reimbursement-claims/{claim_id}/archive",
+    response_model=ReimbursementClaimResponse,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+)
 async def archive(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
 ) -> ReimbursementClaimResponse:
@@ -158,7 +187,9 @@ async def archive(
 
 
 @router.post(
-    "/reimbursement-claims/{claim_id}/unarchive", response_model=ReimbursementClaimResponse
+    "/reimbursement-claims/{claim_id}/unarchive",
+    response_model=ReimbursementClaimResponse,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
 )
 async def unarchive(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
@@ -180,6 +211,7 @@ async def list_receipts(
     "/reimbursement-claims/{claim_id}/receipts",
     response_model=ReimbursementReceiptResponse,
     status_code=http_status.HTTP_201_CREATED,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
 )
 async def create_receipt(
     claim_id: UUID,
@@ -216,7 +248,11 @@ async def replace_receipt_preview(
     return await service.receipt_preview(claim_id, request, exclude_receipt=receipt_id)
 
 
-@router.put("/reimbursement-receipts/{receipt_id}", response_model=ReimbursementReceiptResponse)
+@router.put(
+    "/reimbursement-receipts/{receipt_id}",
+    response_model=ReimbursementReceiptResponse,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+)
 async def replace_receipt(
     receipt_id: UUID, request: ReimbursementReceiptReplace, service: ReimbursementServiceDependency
 ) -> ReimbursementReceiptResponse:
@@ -224,7 +260,9 @@ async def replace_receipt(
 
 
 @router.post(
-    "/reimbursement-receipts/{receipt_id}/void", response_model=ReimbursementReceiptResponse
+    "/reimbursement-receipts/{receipt_id}/void",
+    response_model=ReimbursementReceiptResponse,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
 )
 async def void_receipt(
     receipt_id: UUID,
@@ -237,7 +275,9 @@ async def void_receipt(
 
 
 @router.post(
-    "/reimbursement-receipts/{receipt_id}/restore", response_model=ReimbursementReceiptResponse
+    "/reimbursement-receipts/{receipt_id}/restore",
+    response_model=ReimbursementReceiptResponse,
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
 )
 async def restore_receipt(
     receipt_id: UUID,

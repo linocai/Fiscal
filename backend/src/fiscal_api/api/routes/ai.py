@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query, Response
 from starlette import status as http_status
 
-from fiscal_api.api.dependencies import AIServiceDependency
+from fiscal_api.api.dependencies import AIServiceDependency, formal_mutation
 from fiscal_api.api.p8_schemas import (
     AIProposalCreate,
     AIProposalMutationResponse,
@@ -34,7 +34,11 @@ async def get_ai_settings(service: AIServiceDependency) -> AISettingsResponse:
     return await service.get_settings()
 
 
-@router.put("/settings", response_model=AISettingsResponse)
+@router.put(
+    "/settings",
+    response_model=AISettingsResponse,
+    dependencies=[formal_mutation("ai", "attention")],
+)
 async def update_ai_settings(
     replacement: AISettingsReplace, service: AIServiceDependency
 ) -> AISettingsResponse:
@@ -46,7 +50,11 @@ async def get_ai_provider_settings(service: AIServiceDependency) -> AIProviderSe
     return await service.get_provider_settings()
 
 
-@router.put("/provider-settings", response_model=AIProviderSettingsResponse)
+@router.put(
+    "/provider-settings",
+    response_model=AIProviderSettingsResponse,
+    dependencies=[formal_mutation("ai", "attention")],
+)
 async def update_ai_provider_settings(
     replacement: AIProviderSettingsReplace,
     actor: AuthenticatedDependency,
@@ -59,6 +67,7 @@ async def update_ai_provider_settings(
     "/proposals",
     response_model=AIProposalResponse,
     status_code=http_status.HTTP_201_CREATED,
+    dependencies=[formal_mutation("ai", "ledger", "accounts", "cash_flow", "reports", "attention")],
 )
 async def create_ai_proposal(
     request: AIProposalCreate,
@@ -87,7 +96,11 @@ async def get_ai_proposal(proposal_id: UUID, service: AIServiceDependency) -> AI
     return await service.get(proposal_id)
 
 
-@router.put("/proposals/{proposal_id}", response_model=AIProposalResponse)
+@router.put(
+    "/proposals/{proposal_id}",
+    response_model=AIProposalResponse,
+    dependencies=[formal_mutation("ai", "ledger", "accounts", "cash_flow", "reports", "attention")],
+)
 async def update_ai_proposal(
     proposal_id: UUID,
     replacement: AIProposalReplace,
@@ -96,7 +109,11 @@ async def update_ai_proposal(
     return await service.edit(proposal_id, replacement.draft, replacement.expected_version)
 
 
-@router.post("/proposals/{proposal_id}/execute", response_model=AIProposalMutationResponse)
+@router.post(
+    "/proposals/{proposal_id}/execute",
+    response_model=AIProposalMutationResponse,
+    dependencies=[formal_mutation("ai", "ledger", "accounts", "cash_flow", "reports", "attention")],
+)
 async def execute_ai_proposal(
     proposal_id: UUID,
     request: AIProposalVersionRequest,
@@ -105,7 +122,11 @@ async def execute_ai_proposal(
     return await service.execute(proposal_id, request.expected_version)
 
 
-@router.post("/proposals/{proposal_id}/ignore", response_model=AIProposalResponse)
+@router.post(
+    "/proposals/{proposal_id}/ignore",
+    response_model=AIProposalResponse,
+    dependencies=[formal_mutation("ai", "attention")],
+)
 async def ignore_ai_proposal(
     proposal_id: UUID,
     request: AIProposalVersionRequest,
@@ -114,7 +135,11 @@ async def ignore_ai_proposal(
     return await service.ignore(proposal_id, request.expected_version)
 
 
-@router.post("/proposals/{proposal_id}/retry", response_model=AIProposalResponse)
+@router.post(
+    "/proposals/{proposal_id}/retry",
+    response_model=AIProposalResponse,
+    dependencies=[formal_mutation("ai", "attention")],
+)
 async def retry_ai_proposal(
     proposal_id: UUID,
     request: AIProposalRetryRequest,
@@ -123,7 +148,11 @@ async def retry_ai_proposal(
     return await service.retry(proposal_id, request.expected_version)
 
 
-@router.post("/proposals/{proposal_id}/undo", response_model=AIProposalMutationResponse)
+@router.post(
+    "/proposals/{proposal_id}/undo",
+    response_model=AIProposalMutationResponse,
+    dependencies=[formal_mutation("ai", "ledger", "accounts", "cash_flow", "reports", "attention")],
+)
 async def undo_ai_proposal(
     proposal_id: UUID,
     request: AIProposalUndoRequest,

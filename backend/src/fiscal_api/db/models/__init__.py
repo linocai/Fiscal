@@ -62,6 +62,7 @@ from fiscal_api.db.models.reimbursement import (
     ReimbursementReceiptRevision,
     ReimbursementRelationRole,
 )
+from fiscal_api.db.models.revision import DataRevision
 
 __all__ = [
     "AIProposal",
@@ -88,6 +89,7 @@ __all__ = [
     "CreditCycle",
     "CreditCycleMode",
     "CreditCycleStatus",
+    "DataRevision",
     "InstallmentLedgerLink",
     "InstallmentLedgerRole",
     "InstallmentOperation",

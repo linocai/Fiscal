@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response
 from starlette import status
 
-from fiscal_api.api.dependencies import AccountServiceDependency
+from fiscal_api.api.dependencies import AccountServiceDependency, formal_mutation
 from fiscal_api.api.p2_schemas import (
     AccountDraft,
     AccountOrderRequest,
@@ -29,7 +29,12 @@ async def list_accounts(
     return await service.list(include_archived=include_archived)
 
 
-@router.post("", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=AccountResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[formal_mutation("accounts", "credit", "reconciliation", "attention", "reports")],
+)
 async def create_account(
     draft: AccountDraft,
     service: AccountServiceDependency,
@@ -37,7 +42,9 @@ async def create_account(
     return await service.create(draft)
 
 
-@router.put("/order", response_model=list[AccountResponse])
+@router.put(
+    "/order", response_model=list[AccountResponse], dependencies=[formal_mutation("accounts")]
+)
 async def order_accounts(
     request: AccountOrderRequest,
     service: AccountServiceDependency,
@@ -53,7 +60,11 @@ async def get_account(
     return await service.get(account_id)
 
 
-@router.patch("/{account_id}", response_model=AccountResponse)
+@router.patch(
+    "/{account_id}",
+    response_model=AccountResponse,
+    dependencies=[formal_mutation("accounts", "credit", "reconciliation", "attention", "reports")],
+)
 async def update_account(
     account_id: UUID,
     patch: AccountPatch,
@@ -62,7 +73,11 @@ async def update_account(
     return await service.update(account_id, patch)
 
 
-@router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{account_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[formal_mutation("accounts", "credit", "reconciliation", "attention", "reports")],
+)
 async def delete_account(
     account_id: UUID,
     service: AccountServiceDependency,
@@ -72,7 +87,11 @@ async def delete_account(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/{account_id}/archive", response_model=AccountResponse)
+@router.post(
+    "/{account_id}/archive",
+    response_model=AccountResponse,
+    dependencies=[formal_mutation("accounts", "credit", "reconciliation", "attention", "reports")],
+)
 async def archive_account(
     account_id: UUID,
     request: VersionRequest,
@@ -81,7 +100,11 @@ async def archive_account(
     return await service.archive(account_id, request.expected_version)
 
 
-@router.post("/{account_id}/restore", response_model=AccountResponse)
+@router.post(
+    "/{account_id}/restore",
+    response_model=AccountResponse,
+    dependencies=[formal_mutation("accounts", "credit", "reconciliation", "attention", "reports")],
+)
 async def restore_account(
     account_id: UUID,
     request: VersionRequest,
