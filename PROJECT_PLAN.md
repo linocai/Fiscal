@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 控制面版本：v1.3.0 施工版 ｜ 更新：2026-08-11 ｜ 状态：P20–P23 均已通过 Automated / Production / Mac + Kurisu 验收。P23 已以 `be664f8` 部署为 `20260811_0023`，生产/影子均未调用真实 Provider；最终 manifest commit 仍须作为精确 HEAD 单独复部署后才可 tag/push。异地备份未配置为 carried risk，真实告警已延期。
+> 控制面版本：v1.3.0 施工版 ｜ 更新：2026-08-11 ｜ 状态：P20–P23 均已通过 Automated / Production / Mac + Kurisu 验收。P23 已部署为 `20260811_0023`，生产/影子均未调用真实 Provider；最终 manifest HEAD 已 same-head 部署，重锚后可 tag/push。异地备份未配置为 carried risk，真实告警已延期。
 > 本文件只保留现行目标、决策、门禁与下一步；历史实施证据以 `docs/qa/p*/results.md`、发布 tag 与 Git 为准，不从本文件追写。
 
 ## 1. 当前事实与 P20 审计起点
@@ -81,7 +81,7 @@
 
 **目标**：把 AI 提案的原始判断、人工修正、执行结果和策略效果变为可测量、可回溯、可自动收紧的安全闭环。
 
-**当前状态**：P23 已生产闭环：`be664f8` 已部署为 `20260811_0023`，生产 revision `2` 与账本 `184/201/0` 不变，post-backup 隔离恢复、受保护质量/策略/规则读取、macOS 与 Kurisu `1.3.0 (21)` 安装启动均通过。影子服务链以无网络 synthetic provider 验收 `parsed→ignored` 及 append-only 事件后已删除；真实候选 Provider shadow 本期明确跳过。最终 manifest commit 必须再 same-head 部署才可 tag/push。
+**当前状态**：P23 已生产闭环：最终 manifest HEAD 已部署为 `20260811_0023`，生产 revision `2` 与账本 `184/201/0` 不变，post-backup 隔离恢复、受保护质量/策略/规则读取、macOS 与 Kurisu `1.3.0 (21)` 安装启动均通过。影子服务链以无网络 synthetic provider 验收 `parsed→ignored` 及 append-only 事件后已删除；真实候选 Provider shadow 本期明确跳过。重锚/clean 后可 tag/push。
 
 - **数据契约**：每个提案保留不可覆盖的原始输入、首次结构化 parse snapshot、最终确认值及字段级 diff；另记录 unchanged/edited confirm、ignored（可选原因）、execute failed、automatic/manual execute、undo、provider retry/final failure。旧提案不伪造历史，标为 `historical_unavailable`。
 - **隐私/领域边界**：原文与快照仅留在 Fiscal 数据库/显式加密 archive，不送第三方分析；质量事件不可编辑且不是面向用户的复杂审计产品。AI 只能调用手工录入同一正式服务、相同校验/幂等/撤销，不能直接写 posting。

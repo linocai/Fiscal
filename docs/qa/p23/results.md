@@ -1,6 +1,6 @@
 # P23 · AI 质量闭环
 
-状态：**Automated / Production / Physical Device Verified**；`v1.3.0 (21)` 的最终 manifest commit 尚待 same-head 复部署、重锚与 tag/push。
+状态：**Automated / Production / Physical Device Verified**；最终 manifest committed HEAD 已 same-head 部署，待重锚、tag/push。
 
 ## 本地自动门
 
@@ -21,4 +21,4 @@
 
 - Kurisu 安装并启动了独立 iOS Release，macOS 独立 Developer ID Release 通过签名校验、安装并启动；两者为 `1.3.0 (21)`。macOS 旧包可恢复地保留为 `/Applications/Fiscal-pre-p23-backup.app`。
 - 不制造正式财务流水，不调用外部 Provider，不伪造生产 AI 样例。真实 Provider / 新模型或提示词替换仍须另行授权脱敏 corpus。
-- 用户已取消七天观察；仅在最终 manifest commit same-head deploy、重锚、clean 与 tag/push 后，P23 才标记为 Released。异地备份 provider 与真实告警接收器仍是 carried risk。
+- 用户已取消七天观察；最终 manifest HEAD 已 same-head deploy，重锚、clean 与 tag/push 后，P23 即标记为 Released。异地备份 provider 与真实告警接收器仍是 carried risk。

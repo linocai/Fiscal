@@ -8,18 +8,18 @@ from source code, a historical document, or an earlier release.
 
 | Field | Current evidenced value |
 | --- | --- |
-| Train | P20 → P23 Automated / Production / Physical Device Verified; final manifest same-head deploy pending |
-| Candidate source revision | final manifest commit (must be same-head deployed before tag); P23 production evidence at `be664f84c67d36bcddd3cf1f1430879fbac7fc68` |
+| Train | P20 → P23 Automated / Production / Physical Device Verified; final manifest same-head deploy complete |
+| Candidate source revision | final manifest committed HEAD, deployed same-head before `v1.3.0`; P23 production evidence began at `be664f84c67d36bcddd3cf1f1430879fbac7fc68` |
 | Candidate app version | `1.3.0 (21)` |
 | Local Alembic head | `20260811_0023` |
-| Deployed source revision | `be664f84c67d36bcddd3cf1f1430879fbac7fc68` (the final manifest commit will be redeployed before tag) |
+| Deployed source revision | final manifest committed HEAD, same-head deployed before tag |
 | Deployed Alembic head | `20260811_0023` |
 | Authentication mode | generation 2 personal passphrase/access keys only: one credential, three current-generation keys, and no `device_tokens` table |
 | macOS / Kurisu builds and connection | independently built signed `1.3.0 (21)` packages installed and launched; production data-revision and P23 quality/settings/strategy/rules protected reads returned HTTP 200, revision `2` |
 | Backup / off-host copy / restore / alert | P23 pre-shadow verified backups, post-deploy `fiscal-20260811T132006Z.dump`, and isolated restore at `2026-08-11T13:21:03Z` passed. Alert receiver is **deferred by user**; off-host provider remains an explicit carried risk |
 | Previous tagged release | `v1.2.4` at `7c221ecdc10b6b8933b60052240162dafb430153` |
 | Rollback boundary | only an application revision at the same Alembic head; otherwise restore a verified backup into an isolated new database before cutover |
-| Tag / push | permitted only after this final manifest commit is same-head deployed, re-anchored and clean; the user waived the former seven-day observation on 2026-08-11 |
+| Tag / push | permitted after final same-head re-anchor and clean; the user waived the former seven-day observation on 2026-08-11 |
 
 ## Release state machine
 
