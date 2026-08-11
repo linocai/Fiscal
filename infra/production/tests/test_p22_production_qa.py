@@ -29,14 +29,14 @@ class ProductionQATests(unittest.TestCase):
         def open_(request, timeout=20):
             if request.method == "POST": return Response({"id":"id","version":1}, headers)
             deleted["count"] += 1; return Response({}, {"X-Fiscal-Data-Revision":"2", "X-Fiscal-Affected-Scopes":headers["X-Fiscal-Affected-Scopes"]})
-        with patch.object(qa, "urlopen", open_), patch("sys.stdin", io.StringIO("secret\n")), patch("sys.stdout", io.StringIO()): qa.main()
+        with patch.object(qa, "urlopen", open_), patch("sys.stdin", io.StringIO("secret\n")), patch("sys.stdout", io.StringIO()): qa.main([])
         self.assertGreaterEqual(deleted["count"], 1)
         bad = dict(headers); bad.pop("X-Fiscal-Affected-Scopes")
         deleted["count"] = 0
         def badopen(request, timeout=20):
             if request.method == "POST": return Response({"id":"id","version":1}, bad)
             deleted["count"] += 1; return Response({}, {})
-        with self.assertRaises(RuntimeError), patch.object(qa, "urlopen", badopen), patch("sys.stdin", io.StringIO("secret\n")): qa.main()
+        with self.assertRaises(RuntimeError), patch.object(qa, "urlopen", badopen), patch("sys.stdin", io.StringIO("secret\n")): qa.main([])
         self.assertEqual(deleted["count"], 1)
 
     def test_delete_failure_is_explicit_and_secret_is_not_output(self) -> None:
@@ -45,5 +45,5 @@ class ProductionQATests(unittest.TestCase):
             if request.method == "POST": return Response({"id":"id","version":1}, headers)
             raise OSError("delete unavailable")
         output = io.StringIO()
-        with self.assertRaisesRegex(RuntimeError, "cleanup delete failed"), patch.object(qa, "urlopen", fail), patch("sys.stdin", io.StringIO("SENTINEL_SECRET\n")), patch("sys.stdout", output), patch("sys.stderr", output): qa.main()
+        with self.assertRaisesRegex(RuntimeError, "cleanup delete failed"), patch.object(qa, "urlopen", fail), patch("sys.stdin", io.StringIO("SENTINEL_SECRET\n")), patch("sys.stdout", output), patch("sys.stderr", output): qa.main([])
         self.assertNotIn("SENTINEL_SECRET", output.getvalue())
