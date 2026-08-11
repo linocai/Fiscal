@@ -62,17 +62,17 @@ device action was attempted in this audit.
 ## Current P20 status
 
 - P20-A local/public audit: recorded; controlled production portion is verified
-  below. User accepted macOS + Kurisu as the physical-device scope; Kurisu is
-  currently offline.
+  below. User accepted macOS + Kurisu as the physical-device scope, and both
+  devices now have production access-key evidence.
 - P20-B release state source / version: complete locally. `README.md` is an
   entrypoint, `RELEASE_STATE.md` is the compact current manifest, and the
   candidate application version is `1.3.0 (21)`.
 - P20-C/E local implementation: stable balance-adjustment category semantics,
   P10 uncategorized trigger repair, atomic account/credit-schedule update, and
   the complete fresh PostgreSQL automated gate are complete.
-- P20-C authentication cleanup: macOS access-key authentication is verified,
-  but the legacy transition remains until Kurisu is online with a current access
-  key and the old-token/recovery checks are completed.
+- P20-C authentication cleanup: macOS and Kurisu access-key authentication are
+  verified, but the legacy transition remains until the old-token/recovery
+  checks are completed.
 - P20-D off-host recovery and real alert delivery: local current-head backup
   and isolated restore are verified; off-host storage and a real alert receiver
   remain blocked pending user-selected external service configuration.
@@ -134,6 +134,7 @@ contract; it restores compilation of the already-reviewed preview path.
 | Ledger invariant after migration | 184 transactions, 201 postings, 0 orphan postings |
 | Isolated recovery | newest current-head dump restored into a disposable database; Alembic head, canonical tables, and orphan-posting check passed in 2 seconds at `2026-08-11T07:44:20Z` |
 | macOS production authentication | signed `1.3.0 (21)` installed after moving `1.2.4 (20)` to `/Applications/Fiscal-build20-backup.app`; the existing Keychain access key reached production `/api/v1/system/status` with HTTP 200 |
+| Kurisu production core flow | signed `1.3.0 (21)` built, code-signature verified, installed and launched on paired Kurisu; production logs recorded access-key `GET /api/v1/system/status` and current-month `GET /api/v1/reports/overview?month=2026-08`, both HTTP 200, at `2026-08-11T15:47:41–42Z` |
 
 The first post-deployment restore drill intentionally surfaced a release-script
 gap: its newest dump was the required *pre*-migration backup at
@@ -146,11 +147,9 @@ passed. Both the failure and the repaired verification are retained as evidence.
 
 ### Remaining production and physical-device gates
 
-- Kurisu is detected by Xcode but currently offline, so Build 21 installation,
-  production core-flow verification, and screenshot evidence cannot yet run.
 - Legacy device-token rejection and CLI passphrase-recovery proof are not
-  claimed. The transition layer is intentionally still deployed until macOS and
-  Kurisu final-state access-key evidence is complete.
+  claimed. The transition layer is intentionally still deployed until those
+  final cleanup checks are complete.
 - `FISCAL_ALERT_WEBHOOK_URL` is missing or invalid, and no off-host backup unit
   or provider is configured. Choosing/configuring an alert receiver and an
   encrypted off-host destination requires a user-selected external service and
