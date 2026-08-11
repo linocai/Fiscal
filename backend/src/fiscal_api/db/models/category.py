@@ -1,7 +1,7 @@
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, CheckConstraint, ForeignKey, Index, String, Uuid, func, text
+from sqlalchemy import JSON, Boolean, CheckConstraint, ForeignKey, Index, String, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from fiscal_api.db.base import Base
@@ -42,6 +42,9 @@ class Category(MutableResourceMixin, Base):
     color_hex: Mapped[str] = mapped_column(String(7), nullable=False)
     aliases: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     examples: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    # This preserves the reporting meaning of historical balancing categories
+    # even when a user later renames them.
+    is_balance_adjustment: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     parent: Mapped["Category | None"] = relationship(
         "Category", remote_side="Category.id", back_populates="children"

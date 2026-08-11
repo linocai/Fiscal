@@ -128,6 +128,7 @@ class CategoryDraft(APIModel):
     color_hex: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     aliases: list[str] = Field(default_factory=list)
     examples: list[str] = Field(default_factory=list)
+    is_balance_adjustment: bool = False
 
     @field_validator("color_hex")
     @classmethod
@@ -149,6 +150,7 @@ class CategoryPatch(APIModel):
     color_hex: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     aliases: list[str] | None = None
     examples: list[str] | None = None
+    is_balance_adjustment: bool | None = None
 
     @model_validator(mode="after")
     def reject_null_required_fields(self) -> CategoryPatch:
@@ -177,6 +179,7 @@ class CategoryResponse(APIModel):
     color_hex: str
     aliases: list[str]
     examples: list[str]
+    is_balance_adjustment: bool
     sort_order: int
     archived_at: datetime | None
     usage_count: int

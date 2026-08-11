@@ -67,13 +67,30 @@ class CreditScheduleChangeRequest(APIModel):
     due_day: StrictInt = Field(ge=1, le=28)
 
 
+class CreditScheduleAffectedCycle(APIModel):
+    cycle_id: UUID
+    old_statement_date: date
+    old_due_date: date
+    new_statement_date: date
+    new_due_date: date
+    remaining_minor: int
+    old_is_overdue: bool
+    new_is_overdue: bool
+
+
 class CreditScheduleChangeResult(APIModel):
     account_id: UUID
     cycle_mode: CreditCycleMode
     statement_day: int
     due_day: int
+    old_cycle_mode: CreditCycleMode | None = None
+    old_statement_day: int | None = None
+    old_due_day: int | None = None
     affected_cycle_count: int
     purchase_count: int
     repayment_count: int
     installment_period_count: int
+    affected_cycles: list[CreditScheduleAffectedCycle] = []
+    old_overdue_cycle_count: int = 0
+    new_overdue_cycle_count: int = 0
     conflicts: list[str] = []

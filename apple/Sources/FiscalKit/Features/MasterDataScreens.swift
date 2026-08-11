@@ -207,7 +207,13 @@ private struct AccountEditor: View {
         } message: {
             if let preview = schedulePreview {
                 if preview.conflicts.isEmpty {
-                    Text("将重算 \(preview.affectedCycleCount) 个未结清账期、\(preview.purchaseCount) 笔消费、\(preview.repaymentCount) 笔还款和 \(preview.installmentPeriodCount) 个分期期次；已结清历史保持不变。")
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("账单日 \(preview.oldStatementDay ?? 0) → \(preview.statementDay)，还款日 \(preview.oldDueDay ?? 0) → \(preview.dueDay)。")
+                        Text("将重算 \(preview.affectedCycleCount) 个未结清账期、\(preview.purchaseCount) 笔消费、\(preview.repaymentCount) 笔还款和 \(preview.installmentPeriodCount) 个分期期次；已结清历史保持不变。")
+                        ForEach(preview.affectedCycles) { cycle in
+                            Text("\(cycle.oldStatementDate) / \(cycle.oldDueDate) → \(cycle.newStatementDate) / \(cycle.newDueDate)\(cycle.oldIsOverdue || cycle.newIsOverdue ? "（逾期，不会重排）" : "")")
+                        }
+                    }
                 } else {
                     Text("发现冲突：\(preview.conflicts.joined(separator: "、"))。没有写入任何变更。")
                 }

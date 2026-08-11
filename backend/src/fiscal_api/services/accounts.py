@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fiscal_api.api.p2_schemas import AccountDraft, AccountPatch, AccountResponse
+from fiscal_api.api.p4_schemas import CreditScheduleChangeRequest
 from fiscal_api.core.errors import APIError
 from fiscal_api.core.time import BUSINESS_TIMEZONE, utc_now
 from fiscal_api.db.models import Account, AccountKind, CreditCycleMode
@@ -20,7 +21,7 @@ from fiscal_api.services.common import (
     invalid,
     not_found,
 )
-from fiscal_api.services.credit import sync_opening_cycle, validate_credit_invariants
+from fiscal_api.services.credit import CreditService, sync_opening_cycle, validate_credit_invariants
 
 
 class AccountService:
@@ -125,15 +126,6 @@ class AccountService:
             or (cycle_mode.value if isinstance(cycle_mode, CreditCycleMode) else cycle_mode)
             != account.cycle_mode
         )
-        if (
-            account.kind == AccountKind.CREDIT.value
-            and schedule_changed
-            and await self.credit_repository.schedule_is_used(account.id)
-        ):
-            conflict(
-                "credit_schedule_in_use",
-                "The statement schedule is frozen after the first credit cycle",
-            )
         self._validate_configuration(
             kind=kind,
             opening=opening,
@@ -150,6 +142,26 @@ class AccountService:
             name, excluding=account.id
         ):
             conflict("account_name_conflict", "An active account already uses this name")
+        if (
+            account.kind == AccountKind.CREDIT.value
+            and schedule_changed
+            and await self.credit_repository.schedule_is_used(account.id)
+        ):
+            assert statement_day is not None
+            assert due_day is not None
+            if not isinstance(cycle_mode, CreditCycleMode):
+                cycle_mode = CreditCycleMode(cycle_mode)
+            await CreditService(self.session).change_schedule(
+                account.id,
+                CreditScheduleChangeRequest(
+                    expected_version=patch.expected_version,
+                    cycle_mode=cycle_mode,
+                    statement_day=statement_day,
+                    due_day=due_day,
+                ),
+                commit=False,
+                touch_account=False,
+            )
         for field, value in updates.items():
             setattr(
                 account,

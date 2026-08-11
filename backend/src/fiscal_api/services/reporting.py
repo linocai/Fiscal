@@ -95,8 +95,6 @@ class _CashFlowProjection(TypedDict):
 
 
 class ReportingService:
-    EXCLUDED_CATEGORY_NAMES = frozenset({"平账"})
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.repository = ReportingRepository(session)
@@ -523,9 +521,7 @@ class ReportingService:
 
     @classmethod
     def _excluded_category_ids(cls, categories: dict[UUID, Category]) -> set[UUID]:
-        excluded = {
-            item.id for item in categories.values() if item.name in cls.EXCLUDED_CATEGORY_NAMES
-        }
+        excluded = {item.id for item in categories.values() if item.is_balance_adjustment}
         while True:
             children = {
                 item.id

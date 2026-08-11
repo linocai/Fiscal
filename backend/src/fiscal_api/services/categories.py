@@ -41,6 +41,7 @@ class CategoryService:
             color_hex=category.color_hex,
             aliases=list(category.aliases),
             examples=list(category.examples),
+            is_balance_adjustment=category.is_balance_adjustment,
             sort_order=category.sort_order,
             archived_at=category.archived_at,
             usage_count=category.usage_count,
@@ -88,6 +89,7 @@ class CategoryService:
             color_hex=draft.color_hex,
             aliases=draft.aliases,
             examples=draft.examples,
+            is_balance_adjustment=draft.is_balance_adjustment,
             sort_order=await self.repository.next_sort_order(draft.parent_id, draft.direction),
         )
         self.repository.add(category)

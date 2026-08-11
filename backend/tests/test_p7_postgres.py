@@ -8,7 +8,7 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from fiscal_api.api.p2_schemas import AccountDraft, CategoryDraft
+from fiscal_api.api.p2_schemas import AccountDraft, CategoryDraft, CategoryPatch
 from fiscal_api.api.p3_schemas import TransactionDraft
 from fiscal_api.api.p5_schemas import InstallmentActionRequest, InstallmentCreate
 from fiscal_api.api.p6_schemas import (
@@ -283,6 +283,7 @@ async def test_balancing_category_is_excluded_from_every_report_caliber(
             direction=CategoryDirection.EXPENSE,
             icon="equal.circle",
             color_hex="#777777",
+            is_balance_adjustment=True,
         )
     )
     balancing_child = await categories.create(
@@ -311,6 +312,11 @@ async def test_balancing_category_is_excluded_from_every_report_caliber(
             uuid4(),
         )
 
+    renamed = await categories.update(
+        balancing.id,
+        CategoryPatch(expected_version=balancing.version, name="余额调整"),
+    )
+    assert renamed.is_balance_adjustment
     reports = ReportingService(session)
     spending = await reports.spending(date_from=date(2026, 7, 1), date_to=date(2026, 7, 31))
     assert spending.gross_consumption_minor == 3_200

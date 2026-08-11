@@ -45,7 +45,7 @@ public final class AccountsModel {
     }
 
     public func previewScheduleChange(draft: AccountDraft, account: AccountDTO) async -> CreditScheduleChangeResult? {
-        guard let request = scheduleRequest(draft: draft, account: account) else {
+        guard scheduleRequest(draft: draft, account: account) != nil else {
             message = "信用账期配置不完整。"; return nil
         }
         isMutating = true; defer { isMutating = false }
@@ -59,10 +59,9 @@ public final class AccountsModel {
         }
         isMutating = true; defer { isMutating = false }
         do {
-            let result = try await repository.applyScheduleChange(id: account.id, request: request)
-            guard result.conflicts.isEmpty else { message = result.conflicts.joined(separator: "、"); return false }
-            let refreshed = try await repository.get(id: account.id)
-            _ = try await repository.update(id: account.id, version: refreshed.version, draft: draft)
+            // The server owns the complete transaction: schedule reassignment and
+            // account-field update must commit together or neither may persist.
+            _ = try await repository.update(id: account.id, version: account.version, draft: draft)
             await load(); return true
         } catch { apply(error); return false }
     }

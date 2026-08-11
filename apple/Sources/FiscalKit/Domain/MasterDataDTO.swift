@@ -118,21 +118,55 @@ public struct CreditScheduleChangeResult: Codable, Sendable, Equatable {
     public let cycleMode: CreditCycleMode
     public let statementDay: Int
     public let dueDay: Int
+    public let oldCycleMode: CreditCycleMode?
+    public let oldStatementDay: Int?
+    public let oldDueDay: Int?
     public let affectedCycleCount: Int
     public let purchaseCount: Int
     public let repaymentCount: Int
     public let installmentPeriodCount: Int
+    public let affectedCycles: [CreditScheduleAffectedCycle]
+    public let oldOverdueCycleCount: Int
+    public let newOverdueCycleCount: Int
     public let conflicts: [String]
     enum CodingKeys: String, CodingKey {
         case accountID = "account_id"
         case cycleMode = "cycle_mode"
         case statementDay = "statement_day"
         case dueDay = "due_day"
+        case oldCycleMode = "old_cycle_mode"
+        case oldStatementDay = "old_statement_day"
+        case oldDueDay = "old_due_day"
         case affectedCycleCount = "affected_cycle_count"
         case purchaseCount = "purchase_count"
         case repaymentCount = "repayment_count"
         case installmentPeriodCount = "installment_period_count"
+        case affectedCycles = "affected_cycles"
+        case oldOverdueCycleCount = "old_overdue_cycle_count"
+        case newOverdueCycleCount = "new_overdue_cycle_count"
         case conflicts
+    }
+}
+
+public struct CreditScheduleAffectedCycle: Codable, Sendable, Equatable, Identifiable {
+    public let cycleID: UUID
+    public let oldStatementDate: String
+    public let oldDueDate: String
+    public let newStatementDate: String
+    public let newDueDate: String
+    public let remainingMinor: Int
+    public let oldIsOverdue: Bool
+    public let newIsOverdue: Bool
+    public var id: UUID { cycleID }
+    enum CodingKeys: String, CodingKey {
+        case cycleID = "cycle_id"
+        case oldStatementDate = "old_statement_date"
+        case oldDueDate = "old_due_date"
+        case newStatementDate = "new_statement_date"
+        case newDueDate = "new_due_date"
+        case remainingMinor = "remaining_minor"
+        case oldIsOverdue = "old_is_overdue"
+        case newIsOverdue = "new_is_overdue"
     }
 }
 
@@ -151,6 +185,7 @@ public struct CategoryDTO: Codable, Sendable, Equatable, Identifiable {
     public let colorHex: String
     public let aliases: [String]
     public let examples: [String]
+    public let isBalanceAdjustment: Bool?
     public let sortOrder: Int
     public let archivedAt: Date?
     public let usageCount: Int
@@ -161,6 +196,7 @@ public struct CategoryDTO: Codable, Sendable, Equatable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id, name, direction, icon, aliases, examples, version, children
+        case isBalanceAdjustment = "is_balance_adjustment"
         case parentID = "parent_id"
         case colorHex = "color_hex"
         case sortOrder = "sort_order"
@@ -176,6 +212,7 @@ public struct CategoryDTO: Codable, Sendable, Equatable, Identifiable {
         direction = try c.decode(CategoryDirection.self, forKey: .direction); parentID = try c.decodeIfPresent(UUID.self, forKey: .parentID)
         icon = try c.decode(String.self, forKey: .icon); colorHex = try c.decode(String.self, forKey: .colorHex)
         aliases = try c.decodeIfPresent([String].self, forKey: .aliases) ?? []; examples = try c.decodeIfPresent([String].self, forKey: .examples) ?? []
+        isBalanceAdjustment = try c.decodeIfPresent(Bool.self, forKey: .isBalanceAdjustment)
         sortOrder = try c.decode(Int.self, forKey: .sortOrder); archivedAt = try c.decodeIfPresent(Date.self, forKey: .archivedAt)
         usageCount = try c.decode(Int.self, forKey: .usageCount); version = try c.decode(Int.self, forKey: .version)
         createdAt = try c.decode(Date.self, forKey: .createdAt); updatedAt = try c.decode(Date.self, forKey: .updatedAt)

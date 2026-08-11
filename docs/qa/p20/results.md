@@ -65,7 +65,13 @@ device action was attempted in this audit.
 - P20-B release state source / version: complete locally. `README.md` is an
   entrypoint, `RELEASE_STATE.md` is the compact current manifest, and the
   candidate application version is `1.3.0 (21)`.
-- P20-C–E: pending implementation and verification.
+- P20-C/E local implementation: stable balance-adjustment category semantics,
+  P10 uncategorized trigger repair, and atomic account/credit-schedule update
+  are implemented; full fresh PostgreSQL gate remains open.
+- P20-C authentication cleanup: blocked at its explicit production/device gate;
+  no legacy token table or transition code has been removed.
+- P20-D off-host recovery and real alert delivery: blocked pending user-selected
+  receiver/storage and controlled production operation.
 - Final release status: not releasable; no tag and no push.
 
 ## P20-B local verification — 2026-08-11 CST
@@ -74,3 +80,23 @@ device action was attempted in this audit.
 | --- | --- |
 | `cd apple && xcodegen generate` | passed; generated project carries `MARKETING_VERSION=1.3.0`, `CURRENT_PROJECT_VERSION=21` |
 | `xcodebuild -project apple/Fiscal.xcodeproj -scheme FiscalmacOS -destination 'platform=macOS' test -only-testing:FiscalKitTests` | passed: 88 tests in 17 suites |
+
+## P20-C/E local verification — 2026-08-11 CST
+
+| Gate | Result |
+| --- | --- |
+| Backend Ruff + Pyright | passed: formatting clean, lint clean, 0 type errors |
+| Default backend suite | 144 passed, 105 PostgreSQL tests skipped; 1 upstream deprecation warning |
+| Fresh disposable PostgreSQL migration | passed from empty `fiscal_p20_test` through `20260811_0018` |
+| P10 uncategorized API + renamed balance-adjustment category reports | 2 passed on fresh PostgreSQL |
+| P17 schedule reassignment regression | 1 passed on fresh PostgreSQL |
+| Alembic offline SQL | passed through `20260811_0018` |
+| macOS FiscalKitTests after contract/UI change | passed: 88 tests in 17 suites |
+
+The attempted full PostgreSQL suite is still red and is not a release waiver.
+It exposed two independent historical defects: P10's later trigger rewrites
+reinstated a category requirement (repaired in `20260811_0018`), and many
+legacy tests encode July 2026 as a still-open period even though the current
+clock is August 2026. The shared migration suite also lacks robust isolation
+after guarded downgrade tests. P20 cannot be marked Automated Verified until
+these remaining test-baseline issues are resolved and rerun from a fresh DB.

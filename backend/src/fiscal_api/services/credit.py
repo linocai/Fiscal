@@ -14,6 +14,7 @@ from fiscal_api.api.p4_schemas import (
     CreditAccountSummary,
     CreditCyclePage,
     CreditCycleResponse,
+    CreditScheduleAffectedCycle,
     CreditScheduleChangeRequest,
     CreditScheduleChangeResult,
 )
@@ -254,7 +255,7 @@ class CreditService:
     ) -> CreditScheduleChangeResult:
         nested = await self.session.begin_nested()
         try:
-            return await self._change_schedule(account_id, request, commit=False)
+            return await self.change_schedule(account_id, request, commit=False)
         except APIError as error:
             return CreditScheduleChangeResult(
                 account_id=account_id,
@@ -275,23 +276,29 @@ class CreditService:
         self, account_id: UUID, request: CreditScheduleChangeRequest
     ) -> CreditScheduleChangeResult:
         try:
-            return await self._change_schedule(account_id, request, commit=True)
+            return await self.change_schedule(account_id, request, commit=True)
         except Exception:
             await self.session.rollback()
             raise
 
-    async def _change_schedule(
+    async def change_schedule(
         self,
         account_id: UUID,
         request: CreditScheduleChangeRequest,
         *,
         commit: bool,
+        touch_account: bool = True,
     ) -> CreditScheduleChangeResult:
         await acquire_mutation_lock(self.session)
         account = await self.repository.account(account_id, for_update=True)
         if account is None or account.kind != AccountKind.CREDIT.value:
             not_found("credit_account_not_found", "The credit account does not exist")
         check_version(account.version, request.expected_version)
+        old_cycle_mode = CreditCycleMode(
+            account.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF.value
+        )
+        old_statement_day = account.statement_day
+        old_due_day = account.due_day
         cycles = await self.repository.cycles(account.id)
         amounts = await self.repository.amounts([item.id for item in cycles])
         affected: list[CreditCycle] = []
@@ -299,6 +306,33 @@ class CreditService:
             purchase, repaid = amounts.get(item.id, (0, 0))
             if not item.is_opening_cycle and purchase - repaid > 0:
                 affected.append(item)
+        today = self._today()
+        previews: list[CreditScheduleAffectedCycle] = []
+        for item in affected:
+            replacement_schedule = schedule_for_statement(
+                date(item.statement_date.year, item.statement_date.month, request.statement_day),
+                request.statement_day,
+                request.due_day,
+                request.cycle_mode,
+            )
+            purchase, repaid = amounts.get(item.id, (0, 0))
+            previews.append(
+                CreditScheduleAffectedCycle(
+                    cycle_id=item.id,
+                    old_statement_date=item.statement_date,
+                    old_due_date=item.due_date,
+                    new_statement_date=replacement_schedule.statement_date,
+                    new_due_date=replacement_schedule.due_date,
+                    remaining_minor=purchase - repaid,
+                    old_is_overdue=item.due_date < today,
+                    new_is_overdue=replacement_schedule.due_date < today,
+                )
+            )
+        if any(item.old_is_overdue for item in previews):
+            conflict(
+                "overdue_credit_cycle_locked",
+                "An overdue credit cycle cannot be moved by a schedule change",
+            )
         affected_ids = [item.id for item in affected]
         transactions = await self.repository.transactions_for_cycles(affected_ids)
         periods = await self.repository.periods_for_cycles(affected_ids)
@@ -307,8 +341,7 @@ class CreditService:
         for period in periods:
             cycle = affected_by_id.get(period.effective_cycle_id)
             if cycle is not None and (
-                cycle.statement_date < self._today()
-                or await self.repository.cycle_has_repayment(cycle.id)
+                cycle.statement_date < today or await self.repository.cycle_has_repayment(cycle.id)
             ):
                 conflict(
                     "installment_period_locked",
@@ -322,8 +355,9 @@ class CreditService:
         account.cycle_mode = request.cycle_mode.value
         account.statement_day = request.statement_day
         account.due_day = request.due_day
-        account.version += 1
-        account.updated_at = utc_now()
+        if touch_account:
+            account.version += 1
+            account.updated_at = utc_now()
         await self.session.flush()
 
         by_id = affected_by_id
@@ -388,10 +422,16 @@ class CreditService:
             cycle_mode=request.cycle_mode,
             statement_day=request.statement_day,
             due_day=request.due_day,
+            old_cycle_mode=old_cycle_mode,
+            old_statement_day=old_statement_day,
+            old_due_day=old_due_day,
             affected_cycle_count=len(affected),
             purchase_count=purchase_count,
             repayment_count=repayment_count,
             installment_period_count=len(periods),
+            affected_cycles=previews,
+            old_overdue_cycle_count=sum(item.old_is_overdue for item in previews),
+            new_overdue_cycle_count=sum(item.new_is_overdue for item in previews),
             conflicts=[],
         )
         if commit:
