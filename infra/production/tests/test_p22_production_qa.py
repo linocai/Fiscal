@@ -38,3 +38,12 @@ class ProductionQATests(unittest.TestCase):
             deleted["count"] += 1; return Response({}, {})
         with self.assertRaises(RuntimeError), patch.object(qa, "urlopen", badopen), patch("sys.stdin", io.StringIO("secret\n")): qa.main()
         self.assertEqual(deleted["count"], 1)
+
+    def test_delete_failure_is_explicit_and_secret_is_not_output(self) -> None:
+        headers = {"X-Fiscal-Data-Revision": "1", "X-Fiscal-Affected-Scopes": ",".join(qa.EXPECTED_SCOPES)}
+        def fail(request, timeout=20):
+            if request.method == "POST": return Response({"id":"id","version":1}, headers)
+            raise OSError("delete unavailable")
+        output = io.StringIO()
+        with self.assertRaisesRegex(RuntimeError, "cleanup delete failed"), patch.object(qa, "urlopen", fail), patch("sys.stdin", io.StringIO("SENTINEL_SECRET\n")), patch("sys.stdout", output), patch("sys.stderr", output): qa.main()
+        self.assertNotIn("SENTINEL_SECRET", output.getvalue())

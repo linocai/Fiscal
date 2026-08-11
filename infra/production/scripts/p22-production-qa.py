@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import argparse
 from datetime import datetime, timezone
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -20,6 +21,7 @@ def request(key: str, path: str, method: str = "GET", body: dict[str, object] | 
 
 
 def main() -> None:
+    argparse.ArgumentParser(description="Run the single stdin-only P22 production QA receipt check").parse_args()
     key = sys.stdin.readline().strip()
     if not key:
         raise SystemExit("missing bearer key on standard input")
