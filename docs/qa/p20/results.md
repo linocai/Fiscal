@@ -62,17 +62,19 @@ device action was attempted in this audit.
 ## Current P20 status
 
 - P20-A local/public audit: recorded; controlled production portion is verified
-  below. User accepted macOS + Kurisu as the physical-device scope, and both
-  devices now have production access-key evidence.
+  below. User accepted macOS + Kurisu as the physical-device scope. Both have
+  prior production access-key evidence and are now awaiting the user-entered
+  post-recovery connection proof.
 - P20-B release state source / version: complete locally. `README.md` is an
   entrypoint, `RELEASE_STATE.md` is the compact current manifest, and the
   candidate application version is `1.3.0 (21)`.
 - P20-C/E local implementation: stable balance-adjustment category semantics,
   P10 uncategorized trigger repair, atomic account/credit-schedule update, and
   the complete fresh PostgreSQL automated gate are complete.
-- P20-C authentication cleanup: macOS and Kurisu access-key authentication are
-  verified, but the legacy transition remains until the old-token/recovery
-  checks are completed.
+- P20-C authentication cleanup: forgotten-passphrase recovery is verified and
+  invalidated generation-1 access keys. macOS and Kurisu must now reconnect
+  with a generation-2 key; the legacy transition remains until old-token
+  rejection is also proven.
 - P20-D off-host recovery and real alert delivery: local current-head backup
   and isolated restore are verified; off-host storage and a real alert receiver
   remain blocked pending user-selected external service configuration.
@@ -135,6 +137,9 @@ contract; it restores compilation of the already-reviewed preview path.
 | Isolated recovery | newest current-head dump restored into a disposable database; Alembic head, canonical tables, and orphan-posting check passed in 2 seconds at `2026-08-11T07:44:20Z` |
 | macOS production authentication | signed `1.3.0 (21)` installed after moving `1.2.4 (20)` to `/Applications/Fiscal-build20-backup.app`; the existing Keychain access key reached production `/api/v1/system/status` with HTTP 200 |
 | Kurisu production core flow | signed `1.3.0 (21)` built, code-signature verified, installed and launched on paired Kurisu; production logs recorded access-key `GET /api/v1/system/status` and current-month `GET /api/v1/reports/overview?month=2026-08`, both HTTP 200, at `2026-08-11T15:47:41–42Z` |
+| Forgotten-passphrase recovery | after service identity, exact release/head, and readiness checks, a two-prompt hidden local dialog sent a fresh value only to the production recovery CLI standard input. Credential generation changed `1→2`; production then reported one generation-2 key and five prior-generation keys, while readiness remained healthy. The successful recovery value and access keys were neither read nor recorded. |
+| Recovery transport safety | a public shell-metacharacter sentinel reached only the remote target process stdin; an isolated PostgreSQL CLI run reproduced `initialize` then `reset-passphrase` as generations `1→2`, and the isolated old-key rejection test passed (1 test). The temporary databases were removed. |
+| Post-recovery device invalidation | macOS and newly launched Kurisu each requested production content using their former key; server logs recorded `401` for `GET /api/v1/system/status` and `GET /api/v1/reports/overview?month=2026-08` at `2026-08-11T15:58:59Z`, as required before reauthentication. |
 
 The first post-deployment restore drill intentionally surfaced a release-script
 gap: its newest dump was the required *pre*-migration backup at
@@ -145,11 +150,23 @@ Commit `a41d299` retains that recovery dump and creates a new verified
 current-head backup after a successful migration; its subsequent isolated drill
 passed. Both the failure and the repaired verification are retained as evidence.
 
+An earlier aborted recovery transport attempt incorrectly attached a dialog's
+stdin to a remote shell rather than the CLI. The CLI did not run and production
+generation did not change; that value was treated as compromised and was not
+reused. This record contains no value. The corrected transport was proven with
+the sentinel and isolated-CLI checks before the successful recovery above.
+
 ### Remaining production and physical-device gates
 
 - Legacy device-token rejection and CLI passphrase-recovery proof are not
-  claimed. The transition layer is intentionally still deployed until those
-  final cleanup checks are complete.
+  fully claimed: the CLI recovery is now proven, but raw legacy-device-token
+  rejection remains unproven. The transition layer is intentionally still
+  deployed until that check and post-recovery macOS + Kurisu generation-2
+  connection proof are complete.
+- User interaction gate: enter the newly recovered passphrase in the cloud
+  connection screen on both macOS and Kurisu. The applications are open and
+  have already demonstrated the expected 401 for their invalidated old keys;
+  no agent may enter or extract the passphrase.
 - `FISCAL_ALERT_WEBHOOK_URL` is missing or invalid, and no off-host backup unit
   or provider is configured. Choosing/configuring an alert receiver and an
   encrypted off-host destination requires a user-selected external service and

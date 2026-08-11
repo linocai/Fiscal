@@ -14,8 +14,8 @@ from source code, a historical document, or an earlier release.
 | Local Alembic head | `20260811_0019` |
 | Deployed source revision | `a41d2991f92e63c3f7b0be3ba9d1fcbdf3e1f277` |
 | Deployed Alembic head | `20260811_0019` |
-| Authentication mode | credential generation 1 with active access keys verified on macOS and Kurisu; legacy device-token transition remains until old-token rejection and passphrase-recovery proof |
-| macOS / Kurisu builds and connection | macOS and Kurisu both run signed `1.3.0 (21)`; each reached production `/system/status` with an access key, and Kurisu loaded the current-month overview |
+| Authentication mode | credential generation 2 after an operator forgotten-passphrase recovery; generation-1 access keys are invalidated, and the legacy device-token transition remains until old-token rejection is proven |
+| macOS / Kurisu builds and connection | macOS and Kurisu both run signed `1.3.0 (21)`; their generation-1 keys correctly received 401 after recovery, and each is awaiting user-entered generation-2 reconnection |
 | Backup / off-host copy / restore / alert | current-head local backup and isolated restore verified; off-host copy and alert receiver are unconfigured blockers |
 | Previous tagged release | `v1.2.4` at `7c221ecdc10b6b8933b60052240162dafb430153` |
 | Rollback boundary | only an application revision at the same Alembic head; otherwise restore a verified backup into an isolated new database before cutover |
