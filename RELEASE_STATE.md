@@ -9,14 +9,14 @@ from source code, a historical document, or an earlier release.
 | Field | Current evidenced value |
 | --- | --- |
 | Train | P20 → P21 → P22 → P23 |
-| Candidate source revision | local committed and deployed `4686e4492482a060fd9080eed16b74bbfccebd69` |
+| Candidate source revision | local committed `887ca22`; production deploy blocked before start by SSH banner timeout |
 | Candidate app version | `1.3.0 (21)` |
-| Local Alembic head | `20260811_0021` |
+| Local Alembic head | `20260811_0022` |
 | Deployed source revision | `4686e4492482a060fd9080eed16b74bbfccebd69` |
 | Deployed Alembic head | `20260811_0021` |
 | Authentication mode | generation 2 personal passphrase/access keys only: one credential, three current-generation keys, and no `device_tokens` table |
 | macOS / Kurisu builds and connection | both signed `1.3.0 (21)` packages installed and launched; each cold-started `fiscal://reconciliation` and reached production accounts, checkpoint, diagnosis and attention reads with HTTP 200 |
-| Backup / off-host copy / restore / alert | P21 pre-migration backup and isolated 0020→0021 shadow restore/ledger-report reconciliation verified; latest verified local backup `2026-08-11T09:38:40Z`; alert receiver is **deferred by user** and does not block P21; off-host backup provider remains unconfigured as an explicit carried risk |
+| Backup / off-host copy / restore / alert | P22 pre-migration dump `2026-08-11T11:13:06Z` verified; exact `887ca22` encrypted Archive A/B 0022 restore and ledger/report/credit fingerprints verified; production remains 0021 because SSH banner timed out before deploy. Alert receiver is **deferred by user**; off-host provider remains an explicit carried risk |
 | Previous tagged release | `v1.2.4` at `7c221ecdc10b6b8933b60052240162dafb430153` |
 | Rollback boundary | only an application revision at the same Alembic head; otherwise restore a verified backup into an isolated new database before cutover |
 | Tag / push | prohibited until every P20–P23 gate and the seven-day stability observation close |
