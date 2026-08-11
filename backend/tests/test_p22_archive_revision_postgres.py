@@ -26,6 +26,7 @@ from fiscal_api.db.base import Base
 from fiscal_api.db.models.ai import AIProposal, AISettings
 from fiscal_api.db.session import create_engine, create_session_factory
 from fiscal_api.main import create_app
+from fiscal_api.services.access import AccessService
 from fiscal_api.services.archive import ArchiveError, ArchiveService
 
 TEST_DATABASE_URL = environ.get("FISCAL_TEST_DATABASE_URL")
@@ -418,6 +419,58 @@ def test_p22_revision_receipts_are_formal_once_and_concurrent() -> None:
             receipts = list(pool.map(create_category, range(4)))
         assert sorted(receipts) == list(range(start + 1, start + 5))
         assert client.get("/api/v1/data-revision", headers=auth).json()["revision"] == start + 4
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
+def test_p22_real_auth_dependency_sees_formal_scopes_at_commit() -> None:
+    assert TEST_DATABASE_URL is not None
+    token_pepper = f"p22-real-auth-{uuid4().hex}"
+    settings = Settings(
+        environment="local",
+        database_url=TEST_DATABASE_URL,
+        token_pepper=token_pepper,
+    )
+
+    async def mint_access_key() -> str:
+        engine = create_engine(TEST_DATABASE_URL)
+        try:
+            factory = create_session_factory(engine)
+            async with factory() as session:
+                return (
+                    await AccessService(session, settings).initialize("p22-test-passphrase")
+                ).raw_key
+        finally:
+            await engine.dispose()
+
+    access_key = asyncio.run(mint_access_key())
+    app = create_app(settings=settings, readiness_check=_ready)
+    auth = {"Authorization": f"Bearer {access_key}"}
+    with TestClient(app) as client:
+        baseline = client.get("/api/v1/data-revision", headers=auth)
+        assert baseline.status_code == 200
+        assert baseline.json()["revision"] == 0
+
+        category = client.post("/api/v1/categories", headers=auth, json=_category_payload())
+        assert category.status_code == 201, category.text
+        assert category.headers["X-Fiscal-Data-Revision"] == "1"
+        assert set(category.headers["X-Fiscal-Affected-Scopes"].split(",")) == {
+            "ledger",
+            "accounts",
+            "credit",
+            "reimbursements",
+            "cash_flow",
+            "reconciliation",
+            "attention",
+            "reports",
+            "ai",
+        }
+
+        deleted = client.delete(
+            f"/api/v1/categories/{category.json()['id']}?expected_version=1", headers=auth
+        )
+        assert deleted.status_code == 204, deleted.text
+        assert deleted.headers["X-Fiscal-Data-Revision"] == "2"
+        assert client.get("/api/v1/data-revision", headers=auth).json()["revision"] == 2
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")

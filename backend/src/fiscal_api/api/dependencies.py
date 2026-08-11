@@ -32,6 +32,10 @@ ReadinessDependency = Annotated[ReadinessCheck, Depends(get_readiness_check)]
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
     factory = cast(async_sessionmaker[AsyncSession], request.app.state.session_factory)
     async with factory() as session:
+        # Authentication may resolve this dependency before a route-level
+        # formal_mutation dependency. FiscalAsyncSession resolves current scopes
+        # from this request at commit/flush time rather than snapshotting them.
+        session.info["data_revision_request"] = request
         scopes = getattr(request.state, "data_revision_scopes", ())
         if scopes:
             session.info["data_revision_scopes"] = scopes

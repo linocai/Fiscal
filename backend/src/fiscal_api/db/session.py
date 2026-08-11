@@ -25,9 +25,24 @@ class FiscalAsyncSession(AsyncSession):
             self.is_modified(instance, include_collections=True) for instance in self.dirty
         )
 
+    def _formal_mutation_scopes(self) -> tuple[str, ...]:
+        """Resolve scopes at commit time, after every FastAPI dependency ran.
+
+        Authentication can acquire the shared session before a route-level
+        ``formal_mutation`` dependency sets the request scopes. Looking only at
+        session construction would make that valid production ordering silently
+        miss the receipt. The legacy session-info value keeps direct service
+        callers compatible, while API requests use their current request state.
+        """
+        request = self.info.get("data_revision_request")
+        request_scopes = getattr(getattr(request, "state", None), "data_revision_scopes", ())
+        if request_scopes:
+            return tuple(request_scopes)
+        return tuple(self.info.get("data_revision_scopes", ()))
+
     async def flush(self, objects: object | None = None) -> None:
         if (
-            self.info.get("data_revision_scopes")
+            self._formal_mutation_scopes()
             and not self.info.get("data_revision_receipt_issued")
             and self._has_unit_of_work_change()
         ):
@@ -41,7 +56,7 @@ class FiscalAsyncSession(AsyncSession):
         self.info.pop("data_revision_has_change", None)
 
     async def commit(self) -> None:
-        scopes = self.info.get("data_revision_scopes")
+        scopes = self._formal_mutation_scopes()
         revision: int | None = None
         has_formal_change = self._has_unit_of_work_change() or bool(
             self.info.get("data_revision_has_change")
