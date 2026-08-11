@@ -17,6 +17,16 @@ sudo infra/production/scripts/bootstrap-host.sh
 sudo infra/production/scripts/bootstrap-host.sh --apply
 ```
 
+For an existing host that only needs immutable-release access repaired, use the
+separate narrow mode. It only creates the dedicated `fiscal_release` group,
+adds `fiscal` and `fiscal_migrator`, and verifies that the production environment
+file remains `root:fiscal` mode `0640`; it does not install dependencies, touch
+`/opt`, or start services:
+
+```bash
+sudo infra/production/scripts/bootstrap-host.sh --release-access --apply
+```
+
 The default is exactly uv `0.11.16` at `/opt/fiscal/tools/uv/bin/uv`. Installation uses `https://mirrors.aliyun.com/pypi/simple/` with a 60-second network timeout. `FISCAL_UV_BIN` and the pinned version are explicit environment controls, not a dependency on a global `uv` command.
 
 ### 2. Edit secrets locally on HZ
