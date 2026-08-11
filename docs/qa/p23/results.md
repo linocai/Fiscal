@@ -8,8 +8,9 @@
 - PostgreSQL trigger 拒绝修改/删除 `ai_quality_events`，并拒绝改写已有提案的 `raw_input` 或首次 parse snapshot。
 - `FISCAL_TEST_DATABASE_URL=postgresql+asyncpg:///fiscal_p23_fresh` 的 P8/P23 定向回归：`34 passed`。覆盖原始快照、人工修改 diff、事件顺序、两次稳定证据后才出现 merchant/category、title/account、source-context alias 规则，以及指标 `total = pending + terminal_outcomes`。
 - disposable `fiscal_p23_fresh`：fresh upgrade 到 `20260811_0023`、`0023 → 0022 → head`、offline SQL 均成功；SQL 含三张新表与两条不可变 trigger。
+- fresh `fiscal_p23_full` PostgreSQL 14：全量 `pytest -q` 通过（收集 `251 tests`），随后已显式删除；不保留测试库。
 - Backend static：`ruff check src/fiscal_api …` 与 `pyright` 均通过。
-- Apple：`xcodegen generate`；`FiscalmacOS` `101 tests / 19 suites`（含 P23 指标分母与 explicit-confirmation payload）通过。Release 编译/签名复跑曾受同一 DerivedData build.db 竞争影响，需在无并发 Xcode 构建时重跑后才能记为已验证。
+- Apple：`xcodegen generate`；`FiscalmacOS` `101 tests / 19 suites`（含 P23 指标分母与 explicit-confirmation payload）通过。独立 DerivedData 下 iOS generic Release 与 macOS Release 都完成；`codesign --verify --deep --strict` 双端通过，macOS 为 Developer ID `HX73DFL88G`。首次 shared DerivedData 重跑的 lock 未改变源码或产物，已改为串行独立路径验证。
 
 ## 下一步与边界
 
