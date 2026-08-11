@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -23,7 +23,7 @@ def main() -> None:
     key = sys.stdin.readline().strip()
     if not key:
         raise SystemExit("missing bearer key on standard input")
-    name = "P22 production QA " + datetime.now(UTC).strftime("%Y%m%dt%H%M%Sz")
+    name = "P22 production QA " + datetime.now(timezone.utc).strftime("%Y%m%dt%H%M%Sz")
     created: dict[str, object] | None = None
     delete_error: Exception | None = None
     try:
