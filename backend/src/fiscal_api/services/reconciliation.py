@@ -26,6 +26,8 @@ from fiscal_api.db.models import (
     CashFlowItem,
     CreditCycle,
     LedgerTransaction,
+    MigrationRun,
+    MigrationRunStatus,
     ReconciliationCheckpoint,
     ReimbursementAllocation,
     ReimbursementClaim,
@@ -205,6 +207,27 @@ class ReconciliationService:
                     else "AI 提案处理失败。",
                     suggested_action="查看并确认、修改或重试。",
                     deep_link=f"fiscal://ai/proposals/{proposal.id}",
+                )
+            )
+        failed_runs = list(
+            (
+                await self.session.scalars(
+                    select(MigrationRun)
+                    .where(MigrationRun.status == MigrationRunStatus.FAILED.value)
+                    .order_by(MigrationRun.completed_at.desc(), MigrationRun.id.desc())
+                )
+            ).all()
+        )
+        for run in failed_runs:
+            items.append(
+                AttentionItem(
+                    source_type="operation_exception",
+                    source_id=run.id,
+                    severity=AttentionSeverity.CRITICAL,
+                    occurred_at=run.completed_at,
+                    explanation=f"{run.mode} 数据迁移运行失败。",
+                    suggested_action="检查运行记录后在隔离环境重新验证。",
+                    deep_link=f"fiscal://settings/migrations/{run.id}",
                 )
             )
         business_date = now.astimezone(BUSINESS_TIMEZONE).date()

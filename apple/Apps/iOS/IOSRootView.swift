@@ -149,6 +149,9 @@ struct IOSRootView: View {
         case "credit_cycle_overdue":
             morePath = [.credit]
             selection = .more
+        case "operation_exception":
+            morePath = [.settings]
+            selection = .more
         default:
             morePath = [.reconciliation]
             selection = .more
@@ -169,6 +172,9 @@ struct IOSRootView: View {
             selection = .more
         case "credit-cycles":
             morePath = [.credit]
+            selection = .more
+        case "settings":
+            morePath = [.settings]
             selection = .more
         case "reconciliation":
             morePath = [.reconciliation]

@@ -7,7 +7,7 @@
 - 核对点是按 `as_of`（UTC instant，业务日期按 `Asia/Shanghai`）重算的派生读模型；金额均为 minor units。
 - 创建核对点不会写入 ledger、posting 或账户余额；只有差额为零时状态为 `reconciled`。后补/编辑正式流水会重新计算并可使旧核对点变为 `open`。
 - 正式余额调整继续使用既有明确的 `is_balance_adjustment` 分类，并从消费报告隔离；P21 未写入或回填任何历史数据。
-- Attention 由现有来源实时派生，忽略仅写入有到期时间的独立 dismissal，不复制各来源状态机。
+- Attention 由现有来源实时派生（核对差额/首次核对、待分类、AI、现金流、报销、信用账期及失败迁移运行），忽略仅写入有到期时间的独立 dismissal，不复制各来源状态机。
 
 ## 自动验证（2026-08-11）
 

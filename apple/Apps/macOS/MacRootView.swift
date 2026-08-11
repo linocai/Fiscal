@@ -157,6 +157,7 @@ struct MacRootView: View {
         case "cash_flow_overdue": section = .cashFlow
         case "reimbursement_overdue": section = .reimbursement
         case "credit_cycle_overdue": section = .accounts
+        case "operation_exception": section = .settings
         default: section = .reconciliation
         }
     }
@@ -172,6 +173,7 @@ struct MacRootView: View {
         case "cash-flow": section = .cashFlow
         case "reimbursements": section = .reimbursement
         case "credit-cycles": section = .accounts
+        case "settings": section = .settings
         case "reconciliation": section = .reconciliation
         default: break
         }
