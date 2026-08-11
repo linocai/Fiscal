@@ -109,6 +109,11 @@ public struct ReconciliationCenterScreen: View {
         .background(FiscalColor.iOSBackground)
         .navigationTitle("核对与关注")
         .task {
+            // This screen is reachable directly from a deep link, before an
+            // account-management screen has had a chance to populate the shared
+            // model. Load the server-owned account choices before choosing the
+            // default reconciliation target.
+            if accounts.accounts.isEmpty { await accounts.load() }
             if selectedAccountID == nil { selectedAccountID = activeAccounts.first?.id }
             if let selectedAccountID { await model.load(accountID: selectedAccountID) }
         }
