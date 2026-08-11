@@ -177,7 +177,7 @@ async def test_opening_purchase_repayment_and_summary_stay_consistent(
     assert (summary.expense_minor, summary.income_minor) == (2_000, 0)
 
 
-async def test_cycle_local_chronology_overpayment_and_schedule_freeze(
+async def test_cycle_local_chronology_overpayment_and_open_cycle_schedule_change(
     session: AsyncSession,
 ) -> None:
     accounts = AccountService(session)
@@ -217,12 +217,27 @@ async def test_cycle_local_chronology_overpayment_and_schedule_freeze(
     assert_error(overpayment, "repayment_exceeds_cycle_remaining")
 
     state = await accounts.get(credit_id)
-    with pytest.raises(APIError) as schedule:
-        await accounts.update(
-            credit_id,
-            AccountPatch(expected_version=state.version, statement_day=12),
-        )
-    assert_error(schedule, "credit_schedule_in_use")
+    updated = await accounts.update(
+        credit_id,
+        AccountPatch(expected_version=state.version, statement_day=12),
+    )
+    assert updated.statement_day == 12
+    moved_cycle = next(
+        item
+        for item in (
+            await CreditService(session, today=lambda: date(2026, 7, 15)).list_cycles(
+                credit_id, cursor=None, limit=20
+            )
+        ).items
+        if item.amount_due_minor == 1_000
+    )
+    # P20 permits a single atomic schedule move while the debt is not overdue;
+    # the original cycle and amount remain the same economic obligation.
+    assert (moved_cycle.statement_date, moved_cycle.due_date, moved_cycle.amount_due_minor) == (
+        date(2026, 8, 12),
+        date(2026, 8, 22),
+        1_000,
+    )
 
 
 async def test_limit_is_admission_only_and_cycle_protects_purchase_void(

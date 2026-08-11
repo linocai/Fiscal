@@ -78,6 +78,10 @@ def test_p8_upgrade_downgrade_restores_complete_validators(
     monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
     get_settings.cache_clear()
 
+    # Start before P8 so the test verifies its singleton seed as well as the
+    # validator rewrite; upgrading an already-head, truncated schema would not
+    # rerun the migration's data insert.
+    command.downgrade(config(), "20260715_0006")
     # This upgrade exercises asyncpg: each CREATE FUNCTION must be a separate statement.
     command.upgrade(config(), "head")
     asyncio.run(clear_p8_data())

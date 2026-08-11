@@ -54,6 +54,7 @@ def test_p8_real_api_nested_edit_idempotency_and_queue_count() -> None:
             environment="test",
             database_url=TEST_DATABASE_URL,
             device_token=SecretStr("p8-api-token"),
+            token_pepper=SecretStr("p8-api-provider-root-secret-32-bytes"),
         ),
         readiness_check=ready,
     )
@@ -161,6 +162,7 @@ def test_p8_settings_reject_unsafe_client_relaxation() -> None:
             environment="test",
             database_url=TEST_DATABASE_URL,
             device_token=SecretStr("p8-settings-token"),
+            token_pepper=SecretStr("p8-settings-provider-root-secret-32-bytes"),
         ),
         readiness_check=ready,
     )

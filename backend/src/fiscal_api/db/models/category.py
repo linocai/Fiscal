@@ -44,7 +44,9 @@ class Category(MutableResourceMixin, Base):
     examples: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     # This preserves the reporting meaning of historical balancing categories
     # even when a user later renames them.
-    is_balance_adjustment: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_balance_adjustment: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     parent: Mapped["Category | None"] = relationship(
         "Category", remote_side="Category.id", back_populates="children"
