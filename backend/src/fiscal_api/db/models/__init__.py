@@ -57,6 +57,11 @@ from fiscal_api.db.models.reimbursement import (
     ReimbursementReceiptRevision,
     ReimbursementRelationRole,
 )
+from fiscal_api.db.models.reconciliation import (
+    AttentionDismissal,
+    ReconciliationCheckpoint,
+    ReconciliationTargetKind,
+)
 
 __all__ = [
     "AIProposal",
@@ -66,6 +71,7 @@ __all__ = [
     "AISettings",
     "AccessCredential",
     "AccessKey",
+    "AttentionDismissal",
     "Account",
     "AccountKind",
     "CashFlowDirection",
@@ -107,6 +113,8 @@ __all__ = [
     "ReimbursementReceiptAllocation",
     "ReimbursementReceiptRevision",
     "ReimbursementRelationRole",
+    "ReconciliationCheckpoint",
+    "ReconciliationTargetKind",
     "RevisionEvent",
     "TransactionKind",
     "TransactionRevision",
