@@ -62,5 +62,15 @@ device action was attempted in this audit.
 ## Current P20 status
 
 - P20-A local/public audit: recorded; controlled production and device portion pending.
-- P20-B–E: pending implementation and verification.
+- P20-B release state source / version: complete locally. `README.md` is an
+  entrypoint, `RELEASE_STATE.md` is the compact current manifest, and the
+  candidate application version is `1.3.0 (21)`.
+- P20-C–E: pending implementation and verification.
 - Final release status: not releasable; no tag and no push.
+
+## P20-B local verification — 2026-08-11 CST
+
+| Gate | Result |
+| --- | --- |
+| `cd apple && xcodegen generate` | passed; generated project carries `MARKETING_VERSION=1.3.0`, `CURRENT_PROJECT_VERSION=21` |
+| `xcodebuild -project apple/Fiscal.xcodeproj -scheme FiscalmacOS -destination 'platform=macOS' test -only-testing:FiscalKitTests` | passed: 88 tests in 17 suites |

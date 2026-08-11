@@ -1,6 +1,6 @@
 # Fiscal
 
-Fiscal is a private, single-user personal-finance application for iOS 26 and macOS 26. P1–P10 cover the unified ledger, credit cycles, installments, reimbursements, reports, AI/OCR capture, and the finished dual-platform daily-use experience described in [`PROJECT_PLAN.md`](PROJECT_PLAN.md). P11 production security and HZ operations are in progress.
+Fiscal is a private, single-user personal-finance application for iOS 26 and macOS 26. Its canonical CNY ledger covers accounts, credit cycles, installments, reimbursements, reports and AI/OCR capture. The current v1.3.0 release train is P20–P23: production trust baseline, reconciliation, recoverable data, and AI quality controls. Product scope and release gates live in [`PROJECT_PLAN.md`](PROJECT_PLAN.md); the currently evidenced release state lives in [`RELEASE_STATE.md`](RELEASE_STATE.md).
 
 ## Repository map
 
@@ -49,7 +49,7 @@ curl -H 'Authorization: Bearer development-device-token-change-me' \
   http://127.0.0.1:8000/api/v1/system/status
 ```
 
-The default token is local-development-only. Staging and production reject static tokens, require an independent pepper of at least 32 bytes, and authenticate HMAC-digested database device keys.
+The default token is local-development-only. Staging and production reject static tokens, require an independent pepper of at least 32 bytes, and use the personal access-passphrase/access-key model. P20 records whether a live deployment has fully exited the legacy transition layer in [`docs/qa/p20/results.md`](docs/qa/p20/results.md); do not infer that from this repository.
 
 Run backend gates:
 
@@ -83,7 +83,7 @@ xcodebuild \
   test
 ```
 
-The debug API base URL is `http://127.0.0.1:8000`, with local-network transport enabled only for development. Release builds use `https://fiscal.linotsai.top`. Provide `FISCAL_DEVICE_TOKEN` as a Run-scheme environment value only for the first trusted Mac bootstrap; later devices can paste an operator-issued pending key into Settings and activate it directly into this-device-only Keychain storage.
+The debug API base URL is `http://127.0.0.1:8000`, with local-network transport enabled only for development. Release builds use `https://fiscal.linotsai.top`. A production client receives a generated access key after the user verifies the personal access passphrase; it stores that opaque key in Keychain. Do not use the local integration key as a production credential.
 
 With the local integration API running and seeded, run the authenticated iOS navigation/data acceptance tests on an available simulator:
 
@@ -108,6 +108,7 @@ See [`infra/README.md`](infra/README.md) for local PostgreSQL and staging, and [
 - P3 contract/checklist/results: [`docs/architecture/p3-contracts.md`](docs/architecture/p3-contracts.md), [`docs/qa/p3/checklist.md`](docs/qa/p3/checklist.md), [`docs/qa/p3/results.md`](docs/qa/p3/results.md)
 - P4–P9 contracts and results remain under `docs/architecture/` and `docs/qa/`.
 - P10 contract/checklist/results: [`docs/architecture/p10-contracts.md`](docs/architecture/p10-contracts.md), [`docs/qa/p10/checklist.md`](docs/qa/p10/checklist.md), [`docs/qa/p10/results.md`](docs/qa/p10/results.md)
-- P11 contract/checklist/results: [`docs/architecture/p11-contracts.md`](docs/architecture/p11-contracts.md), [`docs/qa/p11/checklist.md`](docs/qa/p11/checklist.md), [`docs/qa/p11/results.md`](docs/qa/p11/results.md)
+- Historical phase contracts/results remain under `docs/architecture/` and `docs/qa/`.
+- Current release evidence: [`docs/qa/p20/results.md`](docs/qa/p20/results.md); earlier P11–P19 records are historical evidence, not live state.
 
 The user approved the native iOS/macOS visual direction before P2. Each phase still requires real API integration, dual-platform screenshots, automated gates, and explicit acceptance before the next business slice begins.
