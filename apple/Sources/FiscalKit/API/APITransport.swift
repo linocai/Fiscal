@@ -131,6 +131,30 @@ public actor APITransport {
         await responseCache.removeAll()
     }
 
+    public func requestNoContent<Body: Encodable & Sendable>(
+        _ path: String,
+        method: String,
+        body: Body
+    ) async throws {
+        var request = URLRequest(url: try Self.endpointURL(baseURL: baseURL, path: path, query: []))
+        request.httpMethod = method; request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = try await tokenProvider(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.httpBody = try encoder.encode(body)
+        let (data, http) = try await perform(request)
+        guard (200..<300).contains(http.statusCode) else {
+            let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
+            if http.statusCode == 401 { throw FiscalAPIError.unauthorized(detail) }
+            if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
+            throw FiscalAPIError.invalidResponse
+        }
+        cacheGeneration &+= 1
+        await responseCache.removeAll()
+    }
+
     /// Performs an authenticated, uncached GET for non-JSON server artifacts such as CSV.
     public func rawDataGET(
         _ path: String,

@@ -3,11 +3,14 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fiscal_api.db.models import (
     AttentionDismissal,
+    InstallmentLedgerLink,
+    InstallmentPeriod,
+    InstallmentPlan,
     LedgerTransaction,
     Posting,
     ReconciliationCheckpoint,
@@ -49,23 +52,17 @@ class ReconciliationRepository:
         return [(item, int(amount)) for item, amount in rows]
 
     async def cycle_impact(self, cycle_id: UUID, as_of: datetime) -> int:
-        statement = (
-            select(func.coalesce(func.sum(-Posting.amount_minor), 0))
-            .join(LedgerTransaction, LedgerTransaction.id == Posting.transaction_id)
-            .where(
-                LedgerTransaction.credit_cycle_id == cycle_id,
-                LedgerTransaction.kind.in_(["credit_purchase", "repayment"]),
-                LedgerTransaction.voided_at.is_(None),
-                LedgerTransaction.occurred_at <= as_of,
-                Posting.role.in_(["account", "destination"]),
-            )
-        )
-        return int(await self.session.scalar(statement) or 0)
+        return sum(amount for _, amount in await self.cycle_entries(cycle_id, None, as_of))
 
     async def cycle_entries(
         self, cycle_id: UUID, start: datetime | None, end: datetime
     ) -> list[tuple[LedgerTransaction, int]]:
-        statement = (
+        """Return the same direct and installment liabilities as credit-cycle balances.
+
+        A checkpoint is an as-of view, so it cannot use the current-cycle aggregate alone:
+        a later purchase or repayment must not affect the historical balance.
+        """
+        direct = (
             select(LedgerTransaction, -Posting.amount_minor)
             .join(Posting, Posting.transaction_id == LedgerTransaction.id)
             .where(
@@ -74,13 +71,38 @@ class ReconciliationRepository:
                 LedgerTransaction.voided_at.is_(None),
                 LedgerTransaction.occurred_at <= end,
                 Posting.role.in_(["account", "destination"]),
+                or_(
+                    LedgerTransaction.kind == "repayment",
+                    ~exists().where(InstallmentLedgerLink.transaction_id == LedgerTransaction.id),
+                ),
             )
-            .order_by(LedgerTransaction.occurred_at.desc(), LedgerTransaction.id.desc())
         )
         if start is not None:
-            statement = statement.where(LedgerTransaction.occurred_at > start)
-        rows = (await self.session.execute(statement)).all()
-        return [(item, int(amount)) for item, amount in rows]
+            direct = direct.where(LedgerTransaction.occurred_at > start)
+        rows = [(item, int(amount)) for item, amount in (await self.session.execute(direct)).all()]
+
+        for transaction_id, amount_column in (
+            (InstallmentPlan.purchase_transaction_id, InstallmentPeriod.principal_minor),
+            (InstallmentPlan.fee_transaction_id, InstallmentPeriod.fee_minor),
+        ):
+            installment = (
+                select(LedgerTransaction, amount_column)
+                .join(InstallmentPlan, transaction_id == LedgerTransaction.id)
+                .join(InstallmentPeriod, InstallmentPeriod.plan_id == InstallmentPlan.id)
+                .where(
+                    InstallmentPeriod.effective_cycle_id == cycle_id,
+                    InstallmentPeriod.cancelled_at.is_(None),
+                    LedgerTransaction.voided_at.is_(None),
+                    LedgerTransaction.occurred_at <= end,
+                )
+            )
+            if start is not None:
+                installment = installment.where(LedgerTransaction.occurred_at > start)
+            rows.extend(
+                (item, int(amount))
+                for item, amount in (await self.session.execute(installment)).all()
+            )
+        return sorted(rows, key=lambda row: (row[0].occurred_at, row[0].id), reverse=True)
 
     async def add(self, checkpoint: ReconciliationCheckpoint) -> None:
         self.session.add(checkpoint)

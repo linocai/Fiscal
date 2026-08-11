@@ -35,6 +35,9 @@ targets:
         FISCAL_API_BASE_URL: "$(FISCAL_API_BASE_URL)"
         NSPhotoLibraryUsageDescription: "Fiscal 读取你允许访问的截图，在设备端识别记账文字；图片不会上传。"
         PHPhotoLibraryPreventAutomaticLimitedAccessAlert: true
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - fiscal
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIApplicationSceneManifest:
@@ -66,6 +69,9 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         FISCAL_API_BASE_URL: "$(FISCAL_API_BASE_URL)"
         LSApplicationCategoryType: public.app-category.finance
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - fiscal
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
     dependencies:

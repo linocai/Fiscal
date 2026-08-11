@@ -3,7 +3,7 @@ import SwiftUI
 
 private enum IOSTab: Hashable { case overview, transactions, cashFlow, more }
 private enum IOSMoreDestination: Hashable {
-    case accounts, categories, credit, creditAccount(UUID), reimbursements
+    case accounts, categories, credit, creditAccount(UUID), reimbursements, reconciliation
     case reports(ReportLens)
     case cloudConnection, settings
 }
@@ -23,6 +23,7 @@ struct IOSRootView: View {
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
     let passphrase: PassphraseModel
+    let reconciliation: ReconciliationModel
     let recordingPreferences: RecordingPreferences
     @State private var selection: IOSTab = .overview
     @State private var showRecordSheet = false
@@ -66,7 +67,7 @@ struct IOSRootView: View {
                         markReceived: { _ in morePath = [.reimbursements]; selection = .more }
                     )
                 }
-            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, passphrase: passphrase, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true })
+            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, passphrase: passphrase, reconciliation: reconciliation, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true }, openAttention: openAttention)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -93,6 +94,7 @@ struct IOSRootView: View {
                 CreditCycleProjectionSheet(credit: credit, cycleID: cycleID)
             }
         }
+        .onOpenURL(perform: openDeepLink)
     }
 
     private var tabBar: some View {
@@ -132,6 +134,48 @@ struct IOSRootView: View {
         .accessibilityAddTraits(selection == tab ? .isSelected : [])
         .accessibilityHint(selection == tab ? "当前页面" : "切换到\(title)")
     }
+
+    private func openAttention(_ item: AttentionItemDTO) {
+        switch item.sourceType {
+        case "uncategorized_transaction":
+            transactions.classification = .uncategorized
+            selection = .transactions
+            Task { await transactions.load() }
+        case "ai_proposal": showAIProposals = true
+        case "cash_flow_overdue": selection = .cashFlow
+        case "reimbursement_overdue":
+            morePath = [.reimbursements]
+            selection = .more
+        case "credit_cycle_overdue":
+            morePath = [.credit]
+            selection = .more
+        default:
+            morePath = [.reconciliation]
+            selection = .more
+        }
+    }
+
+    private func openDeepLink(_ url: URL) {
+        guard url.scheme == "fiscal" else { return }
+        switch url.host {
+        case "transactions":
+            transactions.classification = .uncategorized
+            selection = .transactions
+            Task { await transactions.load() }
+        case "ai": showAIProposals = true
+        case "cash-flow": selection = .cashFlow
+        case "reimbursements":
+            morePath = [.reimbursements]
+            selection = .more
+        case "credit-cycles":
+            morePath = [.credit]
+            selection = .more
+        case "reconciliation":
+            morePath = [.reconciliation]
+            selection = .more
+        default: break
+        }
+    }
 }
 
 private struct IOSMoreScreen: View {
@@ -148,9 +192,11 @@ private struct IOSMoreScreen: View {
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
     let passphrase: PassphraseModel
+    let reconciliation: ReconciliationModel
     let connection: ConnectionModel
     let recordingPreferences: RecordingPreferences
     let openAI: () -> Void
+    let openAttention: (AttentionItemDTO) -> Void
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -158,6 +204,11 @@ private struct IOSMoreScreen: View {
                 VStack(spacing: 14) {
                     FiscalCard(radius: 20) {
                         VStack(spacing: 0) {
+                            NavigationLink(value: IOSMoreDestination.reconciliation) {
+                                row("核对与关注", symbol: "checkmark.circle", detail: "实际余额 · 差额 · 待处理", color: FiscalColor.income)
+                            }
+                            .buttonStyle(.plain)
+                            Divider().padding(.leading, 46)
                             NavigationLink(value: IOSMoreDestination.accounts) {
                                 row("账户", symbol: "wallet.bifold", detail: "现金 · 储蓄卡 · 信用卡", color: FiscalColor.accent)
                             }
@@ -203,6 +254,7 @@ private struct IOSMoreScreen: View {
                 case .creditAccount(let accountID):
                     IOSCreditAccountDetail(credit: credit, installments: installments, accountID: accountID, transactions: transactions, accounts: accounts, categories: categories, cashFlow: cashFlow)
                 case .reimbursements: IOSReimbursementsScreen(model: reimbursements, accounts: accounts)
+                case .reconciliation: ReconciliationCenterScreen(model: reconciliation, accounts: accounts, openAttention: openAttention)
                 case .reports: IOSReportsScreen(model: reports)
                 case .cloudConnection:
                     IOSCloudConnectionScreen(

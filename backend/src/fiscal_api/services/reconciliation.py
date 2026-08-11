@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fiscal_api.api.p21_schemas import (
@@ -18,15 +18,22 @@ from fiscal_api.api.p21_schemas import (
     ReconciliationState,
     ReconciliationTargetKind,
 )
-from fiscal_api.core.time import ensure_utc, utc_now
+from fiscal_api.core.time import BUSINESS_TIMEZONE, ensure_utc, utc_now
 from fiscal_api.db.models import (
     Account,
     AccountKind,
     AIProposal,
+    CashFlowItem,
     CreditCycle,
     LedgerTransaction,
     ReconciliationCheckpoint,
+    ReimbursementAllocation,
+    ReimbursementClaim,
+    ReimbursementParty,
+    ReimbursementReceipt,
+    ReimbursementReceiptAllocation,
 )
+from fiscal_api.repositories.credit import CreditRepository
 from fiscal_api.repositories.reconciliation import ReconciliationRepository
 from fiscal_api.services.common import invalid, not_found
 
@@ -119,7 +126,12 @@ class ReconciliationService:
         dismissed = await self.repository.active_dismissals(now)
         items: list[AttentionItem] = []
         checkpoints = await self.repository.list(account_id=None, credit_cycle_id=None)
+        latest_targets: set[tuple[str, UUID]] = set()
         for checkpoint in checkpoints:
+            target_id = checkpoint.account_id or checkpoint.credit_cycle_id
+            if target_id is None or (checkpoint.target_kind, target_id) in latest_targets:
+                continue
+            latest_targets.add((checkpoint.target_kind, target_id))
             response = await self._response(checkpoint)
             if response.state is ReconciliationState.OPEN:
                 items.append(
@@ -195,6 +207,93 @@ class ReconciliationService:
                     deep_link=f"fiscal://ai/proposals/{proposal.id}",
                 )
             )
+        business_date = now.astimezone(BUSINESS_TIMEZONE).date()
+        cash_flow_statement = select(CashFlowItem).where(
+            CashFlowItem.status.in_(["expected", "confirmed"]),
+            CashFlowItem.expected_date < business_date,
+        )
+        for item in (await self.session.scalars(cash_flow_statement)).all():
+            items.append(
+                AttentionItem(
+                    source_type="cash_flow_overdue",
+                    source_id=item.id,
+                    severity=AttentionSeverity.WARNING,
+                    amount_minor=item.planned_amount_minor,
+                    explanation=f"现金流项目“{item.title}”已逾期。",
+                    suggested_action="确认、结算或取消该现金流项目。",
+                    deep_link=f"fiscal://cash-flow/{item.id}",
+                )
+            )
+        party_allocated = (
+            select(func.coalesce(func.sum(ReimbursementAllocation.amount_minor), 0))
+            .where(ReimbursementAllocation.party_id == ReimbursementParty.id)
+            .correlate(ReimbursementParty)
+            .scalar_subquery()
+        )
+        party_received = (
+            select(func.coalesce(func.sum(ReimbursementReceiptAllocation.amount_minor), 0))
+            .join(
+                ReimbursementReceipt,
+                ReimbursementReceipt.id == ReimbursementReceiptAllocation.receipt_id,
+            )
+            .join(LedgerTransaction, LedgerTransaction.id == ReimbursementReceipt.transaction_id)
+            .join(
+                ReimbursementAllocation,
+                ReimbursementAllocation.id == ReimbursementReceiptAllocation.allocation_id,
+            )
+            .where(
+                ReimbursementAllocation.party_id == ReimbursementParty.id,
+                LedgerTransaction.voided_at.is_(None),
+            )
+            .correlate(ReimbursementParty)
+            .scalar_subquery()
+        )
+        party_statement = (
+            select(ReimbursementParty, ReimbursementClaim)
+            .join(ReimbursementClaim, ReimbursementClaim.id == ReimbursementParty.claim_id)
+            .where(
+                ReimbursementParty.expected_date.is_not(None),
+                ReimbursementParty.expected_date < business_date,
+                ReimbursementClaim.submitted_at.is_not(None),
+                ReimbursementClaim.cancelled_at.is_(None),
+                ReimbursementClaim.voided_at.is_(None),
+                party_received < party_allocated,
+            )
+        )
+        for party, claim in (await self.session.execute(party_statement)).all():
+            items.append(
+                AttentionItem(
+                    source_type="reimbursement_overdue",
+                    source_id=party.id,
+                    severity=AttentionSeverity.WARNING,
+                    explanation=f"报销“{claim.title}”的{party.name}已超过预计回款日。",
+                    suggested_action="记录回款或更新报销进度。",
+                    deep_link=f"fiscal://reimbursements/{claim.id}",
+                )
+            )
+        cycles = list(
+            (
+                await self.session.scalars(
+                    select(CreditCycle).where(CreditCycle.due_date < business_date)
+                )
+            ).all()
+        )
+        amounts = await CreditRepository(self.session).amounts([item.id for item in cycles])
+        for cycle in cycles:
+            purchase, repaid = amounts.get(cycle.id, (0, 0))
+            remaining = purchase - repaid
+            if remaining > 0:
+                items.append(
+                    AttentionItem(
+                        source_type="credit_cycle_overdue",
+                        source_id=cycle.id,
+                        severity=AttentionSeverity.CRITICAL,
+                        amount_minor=remaining,
+                        explanation="信用账期仍有未还余额且已逾期。",
+                        suggested_action="查看账期并安排还款。",
+                        deep_link=f"fiscal://credit-cycles/{cycle.id}",
+                    )
+                )
         visible = [item for item in items if (item.source_type, item.source_id) not in dismissed]
         severity = {"critical": 0, "warning": 1, "info": 2}
         visible.sort(

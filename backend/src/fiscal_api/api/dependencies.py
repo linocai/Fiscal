@@ -15,9 +15,9 @@ from fiscal_api.services.cash_flow import CashFlowService
 from fiscal_api.services.categories import CategoryService
 from fiscal_api.services.credit import CreditService
 from fiscal_api.services.installments import InstallmentService
+from fiscal_api.services.reconciliation import ReconciliationService
 from fiscal_api.services.reimbursements import ReimbursementService
 from fiscal_api.services.reporting import ReportingService
-from fiscal_api.services.reconciliation import ReconciliationService
 from fiscal_api.services.transactions import TransactionService
 
 
@@ -107,6 +107,8 @@ CreditServiceDependency = Annotated[CreditService, Depends(get_credit_service)]
 InstallmentServiceDependency = Annotated[InstallmentService, Depends(get_installment_service)]
 ReimbursementServiceDependency = Annotated[ReimbursementService, Depends(get_reimbursement_service)]
 ReportingServiceDependency = Annotated[ReportingService, Depends(get_reporting_service)]
-ReconciliationServiceDependency = Annotated[ReconciliationService, Depends(get_reconciliation_service)]
+ReconciliationServiceDependency = Annotated[
+    ReconciliationService, Depends(get_reconciliation_service)
+]
 AIServiceDependency = Annotated[AIService, Depends(get_ai_service)]
 AccessServiceDependency = Annotated[AccessService, Depends(get_access_service)]

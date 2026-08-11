@@ -3,7 +3,7 @@ import SwiftUI
 
 private enum MacSection: String, CaseIterable, Identifiable {
     case overview = "总览", transactions = "流水", accounts = "账户", cashFlow = "现金流"
-    case reimbursement = "报销", reports = "报表", ai = "AI 待确认", settings = "设置"
+    case reimbursement = "报销", reconciliation = "核对", reports = "报表", ai = "AI 待确认", settings = "设置"
     var id: Self { self }
     var symbol: String {
         switch self {
@@ -12,6 +12,7 @@ private enum MacSection: String, CaseIterable, Identifiable {
         case .accounts: "wallet.bifold"
         case .cashFlow: "arrow.up.arrow.down"
         case .reimbursement: "doc.text"
+        case .reconciliation: "checkmark.circle"
         case .reports: "chart.bar"
         case .ai: "sparkles"
         case .settings: "gearshape"
@@ -24,6 +25,7 @@ private enum MacSection: String, CaseIterable, Identifiable {
         case .accounts: "P2"
         case .cashFlow, .reports: "P7"
         case .reimbursement: "P6"
+        case .reconciliation: "P21"
         case .ai, .settings: "P8"
         }
     }
@@ -43,6 +45,7 @@ struct MacRootView: View {
     let aiProposals: AIProposalModel
     let aiSettings: AISettingsModel
     let passphrase: PassphraseModel
+    let reconciliation: ReconciliationModel
     let recordingPreferences: RecordingPreferences
     let cache: HTTPResponseCache
     @State private var section: MacSection = .overview
@@ -73,6 +76,8 @@ struct MacRootView: View {
                     MacTransactionWorkbench(model: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments, preferences: recordingPreferences)
                 } else if section == .reimbursement {
                     MacReimbursementsScreen(model: reimbursements, accounts: accounts)
+                } else if section == .reconciliation {
+                    ReconciliationCenterScreen(model: reconciliation, accounts: accounts, openAttention: openAttention)
                 } else if section == .cashFlow {
                     MacFutureCashFlowScreen(
                         model: cashFlow, accounts: accounts, categories: categories,
@@ -105,6 +110,7 @@ struct MacRootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .background(FiscalColor.macBackground)
+        .onOpenURL(perform: openDeepLink)
         .sheet(isPresented: $showCategories) {
             NavigationStack { CategoriesManagementScreen(model: categories) }
                 .frame(width: 660, height: 680)
@@ -138,6 +144,36 @@ struct MacRootView: View {
                 CreditCycleProjectionSheet(credit: credit, cycleID: cycleID)
                     .frame(width: 560, height: 680)
             }
+        }
+    }
+
+    private func openAttention(_ item: AttentionItemDTO) {
+        switch item.sourceType {
+        case "uncategorized_transaction":
+            transactions.classification = .uncategorized
+            section = .transactions
+            Task { await transactions.load() }
+        case "ai_proposal": section = .ai
+        case "cash_flow_overdue": section = .cashFlow
+        case "reimbursement_overdue": section = .reimbursement
+        case "credit_cycle_overdue": section = .accounts
+        default: section = .reconciliation
+        }
+    }
+
+    private func openDeepLink(_ url: URL) {
+        guard url.scheme == "fiscal" else { return }
+        switch url.host {
+        case "transactions":
+            transactions.classification = .uncategorized
+            section = .transactions
+            Task { await transactions.load() }
+        case "ai": section = .ai
+        case "cash-flow": section = .cashFlow
+        case "reimbursements": section = .reimbursement
+        case "credit-cycles": section = .accounts
+        case "reconciliation": section = .reconciliation
+        default: break
         }
     }
 
