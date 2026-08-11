@@ -7,6 +7,7 @@ created exclusively; an existing archive is never overwritten.
 
 import argparse
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -27,17 +28,32 @@ def _parser() -> argparse.ArgumentParser:
 
 
 async def _run(args: argparse.Namespace, password: str) -> None:
-    engine = create_engine(Settings().database_url)
+    # Reserve the exact path before the potentially long database export.  The
+    # exclusive create prevents a concurrent operator from replacing an
+    # existing archive; every later failure removes only this reservation.
+    created_output = False
     try:
-        factory = create_session_factory(engine)
-        async with factory() as session:
-            archive, _manifest = await ArchiveService(session).export(
-                password=password, include_ai_raw=args.include_ai_raw
-            )
         with args.output.open("xb") as output:
+            created_output = True
+            engine = create_engine(Settings().database_url)
+            try:
+                factory = create_session_factory(engine)
+                async with factory() as session:
+                    archive, _manifest = await ArchiveService(session).export(
+                        password=password, include_ai_raw=args.include_ai_raw
+                    )
+            finally:
+                await engine.dispose()
             output.write(archive)
-    finally:
-        await engine.dispose()
+            output.flush()
+            os.fsync(output.fileno())
+    except BaseException:
+        if created_output:
+            try:
+                args.output.unlink()
+            except FileNotFoundError:
+                pass
+        raise
     print(f"archive_written={args.output}")
 
 

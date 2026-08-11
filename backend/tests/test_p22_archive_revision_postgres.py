@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import argparse
 import asyncio
 import copy
 import hashlib
@@ -16,6 +19,7 @@ from sqlalchemy import text
 from fiscal_api.cli import archive_export
 from fiscal_api.core.config import Settings
 from fiscal_api.db.base import Base
+from fiscal_api.db.models.ai import AIProposal
 from fiscal_api.db.session import create_engine
 from fiscal_api.main import create_app
 from fiscal_api.services.archive import ArchiveError, ArchiveService
@@ -99,6 +103,117 @@ def test_p22_archive_export_cli_requires_password_on_stdin(
     with pytest.raises(SystemExit, match="standard input"):
         archive_export.main()
     assert not output.exists()
+
+
+class _FakeExportEngine:
+    async def dispose(self) -> None:
+        return None
+
+
+class _FakeExportSession:
+    async def __aenter__(self) -> _FakeExportSession:
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        return None
+
+
+def _stub_cli_export_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(archive_export, "create_engine", lambda _: _FakeExportEngine())
+    monkeypatch.setattr(
+        archive_export,
+        "create_session_factory",
+        lambda _: lambda: _FakeExportSession(),
+    )
+
+
+def test_p22_archive_export_cli_removes_only_its_failed_reservation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    password = uuid4().hex + uuid4().hex
+    _stub_cli_export_environment(monkeypatch)
+
+    async def failed_export(
+        self: ArchiveService, *, password: str, include_ai_raw: bool
+    ) -> tuple[bytes, dict[str, object]]:
+        raise RuntimeError("simulated archive export failure")
+
+    monkeypatch.setattr(ArchiveService, "export", failed_export)
+    export_failure = tmp_path / "export-failure.far"
+    with pytest.raises(RuntimeError, match="simulated archive export failure"):
+        asyncio.run(
+            archive_export._run(
+                argparse.Namespace(output=export_failure, include_ai_raw=False), password
+            )
+        )
+    assert not export_failure.exists()
+
+    async def successful_export(
+        self: ArchiveService, *, password: str, include_ai_raw: bool
+    ) -> tuple[bytes, dict[str, object]]:
+        return b"would-be-archive", {}
+
+    monkeypatch.setattr(ArchiveService, "export", successful_export)
+    real_open = Path.open
+
+    class PartialWriteFailure:
+        def __init__(self, output: object) -> None:
+            self.output = output
+
+        def __enter__(self) -> PartialWriteFailure:
+            return self
+
+        def __exit__(self, *args: object) -> object:
+            return self.output.__exit__(*args)  # type: ignore[union-attr,no-any-return]
+
+        def write(self, value: bytes) -> int:
+            self.output.write(value[:4])  # type: ignore[union-attr,no-any-return]
+            raise OSError("simulated partial write failure")
+
+        def flush(self) -> None:
+            self.output.flush()  # type: ignore[union-attr]
+
+        def fileno(self) -> int:
+            return self.output.fileno()  # type: ignore[union-attr,no-any-return]
+
+    monkeypatch.setattr(
+        Path,
+        "open",
+        lambda path, *args, **kwargs: PartialWriteFailure(real_open(path, *args, **kwargs)),
+    )
+    write_failure = tmp_path / "write-failure.far"
+    with pytest.raises(OSError, match="simulated partial write failure"):
+        asyncio.run(
+            archive_export._run(
+                argparse.Namespace(output=write_failure, include_ai_raw=False), password
+            )
+        )
+    assert not write_failure.exists()
+
+
+def test_p22_archive_export_cli_rejects_existing_before_export(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    output = tmp_path / "existing.far"
+    output.write_bytes(b"do-not-overwrite")
+    called = False
+
+    async def must_not_export(
+        self: ArchiveService, *, password: str, include_ai_raw: bool
+    ) -> tuple[bytes, dict[str, object]]:
+        nonlocal called
+        called = True
+        return b"unexpected", {}
+
+    monkeypatch.setattr(ArchiveService, "export", must_not_export)
+    with pytest.raises(FileExistsError):
+        asyncio.run(
+            archive_export._run(
+                argparse.Namespace(output=output, include_ai_raw=False), uuid4().hex + uuid4().hex
+            )
+        )
+    assert called is False
+    assert output.read_bytes() == b"do-not-overwrite"
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
@@ -322,15 +437,53 @@ def test_p22_archive_export_cli_is_stdin_only_and_never_overwrites(
         monkeypatch.setattr(sys, "stdin", io.StringIO(password + "\n"))
         archive_export.main()
 
+    raw_ai_input = f"P22 AI raw input {uuid4().hex}"
+
+    async def seed_ai_proposal() -> None:
+        engine = create_engine(TEST_DATABASE_URL)
+        try:
+            from fiscal_api.db.session import create_session_factory
+
+            async with create_session_factory(engine)() as session:
+                session.add(
+                    AIProposal(
+                        source="text",
+                        raw_input=raw_ai_input,
+                        content_fingerprint=hashlib.sha256(raw_ai_input.encode()).hexdigest(),
+                        create_idempotency_key=uuid4(),
+                        create_request_hash=hashlib.sha256(
+                            f"request:{raw_ai_input}".encode()
+                        ).hexdigest(),
+                        field_confidences={},
+                        missing_fields=[],
+                        reason_codes=[],
+                        status="failed",
+                        error_code="archive_test",
+                    )
+                )
+                await session.commit()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(seed_ai_proposal())
     default_archive = tmp_path / "default.far"
     invoke(str(default_archive))
-    default_manifest, _ = ArchiveService.open(default_archive.read_bytes(), password=password)
+    default_manifest, default_payload = ArchiveService.open(
+        default_archive.read_bytes(), password=password
+    )
     assert default_manifest["includes_ai_raw"] is False
+    default_proposal = next(
+        row
+        for row in default_payload["entities"]["ai_proposals"]
+        if row["raw_input"] == "[AI raw input excluded from Fiscal Archive]"
+    )
+    assert default_proposal["raw_input"] != raw_ai_input
 
     raw_archive = tmp_path / "raw.far"
     invoke("--include-ai-raw", str(raw_archive))
-    raw_manifest, _ = ArchiveService.open(raw_archive.read_bytes(), password=password)
+    raw_manifest, raw_payload = ArchiveService.open(raw_archive.read_bytes(), password=password)
     assert raw_manifest["includes_ai_raw"] is True
+    assert any(row["raw_input"] == raw_ai_input for row in raw_payload["entities"]["ai_proposals"])
 
     existing = tmp_path / "existing.far"
     existing.write_bytes(b"do-not-overwrite")
