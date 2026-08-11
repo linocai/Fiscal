@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 控制面版本：v1.3.0 施工版 ｜ 更新：2026-08-11 ｜ 状态：P20–P22 已完成。P22 精确 `5330b42` 已生产部署为 `20260811_0022`；post-backup isolated restore、唯一可清理 receipt QA、macOS 与 Kurisu 物理验收均通过。P23 的本地 schema/backend 与 Apple 质量入口已提交（`60f553b`、`2ed13f9`）；生产、真实 provider、shadow/deploy 与真机门尚未开始。异地备份未配置为 carried risk，真实告警已延期。
+> 控制面版本：v1.3.0 施工版 ｜ 更新：2026-08-11 ｜ 状态：P20–P23 均已通过 Automated / Production / Mac + Kurisu 验收。P23 已以 `be664f8` 部署为 `20260811_0023`，生产/影子均未调用真实 Provider；最终 manifest commit 仍须作为精确 HEAD 单独复部署后才可 tag/push。异地备份未配置为 carried risk，真实告警已延期。
 > 本文件只保留现行目标、决策、门禁与下一步；历史实施证据以 `docs/qa/p*/results.md`、发布 tag 与 Git 为准，不从本文件追写。
 
 ## 1. 当前事实与 P20 审计起点
@@ -81,7 +81,7 @@
 
 **目标**：把 AI 提案的原始判断、人工修正、执行结果和策略效果变为可测量、可回溯、可自动收紧的安全闭环。
 
-**当前状态**：本地 P23 候选 `cac6ab2` 已完成 0023 schema/events/metrics/policy/rules、脱敏 shadow candidate gate 和双端 UI；fresh PostgreSQL 14 全量 251 tests、0023↔0022/离线 SQL、Ruff/Pyright、macOS 101/19 单测、iOS/macOS 独立签名 Release 均通过。生产仍为 `5330b42 / 20260811_0022`，未迁移、未调用真实 Provider、未做 Mac/Kurisu P23 真机门；需单独授权。
+**当前状态**：P23 已生产闭环：`be664f8` 已部署为 `20260811_0023`，生产 revision `2` 与账本 `184/201/0` 不变，post-backup 隔离恢复、受保护质量/策略/规则读取、macOS 与 Kurisu `1.3.0 (21)` 安装启动均通过。影子服务链以无网络 synthetic provider 验收 `parsed→ignored` 及 append-only 事件后已删除；真实候选 Provider shadow 本期明确跳过。最终 manifest commit 必须再 same-head 部署才可 tag/push。
 
 - **数据契约**：每个提案保留不可覆盖的原始输入、首次结构化 parse snapshot、最终确认值及字段级 diff；另记录 unchanged/edited confirm、ignored（可选原因）、execute failed、automatic/manual execute、undo、provider retry/final failure。旧提案不伪造历史，标为 `historical_unavailable`。
 - **隐私/领域边界**：原文与快照仅留在 Fiscal 数据库/显式加密 archive，不送第三方分析；质量事件不可编辑且不是面向用户的复杂审计产品。AI 只能调用手工录入同一正式服务、相同校验/幂等/撤销，不能直接写 posting。
@@ -89,7 +89,7 @@
 - **确定性学习**：仅建立可见、可撤销、需重复证据的 merchant→category、标题→账户、分类别名/来源上下文规则；绑定稳定 ID，不自动创分类、不以单次修正永久改变行为，不训练或微调外部模型。
 - **施工提交**：A snapshot/diff/event schema 与旧数据兼容 → B 质量聚合/API/隐私测试 → C 策略版本与自动降级 → D 双端提案解释、规则管理与指标 → E shadow corpus、端到端真机 QA。
 - **验收/回退**：可还原 AI→修正→正式记录链；指标分母守恒；策略版本/生效时刻可查；新模型无评估不得替换；异常可自动降级；OCR/快捷指令→提案→确认/自动→流水→撤销在两端真机完成。关闭自动执行或回退策略不删除事件；schema 回退按 P20 规则。
-- **风险/门**：原文隐私、错误统计和自动化扩大风险最高；必须完成 P22 archive/revision、shadow 回归和生产观察，才可允许最终发布候选。
+- **风险/门**：原文隐私、错误统计和自动化扩大风险最高；P22 archive/revision、shadow、生产恢复和双端验收已通过。真实候选 Provider/提示词替换仍须单独授权脱敏 shadow corpus；异地备份/真实告警继续作为 carried risk。
 
 ## 8. v1.3.0 收口、决策与恢复入口
 
