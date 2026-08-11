@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 public enum JSONValue: Codable, Sendable, Equatable {
@@ -46,28 +47,30 @@ public actor APITransport {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let responseCache: HTTPResponseCache
+    private let offlineSnapshots: OfflineSnapshotStore
+    private let revisionStore: DataRevisionStore?
     /// Monotonic marker bumped on every successful mutation. A GET only writes its response back
     /// to the cache if this is unchanged from when the GET was issued, so a read that was already
     /// in flight when a mutation cleared the cache can never re-poison it with pre-mutation data.
     private var cacheGeneration: UInt64 = 0
 
-    public init(baseURL: URL, session: URLSession = .shared, accessKeyStore: AccessKeyStore = .init(), responseCache: HTTPResponseCache = .shared) {
-        self.baseURL = baseURL; self.session = session; self.tokenProvider = { try await accessKeyStore.read() }; self.responseCache = responseCache
+    public init(baseURL: URL, session: URLSession = .shared, accessKeyStore: AccessKeyStore = .init(), responseCache: HTTPResponseCache = .shared, offlineSnapshots: OfflineSnapshotStore = .shared, revisionStore: DataRevisionStore? = nil) {
+        self.baseURL = baseURL; self.session = session; self.tokenProvider = { try await accessKeyStore.read() }; self.responseCache = responseCache; self.offlineSnapshots = offlineSnapshots; self.revisionStore = revisionStore
         encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
     }
 
     /// A non-persistent credential seam for deterministic tools and tests. Production apps keep
     /// using the Keychain-backed initializer above.
-    public init(baseURL: URL, session: URLSession = .shared, token: String, responseCache: HTTPResponseCache = .shared) {
-        self.baseURL = baseURL; self.session = session; self.tokenProvider = { token }; self.responseCache = responseCache
+    public init(baseURL: URL, session: URLSession = .shared, token: String, responseCache: HTTPResponseCache = .shared, offlineSnapshots: OfflineSnapshotStore = .shared, revisionStore: DataRevisionStore? = nil) {
+        self.baseURL = baseURL; self.session = session; self.tokenProvider = { token }; self.responseCache = responseCache; self.offlineSnapshots = offlineSnapshots; self.revisionStore = revisionStore
         encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
     }
 
     public func request<Response: Decodable & Sendable, Body: Encodable & Sendable>(
         _ path: String, method: String = "GET", query: [URLQueryItem] = [], headers: [String: String] = [:],
-        authorizationToken: String? = nil, body: Body? = Optional<String>.none
+        authorizationToken: String? = nil, cache: Bool = true, body: Body? = Optional<String>.none
     ) async throws -> Response {
         var request = URLRequest(url: try Self.endpointURL(baseURL: baseURL, path: path, query: query))
         request.httpMethod = method; request.timeoutInterval = 15
@@ -78,7 +81,8 @@ public actor APITransport {
         else { token = try await tokenProvider() }
         if let token, !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body { request.httpBody = try encoder.encode(body); request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
-        let cacheKey = request.httpMethod == "GET" ? cacheKey(for: request, token: token) : nil
+        let isGET = request.httpMethod == "GET"
+        let cacheKey = cache && isGET ? cacheKey(for: request, token: token) : nil
         if let cacheKey, let cached = await responseCache.data(for: cacheKey) {
             if let decoded = try? decoder.decode(Response.self, from: cached) { return decoded }
             // Poisoned cache entry (undecodable body): evict it and fall through to the network
@@ -86,8 +90,24 @@ public actor APITransport {
             await responseCache.remove(cacheKey)
         }
         let startGeneration = cacheGeneration
-        var (data, http) = try await perform(request)
-        if http.statusCode == 429, cacheKey != nil {
+        var data: Data
+        var http: HTTPURLResponse
+        do {
+            (data, http) = try await perform(request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as FiscalAPIError {
+            guard case .transport = error,
+                  let cacheKey,
+                  let snapshot = await offlineSnapshots.data(for: cacheKey),
+                  let decoded = try? decoder.decode(Response.self, from: snapshot.data)
+            else { throw error }
+            await revisionStore?.markOfflineSnapshot(at: snapshot.status.storedAt)
+            return decoded
+        } catch {
+            throw error
+        }
+        if http.statusCode == 429, isGET {
             // An idempotent read bounced off the gateway limiter; one short-backoff retry absorbs
             // a refresh burst instead of surfacing an error for a self-healing situation.
             try await Task.sleep(nanoseconds: 1_200_000_000)
@@ -100,18 +120,24 @@ public actor APITransport {
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
-        if let cacheKey {
+        if isGET {
             // GET: decode before caching so an undecodable body never gets stored, and only cache
             // if no mutation bumped the generation while this read was in flight (M14).
             let decoded: Response
             do { decoded = try decoder.decode(Response.self, from: data) }
             catch { throw FiscalAPIError.invalidResponse }
-            if cacheGeneration == startGeneration { await responseCache.store(data, for: cacheKey) }
+            if let cacheKey, cacheGeneration == startGeneration {
+                await responseCache.store(data, for: cacheKey)
+                await offlineSnapshots.store(data, for: cacheKey)
+            }
+            await revisionStore?.markOnline()
             return decoded
         }
         // Mutation: invalidate every cache entry on success regardless of body decodability.
         cacheGeneration &+= 1
         await responseCache.removeAll()
+        await revisionStore?.markOnline()
+        await acceptRevisionReceipt(from: http)
         do { return try decoder.decode(Response.self, from: data) } catch { throw FiscalAPIError.invalidResponse }
     }
 
@@ -129,6 +155,16 @@ public actor APITransport {
         }
         cacheGeneration &+= 1
         await responseCache.removeAll()
+        await revisionStore?.markOnline()
+        await acceptRevisionReceipt(from: http)
+    }
+
+    /// Polls the additive P22 revision contract without using either memory or disk response
+    /// caches. Servers predating P22 simply fail this request and leave the current UI intact.
+    public func refreshDataRevision() async throws {
+        let pollBaseline = await revisionStore?.currentRevision
+        let response: DataRevisionResponse = try await request("data-revision", cache: false)
+        await revisionStore?.observeServer(revision: response.revision, pollBaseline: pollBaseline)
     }
 
     public func requestNoContent<Body: Encodable & Sendable>(
@@ -153,6 +189,8 @@ public actor APITransport {
         }
         cacheGeneration &+= 1
         await responseCache.removeAll()
+        await revisionStore?.markOnline()
+        await acceptRevisionReceipt(from: http)
     }
 
     /// Performs an authenticated, uncached GET for non-JSON server artifacts such as CSV.
@@ -176,11 +214,14 @@ public actor APITransport {
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
+        await revisionStore?.markOnline()
         return data
     }
 
     private func cacheKey(for request: URLRequest, token: String?) -> String {
-        let tokenScope = token.map { String($0.hashValue) } ?? "anonymous"
+        let tokenScope = token.map {
+            SHA256.hash(data: Data($0.utf8)).map { String(format: "%02x", $0) }.joined()
+        } ?? "anonymous"
         return "\(request.url?.absoluteString ?? "")|\(tokenScope)"
     }
 
@@ -209,5 +250,11 @@ public actor APITransport {
         catch { throw FiscalAPIError.transport(error.localizedDescription) }
         guard let http = response as? HTTPURLResponse else { throw FiscalAPIError.invalidResponse }
         return (data, http)
+    }
+
+    private func acceptRevisionReceipt(from response: HTTPURLResponse) async {
+        guard let raw = response.value(forHTTPHeaderField: "X-Fiscal-Data-Revision"), let revision = Int64(raw) else { return }
+        let scopes = Set((response.value(forHTTPHeaderField: "X-Fiscal-Affected-Scopes") ?? "").split(separator: ",").map(String.init).filter { !$0.isEmpty })
+        await revisionStore?.accept(.init(revision: revision, scopes: scopes))
     }
 }

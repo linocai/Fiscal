@@ -10,10 +10,14 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     let status: Int
     let body: Data
     let sleep: TimeInterval
-    init(status: Int = 200, body: Data, sleep: TimeInterval = 0) {
+    let failure: URLError?
+    let headers: [String: String]
+    init(status: Int = 200, body: Data, sleep: TimeInterval = 0, failure: URLError? = nil, headers: [String: String] = [:]) {
       self.status = status
       self.body = body
       self.sleep = sleep
+      self.failure = failure
+      self.headers = headers
     }
   }
 
@@ -47,9 +51,10 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     }
     let stub = handler(request)
     if stub.sleep > 0 { Thread.sleep(forTimeInterval: stub.sleep) }
+    if let failure = stub.failure { client?.urlProtocol(self, didFailWithError: failure); return }
     let response = HTTPURLResponse(
       url: request.url!, statusCode: stub.status, httpVersion: "HTTP/1.1",
-      headerFields: ["Content-Type": "application/json"])!
+      headerFields: ["Content-Type": "application/json"].merging(stub.headers) { _, new in new })!
     client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
     client?.urlProtocol(self, didLoad: stub.body)
     client?.urlProtocolDidFinishLoading(self)

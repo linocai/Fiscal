@@ -23,6 +23,9 @@ public struct TransactionEditorSheet: View {
     let installments: InstallmentModel?
     let preferences: RecordingPreferences?
     let appliesPreferences: Bool
+    let localDrafts: TransactionLocalDraftStore
+    let revisions: DataRevisionStore?
+    private let supportsLocalDraft: Bool
     @State private var editor: TransactionEditorModel
     @State private var accountOptions: [AccountDTO] = []
     @State private var categoryOptions: [CategoryDTO] = []
@@ -43,10 +46,14 @@ public struct TransactionEditorSheet: View {
     @State private var installmentFeeOccurredAt = Date()
     @State private var previewedInstallmentRequest: InstallmentPurchaseCreateRequest?
     @State private var installmentValidation: String?
+    @State private var pendingDraftSavedAt: Date?
 
-    public init(transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil, installments: InstallmentModel? = nil, editing: TransactionDTO? = nil, initialKind: TransactionKind? = nil, creditAccountID: UUID? = nil, cycleID: UUID? = nil, amountMinor: Int64? = nil, preferences: RecordingPreferences? = nil) {
+    public init(transactions: TransactionsModel, accounts: AccountsModel, categories: CategoriesModel, credit: CreditModel? = nil, installments: InstallmentModel? = nil, editing: TransactionDTO? = nil, initialKind: TransactionKind? = nil, creditAccountID: UUID? = nil, cycleID: UUID? = nil, amountMinor: Int64? = nil, preferences: RecordingPreferences? = nil, localDrafts: TransactionLocalDraftStore = .shared, revisions: DataRevisionStore? = nil) {
         self.transactions = transactions; self.accounts = accounts; self.categories = categories; self.credit = credit; self.installments = installments; self.preferences = preferences
+        self.localDrafts = localDrafts
+        self.revisions = revisions
         appliesPreferences = editing == nil && initialKind == nil && preferences != nil
+        supportsLocalDraft = editing == nil && initialKind == nil && amountMinor == nil
         let model = TransactionEditorModel(editing: editing)
         if let initialKind { model.changeKind(initialKind) }
         if initialKind == .repayment { model.draft.destinationAccountID = creditAccountID; model.draft.creditCycleID = cycleID }
@@ -105,7 +112,7 @@ public struct TransactionEditorSheet: View {
 #endif
             }
             .safeAreaInset(edge: .bottom) { saveBar }
-            .task { await loadOptions() }
+            .task { await loadOptions(); await restoreLocalDraft() }
         }
         .frame(minWidth: 380, idealWidth: 440, minHeight: 520, idealHeight: 620)
         .interactiveDismissDisabled(transactions.isMutating || installments?.isMutating == true)
@@ -168,18 +175,34 @@ public struct TransactionEditorSheet: View {
         }
     }
     private var saveBar: some View {
-        Button {
-            focusedField = nil; requestSave()
-        } label: {
-            Text((transactions.isMutating || installments?.isMutating == true) ? "保存中…" : (editor.editing == nil ? "保存这笔流水" : "保存修改"))
-                .frame(maxWidth: .infinity)
+        VStack(spacing: 8) {
+            if supportsLocalDraft {
+                Button(pendingDraftSavedAt == nil ? "保存为未提交草稿" : "更新未提交草稿") {
+                    Task { await saveLocalDraft() }
+                }
+                .buttonStyle(FiscalActionButtonStyle(.secondary))
+                .accessibilityIdentifier("transaction.localDraft.save")
+                if let pendingDraftSavedAt {
+                    Text("未提交草稿 · \(pendingDraftSavedAt.formatted(date: .abbreviated, time: .shortened)) · 需手动提交")
+                        .font(.caption).foregroundStyle(FiscalColor.tertiary)
+                }
+            }
+            if let storedAt = revisions?.offlineSnapshotAt {
+                Label("离线只读快照 · \(storedAt.formatted(date: .abbreviated, time: .shortened))；只能保存未提交草稿", systemImage: "wifi.slash")
+                    .font(.caption).foregroundStyle(FiscalColor.expense)
+                    .accessibilityIdentifier("transaction.offlineReadOnly")
+            }
+            Button {
+                focusedField = nil; requestSave()
+            } label: {
+                Text((transactions.isMutating || installments?.isMutating == true) ? "保存中…" : (editor.editing == nil ? "保存这笔流水" : "保存修改"))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(FiscalActionButtonStyle())
+            .disabled(transactions.isMutating || installments?.isMutating == true || loadingOptions || optionsError != nil || !canSubmitFormal)
+            .accessibilityIdentifier("transaction.save")
         }
-        .buttonStyle(FiscalActionButtonStyle())
-        .disabled(transactions.isMutating || installments?.isMutating == true || loadingOptions || optionsError != nil)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 16).padding(.vertical, 10)
-        .background(.regularMaterial)
-        .accessibilityIdentifier("transaction.save")
+        .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.vertical, 10).background(.regularMaterial)
     }
     private var editorBackground: Color {
 #if os(iOS)
@@ -187,6 +210,9 @@ public struct TransactionEditorSheet: View {
 #else
         FiscalColor.macBackground
 #endif
+    }
+    private var canSubmitFormal: Bool {
+        FormalSubmissionGate.canSubmit(offlineSnapshotAt: revisions?.offlineSnapshotAt)
     }
     private func sectionTitle(_ title: String) -> some View {
         Text(title).font(.headline).padding(.horizontal, 3)
@@ -481,6 +507,7 @@ public struct TransactionEditorSheet: View {
     private var shouldStayAfterSave: Bool { editor.editing == nil && preferences?.stayAfterSave == true }
     private func completeSuccessfulSave() {
         savedCycleDescription = nil
+        if supportsLocalDraft { Task { await localDrafts.remove() } }
         guard shouldStayAfterSave else { dismiss(); return }
         editor.resetForNextEntry(validAccounts: accountOptions)
         cycleOptions = []
@@ -488,6 +515,22 @@ public struct TransactionEditorSheet: View {
         referenceValidation = nil
         transactions.clearMessage()
         focusedField = .amount
+    }
+
+    private func restoreLocalDraft() async {
+        guard supportsLocalDraft, editor.draft.title.isEmpty, let saved = await localDrafts.load() else { return }
+        editor.draft = saved.draft
+        editor.amountText = saved.amountText
+        editor.restoreCreateKey(saved.idempotencyKey)
+        pendingDraftSavedAt = saved.savedAt
+    }
+
+    private func saveLocalDraft() async {
+        guard supportsLocalDraft else { return }
+        let value = PendingTransactionDraft(
+            draft: editor.draft, amountText: editor.amountText, idempotencyKey: editor.idempotencyKey)
+        await localDrafts.save(value)
+        pendingDraftSavedAt = value.savedAt
     }
 }
 

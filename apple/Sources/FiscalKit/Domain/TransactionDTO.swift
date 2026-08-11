@@ -156,6 +156,18 @@ public struct TransactionDraft: Codable, Sendable, Equatable {
         try c.encode(kind == .transfer || kind == .repayment ? destinationAccountID : nil, forKey: .destinationAccountID)
         try c.encode(kind == .repayment ? creditCycleID : nil, forKey: .creditCycleID)
     }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decode(TransactionKind.self, forKey: .kind)
+        occurredAt = try c.decode(Date.self, forKey: .occurredAt)
+        title = try c.decode(String.self, forKey: .title)
+        note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+        amountMinor = try c.decode(Int64.self, forKey: .amountMinor)
+        categoryID = try c.decodeIfPresent(UUID.self, forKey: .categoryID)
+        accountID = try c.decodeIfPresent(UUID.self, forKey: .accountID)
+        destinationAccountID = try c.decodeIfPresent(UUID.self, forKey: .destinationAccountID)
+        creditCycleID = try c.decodeIfPresent(UUID.self, forKey: .creditCycleID)
+    }
 }
 
 public struct VersionedTransactionDraft: Codable, Sendable {

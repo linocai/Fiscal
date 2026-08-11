@@ -318,6 +318,7 @@ public final class TransactionEditorModel {
         switch kind { case .transfer: 1; case .repayment: 2; default: 0 }
     }
     public func rotateCreateKey() { if editing == nil { idempotencyKey = UUID() } }
+    public func restoreCreateKey(_ key: UUID) { if editing == nil { idempotencyKey = key } }
     public func apply(preferences: RecordingPreferences, accounts: [AccountDTO]) {
         guard editing == nil else { return }
         changeKind(preferences.defaultKind.transactionKind)

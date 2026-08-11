@@ -1,15 +1,19 @@
 import asyncio
 import copy
 import hashlib
+import io
 import json
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from os import environ
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+from fiscal_api.cli import archive_export
 from fiscal_api.core.config import Settings
 from fiscal_api.db.base import Base
 from fiscal_api.db.session import create_engine
@@ -84,6 +88,17 @@ def test_p22_archive_crypto_contract_runs_without_postgres() -> None:
     malformed["entities"]["transactions"] = [{"id": "duplicate"}]
     with pytest.raises(ArchiveError):
         ArchiveService.dry_run_report(manifest, malformed)
+
+
+def test_p22_archive_export_cli_requires_password_on_stdin(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    output = tmp_path / "archive.far"
+    monkeypatch.setattr(sys, "argv", ["archive_export.py", str(output)])
+    monkeypatch.setattr(sys, "stdin", io.StringIO("too-short\n"))
+    with pytest.raises(SystemExit, match="standard input"):
+        archive_export.main()
+    assert not output.exists()
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
@@ -292,3 +307,38 @@ def test_p22_archive_round_trip_rejects_tampering_and_secrets() -> None:
             await engine.dispose()
 
     asyncio.run(restore())
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
+def test_p22_archive_export_cli_is_stdin_only_and_never_overwrites(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    assert TEST_DATABASE_URL is not None
+    password = uuid4().hex + uuid4().hex
+    monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
+
+    def invoke(*args: str) -> None:
+        monkeypatch.setattr(sys, "argv", ["archive_export.py", *args])
+        monkeypatch.setattr(sys, "stdin", io.StringIO(password + "\n"))
+        archive_export.main()
+
+    default_archive = tmp_path / "default.far"
+    invoke(str(default_archive))
+    default_manifest, _ = ArchiveService.open(default_archive.read_bytes(), password=password)
+    assert default_manifest["includes_ai_raw"] is False
+
+    raw_archive = tmp_path / "raw.far"
+    invoke("--include-ai-raw", str(raw_archive))
+    raw_manifest, _ = ArchiveService.open(raw_archive.read_bytes(), password=password)
+    assert raw_manifest["includes_ai_raw"] is True
+
+    existing = tmp_path / "existing.far"
+    existing.write_bytes(b"do-not-overwrite")
+    with pytest.raises(SystemExit, match="File exists"):
+        invoke(str(existing))
+    assert existing.read_bytes() == b"do-not-overwrite"
+
+    missing_parent = tmp_path / "missing" / "partial.far"
+    with pytest.raises(SystemExit, match="No such file"):
+        invoke(str(missing_parent))
+    assert not missing_parent.exists()

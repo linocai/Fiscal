@@ -10,6 +10,7 @@ private enum IOSMoreDestination: Hashable {
 
 struct IOSRootView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.scenePhase) private var scenePhase
     @Bindable var connection: ConnectionModel
     let accounts: AccountsModel
     let categories: CategoriesModel
@@ -25,6 +26,8 @@ struct IOSRootView: View {
     let passphrase: PassphraseModel
     let reconciliation: ReconciliationModel
     let recordingPreferences: RecordingPreferences
+    let revisions: DataRevisionStore
+    let revisionTransport: APITransport
     @State private var selection: IOSTab = .overview
     @State private var showRecordSheet = false
     @State private var morePath: [IOSMoreDestination] = []
@@ -72,10 +75,18 @@ struct IOSRootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(FiscalColor.iOSBackground.ignoresSafeArea())
+        .overlay(alignment: .topTrailing) {
+            if let storedAt = revisions.offlineSnapshotAt {
+                Label("离线只读快照 · \(storedAt.formatted(date: .abbreviated, time: .shortened))", systemImage: "wifi.slash")
+                    .font(.caption.weight(.medium)).padding(8)
+                    .background(.thinMaterial, in: .capsule).padding(12)
+                    .accessibilityIdentifier("fiscal.offlineSnapshot")
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if selection != .more || morePath.isEmpty { tabBar }
         }
-        .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments, preferences: recordingPreferences) }
+        .sheet(isPresented: $showRecordSheet) { TransactionEditorSheet(transactions: transactions, accounts: accounts, categories: categories, credit: credit, installments: installments, preferences: recordingPreferences, revisions: revisions) }
         .sheet(isPresented: $showAIProposals) { IOSAIProposalSheet(model: aiProposals, accounts: accounts, categories: categories, credit: credit) }
         .sheet(item: $repaymentItem) { item in
             TransactionEditorSheet(
@@ -95,6 +106,11 @@ struct IOSRootView: View {
             }
         }
         .onOpenURL(perform: openDeepLink)
+        .onChange(of: revisions.latest?.revision) { _, _ in Task { await convergeRevision() } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await refreshDataRevision() } }
+        }
+        .task { await refreshDataRevision() }
     }
 
     private var tabBar: some View {
@@ -156,6 +172,27 @@ struct IOSRootView: View {
             morePath = [.reconciliation]
             selection = .more
         }
+    }
+
+    private func convergeRevision() async {
+        guard let scopes = revisions.latest?.scopes else { return }
+        let fullRefresh = scopes.isEmpty
+        async let accountsLoad: Void = (fullRefresh || scopes.contains("accounts")) ? accounts.load() : ()
+        async let categoriesLoad: Void = (fullRefresh || scopes.contains("ledger")) ? categories.load() : ()
+        async let ledgerLoad: Void = (fullRefresh || scopes.contains("ledger")) ? transactions.load() : ()
+        async let creditLoad: Void = (fullRefresh || scopes.contains("accounts") || scopes.contains("credit")) ? credit.refreshCurrentSelection() : ()
+        async let cashFlowLoad: Void = (fullRefresh || scopes.contains("cash_flow")) ? cashFlow.load() : ()
+        async let reimbursementLoad: Void = (fullRefresh || scopes.contains("reimbursements")) ? reimbursements.load() : ()
+        async let reconciliationLoad: Void = (fullRefresh || scopes.contains("reconciliation")) ? reconciliation.refreshCurrent() : ()
+        async let reportLoad: Void = (fullRefresh || scopes.contains("reports")) ? reports.loadSpending() : ()
+        async let overviewLoad: Void = (fullRefresh || scopes.contains("reports")) ? overview.loadOverview() : ()
+        async let aiLoad: Void = (fullRefresh || scopes.contains("ai")) ? aiProposals.load() : ()
+        async let aiSettingsLoad: Void = (fullRefresh || scopes.contains("ai")) ? aiSettings.load() : ()
+        _ = await (accountsLoad, categoriesLoad, ledgerLoad, creditLoad, cashFlowLoad, reimbursementLoad, reconciliationLoad, reportLoad, overviewLoad, aiLoad, aiSettingsLoad)
+    }
+
+    private func refreshDataRevision() async {
+        try? await revisionTransport.refreshDataRevision()
     }
 
     private func openDeepLink(_ url: URL) {

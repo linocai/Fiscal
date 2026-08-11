@@ -32,6 +32,7 @@ private enum MacSection: String, CaseIterable, Identifiable {
 }
 
 struct MacRootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Bindable var connection: ConnectionModel
     let accounts: AccountsModel
     let categories: CategoriesModel
@@ -48,6 +49,8 @@ struct MacRootView: View {
     let reconciliation: ReconciliationModel
     let recordingPreferences: RecordingPreferences
     let cache: HTTPResponseCache
+    let revisions: DataRevisionStore
+    let revisionTransport: APITransport
     @State private var section: MacSection = .overview
     @State private var showCategories = false
     @State private var showRecordSheet = false
@@ -110,7 +113,20 @@ struct MacRootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .background(FiscalColor.macBackground)
+        .overlay(alignment: .topTrailing) {
+            if let storedAt = revisions.offlineSnapshotAt {
+                Label("离线只读快照 · \(storedAt.formatted(date: .abbreviated, time: .shortened))", systemImage: "wifi.slash")
+                    .font(.caption.weight(.medium)).padding(8)
+                    .background(.thinMaterial, in: .capsule).padding(12)
+                    .accessibilityIdentifier("fiscal.offlineSnapshot")
+            }
+        }
         .onOpenURL(perform: openDeepLink)
+        .onChange(of: revisions.latest?.revision) { _, _ in Task { await convergeRevision() } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await refreshDataRevision() } }
+        }
+        .task { await refreshDataRevision() }
         .sheet(isPresented: $showCategories) {
             NavigationStack { CategoriesManagementScreen(model: categories) }
                 .frame(width: 660, height: 680)
@@ -122,7 +138,8 @@ struct MacRootView: View {
                 categories: categories,
                 credit: credit,
                 installments: installments,
-                preferences: recordingPreferences
+                preferences: recordingPreferences,
+                revisions: revisions
             )
         }
         .sheet(item: $repaymentItem) { item in
@@ -160,6 +177,27 @@ struct MacRootView: View {
         case "operation_exception": section = .settings
         default: section = .reconciliation
         }
+    }
+
+    private func convergeRevision() async {
+        guard let scopes = revisions.latest?.scopes else { return }
+        let fullRefresh = scopes.isEmpty
+        async let accountsLoad: Void = (fullRefresh || scopes.contains("accounts")) ? accounts.load() : ()
+        async let categoriesLoad: Void = (fullRefresh || scopes.contains("ledger")) ? categories.load() : ()
+        async let ledgerLoad: Void = (fullRefresh || scopes.contains("ledger")) ? transactions.load() : ()
+        async let creditLoad: Void = (fullRefresh || scopes.contains("accounts") || scopes.contains("credit")) ? credit.refreshCurrentSelection() : ()
+        async let cashFlowLoad: Void = (fullRefresh || scopes.contains("cash_flow")) ? cashFlow.load() : ()
+        async let reimbursementLoad: Void = (fullRefresh || scopes.contains("reimbursements")) ? reimbursements.load() : ()
+        async let reconciliationLoad: Void = (fullRefresh || scopes.contains("reconciliation")) ? reconciliation.refreshCurrent() : ()
+        async let reportLoad: Void = (fullRefresh || scopes.contains("reports")) ? reports.loadSpending() : ()
+        async let overviewLoad: Void = (fullRefresh || scopes.contains("reports")) ? overview.loadOverview() : ()
+        async let aiLoad: Void = (fullRefresh || scopes.contains("ai")) ? aiProposals.load() : ()
+        async let aiSettingsLoad: Void = (fullRefresh || scopes.contains("ai")) ? aiSettings.load() : ()
+        _ = await (accountsLoad, categoriesLoad, ledgerLoad, creditLoad, cashFlowLoad, reimbursementLoad, reconciliationLoad, reportLoad, overviewLoad, aiLoad, aiSettingsLoad)
+    }
+
+    private func refreshDataRevision() async {
+        try? await revisionTransport.refreshDataRevision()
     }
 
     private func openDeepLink(_ url: URL) {

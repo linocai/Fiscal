@@ -12,10 +12,12 @@ public final class ReconciliationModel {
     public private(set) var message: String?
     private let repository: any ReconciliationRepository
     private var generation: UInt64 = 0
+    private var loadedAccountID: UUID?
 
     public init(repository: any ReconciliationRepository) { self.repository = repository }
 
     public func load(accountID: UUID) async {
+        loadedAccountID = accountID
         generation &+= 1
         let current = generation
         isLoading = true
@@ -32,6 +34,14 @@ public final class ReconciliationModel {
             message = nil
         } catch is CancellationError { return
         } catch { guard current == generation else { return }; message = error.localizedDescription }
+    }
+
+    /// Revision convergence refreshes the visible account when there is one, otherwise it still
+    /// refreshes attention so a hidden reconciliation screen cannot retain stale alerts.
+    public func refreshCurrent() async {
+        if let loadedAccountID { await load(accountID: loadedAccountID); return }
+        do { attention = try await repository.attention().items }
+        catch { message = error.localizedDescription }
     }
 
     @discardableResult

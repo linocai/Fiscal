@@ -19,11 +19,15 @@ struct FiscalmacOSApp: App {
     @State private var passphrase: PassphraseModel
     @State private var reconciliation: ReconciliationModel
     @State private var recordingPreferences = RecordingPreferences()
+    @State private var revisions: DataRevisionStore
+    private let transport: APITransport
 
     init() {
         let baseURL = APIConfiguration.baseURL()
         let accessKeyStore = AccessKeyStore()
-        let transport = APITransport(baseURL: baseURL, accessKeyStore: accessKeyStore)
+        let revisions = DataRevisionStore()
+        let transport = APITransport(baseURL: baseURL, accessKeyStore: accessKeyStore, revisionStore: revisions)
+        self.transport = transport
         let accounts = AccountsModel(repository: RemoteAccountRepository(transport: transport))
         let categories = CategoriesModel(repository: RemoteCategoryRepository(transport: transport))
         let credit = CreditModel(repository: RemoteCreditRepository(transport: transport))
@@ -55,11 +59,12 @@ struct FiscalmacOSApp: App {
         _aiProposals = State(initialValue: aiProposals)
         _aiSettings = State(initialValue: AISettingsModel(repository: RemoteAISettingsRepository(transport: transport)))
         _reconciliation = State(initialValue: reconciliation)
+        _revisions = State(initialValue: revisions)
     }
 
     var body: some Scene {
         WindowGroup {
-            MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, passphrase: passphrase, reconciliation: reconciliation, recordingPreferences: recordingPreferences, cache: .shared)
+            MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, passphrase: passphrase, reconciliation: reconciliation, recordingPreferences: recordingPreferences, cache: .shared, revisions: revisions, revisionTransport: transport)
                 .tint(FiscalColor.accent)
                 .frame(minWidth: 1_040, minHeight: 700)
                 .background(
