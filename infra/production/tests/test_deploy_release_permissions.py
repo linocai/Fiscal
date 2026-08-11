@@ -53,6 +53,9 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertIn('runuser --user=fiscal_migrator -- test -w "$workspace"', SHADOW_WRAPPER)
         self.assertIn('cd "$2/backend"', SHADOW_WRAPPER)
         self.assertIn('rm -f -- "$env_file"', SHADOW_WRAPPER)
+        self.assertIn('--source-preflight', SHADOW_WRAPPER)
+        self.assertIn('P22 source/principal preflight passed; no target database was used', SHADOW_WRAPPER)
+        self.assertIn('psql --dbname=postgres', SHADOW_WRAPPER)
 
     def test_release_tree_is_group_readable_before_migrator_preflight(self) -> None:
         ownership = DEPLOY.index('chown -R root:fiscal_release "$temporary_release"')

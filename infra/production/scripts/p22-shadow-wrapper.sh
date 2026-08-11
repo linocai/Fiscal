@@ -10,6 +10,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
 apply=false
+source_preflight=false
 source_root=""
 target_database=""
 evidence_parent=""
@@ -17,6 +18,7 @@ evidence_parent=""
 while (($#)); do
   case "$1" in
     --apply) apply=true ;;
+    --source-preflight) source_preflight=true ;;
     --source) shift; source_root="${1:?--source requires a path}" ;;
     --target-database) shift; target_database="${1:?--target-database requires a value}" ;;
     --evidence-parent) shift; evidence_parent="${1:?--evidence-parent requires a path}" ;;
@@ -25,10 +27,12 @@ while (($#)); do
   shift
 done
 
-[[ "$target_database" =~ ^fiscal_p22_shadow_[a-z0-9_]+$ ]] || \
-  die "target must be an explicitly scoped fiscal_p22_shadow database"
 [[ -n "$source_root" && -d "$source_root/backend" ]] || die "--source backend is required"
 [[ -n "$evidence_parent" ]] || die "--evidence-parent is required"
+if [[ "$source_preflight" != true ]]; then
+  [[ "$target_database" =~ ^fiscal_p22_shadow_[a-z0-9_]+$ ]] || \
+    die "target must be an explicitly scoped fiscal_p22_shadow database"
+fi
 
 if [[ "$apply" != true ]]; then
   log "P22 shadow wrapper plan: would create only a migrator-owned 0700 workspace and preflight the target"
@@ -44,6 +48,19 @@ load_fiscal_env
 install -d -o root -g fiscal_migrator -m 0710 "$evidence_parent"
 workspace="$evidence_parent/workspace"
 install -d -o fiscal_migrator -g fiscal_migrator -m 0700 "$workspace"
+runuser --user=fiscal_migrator -- test -w "$workspace"
+
+if [[ "$source_preflight" == true ]]; then
+  runuser --user=fiscal_migrator -- bash -c '
+    cd "$1/backend"
+    "$2" -c "import fiscal_api"
+    "$3" --config alembic.ini heads >/dev/null
+    psql --dbname=postgres --no-psqlrc --tuples-only --no-align --command="SELECT current_user" | grep -qx fiscal_migrator
+  ' _ "$source_root" "$source_root/backend/.venv/bin/python" "$source_root/backend/.venv/bin/alembic"
+  log "P22 source/principal preflight passed; no target database was used"
+  exit 0
+fi
+
 env_file="$workspace/target.env"
 cleanup() { rm -f -- "$env_file"; }
 trap cleanup EXIT
@@ -63,7 +80,6 @@ PY
 chown fiscal_migrator:fiscal_migrator "$env_file"
 chmod 0600 "$env_file"
 
-runuser --user=fiscal_migrator -- test -w "$workspace"
 runuser --user=fiscal_migrator -- bash -c '
   set -a; . "$1"; set +a
   cd "$2/backend"
