@@ -304,3 +304,25 @@ class AILearningRule(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
+
+
+class AIShadowEvaluation(Base):
+    __tablename__ = "ai_shadow_evaluations"
+    __table_args__ = (
+        CheckConstraint("char_length(corpus_fingerprint) = 64", name="fingerprint_length"),
+        CheckConstraint("sample_size >= 30", name="minimum_sample"),
+        CheckConstraint("passed_cases BETWEEN 0 AND sample_size", name="passed_cases_range"),
+        UniqueConstraint("provider", "model", "prompt_version", name="uq_ai_shadow_candidate"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    model: Mapped[str] = mapped_column(String(200), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    corpus_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    sample_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    passed_cases: Mapped[int] = mapped_column(Integer, nullable=False)
+    evaluator_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )

@@ -113,6 +113,23 @@ def upgrade() -> None:
         ),
     )
     op.create_index("ix_ai_learning_rules_active", "ai_learning_rules", ["enabled", "rule_kind"])
+    op.create_table(
+        "ai_shadow_evaluations",
+        sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("provider", sa.String(length=40), nullable=False),
+        sa.Column("model", sa.String(length=200), nullable=False),
+        sa.Column("prompt_version", sa.String(length=80), nullable=False),
+        sa.Column("corpus_fingerprint", sa.String(length=64), nullable=False),
+        sa.Column("sample_size", sa.Integer(), nullable=False),
+        sa.Column("passed_cases", sa.Integer(), nullable=False),
+        sa.Column("evaluator_version", sa.String(length=80), nullable=False),
+        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint("char_length(corpus_fingerprint) = 64", name="fingerprint_length"),
+        sa.CheckConstraint("sample_size >= 30", name="minimum_sample"),
+        sa.CheckConstraint("passed_cases BETWEEN 0 AND sample_size", name="passed_cases_range"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("provider", "model", "prompt_version", name="uq_ai_shadow_candidate"),
+    )
     # PostgreSQL permissions are intentionally not widened.  The trigger makes quality
     # evidence immutable even for accidental application updates/deletes.
     op.execute("""
@@ -149,6 +166,7 @@ def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS fiscal_preserve_ai_proposal_evidence()")
     op.execute("DROP TRIGGER IF EXISTS ai_quality_events_immutable ON ai_quality_events")
     op.execute("DROP FUNCTION IF EXISTS fiscal_prevent_ai_quality_event_mutation()")
+    op.drop_table("ai_shadow_evaluations")
     op.drop_index("ix_ai_learning_rules_active", table_name="ai_learning_rules")
     op.drop_table("ai_learning_rules")
     op.drop_index("ix_ai_execution_policies_effective", table_name="ai_execution_policies")

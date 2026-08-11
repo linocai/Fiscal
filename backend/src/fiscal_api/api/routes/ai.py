@@ -23,6 +23,8 @@ from fiscal_api.api.p8_schemas import (
     AIQualityMetricsResponse,
     AISettingsReplace,
     AISettingsResponse,
+    AIShadowEvaluationCreate,
+    AIShadowEvaluationResponse,
     ProposalStatus,
 )
 from fiscal_api.core.security import AuthenticatedDependency, require_authenticated
@@ -69,6 +71,17 @@ async def replace_ai_strategy(
     replacement: AIExecutionPolicyReplace, service: AIServiceDependency
 ) -> AIExecutionPolicyResponse:
     return await service.replace_policy(replacement)
+
+
+@router.post(
+    "/shadow-evaluations",
+    response_model=AIShadowEvaluationResponse,
+    dependencies=[formal_mutation("ai", "attention")],
+)
+async def record_ai_shadow_evaluation(
+    record: AIShadowEvaluationCreate, service: AIServiceDependency
+) -> AIShadowEvaluationResponse:
+    return await service.record_shadow_evaluation(record)
 
 
 @router.get("/learning-rules", response_model=list[AILearningRuleResponse])

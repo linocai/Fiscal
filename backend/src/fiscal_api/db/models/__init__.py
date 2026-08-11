@@ -10,6 +10,7 @@ from fiscal_api.db.models.ai import (
     AIQualityEvent,
     AIQualityEventType,
     AISettings,
+    AIShadowEvaluation,
 )
 from fiscal_api.db.models.cash_flow import (
     CashFlowDirection,
@@ -78,6 +79,7 @@ __all__ = [
     "AIQualityEvent",
     "AIQualityEventType",
     "AISettings",
+    "AIShadowEvaluation",
     "AccessCredential",
     "AccessKey",
     "Account",

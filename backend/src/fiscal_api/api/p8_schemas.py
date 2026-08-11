@@ -141,6 +141,7 @@ class AIProviderSettingsReplace(P8Model):
     provider: Literal["openai_compatible"] = "openai_compatible"
     base_url: str = Field(min_length=8, max_length=500)
     model: str = Field(min_length=1, max_length=200)
+    prompt_version: str = Field(default="p23-v1", min_length=1, max_length=80)
     api_key: str | None = Field(default=None, min_length=8, max_length=4096)
     expected_version: Annotated[StrictInt, Field(ge=1)]
 
@@ -320,3 +321,25 @@ class AILearningRuleResponse(P8Model):
     revoked_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class AIShadowEvaluationCreate(P8Model):
+    provider: Literal["openai_compatible"] = "openai_compatible"
+    model: str = Field(min_length=1, max_length=200)
+    prompt_version: str = Field(min_length=1, max_length=80)
+    corpus_fingerprint: str = Field(min_length=64, max_length=64, pattern="^[0-9a-f]{64}$")
+    sample_size: Annotated[StrictInt, Field(ge=30, le=10_000)]
+    passed_cases: Annotated[StrictInt, Field(ge=0, le=10_000)]
+    evaluator_version: str = Field(min_length=1, max_length=80)
+
+
+class AIShadowEvaluationResponse(P8Model):
+    id: UUID
+    provider: str
+    model: str
+    prompt_version: str
+    corpus_fingerprint: str
+    sample_size: int
+    passed_cases: int
+    evaluator_version: str
+    completed_at: datetime

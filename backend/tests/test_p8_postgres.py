@@ -17,6 +17,7 @@ from fiscal_api.api.p8_schemas import (
     AIProviderResult,
     AIProviderSettingsReplace,
     AISettingsReplace,
+    AIShadowEvaluationCreate,
 )
 from fiscal_api.core.config import Settings
 from fiscal_api.core.errors import APIError
@@ -160,6 +161,17 @@ async def test_active_device_updates_encrypted_provider_configuration(
     )
     assert (await service.get_settings()).provider_configured
 
+    shadow = await service.record_shadow_evaluation(
+        AIShadowEvaluationCreate(
+            model="provider-model-v2",
+            prompt_version="p23-v1",
+            corpus_fingerprint="a" * 64,
+            sample_size=30,
+            passed_cases=30,
+            evaluator_version="p23-test",
+        )
+    )
+    assert shadow.sample_size == 30
     retained = await service.update_provider_settings(
         AIProviderSettingsReplace(
             base_url="https://api.example.com/v1",

@@ -32,6 +32,8 @@ from fiscal_api.api.p8_schemas import (
     AIQualityMetricsRow,
     AISettingsReplace,
     AISettingsResponse,
+    AIShadowEvaluationCreate,
+    AIShadowEvaluationResponse,
     LearningRuleKind,
     ProposalSource,
     ProposalStatus,
@@ -54,6 +56,7 @@ from fiscal_api.db.models import (
     AIQualityEvent,
     AIQualityEventType,
     AISettings,
+    AIShadowEvaluation,
     CashFlowDirection,
     CashFlowSource,
     Category,
@@ -271,6 +274,20 @@ class AIService:
         await acquire_mutation_lock(self.session)
         settings = await self.repository.settings(for_update=True)
         check_version(settings.version, replacement.expected_version)
+        candidate_changed = settings.provider_model is not None and (
+            settings.provider_model != replacement.model
+            or settings.prompt_version != replacement.prompt_version
+        )
+        if (
+            candidate_changed
+            and await self.repository.passing_shadow_evaluation(
+                provider=replacement.provider,
+                model=replacement.model,
+                prompt_version=replacement.prompt_version,
+            )
+            is None
+        ):
+            conflict("ai_shadow_evaluation_required", "新模型或提示词必须先通过脱敏 shadow corpus")
         if replacement.api_key is not None:
             settings.provider_api_key_ciphertext = self.credential_cipher.encrypt(
                 replacement.api_key
@@ -285,10 +302,35 @@ class AIService:
         settings.provider_kind = replacement.provider
         settings.provider_base_url = replacement.base_url
         settings.provider_model = replacement.model
+        settings.prompt_version = replacement.prompt_version
         settings.version += 1
         settings.updated_at = utc_now()
         await self.session.commit()
         return self._provider_settings_response(settings)
+
+    async def record_shadow_evaluation(
+        self, record: AIShadowEvaluationCreate
+    ) -> AIShadowEvaluationResponse:
+        if record.passed_cases != record.sample_size:
+            conflict("ai_shadow_evaluation_incomplete", "shadow corpus 必须全部通过后才能登记")
+        await acquire_mutation_lock(self.session)
+        existing = await self.repository.passing_shadow_evaluation(
+            provider=record.provider, model=record.model, prompt_version=record.prompt_version
+        )
+        if existing is not None:
+            return self._shadow_response(existing)
+        value = AIShadowEvaluation(
+            provider=record.provider,
+            model=record.model,
+            prompt_version=record.prompt_version,
+            corpus_fingerprint=record.corpus_fingerprint,
+            sample_size=record.sample_size,
+            passed_cases=record.passed_cases,
+            evaluator_version=record.evaluator_version,
+        )
+        self.repository.add_shadow_evaluation(value)
+        await self.session.commit()
+        return self._shadow_response(value)
 
     async def create(self, request: AIProposalCreate, key: UUID) -> tuple[AIProposalResponse, bool]:
         request_hash = self._create_request_hash(request)
@@ -1149,6 +1191,20 @@ class AIService:
             revoked_at=rule.revoked_at,
             created_at=rule.created_at,
             updated_at=rule.updated_at,
+        )
+
+    @staticmethod
+    def _shadow_response(value: AIShadowEvaluation) -> AIShadowEvaluationResponse:
+        return AIShadowEvaluationResponse(
+            id=value.id,
+            provider=value.provider,
+            model=value.model,
+            prompt_version=value.prompt_version,
+            corpus_fingerprint=value.corpus_fingerprint,
+            sample_size=value.sample_size,
+            passed_cases=value.passed_cases,
+            evaluator_version=value.evaluator_version,
+            completed_at=value.completed_at,
         )
 
     def _provider_configured(self, settings: AISettings) -> bool:

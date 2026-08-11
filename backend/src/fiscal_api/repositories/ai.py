@@ -13,6 +13,7 @@ from fiscal_api.db.models import (
     AIProposal,
     AIQualityEvent,
     AISettings,
+    AIShadowEvaluation,
     Category,
 )
 
@@ -139,6 +140,18 @@ class AIRepository:
             statement = statement.where(AIProposal.account_id == account_id)
         return int((await self.session.scalar(statement)) or 0)
 
+    async def passing_shadow_evaluation(
+        self, *, provider: str, model: str, prompt_version: str
+    ) -> AIShadowEvaluation | None:
+        return await self.session.scalar(
+            select(AIShadowEvaluation).where(
+                AIShadowEvaluation.provider == provider,
+                AIShadowEvaluation.model == model,
+                AIShadowEvaluation.prompt_version == prompt_version,
+                AIShadowEvaluation.passed_cases == AIShadowEvaluation.sample_size,
+            )
+        )
+
     async def active_accounts(self) -> list[Account]:
         return list(
             (
@@ -172,3 +185,6 @@ class AIRepository:
 
     def add_rule(self, rule: AILearningRule) -> None:
         self.session.add(rule)
+
+    def add_shadow_evaluation(self, evaluation: AIShadowEvaluation) -> None:
+        self.session.add(evaluation)
