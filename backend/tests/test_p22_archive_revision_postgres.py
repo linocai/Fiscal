@@ -13,14 +13,18 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from fiscal_api.cli import archive_export
-from fiscal_api.core.config import Settings
+from fiscal_api.core.config import Settings, get_settings
 from fiscal_api.db.base import Base
-from fiscal_api.db.models.ai import AIProposal
-from fiscal_api.db.session import create_engine
+from fiscal_api.db.models.ai import AIProposal, AISettings
+from fiscal_api.db.session import create_engine, create_session_factory
 from fiscal_api.main import create_app
 from fiscal_api.services.archive import ArchiveError, ArchiveService
 
@@ -56,6 +60,41 @@ def _category_payload() -> dict[str, object]:
         "icon": "tag",
         "color_hex": "#123456",
     }
+
+
+def _alembic_config() -> Config:
+    return Config(str(Path(__file__).parents[1] / "alembic.ini"))
+
+
+def _fresh_database_url(name: str) -> str:
+    assert TEST_DATABASE_URL is not None
+    return make_url(TEST_DATABASE_URL).set(database=name).render_as_string(hide_password=False)
+
+
+async def _create_database(name: str) -> None:
+    assert TEST_DATABASE_URL is not None
+    engine = create_async_engine(
+        make_url(TEST_DATABASE_URL).set(database="postgres").render_as_string(hide_password=False),
+        isolation_level="AUTOCOMMIT",
+    )
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(text(f'CREATE DATABASE "{name}"'))
+    finally:
+        await engine.dispose()
+
+
+async def _drop_database(name: str) -> None:
+    assert TEST_DATABASE_URL is not None
+    engine = create_async_engine(
+        make_url(TEST_DATABASE_URL).set(database="postgres").render_as_string(hide_password=False),
+        isolation_level="AUTOCOMMIT",
+    )
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(text(f'DROP DATABASE IF EXISTS "{name}"'))
+    finally:
+        await engine.dispose()
 
 
 def test_p22_archive_crypto_contract_runs_without_postgres() -> None:
@@ -214,6 +253,114 @@ def test_p22_archive_export_cli_rejects_existing_before_export(
         )
     assert called is False
     assert output.read_bytes() == b"do-not-overwrite"
+
+
+@pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
+def test_p22_archive_restore_allows_only_fresh_migration_seed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert TEST_DATABASE_URL is not None
+    password = uuid4().hex + uuid4().hex
+
+    async def source_archive() -> tuple[dict[str, object], dict[str, object]]:
+        engine = create_engine(TEST_DATABASE_URL)
+        try:
+            async with create_session_factory(engine)() as session:
+                session.add(
+                    AISettings(
+                        id=1,
+                        auto_execute_enabled=False,
+                        ocr_source_enabled=False,
+                        shortcut_text_source_enabled=False,
+                        auto_execute_limit_minor=100_000,
+                        minimum_confidence_bps=9_000,
+                        provider_kind=None,
+                        provider_base_url=None,
+                        provider_model=None,
+                        provider_api_key_ciphertext=None,
+                        provider_key_version=None,
+                        version=1,
+                    )
+                )
+                await session.commit()
+                archive, _ = await ArchiveService(session).export(
+                    password=password, include_ai_raw=False
+                )
+                return ArchiveService.open(archive, password=password)
+        finally:
+            await engine.dispose()
+
+    manifest, payload = asyncio.run(source_archive())
+
+    def migrate_fresh(database_url: str) -> None:
+        monkeypatch.setenv("FISCAL_DATABASE_URL", database_url)
+        get_settings.cache_clear()
+        command.upgrade(_alembic_config(), "head")
+
+    async def run_case(case: str, database_url: str) -> None:
+        engine = create_engine(database_url)
+        try:
+            async with engine.begin() as connection:
+                assert await connection.scalar(text("SELECT count(*) FROM ai_settings")) == 1
+                assert (
+                    await connection.scalar(text("SELECT revision FROM data_revision WHERE id = 1"))
+                    == 0
+                )
+                if case == "changed_seed":
+                    await connection.execute(text("UPDATE ai_settings SET version = 2"))
+                    with pytest.raises(ArchiveError, match="noncanonical ai_settings"):
+                        await ArchiveService.restore_empty_target(
+                            connection, manifest=manifest, payload=payload
+                        )
+                    assert await connection.scalar(text("SELECT version FROM ai_settings")) == 2
+                elif case == "data_revision":
+                    await connection.execute(text("UPDATE data_revision SET revision = 1"))
+                    with pytest.raises(ArchiveError, match="data revision is not pristine"):
+                        await ArchiveService.restore_empty_target(
+                            connection, manifest=manifest, payload=payload
+                        )
+                    assert await connection.scalar(text("SELECT revision FROM data_revision")) == 1
+                elif case == "other_data":
+                    await connection.execute(
+                        Base.metadata.tables["categories"]
+                        .insert()
+                        .values(
+                            name=f"P22 nonempty {uuid4().hex}",
+                            direction="expense",
+                            icon="tag",
+                            color_hex="#123456",
+                        )
+                    )
+                    with pytest.raises(
+                        ArchiveError, match=r"restore target is not empty \(categories\)"
+                    ):
+                        await ArchiveService.restore_empty_target(
+                            connection, manifest=manifest, payload=payload
+                        )
+                    assert await connection.scalar(text("SELECT count(*) FROM categories")) == 1
+                else:
+                    await ArchiveService.restore_empty_target(
+                        connection, manifest=manifest, payload=payload
+                    )
+                    assert await connection.scalar(text("SELECT count(*) FROM ai_settings")) == 1
+                    assert await connection.scalar(text("SELECT revision FROM data_revision")) == 0
+                assert await connection.scalar(text("SELECT count(*) FROM accounts")) == 0
+        finally:
+            await engine.dispose()
+
+    try:
+        for case in ("success", "changed_seed", "data_revision", "other_data"):
+            name = f"fiscal_p22_seed_{uuid4().hex}"
+            fresh_url = _fresh_database_url(name)
+            asyncio.run(_create_database(name))
+            try:
+                migrate_fresh(fresh_url)
+                asyncio.run(run_case(case, fresh_url))
+            finally:
+                asyncio.run(_drop_database(name))
+    finally:
+        monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
+        get_settings.cache_clear()
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
@@ -377,6 +524,25 @@ def test_p22_archive_round_trip_rejects_tampering_and_secrets() -> None:
                 ).one()
                 await connection.execute(text(f"TRUNCATE TABLE {', '.join(tables)} CASCADE"))
                 assert await connection.scalar(text("SELECT count(*) FROM accounts")) == 0
+                await connection.execute(
+                    AISettings.__table__.insert().values(
+                        id=1,
+                        auto_execute_enabled=False,
+                        ocr_source_enabled=False,
+                        shortcut_text_source_enabled=False,
+                        auto_execute_limit_minor=100_000,
+                        minimum_confidence_bps=9_000,
+                        provider_kind=None,
+                        provider_base_url=None,
+                        provider_model=None,
+                        provider_api_key_ciphertext=None,
+                        provider_key_version=None,
+                        version=1,
+                    )
+                )
+                await connection.execute(
+                    text("INSERT INTO data_revision (id, revision) VALUES (1, 0)")
+                )
                 with pytest.raises(ArchiveError, match="duplicate primary keys"):
                     await ArchiveService.restore_empty_target(
                         connection, manifest=manifest, payload=duplicate_primary_key

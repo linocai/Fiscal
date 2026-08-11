@@ -52,6 +52,20 @@ _AI_SECRET_COLUMNS = {
     "provider_model",
 }
 _AI_REDACTED_RAW_INPUT = "[AI raw input excluded from Fiscal Archive]"
+_CANONICAL_AI_SETTINGS_SEED = {
+    "id": 1,
+    "auto_execute_enabled": False,
+    "ocr_source_enabled": False,
+    "shortcut_text_source_enabled": False,
+    "auto_execute_limit_minor": 100_000,
+    "minimum_confidence_bps": 9_000,
+    "provider_kind": None,
+    "provider_base_url": None,
+    "provider_model": None,
+    "provider_api_key_ciphertext": None,
+    "provider_key_version": None,
+    "version": 1,
+}
 
 
 class ArchiveError(ValueError):
@@ -333,10 +347,12 @@ class ArchiveService:
                 "restore target database revision does not match archive"
             )
         tables = _archive_tables(Base.metadata)
-        for table in tables:
-            count = await connection.scalar(select(func.count()).select_from(table))
-            if count:
-                raise ArchiveError(f"restore target is not empty ({table.name})")
+        await ArchiveService._validate_pristine_restore_target(connection)
+        # A head migration deterministically creates this singleton, so it is
+        # the sole schema-owned row a v1 restore may replace.  Its exact
+        # values were validated before this delete; every user/auth row stays
+        # forbidden and the surrounding transaction rolls this back on error.
+        await connection.execute(delete(Base.metadata.tables["ai_settings"]))
         entities = _json_object(payload["entities"], error="archive entities are invalid")
         for table in tables:
             raw_rows = entities[table.name]
@@ -364,3 +380,29 @@ class ArchiveService:
         if restored_counts != manifest["entity_counts"]:
             raise ArchiveError("restored entity counts do not match manifest")
         ArchiveService._validate_relationships(payload)
+
+    @staticmethod
+    async def _validate_pristine_restore_target(connection: AsyncConnection) -> None:
+        """Reject all data except the exact, migration-owned AI singleton."""
+        for table in Base.metadata.sorted_tables:
+            if table.name == "data_revision":
+                continue
+            if table.name == "ai_settings":
+                rows = (await connection.execute(select(table))).mappings().all()
+                if len(rows) != 1 or any(
+                    row[column] != value
+                    for row in rows
+                    for column, value in _CANONICAL_AI_SETTINGS_SEED.items()
+                ):
+                    raise ArchiveError("restore target has a noncanonical ai_settings seed")
+                continue
+            count = await connection.scalar(select(func.count()).select_from(table))
+            if count:
+                raise ArchiveError(f"restore target is not empty ({table.name})")
+        revisions = (
+            await connection.execute(
+                select(DataRevision.id, DataRevision.revision).order_by(DataRevision.id)
+            )
+        ).all()
+        if revisions != [(1, 0)]:
+            raise ArchiveError("restore target data revision is not pristine")
