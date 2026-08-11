@@ -30,7 +30,7 @@ normalize_database() {
 }
 
 usage_error() {
-  die "use exactly one mode: --source-preflight, --provision-target, --archive-export, --archive-dry-run, or --archive-apply (or omit it for target preflight)"
+  die "use exactly one mode: --source-preflight, --provision-target, --archive-export, --archive-dry-run, --archive-apply, or --archive-roundtrip (or omit it for target preflight)"
 }
 
 while (($#)); do
@@ -38,7 +38,7 @@ while (($#)); do
     --apply) apply=true ;;
     --source-preflight) source_preflight=true ;;
     --provision-target) provision_target=true ;;
-    --archive-export|--archive-dry-run|--archive-apply)
+    --archive-export|--archive-dry-run|--archive-apply|--archive-roundtrip)
       [[ -z "$archive_action" ]] || usage_error
       archive_action="${1#--archive-}"
       ;;
@@ -277,6 +277,12 @@ case "$archive_action" in
   apply)
     run_archive "$target_env" fiscal_api.cli.archive "$archive_path" --apply --confirm-empty-target
     log "P22 shadow archive apply passed; target database was restored"
+    ;;
+  roundtrip)
+    run_archive "$source_env" fiscal_api.cli.archive_export "$archive_path"
+    run_archive "$target_env" fiscal_api.cli.archive "$archive_path" --dry-run
+    run_archive "$target_env" fiscal_api.cli.archive "$archive_path" --apply --confirm-empty-target
+    log "P22 shadow archive roundtrip passed; only the scoped target database was restored"
     ;;
   *) die "unexpected archive action" ;;
 esac

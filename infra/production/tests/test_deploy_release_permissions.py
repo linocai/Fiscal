@@ -107,6 +107,11 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertIn('run_archive "$source_env" fiscal_api.cli.archive_export "$archive_path"', SHADOW_WRAPPER)
         self.assertIn('run_archive "$target_env" fiscal_api.cli.archive "$archive_path" --dry-run', SHADOW_WRAPPER)
         self.assertIn('run_archive "$target_env" fiscal_api.cli.archive "$archive_path" --apply --confirm-empty-target', SHADOW_WRAPPER)
+        self.assertIn("--archive-roundtrip", SHADOW_WRAPPER)
+        roundtrip = SHADOW_WRAPPER.index("  roundtrip)")
+        roundtrip_block = SHADOW_WRAPPER[roundtrip : SHADOW_WRAPPER.index("    ;;", roundtrip)]
+        self.assertLess(roundtrip_block.index("archive_export"), roundtrip_block.index("--dry-run"))
+        self.assertLess(roundtrip_block.index("--dry-run"), roundtrip_block.index("--apply"))
 
     def test_p22_shadow_provisioning_rejects_existing_and_proves_migrator_control(self) -> None:
         self.assertIn("--provision-target", SHADOW_WRAPPER)
