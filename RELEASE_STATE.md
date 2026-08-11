@@ -9,14 +9,14 @@ from source code, a historical document, or an earlier release.
 | Field | Current evidenced value |
 | --- | --- |
 | Train | P20 → P21 → P22 → P23 |
-| Candidate source revision | local committed `0a7824b` (documentation/evidence only; deployed executable revision remains below) |
+| Candidate source revision | local committed and deployed `81d5881ba99c4694b480f1bfb20a41dbedd8faf7` |
 | Candidate app version | `1.3.0 (21)` |
-| Local Alembic head | `20260811_0019` |
-| Deployed source revision | `a41d2991f92e63c3f7b0be3ba9d1fcbdf3e1f277` |
-| Deployed Alembic head | `20260811_0019` |
-| Authentication mode | credential generation 2 after an operator forgotten-passphrase recovery; generation-1 access keys are invalidated, and the legacy device-token transition remains until old-token rejection is proven |
-| macOS / Kurisu builds and connection | macOS and Kurisu both run signed `1.3.0 (21)`; their generation-1 keys correctly received 401 after recovery, and each is awaiting user-entered generation-2 reconnection |
-| Backup / off-host copy / restore / alert | current-head local backup and isolated restore verified; off-host copy and alert receiver are unconfigured blockers |
+| Local Alembic head | `20260811_0020` |
+| Deployed source revision | `81d5881ba99c4694b480f1bfb20a41dbedd8faf7` |
+| Deployed Alembic head | `20260811_0020` |
+| Authentication mode | generation 2 personal passphrase/access keys only: one credential, three current-generation keys, and no `device_tokens` table |
+| macOS / Kurisu builds and connection | macOS signed `1.3.0 (21)` installed and production status/overview 200; Kurisu signed `1.3.0 (21)` installed but launch is blocked by its lock screen |
+| Backup / off-host copy / restore / alert | post-migration local backup and isolated restore verified at `2026-08-11T08:27:25Z`; off-host copy and alert receiver remain unconfigured external blockers |
 | Previous tagged release | `v1.2.4` at `7c221ecdc10b6b8933b60052240162dafb430153` |
 | Rollback boundary | only an application revision at the same Alembic head; otherwise restore a verified backup into an isolated new database before cutover |
 | Tag / push | prohibited until every P20–P23 gate and the seven-day stability observation close |

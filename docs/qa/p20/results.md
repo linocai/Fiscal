@@ -158,16 +158,34 @@ the sentinel and isolated-CLI checks before the successful recovery above.
 
 ### Remaining production and physical-device gates
 
-- Legacy device-token rejection and CLI passphrase-recovery proof are not
-  fully claimed: the CLI recovery is now proven, but raw legacy-device-token
-  rejection remains unproven. The transition layer is intentionally still
-  deployed until that check and post-recovery macOS + Kurisu generation-2
-  connection proof are complete.
-- User interaction gate: enter the newly recovered passphrase in the cloud
-  connection screen on both macOS and Kurisu. The applications are open and
-  have already demonstrated the expected 401 for their invalidated old keys;
-  no agent may enter or extract the passphrase.
+- The legacy device-token table, model, verifier, configuration, CLI and
+  client bridge were removed by irreversible migration `20260811_0020`.
+  Its precondition and downgrade guard are covered by fresh PostgreSQL tests;
+  the production relation is absent after deployment. Raw legacy bearer values
+  were never read or replayed.
+- macOS has completed the new-build production read path. Kurisu has the same
+  signed build installed, but its launch was denied because the physical device
+  was locked. It must be unlocked and launched to record the final production
+  status/overview 200 evidence; no agent may enter or extract the passphrase.
 - `FISCAL_ALERT_WEBHOOK_URL` is missing or invalid, and no off-host backup unit
   or provider is configured. Choosing/configuring an alert receiver and an
   encrypted off-host destination requires a user-selected external service and
   credentials; no guess or substitute was made.
+
+## P20 final authentication cleanup and deployment — 2026-08-11 CST
+
+| Gate | Result |
+| --- | --- |
+| Cleanup revision | local committed `81d5881ba99c4694b480f1bfb20a41dbedd8faf7`; migration `20260811_0020` requires exactly one access credential when legacy rows exist, drops `device_tokens`, and permanently guards downgrade |
+| Backend automated gates | Ruff format/check and Pyright passed; default suite **141 passed, 96 skipped** with one upstream deprecation warning; fresh PostgreSQL suite **237 passed, 0 failures/errors/skips** |
+| Migration gates | empty database completed `base→0019→base→0019→0020`; `0020→0019` was rejected by the expected irreversible guard |
+| Swift gates | macOS FiscalKitTests **87 tests in 17 suites** passed; signed iOS generic-device Debug build and signed macOS/iOS Release builds passed |
+| Production deployment | existing deployment script verified a pre-migration backup, deployed exact `81d5881…`, migrated to `20260811_0020`, created a current-head backup, restarted active/ready API, and passed public HTTPS live smoke |
+| Production authentication/schema | one access credential, three current-generation keys, no `public.device_tokens` relation; no credential/key material was queried or recorded |
+| Production ledger and recovery | 184 transactions, 201 postings, zero orphan postings; current-head isolated restore completed in two seconds at `2026-08-11T08:27:25Z` from a new verified backup |
+| macOS physical gate | exact signed `1.3.0 (21)` installed and launched; production status and current-month overview each returned HTTP 200 at `2026-08-11T16:25:24–25Z` |
+| Kurisu physical gate | exact signed `1.3.0 (21)` installed successfully; CoreDevice launch was denied because Kurisu was locked, so no post-cleanup production request is claimed |
+
+P20 remains blocked only on the Kurisu unlock/launch evidence and the previously
+recorded user-selected off-host backup plus real alert receiver. No tag or push
+is permitted, and P21 must not begin until these P20 gates are closed.
