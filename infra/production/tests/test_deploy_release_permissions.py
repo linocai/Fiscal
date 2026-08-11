@@ -52,7 +52,7 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertIn('install -d -o fiscal_migrator -g fiscal_migrator -m 0700 "$workspace"', SHADOW_WRAPPER)
         self.assertIn('runuser --user=fiscal_migrator -- test -w "$workspace"', SHADOW_WRAPPER)
         self.assertIn('cd "$2/backend"', SHADOW_WRAPPER)
-        self.assertIn('rm -f -- "$env_file"', SHADOW_WRAPPER)
+        self.assertIn('rm -f -- "$source_env" "$target_env" "$password_file"', SHADOW_WRAPPER)
         self.assertIn('--source-preflight', SHADOW_WRAPPER)
         self.assertIn('P22 source/principal preflight passed; no target database was used', SHADOW_WRAPPER)
         self.assertIn('psql --dbname=postgres', SHADOW_WRAPPER)
@@ -60,6 +60,26 @@ class DeployReleasePermissionsTests(unittest.TestCase):
     def test_p22_shadow_target_normalization_keeps_identifier_whitelist(self) -> None:
         self.assertIn("tr '[:upper:]' '[:lower:]'", SHADOW_WRAPPER)
         self.assertIn('^fiscal_p22_shadow_[a-z0-9_]+$', SHADOW_WRAPPER)
+
+    def test_p22_shadow_archive_wrapper_keeps_credentials_off_argv_and_cleans_them(self) -> None:
+        self.assertIn("--archive-export|--archive-dry-run|--archive-apply", SHADOW_WRAPPER)
+        self.assertIn('archive output already exists and will not be overwritten', SHADOW_WRAPPER)
+        self.assertIn('os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600', SHADOW_WRAPPER)
+        self.assertIn('os.environ["FISCAL_MIGRATION_DATABASE_URL"]', SHADOW_WRAPPER)
+        self.assertNotIn(' - "$FISCAL_MIGRATION_DATABASE_URL" ', SHADOW_WRAPPER)
+        self.assertIn('password_file="$workspace/archive-password"', SHADOW_WRAPPER)
+        self.assertIn('printf \'%s\\n\' "$archive_password" >"$password_file"', SHADOW_WRAPPER)
+        self.assertIn('chmod 0600 "$password_file"', SHADOW_WRAPPER)
+        self.assertIn('rm -f -- "$source_env" "$target_env" "$password_file"', SHADOW_WRAPPER)
+        self.assertIn('exec "$python_bin" -m "$archive_module" "$@" < "$archive_password"', SHADOW_WRAPPER)
+
+    def test_p22_shadow_archive_modes_keep_source_and_target_contracts_separate(self) -> None:
+        self.assertIn('if [[ "$source_preflight" == true || "$archive_action" == "export" ]]; then', SHADOW_WRAPPER)
+        self.assertIn('if source_database != "fiscal":', SHADOW_WRAPPER)
+        self.assertIn('target must be an explicitly scoped fiscal_p22_shadow database', SHADOW_WRAPPER)
+        self.assertIn('run_archive "$source_env" fiscal_api.cli.archive_export "$archive_path"', SHADOW_WRAPPER)
+        self.assertIn('run_archive "$target_env" fiscal_api.cli.archive "$archive_path" --dry-run', SHADOW_WRAPPER)
+        self.assertIn('run_archive "$target_env" fiscal_api.cli.archive "$archive_path" --apply --confirm-empty-target', SHADOW_WRAPPER)
 
     def test_release_tree_is_group_readable_before_migrator_preflight(self) -> None:
         ownership = DEPLOY.index('chown -R root:fiscal_release "$temporary_release"')
