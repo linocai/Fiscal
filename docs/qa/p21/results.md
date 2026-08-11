@@ -1,6 +1,6 @@
 # P21 核对点与 Attention — QA 记录
 
-实施提交：`5c77992`（领域/API/migration 契约）、`ea95a62`（Attention 派生、双端界面、深链与 QA）。
+实施提交：`5c77992`（领域/API/migration 契约）、`ea95a62`（Attention 派生、双端界面、深链与 QA）、`97d2ccd`（失败迁移运行的运维异常 Attention）。
 
 ## 范围与不变量
 
