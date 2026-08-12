@@ -1,6 +1,7 @@
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Header, Response
 from starlette import status
 
 from fiscal_api.api.dependencies import StatementImportServiceDependency, formal_mutation
@@ -13,6 +14,10 @@ from fiscal_api.api.p24_schemas import (
     StatementImportRegistrationResponse,
     StatementImportResponse,
     StatementImportVersionRequest,
+)
+from fiscal_api.api.p26_schemas import (
+    StatementImportProviderAttemptCreate,
+    StatementImportProviderAttemptResponse,
 )
 from fiscal_api.core.security import require_authenticated
 
@@ -74,6 +79,27 @@ async def submit_statement_import_evidence(
     service: StatementImportServiceDependency,
 ) -> StatementImportEvidenceResponse:
     return await service.submit_evidence(statement_import_id, request)
+
+
+@router.post(
+    "/{statement_import_id}/provider-attempts",
+    response_model=StatementImportProviderAttemptResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[formal_mutation("statement_imports")],
+)
+async def start_statement_import_provider_attempt(
+    statement_import_id: UUID,
+    request: StatementImportProviderAttemptCreate,
+    response: Response,
+    service: StatementImportServiceDependency,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+) -> StatementImportProviderAttemptResponse:
+    attempt, replay = await service.start_provider_attempt(
+        statement_import_id, request, idempotency_key
+    )
+    if replay:
+        response.status_code = status.HTTP_200_OK
+    return attempt
 
 
 @router.post(

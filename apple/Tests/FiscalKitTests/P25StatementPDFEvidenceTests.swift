@@ -88,6 +88,19 @@ struct FiscalKitP25StatementPDFEvidenceTests {
     let repository = RecordingStatementImportEvidenceRepository()
     try await repository.recordPrepared(built.package)
     #expect(await repository.preparedPackages() == [built.package])
+
+    let authorization = StatementImportProviderAuthorizationRequest(
+      expectedVersion: 2, evidenceSHA256: String(repeating: "a", count: 64), preview: built.preview)
+    let confirmationBytes = try JSONEncoder().encode(authorization)
+    let confirmationText = try #require(String(data: confirmationBytes, encoding: .utf8))
+    #expect(!confirmationText.contains("Synthetic market"))
+    #expect(!confirmationText.contains("1234567890123456"))
+    #expect(!confirmationText.contains("pdf"))
+    #expect(!confirmationText.contains("image"))
+    let attemptRepository = RecordingStatementImportProviderAttemptRepository()
+    let key = UUID()
+    try await attemptRepository.confirm(authorization, idempotencyKey: key)
+    #expect(await attemptRepository.recordedConfirmations().map(\.1) == [key])
   }
 
   @Test("Invalid, protected, and bounded PDF input produce stable local errors")

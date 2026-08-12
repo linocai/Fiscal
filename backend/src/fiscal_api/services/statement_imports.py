@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
+from typing import cast
 from uuid import UUID
 
 import structlog
@@ -19,12 +21,24 @@ from fiscal_api.api.p24_schemas import (
     StatementImportResponse,
     StatementImportVersionRequest,
 )
+from fiscal_api.api.p26_schemas import (
+    StatementImportProviderAttemptCreate,
+    StatementImportProviderAttemptResponse,
+    StatementProviderOutboundPage,
+    StatementProviderOutboundRequest,
+    StatementProviderOutboundRow,
+    StatementProviderResult,
+)
+from fiscal_api.core.errors import APIError
 from fiscal_api.core.time import utc_now
 from fiscal_api.db.models.statement_import import (
     StatementImport,
     StatementImportAttempt,
     StatementImportOperation,
     StatementImportPage,
+    StatementImportProviderAttempt,
+    StatementImportProviderAttemptSnapshot,
+    StatementImportProviderSnapshotSourceRef,
     StatementImportRow,
 )
 from fiscal_api.services.common import (
@@ -34,6 +48,7 @@ from fiscal_api.services.common import (
     invalid,
     not_found,
 )
+from fiscal_api.services.statement_import_provider import StatementImportProvider
 
 logger = structlog.get_logger()
 
@@ -44,13 +59,19 @@ _SENSITIVE_LABEL_VALUE = re.compile(
     r"\s*(?:[:\uFF1A#]|\s)\s*(?!\[REDACTED\])[^\n]+"
 )
 _ACCOUNT_OR_CARD_NUMBER = re.compile(r"(?<!\d)(?:\d[ -]?){9,18}\d(?!\d)")
+_PHONE_NUMBER = re.compile(r"(?<!\d)(?:\+?86[- ]?)?1[3-9]\d{9}(?!\d)")
+_EMAIL_ADDRESS = re.compile(r"\b[^\s@]+@[^\s@]+\.[^\s@]+\b")
+_IDENTITY_NUMBER = re.compile(r"(?<![0-9A-Za-z])\d{17}[0-9Xx](?![0-9A-Za-z])")
 
 
 class StatementImportService:
     """P24 batch registry only. It never receives PDF bytes or writes the ledger."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self, session: AsyncSession, provider: StatementImportProvider | None = None
+    ) -> None:
         self.session = session
+        self.provider = provider
 
     @staticmethod
     def response(item: StatementImport) -> StatementImportResponse:
@@ -273,6 +294,143 @@ class StatementImportService:
         )
         return self._evidence_response(item, attempt, request, duplicate=False)
 
+    async def start_provider_attempt(
+        self,
+        statement_import_id: UUID,
+        request: StatementImportProviderAttemptCreate,
+        idempotency_key: UUID,
+    ) -> tuple[StatementImportProviderAttemptResponse, bool]:
+        if self.provider is None:
+            raise RuntimeError("statement provider is unavailable")
+        provider = self.provider
+        request_hash = self._request_hash(request)
+        await acquire_mutation_lock(self.session)
+        replay = await self.session.scalar(
+            select(StatementImportProviderAttempt)
+            .where(StatementImportProviderAttempt.idempotency_key == idempotency_key)
+            .with_for_update()
+        )
+        if replay is not None:
+            if (
+                replay.request_hash != request_hash
+                or replay.statement_import_id != statement_import_id
+            ):
+                conflict(
+                    "idempotency_key_reused", "The idempotency key was used for another request"
+                )
+            item = await self._required(statement_import_id)
+            return await self._provider_response(item, replay, replay=True), True
+        item = await self._required(statement_import_id, for_update=True)
+        check_version(item.version, request.expected_version)
+        local = await self.session.scalar(
+            select(StatementImportAttempt)
+            .where(
+                StatementImportAttempt.statement_import_id == item.id,
+                StatementImportAttempt.kind == "local_extraction",
+                StatementImportAttempt.status == "succeeded",
+                StatementImportAttempt.evidence_sha256 == request.evidence_sha256,
+            )
+            .order_by(StatementImportAttempt.attempt_number.desc())
+            .with_for_update()
+        )
+        if (
+            local is None
+            or item.status not in {"review_required", "failed"}
+        ):
+            conflict("statement_provider_evidence_stale", "Current redacted evidence is required")
+        outbound = await self._outbound_request(item.id)
+        self._validate_authorization(request, outbound, local.evidence_sha256)
+        next_number = await self.session.scalar(
+            select(func.coalesce(func.max(StatementImportAttempt.attempt_number), 0) + 1).where(
+                StatementImportAttempt.statement_import_id == item.id
+            )
+        )
+        assert isinstance(next_number, int)
+        attempt = StatementImportAttempt(
+            statement_import_id=item.id,
+            attempt_number=next_number,
+            kind="provider_parse",
+            status="started",
+            provider=provider.provider_id,
+            provider_model=provider.model_id,
+            prompt_version=provider.prompt_version,
+            schema_version=provider.schema_version,
+            evidence_sha256=local.evidence_sha256,
+            input_page_count=len(outbound.pages),
+        )
+        self.session.add(attempt)
+        await self.session.flush()
+        provider_attempt = StatementImportProviderAttempt(
+            statement_import_id=item.id,
+            statement_import_attempt_id=attempt.id,
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+            evidence_sha256=local.evidence_sha256,
+            provider=provider.provider_id,
+            provider_model=provider.model_id,
+            prompt_version=provider.prompt_version,
+            schema_version=provider.schema_version,
+        )
+        self.session.add(provider_attempt)
+        self.session.add_all(
+            [
+                StatementImportProviderAttemptSnapshot(
+                    provider_attempt=provider_attempt,
+                    snapshot_kind="authorization",
+                    payload=request.authorization.model_dump(mode="json"),
+                ),
+                StatementImportProviderAttemptSnapshot(
+                    provider_attempt=provider_attempt,
+                    snapshot_kind="outbound_request",
+                    payload=outbound.model_dump(mode="json"),
+                ),
+            ]
+        )
+        item.status = "parsing"
+        item.latest_attempt_id = attempt.id
+        self._touch(item)
+        self._record_operation(
+            item,
+            operation="provider_attempt_started",
+            error_code="statement_provider_attempt_started",
+            attempt_id=attempt.id,
+            details={
+                "attempt_number": next_number,
+                "page_count": len(outbound.pages),
+                "row_count": len(outbound.rows),
+            },
+        )
+        await self.session.commit()
+        try:
+            result = await provider.parse(outbound)
+            self._validate_provider_result(result, outbound)
+        except (TimeoutError, ConnectionError):
+            return await self._fail_provider_attempt(
+                item.id, provider_attempt.id, attempt.id, "statement_provider_unavailable"
+            ), False
+        except asyncio.CancelledError:
+            return await self._fail_provider_attempt(
+                item.id, provider_attempt.id, attempt.id, "statement_provider_cancelled"
+            ), False
+        except APIError as error:
+            return await self._fail_provider_attempt(
+                item.id,
+                provider_attempt.id,
+                attempt.id,
+                (
+                    "statement_provider_unavailable"
+                    if error.status_code == 429 or error.status_code >= 500
+                    else "statement_provider_invalid_result"
+                ),
+            ), False
+        except Exception:
+            return await self._fail_provider_attempt(
+                item.id, provider_attempt.id, attempt.id, "statement_provider_invalid_result"
+            ), False
+        return await self._complete_provider_attempt(
+            item.id, provider_attempt.id, attempt.id, result, outbound
+        ), False
+
     async def abandon(
         self, statement_import_id: UUID, request: StatementImportVersionRequest
     ) -> StatementImportResponse:
@@ -390,4 +548,285 @@ class StatementImportService:
             evidence_sha256=attempt.evidence_sha256,
             row_count=len(request.rows),
             duplicate=duplicate,
+        )
+
+    async def _outbound_request(
+        self, statement_import_id: UUID
+    ) -> StatementProviderOutboundRequest:
+        pages = list(
+            (
+                await self.session.scalars(
+                    select(StatementImportPage)
+                    .where(StatementImportPage.statement_import_id == statement_import_id)
+                    .order_by(StatementImportPage.page_number)
+                )
+            ).all()
+        )
+        rows = list(
+            (
+                await self.session.scalars(
+                    select(StatementImportRow)
+                    .where(StatementImportRow.statement_import_id == statement_import_id)
+                    .order_by(StatementImportRow.row_number)
+                )
+            ).all()
+        )
+        outbound = StatementProviderOutboundRequest(
+            schema_version="statement-provider-v1",
+            currency="CNY",
+            pages=[
+                StatementProviderOutboundPage.model_validate(
+                    {
+                        "page_number": page.page_number,
+                        "source_kind": page.source_kind or "unsupported",
+                        "evidence_text_masked": page.evidence_text_masked,
+                    }
+                )
+                for page in pages
+            ],
+            rows=[
+                StatementProviderOutboundRow.model_validate(
+                    {
+                        "row_number": row.row_number,
+                        "page_number": row.page_number,
+                        "evidence_text_masked": row.evidence_text_masked,
+                        "bounding_box": row.bounding_box,
+                    }
+                )
+                for row in rows
+            ],
+        )
+        self._reject_outbound_sensitive_values(outbound)
+        return outbound
+
+    def _validate_authorization(
+        self,
+        request: StatementImportProviderAttemptCreate,
+        outbound: StatementProviderOutboundRequest,
+        evidence_sha256: str | None,
+    ) -> None:
+        if evidence_sha256 is None or request.authorization.evidence_sha256 != evidence_sha256:
+            conflict(
+                "statement_provider_authorization_stale", "Authorization evidence does not match"
+            )
+        auth = request.authorization
+        assert self.provider is not None
+        if (
+            request.evidence_sha256 != evidence_sha256
+            or auth.page_numbers != [page.page_number for page in outbound.pages]
+            or auth.row_count != len(outbound.rows)
+            or auth.redaction_count
+            != sum((page.evidence_text_masked or "").count("[REDACTED]") for page in outbound.pages)
+            or auth.provider != self.provider.provider_id
+            or auth.provider_model != self.provider.model_id
+            or auth.prompt_version != self.provider.prompt_version
+            or auth.schema_version != self.provider.schema_version
+        ):
+            conflict(
+                "statement_provider_authorization_stale",
+                "Authorization preview is no longer current",
+            )
+
+    def _validate_provider_result(
+        self, result: StatementProviderResult, outbound: StatementProviderOutboundRequest
+    ) -> None:
+        row_text = {row.row_number: row.evidence_text_masked for row in outbound.rows}
+        assert self.provider is not None
+        if result.schema_version != self.provider.schema_version:
+            raise ValueError("schema version")
+        for candidate in result.candidates:
+            if any(number not in row_text for number in candidate.source_row_numbers):
+                raise ValueError("unknown source row")
+            evidence = "\n".join(row_text[number] for number in candidate.source_row_numbers)
+            if (
+                candidate.summary_evidence is not None
+                and candidate.summary_evidence not in evidence
+            ):
+                raise ValueError("unproven summary")
+            if candidate.raw_amount is not None and candidate.raw_amount not in evidence:
+                raise ValueError("unproven amount")
+            if (
+                candidate.transaction_date is not None
+                and candidate.transaction_date.isoformat() not in evidence
+            ):
+                raise ValueError("unproven date")
+            if (
+                candidate.posted_date is not None
+                and candidate.posted_date.isoformat() not in evidence
+            ):
+                raise ValueError("unproven posted date")
+            if any(number not in row_text for number in candidate.unparsed_source_row_numbers):
+                raise ValueError("unknown unparsed source row")
+
+    def _reject_outbound_sensitive_values(self, outbound: StatementProviderOutboundRequest) -> None:
+        values = [page.evidence_text_masked for page in outbound.pages]
+        values.extend(row.evidence_text_masked for row in outbound.rows)
+        self._reject_sensitive_texts(values)
+        if any(
+            value is not None
+            and (
+                _PHONE_NUMBER.search(value)
+                or _EMAIL_ADDRESS.search(value)
+                or _IDENTITY_NUMBER.search(value)
+            )
+            for value in values
+        ):
+            invalid(
+                "statement_provider_outbound_not_redacted",
+                "Outbound provider evidence contains an unredacted sensitive value",
+            )
+
+    @staticmethod
+    def _request_hash(request: StatementImportProviderAttemptCreate) -> str:
+        encoded = json.dumps(
+            request.model_dump(mode="json"),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        return hashlib.sha256(encoded).hexdigest()
+
+    async def _complete_provider_attempt(
+        self,
+        statement_import_id: UUID,
+        provider_attempt_id: UUID,
+        attempt_id: UUID,
+        result: StatementProviderResult,
+        outbound: StatementProviderOutboundRequest,
+    ) -> StatementImportProviderAttemptResponse:
+        await acquire_mutation_lock(self.session)
+        item = await self._required(statement_import_id, for_update=True)
+        attempt = await self.session.scalar(
+            select(StatementImportAttempt)
+            .where(StatementImportAttempt.id == attempt_id)
+            .with_for_update()
+        )
+        provider_attempt = await self.session.scalar(
+            select(StatementImportProviderAttempt)
+            .where(StatementImportProviderAttempt.id == provider_attempt_id)
+            .with_for_update()
+        )
+        if attempt is None or provider_attempt is None or attempt.status != "started":
+            conflict(
+                "statement_provider_attempt_invalid", "The provider attempt is no longer active"
+            )
+        snapshot = StatementImportProviderAttemptSnapshot(
+            provider_attempt_id=provider_attempt.id,
+            snapshot_kind="validated_result",
+            payload=result.model_dump(mode="json"),
+        )
+        self.session.add(snapshot)
+        await self.session.flush()
+        rows = {
+            row.row_number: row.id
+            for row in (
+                await self.session.scalars(
+                    select(StatementImportRow).where(
+                        StatementImportRow.statement_import_id == item.id
+                    )
+                )
+            ).all()
+        }
+        self.session.add_all(
+            [
+                StatementImportProviderSnapshotSourceRef(
+                    provider_attempt_snapshot_id=snapshot.id,
+                    statement_import_row_id=rows[number],
+                    candidate_index=index,
+                )
+                for index, candidate in enumerate(result.candidates)
+                for number in candidate.source_row_numbers
+            ]
+        )
+        attempt.status = "succeeded"
+        attempt.completed_at = utc_now()
+        attempt.output_token_count = len(result.candidates)
+        attempt.version += 1
+        item.status = "review_required"
+        self._touch(item)
+        self._record_operation(
+            item,
+            operation="provider_attempt_succeeded",
+            error_code="statement_provider_attempt_succeeded",
+            attempt_id=attempt.id,
+            details={
+                "attempt_number": attempt.attempt_number,
+                "candidate_count": len(result.candidates),
+            },
+        )
+        await self.session.commit()
+        return await self._provider_response(item, provider_attempt, replay=False)
+
+    async def _fail_provider_attempt(
+        self,
+        statement_import_id: UUID,
+        provider_attempt_id: UUID,
+        attempt_id: UUID,
+        error_code: str,
+    ) -> StatementImportProviderAttemptResponse:
+        await acquire_mutation_lock(self.session)
+        item = await self._required(statement_import_id, for_update=True)
+        attempt = await self.session.scalar(
+            select(StatementImportAttempt)
+            .where(StatementImportAttempt.id == attempt_id)
+            .with_for_update()
+        )
+        provider_attempt = await self.session.scalar(
+            select(StatementImportProviderAttempt)
+            .where(StatementImportProviderAttempt.id == provider_attempt_id)
+            .with_for_update()
+        )
+        if attempt is None or provider_attempt is None:
+            raise RuntimeError("provider attempt disappeared")
+        attempt.status = "failed"
+        attempt.error_code = error_code
+        attempt.error_summary = "Statement parsing did not complete."
+        attempt.completed_at = utc_now()
+        attempt.version += 1
+        item.status = "failed"
+        self._touch(item)
+        self._record_operation(
+            item,
+            operation="provider_attempt_failed",
+            error_code=error_code,
+            attempt_id=attempt.id,
+            details={"attempt_number": attempt.attempt_number},
+        )
+        await self.session.commit()
+        return await self._provider_response(item, provider_attempt, replay=False)
+
+    async def _provider_response(
+        self,
+        item: StatementImport,
+        provider_attempt: StatementImportProviderAttempt,
+        *,
+        replay: bool,
+    ) -> StatementImportProviderAttemptResponse:
+        attempt = await self.session.scalar(
+            select(StatementImportAttempt).where(
+                StatementImportAttempt.id == provider_attempt.statement_import_attempt_id
+            )
+        )
+        assert attempt is not None
+        snapshot = await self.session.scalar(
+            select(StatementImportProviderAttemptSnapshot).where(
+                StatementImportProviderAttemptSnapshot.provider_attempt_id == provider_attempt.id,
+                StatementImportProviderAttemptSnapshot.snapshot_kind == "validated_result",
+            )
+        )
+        raw_candidates: object = snapshot.payload.get("candidates") if snapshot is not None else []
+        candidate_count = (
+            len(cast(list[object], raw_candidates)) if isinstance(raw_candidates, list) else 0
+        )
+        return StatementImportProviderAttemptResponse(
+            **self.response(item).model_dump(),
+            provider_attempt_id=str(provider_attempt.id),
+            attempt_id=str(attempt.id),
+            provider=provider_attempt.provider,
+            provider_model=provider_attempt.provider_model,
+            prompt_version=provider_attempt.prompt_version,
+            schema_version=provider_attempt.schema_version,
+            provider_status=attempt.status,
+            candidate_count=candidate_count,
+            replay=replay,
         )

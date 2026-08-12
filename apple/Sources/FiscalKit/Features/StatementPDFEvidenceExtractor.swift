@@ -527,6 +527,76 @@ public actor RecordingStatementImportEvidenceRepository: StatementImportEvidence
   public func preparedPackages() -> [StatementImportEvidencePackage] { packages }
 }
 
+/// P26's confirmation-only client contract. It is derived from the already-redacted preview and
+/// contains no evidence text at all; a future transport may send it only after user confirmation.
+public struct StatementImportProviderAuthorizationRequest: Codable, Sendable, Equatable {
+  public let expectedVersion: Int
+  public let evidenceSHA256: String
+  public let authorization: Authorization
+
+  public init(
+    expectedVersion: Int, evidenceSHA256: String, preview: StatementImportEvidencePreview
+  ) {
+    self.expectedVersion = expectedVersion
+    self.evidenceSHA256 = evidenceSHA256
+    authorization = Authorization(
+      confirmed: true, provider: "synthetic_statement", providerModel: "synthetic-statement-v1",
+      promptVersion: "statement-p26-v1", schemaVersion: "statement-provider-v1",
+      evidenceSHA256: evidenceSHA256, pageNumbers: preview.pages.map(\.pageNumber),
+      rowCount: preview.rowCount, redactionVersion: "statement-redaction-v1",
+      redactionCount: preview.pages.reduce(0) { partial, page in
+        partial + (page.evidenceTextMasked?.components(separatedBy: "[REDACTED]").count ?? 1) - 1
+      })
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case expectedVersion = "expected_version"
+    case evidenceSHA256 = "evidence_sha256"
+    case authorization
+  }
+
+  public struct Authorization: Codable, Sendable, Equatable {
+    public let confirmed: Bool
+    public let provider: String
+    public let providerModel: String
+    public let promptVersion: String
+    public let schemaVersion: String
+    public let evidenceSHA256: String
+    public let pageNumbers: [Int]
+    public let rowCount: Int
+    public let redactionVersion: String
+    public let redactionCount: Int
+    enum CodingKeys: String, CodingKey {
+      case confirmed, provider
+      case providerModel = "provider_model"
+      case promptVersion = "prompt_version"
+      case schemaVersion = "schema_version"
+      case evidenceSHA256 = "evidence_sha256"
+      case pageNumbers = "page_numbers"
+      case rowCount = "row_count"
+      case redactionVersion = "redaction_version"
+      case redactionCount = "redaction_count"
+    }
+  }
+}
+
+/// No remote implementation belongs to P26-A. This seam lets UI confirmation be tested without
+/// making a provider/network call or giving a repository the original package/evidence text.
+public protocol StatementImportProviderAttemptRepository: Sendable {
+  func confirm(_ request: StatementImportProviderAuthorizationRequest, idempotencyKey: UUID) async throws
+}
+
+public actor RecordingStatementImportProviderAttemptRepository: StatementImportProviderAttemptRepository {
+  private var confirmations: [(StatementImportProviderAuthorizationRequest, UUID)] = []
+  public init() {}
+  public func confirm(
+    _ request: StatementImportProviderAuthorizationRequest, idempotencyKey: UUID
+  ) async throws { confirmations.append((request, idempotencyKey)) }
+  public func recordedConfirmations() -> [(StatementImportProviderAuthorizationRequest, UUID)] {
+    confirmations
+  }
+}
+
 private enum StatementPDFPageRasterizer {
   static func image(
     from page: PDFPage, geometry: StatementPDFPageGeometry, maximumPixels: Int

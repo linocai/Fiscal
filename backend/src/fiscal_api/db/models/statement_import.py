@@ -340,6 +340,7 @@ class StatementImportOperation(Base):
     __table_args__ = (
         CheckConstraint(
             "operation IN ('registered','attempt_started','evidence_received',"
+            "'provider_attempt_started','provider_attempt_succeeded','provider_attempt_failed',"
             "'attempt_failed','abandoned')",
             name="valid_operation",
         ),
@@ -365,4 +366,105 @@ class StatementImportOperation(Base):
 
     statement_import: Mapped[StatementImport] = relationship(
         "StatementImport", back_populates="operations"
+    )
+
+
+class StatementImportProviderAttempt(Base):
+    """P26's provider-only metadata; never a credential or upstream raw body."""
+
+    __tablename__ = "statement_import_provider_attempts"
+    __table_args__ = (
+        CheckConstraint("char_length(evidence_sha256) = 64", name="evidence_sha256_length"),
+        CheckConstraint("char_length(request_hash) = 64", name="request_hash_length"),
+        UniqueConstraint(
+            "statement_import_attempt_id", name="uq_statement_provider_attempt_source"
+        ),
+        UniqueConstraint("idempotency_key", name="uq_statement_provider_attempt_idempotency"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    statement_import_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("statement_imports.id", ondelete="RESTRICT"), nullable=False
+    )
+    statement_import_attempt_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("statement_import_attempts.id", ondelete="RESTRICT"), nullable=False
+    )
+    idempotency_key: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    evidence_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    provider_model: Mapped[str] = mapped_column(String(200), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    snapshots: Mapped[list[StatementImportProviderAttemptSnapshot]] = relationship(
+        "StatementImportProviderAttemptSnapshot",
+        back_populates="provider_attempt",
+        cascade="all, delete-orphan",
+    )
+
+
+class StatementImportProviderAttemptSnapshot(Base):
+    """Append-only authorization, outbound, and validated-result snapshots."""
+
+    __tablename__ = "statement_import_provider_attempt_snapshots"
+    __table_args__ = (
+        CheckConstraint(
+            "snapshot_kind IN ('authorization','outbound_request','validated_result')",
+            name="valid_snapshot_kind",
+        ),
+        UniqueConstraint(
+            "provider_attempt_id", "snapshot_kind", name="uq_provider_attempt_snapshot_kind"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    provider_attempt_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("statement_import_provider_attempts.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    snapshot_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    provider_attempt: Mapped[StatementImportProviderAttempt] = relationship(
+        "StatementImportProviderAttempt", back_populates="snapshots"
+    )
+    source_refs: Mapped[list[StatementImportProviderSnapshotSourceRef]] = relationship(
+        "StatementImportProviderSnapshotSourceRef",
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+    )
+
+
+class StatementImportProviderSnapshotSourceRef(Base):
+    __tablename__ = "statement_import_provider_snapshot_source_refs"
+    __table_args__ = (
+        CheckConstraint("candidate_index >= 0", name="candidate_index_nonnegative"),
+        UniqueConstraint(
+            "provider_attempt_snapshot_id",
+            "candidate_index",
+            "statement_import_row_id",
+            name="uq_provider_snapshot_source_ref",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    provider_attempt_snapshot_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("statement_import_provider_attempt_snapshots.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    statement_import_row_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("statement_import_rows.id", ondelete="RESTRICT"), nullable=False
+    )
+    candidate_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    snapshot: Mapped[StatementImportProviderAttemptSnapshot] = relationship(
+        "StatementImportProviderAttemptSnapshot", back_populates="source_refs"
     )
