@@ -89,6 +89,9 @@
 		8814AC6A29D51201C6CB0F3A /* CashFlowModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A778C118F4503E15450A6E25 /* CashFlowModel.swift */; };
 		89087700DD68C77C7175FA1C /* InstallmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F624ADD5C2E121C7F641DD /* InstallmentRepository.swift */; };
 		8C3520FB72EC576D0544255C /* P9InputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B37F87A62073E2D426AC5C /* P9InputTests.swift */; };
+		F25A00000000000000000002 /* StatementPDFEvidenceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F25A00000000000000000001 /* StatementPDFEvidenceExtractor.swift */; };
+		F25A00000000000000000003 /* StatementPDFEvidenceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F25A00000000000000000001 /* StatementPDFEvidenceExtractor.swift */; };
+		F25A00000000000000000005 /* P25StatementPDFEvidenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F25A00000000000000000004 /* P25StatementPDFEvidenceTests.swift */; };
 		8E2A9F3F530D7AEC804E1A0E /* TransactionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0752D3D57AD3B99FE1943E05 /* TransactionModels.swift */; };
 		8E8037BF67BFD62CDA4033EA /* FiscalmacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E8B677BF8165F1CF2AA217F /* FiscalmacOSApp.swift */; };
 		8F352FC4B0E80F982525AED9 /* ReimbursementDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF39C6F2744F63EE814A73F2 /* ReimbursementDTO.swift */; };
@@ -328,6 +331,8 @@
 		EA464751FCA42DDEA8005314 /* CreditScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditScreens.swift; sourceTree = "<group>"; };
 		EDDD9FF6DB6523DE10952C11 /* P17Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P17Tests.swift; sourceTree = "<group>"; };
 		EF39C6F2744F63EE814A73F2 /* ReimbursementDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimbursementDTO.swift; sourceTree = "<group>"; };
+		F25A00000000000000000001 /* StatementPDFEvidenceExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementPDFEvidenceExtractor.swift; sourceTree = "<group>"; };
+		F25A00000000000000000004 /* P25StatementPDFEvidenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P25StatementPDFEvidenceTests.swift; sourceTree = "<group>"; };
 		F05017C6B56940B011F6E23E /* SystemStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemStatus.swift; sourceTree = "<group>"; };
 		F388265D8ABA7AB1219DA2A1 /* P18ReportingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P18ReportingTests.swift; sourceTree = "<group>"; };
 		F41296659AE4F2333D274669 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -417,6 +422,7 @@
 				549791302DE4F9854A26918B /* MasterDataModels.swift */,
 				40E7C412779E444B2EBDB328 /* MasterDataScreens.swift */,
 				36C53CFB1B3FBC363B77ED08 /* OCRInputService.swift */,
+				F25A00000000000000000001 /* StatementPDFEvidenceExtractor.swift */,
 				B21062E4064D11C69EA37BEA /* PassphraseModel.swift */,
 				D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */,
 				D861BDB3034B1DF16C4CB8C3 /* ReconciliationModel.swift */,
@@ -506,6 +512,7 @@
 				F388265D8ABA7AB1219DA2A1 /* P18ReportingTests.swift */,
 				85761C2F06B3E0F0E9F583F8 /* P21ReconciliationTests.swift */,
 				87CC6A97C83387C1644C9BDA /* P22RevisionTests.swift */,
+				F25A00000000000000000004 /* P25StatementPDFEvidenceTests.swift */,
 			);
 			name = FiscalKitTests;
 			path = Tests/FiscalKitTests;
@@ -796,6 +803,7 @@
 				A0A81DCBCF39BDED4EFFF670 /* P21ReconciliationTests.swift in Sources */,
 				7EE520DFB774A20C5B4D0184 /* P22RevisionTests.swift in Sources */,
 				8C3520FB72EC576D0544255C /* P9InputTests.swift in Sources */,
+				F25A00000000000000000005 /* P25StatementPDFEvidenceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -840,6 +848,7 @@
 				3010D4B8CF583CCB83B9C0CF /* MasterDataScreens.swift in Sources */,
 				A306C34BEC185CD5FE479DF0 /* MoneyFormat.swift in Sources */,
 				BA71137FB7961C822DA900E9 /* OCRInputService.swift in Sources */,
+				F25A00000000000000000002 /* StatementPDFEvidenceExtractor.swift in Sources */,
 				385BD2527D9DCC73BD30B8E4 /* OfflineSnapshotStore.swift in Sources */,
 				AEB258C3DF48989FDDC59B2B /* OverviewSnapshot.swift in Sources */,
 				2FCD0B493CA738BC2F610AE9 /* PassphraseModel.swift in Sources */,
@@ -919,6 +928,7 @@
 				38CD903D4D58CFE2A8C209D0 /* MasterDataScreens.swift in Sources */,
 				42CF6FAB3A19861566479BE9 /* MoneyFormat.swift in Sources */,
 				790361283016EDBEF8212D3D /* OCRInputService.swift in Sources */,
+				F25A00000000000000000003 /* StatementPDFEvidenceExtractor.swift in Sources */,
 				348431CDF91803DEB5C1A8D1 /* OfflineSnapshotStore.swift in Sources */,
 				0DB3D38B493F1B22A954DEC2 /* OverviewSnapshot.swift in Sources */,
 				D7E65B2896ADB87B0C04DEE4 /* PassphraseModel.swift in Sources */,
