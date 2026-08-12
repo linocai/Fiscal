@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 控制面版本：v1.4 施工计划 ｜ 更新：2026-08-12 ｜ 状态：v1.3.0/P20–P23 已发布；v1.4 尚未开始、未部署。本文件仅保存当前目标、稳定决定、阶段门和下一步。详细产品/契约记录见 [docs/BACKLOG-v1.4-v1.5.md](docs/BACKLOG-v1.4-v1.5.md)；实施证据只写入 `docs/qa/p24` 至 `docs/qa/p29`。
+> 控制面版本：v1.4 施工计划 ｜ 更新：2026-08-12 ｜ 状态：v1.3.0/P20–P23 已发布；P24-A 后端基础已 Automated Verified（`1d037bb`），P24 整期/P25–P29 均未完成、未部署。本文件仅保存当前目标、稳定决定、阶段门和下一步。详细产品/契约记录见 [docs/BACKLOG-v1.4-v1.5.md](docs/BACKLOG-v1.4-v1.5.md)；实施证据只写入 `docs/qa/p24` 至 `docs/qa/p29`。
 
 ## 1. 当前事实与目标
 
@@ -56,10 +56,13 @@
 ## 7. 里程碑索引与 Backlog
 
 - 已完成：P20 可信基线、P21 核对、P22 Archive/revision、P23 AI 质量；证据见 `docs/qa/p20`–`p23` 与 `RELEASE_STATE.md`。
-- 当前：P24 是唯一可施工阶段。详细字段、夹具、风险和 v1.4 DoD 见 [执行记录 §3.4–§3.9](docs/BACKLOG-v1.4-v1.5.md#34-p24--导入与隐私基础)。
+- P24-A：`1d037bb0cd33df8bf20e060e6891c90e16956f2a` 已 Automated Verified，新增仅元数据导入基础，Alembic `20260812_0024`。范围明确排除 PDF 解析、Provider、ledger/posting、Apple、生产和设备验收。
+- P24-A 验证：Ruff/Pyright 通过；fresh PostgreSQL `head → 20260811_0023 → head` 通过；lifecycle/hash duplicate/zero ledger+posting/Archive/revision/log redaction 定向测试 **4 passed**。完整命令、临时库清理和脱敏证据见 [P24 QA](docs/qa/p24/results.md)。
+- 已知门：全量后端回归止于既有 `tests/test_p10_api_postgres.py::test_p10_filter_bulk_and_csv_api` 的 `account_not_found`，不在 P24-A diff 内，已记录 P24 QA；它仍阻止 P24 整期和 v1.4 发布标记为全量通过。
+- 当前：允许启动受限 **P25-A**，因为它只消费已验证的批次边界并在设备本地运行；不得将此视为 P24/P25 整期完成，不得调用 Provider 或接入正式确认。详细字段、夹具、风险和 v1.4 DoD 见 [执行记录 §3.4–§3.9](docs/BACKLOG-v1.4-v1.5.md#34-p24--导入与隐私基础)。
 - 后续：v1.5（P30–P35）仅保留在 [执行记录 §4](docs/BACKLOG-v1.4-v1.5.md#4-v15--事实展现升级)，不得插入 v1.4。预算、建议、预测、银行连接器、通用附件、多人和投资仍明确不做。
 - 每次状态替换本文件当前事实/阶段/下一步；长篇测试输出和实现过程留在对应 QA 结果或 Git，不在此追加。
 
 ## 8. Builder 第一项任务
 
-执行 **P24-A：导入与隐私基础（后端垂直切片）**。先将 `StatementImport`、page、row、attempt、resolution 的稳定字段、关系、约束和状态迁移落入模型/API/service/archive/revision 边界；实现批次登记、hash 重复返回、失败/重试/放弃及脱敏操作日志。此切片不得解析真实 PDF、调用 Provider、创建 transaction 或 posting。完成后以 fresh PostgreSQL migration 往返、Archive roundtrip、重复 hash、零账本写入和日志脱敏测试作为 P24-A 门，并将命令、revision 与结果写入 `docs/qa/p24/results.md` 后再启动 P25。
+执行 **P25-A：Apple 本地提取基础**。在共享 Apple 层建立可取消的 PDF 页面证据提取边界：用 PDFKit 获取页数/文本层和页面几何，用 Vision 对扫描页 OCR，并为 `text`、`scanned_image`、`mixed`、`unsupported` 输出稳定的页序、行块/坐标及错误。先以合成 PDF/图像夹具测试文本、扫描、旋转、空白、受密码保护和超限输入；mixed 去重必须保留页号和原始证据。此切片不得上传/持久化 PDF 或页面图像、调用任何 API/Provider、创建导入批次或写入 ledger/posting。完成门为 Apple 单测中可重复的页/行/坐标结果、未授权零外发，以及完成/失败/取消三条临时文件清理路径；结果追加到 `docs/qa/p24/results.md`。P25-A 之后才评估同 P24 批次登记与发送前预览的对接。
