@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import Field
 
 from fiscal_api.api.p24_schemas import P24Model, StatementImportBoundingBox
+from fiscal_api.api.p27_confirmation_schemas import StatementImportConfirmRequest
 from fiscal_api.api.p27_schemas import ResolutionKind, ValidationStatus
 
 
@@ -57,6 +58,7 @@ class StatementImportWorkbenchRow(P24Model):
     draft: StatementImportWorkbenchDraft | None
     candidates: list[StatementImportWorkbenchCandidate]
     final_create_draft_version: int | None
+    is_confirmed: bool
 
 
 class StatementImportWorkbenchResponse(P24Model):
@@ -79,3 +81,54 @@ class StatementImportWorkbenchPageResponse(P24Model):
     evidence_text_masked: str | None = Field(default=None, max_length=20_000)
     bounding_boxes: list[StatementImportBoundingBox] = Field(default_factory=_empty_bounding_boxes)
     rows: list[StatementImportWorkbenchRow] = Field(default_factory=_empty_rows)
+
+
+class StatementImportConfirmationPreviewRequest(P24Model):
+    """The explicit selected subset. Versions are always freshly server-derived."""
+
+    row_ids: list[UUID] = Field(min_length=1, max_length=1000)
+
+
+class StatementImportConfirmationPreviewRow(P24Model):
+    row_id: UUID
+    expected_row_version: int
+    expected_draft_version: int
+    expected_final_create_draft_version: int | None
+    resolution: ResolutionKind
+    is_confirmed: bool
+
+
+class StatementImportConfirmationPreviewCounts(P24Model):
+    selected: int
+    create_new: int
+    match_existing: int
+    ignore_non_transaction: int
+    ignore_intentional: int
+    unresolved: int
+    batch_unresolved: int
+
+
+class StatementImportConfirmationPreviewAmounts(P24Model):
+    """Only source values that are actually stored are summed; unknown is explicit."""
+
+    known_create_minor: int
+    known_match_minor: int
+    known_total_minor: int
+    unknown_selected_count: int
+
+
+class StatementImportConfirmationPreviewCheck(P24Model):
+    check_kind: str
+    status: ValidationStatus
+
+
+class StatementImportConfirmationPreviewResponse(P24Model):
+    batch_id: UUID
+    batch_version: int
+    status: str
+    selected_rows: list[StatementImportConfirmationPreviewRow]
+    counts: StatementImportConfirmationPreviewCounts
+    amounts: StatementImportConfirmationPreviewAmounts
+    checks: list[StatementImportConfirmationPreviewCheck]
+    warnings: list[str]
+    request: StatementImportConfirmRequest

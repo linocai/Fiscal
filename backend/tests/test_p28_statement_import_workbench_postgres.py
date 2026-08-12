@@ -1,11 +1,26 @@
 from __future__ import annotations
 
+import asyncio
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 
-from test_p27_statement_import_review_postgres import _client, _seed, _snapshot
+from fiscal_api.db.models.ledger import LedgerTransaction, Posting
+from fiscal_api.db.models.statement_import import StatementImportRow
+from fiscal_api.db.models.statement_import_confirmation import (
+    StatementImportConfirmationOperation,
+    StatementImportTransactionProvenance,
+)
+from fiscal_api.db.session import create_engine, create_session_factory
+from test_p27_statement_import_review_postgres import (
+    TEST_DATABASE_URL,
+    _client,
+    _row_ids,
+    _seed,
+    _snapshot,
+)
 
 pytestmark = pytest.mark.skipif(
     __import__("os").environ.get("FISCAL_TEST_DATABASE_URL") is None,
@@ -120,3 +135,141 @@ def test_workbench_cursor_filter_and_review_projection_are_read_only() -> None:
             client.get(f"/api/v1/statement-imports/{batch_id}", headers=auth).json()["version"]
             == body["batch_version"]
         )
+
+
+def test_confirmation_preview_is_read_only_canonical_and_receipt_is_persisted_only() -> None:
+    with _client() as client:
+        batch, auth = _seed(client, row_count=2)
+        batch_id = batch["id"]
+        snapshot = asyncio.run(_snapshot(__import__("uuid").UUID(batch_id)))
+        review = client.post(
+            f"/api/v1/statement-imports/{batch_id}/validation-runs",
+            headers=auth,
+            json={
+                "expected_batch_version": batch["version"],
+                "provider_snapshot_id": str(snapshot),
+            },
+        )
+        assert review.status_code == 201, review.text
+        selected_id = review.json()["candidates"][0]["statement_import_row_id"]
+        other_id = str(asyncio.run(_row_ids(__import__("uuid").UUID(batch_id)))[1])
+        resolution = client.put(
+            f"/api/v1/statement-imports/{batch_id}/rows/{selected_id}/draft-resolution",
+            headers=auth,
+            json={
+                "expected_batch_version": review.json()["batch_version"],
+                "expected_row_version": 1,
+                "expected_resolution_version": 0,
+                "resolution": "ignore_intentional",
+                "ignored_reason": "Not a personal transaction",
+            },
+        )
+        assert resolution.status_code == 200, resolution.text
+
+        async def mutation_counts() -> tuple[int, int, int, int, int]:
+            engine = create_engine(TEST_DATABASE_URL)
+            try:
+                async with create_session_factory(engine)() as session:
+                    return (
+                        int(
+                            await session.scalar(
+                                select(func.count()).select_from(LedgerTransaction)
+                            )
+                            or 0
+                        ),
+                        int(await session.scalar(select(func.count()).select_from(Posting)) or 0),
+                        int(
+                            await session.scalar(
+                                select(func.count()).select_from(StatementImportTransactionProvenance)
+                            )
+                            or 0
+                        ),
+                        int(
+                            await session.scalar(
+                                select(func.count()).select_from(StatementImportConfirmationOperation)
+                            )
+                            or 0
+                        ),
+                        int(
+                            await session.scalar(
+                                select(func.count())
+                                .select_from(StatementImportRow)
+                                .where(StatementImportRow.confirmed_at.is_not(None))
+                            )
+                            or 0
+                        ),
+                    )
+            finally:
+                await engine.dispose()
+
+        before = asyncio.run(mutation_counts())
+        preview = client.post(
+            f"/api/v1/statement-imports/{batch_id}/confirmation-preview",
+            headers=auth,
+            json={"row_ids": [selected_id]},
+        )
+        assert preview.status_code == 200, preview.text
+        body = preview.json()
+        assert body["counts"] == {
+            "selected": 1,
+            "create_new": 0,
+            "match_existing": 0,
+            "ignore_non_transaction": 0,
+            "ignore_intentional": 1,
+            "unresolved": 0,
+            "batch_unresolved": 1,
+        }
+        assert body["amounts"] == {
+            "known_create_minor": 0,
+            "known_match_minor": 0,
+            "known_total_minor": 0,
+            "unknown_selected_count": 1,
+        }
+        assert body["request"] == {
+            "expected_batch_version": resolution.json()["batch_version"],
+            "rows": [
+                {
+                    "row_id": selected_id,
+                    "expected_row_version": 1,
+                    "expected_draft_version": 1,
+                    "expected_final_create_draft_version": None,
+                }
+            ],
+        }
+        assert asyncio.run(mutation_counts()) == before
+        duplicate = client.post(
+            f"/api/v1/statement-imports/{batch_id}/confirmation-preview",
+            headers=auth,
+            json={"row_ids": [selected_id, selected_id]},
+        )
+        assert duplicate.status_code == 409
+        unresolved = client.post(
+            f"/api/v1/statement-imports/{batch_id}/confirmation-preview",
+            headers=auth,
+            json={"row_ids": [other_id]},
+        )
+        assert unresolved.status_code == 409
+
+        key = str(uuid4())
+        confirmed = client.post(
+            f"/api/v1/statement-imports/{batch_id}/confirm",
+            headers={**auth, "Idempotency-Key": key},
+            json=body["request"],
+        )
+        assert confirmed.status_code == 200, confirmed.text
+        receipt = client.get(
+            f"/api/v1/statement-imports/{batch_id}/confirmation-receipt",
+            headers={**auth, "Idempotency-Key": key},
+        )
+        assert receipt.status_code == 200, receipt.text
+        assert receipt.json() == {**confirmed.json(), "replay": True}
+        missing = client.get(
+            f"/api/v1/statement-imports/{batch_id}/confirmation-receipt",
+            headers={**auth, "Idempotency-Key": str(uuid4())},
+        )
+        assert missing.status_code == 404
+        workbench = client.get(
+            f"/api/v1/statement-imports/{batch_id}/review-workbench", headers=auth
+        )
+        assert workbench.status_code == 200
+        assert workbench.json()["rows"][0]["is_confirmed"] is True

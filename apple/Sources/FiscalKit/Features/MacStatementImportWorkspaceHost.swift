@@ -2,7 +2,7 @@
 import SwiftUI
 
 /// macOS-only P28-B review surface.  Every value here is an in-memory user choice; only the
-/// dedicated P27 repositories can write it, and this screen has no confirmation affordance.
+/// dedicated P27 repositories can write it; P28-C adds only a two-step confirmation sheet.
 public struct MacStatementImportWorkspaceHost: View {
   @Bindable private var model: StatementImportReviewWorkbenchModel
   private let batchID: UUID
@@ -12,6 +12,8 @@ public struct MacStatementImportWorkspaceHost: View {
   @State private var matchedTransactionID: UUID?
   @State private var ignoredReason = ""
   @State private var create = CreateForm()
+  @State private var confirmationSelection = Set<UUID>()
+  @State private var showingConfirmationSheet = false
 
   public init(
     model: StatementImportReviewWorkbenchModel, batchID: UUID,
@@ -29,7 +31,10 @@ public struct MacStatementImportWorkspaceHost: View {
       reviewColumn
     }
     .task { await model.reload(batchID: batchID) }
-    .onDisappear { resetLocalForms(); model.clear() }
+    .onDisappear { resetLocalForms(); confirmationSelection.removeAll(); showingConfirmationSheet = false; model.clear() }
+    .sheet(isPresented: $showingConfirmationSheet) {
+      MacStatementImportConfirmationSheet(model: model, isPresented: $showingConfirmationSheet)
+    }
     .accessibilityIdentifier("mac.statementImport.workbench")
     .accessibilityLabel("账单审核工作台，三栏布局；只显示已存脱敏证据")
   }
@@ -47,6 +52,18 @@ public struct MacStatementImportWorkspaceHost: View {
         .keyboardShortcut("r", modifiers: [.command])
         .accessibilityHint("重新读取服务器中的脱敏审核数据")
       if let error = model.error { Text(error).foregroundStyle(.orange).font(.caption) }
+      Button("准备确认所选 (confirmationSelection.count) 行") {
+        Task { if await model.prepareConfirmation(batchID: batchID, rowIDs: confirmationSelection) { showingConfirmationSheet = true } }
+      }
+      .disabled(!canPrepareConfirmation)
+      .accessibilityHint("先重新读取并只生成确认预览；不会立即确认")
+      if model.responseUnknownConfirmationKey != nil {
+        Button("查询确认收据") { Task { _ = await model.lookupConfirmationReceipt() } }
+          .accessibilityHint("仅显式查询已持久化收据；不会重新发送确认")
+      }
+      if let receipt = model.confirmationReceipt {
+        Text("确认收据：\(receipt.confirmedRowIDs.count) 行，\(receipt.status)").font(.caption)
+      }
       Spacer()
     }
     .frame(width: 230, alignment: .topLeading).padding()
@@ -72,17 +89,24 @@ public struct MacStatementImportWorkspaceHost: View {
   private var reviewColumn: some View {
     VStack(spacing: 0) {
       List(model.workbench?.rows ?? []) { row in
-        Button {
-          resetLocalForms(for: row)
-          Task { await model.select(row) }
-        } label: {
-          VStack(alignment: .leading, spacing: 3) {
-            Text("#\(row.rowNumber) \(row.evidenceTextMasked ?? "来源不可用")").lineLimit(1)
-            Text(row.draft?.resolution ?? "unresolved").font(.caption).foregroundStyle(.secondary)
+        HStack {
+          Button {
+            resetLocalForms(for: row)
+            Task { await model.select(row) }
+          } label: {
+            VStack(alignment: .leading, spacing: 3) {
+              Text("#\(row.rowNumber) \(row.evidenceTextMasked ?? "来源不可用")").lineLimit(1)
+              Text(row.isConfirmed ? "已确认（冻结）" : (row.draft?.resolution ?? "unresolved")).font(.caption).foregroundStyle(.secondary)
+            }
           }
+          .buttonStyle(.plain).focusable()
+          .accessibilityLabel("第 \(row.rowNumber) 行，\(row.evidenceTextMasked ?? "脱敏来源不可用")")
+          Spacer()
+          Toggle("选择确认", isOn: selectionBinding(for: row))
+            .labelsHidden()
+            .disabled(!isConfirmationEligible(row))
+            .accessibilityLabel("选择第 \(row.rowNumber) 行用于确认")
         }
-        .buttonStyle(.plain).focusable()
-        .accessibilityLabel("第 \(row.rowNumber) 行，\(row.evidenceTextMasked ?? "脱敏来源不可用")")
       }
       .frame(minHeight: 160)
       Divider()
@@ -102,7 +126,9 @@ public struct MacStatementImportWorkspaceHost: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 10) {
         Text("行 #\(row.rowNumber) 审核").font(.headline)
-        if model.workbench?.reviewAvailable != true {
+        if row.isConfirmed {
+          Text("该行已确认并冻结，不能编辑或再次确认。").foregroundStyle(.secondary)
+        } else if model.workbench?.reviewAvailable != true {
           Text("结构化审核不可用；此批次只能查看脱敏证据。")
             .foregroundStyle(.secondary)
         } else {
@@ -179,6 +205,17 @@ public struct MacStatementImportWorkspaceHost: View {
 
   private var activeAccounts: [AccountDTO] { accounts.filter { $0.archivedAt == nil } }
   private var activeCategories: [CategoryDTO] { categories.filter { $0.archivedAt == nil } }
+  private var canPrepareConfirmation: Bool {
+    model.workbench?.reviewAvailable == true && !confirmationSelection.isEmpty
+  }
+  private func isConfirmationEligible(_ row: StatementImportWorkbench.Row) -> Bool {
+    model.workbench?.reviewAvailable == true && !row.isConfirmed && row.draft?.resolution != nil && row.draft?.resolution != "unresolved"
+  }
+  private func selectionBinding(for row: StatementImportWorkbench.Row) -> Binding<Bool> {
+    Binding(get: { confirmationSelection.contains(row.id) }, set: { selected in
+      if selected { confirmationSelection.insert(row.id) } else { confirmationSelection.remove(row.id) }
+    })
+  }
 
   private func canSave(_ row: StatementImportWorkbench.Row) -> Bool {
     switch resolution {
@@ -229,6 +266,35 @@ public struct MacStatementImportWorkspaceHost: View {
       draft.creditCycleID = UUID(uuidString: creditCycleID.trimmingCharacters(in: .whitespacesAndNewlines))
       return draft
     }
+  }
+}
+
+private struct MacStatementImportConfirmationSheet: View {
+  @Bindable var model: StatementImportReviewWorkbenchModel
+  @Binding var isPresented: Bool
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      Text("确认前复核").font(.title2)
+      if let preview = model.confirmationPreview {
+        Text("将确认 \(preview.counts.selected) 行；未解决行仍有 \(preview.counts.batchUnresolved) 行。")
+        Text("新建 \(preview.counts.createNew) · 匹配 \(preview.counts.matchExisting) · 非交易忽略 \(preview.counts.ignoreNonTransaction) · 有意忽略 \(preview.counts.ignoreIntentional)")
+        Text("已知金额合计 \(preview.amounts.knownTotalMinor) 分；未知金额 \(preview.amounts.unknownSelectedCount) 行。")
+        if !preview.warnings.isEmpty { Text("警告：\(preview.warnings.joined(separator: "、"))").foregroundStyle(.orange) }
+        if !preview.checks.isEmpty { Text("检查：\(preview.checks.map { "\($0.checkKind): \($0.status)" }.joined(separator: "；"))").font(.caption) }
+      } else { Text("预览已失效，请关闭后重新选择。") }
+      if let error = model.error { Text(error).foregroundStyle(.orange).font(.caption) }
+      HStack {
+        Button("取消") { isPresented = false }
+        Spacer()
+        Button("最终确认") { Task { if await model.confirmPrepared() { isPresented = false } } }
+          .disabled(model.confirmationPreview == nil)
+          .accessibilityHint("仅此按钮发送一次正式确认；没有键盘快捷键或自动重发")
+      }
+    }
+    .padding(24).frame(minWidth: 520)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("确认前复核表；最终确认需要明确点击")
   }
 }
 #endif

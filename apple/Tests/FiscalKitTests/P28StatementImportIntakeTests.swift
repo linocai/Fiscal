@@ -172,12 +172,66 @@ struct FiscalKitP28StatementImportIntakeTests {
     #expect(StubURLProtocol.requestCount == 2)
   }
 
+  @Test("Confirmation previews before one explicit final POST with its exact key")
+  func confirmationPreviewThenExplicitFinalPost() async throws {
+    let batchID = UUID(), rowID = UUID(), operationID = UUID()
+    let observedConfirm = ConfirmationFlag()
+    StubURLProtocol.install { request in
+      let path = request.url!.path
+      if request.httpMethod == "GET" {
+        return .init(body: Self.workbenchBody(batchID: batchID, rowID: rowID, batchVersion: 9, rowVersion: 4, draftVersion: 7, resolution: "ignore_non_transaction"))
+      }
+      let data = try! #require(Self.requestBody(request))
+      let body = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+      if path.hasSuffix("confirmation-preview") {
+        #expect(request.value(forHTTPHeaderField: "Idempotency-Key") == nil)
+        #expect((body["row_ids"] as? [String]) == [rowID.uuidString])
+        #expect(!observedConfirm.value)
+        return .init(body: Data("""
+          {"batch_id":"\(batchID.uuidString)","batch_version":9,"status":"review_required","selected_rows":[],"counts":{"selected":1,"create_new":0,"match_existing":0,"ignore_non_transaction":1,"ignore_intentional":0,"unresolved":0,"batch_unresolved":0},"amounts":{"known_create_minor":0,"known_match_minor":0,"known_total_minor":0,"unknown_selected_count":1},"checks":[],"warnings":[],"request":{"expected_batch_version":9,"rows":[{"row_id":"\(rowID.uuidString)","expected_row_version":4,"expected_draft_version":7,"expected_final_create_draft_version":null}]}}
+          """.utf8))
+      }
+      #expect(path.hasSuffix("confirm")); #expect(!observedConfirm.value); observedConfirm.value = true
+      #expect(UUID(uuidString: request.value(forHTTPHeaderField: "Idempotency-Key") ?? "") != nil)
+      #expect(body["expected_batch_version"] as? Int == 9)
+      return .init(body: Data("""
+        {"operation_id":"\(operationID.uuidString)","batch_id":"\(batchID.uuidString)","batch_version":10,"status":"confirmed","confirmed_row_ids":["\(rowID.uuidString)"],"replay":false}
+        """.utf8))
+    }
+    let transport = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t", responseCache: HTTPResponseCache())
+    let model = await MainActor.run {
+      StatementImportReviewWorkbenchModel(
+        repository: RemoteStatementImportReviewWorkbenchRepository(transport: transport),
+        confirmationRepository: RemoteStatementImportConfirmationRepository(transport: transport))
+    }
+    #expect(await model.prepareConfirmation(batchID: batchID, rowIDs: [rowID]))
+    #expect(!observedConfirm.value)
+    #expect(await model.confirmPrepared())
+    #expect(observedConfirm.value)
+    #expect(StubURLProtocol.requestCount == 4) // fresh reload, preview, post-confirm reload
+  }
+
+  @Test("Confirmation transport loss has no resend and receipt lookup is explicit")
+  func confirmationTransportLossNeedsExplicitReceiptLookup() async throws {
+    let batchID = UUID(), rowID = UUID()
+    let workbench = WorkbenchFixture(batchID: batchID, rowID: rowID, reviewAvailable: true, resolution: "ignore_non_transaction")
+    let confirmations = ConfirmationFixture(batchID: batchID, rowID: rowID, failConfirm: true)
+    let model = await MainActor.run { StatementImportReviewWorkbenchModel(repository: workbench, confirmationRepository: confirmations) }
+    #expect(await model.prepareConfirmation(batchID: batchID, rowIDs: [rowID]))
+    let confirmed = await model.confirmPrepared()
+    #expect(!confirmed)
+    #expect(await confirmations.calls() == ["preview", "confirm"])
+    #expect(await MainActor.run { model.responseUnknownConfirmationKey != nil })
+    #expect(await model.lookupConfirmationReceipt())
+    #expect(await confirmations.calls() == ["preview", "confirm", "receipt"])
+  }
+
   private static func workbenchBody(
     batchID: UUID, rowID: UUID, batchVersion: Int, rowVersion: Int, draftVersion: Int,
-    finalVersion: Int? = nil
+    finalVersion: Int? = nil, resolution: String = "unresolved"
   ) -> Data {
     Data("""
-    {"batch_id":"\(batchID.uuidString)","batch_version":\(batchVersion),"review_available":true,"rows":[{"id":"\(rowID.uuidString)","row_number":1,"page_number":1,"row_version":\(rowVersion),"source_kind":"text","evidence_text_masked":"[REDACTED] market","draft":{"id":"\(UUID().uuidString)","resolution":"unresolved","version":\(draftVersion)},"candidates":[],"final_create_draft_version":\(finalVersion.map { String($0) } ?? "null")}],"next_cursor":null}
+    {"batch_id":"\(batchID.uuidString)","batch_version":\(batchVersion),"review_available":true,"rows":[{"id":"\(rowID.uuidString)","row_number":1,"page_number":1,"row_version":\(rowVersion),"source_kind":"text","evidence_text_masked":"[REDACTED] market","draft":{"id":"\(UUID().uuidString)","resolution":"\(resolution)","version":\(draftVersion)},"candidates":[],"final_create_draft_version":\(finalVersion.map { String($0) } ?? "null"),"is_confirmed":false}],"next_cursor":null}
     """.utf8)
   }
 
@@ -197,16 +251,35 @@ struct FiscalKitP28StatementImportIntakeTests {
 
 private actor WorkbenchFixture: StatementImportReviewWorkbenchRepository {
   private let batchID: UUID; private let rowID: UUID; private var recorded: [String] = []
-  init(batchID: UUID, rowID: UUID) { self.batchID = batchID; self.rowID = rowID }
+  private let reviewAvailable: Bool; private let resolution: String
+  init(batchID: UUID, rowID: UUID, reviewAvailable: Bool = false, resolution: String = "unresolved") { self.batchID = batchID; self.rowID = rowID; self.reviewAvailable = reviewAvailable; self.resolution = resolution }
   func workbench(batchID: UUID, cursor: Int, limit: Int, filters: [String: String]) async throws -> StatementImportWorkbench {
     recorded.append("workbench"); #expect(batchID == self.batchID); #expect(cursor == 0 && limit == 100 && filters.isEmpty)
-    return try JSONDecoder().decode(StatementImportWorkbench.self, from: Data("{\"batch_id\":\"\(batchID.uuidString)\",\"batch_version\":3,\"review_available\":false,\"rows\":[{\"id\":\"\(rowID.uuidString)\",\"row_number\":1,\"page_number\":1,\"row_version\":1,\"source_kind\":\"text\",\"evidence_text_masked\":\"[REDACTED] market\",\"draft\":null,\"candidates\":[],\"final_create_draft_version\":null}],\"next_cursor\":null}".utf8))
+    return try JSONDecoder().decode(StatementImportWorkbench.self, from: Data("{\"batch_id\":\"\(batchID.uuidString)\",\"batch_version\":3,\"review_available\":\(reviewAvailable),\"rows\":[{\"id\":\"\(rowID.uuidString)\",\"row_number\":1,\"page_number\":1,\"row_version\":1,\"source_kind\":\"text\",\"evidence_text_masked\":\"[REDACTED] market\",\"draft\":{\"id\":\"\(UUID().uuidString)\",\"resolution\":\"\(resolution)\",\"version\":1},\"candidates\":[],\"final_create_draft_version\":null,\"is_confirmed\":false}],\"next_cursor\":null}".utf8))
   }
   func page(batchID: UUID, pageNumber: Int) async throws -> StatementImportWorkbenchPage {
     recorded.append("page"); #expect(batchID == self.batchID && pageNumber == 1)
     return try JSONDecoder().decode(StatementImportWorkbenchPage.self, from: Data("{\"page_number\":1,\"source_available\":true,\"source_kind\":\"text\",\"evidence_text_masked\":\"[REDACTED] market\"}".utf8))
   }
   func calls() -> [String] { recorded }
+}
+
+private actor ConfirmationFixture: StatementImportConfirmationRepository {
+  private let batchID: UUID; private let rowID: UUID; private let failConfirm: Bool; private var recorded: [String] = []
+  init(batchID: UUID, rowID: UUID, failConfirm: Bool) { self.batchID = batchID; self.rowID = rowID; self.failConfirm = failConfirm }
+  func preview(batchID: UUID, rowIDs: [UUID]) async throws -> StatementImportConfirmationPreview {
+    recorded.append("preview"); #expect(batchID == self.batchID && rowIDs == [rowID])
+    return try JSONDecoder().decode(StatementImportConfirmationPreview.self, from: Data("{\"batch_id\":\"\(batchID.uuidString)\",\"batch_version\":3,\"status\":\"review_required\",\"counts\":{\"selected\":1,\"create_new\":0,\"match_existing\":0,\"ignore_non_transaction\":1,\"ignore_intentional\":0,\"unresolved\":0,\"batch_unresolved\":0},\"amounts\":{\"known_create_minor\":0,\"known_match_minor\":0,\"known_total_minor\":0,\"unknown_selected_count\":1},\"checks\":[],\"warnings\":[],\"request\":{\"expected_batch_version\":3,\"rows\":[{\"row_id\":\"\(rowID.uuidString)\",\"expected_row_version\":1,\"expected_draft_version\":1,\"expected_final_create_draft_version\":null}]}}".utf8))
+  }
+  func confirm(batchID: UUID, request: StatementImportConfirmationDTO, idempotencyKey: UUID) async throws -> StatementImportConfirmationReceipt { recorded.append("confirm"); #expect(batchID == self.batchID && request.rows.first?.rowID == rowID && idempotencyKey.uuidString.isEmpty == false); if failConfirm { throw FiscalAPIError.transport("lost") }; throw FiscalAPIError.invalidResponse }
+  func receipt(batchID: UUID, idempotencyKey: UUID) async throws -> StatementImportConfirmationReceipt { recorded.append("receipt"); #expect(batchID == self.batchID && idempotencyKey.uuidString.isEmpty == false); return .init(operationID: UUID(), batchID: batchID, batchVersion: 4, status: "confirmed", confirmedRowIDs: [rowID], replay: true) }
+  func confirm(_ request: StatementImportConfirmationDTO, idempotencyKey: UUID) async throws { _ = request; _ = idempotencyKey }
+  func calls() -> [String] { recorded }
+}
+
+private final class ConfirmationFlag: @unchecked Sendable {
+  private let lock = NSLock(); private var stored = false
+  var value: Bool { get { lock.withLock { stored } } set { lock.withLock { stored = newValue } } }
 }
 
 private actor IntakeRepositoryFixture: StatementImportIntakeRepository {

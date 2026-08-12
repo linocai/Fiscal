@@ -659,13 +659,47 @@ public struct StatementImportConfirmationDTO: Codable, Sendable, Equatable {
     public let expectedRowVersion: Int
     public let expectedDraftVersion: Int
     public let expectedFinalCreateDraftVersion: Int?
+    enum CodingKeys: String, CodingKey {
+      case rowID = "row_id", expectedRowVersion = "expected_row_version"
+      case expectedDraftVersion = "expected_draft_version"
+      case expectedFinalCreateDraftVersion = "expected_final_create_draft_version"
+    }
   }
   public let expectedBatchVersion: Int
   public let rows: [Row]
+  enum CodingKeys: String, CodingKey { case expectedBatchVersion = "expected_batch_version", rows }
+}
+
+public struct StatementImportConfirmationPreview: Codable, Sendable, Equatable {
+  public struct Counts: Codable, Sendable, Equatable {
+    public let selected: Int; public let createNew: Int; public let matchExisting: Int; public let ignoreNonTransaction: Int; public let ignoreIntentional: Int; public let unresolved: Int; public let batchUnresolved: Int
+    enum CodingKeys: String, CodingKey { case selected, unresolved; case createNew = "create_new", matchExisting = "match_existing", ignoreNonTransaction = "ignore_non_transaction", ignoreIntentional = "ignore_intentional", batchUnresolved = "batch_unresolved" }
+  }
+  public struct Amounts: Codable, Sendable, Equatable {
+    public let knownCreateMinor: Int; public let knownMatchMinor: Int; public let knownTotalMinor: Int; public let unknownSelectedCount: Int
+    enum CodingKeys: String, CodingKey { case knownCreateMinor = "known_create_minor", knownMatchMinor = "known_match_minor", knownTotalMinor = "known_total_minor", unknownSelectedCount = "unknown_selected_count" }
+  }
+  public struct Check: Codable, Sendable, Equatable { public let checkKind: String; public let status: String; enum CodingKeys: String, CodingKey { case checkKind = "check_kind", status } }
+  public let batchID: UUID; public let batchVersion: Int; public let status: String; public let counts: Counts; public let amounts: Amounts; public let checks: [Check]; public let warnings: [String]; public let request: StatementImportConfirmationDTO
+  enum CodingKeys: String, CodingKey { case status, counts, amounts, checks, warnings, request; case batchID = "batch_id", batchVersion = "batch_version" }
+}
+
+public struct StatementImportConfirmationReceipt: Codable, Sendable, Equatable {
+  public let operationID: UUID; public let batchID: UUID; public let batchVersion: Int; public let status: String; public let confirmedRowIDs: [UUID]; public let replay: Bool
+  enum CodingKeys: String, CodingKey { case status, replay; case operationID = "operation_id", batchID = "batch_id", batchVersion = "batch_version", confirmedRowIDs = "confirmed_row_ids" }
 }
 
 public protocol StatementImportConfirmationRepository: Sendable {
+  func preview(batchID: UUID, rowIDs: [UUID]) async throws -> StatementImportConfirmationPreview
+  func receipt(batchID: UUID, idempotencyKey: UUID) async throws -> StatementImportConfirmationReceipt
+  func confirm(batchID: UUID, request: StatementImportConfirmationDTO, idempotencyKey: UUID) async throws -> StatementImportConfirmationReceipt
   func confirm(_ request: StatementImportConfirmationDTO, idempotencyKey: UUID) async throws
+}
+
+public extension StatementImportConfirmationRepository {
+  func preview(batchID: UUID, rowIDs: [UUID]) async throws -> StatementImportConfirmationPreview { throw FiscalAPIError.invalidResponse }
+  func receipt(batchID: UUID, idempotencyKey: UUID) async throws -> StatementImportConfirmationReceipt { throw FiscalAPIError.invalidResponse }
+  func confirm(batchID: UUID, request: StatementImportConfirmationDTO, idempotencyKey: UUID) async throws -> StatementImportConfirmationReceipt { throw FiscalAPIError.invalidResponse }
 }
 
 public actor RecordingStatementImportConfirmationRepository: StatementImportConfirmationRepository {

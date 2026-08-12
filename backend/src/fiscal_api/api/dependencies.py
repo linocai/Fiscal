@@ -20,6 +20,9 @@ from fiscal_api.services.reconciliation import ReconciliationService
 from fiscal_api.services.reimbursements import ReimbursementService
 from fiscal_api.services.reporting import ReportingService
 from fiscal_api.services.statement_import_confirmation import StatementImportConfirmationService
+from fiscal_api.services.statement_import_confirmation_preview import (
+    StatementImportConfirmationPreviewService,
+)
 from fiscal_api.services.statement_import_final_drafts import StatementImportFinalDraftService
 from fiscal_api.services.statement_import_provider import (
     StatementImportProvider,
@@ -215,4 +218,16 @@ def get_statement_import_confirmation_service(
 
 StatementImportConfirmationServiceDependency = Annotated[
     StatementImportConfirmationService, Depends(get_statement_import_confirmation_service)
+]
+
+
+def get_statement_import_confirmation_preview_service(
+    session: SessionDependency,
+) -> StatementImportConfirmationPreviewService:
+    return StatementImportConfirmationPreviewService(session)
+
+
+StatementImportConfirmationPreviewServiceDependency = Annotated[
+    StatementImportConfirmationPreviewService,
+    Depends(get_statement_import_confirmation_preview_service),
 ]

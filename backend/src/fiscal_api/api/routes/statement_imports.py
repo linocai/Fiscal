@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from starlette import status
 
 from fiscal_api.api.dependencies import (
+    StatementImportConfirmationPreviewServiceDependency,
     StatementImportConfirmationServiceDependency,
     StatementImportFinalDraftServiceDependency,
     StatementImportReviewServiceDependency,
@@ -40,6 +41,8 @@ from fiscal_api.api.p27_schemas import (
     StatementImportValidationRunCreate,
 )
 from fiscal_api.api.p28_schemas import (
+    StatementImportConfirmationPreviewRequest,
+    StatementImportConfirmationPreviewResponse,
     StatementImportWorkbenchFilters,
     StatementImportWorkbenchPageResponse,
     StatementImportWorkbenchResponse,
@@ -238,6 +241,30 @@ async def confirm_statement_import(
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
 ) -> StatementImportConfirmReceipt:
     return await service.confirm(statement_import_id, request, idempotency_key)
+
+
+@router.post(
+    "/{statement_import_id}/confirmation-preview",
+    response_model=StatementImportConfirmationPreviewResponse,
+)
+async def preview_statement_import_confirmation(
+    statement_import_id: UUID,
+    request: StatementImportConfirmationPreviewRequest,
+    service: StatementImportConfirmationPreviewServiceDependency,
+) -> StatementImportConfirmationPreviewResponse:
+    return await service.preview(statement_import_id, request)
+
+
+@router.get(
+    "/{statement_import_id}/confirmation-receipt",
+    response_model=StatementImportConfirmReceipt,
+)
+async def get_statement_import_confirmation_receipt(
+    statement_import_id: UUID,
+    service: StatementImportConfirmationPreviewServiceDependency,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+) -> StatementImportConfirmReceipt:
+    return await service.receipt(statement_import_id, idempotency_key)
 
 
 @router.post(

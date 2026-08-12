@@ -230,6 +230,7 @@ class StatementImportWorkbenchService:
                 "draft": draft,
                 "candidates": candidates,
                 "final_create_draft_version": final.version if final else None,
+                "is_confirmed": row.confirmed_at is not None,
             }
         )
 
