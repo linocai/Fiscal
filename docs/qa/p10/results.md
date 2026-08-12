@@ -57,4 +57,5 @@ The evidence uses production views connected to an authenticated local PostgreSQ
 
 - The reported `test_p10_filter_bulk_and_csv_api` `account_not_found` blocker could not be reproduced on a newly created PostgreSQL database migrated to `head`: 12 independent runs passed. No P10 domain or API change was required.
 - P4/P5/P10/P20/P22 adjacent PostgreSQL coverage passed: **45 passed**. Every temporary database was dropped after its command.
-- The historical P21 fixture subsequently received a test-only frozen business clock; a new fresh PostgreSQL full-suite run is now **256 passed**. No P10 production code was changed.
+- The historical P21 fixture subsequently received a test-only frozen business clock. P10's guarded-downgrade test now explicitly restores `20260811_0019` before exercising its empty-data downgrade path and always restores/clears that baseline on exit, so an Alembic partial downgrade cannot leak a version row or uncategorized fixture into the next test.
+- Fresh disposable PostgreSQL JUnit after that harness correction: **268 passed, 0 failures, 0 errors, 0 skipped**. The P10 migration/filter/API focus was **7 passed**; temporary databases and the JUnit report were removed after verification. No P10 production code was changed.

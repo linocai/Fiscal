@@ -67,21 +67,42 @@ async def insert_uncategorized() -> None:
         await engine.dispose()
 
 
+async def current_revision() -> str:
+    assert TEST_DATABASE_URL is not None
+    engine = create_async_engine(TEST_DATABASE_URL)
+    try:
+        async with engine.connect() as connection:
+            revision = await connection.scalar(text("SELECT version_num FROM alembic_version"))
+    finally:
+        await engine.dispose()
+    assert isinstance(revision, str)
+    return revision
+
+
 def test_p10_uncategorized_upgrade_and_guarded_downgrade(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     assert TEST_DATABASE_URL is not None
     monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
     get_settings.cache_clear()
-    command.upgrade(config(), "20260811_0019")
-    asyncio.run(clear_ledger())
-    asyncio.run(insert_uncategorized())
-    with pytest.raises(DBAPIError, match="P10 downgrade blocked"):
-        command.downgrade(config(), "20260716_0008")
-
-    asyncio.run(clear_ledger())
-    command.downgrade(config(), "20260716_0008")
-    with pytest.raises(DBAPIError, match="invalid income/expense posting shape"):
+    try:
+        command.upgrade(config(), "20260811_0019")
+        asyncio.run(clear_ledger())
         asyncio.run(insert_uncategorized())
-    command.upgrade(config(), "20260811_0019")
-    get_settings.cache_clear()
+        with pytest.raises(DBAPIError, match="P10 downgrade blocked"):
+            command.downgrade(config(), "20260716_0008")
+
+        # Alembic may have applied the later reversible downgrades before P10's
+        # data guard raises. Restore the known P10 baseline before proving the
+        # empty-data path, rather than assuming the version row stayed put.
+        command.upgrade(config(), "20260811_0019")
+        assert asyncio.run(current_revision()) == "20260811_0019"
+        asyncio.run(clear_ledger())
+        command.downgrade(config(), "20260716_0008")
+        assert asyncio.run(current_revision()) == "20260716_0008"
+        with pytest.raises(DBAPIError, match="invalid income/expense posting shape"):
+            asyncio.run(insert_uncategorized())
+    finally:
+        command.upgrade(config(), "20260811_0019")
+        asyncio.run(clear_ledger())
+        get_settings.cache_clear()
