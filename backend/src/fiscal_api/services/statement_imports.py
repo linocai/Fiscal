@@ -333,10 +333,7 @@ class StatementImportService:
             .order_by(StatementImportAttempt.attempt_number.desc())
             .with_for_update()
         )
-        if (
-            local is None
-            or item.status not in {"review_required", "failed"}
-        ):
+        if local is None or item.status not in {"review_required", "failed"}:
             conflict("statement_provider_evidence_stale", "Current redacted evidence is required")
         outbound = await self._outbound_request(item.id)
         self._validate_authorization(request, outbound, local.evidence_sha256)

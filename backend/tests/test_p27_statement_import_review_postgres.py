@@ -75,9 +75,7 @@ def _alembic_config() -> Config:
     return Config(str(Path(__file__).parents[1] / "alembic.ini"))
 
 
-def _seed(
-    client: TestClient, *, row_count: int = 1
-) -> tuple[dict[str, object], dict[str, str]]:
+def _seed(client: TestClient, *, row_count: int = 1) -> tuple[dict[str, object], dict[str, str]]:
     auth = {"Authorization": "Bearer p27-token"}
     created = client.post(
         "/api/v1/statement-imports",
@@ -950,9 +948,9 @@ def test_p27_confirm_preflight_rolls_back_and_chunks_freeze_rows() -> None:
                     ),
                     int(
                         await session.scalar(
-                            select(func.count()).select_from(StatementImportRow).where(
-                                StatementImportRow.confirmed_at.is_not(None)
-                            )
+                            select(func.count())
+                            .select_from(StatementImportRow)
+                            .where(StatementImportRow.confirmed_at.is_not(None))
                         )
                         or 0
                     ),

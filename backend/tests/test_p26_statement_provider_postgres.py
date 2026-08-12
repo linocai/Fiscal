@@ -85,9 +85,7 @@ def _evidence(attempt_id: str, version: int) -> dict[str, object]:
             {
                 "page_number": 1,
                 "source_kind": "text",
-                "evidence_text_masked": (
-                    "2026-08-12 Synthetic market 18.50 [REDACTED]"
-                ),
+                "evidence_text_masked": ("2026-08-12 Synthetic market 18.50 [REDACTED]"),
                 "bounding_boxes": [{"x": 0.1, "y": 0.1, "width": 0.3, "height": 0.1}],
             },
             {"page_number": 2, "source_kind": "unsupported", "bounding_boxes": []},
@@ -96,9 +94,7 @@ def _evidence(attempt_id: str, version: int) -> dict[str, object]:
             {
                 "row_number": 1,
                 "page_number": 1,
-                "evidence_text_masked": (
-                    "2026-08-12 Synthetic market 18.50 [REDACTED]"
-                ),
+                "evidence_text_masked": ("2026-08-12 Synthetic market 18.50 [REDACTED]"),
                 "bounding_box": {"x": 0.1, "y": 0.1, "width": 0.3, "height": 0.1},
             }
         ],
@@ -262,7 +258,9 @@ def test_p26_synthetic_outbound_snapshots_idempotency_and_archive(
         make_url(TEST_DATABASE_URL).set(database="postgres").render_as_string(hide_password=False)
     )
     fresh_url = (
-        make_url(TEST_DATABASE_URL).set(database=database_name).render_as_string(hide_password=False)
+        make_url(TEST_DATABASE_URL)
+        .set(database=database_name)
+        .render_as_string(hide_password=False)
     )
 
     async def create_database() -> None:
@@ -294,15 +292,27 @@ def test_p26_synthetic_outbound_snapshots_idempotency_and_archive(
                     await ArchiveService.restore_empty_target(
                         connection, manifest=manifest, payload=payload
                     )
-                    assert await connection.scalar(
-                        text("SELECT count(*) FROM statement_import_provider_attempts")
-                    ) == 1
-                    assert await connection.scalar(
-                        text("SELECT count(*) FROM statement_import_provider_attempt_snapshots")
-                    ) == 3
-                    assert await connection.scalar(
-                        text("SELECT count(*) FROM statement_import_provider_snapshot_source_refs")
-                    ) == 1
+                    assert (
+                        await connection.scalar(
+                            text("SELECT count(*) FROM statement_import_provider_attempts")
+                        )
+                        == 1
+                    )
+                    assert (
+                        await connection.scalar(
+                            text("SELECT count(*) FROM statement_import_provider_attempt_snapshots")
+                        )
+                        == 3
+                    )
+                    assert (
+                        await connection.scalar(
+                            text(
+                                "SELECT count(*) FROM "
+                                "statement_import_provider_snapshot_source_refs"
+                            )
+                        )
+                        == 1
+                    )
                     assert await connection.scalar(text("SELECT count(*) FROM transactions")) == 0
                     assert await connection.scalar(text("SELECT count(*) FROM postings")) == 0
 

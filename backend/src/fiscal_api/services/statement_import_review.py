@@ -331,10 +331,7 @@ class StatementImportReviewService:
                 )
         elif request.matched_transaction_id is not None:
             conflict("statement_import_resolution_invalid", "The draft has incompatible fields")
-        if (
-            request.resolution != "ignore_intentional"
-            and request.ignored_reason is not None
-        ):
+        if request.resolution != "ignore_intentional" and request.ignored_reason is not None:
             conflict("statement_import_resolution_invalid", "The draft has incompatible fields")
         if request.resolution == "ignore_intentional" and request.ignored_reason is None:
             conflict(
