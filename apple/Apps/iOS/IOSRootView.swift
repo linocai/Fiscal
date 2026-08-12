@@ -304,7 +304,7 @@ private struct IOSMoreScreen: View {
                     IOSCreditAccountDetail(credit: credit, installments: installments, accountID: accountID, transactions: transactions, accounts: accounts, categories: categories, cashFlow: cashFlow)
                 case .reimbursements: IOSReimbursementsScreen(model: reimbursements, accounts: accounts)
                 case .reconciliation: ReconciliationCenterScreen(model: reconciliation, accounts: accounts, openAttention: openAttention)
-                case .statementImport: IOSStatementImportScreen(intake: statementImport, review: statementReview)
+                case .statementImport: IOSStatementImportScreen(intake: statementImport, review: statementReview, accounts: accounts.accounts, categories: categories.flattened)
                 case .reports: IOSReportsScreen(model: reports)
                 case .cloudConnection:
                     IOSCloudConnectionScreen(

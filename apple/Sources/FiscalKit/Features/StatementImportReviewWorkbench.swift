@@ -83,6 +83,14 @@ public struct RemoteStatementImportReviewWorkbenchRepository: StatementImportRev
     self.confirmationRepository = confirmationRepository
   }
   public func reload(batchID: UUID, preservingError: Bool = false) async { do { workbench = try await repository.workbench(batchID: batchID, cursor: 0, limit: 100, filters: [:]); if !preservingError { self.error = nil } } catch { self.error = "无法刷新审核数据。" } }
+  public func loadMore() async {
+    guard let current = workbench, let cursor = current.nextCursor else { return }
+    do {
+      let page = try await repository.workbench(batchID: current.batchID, cursor: cursor, limit: 100, filters: [:])
+      guard page.batchVersion == current.batchVersion else { error = "服务器已变化，请重新加载。"; return }
+      workbench = StatementImportWorkbench(batchID: current.batchID, batchVersion: current.batchVersion, reviewAvailable: current.reviewAvailable, rows: current.rows + page.rows.filter { row in !current.rows.contains(where: { $0.id == row.id }) }, nextCursor: page.nextCursor)
+    } catch { self.error = "无法加载更多审核行。" }
+  }
   public func select(_ row: StatementImportWorkbench.Row) async { selectedRowID = row.id; guard let pageNumber = row.pageNumber, let workbench else { page = nil; return }; do { page = try await repository.page(batchID: workbench.batchID, pageNumber: pageNumber) } catch { self.error = "脱敏来源不可用。" } }
   @discardableResult public func saveResolution(
     rowID: UUID, resolution: StatementImportDraftResolutionKind,
