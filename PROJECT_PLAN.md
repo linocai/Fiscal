@@ -1,101 +1,65 @@
 # Fiscal · PROJECT_PLAN
 
-> 控制面版本：v1.3.0 施工版 ｜ 更新：2026-08-11 ｜ 状态：P20–P23 均已通过 Automated / Production / Mac + Kurisu 验收。P23 已部署为 `20260811_0023`，生产/影子均未调用真实 Provider；最终 manifest HEAD 已 same-head 部署，重锚后可 tag/push。异地备份未配置为 carried risk，真实告警已延期。
-> 本文件只保留现行目标、决策、门禁与下一步；历史实施证据以 `docs/qa/p*/results.md`、发布 tag 与 Git 为准，不从本文件追写。
+> 控制面版本：v1.4 施工计划 ｜ 更新：2026-08-12 ｜ 状态：v1.3.0/P20–P23 已发布；v1.4 尚未开始、未部署。本文件仅保存当前目标、稳定决定、阶段门和下一步。详细产品/契约记录见 [docs/BACKLOG-v1.4-v1.5.md](docs/BACKLOG-v1.4-v1.5.md)；实施证据只写入 `docs/qa/p24` 至 `docs/qa/p29`。
 
-## 1. 当前事实与 P20 审计起点
+## 1. 当前事实与目标
 
-- 仓库检查时：`main...origin/main` clean，HEAD=`cdc4037`；`v1.2.4^{commit}`=`7c221ec`，不是 HEAD；`apple/project.yml` 为 `1.2.4 (Build 20)`。
-- `README.md` 仍称 P11 进行中并描述 device token；P18/P19 QA 记录、旧大计划和当前 HEAD/Build 有漂移。它们是待核验证据，**均不等于当前生产事实**。
-- P19 记录过 transition 鉴权、`access_credential` 与 `device_tokens` 过渡；后续 Build 18–20 快修记录又暗示不同状态。P20 必须通过受控生产查询、已安装 App 与精确 revision 重建事实，禁止臆测或把旧记录直接改成“完成”。
-- 历史 PostgreSQL 全量组合测试曾有 11–13 个失败；P20 必须以 fresh DB/head 重新测量并清零/逐项修复，不能继续以“既有失败”作为 v1.3.0 发布豁免。
+- `v1.3.0` tag 指向 `a18b54f`；生产后端的已验证状态仍为 P23、Alembic `20260811_0023`、data revision `2`。异地备份 provider 与真实告警接收器仍是明确 carried risk。
+- `main`/`origin/main` 当前为 `fd2335c`：仅 Apple 图标包升为 `1.3.1 (22)`。这不是后端部署，**不得**据此宣称 v1.4 或 1.3.1 已生产发布。
+- v1.4 目标：把一份 CNY 银行/信用卡 PDF 转为可审核候选；用户逐行决定新建、匹配或忽略，并在最终确认后才通过既有领域服务写入正式账本。
+- v1.4 首发支持文本层 PDF 和 Apple Vision 本地 OCR 的扫描 PDF；只承诺用户实际使用的 2–3 个单账户版式。全量范围、字段和验收基线以 [v1.4 执行记录 §3](docs/BACKLOG-v1.4-v1.5.md#3-v14--pdf-智能账单导入) 为准。
 
-## 2. 发布列车与不可变规则
+## 2. 不变产品边界
 
-- P20→P21→P22→P23 是同一发布列车：最终唯一版本为 **v1.3.0 / `CURRENT_PROJECT_VERSION=21`**。P20 的首个可构建批次统一升版本；之后所有候选包都保持 1.3.0 (21)，不得再占用 Build 22。
-- 四期全部完成，且自动门禁、生产验证、macOS + 实体 iPhone **Kurisu** 验收均闭环前：**不得创建 tag、不得 push**。用户于 2026-08-11 明确裁定个人自用 App 不需要额外 7 天观察；当晚 P23 生产/真机/最终一致性门全绿后即可 tag + push。中间只做小而可回退的本地 commit；部署仅允许来自已提交的精确本地 revision。
-- 最终顺序：冻结干净树 → 记录所有 QA 证据 → 创建 `v1.3.0` annotated tag → `git push origin main v1.3.0`。不建 P20/P21/P22 阶段 tag，不追标历史 P18/P19 tag。
-- 每批 commit 必须可编译、范围单一、附自动验证；提交后把 revision/命令/结果写入该期 `docs/qa/pNN/results.md`。不重写历史、不 reset、不以未提交文件部署。
-- 稳定边界：仅 CNY、单人私用；VPS PostgreSQL 是唯一正式真相源，双端原生 SwiftUI 按 `design_handoff_fiscal_app/` 视觉合同实现；不做登录/多人/投资。
-- 统一账本、正式流水、posting、金额精度、业务服务是唯一金额真相；AI、Attention、导出、缓存与客户端状态均为派生层，不能绕开正式服务或私自改余额。
-- 每个数据库变更均需：upgrade/downgrade/re-upgrade、fresh DB、影子恢复/金额对账、旧客户端读取兼容与生产前验证备份。数据库 head 不同不得用应用 rollback；改从已验证备份恢复到隔离新库后切换。
+- 仅单人、CNY、事实记录；不做预算、建议、评分、预测、投资、多币种、多人、银行连接器、通用附件或 AI 财务聊天。
+- 正式 ledger/posting、余额、信用账期和报表仍是唯一金额真相。导入、OCR、LLM、匹配、缓存和 UI 都是候选或派生层，不能改余额、自动平账或绕过现有领域校验。
+- PDF 永远人工确认：不存在由置信度、金额阈值、AI 自动执行开关或任何 profile 触发的自动记账路径。
+- 服务端计算金额、日期边界、去重、校验和报表；客户端只显示服务端口径。金额在 API 内为 CNY `Int64` minor units，边界 decimal string 只解析一次，禁止浮点。
 
-## 3. 范围、顺序与共同验收
+## 3. v1.4 核心契约与安全决定
 
-| Phase | 主题与依赖 | 本期交付 | 明确不做 |
-| --- | --- | --- | --- |
-| P20 | 可信基线；前置 | 可审计生产/发布/恢复基线、鉴权收口、测试债务清零 | 新业务模块、历史账本重写 |
-| P21 | 依赖 P20 | 账户/账期余额核对点、差额诊断、Attention Center | 独立会计对账系统、自动平账 |
-| P22 | 依赖 P21 | 可恢复 Fiscal Archive、全局 revision、保守离线 | 现有库合并导入、离线写入队列、实时推送 |
-| P23 | 依赖 P22 | AI 原始判断/修正/结果闭环、质量与策略 | AI 聊天、模型训练、绕过正式记账 |
+- **导入生命周期**：`created → extracting → parsing → review_required → ready_to_confirm → partially_confirmed|confirmed`，可进入 `failed|abandoned`。失败/重试保留尝试历史；放弃不会删除已确认流水；同 SHA-256 文件复用既有批次而不复制候选。
+- **数据最小化**：默认不长期保存原 PDF。仅临时使用文件/页面字节，完成、失败、取消均清理；持久化 hash、页号、必要证据文本/坐标、结构化候选、修正和 provenance。完整卡号、账号、姓名、地址、客户号、PDF 正文、Provider request/response 不进日志、Git、截图或 crash metadata。
+- **Provider**：每个批次单独明确授权；先本地 PDFKit/Vision，发送前显示 Provider、模型、文本/图像、页数和脱敏范围。仅允许固定提示词、无工具的严格 JSON Schema；账单中的指令、URL、二维码或伪 JSON 一律是不可信数据。
+- **候选与确认**：LLM 只能提出证据中存在的字段；确定性代码决定 `needs_review`。每行仅能为 `create_new`、`match_existing`、`ignore_non_transaction`、`ignore_intentional` 或 `unresolved`。同日同额只是候选匹配；匹配不改既有流水。
+- **原子与并发**：最终确认携带 batch `expected_version` 和 UUID `Idempotency-Key`；一次选中行的 create/match/ignore 同事务，重放返回原结果，异 payload 重用 key 冲突。确认前重验账户/分类/账期状态；每次成功确认恰增一次 P22 data revision，并返回实际 affected scopes。
+- **恢复与兼容**：新实体、尝试、证据、resolution 和正式流水链接纳入 Archive、实体计数、哈希和恢复关系校验；原 PDF 默认排除。新增字段/端点可追加，旧客户端可忽略；旧 AI proposal/自动执行 API 不承担 PDF 行确认。
+- **确定的产品默认值**：允许部分确认，但每次确认原子、批次在全部行 resolution 前不能 `confirmed`；账单校验失败时可保存和审核，最终确认必须显著警示且持续保留 `failed`，绝不伪装为对平或生成 `balance_adjustment`。首个 v1.4 App 版本预留为 `1.4.0 (23)`，若其前有其他 Apple 构建则按顺序调整 build 号并记录。
 
-- 每期结束有三类独立证据：Automated Verified（测试/迁移/构建）、Production Verified（精确 revision 的备份、部署/冒烟/数据对账）、Physical Device Verified（macOS 与实体 iPhone Kurisu 真机主链路）；任何一步不得替代另一步。原 7 天 Observed Stable 观察期已由用户明确取消。
-- 全局自动门禁基线：锁文件、格式/静态检查、默认与 fresh PostgreSQL 全量测试、Alembic SQL/往返、Swift 单测、iOS/macOS Debug 与签名 Release 构建、签名验证、相关 UI/视觉回归。具体命令与计数只在本轮实测后记录，不能沿用历史数字。
-- 用户网页操作清单：无固定网页 URL。需要人手的受控动作见 P20（自选/输入访问口令、解锁并安装 Kurisu）及各期生产部署授权；凭证绝不进聊天、命令参数、git 或 QA 记录。
+## 4. 阶段、依赖与发布门
 
-## 4. P20 · 可信基线收口
+| Phase | 依赖与交付 | 阶段退出门 |
+| --- | --- | --- |
+| P24 | 导入批次/页面/行/尝试/resolution、状态机、hash 去重、隐私/授权、Archive 与 `statement_imports` revision scope；**不写账本** | fresh PostgreSQL migration 往返；创建/失败/重试/放弃零 posting；重复文件不建第二批；Archive 往返且敏感日志扫描通过 |
+| P25 | Apple PDFKit 文本提取、Vision OCR、页型/上限/错误模型、发送前预览和三路径临时文件清理 | 合成夹具可重复给出页序/证据定位；未授权零外发；text/OCR/mixed 不静默漏页或重行 |
+| P26 | 独立账单结构化 Provider contract、严格 schema、attempt snapshot、质量事件和 synthetic provider 测试 | 非法/超限输出在候选前失败；取消/429/5xx 无半套候选或账本写入；无自动确认配置 |
+| P27 | 账单级确定性校验、行级强/候选去重、既有流水匹配、provenance 与原子正式确认 | 重放/并发/冲突不重复记账；批量任一失败零部分 posting；各种导入语义与手工领域服务的余额/账期/报表一致 |
+| P28 | macOS 三栏导入工作台、证据双向定位、筛选/批量预览、最终确认 sheet 与可恢复审核 | 用多页储蓄卡及信用卡合成夹具完成端到端审核；摘要与实际写入逐项一致；无原 PDF 时诚实降级 |
+| P29 | iOS 分步审核、跨端 optimistic conflict、Attention 入口、签名包与生产迁移/恢复/真机收口 | 全量自动门、备份/影子恢复/守恒、macOS+Kurisu 各完成真实受控账单主链路、production smoke 均通过后才可发布 |
 
-**目标**：证明正在运行什么、能否安全发布/恢复，并删除已经完成迁移的过渡层；不把文档修订当成生产验证。
+各阶段只能在前一阶段的 Automated Verified 完整通过后开始其依赖写入；P28 可在 P27 API 契约冻结后并行完成只读/审核界面。每期结束必须记录 Automated、Production、Physical Device 三类独立证据；任一类不能替代另一类。
 
-**当前状态**：P20 按用户裁定通过：`81d5881` 已部署至生产、Alembic `20260811_0020`，自动与隔离恢复门禁已通过，旧 device-token 兼容层及表已移除，macOS 与 Kurisu 的新包均已连通生产。真实告警接收器由用户明确延期，不阻塞 P21；异地副本 provider 仍未配置，作为 carried risk 进入后续阶段，不得写成已完成。
+## 5. 实施与验证约束
 
-- **P20-A 事实审计（先做）**：只读采集生产 release commit、Alembic head、鉴权模式/凭证行/旧 token 是否仍可用、备份/异地副本/告警接收器状态、macOS 与 Kurisu 的实际 bundle/build/连接结果；逐项与 HEAD、tag、README、P18/P19 QA 比对，写成带时间和命令的 P20 证据。任何冲突先标风险，不猜测修复结果。
-- **P20-B 发布状态源**：将 README 改为入口说明；新增短的 release manifest/状态契约（生产 revision、DB head、App build、鉴权、设备、备份/恢复/告警最近证据、开放门禁、回退点），并将历史细节保留在各期 QA。状态仅由实际证据更新。
-- **P20-C 鉴权最终态**：先由用户在已装 App 安全设置/确认访问口令；证明 macOS 与 Kurisu 能以 access key/口令连接、改口令使旧 key 401、忘记口令 CLI 恢复可演练。仅在此门通过后，移除 device-token 表/model/config/认证分支/迁移桥与遗留文档；最终只保留 personal passphrase + generation access key。
-- **P20-D 发布与恢复**：修复 fresh PostgreSQL 全量组合测试及顺序污染；建立不可豁免的发布状态机和 exact tag/commit 对应关系；配置并实际送达 API、备份、恢复、磁盘告警；完成加密异地副本、保留期、隔离恢复及账本/posting/关键汇总对账，记录 RPO/RTO 和人工 runbook。
-- **P20-E 领域风险收口**：将“平账”从名称匹配改为稳定领域属性且保留历史口径；账户账期设置与其派生变更使用单一事务，预览列出 old/new 日期、受影响账期和逾期变化，禁止静默重排已逾期债务。
-- **契约/兼容**：P20-A/B 不能声称已改生产；鉴权移除是一次不可逆 migration，旧客户端将明确 `authentication_required` 而非降级；平账迁移以稳定 ID/属性回填，名称可改、历史流水及账户影响不变。
-- **施工提交**：A 审计与证据 → B 状态源/版本 1.3.0(21) → C 测试基线与领域修复 → D 鉴权最终迁移 → E 备份/告警/恢复收口；每个 migration 与应用切换分开 commit，均不打 tag。
-- **验收/回退**：所有全量门禁绿；生产事实能从 manifest 重现；异地 dump 恢复到隔离库后 head、数量、posting 与汇总一致；真实告警送达；macOS 与 Kurisu 核心录入/查看成功。认证/迁移失败立刻回到同 head 的旧应用；head 不同则从验证备份恢复新库，绝不盲目 downgrade。
-- **决策门与风险**：必须先完成用户口令/Kurisu 动作，才可删除旧鉴权；远程生产写操作在执行时另取授权。最大风险是历史状态漂移和单机备份伪装成 DR，P20 不闭环不得进入 P21。
+- P24–P27 后端修改必须覆盖 migration upgrade/downgrade/re-upgrade、fresh PostgreSQL、现有全量测试、Archive 往返、revision scope/receipt 和旧客户端读取兼容。数据库 head 不同不做应用 rollback；以验证备份恢复到隔离新库后再切换。
+- 解析器 fixtures 必须合成或不可逆脱敏；不得提交真实银行 PDF。真实账单只在受控本地或生产验收使用，且不进入命令回显、QA 文档或截图。
+- 每个正式确认经既有 transaction/credit/reimbursement 服务产生原有业务语义与 posting；新增 `statement_import` source/provenance 仅允许导入服务创建，公开 API 不可伪造。
+- P25/P28/P29 的耗时提取、OCR、哈希和大表格不得阻塞主线程；服务端对文件、页数、像素、字符、行数及 payload 设上限。记录 batch/attempt、版本、耗时、数量和稳定错误码，不记录正文。
+- 发布顺序：干净已提交 revision → 生产前备份 → 影子 migration/Archive/守恒 → 精确 revision 部署 → 生产 smoke/备份恢复 → macOS 与 Kurisu 签名包真机验收 → 更新 release manifest、tag/push。部署或生产写入须在当时另获用户授权。
 
-## 5. P21 · 账户核对与财务关注中心
+## 6. 用户决定与操作清单
 
-**目标**：使账本能被现实账户余额验证，并把现有待办/异常收敛为一个派生入口。
+- **P25 前**：用户提供首批实际使用的 2–3 类银行/信用卡版式名称，并只在受控设备上用于真实验收；不上传或提交原件。未给出时只交付合成夹具和通用阻止/降级行为，不宣称兼容某银行。
+- **P26/真实验收前**：用户选择并逐批授权实际 Provider/模型及可发送范围；这涉及账单隐私和外部成本，不能由工程默认开启。无真实授权时使用 synthetic provider 完成全部自动门。
+- **P29 生产前**：用户单独授权备份、迁移、部署与真实账单确认，并在 macOS 和 Kurisu 完成主链路验收。无固定网页操作；生产服务入口为 https://fiscal.linotsai.top ，但不得把凭证放入聊天、Git 或 QA。
 
-**当前状态**：`4686e44` 已部署，生产 head `20260811_0021`。影子 0020→0021、账本/posting/余额/报表守恒、备份、服务 smoke 及 macOS + Kurisu 的核对读取/导航均已验证；生产没有虚构真实余额。用户真实余额输入后的 checkpoint 写入验收仍保留，P22 工程可开始。
+## 7. 里程碑索引与 Backlog
 
-- **范围**：为现金/借记/信用账户及信用账期提供按时点的核对记录；显示账面额、用户输入真实额、差额、状态、备注和创建信息；差额区间诊断；账户/账期内历史；跨领域 Attention Center；iOS 快速核对/处理，macOS 历史/差额分析。
-- **核对契约**：`checkpoint` 永不改 ledger/posting 或覆盖账户余额。账面额按核对时点和业务时区可重复计算；状态只有 open（有差额）与 reconciled（差额为零）。修正必须走普通正式流水，确有余额调整时走显式 `balance_adjustment` 语义、来源为核对、从消费报表隔离，禁止生成隐形“平账”。已归档账户只读历史。
-- **诊断与 Attention 契约**：候选仅提示待归类、近期编辑/恢复、重复金额时间窗、AI 自动执行、跨时点交易、信用/还款归属和期初缺失，不能自动判错。Attention 是服务端派生 read model：稳定 `source_type/source_id`、severity、金额/日期、解释、建议动作、双端深链和到期忽略；只汇集余额差异/久未核对、待归类、AI 待确认/失败、信用/现金流逾期、报销逾期、运维异常，不复制任何状态机。
-- **接口与迁移**：新增 checkpoint/attention 读写 API 和新表；现有账户、流水、信用、报销响应只追加字段。差额按服务端计算，客户端不得二算；新表无历史余额回填，首次核对是用户锚点，旧客户端可继续使用。
-- **施工提交**：A schema + 余额重算 service/测试 → B checkpoint API/差额诊断 → C Attention 派生 API/失效规则 → D iOS/macOS 流程、深链和视觉回归 → E 生产迁移/真实样例 QA。
-- **验收/回退**：同一时点账面余额重复计算一致；任何 checkpoint 不改变账本；补录/编辑后差额重算；零差额记录可追溯；Attention 无重复且深链正确；两端以现金、借记、信用、归档、差额/零差额样例验证。迁移后回退按 P20 规则；可禁用新入口但不删核对证据。
-- **风险/门**：期初余额、时区、信用“欠款/账单余额”语义和余额调整口径须在 API 契约测试中锁死；Attention 不得成为第二真相。真实账户样例、生产核对和双端真机通过后才进入 P22。
+- 已完成：P20 可信基线、P21 核对、P22 Archive/revision、P23 AI 质量；证据见 `docs/qa/p20`–`p23` 与 `RELEASE_STATE.md`。
+- 当前：P24 是唯一可施工阶段。详细字段、夹具、风险和 v1.4 DoD 见 [执行记录 §3.4–§3.9](docs/BACKLOG-v1.4-v1.5.md#34-p24--导入与隐私基础)。
+- 后续：v1.5（P30–P35）仅保留在 [执行记录 §4](docs/BACKLOG-v1.4-v1.5.md#4-v15--事实展现升级)，不得插入 v1.4。预算、建议、预测、银行连接器、通用附件、多人和投资仍明确不做。
+- 每次状态替换本文件当前事实/阶段/下一步；长篇测试输出和实现过程留在对应 QA 结果或 Git，不在此追加。
 
-## 6. P22 · 数据自主与一致性框架
+## 8. Builder 第一项任务
 
-**目标**：用户可完整、可验证地恢复数据；任意正式写入后双端可确定收敛。
-
-**当前状态**：P22 已收口。精确 `5330b42a0e95ab1150a9c0abf2676a4443333d53` 已部署至生产 `20260811_0022`；post-deploy backup `fiscal-20260811T123917Z.dump` 的隔离恢复、唯一 category receipt QA（revision `0→1→2` / full nine scopes / cleanup）、最终 `184/201/0` 数据对账均通过。签名 `1.3.0 (21)` 已安装启动于 macOS 与 paired Kurisu，两端 stored revision=`2` 且生产 reads 为 200。下一动作仅能按单独授权启动 P23；不打 tag/push。
-
-- **Fiscal Archive v1 契约**：独立导出密码、加密 payload、版本化 manifest（archive/API schema、导出时间、业务时区/币种、DB revision、实体计数、哈希、AI 原文包含标记）；覆盖账户/分类、ledger/postings、信用/账期/还款、分期、报销/回款、现金流、P21 checkpoint 和必要的 ID/幂等/来源关系；明确排除口令哈希、access key、provider key、环境变量与敏感运行日志。
-- **恢复契约**：选择→解密/哈希/兼容检查→dry run（数量/金额/关系报告）→用户确认→只写入空库/隔离新库→全量一致性验证→切换。v1 禁止合并导入和覆盖现有账本；AI 原始文本默认不出档，只有显式选择才含入加密档。
-- **数据 revision 契约**：服务端持久化单调 `data_revision`，每次已提交的正式 mutation 原子增加一次；响应以兼容的 header/metadata 返回 revision + 受影响 scope（ledger/accounts/credit/reimbursements/cash_flow/reconciliation/attention/reports/ai），并提供只读当前 revision 端点。客户端前台/写入后按 scope 刷新，不靠手工 fan-out 猜测；旧客户端忽略新增信息仍可读写。
-- **离线边界**：只显示加密的最近只读快照及数据时间/离线标识，可保存未提交草稿；联网后须用户确认，绝不后台重放、不建冲突队列、不把过期快照伪装成最新余额。
-- **施工提交**：A archive 格式、密码学/manifest/导出测试 → B 隔离恢复与损坏/兼容测试 → C revision schema、服务端 mutation receipt → D 双端 scope 收敛/离线只读与草稿 → E 生产恢复演练与 QA。
-- **验收/回退**：完整档→空库恢复后数量、余额、负债、报表和 P21 核对一致；篡改/错误密码/不兼容必须写入前失败；档案无秘密；并发/跨端写入后 revision 单调且页面收敛；离线不产生正式流水。Archive/revision 均为新增兼容层，回退应用不破旧数据；导入切换失败保留原库且不触碰。
-- **风险/门**：密码学实现、部分导出和导入可用性是高风险，先审计库/格式选择再编码；必须在隔离恢复和双端 revision 回归通过后才进入 P23。
-
-## 7. P23 · AI 质量闭环
-
-**目标**：把 AI 提案的原始判断、人工修正、执行结果和策略效果变为可测量、可回溯、可自动收紧的安全闭环。
-
-**当前状态**：P23 已生产闭环：最终 manifest HEAD 已部署为 `20260811_0023`，生产 revision `2` 与账本 `184/201/0` 不变，post-backup 隔离恢复、受保护质量/策略/规则读取、macOS 与 Kurisu `1.3.0 (21)` 安装启动均通过。影子服务链以无网络 synthetic provider 验收 `parsed→ignored` 及 append-only 事件后已删除；真实候选 Provider shadow 本期明确跳过。重锚/clean 后可 tag/push。
-
-- **数据契约**：每个提案保留不可覆盖的原始输入、首次结构化 parse snapshot、最终确认值及字段级 diff；另记录 unchanged/edited confirm、ignored（可选原因）、execute failed、automatic/manual execute、undo、provider retry/final failure。旧提案不伪造历史，标为 `historical_unavailable`。
-- **隐私/领域边界**：原文与快照仅留在 Fiscal 数据库/显式加密 archive，不送第三方分析；质量事件不可编辑且不是面向用户的复杂审计产品。AI 只能调用手工录入同一正式服务、相同校验/幂等/撤销，不能直接写 posting。
-- **指标与策略**：按来源、模型/提示词版本、交易类型、金额区间计算解析成功、无修改确认、字段修改、忽略、失败、撤销、自动撤销、延迟/错误率；策略版本化并记录生效时间。来源/类型的阈值可不同；样本不足不提权，新模型/提示词先跑脱敏 shadow corpus；异常率只能自动收紧/关闭自动执行，放宽需用户确认。
-- **确定性学习**：仅建立可见、可撤销、需重复证据的 merchant→category、标题→账户、分类别名/来源上下文规则；绑定稳定 ID，不自动创分类、不以单次修正永久改变行为，不训练或微调外部模型。
-- **施工提交**：A snapshot/diff/event schema 与旧数据兼容 → B 质量聚合/API/隐私测试 → C 策略版本与自动降级 → D 双端提案解释、规则管理与指标 → E shadow corpus、端到端真机 QA。
-- **验收/回退**：可还原 AI→修正→正式记录链；指标分母守恒；策略版本/生效时刻可查；新模型无评估不得替换；异常可自动降级；OCR/快捷指令→提案→确认/自动→流水→撤销在两端真机完成。关闭自动执行或回退策略不删除事件；schema 回退按 P20 规则。
-- **风险/门**：原文隐私、错误统计和自动化扩大风险最高；P22 archive/revision、shadow、生产恢复和双端验收已通过。真实候选 Provider/提示词替换仍须单独授权脱敏 shadow corpus；异地备份/真实告警继续作为 carried risk。
-
-## 8. v1.3.0 收口、决策与恢复入口
-
-- **最终发布门**：P20–P23 的 Automated / Production / Mac + Kurisu 状态必须全部闭环；fresh PostgreSQL 全量零失败；生产 exact revision/head/备份/恢复证据齐；macOS 与 Kurisu 完成当期主链路；README、release manifest、App build、tag 指向一致。任一缺失即只保留 commits，不打 tag/push。
-- **观察期裁定**：原默认的 7 天 Observed Stable 门已由用户于 2026-08-11 对该个人自用 App 明确取消。P23 当晚生产、恢复、双端真机与最终对账通过即可创建 `v1.3.0` tag 并 push；后续问题按正常 hotfix 流程处理。
-- **可翻案默认决策**：P21 只做账户/账期内核对，不做独立对账中心；零差额才 reconciled；P22 只支持空库恢复、独立档案密码、只读离线；P23 只做确定性学习且策略只自动收紧；所有默认值可在相应 Phase 的编码前调整，但变更须更新本文件与 QA 契约。
-- **尚需用户动作（非方案决策）**：P20 执行时安全地设定/确认访问口令、解锁并配对 Kurisu；涉及生产写入、部署、迁移或恢复切换时，由用户按当时风险单独授权。无其他产品方向待拍板。
-- **Backlog（明确不插队）**：投资/订阅、泛化附件、AI 聊天、多人协作、实时 WebSocket、离线写入队列、复杂导入合并、更多仪表盘。它们不提升当前可信性，不进入 v1.3.0。
-- **恢复顺序**：先读本文件 → `git status --short --branch` → P20-A 的最新 QA 证据与生产 manifest → 再决定下一批；若事实不一致，停在审计，不以旧聊天或历史计划覆盖现场。
+执行 **P24-A：导入与隐私基础（后端垂直切片）**。先将 `StatementImport`、page、row、attempt、resolution 的稳定字段、关系、约束和状态迁移落入模型/API/service/archive/revision 边界；实现批次登记、hash 重复返回、失败/重试/放弃及脱敏操作日志。此切片不得解析真实 PDF、调用 Provider、创建 transaction 或 posting。完成后以 fresh PostgreSQL migration 往返、Archive roundtrip、重复 hash、零账本写入和日志脱敏测试作为 P24-A 门，并将命令、revision 与结果写入 `docs/qa/p24/results.md` 后再启动 P25。
