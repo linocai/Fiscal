@@ -40,6 +40,23 @@ public enum FiscalAPIError: Error, Sendable, Equatable {
     public var displayMessage: String { switch self { case .unauthorized: "访问口令无效或已更改，请重新输入。"; case .domain(_, let d): d.message; case .rateLimited: "操作太频繁，请等几秒再试。"; case .invalidResponse: "服务器响应无法解析。"; case .transport: "无法连接个人 VPS。" } }
 }
 
+/// A deliberately narrow mutation response seam for contracts whose next request must use a
+/// server-issued header. It exposes only decoded JSON and selected header values, never the raw
+/// body or request.
+public struct APIResponseMetadata<Value: Sendable>: Sendable {
+    public let value: Value
+    public let headers: [String: String]
+
+    public init(value: Value, headers: [String: String]) {
+        self.value = value
+        self.headers = headers
+    }
+
+    public func header(_ name: String) -> String? {
+        headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
+    }
+}
+
 public actor APITransport {
     private let baseURL: URL
     private let session: URLSession
@@ -139,6 +156,43 @@ public actor APITransport {
         await revisionStore?.markOnline()
         await acceptRevisionReceipt(from: http)
         do { return try decoder.decode(Response.self, from: data) } catch { throw FiscalAPIError.invalidResponse }
+    }
+
+    /// Performs an uncached JSON mutation and preserves response headers for the caller. This is
+    /// intentionally separate from the normal request API so header-dependent workflows remain
+    /// explicit and cannot accidentally gain raw request/response access.
+    public func requestWithResponseMetadata<Response: Decodable & Sendable, Body: Encodable & Sendable>(
+        _ path: String, method: String, headers: [String: String] = [:], body: Body
+    ) async throws -> APIResponseMetadata<Response> {
+        var request = URLRequest(url: try Self.endpointURL(baseURL: baseURL, path: path, query: []))
+        request.httpMethod = method
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
+        if let token = try await tokenProvider(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.httpBody = try encoder.encode(body)
+        let (data, http) = try await perform(request)
+        guard (200..<300).contains(http.statusCode) else {
+            let detail = try? decoder.decode(APIErrorEnvelope.self, from: data).error
+            if http.statusCode == 401 { throw FiscalAPIError.unauthorized(detail) }
+            if http.statusCode == 429, detail == nil { throw FiscalAPIError.rateLimited }
+            if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
+            throw FiscalAPIError.invalidResponse
+        }
+        let value: Response
+        do { value = try decoder.decode(Response.self, from: data) }
+        catch { throw FiscalAPIError.invalidResponse }
+        cacheGeneration &+= 1
+        await responseCache.removeAll()
+        await revisionStore?.markOnline()
+        await acceptRevisionReceipt(from: http)
+        return APIResponseMetadata(value: value, headers: http.allHeaderFields.reduce(into: [:]) {
+            guard let key = $1.key as? String, let value = $1.value as? String else { return }
+            $0[key] = value
+        })
     }
 
     public func requestNoContent(_ path: String, method: String, query: [URLQueryItem] = []) async throws {

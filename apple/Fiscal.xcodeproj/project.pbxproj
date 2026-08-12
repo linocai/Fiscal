@@ -92,6 +92,9 @@
 		F25A00000000000000000002 /* StatementPDFEvidenceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F25A00000000000000000001 /* StatementPDFEvidenceExtractor.swift */; };
 		F25A00000000000000000003 /* StatementPDFEvidenceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F25A00000000000000000001 /* StatementPDFEvidenceExtractor.swift */; };
 		F25A00000000000000000005 /* P25StatementPDFEvidenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F25A00000000000000000004 /* P25StatementPDFEvidenceTests.swift */; };
+		F28A00000000000000000003 /* StatementImportIntake.swift in Sources */ = {isa = PBXBuildFile; fileRef = F28A00000000000000000001 /* StatementImportIntake.swift */; };
+		F28A00000000000000000005 /* MacStatementImportIntake.swift in Sources */ = {isa = PBXBuildFile; fileRef = F28A00000000000000000004 /* MacStatementImportIntake.swift */; };
+		F28A00000000000000000007 /* P28StatementImportIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F28A00000000000000000006 /* P28StatementImportIntakeTests.swift */; };
 		8E2A9F3F530D7AEC804E1A0E /* TransactionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0752D3D57AD3B99FE1943E05 /* TransactionModels.swift */; };
 		8E8037BF67BFD62CDA4033EA /* FiscalmacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E8B677BF8165F1CF2AA217F /* FiscalmacOSApp.swift */; };
 		8F352FC4B0E80F982525AED9 /* ReimbursementDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF39C6F2744F63EE814A73F2 /* ReimbursementDTO.swift */; };
@@ -333,6 +336,9 @@
 		EF39C6F2744F63EE814A73F2 /* ReimbursementDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimbursementDTO.swift; sourceTree = "<group>"; };
 		F25A00000000000000000001 /* StatementPDFEvidenceExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementPDFEvidenceExtractor.swift; sourceTree = "<group>"; };
 		F25A00000000000000000004 /* P25StatementPDFEvidenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P25StatementPDFEvidenceTests.swift; sourceTree = "<group>"; };
+		F28A00000000000000000001 /* StatementImportIntake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementImportIntake.swift; sourceTree = "<group>"; };
+		F28A00000000000000000004 /* MacStatementImportIntake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacStatementImportIntake.swift; sourceTree = "<group>"; };
+		F28A00000000000000000006 /* P28StatementImportIntakeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P28StatementImportIntakeTests.swift; sourceTree = "<group>"; };
 		F05017C6B56940B011F6E23E /* SystemStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemStatus.swift; sourceTree = "<group>"; };
 		F388265D8ABA7AB1219DA2A1 /* P18ReportingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P18ReportingTests.swift; sourceTree = "<group>"; };
 		F41296659AE4F2333D274669 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -423,6 +429,8 @@
 				40E7C412779E444B2EBDB328 /* MasterDataScreens.swift */,
 				36C53CFB1B3FBC363B77ED08 /* OCRInputService.swift */,
 				F25A00000000000000000001 /* StatementPDFEvidenceExtractor.swift */,
+				F28A00000000000000000001 /* StatementImportIntake.swift */,
+				F28A00000000000000000004 /* MacStatementImportIntake.swift */,
 				B21062E4064D11C69EA37BEA /* PassphraseModel.swift */,
 				D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */,
 				D861BDB3034B1DF16C4CB8C3 /* ReconciliationModel.swift */,
@@ -513,6 +521,7 @@
 				85761C2F06B3E0F0E9F583F8 /* P21ReconciliationTests.swift */,
 				87CC6A97C83387C1644C9BDA /* P22RevisionTests.swift */,
 				F25A00000000000000000004 /* P25StatementPDFEvidenceTests.swift */,
+				F28A00000000000000000006 /* P28StatementImportIntakeTests.swift */,
 			);
 			name = FiscalKitTests;
 			path = Tests/FiscalKitTests;
@@ -804,6 +813,7 @@
 				7EE520DFB774A20C5B4D0184 /* P22RevisionTests.swift in Sources */,
 				8C3520FB72EC576D0544255C /* P9InputTests.swift in Sources */,
 				F25A00000000000000000005 /* P25StatementPDFEvidenceTests.swift in Sources */,
+				F28A00000000000000000007 /* P28StatementImportIntakeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -929,6 +939,8 @@
 				42CF6FAB3A19861566479BE9 /* MoneyFormat.swift in Sources */,
 				790361283016EDBEF8212D3D /* OCRInputService.swift in Sources */,
 				F25A00000000000000000003 /* StatementPDFEvidenceExtractor.swift in Sources */,
+				F28A00000000000000000003 /* StatementImportIntake.swift in Sources */,
+				F28A00000000000000000005 /* MacStatementImportIntake.swift in Sources */,
 				348431CDF91803DEB5C1A8D1 /* OfflineSnapshotStore.swift in Sources */,
 				0DB3D38B493F1B22A954DEC2 /* OverviewSnapshot.swift in Sources */,
 				D7E65B2896ADB87B0C04DEE4 /* PassphraseModel.swift in Sources */,

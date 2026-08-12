@@ -35,6 +35,19 @@ struct FiscalKitP25StatementPDFEvidenceTests {
     #expect(await repository.recordedAttempts().first?.1 == key)
   }
 
+  @Test("P28 local intake register payload has no source path or filename")
+  func p28RegistrationPayloadIsMetadataOnly() throws {
+    let request = StatementImportRegistrationRequest(metadata: .init(
+      sourceFilename: "private-card-statement.pdf", byteSize: 120, pageCount: 1,
+      documentSHA256: String(repeating: "a", count: 64)))
+    let value = try #require(String(data: JSONEncoder().encode(request), encoding: .utf8))
+    #expect(value.contains("statement.pdf"))
+    #expect(!value.contains("private-card-statement.pdf"))
+    #expect(!value.contains("path"))
+    #expect(!value.contains("bookmark"))
+    #expect(!value.contains("data"))
+  }
+
   @Test("Synthetic text PDF keeps page order, source evidence, and money/date punctuation")
   func textEvidenceIsStable() async throws {
     let extractor = StatementPDFEvidenceExtractor(ocr: FixtureOCR(linesByPage: [:]))

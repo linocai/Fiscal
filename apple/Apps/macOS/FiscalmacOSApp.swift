@@ -18,6 +18,7 @@ struct FiscalmacOSApp: App {
     @State private var aiSettings: AISettingsModel
     @State private var passphrase: PassphraseModel
     @State private var reconciliation: ReconciliationModel
+    @State private var statementImport: StatementImportIntakeModel
     @State private var recordingPreferences = RecordingPreferences()
     @State private var revisions: DataRevisionStore
     private let transport: APITransport
@@ -43,6 +44,8 @@ struct FiscalmacOSApp: App {
         let reimbursements = ReimbursementModel(repository: RemoteReimbursementRepository(transport: transport), transactions: transactions, accounts: accounts, reporting: reporting)
         let aiProposals = AIProposalModel(repository: RemoteAIProposalRepository(transport: transport), transactions: transactions, reporting: reporting, cashFlow: cashFlow)
         let reconciliation = ReconciliationModel(repository: RemoteReconciliationRepository(transport: transport))
+        let statementImport = StatementImportIntakeModel(
+            repository: RemoteStatementImportIntakeRepository(transport: transport))
         _connection = State(initialValue: ConnectionModel(client: SystemStatusClient(baseURL: baseURL, accessKeyStore: accessKeyStore)))
         _passphrase = State(initialValue: PassphraseModel(
             repository: RemoteAuthRepository(transport: transport),
@@ -59,12 +62,13 @@ struct FiscalmacOSApp: App {
         _aiProposals = State(initialValue: aiProposals)
         _aiSettings = State(initialValue: AISettingsModel(repository: RemoteAISettingsRepository(transport: transport)))
         _reconciliation = State(initialValue: reconciliation)
+        _statementImport = State(initialValue: statementImport)
         _revisions = State(initialValue: revisions)
     }
 
     var body: some Scene {
         WindowGroup {
-            MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, passphrase: passphrase, reconciliation: reconciliation, recordingPreferences: recordingPreferences, cache: .shared, revisions: revisions, revisionTransport: transport)
+            MacRootView(connection: connection, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, passphrase: passphrase, reconciliation: reconciliation, statementImport: statementImport, recordingPreferences: recordingPreferences, cache: .shared, revisions: revisions, revisionTransport: transport)
                 .tint(FiscalColor.accent)
                 .frame(minWidth: 1_040, minHeight: 700)
                 .background(

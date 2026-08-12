@@ -3,7 +3,7 @@ import SwiftUI
 
 private enum MacSection: String, CaseIterable, Identifiable {
     case overview = "总览", transactions = "流水", accounts = "账户", cashFlow = "现金流"
-    case reimbursement = "报销", reconciliation = "核对", reports = "报表", ai = "AI 待确认", settings = "设置"
+    case reimbursement = "报销", reconciliation = "核对", statementImport = "账单导入", reports = "报表", ai = "AI 待确认", settings = "设置"
     var id: Self { self }
     var symbol: String {
         switch self {
@@ -13,6 +13,7 @@ private enum MacSection: String, CaseIterable, Identifiable {
         case .cashFlow: "arrow.up.arrow.down"
         case .reimbursement: "doc.text"
         case .reconciliation: "checkmark.circle"
+        case .statementImport: "doc.text.viewfinder"
         case .reports: "chart.bar"
         case .ai: "sparkles"
         case .settings: "gearshape"
@@ -26,6 +27,7 @@ private enum MacSection: String, CaseIterable, Identifiable {
         case .cashFlow, .reports: "P7"
         case .reimbursement: "P6"
         case .reconciliation: "P21"
+        case .statementImport: "P28-A"
         case .ai, .settings: "P8"
         }
     }
@@ -47,6 +49,7 @@ struct MacRootView: View {
     let aiSettings: AISettingsModel
     let passphrase: PassphraseModel
     let reconciliation: ReconciliationModel
+    let statementImport: StatementImportIntakeModel
     let recordingPreferences: RecordingPreferences
     let cache: HTTPResponseCache
     let revisions: DataRevisionStore
@@ -81,6 +84,8 @@ struct MacRootView: View {
                     MacReimbursementsScreen(model: reimbursements, accounts: accounts)
                 } else if section == .reconciliation {
                     ReconciliationCenterScreen(model: reconciliation, accounts: accounts, openAttention: openAttention)
+                } else if section == .statementImport {
+                    MacStatementImportIntake(model: statementImport)
                 } else if section == .cashFlow {
                     MacFutureCashFlowScreen(
                         model: cashFlow, accounts: accounts, categories: categories,
