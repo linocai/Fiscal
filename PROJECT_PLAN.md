@@ -61,10 +61,11 @@
 - 已知门：全量后端回归止于既有 `tests/test_p10_api_postgres.py::test_p10_filter_bulk_and_csv_api` 的 `account_not_found`，不在 P24-A diff 内，已记录 P24 QA；它仍阻止 P24 整期和 v1.4 发布标记为全量通过。
 - P25-A：`fbf3ea3` 已 Automated Verified。Apple 本地 PDFKit/Vision 提取以合成夹具验证 `text`/`scanned_image`/`mixed`/`unsupported` 页型、行级页号/坐标、稳定错误与成功/失败/取消清理；不调用网络/Provider、不接入批次或账本。证据见 [P25 QA](docs/qa/p25/results.md)。这不代表 P24 或完整 P25 phase 完成。
 - P24-B/P25-B：本地 extractor 产生确定性脱敏 page/row package 与发送前 preview；`20260812_0025` JSON-only evidence endpoint 在 batch version+active attempt guard 下原子保存既有 pages/rows，进入 `review_required`，同包重放无重复且只发 `statement_imports` revision。Archive/fresh PG/API、Apple 108 tests、macOS/iOS builds 均通过；无 URLSession/Provider、PDF/image 上传或持久化、账本写入。证据见 [P24 QA](docs/qa/p24/results.md) 与 [P25 QA](docs/qa/p25/results.md)。
-- 当前：P24/P25 整期仍停在 review-only 证据边界；下一块须冻结 P26 Provider contract 或 P28 只读审核 UI，均不得绕过 P24 整期门。详细字段、夹具、风险和 v1.4 DoD 见 [执行记录 §3.4–§3.9](docs/BACKLOG-v1.4-v1.5.md#34-p24--导入与隐私基础)。
+- P26-A 已冻结、尚未实施：只允许服务端从已保存的脱敏 evidence 构造 outbound JSON；逐批显式授权与 idempotency 绑定 evidence hash/Provider/model/prompt/schema/页行摘要。独立 statement-provider attempt 只保存脱敏 authorization/request/validated-result snapshot，成功或失败只影响 `statement_imports` revision，始终零 ledger/posting。完整接口、允许面、失败与 Archive 门见 [P26 契约](docs/BACKLOG-v1.4-v1.5.md#p26-a--冻结的最小-provider-契约)；验收证据路由预留为 `docs/qa/p26/results.md`。
+- 当前：P24/P25 整期仍停在 review-only 证据边界；P26-A 是下一最小集成块，P28 只读审核 UI 必须等待其稳定 DTO。P26-A 不解除既有 P10 全量回归门，也不得绕过 P24 整期或生产门。
 - 后续：v1.5（P30–P35）仅保留在 [执行记录 §4](docs/BACKLOG-v1.4-v1.5.md#4-v15--事实展现升级)，不得插入 v1.4。预算、建议、预测、银行连接器、通用附件、多人和投资仍明确不做。
 - 每次状态替换本文件当前事实/阶段/下一步；长篇测试输出和实现过程留在对应 QA 结果或 Git，不在此追加。
 
 ## 8. Builder 下一实施块
 
-P24-B/P25-B 已完成；下一动作是在不扩大 P24/P25 边界的前提下，冻结 P26 Provider contract 或 P28 只读审核 UI。二者在获准前不得创建 ledger/posting，且 Provider 需用户逐批授权；不得持久化或上传 PDF/页面图像，亦不得宣称 P24/P25 phase 已完成。
+执行 **P26-A：脱敏 Provider attempt（backend 主责，Apple 仅 DTO/repository confirmation seam）**。Backend 新建独立 `StatementImportProvider` protocol、P26 schema/route/service、append-only attempt snapshots 与 migration；从既有 P24 pages/rows 构造 allowlisted outbound JSON，执行 per-batch authorization、idempotency、严格 result validation、取消/429/5xx/timeout 终态和 `statement_imports`-only revision。不得修改/复用 P23 AI 自动执行服务，不得写 transaction/posting 或生产。**本切片只注入无网络 synthetic adapter，禁止调用真实 Provider、读取任何 Provider 配置/密钥或要求用户授权真实外发。** Apple 只负责把既有脱敏 preview 和确认摘要编码为 authorization request，并断言 transport 永不接收 PDF/image/原文；不做 P28 工作台或真实 Provider UI。Builder 必须以 synthetic adapter 完成 outbound-redaction/schema/idempotency/retry/failure/zero-ledger 测试，fresh PostgreSQL migration 往返、Archive snapshot/source-ref 往返、Apple DTO tests 与 macOS/iOS builds；全量后端回归的既有 P10 `account_not_found` 继续单列记录。结果写入新建的 `docs/qa/p26/results.md`，再评估 P26-B/P28。

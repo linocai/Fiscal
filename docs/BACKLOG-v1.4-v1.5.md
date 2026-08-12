@@ -229,6 +229,36 @@ v1.4 首发只承诺：
 
 让 LLM 将不统一的银行版式转换为严格候选结构，同时完整保留原始判断、修正和失败证据。
 
+#### P26-A · 冻结的最小 Provider 契约
+
+本切片只将已经持久化的、确定性脱敏的 P24-B/P25-B evidence package 发送给 Provider，并保存可审计的结构化解析结果；它不是记账、匹配、确认或 P28 工作台。它独立于 P23 的 `AIProvider`/`AIProposal` 自动执行通道，不能继承其设置、阈值或写账能力。
+
+**授权与启动**
+
+- 唯一入口为 `POST /api/v1/statement-imports/{id}/provider-attempts`，要求 UUID `Idempotency-Key`、batch `expected_version`、当前 `evidence_sha256` 和 `authorization.confirmed=true`。
+- `authorization` 必须绑定本次用户已查看的 Provider 标识/模型、prompt/schema version、页号集合、行数、redaction version/计数和 evidence hash；服务端逐项与当前 batch、已保存 evidence 及安全 Provider 配置比对。客户端只确认，不上传文本、页面、文件或自定义 prompt/model/URL。
+- 授权只能启动一个新的 `provider_parse` attempt，先持久化授权快照并把 batch 转为 `parsing`，再在数据库事务/锁外调用 Provider。每一次 retry 都需要新的 `Idempotency-Key` 和新的本批次明确授权；同 key+同 payload 重放返回同一 attempt/终态，异 payload 冲突且绝不再次外呼。
+- 预览由 Apple 的 `StatementImportEvidencePreview` 直接渲染脱敏 package，并在发送按钮上列出 Provider、模型、页数、行数、redaction count 与“只发送文本/坐标、不会发送 PDF 或图像”。没有这次显式确认或 offline snapshot 时，不得调用入口。
+
+**Provider 请求允许面**
+
+- 服务端从已保存 evidence 构造请求，**只**发送：`schema_version`、`currency="CNY"`、每页 `page_number/source_kind/evidence_text_masked`，以及每行 `row_number/page_number/evidence_text_masked/bounding_box(x,y,width,height)`。坐标为 `[0,1]` 的归一化位置，只用于行证据关联；允许页号/页型，不发送页面尺寸、旋转、像素或 OCR 原始来源。
+- 明确禁止：PDF bytes、文件/图片 URL、页面图像、原始/规范化前文本、display name、document/import/attempt ID、document hash、byte size、机构/账户原始提示、完整账号/卡号、姓名、地址、客户号、身份证/电话/邮箱、Provider 凭证和任何日志/错误正文。Provider 不能获得工具、网页访问或执行能力。
+- 脱敏只依赖版本化的确定性代码，而不依赖 LLM：先遮盖带标签的身份字段及连续/分隔的账号卡号，再遮盖电话、邮箱、身份证等确定性模式；服务端对将外发的每个字符串独立复检。无法确定为安全的值拒绝发送并以稳定本地错误结束 attempt，不能降级为发送原文。`[REDACTED]` 不是可推断字段。
+
+**严格输出与快照**
+
+- Provider 只可返回 `statement-provider-v1` 的 JSON Schema（`additionalProperties=false`、无 Markdown/自由文本/工具调用）。顶层为 `document` 摘要和 `candidates`；候选至少含唯一 `source_row_numbers`、可空的交易/入账日期（`YYYY-MM-DD`）、原始 CNY decimal string、方向、受限交易类型、摘要证据、`uncertain_fields` 与无法解析 source refs。日期仅是 Asia/Shanghai 业务日，不伪造时刻；金额由服务端一次性以 Decimal→`Int64` minor units 校验，禁止 float。
+- 每个非空候选值必须能由其 source rows 的已脱敏文本确定性证明；不确定则返回 `null`/`uncertain_fields`。输出不得包含账户、分类、账期、正式 transaction ID 或不在 evidence 中的对手方/余额。服务端拒绝未知枚举、额外字段、越界数量、非 CNY、无 source ref、不可证明文本、无效日期/金额及超大响应。
+- 每个 provider attempt 追加不可变的 `authorization`、redacted request 和**已通过 schema 的** initial result snapshot（含 Provider/model/prompt/schema/evidence hash、耗时和 token 计数）。无效上游 body 不保存；只留稳定错误码。快照及其 source refs 是 P26 的当前候选读模型，P27 才把用户最终值/resolution 物化到正式导入行；P26 不创建 transaction、posting 或 ledger candidate。
+- Archive 必须包含 attempt 与这些仅脱敏快照、实体计数、hash 和 source-ref 关系；默认排除 PDF/image、未验证上游 body、Provider key/URL 和所有原始证据。恢复后可只读查看或重试，不能把旧授权自动复用。
+
+**失败、revision 与最小验收**
+
+- 取消、timeout、429、5xx、网络故障、无效 schema 或服务端验证失败都使当前 attempt 终态为 `failed`，batch 回到 `failed` 可重试；不留下半套 candidates、不会改 pages/rows evidence、更不会写 ledger/posting。429/5xx/timeout/网络统一为稳定的不可用错误，不暴露上游正文；取消保留独立稳定错误码。配置/授权/evidence preflight 未通过时零外呼、零 attempt、零 revision。
+- 授权启动和每个已提交终态各自最多增加一次 `data_revision`，affected scope 永远仅 `statement_imports`；idempotency replay、只读预览和 preflight 拒绝不增加 revision。不得复用全局 AI 自动执行、策略或 quality-event 作为 PDF 确认机制。
+- P26-A 自动门**只**使用注入、无网络的 synthetic adapter；不得调用真实 Provider、读取 Provider 配置/密钥或要求用户授权真实外发。它断言外发 envelope 没有禁传字段且提示注入仅作为数据；覆盖严格 schema/证据证明/金额边界失败、授权/idempotency/retry、取消/429/5xx/timeout 零半套结果、Archive 往返快照/source refs，以及每条路径 ledger/posting=0 与 revision scope 精确。完成后在 `docs/qa/p26/results.md` 记录命令、精确 revision 和已知全量回归边界。
+
 #### Backlog
 
 - [ ] 为账单识别建立独立 target/source，不复用单笔 `AIProposal` 的自动执行路径。
