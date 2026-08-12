@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import asyncio
 from os import environ
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from fiscal_api.api.dependencies import get_statement_import_provider
 from fiscal_api.api.p26_schemas import StatementProviderCandidate, StatementProviderResult
-from fiscal_api.core.config import Settings
+from fiscal_api.core.config import Settings, get_settings
 from fiscal_api.db.models.ledger import LedgerTransaction, Posting
 from fiscal_api.db.models.statement_import import (
     StatementImportProviderAttempt,
@@ -58,6 +63,10 @@ def _client() -> TestClient:
     )
     app.dependency_overrides[get_statement_import_provider] = Provider
     return TestClient(app)
+
+
+def _alembic_config() -> Config:
+    return Config(str(Path(__file__).parents[1] / "alembic.ini"))
 
 
 def _seed(client: TestClient) -> tuple[dict[str, object], dict[str, str]]:
@@ -149,7 +158,9 @@ async def _snapshot(batch_id: UUID) -> UUID:
         await engine.dispose()
 
 
-def test_p27_validation_review_drafts_replay_and_zero_ledger() -> None:
+def test_p27_validation_review_drafts_replay_and_zero_ledger(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     with _client() as client:
         batch, auth = _seed(client)
         snapshot = asyncio.run(_snapshot(UUID(batch["id"])))
@@ -240,7 +251,7 @@ def test_p27_validation_review_drafts_replay_and_zero_ledger() -> None:
 
     assert asyncio.run(counts()) == (0, 0)
 
-    async def archive_counts() -> dict[str, object]:
+    async def archive_payload() -> tuple[dict[str, object], dict[str, object]]:
         engine = create_engine(TEST_DATABASE_URL)
         try:
             async with create_session_factory(engine)() as session:
@@ -248,14 +259,106 @@ def test_p27_validation_review_drafts_replay_and_zero_ledger() -> None:
                 archive, _ = await ArchiveService(session).export(
                     password=password, include_ai_raw=False
                 )
-                return ArchiveService.open(archive, password=password)[1]
+                return ArchiveService.open(archive, password=password)
         finally:
             await engine.dispose()
 
-    payload = asyncio.run(archive_counts())
+    manifest, payload = asyncio.run(archive_payload())
     entities = payload["entities"]
     assert len(entities["statement_import_validation_runs"]) == 1  # type: ignore[index]
     assert len(entities["statement_import_validation_checks"]) == 5  # type: ignore[index]
     assert len(entities["statement_import_review_candidates"]) == 1  # type: ignore[index]
     assert len(entities["statement_import_draft_resolutions"]) == 1  # type: ignore[index]
     assert "pdf" not in str(entities["statement_import_validation_runs"]).lower()  # type: ignore[index]
+    assert ArchiveService.dry_run_report(manifest, payload)["relationship_errors"] == 0
+
+    database_name = f"fiscal_p27_restore_{uuid4().hex}"
+    postgres_url = (
+        make_url(TEST_DATABASE_URL).set(database="postgres").render_as_string(hide_password=False)
+    )
+    fresh_url = (
+        make_url(TEST_DATABASE_URL)
+        .set(database=database_name)
+        .render_as_string(hide_password=False)
+    )
+
+    async def create_database() -> None:
+        engine = create_async_engine(postgres_url, isolation_level="AUTOCOMMIT")
+        try:
+            async with engine.connect() as connection:
+                await connection.execute(text(f'CREATE DATABASE "{database_name}"'))
+        finally:
+            await engine.dispose()
+
+    async def drop_database() -> None:
+        engine = create_async_engine(postgres_url, isolation_level="AUTOCOMMIT")
+        try:
+            async with engine.connect() as connection:
+                await connection.execute(text(f'DROP DATABASE IF EXISTS "{database_name}"'))
+        finally:
+            await engine.dispose()
+
+    asyncio.run(create_database())
+    try:
+        monkeypatch.setenv("FISCAL_DATABASE_URL", fresh_url)
+        get_settings.cache_clear()
+        command.upgrade(_alembic_config(), "head")
+        target_engine = create_engine(fresh_url)
+        try:
+
+            async def restore_and_assert() -> None:
+                async with target_engine.begin() as connection:
+                    await ArchiveService.restore_empty_target(
+                        connection, manifest=manifest, payload=payload
+                    )
+                    for query, count in (
+                        (text("SELECT count(*) FROM statement_import_validation_runs"), 1),
+                        (text("SELECT count(*) FROM statement_import_validation_checks"), 5),
+                        (text("SELECT count(*) FROM statement_import_review_candidates"), 1),
+                        (text("SELECT count(*) FROM statement_import_draft_resolutions"), 1),
+                    ):
+                        assert await connection.scalar(query) == count
+                    assert (
+                        await connection.scalar(
+                            text(
+                                "SELECT count(*) FROM statement_import_validation_runs run "
+                                "JOIN statement_import_provider_attempt_snapshots snapshot "
+                                "ON snapshot.id = run.provider_snapshot_id "
+                                "JOIN statement_import_provider_snapshot_source_refs source_ref "
+                                "ON source_ref.provider_attempt_snapshot_id = snapshot.id"
+                            )
+                        )
+                        == 1
+                    )
+                    assert (
+                        await connection.scalar(
+                            text(
+                                "SELECT count(*) FROM statement_import_draft_resolutions draft "
+                                "JOIN statement_import_validation_runs run "
+                                "ON run.id = draft.validation_run_id "
+                                "JOIN statement_import_rows row "
+                                "ON row.id = draft.statement_import_row_id"
+                            )
+                        )
+                        == 1
+                    )
+                    assert (
+                        await connection.scalar(text("SELECT version FROM statement_imports"))
+                        == entities["statement_imports"][0]["version"]
+                    )  # type: ignore[index]
+                    assert (
+                        await connection.scalar(
+                            text("SELECT version FROM statement_import_draft_resolutions")
+                        )
+                        == entities["statement_import_draft_resolutions"][0]["version"]
+                    )  # type: ignore[index]
+                    assert await connection.scalar(text("SELECT count(*) FROM transactions")) == 0
+                    assert await connection.scalar(text("SELECT count(*) FROM postings")) == 0
+
+            asyncio.run(restore_and_assert())
+        finally:
+            asyncio.run(target_engine.dispose())
+    finally:
+        asyncio.run(drop_database())
+        monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
+        get_settings.cache_clear()
