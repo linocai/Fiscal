@@ -8,10 +8,12 @@ import UniformTypeIdentifiers
 public struct MacStatementImportIntake: View {
   @Bindable private var model: StatementImportIntakeModel
   private let workbench: StatementImportReviewWorkbenchModel
+  private let accounts: AccountsModel
+  private let categories: CategoriesModel
   @State private var importerPresented = false
   @FocusState private var importFocused: Bool
 
-  public init(model: StatementImportIntakeModel, workbench: StatementImportReviewWorkbenchModel) { self.model = model; self.workbench = workbench }
+  public init(model: StatementImportIntakeModel, workbench: StatementImportReviewWorkbenchModel, accounts: AccountsModel, categories: CategoriesModel) { self.model = model; self.workbench = workbench; self.accounts = accounts; self.categories = categories }
 
   public var body: some View {
     VStack(alignment: .leading, spacing: 22) {
@@ -106,7 +108,7 @@ public struct MacStatementImportIntake: View {
     case .extracting: ProgressView("正在本地提取与脱敏…")
     case .uploading: ProgressView("正在上传脱敏 JSON 证据…")
     case .reviewRequired(let batch):
-      MacStatementImportWorkspaceHost(model: workbench, batchID: batch.id)
+      MacStatementImportWorkspaceHost(model: workbench, batchID: batch.id, accounts: accounts.accounts, categories: categories.categories)
     case .localFailure(let message): failure(message, retry: false)
     case .remoteFailure(let message): failure(message, retry: false)
     case .remoteUnknown:

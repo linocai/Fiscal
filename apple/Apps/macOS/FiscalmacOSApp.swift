@@ -48,7 +48,9 @@ struct FiscalmacOSApp: App {
         let statementImport = StatementImportIntakeModel(
             repository: RemoteStatementImportIntakeRepository(transport: transport))
         let statementWorkbench = StatementImportReviewWorkbenchModel(
-            repository: RemoteStatementImportReviewWorkbenchRepository(transport: transport))
+            repository: RemoteStatementImportReviewWorkbenchRepository(transport: transport),
+            resolutionRepository: RemoteStatementImportDraftResolutionRepository(transport: transport),
+            finalDraftRepository: RemoteStatementImportFinalCreateDraftRepository(transport: transport))
         _connection = State(initialValue: ConnectionModel(client: SystemStatusClient(baseURL: baseURL, accessKeyStore: accessKeyStore)))
         _passphrase = State(initialValue: PassphraseModel(
             repository: RemoteAuthRepository(transport: transport),

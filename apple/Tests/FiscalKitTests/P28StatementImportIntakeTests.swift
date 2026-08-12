@@ -108,6 +108,91 @@ struct FiscalKitP28StatementImportIntakeTests {
     await model.clear()
     #expect(await MainActor.run { model.workbench == nil && model.page == nil })
   }
+
+  @Test("Resolution PUT reloads cache-free versions and never resends after a 409")
+  func resolutionUsesFreshVersionsAndConflictReloadsOnce() async throws {
+    let batchID = UUID(), rowID = UUID()
+    let cache = HTTPResponseCache()
+    StubURLProtocol.install { request in
+      let path = request.url!.path
+      #expect(!path.contains("confirm"))
+      if request.httpMethod == "GET" {
+        #expect(path == "/api/v1/statement-imports/\(batchID)/review-workbench")
+        #expect(request.url?.query?.contains("cursor=0") == true)
+        #expect(request.url?.query?.contains("limit=100") == true || request.url?.query?.contains("limit=200") == true)
+        return .init(body: Self.workbenchBody(batchID: batchID, rowID: rowID, batchVersion: 9, rowVersion: 4, draftVersion: 7))
+      }
+      #expect(path == "/api/v1/statement-imports/\(batchID)/rows/\(rowID)/draft-resolution")
+      #expect(request.httpMethod == "PUT")
+      let data = try! #require(Self.requestBody(request))
+      let body = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+      #expect(body["expected_batch_version"] as? Int == 9)
+      #expect(body["expected_row_version"] as? Int == 4)
+      #expect(body["expected_resolution_version"] as? Int == 7)
+      #expect(body["resolution"] as? String == "ignore_intentional")
+      #expect(body["ignored_reason"] as? String == "synthetic reason")
+      return .init(status: 409, body: Data(#"{"error":{"code":"version_conflict","message":"changed","request_id":"r"}}"#.utf8))
+    }
+    let transport = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t", responseCache: cache)
+    let model = await MainActor.run {
+      StatementImportReviewWorkbenchModel(
+        repository: RemoteStatementImportReviewWorkbenchRepository(transport: transport),
+        resolutionRepository: RemoteStatementImportDraftResolutionRepository(transport: transport))
+    }
+    await model.reload(batchID: batchID) // visible selection state is stale by design
+    await model.saveResolution(rowID: rowID, resolution: .ignoreIntentional, ignoredReason: "synthetic reason")
+    // Initial display GET, mutation preflight GET, then the conflict recovery GET.  No resend.
+    #expect(StubURLProtocol.requestCount == 4)
+    #expect(await cache.snapshot().entryCount == 0)
+    #expect(await MainActor.run { model.error == "服务器已变化，请重新选择后再提交。" })
+  }
+
+  @Test("Final create draft reads its current version and decodes the normal JSON response")
+  func finalCreateDraftUsesFreshVersion() async throws {
+    let batchID = UUID(), rowID = UUID(), finalID = UUID(), resolutionID = UUID()
+    StubURLProtocol.install { request in
+      if request.httpMethod == "GET" {
+        return .init(body: Self.workbenchBody(batchID: batchID, rowID: rowID, batchVersion: 9, rowVersion: 4, draftVersion: 2, finalVersion: 6))
+      }
+      #expect(request.url?.path == "/api/v1/statement-imports/\(batchID)/rows/\(rowID)/final-create-draft")
+      let data = try! #require(Self.requestBody(request))
+      let body = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+      #expect(body["expected_version"] as? Int == 6)
+      #expect((body["transaction"] as? [String: Any])?["kind"] as? String == "expense")
+      return .init(body: Data("""
+        {"id":"\(finalID.uuidString)","statement_import_row_id":"\(rowID.uuidString)","draft_resolution_id":"\(resolutionID.uuidString)","transaction":{"kind":"expense","amount_minor":123,"occurred_at":"2026-08-12T12:00:00Z","title":"Manual","note":null,"account_id":null,"category_id":null,"destination_account_id":null,"credit_cycle_id":null},"version":7}
+        """.utf8))
+    }
+    let transport = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t", responseCache: HTTPResponseCache())
+    var transaction = TransactionDraft(); transaction.kind = .expense; transaction.amountMinor = 123
+    transaction.title = "Manual"; transaction.occurredAt = Date(timeIntervalSince1970: 1_786_276_800)
+    let response = try await RemoteStatementImportFinalCreateDraftRepository(transport: transport)
+      .putFinalCreateDraft(batchID: batchID, rowID: rowID, transaction: transaction)
+    #expect(response.id == finalID && response.version == 7)
+    #expect(StubURLProtocol.requestCount == 2)
+  }
+
+  private static func workbenchBody(
+    batchID: UUID, rowID: UUID, batchVersion: Int, rowVersion: Int, draftVersion: Int,
+    finalVersion: Int? = nil
+  ) -> Data {
+    Data("""
+    {"batch_id":"\(batchID.uuidString)","batch_version":\(batchVersion),"review_available":true,"rows":[{"id":"\(rowID.uuidString)","row_number":1,"page_number":1,"row_version":\(rowVersion),"source_kind":"text","evidence_text_masked":"[REDACTED] market","draft":{"id":"\(UUID().uuidString)","resolution":"unresolved","version":\(draftVersion)},"candidates":[],"final_create_draft_version":\(finalVersion.map { String($0) } ?? "null")}],"next_cursor":null}
+    """.utf8)
+  }
+
+  private static func requestBody(_ request: URLRequest) -> Data? {
+    if let body = request.httpBody { return body }
+    guard let stream = request.httpBodyStream else { return nil }
+    stream.open(); defer { stream.close() }
+    var data = Data(), buffer = [UInt8](repeating: 0, count: 1024)
+    while stream.hasBytesAvailable {
+      let count = stream.read(&buffer, maxLength: buffer.count)
+      guard count >= 0 else { return nil }
+      data.append(buffer, count: count)
+    }
+    return data
+  }
 }
 
 private actor WorkbenchFixture: StatementImportReviewWorkbenchRepository {

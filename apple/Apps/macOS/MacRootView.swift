@@ -86,7 +86,7 @@ struct MacRootView: View {
                 } else if section == .reconciliation {
                     ReconciliationCenterScreen(model: reconciliation, accounts: accounts, openAttention: openAttention)
                 } else if section == .statementImport {
-                    MacStatementImportIntake(model: statementImport, workbench: statementWorkbench)
+                    MacStatementImportIntake(model: statementImport, workbench: statementWorkbench, accounts: accounts, categories: categories)
                 } else if section == .cashFlow {
                     MacFutureCashFlowScreen(
                         model: cashFlow, accounts: accounts, categories: categories,

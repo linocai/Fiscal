@@ -39,8 +39,53 @@ public struct RemoteStatementImportReviewWorkbenchRepository: StatementImportRev
 @MainActor @Observable public final class StatementImportReviewWorkbenchModel {
   public private(set) var workbench: StatementImportWorkbench?; public private(set) var selectedRowID: UUID?; public private(set) var page: StatementImportWorkbenchPage?; public private(set) var error: String?
   private let repository: any StatementImportReviewWorkbenchRepository
-  public init(repository: any StatementImportReviewWorkbenchRepository) { self.repository = repository }
-  public func reload(batchID: UUID) async { do { workbench = try await repository.workbench(batchID: batchID, cursor: 0, limit: 100, filters: [:]); self.error = nil } catch { self.error = "无法刷新审核数据。" } }
+  private let resolutionRepository: (any StatementImportDraftResolutionRepository)?
+  private let finalDraftRepository: (any StatementImportFinalCreateDraftRepository)?
+  public init(
+    repository: any StatementImportReviewWorkbenchRepository,
+    resolutionRepository: (any StatementImportDraftResolutionRepository)? = nil,
+    finalDraftRepository: (any StatementImportFinalCreateDraftRepository)? = nil
+  ) {
+    self.repository = repository
+    self.resolutionRepository = resolutionRepository
+    self.finalDraftRepository = finalDraftRepository
+  }
+  public func reload(batchID: UUID, preservingError: Bool = false) async { do { workbench = try await repository.workbench(batchID: batchID, cursor: 0, limit: 100, filters: [:]); if !preservingError { self.error = nil } } catch { self.error = "无法刷新审核数据。" } }
   public func select(_ row: StatementImportWorkbench.Row) async { selectedRowID = row.id; guard let pageNumber = row.pageNumber, let workbench else { page = nil; return }; do { page = try await repository.page(batchID: workbench.batchID, pageNumber: pageNumber) } catch { self.error = "脱敏来源不可用。" } }
+  @discardableResult public func saveResolution(
+    rowID: UUID, resolution: StatementImportDraftResolutionKind,
+    matchedTransactionID: UUID? = nil, ignoredReason: String? = nil
+  ) async -> Bool {
+    guard let resolutionRepository, let workbench else { error = "审核写入不可用。"; return false }
+    do {
+      _ = try await resolutionRepository.putResolution(
+        batchID: workbench.batchID, rowID: rowID, resolution: resolution,
+        matchedTransactionID: matchedTransactionID, ignoredReason: ignoredReason)
+      await reload(batchID: workbench.batchID); return true
+    } catch {
+      if Self.isConflict(error) {
+        self.error = "服务器已变化，请重新选择后再提交。"
+        await reload(batchID: workbench.batchID, preservingError: true)
+      } else { self.error = "无法保存审核选择。" }
+      return false
+    }
+  }
+  public func saveFinalCreateDraft(rowID: UUID, transaction: TransactionDraft) async {
+    guard let finalDraftRepository, let workbench else { error = "新建草稿不可用。"; return }
+    do {
+      _ = try await finalDraftRepository.putFinalCreateDraft(
+        batchID: workbench.batchID, rowID: rowID, transaction: transaction)
+      await reload(batchID: workbench.batchID)
+    } catch {
+      if Self.isConflict(error) {
+        self.error = "服务器已变化，请重新选择后再提交。"
+        await reload(batchID: workbench.batchID, preservingError: true)
+      } else { self.error = "无法保存新建草稿。" }
+    }
+  }
   public func clear() { workbench = nil; selectedRowID = nil; page = nil; error = nil }
+  private static func isConflict(_ error: Error) -> Bool {
+    guard case .domain(let status, _) = error as? FiscalAPIError else { return false }
+    return status == 409
+  }
 }

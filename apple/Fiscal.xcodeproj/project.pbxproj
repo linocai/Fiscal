@@ -96,6 +96,7 @@
 		F28A00000000000000000005 /* MacStatementImportIntake.swift in Sources */ = {isa = PBXBuildFile; fileRef = F28A00000000000000000004 /* MacStatementImportIntake.swift */; };
 		F28A00000000000000000007 /* P28StatementImportIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F28A00000000000000000006 /* P28StatementImportIntakeTests.swift */; };
 		F28B00000000000000000003 /* StatementImportReviewWorkbench.swift in Sources */ = {isa = PBXBuildFile; fileRef = F28B00000000000000000001 /* StatementImportReviewWorkbench.swift */; };
+		F28B00000000000000000007 /* StatementImportP27DraftRepositories.swift in Sources */ = {isa = PBXBuildFile; fileRef = F28B00000000000000000006 /* StatementImportP27DraftRepositories.swift */; };
 		F28B00000000000000000005 /* MacStatementImportWorkspaceHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = F28B00000000000000000004 /* MacStatementImportWorkspaceHost.swift */; };
 		8E2A9F3F530D7AEC804E1A0E /* TransactionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0752D3D57AD3B99FE1943E05 /* TransactionModels.swift */; };
 		8E8037BF67BFD62CDA4033EA /* FiscalmacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E8B677BF8165F1CF2AA217F /* FiscalmacOSApp.swift */; };
@@ -343,6 +344,7 @@
 		F28A00000000000000000006 /* P28StatementImportIntakeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P28StatementImportIntakeTests.swift; sourceTree = "<group>"; };
 		F28B00000000000000000001 /* StatementImportReviewWorkbench.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementImportReviewWorkbench.swift; sourceTree = "<group>"; };
 		F28B00000000000000000004 /* MacStatementImportWorkspaceHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacStatementImportWorkspaceHost.swift; sourceTree = "<group>"; };
+		F28B00000000000000000006 /* StatementImportP27DraftRepositories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementImportP27DraftRepositories.swift; sourceTree = "<group>"; };
 		F05017C6B56940B011F6E23E /* SystemStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemStatus.swift; sourceTree = "<group>"; };
 		F388265D8ABA7AB1219DA2A1 /* P18ReportingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P18ReportingTests.swift; sourceTree = "<group>"; };
 		F41296659AE4F2333D274669 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -437,6 +439,7 @@
 				F28A00000000000000000004 /* MacStatementImportIntake.swift */,
 				F28B00000000000000000001 /* StatementImportReviewWorkbench.swift */,
 				F28B00000000000000000004 /* MacStatementImportWorkspaceHost.swift */,
+				F28B00000000000000000006 /* StatementImportP27DraftRepositories.swift */,
 				B21062E4064D11C69EA37BEA /* PassphraseModel.swift */,
 				D4B37D7D7A1AACF4ABC9F561 /* PlaceholderScreen.swift */,
 				D861BDB3034B1DF16C4CB8C3 /* ReconciliationModel.swift */,
@@ -949,6 +952,7 @@
 				F28A00000000000000000005 /* MacStatementImportIntake.swift in Sources */,
 				F28B00000000000000000003 /* StatementImportReviewWorkbench.swift in Sources */,
 				F28B00000000000000000005 /* MacStatementImportWorkspaceHost.swift in Sources */,
+				F28B00000000000000000007 /* StatementImportP27DraftRepositories.swift in Sources */,
 				348431CDF91803DEB5C1A8D1 /* OfflineSnapshotStore.swift in Sources */,
 				0DB3D38B493F1B22A954DEC2 /* OverviewSnapshot.swift in Sources */,
 				D7E65B2896ADB87B0C04DEE4 /* PassphraseModel.swift in Sources */,
