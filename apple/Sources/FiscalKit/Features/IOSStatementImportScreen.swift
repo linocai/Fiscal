@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct IOSStatementImportScreen: View {
+  @Environment(\.scenePhase) private var scenePhase
   @Bindable private var intake: StatementImportIntakeModel
   private let review: StatementImportReviewWorkbenchModel
   private let accounts: [AccountDTO]; private let categories: [CategoryDTO]
@@ -28,7 +29,8 @@ public struct IOSStatementImportScreen: View {
       Spacer()
     }.padding().navigationTitle("账单导入")
       .fileImporter(isPresented: $importer, allowedContentTypes: [.pdf]) { result in if case .success(let url) = result { Task { await intake.select(url: url) } } }
-      .onDisappear { intake.cleanup(); review.clear() }
+      .onDisappear { intake.discardForSceneInterruption(); review.clear() }
+      .onChange(of: scenePhase) { _, phase in if phase == .background { intake.discardForSceneInterruption(); review.clear() } }
   }
 }
 

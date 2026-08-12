@@ -238,6 +238,9 @@ public final class StatementImportIntakeModel {
   private var package: StatementImportEvidencePackage?
   private var batch: StatementImportDTO?
   private var failIssued = false
+  /// Incremented only for lifecycle disposal.  A cancelled upload carrying an older generation
+  /// must not turn a scene transition into a best-effort remote `fail` mutation.
+  private var interruptionGeneration = 0
   @ObservationIgnored private var activeUpload: Task<Void, Never>?
   private let repository: any StatementImportIntakeRepository
   private let processor: any StatementImportLocalProcessing
@@ -251,6 +254,7 @@ public final class StatementImportIntakeModel {
   }
 
   public func select(url: URL) async {
+    discardForSceneInterruption()
     reset(keepPhase: false)
     phase = .inspecting
     do {
@@ -267,10 +271,15 @@ public final class StatementImportIntakeModel {
   /// This is the sole consent gate. Selecting, inspecting, drag/drop, and duplicate detection
   /// cannot call the repository before this method is explicitly invoked by the user.
   public func consentAndUpload() async {
+    await performConsentAndUpload(interruptionGeneration: nil)
+  }
+
+  private func performConsentAndUpload(interruptionGeneration: Int?) async {
     guard let metadata, let sourceURL else { phase = .localFailure("请选择账单 PDF。"); return }
     phase = .registering
     do {
       let registered = try await repository.register(.init(metadata: metadata))
+      try Task.checkCancellation()
       batch = registered
       if registered.duplicate == true {
         phase = .duplicate(registered)
@@ -279,13 +288,16 @@ public final class StatementImportIntakeModel {
       }
       let started = try await repository.startLocalExtraction(
         batchID: registered.id, expectedVersion: registered.version)
+      try Task.checkCancellation()
       phase = .extracting
       let built = try await processor.redactedPackage(
         url: sourceURL, attemptID: started.attempt.id, expectedVersion: started.expectedVersion)
+      try Task.checkCancellation()
       package = built.0
       preview = built.1
       clearSource()
       phase = .uploading
+      try Task.checkCancellation()
       let uploaded: StatementImportEvidenceUploadDTO
       do {
         uploaded = try await repository.submitEvidence(batchID: registered.id, package: built.0)
@@ -303,6 +315,9 @@ public final class StatementImportIntakeModel {
       phase = .reviewRequired(reviewed)
       package = nil
     } catch is CancellationError {
+      guard interruptionGeneration == nil || interruptionGeneration == self.interruptionGeneration else {
+        return
+      }
       await cancelActiveAttempt()
     } catch {
       await handleFailure(error)
@@ -313,9 +328,10 @@ public final class StatementImportIntakeModel {
   /// results in at most one best-effort failed-attempt request.
   public func beginConsentAndUpload() {
     activeUpload?.cancel()
+    let generation = interruptionGeneration
     activeUpload = Task { [weak self] in
       guard let self else { return }
-      await self.consentAndUpload()
+      await self.performConsentAndUpload(interruptionGeneration: generation)
       self.activeUpload = nil
     }
   }
@@ -366,7 +382,18 @@ public final class StatementImportIntakeModel {
     }
   }
 
-  public func cleanup() { reset(keepPhase: false) }
+  public func cleanup() { discardForSceneInterruption() }
+
+  /// Scene/background interruption is not a user cancellation.  Do not perform a best-effort
+  /// network mutation from lifecycle code: discard the in-memory source/package so a future
+  /// foreground action must explicitly query or choose the document again.
+  public func discardForSceneInterruption() {
+    interruptionGeneration &+= 1
+    activeUpload?.cancel()
+    activeUpload = nil
+    clearSource(); metadata = nil; preview = nil; package = nil; batch = nil; failIssued = false
+    phase = .idle
+  }
 
   private func cancelActiveAttempt() async {
     guard let batch, !failIssued else { phase = .cancelled; clearSource(); return }
@@ -397,7 +424,6 @@ public final class StatementImportIntakeModel {
   }
 
   private func reset(keepPhase: Bool) {
-    activeUpload?.cancel()
     activeUpload = nil
     clearSource(); metadata = nil; preview = nil; package = nil; batch = nil; failIssued = false
     if !keepPhase { phase = .idle }

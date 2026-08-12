@@ -238,6 +238,36 @@ struct FiscalKitP28StatementImportIntakeTests {
     #expect(await MainActor.run { model.confirmationPreview == nil && model.responseUnknownConfirmationKey == nil })
   }
 
+  @Test("Scene interruption discards in-memory evidence without an automatic POST")
+  func sceneInterruptionDoesNotRetryEvidence() async throws {
+    let repository = IntakeRepositoryFixture(failFirstEvidence: true)
+    let model = await MainActor.run { StatementImportIntakeModel(repository: repository, processor: IntakeProcessorFixture()) }
+    await model.select(url: URL(fileURLWithPath: "/private/interrupted.pdf"))
+    await model.consentAndUpload()
+    #expect(await repository.callNames() == ["register", "start", "evidence"])
+    await MainActor.run { model.discardForSceneInterruption() }
+    #expect(await repository.callNames() == ["register", "start", "evidence"])
+    #expect(await MainActor.run { model.phase == .idle && model.metadata == nil && model.preview == nil })
+  }
+
+  @Test("Background interruption cancels local extraction without evidence or failure POST")
+  func backgroundInterruptionCancelsActiveLocalWorkLocally() async throws {
+    let repository = IntakeRepositoryFixture()
+    let processor = InterruptibleIntakeProcessor()
+    let model = await MainActor.run {
+      StatementImportIntakeModel(repository: repository, processor: processor)
+    }
+    await model.select(url: URL(fileURLWithPath: "/private/background.pdf"))
+    await MainActor.run { model.beginConsentAndUpload() }
+    await processor.waitUntilExtractionBegins()
+    #expect(await repository.callNames() == ["register", "start"])
+
+    await MainActor.run { model.discardForSceneInterruption() }
+    await processor.waitUntilCancelled()
+    #expect(await repository.callNames() == ["register", "start"])
+    #expect(await MainActor.run { model.phase == .idle && model.metadata == nil && model.preview == nil })
+  }
+
   private static func workbenchBody(
     batchID: UUID, rowID: UUID, batchVersion: Int, rowVersion: Int, draftVersion: Int,
     finalVersion: Int? = nil, resolution: String = "unresolved"
@@ -376,4 +406,44 @@ private actor IntakeProcessorFixture: StatementImportLocalProcessing {
   }
 
   func extractionCount() -> Int { extractions }
+}
+
+private actor InterruptibleIntakeProcessor: StatementImportLocalProcessing {
+  private var began = false
+  private var cancelled = false
+  private var continuation: CheckedContinuation<Void, Never>?
+
+  func inspect(url: URL) async throws -> StatementImportLocalMetadata {
+    .init(sourceFilename: url.lastPathComponent, byteSize: 120, pageCount: 1,
+          documentSHA256: String(repeating: "a", count: 64))
+  }
+
+  func redactedPackage(
+    url _: URL, attemptID _: UUID, expectedVersion _: Int
+  ) async throws -> (StatementImportEvidencePackage, StatementImportEvidencePreview) {
+    try await withTaskCancellationHandler(operation: {
+      await withCheckedContinuation { continuation in
+        began = true
+        self.continuation = continuation
+      }
+      try Task.checkCancellation()
+      throw StatementImportIntakeError.inaccessibleFile
+    }, onCancel: {
+      Task { await self.cancelLocalWork() }
+    })
+  }
+
+  func waitUntilExtractionBegins() async {
+    while !began { await Task.yield() }
+  }
+
+  func waitUntilCancelled() async {
+    while !cancelled { await Task.yield() }
+  }
+
+  private func cancelLocalWork() {
+    cancelled = true
+    continuation?.resume()
+    continuation = nil
+  }
 }
