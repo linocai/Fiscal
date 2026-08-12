@@ -7,10 +7,11 @@ import UniformTypeIdentifiers
 /// outside this view.
 public struct MacStatementImportIntake: View {
   @Bindable private var model: StatementImportIntakeModel
+  private let workbench: StatementImportReviewWorkbenchModel
   @State private var importerPresented = false
   @FocusState private var importFocused: Bool
 
-  public init(model: StatementImportIntakeModel) { self.model = model }
+  public init(model: StatementImportIntakeModel, workbench: StatementImportReviewWorkbenchModel) { self.model = model; self.workbench = workbench }
 
   public var body: some View {
     VStack(alignment: .leading, spacing: 22) {
@@ -105,8 +106,7 @@ public struct MacStatementImportIntake: View {
     case .extracting: ProgressView("正在本地提取与脱敏…")
     case .uploading: ProgressView("正在上传脱敏 JSON 证据…")
     case .reviewRequired(let batch):
-      Label("脱敏证据已保存，批次已进入待审核状态（\(batch.id.uuidString)）。P28-A 不会解析、匹配或确认账本。", systemImage: "checkmark.shield")
-        .foregroundStyle(.green).textSelection(.enabled)
+      MacStatementImportWorkspaceHost(model: workbench, batchID: batch.id)
     case .localFailure(let message): failure(message, retry: false)
     case .remoteFailure(let message): failure(message, retry: false)
     case .remoteUnknown:

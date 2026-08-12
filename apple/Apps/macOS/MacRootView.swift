@@ -50,6 +50,7 @@ struct MacRootView: View {
     let passphrase: PassphraseModel
     let reconciliation: ReconciliationModel
     let statementImport: StatementImportIntakeModel
+    let statementWorkbench: StatementImportReviewWorkbenchModel
     let recordingPreferences: RecordingPreferences
     let cache: HTTPResponseCache
     let revisions: DataRevisionStore
@@ -85,7 +86,7 @@ struct MacRootView: View {
                 } else if section == .reconciliation {
                     ReconciliationCenterScreen(model: reconciliation, accounts: accounts, openAttention: openAttention)
                 } else if section == .statementImport {
-                    MacStatementImportIntake(model: statementImport)
+                    MacStatementImportIntake(model: statementImport, workbench: statementWorkbench)
                 } else if section == .cashFlow {
                     MacFutureCashFlowScreen(
                         model: cashFlow, accounts: accounts, categories: categories,

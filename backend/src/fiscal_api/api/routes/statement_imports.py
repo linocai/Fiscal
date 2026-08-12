@@ -1,7 +1,9 @@
+import json
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Response
+from pydantic import ValidationError
 from starlette import status
 
 from fiscal_api.api.dependencies import (
@@ -9,6 +11,7 @@ from fiscal_api.api.dependencies import (
     StatementImportFinalDraftServiceDependency,
     StatementImportReviewServiceDependency,
     StatementImportServiceDependency,
+    StatementImportWorkbenchServiceDependency,
     formal_mutation,
 )
 from fiscal_api.api.p24_schemas import (
@@ -35,6 +38,11 @@ from fiscal_api.api.p27_schemas import (
     StatementImportDraftResolutionPut,
     StatementImportReviewResponse,
     StatementImportValidationRunCreate,
+)
+from fiscal_api.api.p28_schemas import (
+    StatementImportWorkbenchFilters,
+    StatementImportWorkbenchPageResponse,
+    StatementImportWorkbenchResponse,
 )
 from fiscal_api.core.security import require_authenticated
 
@@ -67,6 +75,42 @@ async def get_statement_import(
     statement_import_id: UUID, service: StatementImportServiceDependency
 ) -> StatementImportResponse:
     return await service.get(statement_import_id)
+
+
+def _workbench_filters(value: str | None) -> StatementImportWorkbenchFilters:
+    if value is None:
+        return StatementImportWorkbenchFilters()
+    try:
+        return StatementImportWorkbenchFilters.model_validate(json.loads(value))
+    except (json.JSONDecodeError, ValidationError) as error:
+        raise HTTPException(status_code=422, detail="Invalid workbench filters") from error
+
+
+@router.get(
+    "/{statement_import_id}/review-workbench", response_model=StatementImportWorkbenchResponse
+)
+async def get_statement_import_review_workbench(
+    statement_import_id: UUID,
+    service: StatementImportWorkbenchServiceDependency,
+    cursor: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    filters: str | None = None,
+) -> StatementImportWorkbenchResponse:
+    return await service.get(
+        statement_import_id, cursor=cursor, limit=limit, filters=_workbench_filters(filters)
+    )
+
+
+@router.get(
+    "/{statement_import_id}/review-workbench/pages/{page_number}",
+    response_model=StatementImportWorkbenchPageResponse,
+)
+async def get_statement_import_review_workbench_page(
+    statement_import_id: UUID,
+    page_number: Annotated[int, Path(ge=1)],
+    service: StatementImportWorkbenchServiceDependency,
+) -> StatementImportWorkbenchPageResponse:
+    return await service.page(statement_import_id, page_number)
 
 
 @router.post(

@@ -10,3 +10,9 @@
 - 新建 disposable PostgreSQL `fiscal_p28a`：`FISCAL_TEST_DATABASE_URL=postgresql+asyncpg:///fiscal_p28a uv run pytest -q tests/test_p24_statement_import_postgres.py` → **4 passed**；同一 fresh database 的全套 JUnit → **266 tests, 0 failures, 0 errors, 0 skipped**。
 
 未完成：P28-B 审核表/编辑体验及任何 P26/P27 parse、review 或 confirm 业务；本块不上传 PDF/image、不创建账本写入，也不访问外部网络。
+
+## P28-B · macOS review workbench
+
+- Backend 新增只读 `GET /review-workbench` 与 page evidence GET；无 migration、provider、validation-run、confirm 或 Archive 写入。无 P26 validated result 的 P28-A batch 明确返回 `review_available=false`，仅有已存 masked evidence/source-unavailable。
+- macOS host 从 P28-A `reviewRequired` 路由到三栏 workbench；repository 一律 `cache:false`，离开清空 in-memory payload/selection。未添加 iOS workbench UI、自动 resend 或 confirm endpoint。
+- `ruff` 与 `pyright` P28 backend files → **passed / 0 errors**；P24/P27/P28 PG targeted → **13 passed**；macOS tests → **117 tests / 21 suites passed**；macOS+iOS Debug builds 已使用隔离 DerivedData 运行通过。

@@ -26,6 +26,7 @@ from fiscal_api.services.statement_import_provider import (
     SyntheticStatementImportProvider,
 )
 from fiscal_api.services.statement_import_review import StatementImportReviewService
+from fiscal_api.services.statement_import_workbench import StatementImportWorkbenchService
 from fiscal_api.services.statement_imports import StatementImportService
 from fiscal_api.services.transactions import TransactionService
 
@@ -181,6 +182,17 @@ def get_statement_import_review_service(
 
 StatementImportReviewServiceDependency = Annotated[
     StatementImportReviewService, Depends(get_statement_import_review_service)
+]
+
+
+def get_statement_import_workbench_service(
+    session: SessionDependency,
+) -> StatementImportWorkbenchService:
+    return StatementImportWorkbenchService(session)
+
+
+StatementImportWorkbenchServiceDependency = Annotated[
+    StatementImportWorkbenchService, Depends(get_statement_import_workbench_service)
 ]
 
 

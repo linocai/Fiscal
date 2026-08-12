@@ -94,6 +94,34 @@ struct FiscalKitP28StatementImportIntakeTests {
     #expect(await repository.callNames() == ["register", "start", "evidence", "fail"])
     #expect(await MainActor.run { model.phase == .cancelled })
   }
+
+  @Test("P28-B workbench is cache-free, masked-only, and clears on exit")
+  func workbenchRoutesMaskedEvidenceWithoutConfirm() async throws {
+    let batchID = UUID(); let rowID = UUID()
+    let repository = WorkbenchFixture(batchID: batchID, rowID: rowID)
+    let model = await MainActor.run { StatementImportReviewWorkbenchModel(repository: repository) }
+    await model.reload(batchID: batchID)
+    let row = try #require(await MainActor.run { model.workbench?.rows.first })
+    await model.select(row)
+    #expect(await repository.calls() == ["workbench", "page"])
+    #expect(await MainActor.run { model.page?.evidenceTextMasked == "[REDACTED] market" })
+    await model.clear()
+    #expect(await MainActor.run { model.workbench == nil && model.page == nil })
+  }
+}
+
+private actor WorkbenchFixture: StatementImportReviewWorkbenchRepository {
+  private let batchID: UUID; private let rowID: UUID; private var recorded: [String] = []
+  init(batchID: UUID, rowID: UUID) { self.batchID = batchID; self.rowID = rowID }
+  func workbench(batchID: UUID, cursor: Int, limit: Int, filters: [String: String]) async throws -> StatementImportWorkbench {
+    recorded.append("workbench"); #expect(batchID == self.batchID); #expect(cursor == 0 && limit == 100 && filters.isEmpty)
+    return try JSONDecoder().decode(StatementImportWorkbench.self, from: Data("{\"batch_id\":\"\(batchID.uuidString)\",\"batch_version\":3,\"review_available\":false,\"rows\":[{\"id\":\"\(rowID.uuidString)\",\"row_number\":1,\"page_number\":1,\"row_version\":1,\"source_kind\":\"text\",\"evidence_text_masked\":\"[REDACTED] market\",\"draft\":null,\"candidates\":[],\"final_create_draft_version\":null}],\"next_cursor\":null}".utf8))
+  }
+  func page(batchID: UUID, pageNumber: Int) async throws -> StatementImportWorkbenchPage {
+    recorded.append("page"); #expect(batchID == self.batchID && pageNumber == 1)
+    return try JSONDecoder().decode(StatementImportWorkbenchPage.self, from: Data("{\"page_number\":1,\"source_available\":true,\"source_kind\":\"text\",\"evidence_text_masked\":\"[REDACTED] market\"}".utf8))
+  }
+  func calls() -> [String] { recorded }
 }
 
 private actor IntakeRepositoryFixture: StatementImportIntakeRepository {
