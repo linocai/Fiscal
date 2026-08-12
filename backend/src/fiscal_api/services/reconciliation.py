@@ -34,6 +34,7 @@ from fiscal_api.db.models import (
     ReimbursementParty,
     ReimbursementReceipt,
     ReimbursementReceiptAllocation,
+    StatementImport,
 )
 from fiscal_api.repositories.credit import CreditRepository
 from fiscal_api.repositories.reconciliation import ReconciliationRepository
@@ -317,6 +318,32 @@ class ReconciliationService:
                         deep_link=f"fiscal://credit-cycles/{cycle.id}",
                     )
                 )
+        imports = list(
+            (
+                await self.session.scalars(
+                    select(StatementImport)
+                    .where(
+                        StatementImport.status.in_(
+                            ["review_required", "ready_to_confirm", "partially_confirmed", "failed"]
+                        )
+                    )
+                    .order_by(StatementImport.updated_at.desc())
+                )
+            ).all()
+        )
+        for item in imports:
+            failed = item.status == "failed"
+            items.append(
+                AttentionItem(
+                    source_type="statement_import_failed" if failed else "statement_import_review",
+                    source_id=item.id,
+                    severity=AttentionSeverity.WARNING if failed else AttentionSeverity.INFO,
+                    occurred_at=item.updated_at,
+                    explanation="账单导入处理失败。" if failed else "账单导入需要审核。",
+                    suggested_action="查看账单导入。",
+                    deep_link=f"fiscal://statement-imports/{item.id}",
+                )
+            )
         visible = [item for item in items if (item.source_type, item.source_id) not in dismissed]
         severity = {"critical": 0, "warning": 1, "info": 2}
         visible.sort(
@@ -331,6 +358,11 @@ class ReconciliationService:
     async def ignore_attention(
         self, source_type: str, source_id: UUID, request: AttentionIgnore
     ) -> None:
+        if source_type in {"statement_import_review", "statement_import_failed"}:
+            invalid(
+                "statement_import_attention_not_dismissible",
+                "Statement import attention cannot be ignored",
+            )
         expires_at = ensure_utc(request.expires_at)
         if expires_at <= utc_now():
             invalid("invalid_attention_expiry", "Ignore expiry must be in the future")

@@ -5,7 +5,7 @@ private enum IOSTab: Hashable { case overview, transactions, cashFlow, more }
 private enum IOSMoreDestination: Hashable {
     case accounts, categories, credit, creditAccount(UUID), reimbursements, reconciliation
     case reports(ReportLens)
-    case cloudConnection, settings
+    case cloudConnection, settings, statementImport
 }
 
 struct IOSRootView: View {
@@ -25,6 +25,8 @@ struct IOSRootView: View {
     let aiSettings: AISettingsModel
     let passphrase: PassphraseModel
     let reconciliation: ReconciliationModel
+    let statementImport: StatementImportIntakeModel
+    let statementReview: StatementImportReviewWorkbenchModel
     let recordingPreferences: RecordingPreferences
     let revisions: DataRevisionStore
     let revisionTransport: APITransport
@@ -70,7 +72,7 @@ struct IOSRootView: View {
                         markReceived: { _ in morePath = [.reimbursements]; selection = .more }
                     )
                 }
-            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, passphrase: passphrase, reconciliation: reconciliation, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true }, openAttention: openAttention)
+            case .more: IOSMoreScreen(path: $morePath, accounts: accounts, categories: categories, transactions: transactions, credit: credit, installments: installments, reimbursements: reimbursements, reports: reports, overview: overview, cashFlow: cashFlow, aiProposals: aiProposals, aiSettings: aiSettings, passphrase: passphrase, reconciliation: reconciliation, statementImport: statementImport, statementReview: statementReview, connection: connection, recordingPreferences: recordingPreferences, openAI: { showAIProposals = true }, openAttention: openAttention)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -236,6 +238,8 @@ private struct IOSMoreScreen: View {
     let aiSettings: AISettingsModel
     let passphrase: PassphraseModel
     let reconciliation: ReconciliationModel
+    let statementImport: StatementImportIntakeModel
+    let statementReview: StatementImportReviewWorkbenchModel
     let connection: ConnectionModel
     let recordingPreferences: RecordingPreferences
     let openAI: () -> Void
@@ -251,6 +255,8 @@ private struct IOSMoreScreen: View {
                                 row("核对与关注", symbol: "checkmark.circle", detail: "实际余额 · 差额 · 待处理", color: FiscalColor.income)
                             }
                             .buttonStyle(.plain)
+                            Divider().padding(.leading, 46)
+                            NavigationLink(value: IOSMoreDestination.statementImport) { row("账单导入", symbol: "doc.text.viewfinder", detail: "本地 PDF · 脱敏审核", color: FiscalColor.accent) }.buttonStyle(.plain)
                             Divider().padding(.leading, 46)
                             NavigationLink(value: IOSMoreDestination.accounts) {
                                 row("账户", symbol: "wallet.bifold", detail: "现金 · 储蓄卡 · 信用卡", color: FiscalColor.accent)
@@ -298,6 +304,7 @@ private struct IOSMoreScreen: View {
                     IOSCreditAccountDetail(credit: credit, installments: installments, accountID: accountID, transactions: transactions, accounts: accounts, categories: categories, cashFlow: cashFlow)
                 case .reimbursements: IOSReimbursementsScreen(model: reimbursements, accounts: accounts)
                 case .reconciliation: ReconciliationCenterScreen(model: reconciliation, accounts: accounts, openAttention: openAttention)
+                case .statementImport: IOSStatementImportScreen(intake: statementImport, review: statementReview)
                 case .reports: IOSReportsScreen(model: reports)
                 case .cloudConnection:
                     IOSCloudConnectionScreen(

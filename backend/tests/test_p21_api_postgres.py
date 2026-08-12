@@ -110,3 +110,51 @@ def test_p21_checkpoint_is_derived_and_attention_is_dismissible(
             row["source_id"] != item["source_id"]
             for row in client.get("/api/v1/reconciliation/attention", headers=auth).json()["items"]
         )
+        imported = client.post(
+            "/api/v1/statement-imports",
+            headers=auth,
+            json={
+                "document_sha256": uuid4().hex * 2,
+                "byte_size": 10,
+                "page_count": 1,
+                "mime_type": "application/pdf",
+                "display_name": "statement.pdf",
+            },
+        )
+        attempt = client.post(
+            f"/api/v1/statement-imports/{imported.json()['id']}/attempts",
+            headers=auth,
+            json={"expected_version": imported.json()["version"]},
+        )
+        evidence = client.post(
+            f"/api/v1/statement-imports/{imported.json()['id']}/evidence",
+            headers=auth,
+            json={
+                "attempt_id": attempt.json()["id"],
+                "expected_version": int(attempt.headers["X-Fiscal-Statement-Import-Version"]),
+                "pages": [
+                    {
+                        "page_number": 1,
+                        "source_kind": "text",
+                        "evidence_text_masked": "[REDACTED]",
+                        "bounding_boxes": [],
+                    }
+                ],
+                "rows": [],
+            },
+        )
+        assert evidence.status_code == 200
+        statement_item = next(
+            row
+            for row in client.get("/api/v1/reconciliation/attention", headers=auth).json()["items"]
+            if row["source_type"] == "statement_import_review"
+        )
+        assert statement_item["source_id"] == imported.json()["id"]
+        assert statement_item["amount_minor"] is None
+        assert "statement.pdf" not in str(statement_item)
+        blocked = client.post(
+            f"/api/v1/reconciliation/attention/{statement_item['source_type']}/{statement_item['source_id']}/ignore",
+            headers=auth,
+            json={"expires_at": "2026-08-12T12:00:00+08:00"},
+        )
+        assert blocked.status_code == 422
