@@ -4,7 +4,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Response
 from starlette import status
 
-from fiscal_api.api.dependencies import StatementImportServiceDependency, formal_mutation
+from fiscal_api.api.dependencies import (
+    StatementImportReviewServiceDependency,
+    StatementImportServiceDependency,
+    formal_mutation,
+)
 from fiscal_api.api.p24_schemas import (
     StatementImportAttemptResponse,
     StatementImportEvidenceResponse,
@@ -18,6 +22,11 @@ from fiscal_api.api.p24_schemas import (
 from fiscal_api.api.p26_schemas import (
     StatementImportProviderAttemptCreate,
     StatementImportProviderAttemptResponse,
+)
+from fiscal_api.api.p27_schemas import (
+    StatementImportDraftResolutionPut,
+    StatementImportReviewResponse,
+    StatementImportValidationRunCreate,
 )
 from fiscal_api.core.security import require_authenticated
 
@@ -100,6 +109,45 @@ async def start_statement_import_provider_attempt(
     if replay:
         response.status_code = status.HTTP_200_OK
     return attempt
+
+
+@router.post(
+    "/{statement_import_id}/validation-runs",
+    response_model=StatementImportReviewResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[formal_mutation("statement_imports")],
+)
+async def start_statement_import_validation_run(
+    statement_import_id: UUID,
+    request: StatementImportValidationRunCreate,
+    response: Response,
+    service: StatementImportReviewServiceDependency,
+) -> StatementImportReviewResponse:
+    review = await service.start_run(statement_import_id, request)
+    if review.replay:
+        response.status_code = status.HTTP_200_OK
+    return review
+
+
+@router.get("/{statement_import_id}/review", response_model=StatementImportReviewResponse)
+async def get_statement_import_review(
+    statement_import_id: UUID, service: StatementImportReviewServiceDependency
+) -> StatementImportReviewResponse:
+    return await service.get_review(statement_import_id)
+
+
+@router.put(
+    "/{statement_import_id}/rows/{row_id}/draft-resolution",
+    response_model=StatementImportReviewResponse,
+    dependencies=[formal_mutation("statement_imports")],
+)
+async def put_statement_import_draft_resolution(
+    statement_import_id: UUID,
+    row_id: UUID,
+    request: StatementImportDraftResolutionPut,
+    service: StatementImportReviewServiceDependency,
+) -> StatementImportReviewResponse:
+    return await service.put_draft(statement_import_id, row_id, request)
 
 
 @router.post(

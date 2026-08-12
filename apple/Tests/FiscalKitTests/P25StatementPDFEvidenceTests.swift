@@ -8,6 +8,21 @@ import Testing
 
 @Suite("FiscalKit P25 local statement PDF evidence")
 struct FiscalKitP25StatementPDFEvidenceTests {
+  @Test("P27 review DTO remains read-only and versioned")
+  func p27ReviewDTOIsCodable() async throws {
+    let batch = UUID()
+    let row = UUID()
+    let dto = StatementImportReviewDTO(
+      batchID: batch, batchVersion: 7, status: "review_required", validationRunID: UUID(),
+      checks: [.init(checkKind: "document_formula", status: "unavailable", evidenceRowIDs: [row])],
+      candidates: [.init(id: UUID(), statementImportRowID: row, candidateKind: "provider_candidate", transactionID: nil)],
+      drafts: [.init(id: UUID(), statementImportRowID: row, resolution: "unresolved", version: 1)])
+    let encoded = try JSONEncoder().encode(dto)
+    #expect(String(decoding: encoded, as: UTF8.self).contains("review_required"))
+    let repository = RecordingStatementImportReviewRepository(dto)
+    #expect(try await repository.review() == dto)
+  }
+
   @Test("Synthetic text PDF keeps page order, source evidence, and money/date punctuation")
   func textEvidenceIsStable() async throws {
     let extractor = StatementPDFEvidenceExtractor(ocr: FixtureOCR(linesByPage: [:]))

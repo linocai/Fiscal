@@ -597,6 +597,60 @@ public actor RecordingStatementImportProviderAttemptRepository: StatementImportP
   }
 }
 
+/// P27-A read-only review DTO. It deliberately has no confirm operation, provider body, or ledger
+/// transport; the app can render deterministic checks and versioned local draft intent only.
+public struct StatementImportReviewDTO: Codable, Sendable, Equatable {
+  public let batchID: UUID
+  public let batchVersion: Int
+  public let status: String
+  public let validationRunID: UUID
+  public let checks: [Check]
+  public let candidates: [Candidate]
+  public let drafts: [Draft]
+  enum CodingKeys: String, CodingKey {
+    case batchID = "batch_id", batchVersion = "batch_version", status
+    case validationRunID = "validation_run_id", checks, candidates, drafts
+  }
+
+  public struct Check: Codable, Sendable, Equatable {
+    public let checkKind: String
+    public let status: String
+    public let evidenceRowIDs: [UUID]
+    enum CodingKeys: String, CodingKey {
+      case checkKind = "check_kind", status, evidenceRowIDs = "evidence_row_ids"
+    }
+  }
+  public struct Candidate: Codable, Sendable, Equatable {
+    public let id: UUID
+    public let statementImportRowID: UUID
+    public let candidateKind: String
+    public let transactionID: UUID?
+    enum CodingKeys: String, CodingKey {
+      case id, statementImportRowID = "statement_import_row_id"
+      case candidateKind = "candidate_kind", transactionID = "transaction_id"
+    }
+  }
+  public struct Draft: Codable, Sendable, Equatable {
+    public let id: UUID
+    public let statementImportRowID: UUID
+    public let resolution: String
+    public let version: Int
+    enum CodingKeys: String, CodingKey {
+      case id, statementImportRowID = "statement_import_row_id", resolution, version
+    }
+  }
+}
+
+public protocol StatementImportReviewRepository: Sendable {
+  func review() async throws -> StatementImportReviewDTO
+}
+
+public actor RecordingStatementImportReviewRepository: StatementImportReviewRepository {
+  private let value: StatementImportReviewDTO
+  public init(_ value: StatementImportReviewDTO) { self.value = value }
+  public func review() async throws -> StatementImportReviewDTO { value }
+}
+
 private enum StatementPDFPageRasterizer {
   static func image(
     from page: PDFPage, geometry: StatementPDFPageGeometry, maximumPixels: Int

@@ -83,6 +83,12 @@ from fiscal_api.db.models.statement_import import (
     StatementImportRow,
     StatementImportStatus,
 )
+from fiscal_api.db.models.statement_import_review import (
+    StatementImportDraftResolution,
+    StatementImportReviewCandidate,
+    StatementImportValidationCheck,
+    StatementImportValidationRun,
+)
 
 __all__ = [
     "AIExecutionPolicy",
@@ -144,6 +150,7 @@ __all__ = [
     "ReimbursementRelationRole",
     "RevisionEvent",
     "StatementImport",
+    "StatementImportDraftResolution",
     "StatementImportAttempt",
     "StatementImportAttemptKind",
     "StatementImportAttemptStatus",
@@ -154,8 +161,11 @@ __all__ = [
     "StatementImportProviderSnapshotSourceRef",
     "StatementImportResolution",
     "StatementImportResolutionKind",
+    "StatementImportReviewCandidate",
     "StatementImportRow",
     "StatementImportStatus",
+    "StatementImportValidationCheck",
+    "StatementImportValidationRun",
     "TransactionKind",
     "TransactionRevision",
     "TransactionSource",
