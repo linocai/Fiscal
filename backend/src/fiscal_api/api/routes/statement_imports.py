@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Header, Response
 from starlette import status
 
 from fiscal_api.api.dependencies import (
+    StatementImportConfirmationServiceDependency,
+    StatementImportFinalDraftServiceDependency,
     StatementImportReviewServiceDependency,
     StatementImportServiceDependency,
     formal_mutation,
@@ -22,6 +24,12 @@ from fiscal_api.api.p24_schemas import (
 from fiscal_api.api.p26_schemas import (
     StatementImportProviderAttemptCreate,
     StatementImportProviderAttemptResponse,
+)
+from fiscal_api.api.p27_confirmation_schemas import (
+    StatementImportConfirmReceipt,
+    StatementImportConfirmRequest,
+    StatementImportFinalCreateDraftPut,
+    StatementImportFinalCreateDraftResponse,
 )
 from fiscal_api.api.p27_schemas import (
     StatementImportDraftResolutionPut,
@@ -148,6 +156,44 @@ async def put_statement_import_draft_resolution(
     service: StatementImportReviewServiceDependency,
 ) -> StatementImportReviewResponse:
     return await service.put_draft(statement_import_id, row_id, request)
+
+
+@router.get(
+    "/{statement_import_id}/rows/{row_id}/final-create-draft",
+    response_model=StatementImportFinalCreateDraftResponse,
+)
+async def get_final_create_draft(
+    statement_import_id: UUID, row_id: UUID, service: StatementImportFinalDraftServiceDependency
+) -> StatementImportFinalCreateDraftResponse:
+    return await service.get(statement_import_id, row_id)
+
+
+@router.put(
+    "/{statement_import_id}/rows/{row_id}/final-create-draft",
+    response_model=StatementImportFinalCreateDraftResponse,
+    dependencies=[formal_mutation("statement_imports")],
+)
+async def put_final_create_draft(
+    statement_import_id: UUID,
+    row_id: UUID,
+    request: StatementImportFinalCreateDraftPut,
+    service: StatementImportFinalDraftServiceDependency,
+) -> StatementImportFinalCreateDraftResponse:
+    return await service.put(statement_import_id, row_id, request)
+
+
+@router.post(
+    "/{statement_import_id}/confirm",
+    response_model=StatementImportConfirmReceipt,
+    dependencies=[formal_mutation("statement_imports", "ledger", "accounts", "credit")],
+)
+async def confirm_statement_import(
+    statement_import_id: UUID,
+    request: StatementImportConfirmRequest,
+    service: StatementImportConfirmationServiceDependency,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+) -> StatementImportConfirmReceipt:
+    return await service.confirm(statement_import_id, request, idempotency_key)
 
 
 @router.post(

@@ -651,6 +651,32 @@ public actor RecordingStatementImportReviewRepository: StatementImportReviewRepo
   public func review() async throws -> StatementImportReviewDTO { value }
 }
 
+/// P27-B's typed, idempotent confirmation contract. This is a DTO seam only;
+/// it performs no ledger transport or automatic confirmation.
+public struct StatementImportConfirmationDTO: Codable, Sendable, Equatable {
+  public struct Row: Codable, Sendable, Equatable {
+    public let rowID: UUID
+    public let expectedRowVersion: Int
+    public let expectedDraftVersion: Int
+    public let expectedFinalCreateDraftVersion: Int?
+  }
+  public let expectedBatchVersion: Int
+  public let rows: [Row]
+}
+
+public protocol StatementImportConfirmationRepository: Sendable {
+  func confirm(_ request: StatementImportConfirmationDTO, idempotencyKey: UUID) async throws
+}
+
+public actor RecordingStatementImportConfirmationRepository: StatementImportConfirmationRepository {
+  private var attempts: [(StatementImportConfirmationDTO, UUID)] = []
+  public init() {}
+  public func confirm(_ request: StatementImportConfirmationDTO, idempotencyKey: UUID) async throws {
+    attempts.append((request, idempotencyKey))
+  }
+  public func recordedAttempts() -> [(StatementImportConfirmationDTO, UUID)] { attempts }
+}
+
 private enum StatementPDFPageRasterizer {
   static func image(
     from page: PDFPage, geometry: StatementPDFPageGeometry, maximumPixels: Int

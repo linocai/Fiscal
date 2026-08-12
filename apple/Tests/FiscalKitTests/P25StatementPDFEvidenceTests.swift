@@ -23,6 +23,18 @@ struct FiscalKitP25StatementPDFEvidenceTests {
     #expect(try await repository.review() == dto)
   }
 
+  @Test("P27 confirmation DTO keeps optimistic versions and one retry key")
+  func p27ConfirmationDTOIsLocalOnly() async throws {
+    let request = StatementImportConfirmationDTO(
+      expectedBatchVersion: 3,
+      rows: [.init(rowID: UUID(), expectedRowVersion: 2, expectedDraftVersion: 1,
+                   expectedFinalCreateDraftVersion: 1)])
+    let repository = RecordingStatementImportConfirmationRepository()
+    let key = UUID()
+    try await repository.confirm(request, idempotencyKey: key)
+    #expect(await repository.recordedAttempts().first?.1 == key)
+  }
+
   @Test("Synthetic text PDF keeps page order, source evidence, and money/date punctuation")
   func textEvidenceIsStable() async throws {
     let extractor = StatementPDFEvidenceExtractor(ocr: FixtureOCR(linesByPage: [:]))

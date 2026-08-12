@@ -129,6 +129,17 @@ class TransactionService:
             commit=commit,
         )
 
+    async def create_statement_import(
+        self, draft: TransactionDraft, idempotency_key: UUID, *, commit: bool = False
+    ) -> TransactionResponse:
+        """Internal-only P27 confirmation adapter; no public transaction route uses this source."""
+        return await self._create(
+            draft,
+            idempotency_key,
+            source=TransactionSource.STATEMENT_IMPORT,
+            commit=commit,
+        )
+
     async def create_cash_flow(
         self,
         draft: TransactionDraft,
