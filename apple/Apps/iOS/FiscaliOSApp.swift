@@ -46,7 +46,11 @@ struct FiscaliOSApp: App {
         let aiProposals = AIProposalModel(repository: RemoteAIProposalRepository(transport: transport), transactions: transactions, reporting: reporting, cashFlow: cashFlow)
         let reconciliation = ReconciliationModel(repository: RemoteReconciliationRepository(transport: transport))
         let statementImport = StatementImportIntakeModel(repository: RemoteStatementImportIntakeRepository(transport: transport))
-        let statementReview = StatementImportReviewWorkbenchModel(repository: RemoteStatementImportReviewWorkbenchRepository(transport: transport))
+        let statementReview = StatementImportReviewWorkbenchModel(
+            repository: RemoteStatementImportReviewWorkbenchRepository(transport: transport),
+            resolutionRepository: RemoteStatementImportDraftResolutionRepository(transport: transport),
+            finalDraftRepository: RemoteStatementImportFinalCreateDraftRepository(transport: transport),
+            confirmationRepository: RemoteStatementImportConfirmationRepository(transport: transport))
         _connection = State(initialValue: ConnectionModel(client: SystemStatusClient(baseURL: baseURL, accessKeyStore: accessKeyStore)))
         _passphrase = State(initialValue: PassphraseModel(
             repository: RemoteAuthRepository(transport: transport),
