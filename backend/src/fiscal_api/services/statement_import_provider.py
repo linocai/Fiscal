@@ -8,7 +8,11 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from fiscal_api.api.p26_schemas import StatementProviderOutboundRequest, StatementProviderResult
+from fiscal_api.api.p26_schemas import (
+    StatementProviderDocument,
+    StatementProviderOutboundRequest,
+    StatementProviderResult,
+)
 from fiscal_api.core.errors import APIError
 
 
@@ -31,7 +35,9 @@ class SyntheticStatementImportProvider:
         # Intentional no-op parser: P26 validates transport, snapshots, and source references.
         # P27 owns turning parsed candidates into import rows or ledger actions.
         del request
-        return StatementProviderResult(document={"status": "synthetic"}, candidates=[])
+        return StatementProviderResult(
+            document=StatementProviderDocument(status="synthetic"), candidates=[]
+        )
 
 
 def unavailable_provider_error() -> APIError:
