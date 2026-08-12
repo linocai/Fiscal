@@ -1,6 +1,6 @@
-# P24-A · 导入与隐私基础（后端垂直切片）
+# P24-A/B · 导入基础与脱敏本地证据包（后端垂直切片）
 
-状态：**Automated Verified**（后端 P24-A）；未部署，未进行真实 PDF、Provider 或设备验收。
+状态：**Automated Verified**（后端 P24-A/B）；未部署，未进行真实 PDF、Provider 或设备验收。
 
 ## 实现边界
 
@@ -21,3 +21,10 @@
 
 - 以同一个隔离 PostgreSQL 环境执行的全量后端回归在既有 `tests/test_p10_api_postgres.py::test_p10_filter_bulk_and_csv_api` 停于 `account_not_found`；该失败发生于 P10 创建账户后写 transaction，涉及文件不在 P24-A diff 内。P24 定向门全部通过，未为该 Plan 外回归修改领域账本。
 - P24-A 仍不代表 P24 phase 结束：P25 需实现本地 PDFKit/Vision 提取、临时文件清理与授权前预览；真实 PDF、Provider、生产和设备验收均未执行。
+
+## P24-B 实现与自动验证（2026-08-12）
+
+- Alembic head：`20260812_0025`。`POST /api/v1/statement-imports/{id}/evidence` 只接受严格 JSON page/row 包（页型、脱敏文本、归一化坐标）；schema 无 PDF、字节或图像字段。
+- 写入以 batch `expected_version` 和 active local-extraction `attempt_id` 同时守卫。成功时同一事务写入既有 `statement_import_pages`/`rows`，attempt 标记 `succeeded`、batch 进入 `review_required`，且只发出 `statement_imports` revision scope。相同 package 重放无重复写入且不增加 revision。
+- 服务端确定性拒绝完整账号/卡号和带值姓名、地址、客户号等显式敏感字段；operation log 只保留 UUID、attempt 序号、页/行计数和稳定 error code，不写显示名或正文。Archive 覆盖 pages/rows；断言其字段不含 PDF/image，且零 transaction/posting。
+- 本机隔离 PostgreSQL 14.22：`20260812_0025 → 20260812_0024 → head`，再执行 P22+P24 定向测试 → **5 passed**（仅既有 TestClient deprecation warning）；临时数据库已删除。Ruff/Pyright 均通过。

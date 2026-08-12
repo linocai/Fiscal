@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
 
 class P24Model(BaseModel):
@@ -24,6 +24,17 @@ ImportStatus = Literal[
     "abandoned",
 ]
 AttemptStatus = Literal["started", "succeeded", "failed", "abandoned"]
+EvidencePageKind = Literal["text", "scanned_image", "mixed", "unsupported"]
+
+
+def _empty_bounding_boxes() -> list[StatementImportBoundingBox]:
+    return []
+
+
+def _empty_evidence_rows() -> list[StatementImportEvidenceRow]:
+    return []
+
+
 ImportErrorCode = Literal[
     "client_extraction_failed",
     "document_unavailable",
@@ -55,6 +66,45 @@ class StatementImportFailure(StatementImportVersionRequest):
     error_code: ImportErrorCode
 
 
+class StatementImportBoundingBox(P24Model):
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    width: float = Field(gt=0, le=1)
+    height: float = Field(gt=0, le=1)
+
+    @model_validator(mode="after")
+    def stays_within_page(self) -> StatementImportBoundingBox:
+        if self.x + self.width > 1 or self.y + self.height > 1:
+            raise ValueError("bounding_box must stay within the normalized page")
+        return self
+
+
+class StatementImportEvidencePage(P24Model):
+    page_number: Annotated[StrictInt, Field(ge=1, le=10_000)]
+    source_kind: EvidencePageKind
+    evidence_text_masked: str | None = Field(default=None, max_length=20_000)
+    bounding_boxes: list[StatementImportBoundingBox] = Field(
+        default_factory=_empty_bounding_boxes, max_length=2_000
+    )
+
+
+class StatementImportEvidenceRow(P24Model):
+    row_number: Annotated[StrictInt, Field(ge=1, le=100_000)]
+    page_number: Annotated[StrictInt, Field(ge=1, le=10_000)]
+    evidence_text_masked: str = Field(min_length=1, max_length=20_000)
+    bounding_box: StatementImportBoundingBox
+
+
+class StatementImportEvidenceSubmission(StatementImportVersionRequest):
+    """A redacted local-extraction result. It deliberately has no PDF/image fields."""
+
+    attempt_id: UUID
+    pages: list[StatementImportEvidencePage] = Field(min_length=1, max_length=10_000)
+    rows: list[StatementImportEvidenceRow] = Field(
+        default_factory=_empty_evidence_rows, max_length=100_000
+    )
+
+
 class StatementImportAttemptResponse(P24Model):
     id: UUID
     attempt_number: int
@@ -83,4 +133,11 @@ class StatementImportResponse(P24Model):
 
 
 class StatementImportRegistrationResponse(StatementImportResponse):
+    duplicate: bool
+
+
+class StatementImportEvidenceResponse(StatementImportResponse):
+    attempt_id: UUID
+    evidence_sha256: str
+    row_count: int
     duplicate: bool

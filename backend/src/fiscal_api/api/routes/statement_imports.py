@@ -6,6 +6,8 @@ from starlette import status
 from fiscal_api.api.dependencies import StatementImportServiceDependency, formal_mutation
 from fiscal_api.api.p24_schemas import (
     StatementImportAttemptResponse,
+    StatementImportEvidenceResponse,
+    StatementImportEvidenceSubmission,
     StatementImportFailure,
     StatementImportRegister,
     StatementImportRegistrationResponse,
@@ -59,6 +61,19 @@ async def start_statement_import_attempt(
     _batch, attempt = await service.start_attempt(statement_import_id, request)
     response.headers["X-Fiscal-Statement-Import-Version"] = str(_batch.version)
     return attempt
+
+
+@router.post(
+    "/{statement_import_id}/evidence",
+    response_model=StatementImportEvidenceResponse,
+    dependencies=[formal_mutation("statement_imports")],
+)
+async def submit_statement_import_evidence(
+    statement_import_id: UUID,
+    request: StatementImportEvidenceSubmission,
+    service: StatementImportServiceDependency,
+) -> StatementImportEvidenceResponse:
+    return await service.submit_evidence(statement_import_id, request)
 
 
 @router.post(

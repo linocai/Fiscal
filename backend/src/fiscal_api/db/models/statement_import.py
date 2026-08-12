@@ -278,6 +278,7 @@ class StatementImportAttempt(Base):
     input_page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     input_token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    evidence_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
@@ -338,7 +339,8 @@ class StatementImportOperation(Base):
     __tablename__ = "statement_import_operations"
     __table_args__ = (
         CheckConstraint(
-            "operation IN ('registered','attempt_started','attempt_failed','abandoned')",
+            "operation IN ('registered','attempt_started','evidence_received',"
+            "'attempt_failed','abandoned')",
             name="valid_operation",
         ),
         CheckConstraint("char_length(error_code) BETWEEN 1 AND 64", name="error_code_length"),

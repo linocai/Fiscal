@@ -48,7 +48,36 @@ def _document_payload(*, digest: str | None = None) -> dict[str, object]:
         "byte_size": 1234,
         "page_count": 2,
         "mime_type": "application/pdf",
-        "display_name": "sensitive-holder-1234567890123456.pdf",
+        "display_name": "private-fixture-name.pdf",
+    }
+
+
+def _evidence_payload(*, attempt_id: str, expected_version: int) -> dict[str, object]:
+    return {
+        "attempt_id": attempt_id,
+        "expected_version": expected_version,
+        "pages": [
+            {
+                "page_number": 1,
+                "source_kind": "text",
+                "evidence_text_masked": "2026-08-12 Synthetic market 18.50",
+                "bounding_boxes": [{"x": 0.1, "y": 0.1, "width": 0.3, "height": 0.1}],
+            },
+            {
+                "page_number": 2,
+                "source_kind": "unsupported",
+                "evidence_text_masked": None,
+                "bounding_boxes": [],
+            },
+        ],
+        "rows": [
+            {
+                "row_number": 1,
+                "page_number": 1,
+                "evidence_text_masked": "2026-08-12 Synthetic market 18.50",
+                "bounding_box": {"x": 0.1, "y": 0.1, "width": 0.3, "height": 0.1},
+            }
+        ],
     }
 
 
@@ -126,8 +155,66 @@ def test_p24_register_duplicate_failure_retry_abandon_is_ledger_isolated(
 
     assert asyncio.run(_ledger_counts()) == (0, 0)
     captured = capsys.readouterr().out
-    assert "sensitive-holder-1234567890123456.pdf" not in captured
-    assert "1234567890123456" not in captured
+    assert "private-fixture-name.pdf" not in captured
+
+
+def test_p24_redacted_evidence_is_atomic_idempotent_and_revision_scoped(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    auth = {"Authorization": "Bearer p24-token"}
+    assert asyncio.run(_ledger_counts()) == (0, 0)
+    assert "4111" not in capsys.readouterr().out
+    with _client() as client:
+        baseline = client.get("/api/v1/data-revision", headers=auth).json()["revision"]
+        created = client.post(
+            "/api/v1/statement-imports",
+            headers=auth,
+            json=_document_payload(digest="b" * 64),
+        )
+        assert created.status_code == 201, created.text
+        batch = created.json()
+        started = client.post(
+            f"/api/v1/statement-imports/{batch['id']}/attempts",
+            headers=auth,
+            json={"expected_version": batch["version"]},
+        )
+        assert started.status_code == 200, started.text
+        evidence = _evidence_payload(
+            attempt_id=started.json()["id"],
+            expected_version=int(started.headers["X-Fiscal-Statement-Import-Version"]),
+        )
+        accepted = client.post(
+            f"/api/v1/statement-imports/{batch['id']}/evidence", headers=auth, json=evidence
+        )
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["status"] == "review_required"
+        assert accepted.json()["page_count"] == 2
+        assert accepted.json()["row_count"] == 1
+        assert accepted.json()["duplicate"] is False
+        assert accepted.headers["X-Fiscal-Data-Revision"] == str(baseline + 3)
+        assert accepted.headers["X-Fiscal-Affected-Scopes"] == "statement_imports"
+
+        replay = client.post(
+            f"/api/v1/statement-imports/{batch['id']}/evidence", headers=auth, json=evidence
+        )
+        assert replay.status_code == 200, replay.text
+        assert replay.json()["duplicate"] is True
+        assert replay.json()["evidence_sha256"] == accepted.json()["evidence_sha256"]
+        assert "X-Fiscal-Data-Revision" not in replay.headers
+
+        unredacted = _evidence_payload(
+            attempt_id=uuid4().hex,
+            expected_version=accepted.json()["version"],
+        )
+        unredacted["pages"][0]["evidence_text_masked"] = "Card Number: 4111 1111 1111 1111"  # type: ignore[index]
+        rejected = client.post(
+            f"/api/v1/statement-imports/{batch['id']}/evidence", headers=auth, json=unredacted
+        )
+        assert rejected.status_code == 422
+        assert rejected.json()["error"]["code"] == "statement_import_evidence_not_redacted"
+        assert "4111" not in rejected.text
+
+    assert asyncio.run(_ledger_counts()) == (0, 0)
 
 
 def test_p24_archive_round_trip_preserves_import_relationships_without_pdf_bytes(
@@ -145,15 +232,15 @@ def test_p24_archive_round_trip_preserves_import_relationships_without_pdf_bytes
             json={"expected_version": batch["version"]},
         )
         assert started.status_code == 200, started.text
-        failed = client.post(
-            f"/api/v1/statement-imports/{batch['id']}/fail",
+        accepted = client.post(
+            f"/api/v1/statement-imports/{batch['id']}/evidence",
             headers=auth,
-            json={
-                "expected_version": int(started.headers["X-Fiscal-Statement-Import-Version"]),
-                "error_code": "document_invalid",
-            },
+            json=_evidence_payload(
+                attempt_id=started.json()["id"],
+                expected_version=int(started.headers["X-Fiscal-Statement-Import-Version"]),
+            ),
         )
-        assert failed.status_code == 200, failed.text
+        assert accepted.status_code == 200, accepted.text
 
     async def export_open() -> tuple[dict[str, object], dict[str, object]]:
         password = "p24-test-password-" + uuid4().hex
@@ -169,10 +256,18 @@ def test_p24_archive_round_trip_preserves_import_relationships_without_pdf_bytes
 
     manifest, payload = asyncio.run(export_open())
     assert manifest["entity_counts"]["statement_imports"] == 1
+    assert manifest["entity_counts"]["statement_import_pages"] == 2
+    assert manifest["entity_counts"]["statement_import_rows"] == 1
     assert manifest["entity_counts"]["statement_import_attempts"] == 1
     assert manifest["entity_counts"]["statement_import_operations"] == 3
     import_fields = set(payload["entities"]["statement_imports"][0])
     assert not {"pdf_bytes", "raw_pdf", "document_bytes"} & import_fields
+    assert all(
+        "image" not in field and "pdf" not in field
+        for entity in ("statement_import_pages", "statement_import_rows")
+        for field in payload["entities"][entity][0]
+    )
+    assert "1234567890123456" not in str(payload)
     assert ArchiveService.dry_run_report(manifest, payload)["relationship_errors"] == 0
 
     async def assert_operation_log() -> None:
@@ -189,8 +284,7 @@ def test_p24_archive_round_trip_preserves_import_relationships_without_pdf_bytes
                     ).all()
                 )
                 assert len(operations) == 3
-                assert all("sensitive-holder" not in str(item.details) for item in operations)
-                assert all("1234567890123456" not in str(item.details) for item in operations)
+                assert all("private-fixture-name" not in str(item.details) for item in operations)
         finally:
             await engine.dispose()
 
@@ -242,6 +336,14 @@ def test_p24_archive_round_trip_preserves_import_relationships_without_pdf_bytes
                         await connection.scalar(
                             text("SELECT count(*) FROM statement_import_attempts")
                         )
+                        == 1
+                    )
+                    assert (
+                        await connection.scalar(text("SELECT count(*) FROM statement_import_pages"))
+                        == 2
+                    )
+                    assert (
+                        await connection.scalar(text("SELECT count(*) FROM statement_import_rows"))
                         == 1
                     )
                     assert (

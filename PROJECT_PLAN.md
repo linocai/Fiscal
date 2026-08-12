@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 控制面版本：v1.4 施工计划 ｜ 更新：2026-08-12 ｜ 状态：v1.3.0/P20–P23 已发布；P24-A 后端基础（`1d037bb`）和受限 P25-A Apple 本地提取（`fbf3ea3`）已 Automated Verified；P24 整期、完整 P25–P29 均未完成、未部署。本文件仅保存当前目标、稳定决定、阶段门和下一步。详细产品/契约记录见 [docs/BACKLOG-v1.4-v1.5.md](docs/BACKLOG-v1.4-v1.5.md)；实施证据只写入 `docs/qa/p24` 至 `docs/qa/p29`。
+> 控制面版本：v1.4 施工计划 ｜ 更新：2026-08-12 ｜ 状态：v1.3.0/P20–P23 已发布；P24-A/B 和受限 P25-A/B 已 Automated Verified；P24 整期、完整 P25–P29 均未完成、未部署。本文件仅保存当前目标、稳定决定、阶段门和下一步。详细产品/契约记录见 [docs/BACKLOG-v1.4-v1.5.md](docs/BACKLOG-v1.4-v1.5.md)；实施证据只写入 `docs/qa/p24` 至 `docs/qa/p29`。
 
 ## 1. 当前事实与目标
 
@@ -60,10 +60,11 @@
 - P24-A 验证：Ruff/Pyright 通过；fresh PostgreSQL `head → 20260811_0023 → head` 通过；lifecycle/hash duplicate/zero ledger+posting/Archive/revision/log redaction 定向测试 **4 passed**。完整命令、临时库清理和脱敏证据见 [P24 QA](docs/qa/p24/results.md)。
 - 已知门：全量后端回归止于既有 `tests/test_p10_api_postgres.py::test_p10_filter_bulk_and_csv_api` 的 `account_not_found`，不在 P24-A diff 内，已记录 P24 QA；它仍阻止 P24 整期和 v1.4 发布标记为全量通过。
 - P25-A：`fbf3ea3` 已 Automated Verified。Apple 本地 PDFKit/Vision 提取以合成夹具验证 `text`/`scanned_image`/`mixed`/`unsupported` 页型、行级页号/坐标、稳定错误与成功/失败/取消清理；不调用网络/Provider、不接入批次或账本。证据见 [P25 QA](docs/qa/p25/results.md)。这不代表 P24 或完整 P25 phase 完成。
-- 当前：P25-A 后评估仍必须停在 P24 已验证边界；任何批次登记、发送前预览或 Provider 对接须作为后续明确切片，且不得绕过 P24 整期门。详细字段、夹具、风险和 v1.4 DoD 见 [执行记录 §3.4–§3.9](docs/BACKLOG-v1.4-v1.5.md#34-p24--导入与隐私基础)。
+- P24-B/P25-B：本地 extractor 产生确定性脱敏 page/row package 与发送前 preview；`20260812_0025` JSON-only evidence endpoint 在 batch version+active attempt guard 下原子保存既有 pages/rows，进入 `review_required`，同包重放无重复且只发 `statement_imports` revision。Archive/fresh PG/API、Apple 108 tests、macOS/iOS builds 均通过；无 URLSession/Provider、PDF/image 上传或持久化、账本写入。证据见 [P24 QA](docs/qa/p24/results.md) 与 [P25 QA](docs/qa/p25/results.md)。
+- 当前：P24/P25 整期仍停在 review-only 证据边界；下一块须冻结 P26 Provider contract 或 P28 只读审核 UI，均不得绕过 P24 整期门。详细字段、夹具、风险和 v1.4 DoD 见 [执行记录 §3.4–§3.9](docs/BACKLOG-v1.4-v1.5.md#34-p24--导入与隐私基础)。
 - 后续：v1.5（P30–P35）仅保留在 [执行记录 §4](docs/BACKLOG-v1.4-v1.5.md#4-v15--事实展现升级)，不得插入 v1.4。预算、建议、预测、银行连接器、通用附件、多人和投资仍明确不做。
 - 每次状态替换本文件当前事实/阶段/下一步；长篇测试输出和实现过程留在对应 QA 结果或 Git，不在此追加。
 
 ## 8. Builder 下一实施块
 
-P25-A 已在 `fbf3ea3` 完成；下一动作是在不扩大 P24/P25 边界的前提下，由主 Plan 明确是否切出“已验证 P24 批次登记 + 发送前预览”的对接块。该块在获准前不得调用 Provider、持久化 PDF/页面图像、创建 ledger/posting 或宣称 P24/P25 phase 已完成。
+P24-B/P25-B 已完成；下一动作是在不扩大 P24/P25 边界的前提下，冻结 P26 Provider contract 或 P28 只读审核 UI。二者在获准前不得创建 ledger/posting，且 Provider 需用户逐批授权；不得持久化或上传 PDF/页面图像，亦不得宣称 P24/P25 phase 已完成。

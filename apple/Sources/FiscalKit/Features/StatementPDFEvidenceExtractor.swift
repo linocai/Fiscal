@@ -155,7 +155,7 @@ public struct StatementPDFPageEvidence: Sendable, Equatable {
   }
 }
 
-public enum StatementPDFPageKind: String, Sendable, Equatable {
+public enum StatementPDFPageKind: String, Codable, Sendable, Equatable {
   case text
   case scannedImage = "scanned_image"
   case mixed
@@ -176,15 +176,21 @@ public struct StatementPDFPageGeometry: Sendable, Equatable {
   public let heightPoints: Double
   public let rotationDegrees: Int
 
+  public init(widthPoints: Double, heightPoints: Double, rotationDegrees: Int) {
+    self.widthPoints = widthPoints
+    self.heightPoints = heightPoints
+    self.rotationDegrees = rotationDegrees
+  }
+
   init(page: PDFPage) {
     let box = page.bounds(for: .mediaBox)
-    widthPoints = Double(abs(box.width))
-    heightPoints = Double(abs(box.height))
-    rotationDegrees = ((page.rotation % 360) + 360) % 360
+    self.init(
+      widthPoints: Double(abs(box.width)), heightPoints: Double(abs(box.height)),
+      rotationDegrees: ((page.rotation % 360) + 360) % 360)
   }
 }
 
-public struct StatementPDFBoundingBox: Sendable, Equatable {
+public struct StatementPDFBoundingBox: Codable, Sendable, Equatable {
   /// Coordinates are normalized to the visible page with a top-left origin, which gives PDFKit
   /// and Vision evidence one stable coordinate system for later review UI.
   public let x: Double
@@ -333,6 +339,192 @@ public enum StatementPDFTemporaryWorkspace {
     defer { try? FileManager.default.removeItem(at: directory) }
     return try await operation(directory)
   }
+}
+
+/// The only cross-boundary form derived from a local statement. It deliberately carries no PDF
+/// URL, bytes, rendered image, source text, account metadata, or provider instruction.
+public struct StatementImportEvidencePackage: Codable, Sendable, Equatable {
+  public let attemptID: UUID
+  public let expectedVersion: Int
+  public let pages: [StatementImportEvidencePageDTO]
+  public let rows: [StatementImportEvidenceRowDTO]
+
+  public init(
+    attemptID: UUID, expectedVersion: Int, pages: [StatementImportEvidencePageDTO],
+    rows: [StatementImportEvidenceRowDTO]
+  ) {
+    self.attemptID = attemptID
+    self.expectedVersion = expectedVersion
+    self.pages = pages
+    self.rows = rows
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case attemptID = "attempt_id"
+    case expectedVersion = "expected_version"
+    case pages, rows
+  }
+}
+
+public struct StatementImportEvidencePageDTO: Codable, Sendable, Equatable, Identifiable {
+  public var id: Int { pageNumber }
+  public let pageNumber: Int
+  public let sourceKind: StatementPDFPageKind
+  public let evidenceTextMasked: String?
+  public let boundingBoxes: [StatementPDFBoundingBox]
+
+  public init(
+    pageNumber: Int, sourceKind: StatementPDFPageKind, evidenceTextMasked: String?,
+    boundingBoxes: [StatementPDFBoundingBox]
+  ) {
+    self.pageNumber = pageNumber
+    self.sourceKind = sourceKind
+    self.evidenceTextMasked = evidenceTextMasked
+    self.boundingBoxes = boundingBoxes
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case pageNumber = "page_number"
+    case sourceKind = "source_kind"
+    case evidenceTextMasked = "evidence_text_masked"
+    case boundingBoxes = "bounding_boxes"
+  }
+}
+
+public struct StatementImportEvidenceRowDTO: Codable, Sendable, Equatable, Identifiable {
+  public var id: Int { rowNumber }
+  public let rowNumber: Int
+  public let pageNumber: Int
+  public let evidenceTextMasked: String
+  public let boundingBox: StatementPDFBoundingBox
+
+  public init(
+    rowNumber: Int, pageNumber: Int, evidenceTextMasked: String,
+    boundingBox: StatementPDFBoundingBox
+  ) {
+    self.rowNumber = rowNumber
+    self.pageNumber = pageNumber
+    self.evidenceTextMasked = evidenceTextMasked
+    self.boundingBox = boundingBox
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case rowNumber = "row_number"
+    case pageNumber = "page_number"
+    case evidenceTextMasked = "evidence_text_masked"
+    case boundingBox = "bounding_box"
+  }
+}
+
+/// A display-ready, redacted-only local preview. UI work can render this later without ever
+/// keeping the original document alive.
+public struct StatementImportEvidencePreview: Sendable, Equatable {
+  public let pages: [StatementImportEvidencePageDTO]
+  public let rows: [StatementImportEvidenceRowDTO]
+  public let redactedFieldCount: Int
+
+  public init(
+    pages: [StatementImportEvidencePageDTO], rows: [StatementImportEvidenceRowDTO],
+    redactedFieldCount: Int
+  ) {
+    self.pages = pages
+    self.rows = rows
+    self.redactedFieldCount = redactedFieldCount
+  }
+
+  public var pageCount: Int { pages.count }
+  public var rowCount: Int { rows.count }
+}
+
+public enum StatementImportEvidencePackageError: Error, Sendable, Equatable {
+  case invalidAttemptVersion
+  case invalidPageSequence
+}
+
+/// Deterministic local redaction shared by page and row evidence. A later network adapter must
+/// send only the result of this type, never `StatementPDFDocumentEvidence` or a file URL.
+public struct StatementImportEvidencePackageBuilder: Sendable {
+  public init() {}
+
+  public func build(
+    attemptID: UUID, expectedVersion: Int, document: StatementPDFDocumentEvidence
+  ) throws -> (package: StatementImportEvidencePackage, preview: StatementImportEvidencePreview) {
+    guard expectedVersion > 0 else { throw StatementImportEvidencePackageError.invalidAttemptVersion }
+    guard document.pageCount > 0 else { throw StatementImportEvidencePackageError.invalidPageSequence }
+    let expectedPages = Array(1...document.pageCount)
+    guard document.pages.map(\.pageNumber) == expectedPages else {
+      throw StatementImportEvidencePackageError.invalidPageSequence
+    }
+    var redactedFieldCount = 0
+    var rows: [StatementImportEvidenceRowDTO] = []
+    let pages = document.pages.map { page -> StatementImportEvidencePageDTO in
+      let redactedLines = page.lines.map { line -> String in
+        let result = StatementImportEvidenceRedactor.redact(line.rawText)
+        redactedFieldCount += result.fieldCount
+        rows.append(
+          StatementImportEvidenceRowDTO(
+            rowNumber: rows.count + 1, pageNumber: page.pageNumber,
+            evidenceTextMasked: result.text, boundingBox: line.boundingBox))
+        return result.text
+      }
+      return StatementImportEvidencePageDTO(
+        pageNumber: page.pageNumber, sourceKind: page.kind,
+        evidenceTextMasked: redactedLines.isEmpty ? nil : redactedLines.joined(separator: "\n"),
+        boundingBoxes: page.lines.map(\.boundingBox))
+    }
+    let package = StatementImportEvidencePackage(
+      attemptID: attemptID, expectedVersion: expectedVersion, pages: pages, rows: rows)
+    return (package, StatementImportEvidencePreview(
+      pages: pages, rows: rows, redactedFieldCount: redactedFieldCount))
+  }
+}
+
+public enum StatementImportEvidenceRedactor {
+  private static let labelledSensitiveField = try! NSRegularExpression(
+    pattern: "(?i)(?:\\b(?:card(?:\\s*(?:number|no\\.?))?|account(?:\\s*(?:number|no\\.?))?|customer(?:\\s*(?:number|no\\.?))?|name|address)\\b|卡号|账号|客户号|姓名|地址|持卡人)\\s*(?:[:：#]|\\s)\\s*[^\\n]+")
+  private static let accountOrCardNumber = try! NSRegularExpression(
+    pattern: "(?<!\\d)(?:\\d[ -]?){9,18}\\d(?!\\d)")
+
+  public static func redact(_ source: String) -> (text: String, fieldCount: Int) {
+    let labelled = replace(labelledSensitiveField, in: source, with: "[REDACTED]")
+    let numbered = replace(accountOrCardNumber, in: labelled.text, with: "[REDACTED]")
+    return (numbered.text, labelled.count + numbered.count)
+  }
+
+  public static func containsProhibitedSensitiveValue(_ text: String) -> Bool {
+    let range = NSRange(text.startIndex..., in: text)
+    return labelledSensitiveField.firstMatch(in: text, range: range) != nil
+      || accountOrCardNumber.firstMatch(in: text, range: range) != nil
+  }
+
+  private static func replace(
+    _ expression: NSRegularExpression, in text: String, with replacement: String
+  ) -> (text: String, count: Int) {
+    let range = NSRange(text.startIndex..., in: text)
+    let count = expression.numberOfMatches(in: text, range: range)
+    return (expression.stringByReplacingMatches(in: text, range: range, withTemplate: replacement), count)
+  }
+}
+
+/// A local test seam only. It retains a redacted package in memory and performs no I/O, transport,
+/// Provider call, or source-document persistence.
+public protocol StatementImportEvidenceRepository: Sendable {
+  func recordPrepared(_ package: StatementImportEvidencePackage) async throws
+}
+
+public actor RecordingStatementImportEvidenceRepository: StatementImportEvidenceRepository {
+  private var packages: [StatementImportEvidencePackage] = []
+
+  public init() {}
+
+  public func recordPrepared(_ package: StatementImportEvidencePackage) async throws {
+    guard package.pages.map(\.pageNumber) == Array(1...package.pages.count) else {
+      throw StatementImportEvidencePackageError.invalidPageSequence
+    }
+    packages.append(package)
+  }
+
+  public func preparedPackages() -> [StatementImportEvidencePackage] { packages }
 }
 
 private enum StatementPDFPageRasterizer {

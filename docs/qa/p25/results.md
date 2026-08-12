@@ -21,3 +21,9 @@
 
 - 所有夹具均为测试运行时生成的合成 PDF，未提交、未读取真实账单。Vision 的真实 OCR 入口已编译，但真实银行版式与物理设备 OCR 验收须在用户给出受控样本及 P29 门时进行。
 - 此切片不含 P24 批次登记/发送前预览对接，也不使 P24 或完整 P25 phase 完成。
+
+## P25-B 本地脱敏包与发送前预览（2026-08-12）
+
+- `StatementImportEvidencePackageBuilder` 将页面/行文本以确定性代码脱敏，产生仅包含页号、页型、脱敏文本和归一化坐标的 Codable package，以及供未来 UI 使用的发送前 preview。完整账号/卡号及姓名、地址、客户号等标记字段替换为 `[REDACTED]`；DTO 无文件 URL、PDF bytes、图像或 Provider 数据。
+- `RecordingStatementImportEvidenceRepository` 是纯进程内、可测试 repository seam；本切片不含 URLSession、Provider、外部网络、PDF/页面图像持久化或 P28 工作台 UI。
+- macOS test → **108 tests / 20 suites passed**。合成 fixture 覆盖 preview、Codable package、脱敏及 local repository；序列化不含原卡号或 `pdf`/`image` payload。macOS 与 iOS simulator Debug build 均 **BUILD SUCCEEDED**。

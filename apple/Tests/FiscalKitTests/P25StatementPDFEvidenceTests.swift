@@ -48,6 +48,48 @@ struct FiscalKitP25StatementPDFEvidenceTests {
     #expect(evidence.pages[1].lines.map(\.source).contains(.visionOCR))
   }
 
+  @Test("Redacted evidence package is previewable, Codable, and local-repository only")
+  func redactedEvidencePackage() async throws {
+    let evidence = StatementPDFDocumentEvidence(pageCount: 2, pages: [
+      StatementPDFPageEvidence(
+        pageNumber: 1, kind: .text,
+        geometry: StatementPDFPageGeometry(widthPoints: 612, heightPoints: 792, rotationDegrees: 0),
+        lines: [
+          .init(
+            pageNumber: 1, source: .textLayer,
+            rawText: "2026-08-12 Synthetic Market 18.50", boundingBox: .init(x: 0.1, y: 0.1, width: 0.3, height: 0.1)),
+          .init(
+            pageNumber: 1, source: .textLayer,
+            rawText: "Card Number: 1234567890123456", boundingBox: .init(x: 0.1, y: 0.2, width: 0.3, height: 0.1)),
+        ]),
+      StatementPDFPageEvidence(
+        pageNumber: 2, kind: .unsupported,
+        geometry: StatementPDFPageGeometry(widthPoints: 612, heightPoints: 792, rotationDegrees: 0),
+        lines: []),
+    ])
+    let built = try StatementImportEvidencePackageBuilder().build(
+      attemptID: UUID(), expectedVersion: 2, document: evidence)
+
+    #expect(built.preview.pageCount == 2)
+    #expect(built.preview.rowCount == 2)
+    #expect(built.preview.redactedFieldCount == 1)
+    #expect(built.package.pages[1].evidenceTextMasked == nil)
+    #expect(!built.package.rows.map { $0.evidenceTextMasked }.joined().contains("1234567890123456"))
+    #expect(!built.package.rows.contains {
+      StatementImportEvidenceRedactor.containsProhibitedSensitiveValue($0.evidenceTextMasked)
+    })
+
+    let encoded = try JSONEncoder().encode(built.package)
+    let serialized = try #require(String(data: encoded, encoding: .utf8))
+    #expect(!serialized.contains("1234567890123456"))
+    #expect(!serialized.contains("pdf"))
+    #expect(!serialized.contains("image"))
+
+    let repository = RecordingStatementImportEvidenceRepository()
+    try await repository.recordPrepared(built.package)
+    #expect(await repository.preparedPackages() == [built.package])
+  }
+
   @Test("Invalid, protected, and bounded PDF input produce stable local errors")
   func stableInputErrors() async throws {
     let extractor = StatementPDFEvidenceExtractor(ocr: FixtureOCR(linesByPage: [:]))
