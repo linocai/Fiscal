@@ -226,6 +226,18 @@ struct FiscalKitP28StatementImportIntakeTests {
     #expect(await confirmations.calls() == ["preview", "confirm", "receipt"])
   }
 
+  @Test("Frozen rows cannot enter confirmation and scene cleanup never retries evidence")
+  func frozenRowsAndCleanupStayReadOnly() async throws {
+    let batchID = UUID(), rowID = UUID()
+    let workbench = WorkbenchFixture(batchID: batchID, rowID: rowID, reviewAvailable: true, resolution: "ignore_non_transaction", confirmed: true)
+    let confirmations = ConfirmationFixture(batchID: batchID, rowID: rowID, failConfirm: false)
+    let model = await MainActor.run { StatementImportReviewWorkbenchModel(repository: workbench, confirmationRepository: confirmations) }
+    #expect(!(await model.prepareConfirmation(batchID: batchID, rowIDs: [rowID])))
+    #expect(await confirmations.calls().isEmpty)
+    await model.clear()
+    #expect(await MainActor.run { model.confirmationPreview == nil && model.responseUnknownConfirmationKey == nil })
+  }
+
   private static func workbenchBody(
     batchID: UUID, rowID: UUID, batchVersion: Int, rowVersion: Int, draftVersion: Int,
     finalVersion: Int? = nil, resolution: String = "unresolved"
@@ -251,11 +263,11 @@ struct FiscalKitP28StatementImportIntakeTests {
 
 private actor WorkbenchFixture: StatementImportReviewWorkbenchRepository {
   private let batchID: UUID; private let rowID: UUID; private var recorded: [String] = []
-  private let reviewAvailable: Bool; private let resolution: String
-  init(batchID: UUID, rowID: UUID, reviewAvailable: Bool = false, resolution: String = "unresolved") { self.batchID = batchID; self.rowID = rowID; self.reviewAvailable = reviewAvailable; self.resolution = resolution }
+  private let reviewAvailable: Bool; private let resolution: String; private let confirmed: Bool
+  init(batchID: UUID, rowID: UUID, reviewAvailable: Bool = false, resolution: String = "unresolved", confirmed: Bool = false) { self.batchID = batchID; self.rowID = rowID; self.reviewAvailable = reviewAvailable; self.resolution = resolution; self.confirmed = confirmed }
   func workbench(batchID: UUID, cursor: Int, limit: Int, filters: [String: String]) async throws -> StatementImportWorkbench {
     recorded.append("workbench"); #expect(batchID == self.batchID); #expect(cursor == 0 && limit == 100 && filters.isEmpty)
-    return try JSONDecoder().decode(StatementImportWorkbench.self, from: Data("{\"batch_id\":\"\(batchID.uuidString)\",\"batch_version\":3,\"review_available\":\(reviewAvailable),\"rows\":[{\"id\":\"\(rowID.uuidString)\",\"row_number\":1,\"page_number\":1,\"row_version\":1,\"source_kind\":\"text\",\"evidence_text_masked\":\"[REDACTED] market\",\"draft\":{\"id\":\"\(UUID().uuidString)\",\"resolution\":\"\(resolution)\",\"version\":1},\"candidates\":[],\"final_create_draft_version\":null,\"is_confirmed\":false}],\"next_cursor\":null}".utf8))
+    return try JSONDecoder().decode(StatementImportWorkbench.self, from: Data("{\"batch_id\":\"\(batchID.uuidString)\",\"batch_version\":3,\"review_available\":\(reviewAvailable),\"rows\":[{\"id\":\"\(rowID.uuidString)\",\"row_number\":1,\"page_number\":1,\"row_version\":1,\"source_kind\":\"text\",\"evidence_text_masked\":\"[REDACTED] market\",\"draft\":{\"id\":\"\(UUID().uuidString)\",\"resolution\":\"\(resolution)\",\"version\":1},\"candidates\":[],\"final_create_draft_version\":null,\"is_confirmed\":\(confirmed)}],\"next_cursor\":null}".utf8))
   }
   func page(batchID: UUID, pageNumber: Int) async throws -> StatementImportWorkbenchPage {
     recorded.append("page"); #expect(batchID == self.batchID && pageNumber == 1)
