@@ -30,3 +30,8 @@
 
 - 真实账户余额输入后的零差额/非零差额 checkpoint、Attention 忽略到期与信用账期历史，需要用户选择账户及给出真实余额后验收；不得由工程人员代填。
 - P20 既有离机备份与告警演练风险仍独立存在，未由 P21 改动。
+
+## 2026-08-12 回归复核
+
+- `test_p21_checkpoint_is_derived_and_attention_is_dismissible` 的数据固定在 2026-08；测试现仅将 `fiscal_api.services.reconciliation.utc_now` 固定为 `2026-08-11T12:00:00Z`，使其固定的次日 expiry 表达原有的有效忽略契约。生产端的过期校验未改，仍拒绝 `expires_at <= utc_now()`。
+- 新鲜 PostgreSQL：P21 API/schema 定向测试 **2 passed**；完整后端 suite **256 passed**。每次验证库均在命令结束后删除。

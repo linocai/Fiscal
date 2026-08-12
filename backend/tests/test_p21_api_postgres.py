@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from os import environ
 from uuid import uuid4
 
@@ -11,8 +12,16 @@ TEST_DATABASE_URL = environ.get("FISCAL_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
 
 
-def test_p21_checkpoint_is_derived_and_attention_is_dismissible() -> None:
+def test_p21_checkpoint_is_derived_and_attention_is_dismissible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     assert TEST_DATABASE_URL is not None
+    # This fixture models an August 2026 reconciliation. Keep its expiry
+    # relative to that business clock rather than the test runner's wall time.
+    monkeypatch.setattr(
+        "fiscal_api.services.reconciliation.utc_now",
+        lambda: datetime(2026, 8, 11, 12, tzinfo=UTC),
+    )
 
     async def ready() -> None:
         return None

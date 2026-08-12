@@ -57,4 +57,4 @@ The evidence uses production views connected to an authenticated local PostgreSQ
 
 - The reported `test_p10_filter_bulk_and_csv_api` `account_not_found` blocker could not be reproduced on a newly created PostgreSQL database migrated to `head`: 12 independent runs passed. No P10 domain or API change was required.
 - P4/P5/P10/P20/P22 adjacent PostgreSQL coverage passed: **45 passed**. Every temporary database was dropped after its command.
-- A fresh full-suite fail-fast run passed P10 and first stopped at unrelated `tests/test_p21_api_postgres.py::test_p21_checkpoint_is_derived_and_attention_is_dismissible`: its fixed `expires_at` (`2026-08-12T12:00:00+08:00`) is already in the past at test time and the API correctly returns `invalid_attention_expiry` (422). This remains outside the P10 regression scope.
+- The historical P21 fixture subsequently received a test-only frozen business clock; a new fresh PostgreSQL full-suite run is now **256 passed**. No P10 production code was changed.
