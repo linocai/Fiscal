@@ -19,6 +19,7 @@ from fiscal_api.services.installments import InstallmentService
 from fiscal_api.services.reconciliation import ReconciliationService
 from fiscal_api.services.reimbursements import ReimbursementService
 from fiscal_api.services.reporting import ReportingService
+from fiscal_api.services.statement_imports import StatementImportService
 from fiscal_api.services.transactions import TransactionService
 
 
@@ -136,6 +137,10 @@ def get_access_service(
     return AccessService(session, settings)
 
 
+def get_statement_import_service(session: SessionDependency) -> StatementImportService:
+    return StatementImportService(session)
+
+
 AccountServiceDependency = Annotated[AccountService, Depends(get_account_service)]
 CategoryServiceDependency = Annotated[CategoryService, Depends(get_category_service)]
 CashFlowServiceDependency = Annotated[CashFlowService, Depends(get_cash_flow_service)]
@@ -149,3 +154,6 @@ ReconciliationServiceDependency = Annotated[
 ]
 AIServiceDependency = Annotated[AIService, Depends(get_ai_service)]
 AccessServiceDependency = Annotated[AccessService, Depends(get_access_service)]
+StatementImportServiceDependency = Annotated[
+    StatementImportService, Depends(get_statement_import_service)
+]

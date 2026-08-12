@@ -12,6 +12,7 @@ ALLOWED_SCOPES = {
     "attention",
     "reports",
     "ai",
+    "statement_imports",
 }
 READ_ONLY_POSTS = {
     "/api/v1/auth/session",

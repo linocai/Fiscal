@@ -1,0 +1,87 @@
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Response
+from starlette import status
+
+from fiscal_api.api.dependencies import StatementImportServiceDependency, formal_mutation
+from fiscal_api.api.p24_schemas import (
+    StatementImportAttemptResponse,
+    StatementImportFailure,
+    StatementImportRegister,
+    StatementImportRegistrationResponse,
+    StatementImportResponse,
+    StatementImportVersionRequest,
+)
+from fiscal_api.core.security import require_authenticated
+
+router = APIRouter(
+    prefix="/statement-imports",
+    tags=["statement-imports"],
+    dependencies=[Depends(require_authenticated)],
+)
+
+
+@router.post(
+    "",
+    response_model=StatementImportRegistrationResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[formal_mutation("statement_imports")],
+)
+async def register_statement_import(
+    request: StatementImportRegister,
+    response: Response,
+    service: StatementImportServiceDependency,
+) -> StatementImportRegistrationResponse:
+    registered, duplicate = await service.register(request)
+    if duplicate:
+        response.status_code = status.HTTP_200_OK
+    return registered
+
+
+@router.get("/{statement_import_id}", response_model=StatementImportResponse)
+async def get_statement_import(
+    statement_import_id: UUID, service: StatementImportServiceDependency
+) -> StatementImportResponse:
+    return await service.get(statement_import_id)
+
+
+@router.post(
+    "/{statement_import_id}/attempts",
+    response_model=StatementImportAttemptResponse,
+    dependencies=[formal_mutation("statement_imports")],
+)
+async def start_statement_import_attempt(
+    statement_import_id: UUID,
+    request: StatementImportVersionRequest,
+    response: Response,
+    service: StatementImportServiceDependency,
+) -> StatementImportAttemptResponse:
+    _batch, attempt = await service.start_attempt(statement_import_id, request)
+    response.headers["X-Fiscal-Statement-Import-Version"] = str(_batch.version)
+    return attempt
+
+
+@router.post(
+    "/{statement_import_id}/fail",
+    response_model=StatementImportResponse,
+    dependencies=[formal_mutation("statement_imports")],
+)
+async def fail_statement_import_attempt(
+    statement_import_id: UUID,
+    request: StatementImportFailure,
+    service: StatementImportServiceDependency,
+) -> StatementImportResponse:
+    return await service.fail_attempt(statement_import_id, request)
+
+
+@router.post(
+    "/{statement_import_id}/abandon",
+    response_model=StatementImportResponse,
+    dependencies=[formal_mutation("statement_imports")],
+)
+async def abandon_statement_import(
+    statement_import_id: UUID,
+    request: StatementImportVersionRequest,
+    service: StatementImportServiceDependency,
+) -> StatementImportResponse:
+    return await service.abandon(statement_import_id, request)

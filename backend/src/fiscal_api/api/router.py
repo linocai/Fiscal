@@ -14,6 +14,7 @@ from fiscal_api.api.routes import (
     reimbursements,
     reports,
     revision,
+    statement_imports,
     system,
     transactions,
 )
@@ -34,3 +35,4 @@ api_router.include_router(reimbursements.router)
 api_router.include_router(reports.router)
 api_router.include_router(reconciliation.router)
 api_router.include_router(revision.router)
+api_router.include_router(statement_imports.router)

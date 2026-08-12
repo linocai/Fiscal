@@ -68,6 +68,18 @@ from fiscal_api.db.models.reimbursement import (
     ReimbursementRelationRole,
 )
 from fiscal_api.db.models.revision import DataRevision
+from fiscal_api.db.models.statement_import import (
+    StatementImport,
+    StatementImportAttempt,
+    StatementImportAttemptKind,
+    StatementImportAttemptStatus,
+    StatementImportOperation,
+    StatementImportPage,
+    StatementImportResolution,
+    StatementImportResolutionKind,
+    StatementImportRow,
+    StatementImportStatus,
+)
 
 __all__ = [
     "AIExecutionPolicy",
@@ -128,6 +140,16 @@ __all__ = [
     "ReimbursementReceiptRevision",
     "ReimbursementRelationRole",
     "RevisionEvent",
+    "StatementImport",
+    "StatementImportAttempt",
+    "StatementImportAttemptKind",
+    "StatementImportAttemptStatus",
+    "StatementImportOperation",
+    "StatementImportPage",
+    "StatementImportResolution",
+    "StatementImportResolutionKind",
+    "StatementImportRow",
+    "StatementImportStatus",
     "TransactionKind",
     "TransactionRevision",
     "TransactionSource",
