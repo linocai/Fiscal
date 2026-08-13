@@ -228,7 +228,8 @@ public final class StatementImportIntakeModel {
   public enum Phase: Sendable, Equatable {
     case idle, inspecting, awaitingConsent, registering, duplicate(StatementImportDTO), extracting
     case uploading, reviewRequired(StatementImportDTO), localFailure(String), remoteFailure(String)
-    case remoteUnknown(UUID), cancelled
+    case remoteUnknown(UUID), duplicateRetryRequired(StatementImportDTO)
+    case duplicateInProgress(StatementImportDTO), cancelled
   }
 
   public private(set) var phase: Phase = .idle
@@ -237,6 +238,7 @@ public final class StatementImportIntakeModel {
   private var sourceURL: URL?
   private var package: StatementImportEvidencePackage?
   private var batch: StatementImportDTO?
+  private var activeAttemptExpectedVersion: Int?
   private var failIssued = false
   /// Incremented only for lifecycle disposal.  A cancelled upload carrying an older generation
   /// must not turn a scene transition into a best-effort remote `fail` mutation.
@@ -282,38 +284,10 @@ public final class StatementImportIntakeModel {
       try Task.checkCancellation()
       batch = registered
       if registered.duplicate == true {
-        phase = .duplicate(registered)
-        clearSource()
+        showDuplicateRecovery(registered)
         return
       }
-      let started = try await repository.startLocalExtraction(
-        batchID: registered.id, expectedVersion: registered.version)
-      try Task.checkCancellation()
-      phase = .extracting
-      let built = try await processor.redactedPackage(
-        url: sourceURL, attemptID: started.attempt.id, expectedVersion: started.expectedVersion)
-      try Task.checkCancellation()
-      package = built.0
-      preview = built.1
-      clearSource()
-      phase = .uploading
-      try Task.checkCancellation()
-      let uploaded: StatementImportEvidenceUploadDTO
-      do {
-        uploaded = try await repository.submitEvidence(batchID: registered.id, package: built.0)
-      } catch is CancellationError {
-        phase = .remoteUnknown(registered.id)
-        return
-      } catch {
-        // The server may have accepted JSON evidence before its response was lost. Never fail the
-        // attempt, reread the PDF, or auto-retry; retain only this in-memory redacted package.
-        phase = .remoteUnknown(registered.id)
-        return
-      }
-      let reviewed = StatementImportDTO(id: uploaded.id, status: uploaded.status, version: uploaded.version)
-      batch = reviewed
-      phase = .reviewRequired(reviewed)
-      package = nil
+      try await extractAndUpload(batch: registered, sourceURL: sourceURL)
     } catch is CancellationError {
       guard interruptionGeneration == nil || interruptionGeneration == self.interruptionGeneration else {
         return
@@ -322,6 +296,76 @@ public final class StatementImportIntakeModel {
     } catch {
       await handleFailure(error)
     }
+  }
+
+  private func extractAndUpload(batch registered: StatementImportDTO, sourceURL: URL) async throws {
+    let started = try await repository.startLocalExtraction(
+      batchID: registered.id, expectedVersion: registered.version)
+    activeAttemptExpectedVersion = started.expectedVersion
+    try Task.checkCancellation()
+    phase = .extracting
+    let built = try await processor.redactedPackage(
+      url: sourceURL, attemptID: started.attempt.id, expectedVersion: started.expectedVersion)
+    try Task.checkCancellation()
+    package = built.0
+    preview = built.1
+    clearSource()
+    phase = .uploading
+    try Task.checkCancellation()
+    let uploaded: StatementImportEvidenceUploadDTO
+    do {
+      uploaded = try await repository.submitEvidence(batchID: registered.id, package: built.0)
+    } catch is CancellationError {
+      activeAttemptExpectedVersion = nil
+      phase = .remoteUnknown(registered.id)
+      return
+    } catch {
+      activeAttemptExpectedVersion = nil
+      phase = .remoteUnknown(registered.id)
+      return
+    }
+    let reviewed = StatementImportDTO(id: uploaded.id, status: uploaded.status, version: uploaded.version)
+    batch = reviewed
+    activeAttemptExpectedVersion = nil
+    phase = .reviewRequired(reviewed)
+    package = nil
+  }
+
+  private func showDuplicateRecovery(_ existing: StatementImportDTO) {
+    switch existing.status {
+    case "review_required", "ready_to_confirm", "partially_confirmed":
+      clearSource(); phase = .reviewRequired(existing)
+    case "failed": phase = .duplicateRetryRequired(existing)
+    case "extracting", "parsing":
+      clearSource(); phase = .duplicateInProgress(existing)
+    default:
+      clearSource(); phase = .duplicate(existing)
+    }
+  }
+
+  /// This explicit read only refreshes the existing batch; it never starts or resends work.
+  public func recoverDuplicate() async {
+    let existing: StatementImportDTO?
+    switch phase {
+    case .duplicate(let value), .duplicateRetryRequired(let value), .duplicateInProgress(let value):
+      existing = value
+    default: existing = nil
+    }
+    guard let existing else { return }
+    do {
+      let refreshed = try await repository.batch(id: existing.id)
+      batch = refreshed
+      showDuplicateRecovery(refreshed)
+    } catch { phase = .remoteFailure("无法查询现有导入批次。") }
+  }
+
+  /// Restarting a failed duplicate is an explicit foreground action; no background retry exists.
+  public func retryFailedDuplicate() async {
+    guard case .duplicateRetryRequired(let existing) = phase, let sourceURL else { return }
+    batch = existing
+    do { try await extractAndUpload(batch: existing, sourceURL: sourceURL) }
+    catch is CancellationError { await cancelActiveAttempt() }
+    catch { await handleFailure(error) }
   }
 
   /// Starts user-approved work without blocking the view. Cancellation is retained locally and
@@ -392,6 +436,7 @@ public final class StatementImportIntakeModel {
     activeUpload?.cancel()
     activeUpload = nil
     clearSource(); metadata = nil; preview = nil; package = nil; batch = nil; failIssued = false
+    activeAttemptExpectedVersion = nil
     phase = .idle
   }
 
@@ -399,9 +444,11 @@ public final class StatementImportIntakeModel {
     guard let batch, !failIssued else { phase = .cancelled; clearSource(); return }
     failIssued = true
     clearSource()
+    let expectedVersion = activeAttemptExpectedVersion ?? batch.version
+    activeAttemptExpectedVersion = nil
     do {
       _ = try await repository.fail(
-        batchID: batch.id, expectedVersion: package?.expectedVersion ?? batch.version,
+        batchID: batch.id, expectedVersion: expectedVersion,
         code: "document_cancelled")
       phase = .cancelled
     } catch {
@@ -413,9 +460,11 @@ public final class StatementImportIntakeModel {
     guard let batch, !failIssued else { phase = .localFailure(Self.message(error)); clearSource(); return }
     failIssued = true
     clearSource()
+    let expectedVersion = activeAttemptExpectedVersion ?? batch.version
+    activeAttemptExpectedVersion = nil
     do {
       _ = try await repository.fail(
-        batchID: batch.id, expectedVersion: package?.expectedVersion ?? batch.version,
+        batchID: batch.id, expectedVersion: expectedVersion,
         code: "client_extraction_failed")
       phase = .localFailure(Self.message(error))
     } catch {
@@ -426,6 +475,7 @@ public final class StatementImportIntakeModel {
   private func reset(keepPhase: Bool) {
     activeUpload = nil
     clearSource(); metadata = nil; preview = nil; package = nil; batch = nil; failIssued = false
+    activeAttemptExpectedVersion = nil
     if !keepPhase { phase = .idle }
   }
 

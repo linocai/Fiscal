@@ -82,6 +82,45 @@ struct FiscalKitP28StatementImportIntakeTests {
     #expect(await processor.extractionCount() == 0)
   }
 
+  @Test("Local extraction failure reports the latest start version")
+  func extractionFailureUsesActiveAttemptVersion() async throws {
+    let repository = IntakeRepositoryFixture()
+    let model = await MainActor.run {
+      StatementImportIntakeModel(repository: repository, processor: FailingIntakeProcessor())
+    }
+    await model.select(url: URL(fileURLWithPath: "/private/failing.pdf"))
+    await model.consentAndUpload()
+    #expect(await repository.callNames() == ["register", "start", "fail"])
+    #expect(await repository.failExpectedVersions() == [2])
+    #expect(await MainActor.run {
+      if case .localFailure = model.phase { return true }
+      return false
+    })
+  }
+
+  @Test("Duplicate recovery is explicit and only a failed batch may restart")
+  func duplicateRecoveryUsesStatusWithoutAutomaticStart() async throws {
+    let reviewRepository = IntakeRepositoryFixture(duplicate: true, duplicateStatus: "review_required")
+    let reviewModel = await MainActor.run {
+      StatementImportIntakeModel(repository: reviewRepository, processor: IntakeProcessorFixture())
+    }
+    await reviewModel.select(url: URL(fileURLWithPath: "/private/duplicate-review.pdf"))
+    await reviewModel.consentAndUpload()
+    #expect(await reviewRepository.callNames() == ["register"])
+    #expect(await MainActor.run { if case .reviewRequired = reviewModel.phase { return true }; return false })
+
+    let failedRepository = IntakeRepositoryFixture(duplicate: true, duplicateStatus: "failed")
+    let failedModel = await MainActor.run {
+      StatementImportIntakeModel(repository: failedRepository, processor: IntakeProcessorFixture())
+    }
+    await failedModel.select(url: URL(fileURLWithPath: "/private/duplicate-failed.pdf"))
+    await failedModel.consentAndUpload()
+    #expect(await failedRepository.callNames() == ["register"])
+    #expect(await MainActor.run { if case .duplicateRetryRequired = failedModel.phase { return true }; return false })
+    await failedModel.retryFailedDuplicate()
+    #expect(await failedRepository.callNames() == ["register", "start", "evidence"])
+  }
+
   @Test("Cancel sends one failure attempt and never queues an automatic resend")
   func cancelUsesOneFailAttempt() async throws {
     let repository = IntakeRepositoryFixture(failFirstEvidence: true)
@@ -222,6 +261,8 @@ struct FiscalKitP28StatementImportIntakeTests {
     #expect(!confirmed)
     #expect(await confirmations.calls() == ["preview", "confirm"])
     #expect(await MainActor.run { model.responseUnknownConfirmationKey != nil })
+    #expect(!(await model.confirmPrepared()))
+    #expect(await confirmations.calls() == ["preview", "confirm"])
     #expect(await model.lookupConfirmationReceipt())
     #expect(await confirmations.calls() == ["preview", "confirm", "receipt"])
   }
@@ -326,21 +367,24 @@ private final class ConfirmationFlag: @unchecked Sendable {
 
 private actor IntakeRepositoryFixture: StatementImportIntakeRepository {
   private let duplicate: Bool
+  private let duplicateStatus: String
   private let missingStartVersion: Bool
   private var failFirstEvidence: Bool
   private var calls: [String] = []
   private var packages: [StatementImportEvidencePackage] = []
+  private var failVersions: [Int] = []
   private let batchID = UUID()
 
-  init(duplicate: Bool = false, missingStartVersion: Bool = false, failFirstEvidence: Bool = false) {
+  init(duplicate: Bool = false, duplicateStatus: String = "created", missingStartVersion: Bool = false, failFirstEvidence: Bool = false) {
     self.duplicate = duplicate
+    self.duplicateStatus = duplicateStatus
     self.missingStartVersion = missingStartVersion
     self.failFirstEvidence = failFirstEvidence
   }
 
   func register(_: StatementImportRegistrationRequest) async throws -> StatementImportDTO {
     calls.append("register")
-    return .init(id: batchID, status: duplicate ? "created" : "created", version: 1, duplicate: duplicate)
+    return .init(id: batchID, status: duplicate ? duplicateStatus : "created", version: 1, duplicate: duplicate)
   }
 
   func startLocalExtraction(
@@ -367,6 +411,7 @@ private actor IntakeRepositoryFixture: StatementImportIntakeRepository {
     calls.append("fail")
     #expect(batchID == self.batchID)
     #expect(expectedVersion > 0)
+    failVersions.append(expectedVersion)
     #expect(["document_cancelled", "client_extraction_failed"].contains(code))
     return .init(id: batchID, status: "failed", version: expectedVersion + 1)
   }
@@ -378,6 +423,7 @@ private actor IntakeRepositoryFixture: StatementImportIntakeRepository {
 
   func callNames() -> [String] { calls }
   func evidencePackages() -> [StatementImportEvidencePackage] { packages }
+  func failExpectedVersions() -> [Int] { failVersions }
 }
 
 private actor IntakeProcessorFixture: StatementImportLocalProcessing {
@@ -445,5 +491,18 @@ private actor InterruptibleIntakeProcessor: StatementImportLocalProcessing {
     cancelled = true
     continuation?.resume()
     continuation = nil
+  }
+}
+
+private struct FailingIntakeProcessor: StatementImportLocalProcessing {
+  func inspect(url: URL) async throws -> StatementImportLocalMetadata {
+    .init(sourceFilename: url.lastPathComponent, byteSize: 1, pageCount: 1,
+          documentSHA256: String(repeating: "b", count: 64))
+  }
+
+  func redactedPackage(
+    url _: URL, attemptID _: UUID, expectedVersion _: Int
+  ) async throws -> (StatementImportEvidencePackage, StatementImportEvidencePreview) {
+    throw StatementImportIntakeError.inaccessibleFile
   }
 }

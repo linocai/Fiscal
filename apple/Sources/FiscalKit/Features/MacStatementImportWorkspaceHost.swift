@@ -48,7 +48,13 @@ public struct MacStatementImportWorkspaceHost: View {
         Text("批次版本 \(workbench.batchVersion)").font(.caption).foregroundStyle(.secondary)
         Text("共 \(workbench.rows.count) 行").font(.caption).foregroundStyle(.secondary)
       }
-      Button("刷新") { Task { await model.reload(batchID: batchID) } }
+      Button("刷新") {
+        Task {
+          if model.responseUnknownConfirmationKey != nil {
+            await model.reloadAfterUnknownConfirmation(batchID: batchID)
+          } else { await model.reload(batchID: batchID) }
+        }
+      }
         .keyboardShortcut("r", modifiers: [.command])
         .accessibilityHint("重新读取服务器中的脱敏审核数据")
       if let error = model.error { Text(error).foregroundStyle(.orange).font(.caption) }

@@ -18,6 +18,17 @@ public struct IOSStatementImportScreen: View {
         Text("确认后仅发送固定名称、大小、页数、哈希与脱敏 JSON；不会上传 PDF、图像、路径或原文。")
         Button("同意并开始") { intake.beginConsentAndUpload() }.buttonStyle(.borderedProminent)
       case .reviewRequired(let batch): IOSStatementReviewScreen(model: review, batchID: batch.id, accounts: accounts, categories: categories)
+      case .duplicate(let batch):
+        Text("发现重复批次 \(batch.id.uuidString)；未开始提取或上传。")
+        Button("查询现有批次") { Task { await intake.recoverDuplicate() } }
+      case .duplicateRetryRequired:
+        Text("重复批次先前失败；不会自动重试。")
+        Button("查询现有批次") { Task { await intake.recoverDuplicate() } }
+        Button("明确重新开始本地提取") { Task { await intake.retryFailedDuplicate() } }
+          .buttonStyle(.borderedProminent)
+      case .duplicateInProgress:
+        Text("重复批次正在提取或解析；不会并发开始或重发。")
+        Button("查询现有批次") { Task { await intake.recoverDuplicate() } }
       case .remoteUnknown:
         Text("服务器响应未确认；不会自动重发。")
         Button("查询批次状态") { Task { await intake.queryRemoteStatus() } }
@@ -51,7 +62,7 @@ private struct IOSStatementReviewScreen: View {
         }
         if workbench.nextCursor != nil { Button("加载更多审核行") { Task { await model.loadMore() } } }
         if workbench.reviewAvailable { Button("准备确认") { Task { if await model.prepareConfirmation(batchID: batchID, rowIDs: selected) { previewPresented = true } } }.disabled(selected.isEmpty) }
-        if let error = model.error { Text(error).foregroundStyle(.orange); Button("重新加载") { Task { await model.reload(batchID: batchID) } } }
+        if let error = model.error { Text(error).foregroundStyle(.orange); Button("重新加载") { Task { if model.responseUnknownConfirmationKey != nil { await model.reloadAfterUnknownConfirmation(batchID: batchID) } else { await model.reload(batchID: batchID) } } } }
         if let receipt = model.confirmationReceipt { Text("确认收据：\(receipt.confirmedRowIDs.count) 行，\(receipt.status)") }
         if model.responseUnknownConfirmationKey != nil { Button("查询确认收据") { Task { _ = await model.lookupConfirmationReceipt() } } }
       } else { ProgressView() }

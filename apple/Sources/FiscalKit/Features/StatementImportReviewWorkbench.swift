@@ -71,6 +71,7 @@ public struct RemoteStatementImportReviewWorkbenchRepository: StatementImportRev
   public private(set) var confirmationPreview: StatementImportConfirmationPreview?
   public private(set) var confirmationReceipt: StatementImportConfirmationReceipt?
   public private(set) var responseUnknownConfirmationKey: UUID?
+  private var responseUnknownConfirmationBatchID: UUID?
   public init(
     repository: any StatementImportReviewWorkbenchRepository,
     resolutionRepository: (any StatementImportDraftResolutionRepository)? = nil,
@@ -124,6 +125,7 @@ public struct RemoteStatementImportReviewWorkbenchRepository: StatementImportRev
     }
   }
   @discardableResult public func prepareConfirmation(batchID: UUID, rowIDs: Set<UUID>) async -> Bool {
+    guard responseUnknownConfirmationKey == nil else { error = "确认响应尚未确定；请查询收据或重新加载。"; return false }
     guard !rowIDs.isEmpty, let confirmationRepository else { error = "请选择至少一条已解决且未冻结的行。"; return false }
     await reload(batchID: batchID)
     guard let workbench, workbench.reviewAvailable,
@@ -133,17 +135,38 @@ public struct RemoteStatementImportReviewWorkbenchRepository: StatementImportRev
     catch { if Self.isConflict(error) { confirmationPreview = nil; self.error = "服务器已变化，请重新选择后再确认。"; await reload(batchID: batchID, preservingError: true) } else { self.error = "无法准备确认预览。" }; return false }
   }
   @discardableResult public func confirmPrepared() async -> Bool {
-    guard let confirmationRepository, let preview = confirmationPreview else { return false }
+    guard responseUnknownConfirmationKey == nil,
+      let confirmationRepository, let preview = confirmationPreview else { return false }
     let key = UUID(); responseUnknownConfirmationKey = key
-    do { confirmationReceipt = try await confirmationRepository.confirm(batchID: preview.batchID, request: preview.request, idempotencyKey: key); confirmationPreview = nil; responseUnknownConfirmationKey = nil; await reload(batchID: preview.batchID); return true }
-    catch { if Self.isConflict(error) { confirmationPreview = nil; self.error = "服务器已变化，请重新选择后再确认。"; await reload(batchID: preview.batchID, preservingError: true) } else { self.error = "确认响应未知；不会自动重发。可显式查询收据。" }; return false }
+    responseUnknownConfirmationBatchID = preview.batchID
+    confirmationPreview = nil
+    do {
+      confirmationReceipt = try await confirmationRepository.confirm(
+        batchID: preview.batchID, request: preview.request, idempotencyKey: key)
+      responseUnknownConfirmationKey = nil; responseUnknownConfirmationBatchID = nil
+      await reload(batchID: preview.batchID); return true
+    } catch {
+      if Self.isConflict(error) {
+        responseUnknownConfirmationKey = nil; responseUnknownConfirmationBatchID = nil
+        self.error = "服务器已变化，请重新选择后再确认。"
+        await reload(batchID: preview.batchID, preservingError: true)
+      } else { self.error = "确认响应未知；不会自动重发。可显式查询收据。" }
+      return false
+    }
   }
   @discardableResult public func lookupConfirmationReceipt() async -> Bool {
-    guard let confirmationRepository, let workbench, let key = responseUnknownConfirmationKey else { return false }
-    do { confirmationReceipt = try await confirmationRepository.receipt(batchID: workbench.batchID, idempotencyKey: key); confirmationPreview = nil; responseUnknownConfirmationKey = nil; await reload(batchID: workbench.batchID); return true }
+    guard let confirmationRepository, let batchID = responseUnknownConfirmationBatchID,
+      let key = responseUnknownConfirmationKey else { return false }
+    do { confirmationReceipt = try await confirmationRepository.receipt(batchID: batchID, idempotencyKey: key); responseUnknownConfirmationKey = nil; responseUnknownConfirmationBatchID = nil; await reload(batchID: batchID); return true }
     catch { self.error = "尚未找到已持久化的确认收据。"; return false }
   }
-  public func clear() { workbench = nil; selectedRowID = nil; page = nil; error = nil; confirmationPreview = nil; confirmationReceipt = nil; responseUnknownConfirmationKey = nil }
+  /// The user may explicitly abandon an unknown receipt and reload before creating a new preview.
+  public func reloadAfterUnknownConfirmation(batchID: UUID) async {
+    confirmationPreview = nil; confirmationReceipt = nil
+    responseUnknownConfirmationKey = nil; responseUnknownConfirmationBatchID = nil
+    await reload(batchID: batchID)
+  }
+  public func clear() { workbench = nil; selectedRowID = nil; page = nil; error = nil; confirmationPreview = nil; confirmationReceipt = nil; responseUnknownConfirmationKey = nil; responseUnknownConfirmationBatchID = nil }
   private static func isConflict(_ error: Error) -> Bool {
     guard case .domain(let status, _) = error as? FiscalAPIError else { return false }
     return status == 409

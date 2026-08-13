@@ -103,8 +103,25 @@ public struct MacStatementImportIntake: View {
       }
     case .registering: ProgressView("正在登记安全元数据…")
     case .duplicate(let batch):
-      Label("发现重复文件：已有批次 \(batch.id.uuidString)。未开始提取，也未上传证据。", systemImage: "doc.on.doc")
-        .foregroundStyle(.secondary).textSelection(.enabled)
+      VStack(alignment: .leading, spacing: 10) {
+        Label("发现重复文件：已有批次 \(batch.id.uuidString)。未开始提取，也未上传证据。", systemImage: "doc.on.doc")
+          .foregroundStyle(.secondary).textSelection(.enabled)
+        Button("查询现有批次") { Task { await model.recoverDuplicate() } }
+      }
+    case .duplicateRetryRequired:
+      VStack(alignment: .leading, spacing: 10) {
+        Text("重复批次先前失败。不会自动重试或重读文件。")
+        HStack {
+          Button("查询现有批次") { Task { await model.recoverDuplicate() } }
+          Button("明确重新开始本地提取") { Task { await model.retryFailedDuplicate() } }
+            .buttonStyle(.borderedProminent)
+        }
+      }
+    case .duplicateInProgress:
+      VStack(alignment: .leading, spacing: 10) {
+        Text("重复批次正在提取或解析。不会并发开始或重发证据。")
+        Button("查询现有批次") { Task { await model.recoverDuplicate() } }
+      }
     case .extracting: ProgressView("正在本地提取与脱敏…")
     case .uploading: ProgressView("正在上传脱敏 JSON 证据…")
     case .reviewRequired(let batch):
