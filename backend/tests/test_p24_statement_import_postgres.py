@@ -451,9 +451,9 @@ def test_p24_fresh_upgrade_downgrade_reupgrade(monkeypatch: pytest.MonkeyPatch) 
 
             async def assert_legacy_filename_sanitized() -> None:
                 async with sanitized_engine.connect() as connection:
-                    assert await connection.scalar(text("SELECT display_name FROM statement_imports")) == (
-                        "statement.pdf"
-                    )
+                    assert await connection.scalar(
+                        text("SELECT display_name FROM statement_imports")
+                    ) == ("statement.pdf")
 
             asyncio.run(assert_legacy_filename_sanitized())
         finally:
