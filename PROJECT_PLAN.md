@@ -1,11 +1,11 @@
 # Fiscal · PROJECT_PLAN
 
-> 控制面版本：v1.4 施工计划 ｜ 更新：2026-08-12 ｜ 状态：v1.3.0/P20–P23 已发布；P24-A/B 和受限 P25-A/B 已 Automated Verified；P24 整期、完整 P25–P29 均未完成、未部署。本文件仅保存当前目标、稳定决定、阶段门和下一步。详细产品/契约记录见 [docs/BACKLOG-v1.4-v1.5.md](docs/BACKLOG-v1.4-v1.5.md)；实施证据只写入 `docs/qa/p24` 至 `docs/qa/p29`。
+> 控制面版本：v1.4 施工计划 ｜ 更新：2026-08-13 ｜ 状态：v1.3.0/P20–P23 已发布；P24–P29-A 已 Automated Verified 并通过独立复审，v1.4 尚未真机/生产验收、未发布。本文件仅保存当前目标、稳定决定、阶段门和下一步。详细产品/契约记录见 [docs/BACKLOG-v1.4-v1.5.md](docs/BACKLOG-v1.4-v1.5.md)；实施证据只写入 `docs/qa/p24` 至 `docs/qa/p29`。
 
 ## 1. 当前事实与目标
 
 - `v1.3.0` tag 指向 `a18b54f`；生产后端的已验证状态仍为 P23、Alembic `20260811_0023`、data revision `2`。异地备份 provider 与真实告警接收器仍是明确 carried risk。
-- `main`/`origin/main` 当前为 `fd2335c`：仅 Apple 图标包升为 `1.3.1 (22)`。这不是后端部署，**不得**据此宣称 v1.4 或 1.3.1 已生产发布。
+- 本地 `main=816d0dc`，比 `origin/main=fd2335c` 多 40 个未 push 提交；本地 schema head 为 `20260813_0029`。这些均未部署，生产仍是 P23/`20260811_0023`，**不得**据此宣称 v1.4 已生产发布。
 - v1.4 目标：把一份 CNY 银行/信用卡 PDF 转为可审核候选；用户逐行决定新建、匹配或忽略，并在最终确认后才通过既有领域服务写入正式账本。
 - v1.4 首发支持文本层 PDF 和 Apple Vision 本地 OCR 的扫描 PDF；只承诺用户实际使用的 2–3 个单账户版式。全量范围、字段和验收基线以 [v1.4 执行记录 §3](docs/BACKLOG-v1.4-v1.5.md#3-v14--pdf-智能账单导入) 为准。
 
@@ -66,9 +66,9 @@
 - P28-A：`9b77e07` 已 Verified。security-scoped temp intake 完成 hash/duplicate 与 `register → start → redacted evidence`；无 PDF/image/path/bookmark/raw name、自动重发。macOS **116/21**、P24 PG **4**、PG **266/0/0** 通过，见 [P28 QA](docs/qa/p28/results.md)。
 - P28-B：`d941eeb` / `1b0d89a`、QA `be7f7b0` 已 Verified。macOS 三栏审核仅 `review_available=true` 可写，无 run 为 evidence-only；Apple **8**、fresh PG **13/268** 通过。无 PDF/image、Provider、confirm、iOS UI 或生产。
 - P28-C：`71e6405` 已 Verified。无写 preview/receipt 与 `is_confirmed` 接入 macOS sheet；最终点击才 UUID+P27 confirm。fresh PG **14/269**、Ruff/Pyright、macOS/两端 Debug 通过，见 [P28 QA](docs/qa/p28/results.md)。P28 自动切片已绿，真机/生产仍未完成。
-- P29-A：`e56b0ea`、`d35c062`、`af96fce`、`e227d7d`、`f5a6223` 与 QA `466122a`/`e47adce` 已 Automated Verified。iOS/Kurisu 现有 Files PDF intake 在前台以临时 security-scoped workspace 完成 hash/consent 与 `register → start → masked evidence`；不持久化 PDF、CGImage、URL、bookmark、原名或原文，不建后台队列/cache。中断/背景化取消本地工作并清 source/package/preview，不自动调用 evidence/fail 或重发。
+- P29-A：`e56b0ea` 至 `f5a6223` 已 Automated Verified；Reviewer 修复 `4668036`、`4ceecbb`、`816d0dc` 与 QA `72ab96b` 经第二轮只读复审后 **0 findings**。iOS/Kurisu Files PDF intake 在前台以临时 security-scoped workspace 完成 hash/consent 与 `register → start → masked evidence`；不持久化 PDF、CGImage、URL、bookmark、原名或原文，不建后台队列/cache。中断/背景化取消本地工作并清 source/package/preview；普通提取取消/失败用 active version 精确 fail，response-unknown 只允许查询或重发同一脱敏包、绝不 fail/自动重发。
 - iOS 分步审核复用 P24–P28 API：evidence-only 不可编辑；异常/未解决优先、完整行表使用 `next_cursor`，续页版本变化拒绝合并；五种 resolution 和 final-create draft 均以新鲜版本、显式 active master IDs 处理，无默认推断。409 清空本地选择/表单并要求 Reload；preview 后才允许最终 tap 生成 UUID 并单一 confirm POST，响应未知仅可显式 receipt lookup；partial/frozen 行不可编辑或再选。Attention 只读派生 `statement_import_review` 与 `statement_import_failed`，不含文件名、金额、证据或 Provider 内容且不可忽略。
-- 自动证据：backend Ruff/Pyright 0 errors，Attention+P24/P27/P28 PostgreSQL targeted **15 passed**，fresh PG JUnit **269/0/0/0**；macOS Swift **124 tests / 21 suites** 与 macOS/iOS Simulator Debug builds 通过，详见 [P29 QA](docs/qa/p29/results.md)。无 migration、Provider、真实账单、生产、tag 或 push。工程中仍没有 LocalAuthentication/Face ID seam，因此未声称设备认证。
+- 隐私/恢复加固：`20260813_0029` 将历史和新导入的 `display_name` 固定为 `statement.pdf` 并以 DB CHECK 防回退；duplicate 按既有批次状态恢复；筛选空页安全推进 cursor；confirmation response-unknown 保留首 UUID、禁第二次 POST。自动证据：backend Ruff/Pyright 0 errors，P24/P28 fresh PG targeted **8 passed**，fresh PG JUnit **270/0/0/0**；macOS Swift **127 tests / 21 suites** 与 iOS Simulator Debug build 通过，详见 [P24 QA](docs/qa/p24/results.md)、[P28 QA](docs/qa/p28/results.md)、[P29 QA](docs/qa/p29/results.md)。无 Provider、真实账单、生产、tag 或 push。工程中仍没有 LocalAuthentication/Face ID seam，因此未声称设备认证。
 - 当前：P24–P29-A 自动门已验证，但 v1.4 仍未完成；下一门是用户受控的 Kurisu 真机合成账单、无障碍/Dynamic Type/rotation/memory 验收，随后才是用户选择的真实版式/Provider、真实受控账单与生产备份/影子/部署/守恒。任何真实文件、Provider 调用、设备安装或生产操作均需当时单独授权。
 - 后续：v1.5（P30–P35）仅保留在 [执行记录 §4](docs/BACKLOG-v1.4-v1.5.md#4-v15--事实展现升级)，不得插入 v1.4。预算、建议、预测、银行连接器、通用附件、多人和投资仍明确不做。
 - 每次状态替换本文件当前事实/阶段/下一步；长篇测试输出和实现过程留在对应 QA 结果或 Git，不在此追加。
