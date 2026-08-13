@@ -170,6 +170,10 @@ struct IOSRootView: View {
         case "operation_exception":
             morePath = [.settings]
             selection = .more
+        case "statement_import_review", "statement_import_failed":
+            morePath = [.statementImport]
+            selection = .more
+            Task { await statementImport.openExistingBatch(id: item.sourceID) }
         default:
             morePath = [.reconciliation]
             selection = .more
@@ -218,6 +222,12 @@ struct IOSRootView: View {
         case "reconciliation":
             morePath = [.reconciliation]
             selection = .more
+        case "statement-imports":
+            guard let batchID = url.pathComponents.dropFirst().first.flatMap(UUID.init(uuidString:))
+            else { return }
+            morePath = [.statementImport]
+            selection = .more
+            Task { await statementImport.openExistingBatch(id: batchID) }
         default: break
         }
     }

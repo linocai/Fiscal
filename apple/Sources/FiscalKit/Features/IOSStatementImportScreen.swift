@@ -55,10 +55,13 @@ private struct IOSStatementReviewScreen: View {
         Text(workbench.reviewAvailable ? "审核：逐行选择" : "仅有已存脱敏证据；结构化审核不可用")
         List(workbench.rows) { row in
           VStack(alignment: .leading, spacing: 7) {
-            HStack { Text("第 \(row.rowNumber) 行"); Spacer(); if row.isConfirmed { Text("已冻结").foregroundStyle(.secondary) } else if workbench.reviewAvailable { Toggle("确认", isOn: binding(row.id)).labelsHidden() } }
-            Text(row.evidenceTextMasked ?? "原件未保留，脱敏来源不可用").font(.caption)
+            HStack { Text("第 \(row.rowNumber) 行"); Spacer(); if row.isConfirmed { Text("已冻结").foregroundStyle(.secondary) } else if workbench.reviewAvailable { Toggle("确认", isOn: binding(row.id)).labelsHidden().accessibilityLabel("选择第 \(row.rowNumber) 行确认") } }
+            Text(row.evidenceTextMasked ?? "原件未保留，脱敏来源不可用")
+              .font(.caption)
+              .contentShape(.rect)
+              .onTapGesture { Task { await model.select(row) } }
             if workbench.reviewAvailable && !row.isConfirmed { actions(row) }
-          }.contentShape(.rect).onTapGesture { Task { await model.select(row) } }
+          }
         }
         if workbench.nextCursor != nil { Button("加载更多审核行") { Task { await model.loadMore() } } }
         if workbench.reviewAvailable { Button("准备确认") { Task { if await model.prepareConfirmation(batchID: batchID, rowIDs: selected) { previewPresented = true } } }.disabled(selected.isEmpty) }
@@ -77,11 +80,12 @@ private struct IOSStatementReviewScreen: View {
   }
   @ViewBuilder private func actions(_ row: StatementImportWorkbench.Row) -> some View {
     HStack {
-      Button("新建") { Task { if await model.saveResolution(rowID: row.id, resolution: .createNew) { createRow = row.id } } }
-      Button("非交易") { Task { _ = await model.saveResolution(rowID: row.id, resolution: .ignoreNonTransaction) } }
-      Menu("匹配") { ForEach(row.candidates.filter { $0.candidateKind == "existing_transaction" && $0.transactionID != nil }) { candidate in Button(candidate.transactionID!.uuidString) { Task { _ = await model.saveResolution(rowID: row.id, resolution: .matchExisting, matchedTransactionID: candidate.transactionID) } } } }
-    }
-    HStack { TextField("有意忽略原因", text: $intentionalReason); Button("有意忽略") { Task { guard !intentionalReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }; _ = await model.saveResolution(rowID: row.id, resolution: .ignoreIntentional, ignoredReason: intentionalReason) } }.disabled(intentionalReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+      Button("新建") { Task { if await model.saveResolution(rowID: row.id, resolution: .createNew) { createRow = row.id } } }.accessibilityLabel("第 \(row.rowNumber) 行，新建交易")
+      Button("非交易") { Task { _ = await model.saveResolution(rowID: row.id, resolution: .ignoreNonTransaction) } }.accessibilityLabel("第 \(row.rowNumber) 行，标记为非交易")
+      Menu("匹配") { ForEach(row.candidates.filter { $0.candidateKind == "existing_transaction" && $0.transactionID != nil }) { candidate in Button(candidate.transactionID!.uuidString) { Task { _ = await model.saveResolution(rowID: row.id, resolution: .matchExisting, matchedTransactionID: candidate.transactionID) } } } }.accessibilityLabel("第 \(row.rowNumber) 行，匹配已有交易")
+    }.buttonStyle(.borderless)
+    HStack { TextField("有意忽略原因", text: $intentionalReason).accessibilityLabel("第 \(row.rowNumber) 行，有意忽略原因"); Button("有意忽略") { Task { guard !intentionalReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }; _ = await model.saveResolution(rowID: row.id, resolution: .ignoreIntentional, ignoredReason: intentionalReason) } }.disabled(intentionalReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("第 \(row.rowNumber) 行，有意忽略") }
+      .buttonStyle(.borderless)
   }
   private var confirmationSheet: some View { VStack(alignment: .leading, spacing: 16) { Text("确认预览").font(.title3.bold()); if let preview = model.confirmationPreview { Text("选择 \(preview.counts.selected) 行；确认后将正式写入。"); Button("最终确认") { Task { _ = await model.confirmPrepared(); previewPresented = model.confirmationPreview != nil } }.buttonStyle(.borderedProminent) } else { Text("预览已失效，请重新加载。") }; Button("取消", role: .cancel) { previewPresented = false } }.padding() }
 }
@@ -90,6 +94,13 @@ private struct CreateDraftSheet: View {
   @Environment(\.dismiss) private var dismiss
   let model: StatementImportReviewWorkbenchModel; let rowID: UUID; let accounts: [AccountDTO]; let categories: [CategoryDTO]
   @State private var kind: TransactionKind?; @State private var title = ""; @State private var amount = ""; @State private var accountID: UUID?; @State private var categoryID: UUID?; @State private var occurredAt: Date?
-  var body: some View { NavigationStack { Form { Section("必须明确填写") { Picker("类型", selection: $kind) { Text("请选择").tag(TransactionKind?.none); ForEach([TransactionKind.expense, .income, .creditPurchase]) { Text($0.title).tag(Optional($0)) }; }; TextField("标题", text: $title); TextField("金额（分）", text: $amount).keyboardType(.numberPad); DatePicker("发生时间", selection: dateBinding, displayedComponents: [.date, .hourAndMinute]); Picker("账户", selection: $accountID) { Text("请选择").tag(UUID?.none); ForEach(accounts) { Text($0.name).tag(Optional($0.id)) } }; Picker("分类", selection: $categoryID) { Text("请选择").tag(UUID?.none); ForEach(categories) { Text($0.name).tag(Optional($0.id)) } } }; Text("没有默认账户、分类、金额、日期或类型；已归档项目不显示。").font(.caption) }.navigationTitle("新建最终草稿").toolbar { ToolbarItem(placement: .confirmationAction) { Button("保存") { Task { guard let kind, let accountID, let categoryID, let occurredAt, let minor = Int64(amount), minor > 0, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }; var draft = TransactionDraft(); draft.kind = kind; draft.title = title; draft.amountMinor = minor; draft.accountID = accountID; draft.categoryID = categoryID; draft.occurredAt = occurredAt; await model.saveFinalCreateDraft(rowID: rowID, transaction: draft); dismiss() } }.disabled(kind == nil || accountID == nil || categoryID == nil || occurredAt == nil || Int64(amount) == nil || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) } } } }
+  var body: some View { NavigationStack { Form { Section("必须明确填写") { Picker("类型", selection: $kind) { Text("请选择").tag(TransactionKind?.none); ForEach([TransactionKind.expense, .income, .creditPurchase]) { Text($0.title).tag(Optional($0)) }; }; TextField("标题", text: $title); amountField; DatePicker("发生时间", selection: dateBinding, displayedComponents: [.date, .hourAndMinute]); Picker("账户", selection: $accountID) { Text("请选择").tag(UUID?.none); ForEach(accounts) { Text($0.name).tag(Optional($0.id)) } }; Picker("分类", selection: $categoryID) { Text("请选择").tag(UUID?.none); ForEach(categories) { Text($0.name).tag(Optional($0.id)) } } }; Text("没有默认账户、分类、金额、日期或类型；已归档项目不显示。").font(.caption) }.navigationTitle("新建最终草稿").toolbar { ToolbarItem(placement: .confirmationAction) { Button("保存") { Task { guard let kind, let accountID, let categoryID, let occurredAt, let minor = Int64(amount), minor > 0, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }; var draft = TransactionDraft(); draft.kind = kind; draft.title = title; draft.amountMinor = minor; draft.accountID = accountID; draft.categoryID = categoryID; draft.occurredAt = occurredAt; await model.saveFinalCreateDraft(rowID: rowID, transaction: draft); dismiss() } }.disabled(kind == nil || accountID == nil || categoryID == nil || occurredAt == nil || Int64(amount) == nil || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) } } } }
+  @ViewBuilder private var amountField: some View {
+    #if os(iOS)
+      TextField("金额（分）", text: $amount).keyboardType(.numberPad)
+    #else
+      TextField("金额（分）", text: $amount)
+    #endif
+  }
   private var dateBinding: Binding<Date> { .init(get: { occurredAt ?? .now }, set: { occurredAt = $0 }) }
 }

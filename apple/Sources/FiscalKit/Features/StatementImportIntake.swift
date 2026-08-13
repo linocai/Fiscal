@@ -359,6 +359,18 @@ public final class StatementImportIntakeModel {
     } catch { phase = .remoteFailure("无法查询现有导入批次。") }
   }
 
+  /// Opens a server-known batch from Attention or a deep link. This is a read-only recovery path:
+  /// it never restarts extraction, resends evidence, invokes a provider, or confirms rows.
+  public func openExistingBatch(id: UUID) async {
+    do {
+      let existing = try await repository.batch(id: id)
+      batch = existing
+      showDuplicateRecovery(existing)
+    } catch {
+      phase = .remoteFailure("无法查询现有导入批次。")
+    }
+  }
+
   /// Restarting a failed duplicate is an explicit foreground action; no background retry exists.
   public func retryFailedDuplicate() async {
     guard case .duplicateRetryRequired(let existing) = phase, let sourceURL else { return }

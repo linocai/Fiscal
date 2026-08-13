@@ -133,6 +133,23 @@ struct FiscalKitP28StatementImportIntakeTests {
     #expect(await failedRepository.callNames() == ["register", "start", "evidence"])
   }
 
+  @Test("Attention and deep links open an existing batch with one read and no work restart")
+  func existingBatchDeepLinkIsReadOnly() async {
+    let repository = IntakeRepositoryFixture()
+    let model = await MainActor.run {
+      StatementImportIntakeModel(repository: repository, processor: IntakeProcessorFixture())
+    }
+    let batchID = UUID()
+    await model.openExistingBatch(id: batchID)
+    #expect(await repository.callNames() == ["get"])
+    #expect(await MainActor.run {
+      if case .reviewRequired(let batch) = model.phase {
+        return batch.id == batchID && model.metadata == nil && model.preview == nil
+      }
+      return false
+    })
+  }
+
   @Test("Remote-unknown cancel preserves the package and never sends a failure POST")
   func remoteUnknownCancelNeedsExplicitRecovery() async throws {
     let repository = IntakeRepositoryFixture(failFirstEvidence: true)
