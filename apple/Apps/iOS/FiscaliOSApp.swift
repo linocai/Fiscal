@@ -26,7 +26,11 @@ struct FiscaliOSApp: App {
 
     init() {
         let baseURL = APIConfiguration.baseURL()
-        let accessKeyStore = AccessKeyStore(accessGroup: "HX73DFL88G.com.linotsai.fiscal")
+        let accessKeyPolicy = APIConfiguration.iOSAccessKeyPolicy(
+            bundleIdentifier: Bundle.main.bundleIdentifier)
+        let accessKeyStore = AccessKeyStore(
+            accessGroup: accessKeyPolicy.accessGroup,
+            prefersSynchronizable: accessKeyPolicy.prefersSynchronizable)
         let revisions = DataRevisionStore()
         let transport = APITransport(baseURL: baseURL, accessKeyStore: accessKeyStore, revisionStore: revisions)
         self.transport = transport

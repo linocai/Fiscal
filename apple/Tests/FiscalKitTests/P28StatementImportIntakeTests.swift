@@ -5,6 +5,18 @@ import Testing
 
 @Suite("FiscalKit P28-A statement import intake", .serialized)
 struct FiscalKitP28StatementImportIntakeTests {
+  @Test func qaBundleCannotReadProductionAccessGroup() {
+    let production = APIConfiguration.iOSAccessKeyPolicy(
+      bundleIdentifier: "com.linotsai.fiscal")
+    #expect(production.accessGroup == "HX73DFL88G.com.linotsai.fiscal")
+    #expect(production.prefersSynchronizable)
+
+    let qa = APIConfiguration.iOSAccessKeyPolicy(
+      bundleIdentifier: "com.linotsai.fiscal.p29qa")
+    #expect(qa.accessGroup == nil)
+    #expect(!qa.prefersSynchronizable)
+  }
+
   @Test("Consent is required before any metadata API call, then only redacted JSON crosses")
   func consentAndPayloadRedline() async throws {
     let repository = IntakeRepositoryFixture()
