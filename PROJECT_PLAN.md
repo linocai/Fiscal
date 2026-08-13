@@ -1,11 +1,11 @@
 # Fiscal · PROJECT_PLAN
 
-> 控制面版本：v1.4 施工计划 ｜ 更新：2026-08-13 ｜ 状态：v1.3.0/P20–P23 已发布；P24–P29-A 已 Automated Verified/独立复审，Kurisu synthetic 主链已真机验证；真实版式/Provider、macOS 真实链路和生产仍未验收，v1.4 未发布。本文件仅保存当前目标、稳定决定、阶段门和下一步。详细产品/契约记录见 [docs/BACKLOG-v1.4-v1.5.md](docs/BACKLOG-v1.4-v1.5.md)；实施证据只写入 `docs/qa/p24` 至 `docs/qa/p29`。
+> 控制面版本：v1.4 已发布 ｜ 更新：2026-08-13 ｜ 状态：P24–P29 Automated/独立复审、Kurisu synthetic 主链、生产 `0029` 迁移和 Mac/Kurisu `1.4.0(23)` 均已验证；最终 manifest 以 same-head 部署并作为 `v1.4.0` tag 目标。真实版式/外部 Provider 仍未验证。本文件仅保存当前目标、稳定决定、阶段门和下一步。
 
 ## 1. 当前事实与目标
 
-- `v1.3.0` tag 指向 `a18b54f`；生产后端的已验证状态仍为 P23、Alembic `20260811_0023`、data revision `2`。异地备份 provider 与真实告警接收器仍是明确 carried risk。
-- 本地 `main` 已包含 P29 真机修复 `c2b9f55`，v1.4 提交尚未 push；本地 schema head 为 `20260813_0029`。这些均未部署，生产仍是 P23/`20260811_0023`，**不得**据此宣称 v1.4 已生产发布。
+- `v1.3.0` tag 指向 `a18b54f`；v1.4 产品候选 `ad956cd` 已验证，最终 manifest committed HEAD 以 same-head 部署，Alembic `20260813_0029`、data revision `2`，账本 `184/201/0 orphan` 守恒。异地备份 provider 与真实告警接收器仍是明确 carried risk。
+- `v1.4.0` 必须指向上述最终 manifest committed HEAD；`main` 与 annotated tag 只在生产 current/RELEASE/head、健康和守恒终态复核后一起 push。
 - v1.4 目标：把一份 CNY 银行/信用卡 PDF 转为可审核候选；用户逐行决定新建、匹配或忽略，并在最终确认后才通过既有领域服务写入正式账本。
 - v1.4 首发支持文本层 PDF 和 Apple Vision 本地 OCR 的扫描 PDF；只承诺用户实际使用的 2–3 个单账户版式。全量范围、字段和验收基线以 [v1.4 执行记录 §3](docs/BACKLOG-v1.4-v1.5.md#3-v14--pdf-智能账单导入) 为准。
 
@@ -70,12 +70,13 @@
 - iOS 分步审核复用 P24–P28 API：evidence-only 不可编辑；异常/未解决优先、完整行表使用 `next_cursor`，续页版本变化拒绝合并；五种 resolution 和 final-create draft 均以新鲜版本、显式 active master IDs 处理，无默认推断。409 清空本地选择/表单并要求 Reload；preview 后才允许最终 tap 生成 UUID 并单一 confirm POST，响应未知仅可显式 receipt lookup；partial/frozen 行不可编辑或再选。Attention 只读派生 `statement_import_review` 与 `statement_import_failed`，不含文件名、金额、证据或 Provider 内容且不可忽略。
 - 隐私/恢复加固：`20260813_0029` 将历史和新导入的 `display_name` 固定为 `statement.pdf` 并以 DB CHECK 防回退；duplicate 按既有批次状态恢复；筛选空页安全推进 cursor；confirmation response-unknown 保留首 UUID、禁第二次 POST。自动证据：backend Ruff/Pyright 0 errors，P24/P28 fresh PG targeted **8 passed**，fresh PG JUnit **270/0/0/0**；macOS Swift **127 tests / 21 suites** 与 iOS Simulator Debug build 通过，详见 [P24 QA](docs/qa/p24/results.md)、[P28 QA](docs/qa/p28/results.md)、[P29 QA](docs/qa/p29/results.md)。无 Provider、真实账单、生产、tag 或 push。工程中仍没有 LocalAuthentication/Face ID seam，因此未声称设备认证。
 - Kurisu synthetic physical：`0c74e0d` 隔离 QA Keychain 与正式 bundle；`c2b9f55` 修复真机 List 行内动作、Attention/批次 deep link 只读恢复、逐行动作无障碍标签，并声明 iPhone/iPad 方向。2 页全合成 fixture 已在签名 QA 包完成 Files consent、PDFKit/Vision、synthetic provider、逐行 review、单行明确 preview/confirm、freeze/receipt/Attention deep link；一次性 DB 守恒 transaction/posting/provenance/receipt=`1/1/1/1`、orphan=`0`。Dynamic Type 与 VoiceOver 启动已观察；CoreDevice 不支持远程 rotation 且 memory warning 返回设备侧 ENOENT，未伪称完成。最终 macOS **129/21**、signed iOS generic-device build 通过，详见 [P29 QA](docs/qa/p29/results.md)。
-- 当前：P24–P29-A 自动门与 Kurisu synthetic 主链已验证，但 v1.4 仍未完成；下一门是用户选择真实版式/Provider 范围、macOS+Kurisu 真实受控账单，以及另行授权的生产备份/影子/部署/守恒。完整 VoiceOver 顺序、实际手持旋转和 memory warning 仍是明确 physical QA 缺口。任何真实文件、Provider 调用或生产操作均需当时单独授权。
+- Production：verified P23 backup → fresh `0023→0029` shadow → encrypted Archive empty-target restore → financial fingerprints 通过；production `ad956cd/0029` active/ready/public，post-backup isolated restore 通过，新导入链为零且账本守恒。Mac/Kurisu `1.4.0(23)` 已安装启动，Kurisu production data revision=`2`。
+- 当前：v1.4 发布链已收口。真实版式/外部 Provider、完整 VoiceOver 顺序和 memory warning 明确 carried forward，不得从 synthetic release 推断兼容。
 - 后续：v1.5（P30–P35）仅保留在 [执行记录 §4](docs/BACKLOG-v1.4-v1.5.md#4-v15--事实展现升级)，不得插入 v1.4。预算、建议、预测、银行连接器、通用附件、多人和投资仍明确不做。
 - 每次状态替换本文件当前事实/阶段/下一步；长篇测试输出和实现过程留在对应 QA 结果或 Git，不在此追加。
 
 ## 8. Builder 下一实施块
 
-执行 **v1.4 真实版式/Provider 决策门（待用户选择）**。Kurisu synthetic 主链已经验证，不重复伪造真实兼容性；下一步由用户点名实际使用的 2–3 类账单版式，并逐批决定真实 Provider/模型及允许发送的脱敏范围。只有取得当时授权，才在受控设备完成 macOS+Kurisu 真实账单主链，再进入生产备份/影子/迁移部署。
+执行 **v1.5 规划门**：只从 [执行记录 §4](docs/BACKLOG-v1.4-v1.5.md#4-v15--事实展现升级) 选择下一块；未获用户指令前不施工。
 
-验收门：真实原件仍不得进入 Git/QA/截图/命令回显；先明确 Provider、模型、页数和发送字段，逐批 consent，验证临时文件清理、validation、逐行显式确认、receipt/Attention、财务守恒和跨端一致。补齐实际手持旋转、完整 VoiceOver 顺序和可用的 memory-pressure 观察；结果续写 [P29 QA](docs/qa/p29/results.md)。生产授权、tag 与 push 仍是独立门。
+验收门：先重新审计 v1.4 carried risks 与 v1.5 契约，再由 Planner 冻结下一实施块。真实原件与外部 Provider 后续仍逐批 consent，不得因 v1.4 已发布而默认放宽。

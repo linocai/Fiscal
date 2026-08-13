@@ -1,6 +1,6 @@
 # P29-A · iOS statement import flow
 
-状态：**Automated Verification Complete；Kurisu synthetic main chain verified**。没有真实账单、真实 Provider、生产请求、迁移、tag 或 push；物理方向、内存压力与完整 VoiceOver 朗读顺序仍按下方边界单列，不能由构建或截图替代。
+状态：**Automated / synthetic Physical Device / Production Verified；v1.4 release complete**。没有真实账单或真实 Provider 调用；物理内存压力与完整 VoiceOver 朗读顺序仍按下方边界单列，不能由构建或截图替代。
 
 - Attention 只读派生 `statement_import_review` 与 `statement_import_failed`；不返回文件名、金额、证据或 Provider 内容，且不允许忽略。
 - Kurisu/iOS More 已接入 Files PDF 选择、既有 security-scoped temporary intake、consent、masked evidence、response-unknown 显式恢复和 evidence-only review。P28-C 的 versioned resolution/final-draft/preview/confirm/receipt repositories 被注入同一 review model；不含 LocalAuthentication/Face ID。duplicate 只按已保存状态恢复：可审核批次直接进入 review，失败批次只允许用户明确 restart，处理中批次只可查询。
@@ -23,4 +23,14 @@
 - XCTest runner 在 UI 启动前由设备 `testmanagerd` session 返回 code 74；同一签名 QA App 的普通 CoreDevice 安装/启动和完整手工链路均成功，因此记录为设备测试运行器限制，不作产品通过依据。
 - 最终代码门：macOS 完整 Swift **129 tests / 21 suites**；独立 iOS generic-device Debug build 成功，`codesign --verify --deep --strict` 通过，bundle Info 含声明的三个 iPhone 方向且无 Xcode orientation warning。
 
-仍未完成：真实账单版式、真实 Provider 调用、真实 production backup/shadow/migration/deploy、macOS 真实账单链路、CoreDevice 无法投递的 memory warning，以及完整 VoiceOver 顺序观察。以上任何一项都不能由本次 synthetic/isolated 证据替代；未创建 tag、未 push。
+## v1.4 production release · 2026-08-13
+
+- 用户授权完成生产备份、影子/Archive、迁移部署、双端正式 Build 23 验收以及最终 tag/push；本轮仍未授权或发送任何真实账单到外部 Provider。
+- P23 生产基线重锚：release/schema=`a18b54f/20260811_0023`，revision/transaction/posting/orphan/account/credit-cycle/AI=`2/184/201/0/7/23/50`，P24+ 表明确 absent。新 verified pre-shadow backup 为 `fiscal-20260813T041555Z.dump`。
+- 精确候选的唯一 fresh shadow 从 verified P23 dump 升至 `20260813_0029`；迁移前后 revision、ledger、balance、credit 和 AI 指纹一致，P24–P27 新链为零基线。加密 Archive 在另一 fresh empty `0029` 目标完成 export/dry-run/apply，`relationship_errors=0`，全表/账本/余额/信用指纹一致；临时密码和 DSN 已清理。
+- 首个 `18198f4` deploy 在任何 backup/migration/switch 前被 repository-wide Ruff format gate 拒绝；机械格式化提交 `ad956cd` 经 Ruff format/check、Ruff、Pyright、默认 backend `148 passed / 122 skipped` 后，唯一 deploy 完整通过。
+- 生产 current/release=`ad956cda9e66692733a005d00983c4fd4a6ffc28`，schema=`20260813_0029`，service active、loopback ready/public live 通过。迁移后 revision/transaction/posting/orphan/account/credit-cycle/AI=`2/184/201/0/7/23/50`，所有 statement-import/confirmation/provenance 表为 0，迁移前后 ledger/balance 指纹一致。
+- post-deploy backup `fiscal-20260813T043124Z.dump` 的 isolated restore 在 2 秒内通过，验证库 residue=0。生产没有创建合成或真实 statement import、candidate、transaction 或 posting。
+- 独立 iOS/macOS Release 均为 `1.4.0 (23)`，strict code-sign verification 通过；iOS 为 Apple Development/team `HX73DFL88G`，macOS 为 Developer ID Application/team `HX73DFL88G`。Mac 正式包已备份旧包后安装并启动，显示生产实时总览/既有流水与“账单导入”入口。Kurisu 同一正式包在用户解锁后成功启动，进程存活，app data preferences 只读确认 production data revision=`2`。
+
+仍未完成且不影响本次已授权的 synthetic-first 发布范围：真实银行/信用卡版式兼容、真实外部 statement Provider、CoreDevice 无法投递的 memory warning，以及完整 VoiceOver 顺序观察。生产当前只提供已验证的本地提取/审核框架和 synthetic provider contract，不宣称真实账单可自动结构化。最终 manifest committed HEAD 必须 same-head 部署，且 annotated `v1.4.0` 只在终态复核后与 `main` 一起 push。
