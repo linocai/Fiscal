@@ -137,7 +137,6 @@ public struct MacStatementImportIntake: View {
           Button("查询批次状态") { Task { await model.queryRemoteStatus() } }
           Button("重发同一脱敏证据") { Task { await model.retryEvidence() } }
             .buttonStyle(.borderedProminent)
-          Button("取消") { Task { await model.cancel() } }
         }
       }
     case .cancelled: Label("已取消；本地临时文件已清理。", systemImage: "xmark.circle")

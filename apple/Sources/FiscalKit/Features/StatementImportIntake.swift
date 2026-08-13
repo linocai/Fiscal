@@ -414,10 +414,13 @@ public final class StatementImportIntakeModel {
   }
 
   public func cancel() async {
+    // A transport-loss response is ambiguous: a /fail could race an accepted evidence package.
+    // Keep the package and require an explicit status read or replay instead of changing remote state.
+    if case .remoteUnknown = phase { return }
     activeUpload?.cancel()
     activeUpload = nil
     switch phase {
-    case .registering, .extracting, .uploading, .remoteUnknown:
+    case .registering, .extracting, .uploading:
       if batch != nil { await cancelActiveAttempt() }
       else { phase = .cancelled; reset(keepPhase: true) }
     default:

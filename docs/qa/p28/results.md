@@ -34,3 +34,4 @@ P28-B 仅为 **Automated Verified** 的受限审核工作台，未完成完整 P
 
 - workbench 过滤分页以已扫描的源 row cursor 前进，并以 `limit + 1` 判断还有无源行；空过滤页不再访问 `selected[-1]`，也不会重复 cursor。定向 PG 覆盖 first page 无匹配、next cursor 前进、后续页匹配和终页 `null`。
 - confirmation transport response unknown 立即冻结/清除 preview，并保留首次 UUID 与 batch；再次 `confirmPrepared` 返回 false、绝不第二 POST。用户只能显式 receipt lookup，或明确 reload 后重新预览。macOS/iOS 两端刷新按该规则清除 unknown state。
+- P2 follow-up：evidence submit 的 transport/response loss 进入 `remoteUnknown` 后，Cancel 不发送 `/fail` 且保留同一内存脱敏包，用户只能显式 GET 或重发该包；scene/disappear cleanup 只清本地状态，零 fail POST。提取仍进行时的取消/本地失败继续以 start 的 active v2 发一次 fail。

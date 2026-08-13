@@ -121,8 +121,8 @@ struct FiscalKitP28StatementImportIntakeTests {
     #expect(await failedRepository.callNames() == ["register", "start", "evidence"])
   }
 
-  @Test("Cancel sends one failure attempt and never queues an automatic resend")
-  func cancelUsesOneFailAttempt() async throws {
+  @Test("Remote-unknown cancel preserves the package and never sends a failure POST")
+  func remoteUnknownCancelNeedsExplicitRecovery() async throws {
     let repository = IntakeRepositoryFixture(failFirstEvidence: true)
     let model = await MainActor.run {
       StatementImportIntakeModel(repository: repository, processor: IntakeProcessorFixture())
@@ -130,7 +130,26 @@ struct FiscalKitP28StatementImportIntakeTests {
     await model.select(url: URL(fileURLWithPath: "/private/cancel.pdf"))
     await model.consentAndUpload()
     await model.cancel()
-    #expect(await repository.callNames() == ["register", "start", "evidence", "fail"])
+    #expect(await repository.callNames() == ["register", "start", "evidence"])
+    #expect(await MainActor.run { if case .remoteUnknown = model.phase { return true }; return false })
+    await model.retryEvidence()
+    #expect(await repository.callNames() == ["register", "start", "evidence", "evidence"])
+  }
+
+  @Test("Cancelling during local extraction uses the active start version once")
+  func extractionCancelUsesActiveAttemptVersion() async throws {
+    let repository = IntakeRepositoryFixture()
+    let processor = InterruptibleIntakeProcessor()
+    let model = await MainActor.run {
+      StatementImportIntakeModel(repository: repository, processor: processor)
+    }
+    await model.select(url: URL(fileURLWithPath: "/private/cancel-extracting.pdf"))
+    await MainActor.run { model.beginConsentAndUpload() }
+    await processor.waitUntilExtractionBegins()
+    await model.cancel()
+    await processor.waitUntilCancelled()
+    #expect(await repository.callNames() == ["register", "start", "fail"])
+    #expect(await repository.failExpectedVersions() == [2])
     #expect(await MainActor.run { model.phase == .cancelled })
   }
 
