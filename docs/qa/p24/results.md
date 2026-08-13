@@ -28,3 +28,10 @@
 - 写入以 batch `expected_version` 和 active local-extraction `attempt_id` 同时守卫。成功时同一事务写入既有 `statement_import_pages`/`rows`，attempt 标记 `succeeded`、batch 进入 `review_required`，且只发出 `statement_imports` revision scope。相同 package 重放无重复写入且不增加 revision。
 - 服务端确定性拒绝完整账号/卡号和带值姓名、地址、客户号等显式敏感字段；operation log 只保留 UUID、attempt 序号、页/行计数和稳定 error code，不写显示名或正文。Archive 覆盖 pages/rows；断言其字段不含 PDF/image，且零 transaction/posting。
 - 本机隔离 PostgreSQL 14.22：`20260812_0025 → 20260812_0024 → head`，再执行 P22+P24 定向测试 → **5 passed**（仅既有 TestClient deprecation warning）；临时数据库已删除。Ruff/Pyright 均通过。
+
+## Reviewer privacy/lifecycle follow-up（2026-08-13）
+
+- Alembic head `20260813_0029` 将已存在的 `statement_imports.display_name` 重写为固定 `statement.pdf`，并加数据库 CHECK；register 忽略客户端传入的名称，因此 API response、DB 与 Archive 均不保留任意原文件名。fresh upgrade 测试先在 `0028` 插入旧名称再升至 head，断言其被清洗；Archive round-trip 也断言固定值。
+- iOS/macOS local intake 记住 start response 的 active expected version；本地提取失败或用户取消 `/fail` 使用该值（start 后 v2 的测试断言 fail=v2，服务端进入 `failed`），成功、失败、取消和 scene cleanup 均清理本地 attempt version。
+- duplicate 仅由已知状态恢复：`review_required`/`ready_to_confirm`/`partially_confirmed` 直接打开 review；`failed` 仅暴露用户明确重新开始；`extracting`/`parsing` 只显示显式查询。没有自动 start、证据重发或后台恢复。
+- 定向 fresh PostgreSQL：`tests/test_p24_statement_import_postgres.py tests/test_p28_statement_import_workbench_postgres.py` → **8 passed**；后端 full JUnit → **270 passed, 0 failures, 0 errors, 0 skipped**。Ruff/Pyright 均为 0 errors。

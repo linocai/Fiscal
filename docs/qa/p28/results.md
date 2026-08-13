@@ -29,3 +29,8 @@ P28-B 仅为 **Automated Verified** 的受限审核工作台，未完成完整 P
 - Mock/PG 覆盖：URLProtocol 断言 preview 在 final POST 前、精确 snake_case P27 body 与 UUID header、response-loss **零**自动 resend、显式 receipt lookup；P28 PG 断言 canonical request/count/unknown amount、duplicate/unresolved rejection、preview 前后 ledger/posting/provenance/operation/frozen-row 零变化、已持久化 receipt read 与 `is_confirmed`。可访问性覆盖 sheet 和选择/最终按钮；macOS 既有 Cmd-R 仅 reload，未给确认添加键盘 shortcut，窗口最小 1040×700 约束未变。
 - 验证：fresh PostgreSQL 14 `fiscal_p28c_preview`（head migration）上 P24/P27/P28 targeted → **14 passed**。fresh PostgreSQL 14 `fiscal_p28c_full2`（head migration）上全量 JUnit `pytest -q` → **269 passed, 0 failures, 0 errors, 0 skipped**。`uv run ruff check .`、`uv run pyright` → **passed / 0 errors**。`xcodebuild ... FiscalmacOS ... -only-testing:FiscalKitTests/FiscalKitP28StatementImportIntakeTests` → **10 tests passed**；完整 macOS test → **exit 0**；`FiscaliOS` generic Simulator Debug build → **BUILD SUCCEEDED**。纯 confirm DTO 保留在双 target 的既有合约文件以使 iOS 编译，iOS 没有 P28-C host、入口或 UI。
 - 红线复核：P28-C preview/receipt/Apple adapter 不读取或返回 PDF/image/path/bookmark/raw filename/evidence/provider body；不调用 provider、不会自动 confirm/retry、没有生产配置、部署或 P29 声明。P28-C 为 **Automated Verified**，并不声称完整 P28 或 P29。
+
+## Reviewer follow-up（2026-08-13）
+
+- workbench 过滤分页以已扫描的源 row cursor 前进，并以 `limit + 1` 判断还有无源行；空过滤页不再访问 `selected[-1]`，也不会重复 cursor。定向 PG 覆盖 first page 无匹配、next cursor 前进、后续页匹配和终页 `null`。
+- confirmation transport response unknown 立即冻结/清除 preview，并保留首次 UUID 与 batch；再次 `confirmPrepared` 返回 false、绝不第二 POST。用户只能显式 receipt lookup，或明确 reload 后重新预览。macOS/iOS 两端刷新按该规则清除 unknown state。
