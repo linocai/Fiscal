@@ -66,6 +66,7 @@ class StatementImport(Base):
         CheckConstraint("char_length(document_sha256) = 64", name="document_sha256_length"),
         CheckConstraint("byte_size > 0", name="byte_size_positive"),
         CheckConstraint("page_count > 0", name="page_count_positive"),
+        CheckConstraint("display_name = 'statement.pdf'", name="display_name_fixed"),
         CheckConstraint("currency = 'CNY'", name="currency_cny"),
         CheckConstraint("version >= 1", name="version_positive"),
         CheckConstraint(

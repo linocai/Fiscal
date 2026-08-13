@@ -137,6 +137,51 @@ def test_workbench_cursor_filter_and_review_projection_are_read_only() -> None:
         )
 
 
+def test_workbench_filtered_empty_page_advances_without_cursor_crash_or_loop() -> None:
+    with _client() as client:
+        provider, auth = _seed(client, row_count=2)
+        batch_id = provider["id"]
+        snapshot = asyncio.run(_snapshot(__import__("uuid").UUID(batch_id)))
+        review = client.post(
+            f"/api/v1/statement-imports/{batch_id}/validation-runs",
+            headers=auth,
+            json={
+                "expected_batch_version": provider["version"],
+                "provider_snapshot_id": str(snapshot),
+            },
+        )
+        assert review.status_code == 201, review.text
+        row_id = str(asyncio.run(_row_ids(__import__("uuid").UUID(batch_id)))[1])
+        resolved = client.put(
+            f"/api/v1/statement-imports/{batch_id}/rows/{row_id}/draft-resolution",
+            headers=auth,
+            json={
+                "expected_batch_version": review.json()["batch_version"],
+                "expected_row_version": 1,
+                "expected_resolution_version": 0,
+                "resolution": "ignore_non_transaction",
+            },
+        )
+        assert resolved.status_code == 200, resolved.text
+        filters = '{"resolution":"ignore_non_transaction"}'
+        first = client.get(
+            f"/api/v1/statement-imports/{batch_id}/review-workbench",
+            headers=auth,
+            params={"limit": 1, "filters": filters},
+        )
+        assert first.status_code == 200, first.text
+        assert first.json()["rows"] == []
+        assert first.json()["next_cursor"] == 1
+        second = client.get(
+            f"/api/v1/statement-imports/{batch_id}/review-workbench",
+            headers=auth,
+            params={"cursor": 1, "limit": 1, "filters": filters},
+        )
+        assert second.status_code == 200, second.text
+        assert [row["id"] for row in second.json()["rows"]] == [row_id]
+        assert second.json()["next_cursor"] is None
+
+
 def test_confirmation_preview_is_read_only_canonical_and_receipt_is_persisted_only() -> None:
     with _client() as client:
         batch, auth = _seed(client, row_count=2)
@@ -180,13 +225,17 @@ def test_confirmation_preview_is_read_only_canonical_and_receipt_is_persisted_on
                         int(await session.scalar(select(func.count()).select_from(Posting)) or 0),
                         int(
                             await session.scalar(
-                                select(func.count()).select_from(StatementImportTransactionProvenance)
+                                select(func.count()).select_from(
+                                    StatementImportTransactionProvenance
+                                )
                             )
                             or 0
                         ),
                         int(
                             await session.scalar(
-                                select(func.count()).select_from(StatementImportConfirmationOperation)
+                                select(func.count()).select_from(
+                                    StatementImportConfirmationOperation
+                                )
                             )
                             or 0
                         ),

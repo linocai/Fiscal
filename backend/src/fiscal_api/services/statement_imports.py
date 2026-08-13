@@ -84,7 +84,6 @@ class StatementImportService:
     async def register(
         self, request: StatementImportRegister
     ) -> tuple[StatementImportRegistrationResponse, bool]:
-        self._reject_sensitive_texts([request.display_name])
         await acquire_mutation_lock(self.session)
         existing = await self.session.scalar(
             select(StatementImport).where(
@@ -100,7 +99,9 @@ class StatementImportService:
             byte_size=request.byte_size,
             page_count=request.page_count,
             mime_type=request.mime_type,
-            display_name=request.display_name,
+            # The registration name is not an upload contract.  Never persist or echo a client
+            # filename: the fixed placeholder is the only archive/API-visible value.
+            display_name="statement.pdf",
         )
         self.session.add(item)
         await self.session.flush()

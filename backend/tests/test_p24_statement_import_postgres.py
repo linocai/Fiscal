@@ -107,6 +107,7 @@ def test_p24_register_duplicate_failure_retry_abandon_is_ledger_isolated(
         created = client.post("/api/v1/statement-imports", headers=auth, json=_document_payload())
         assert created.status_code == 201, created.text
         assert created.json()["duplicate"] is False
+        assert created.json()["display_name"] == "statement.pdf"
         assert created.headers["X-Fiscal-Data-Revision"] == str(baseline + 1)
         assert created.headers["X-Fiscal-Affected-Scopes"] == "statement_imports"
         batch = created.json()
@@ -126,6 +127,7 @@ def test_p24_register_duplicate_failure_retry_abandon_is_ledger_isolated(
         assert started.json()["attempt_number"] == 1
         assert started.json()["kind"] == "local_extraction"
         active_version = int(started.headers["X-Fiscal-Statement-Import-Version"])
+        assert active_version == 2
 
         failed = client.post(
             f"/api/v1/statement-imports/{batch['id']}/fail",
@@ -261,6 +263,7 @@ def test_p24_archive_round_trip_preserves_import_relationships_without_pdf_bytes
     assert manifest["entity_counts"]["statement_import_attempts"] == 1
     assert manifest["entity_counts"]["statement_import_operations"] == 3
     import_fields = set(payload["entities"]["statement_imports"][0])
+    assert payload["entities"]["statement_imports"][0]["display_name"] == "statement.pdf"
     assert not {"pdf_bytes", "raw_pdf", "document_bytes"} & import_fields
     assert all(
         "image" not in field and "pdf" not in field
@@ -417,6 +420,44 @@ def test_p24_fresh_upgrade_downgrade_reupgrade(monkeypatch: pytest.MonkeyPatch) 
             asyncio.run(assert_schema())
         finally:
             asyncio.run(engine.dispose())
+
+        # Upgrade an existing P28 database that still contains the formerly accepted filename.
+        # The P29 privacy migration must rewrite it before adding the fixed-name database guard.
+        command.downgrade(config, "20260812_0028")
+        legacy_engine = create_engine(fresh_url)
+        try:
+
+            async def insert_legacy_filename() -> None:
+                async with legacy_engine.begin() as connection:
+                    await connection.execute(
+                        text(
+                            """
+                            INSERT INTO statement_imports
+                            (id, document_sha256, byte_size, page_count, mime_type, display_name,
+                             currency, status, version, created_at, updated_at)
+                            VALUES (:id, :digest, 1, 1, 'application/pdf', 'legacy-private.pdf',
+                                    'CNY', 'created', 1, now(), now())
+                            """
+                        ),
+                        {"id": str(uuid4()), "digest": "f" * 64},
+                    )
+
+            asyncio.run(insert_legacy_filename())
+        finally:
+            asyncio.run(legacy_engine.dispose())
+        command.upgrade(config, "head")
+        sanitized_engine = create_engine(fresh_url)
+        try:
+
+            async def assert_legacy_filename_sanitized() -> None:
+                async with sanitized_engine.connect() as connection:
+                    assert await connection.scalar(text("SELECT display_name FROM statement_imports")) == (
+                        "statement.pdf"
+                    )
+
+            asyncio.run(assert_legacy_filename_sanitized())
+        finally:
+            asyncio.run(sanitized_engine.dispose())
     finally:
         asyncio.run(drop_database())
         monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)

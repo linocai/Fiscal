@@ -41,7 +41,7 @@ class StatementImportWorkbenchService:
         batch = await self._batch(batch_id)
         run = await self._run(batch.id)
         checks = await self._checks(run.id) if run else []
-        rows = list(
+        scanned_rows = list(
             (
                 await self.session.scalars(
                     select(StatementImportRow)
@@ -50,14 +50,18 @@ class StatementImportWorkbenchService:
                         StatementImportRow.row_number > cursor,
                     )
                     .order_by(StatementImportRow.row_number)
+                    .limit(limit + 1)
                 )
             ).all()
         )
+        has_more_source_rows = len(scanned_rows) > limit
+        rows = scanned_rows[:limit]
         projection = [await self._row(item, run.id if run else None) for item in rows]
         projection = [item for item in projection if self._matches(item, checks, filters)]
-        selected = projection[:limit]
-        # A filtered short page must not claim completion while more source rows remain.
-        next_cursor = selected[-1].row_number if len(rows) > len(selected) else None
+        selected = projection
+        # Cursor follows the final source row examined, not the final filtered row.  A filter may
+        # produce an empty page; using selected[-1] would both crash and retry cursor zero forever.
+        next_cursor = rows[-1].row_number if rows and has_more_source_rows else None
         unavailable = sum(
             1
             for item in projection
