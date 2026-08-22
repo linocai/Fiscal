@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 控制面版本：v1.5.1 ｜ 更新：2026-08-22（Asia/Shanghai）｜ 状态：**Review 已通过；macOS 发布链已获授权并执行中。**
+> 控制面版本：v1.5.1 ｜ 更新：2026-08-22（Asia/Shanghai）｜ 状态：**Review 与 P2 收口完成；macOS v1.5.1（25）已签名、换包并启动。**
 
 ## 1. 本轮目标
 
@@ -103,7 +103,7 @@
 - 版本已落为 `1.5.1 (25)`；正式 iOS 目标收窄为 iPhone 竖屏；macOS 默认窗口为 1440×900。
 - 已重新生成 Xcode 工程；macOS App target 与 iOS Simulator App target 的 Debug 短编译均通过。
 - 用户放行的首轮 Review 已完成，并发现 10 个前端行为阻断项；随后只针对这些阻断项返工，没有扩展后端或发布范围。
-- 未运行全量测试、长 UI 自动化、发布签名、打包、tag、push 或部署。
+- Build 阶段未运行全量测试或长 UI 自动化；获用户发布授权后，另行完成 Developer ID Release 构建、打包和本机换包。
 
 ## 8. Review 修复收口
 
@@ -120,6 +120,6 @@
 
 ## 9. 当前下一步
 
-- 最终 Review 无 P0/P1，允许进入发布收口；最后一个 Sheet 生命周期 P2 已在打包前修复。
-- 从干净的 v1.5.1 源码提交生成 Developer ID 签名 macOS 包，严格验签后替换 `/Applications/Fiscal.app` 并做最小启动检查。
-- 写入最终发布记录，创建 annotated `v1.5.1` Tag，并推送 `main` 与 Tag 到 `origin`；不做 Apple 公证、iOS/TestFlight 或 Backend 部署。
+- 最终 Review 无 P0/P1；最后一个 Sheet 生命周期 P2 已在打包前修复并进入源码提交 `558ec4a`。
+- Developer ID 签名的 universal macOS v1.5.1（25）包已生成并通过解包验签；`/Applications/Fiscal.app` 已换包并成功启动，旧 v1.5.0（24）保留为可恢复备份。
+- 本提交作为 annotated `v1.5.1` Tag 的发布记录，随后只推送 `main` 与 Tag 到 `origin` 并停止；Apple 公证、iOS/TestFlight 与 Backend 部署均不在本次操作范围。

@@ -1,6 +1,6 @@
 # Fiscal
 
-Fiscal is a private, single-user personal-finance application for iOS 26 and macOS 26. Its canonical CNY ledger covers accounts, credit cycles, installments, reimbursements, reports, AI/OCR capture, and manually reviewed PDF statement imports. The repository source is prepared as `v1.5.1 (25)` for the authorized macOS release chain; iOS distribution remains operator-managed. Product scope and the current stop point live in [`PROJECT_PLAN.md`](PROJECT_PLAN.md); release manifests live under [`archive/releases/`](archive/releases/).
+Fiscal is a private, single-user personal-finance application for iOS 26 and macOS 26. Its canonical CNY ledger covers accounts, credit cycles, installments, reimbursements, reports, AI/OCR capture, and manually reviewed PDF statement imports. The signed macOS `v1.5.1 (25)` release is installed locally; iOS distribution remains operator-managed. Product scope and the current stop point live in [`PROJECT_PLAN.md`](PROJECT_PLAN.md); release manifests live under [`archive/releases/`](archive/releases/).
 
 ## Repository map
 
