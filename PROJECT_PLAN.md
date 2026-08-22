@@ -1,82 +1,109 @@
 # Fiscal · PROJECT_PLAN
 
-> 控制面版本：v1.4 已发布 ｜ 更新：2026-08-13 ｜ 状态：P24–P29 Automated/独立复审、Kurisu synthetic 主链、生产 `0029` 迁移和 Mac/Kurisu `1.4.0(23)` 均已验证；最终 manifest 以 same-head 部署并作为 `v1.4.0` tag 目标。真实版式/外部 Provider 仍未验证。本文件仅保存当前目标、稳定决定、阶段门和下一步。
+> 控制面版本：v1.5.0 ｜ 更新：2026-08-22（Asia/Shanghai）｜ 状态：**v1.5.0 (24) 源码收口完成，停止在发布包生成之前。P30–P34、F0–F4 与 F5-A 的既有实现/审查证据保留；正式 iOS/macOS root 已切至 V15，旧视觉层已删除，最终离线回退源码已收敛。按用户指令不再启动长验证或追加审查；release package、签名、公证、tag/push 与生产部署均未执行。**
 
-## 1. 当前事实与目标
+## 1. 目标、边界与现状
 
-- `v1.3.0` tag 指向 `a18b54f`；v1.4 产品候选 `ad956cd` 已验证，最终 manifest committed HEAD 以 same-head 部署，Alembic `20260813_0029`、data revision `2`，账本 `184/201/0 orphan` 守恒。异地备份 provider 与真实告警接收器仍是明确 carried risk。
-- `v1.4.0` 必须指向上述最终 manifest committed HEAD；`main` 与 annotated tag 只在生产 current/RELEASE/head、健康和守恒终态复核后一起 push。
-- v1.4 目标：把一份 CNY 银行/信用卡 PDF 转为可审核候选；用户逐行决定新建、匹配或忽略，并在最终确认后才通过既有领域服务写入正式账本。
-- v1.4 首发支持文本层 PDF 和 Apple Vision 本地 OCR 的扫描 PDF；只承诺用户实际使用的 2–3 个单账户版式。全量范围、字段和验收基线以 [v1.4 执行记录 §3](docs/BACKLOG-v1.4-v1.5.md#3-v14--pdf-智能账单导入) 为准。
+- **v1.5.0 目标**：以 clean-room 方式完整替换 iOS 与 macOS 原生 SwiftUI 表现层，交付“过去 / 现在 / 已知未来”的一致事实体验；macOS 为账簿脊柱，iOS 为决策台。视觉、文案、状态语法和可访问性以 `Fiscal 前端设计启动/` 为基线；字段、金额、状态、动作、错误和接口以后端与本计划为准。
+- 交付包括 P30–P34 服务端契约、全业务的 v1.5 原生入口、商户/历史、当前快照、时间轴、月报/年报/导出及旧 View 一次性切换。P35 Widget/Spotlight 可顺延 v1.5.x（D10）。
+- 不做预算、建议、评分、预测、多币种、多人、银行连接器、通用附件、AI 财务聊天或离线写入队列；不引入 React、Tailwind、shadcn 或 Web UI。
+- v1.4.0 已发布；其旧 View 不是视觉或交互模板。当前工作区已有用户的暂存目录迁移，施工不得重置、覆盖、混入或重新整理该批改动。
 
-## 2. 不变产品边界
+## 2. 权威与不可变规则
 
-- 仅单人、CNY、事实记录；不做预算、建议、评分、预测、投资、多币种、多人、银行连接器、通用附件或 AI 财务聊天。
-- 正式 ledger/posting、余额、信用账期和报表仍是唯一金额真相。导入、OCR、LLM、匹配、缓存和 UI 都是候选或派生层，不能改余额、自动平账或绕过现有领域校验。
-- PDF 永远人工确认：不存在由置信度、金额阈值、AI 自动执行开关或任何 profile 触发的自动记账路径。
-- 服务端计算金额、日期边界、去重、校验和报表；客户端只显示服务端口径。金额在 API 内为 CNY `Int64` minor units，边界 decimal string 只解析一次，禁止浮点。
+| 优先级 | 来源与执行规则 |
+| --- | --- |
+| 1 | 本计划、用户已批准 D1–D10、`AGENTS.md`；冲突时停止并更新本计划，不自行发明产品行为。 |
+| 2 | v1.5 后端 schema/service；未改造能力沿用当前 Backend。客户端不自算会计真相、状态跃迁、去重或报表。 |
+| 3 | `archive/plans/v1.4-v1.5-backlog.md#4-v15--事实展现升级`；本计划将其 P30–P34 收敛为可施工门。 |
+| 4 | `Fiscal 前端设计启动/`：颜色、排版、组件、平台布局、交互意图和视觉验收；原型中与契约冲突的字段/行为一律替换。 |
+| 5 | `archive/audits/frontend-v1.5-design-backend-conflicts-2026-08-14.md`：缺口、风险和批准决定的依据；本计划是唯一当前控制面。 |
 
-## 3. v1.4 核心契约与安全决定
+- 金额始终为 CNY `Int64` minor units；输入只经 `CNYAmountParser` 一次转为分，最多两位小数，禁止浮点。业务日、筛选边界、用户可见导出日期均为 `Asia/Shanghai`，API 时间戳为 UTC。
+- R1 preview 不等于 commit：预览必须显示服务端真实影响和版本；任一输入（包括非法文本）变更立即作废预览并禁止提交。R2 冲突接管整个决策面，重新 GET/预览后才可决定。R3 提议、导入、预览、预计事项三重标识为未定。R4 archive 不等于 delete。R5 部分完成必须说明完成、当前状态和剩余项。
+- 所有异步 load/preview 用 generation 守卫；取消分支同样不得覆盖新状态。所有 iOS sheet 内显示错误；所有禁用控件保留可见原因。加载、空、离线陈旧、校验错、服务错、冲突、归档只读、危险预览、成功凭证、部分完成分别建模和验收。
 
-- **导入生命周期**：`created → extracting → parsing → review_required → ready_to_confirm → partially_confirmed|confirmed`，可进入 `failed|abandoned`。失败/重试保留尝试历史；放弃不会删除已确认流水；同 SHA-256 文件复用既有批次而不复制候选。
-- **数据最小化**：默认不长期保存原 PDF。仅临时使用文件/页面字节，完成、失败、取消均清理；持久化 hash、页号、必要证据文本/坐标、结构化候选、修正和 provenance。完整卡号、账号、姓名、地址、客户号、PDF 正文、Provider request/response 不进日志、Git、截图或 crash metadata。
-- **Provider**：每个批次单独明确授权；先本地 PDFKit/Vision，发送前显示 Provider、模型、文本/图像、页数和脱敏范围。仅允许固定提示词、无工具的严格 JSON Schema；账单中的指令、URL、二维码或伪 JSON 一律是不可信数据。
-- **候选与确认**：LLM 只能提出证据中存在的字段；确定性代码决定 `needs_review`。每行仅能为 `create_new`、`match_existing`、`ignore_non_transaction`、`ignore_intentional` 或 `unresolved`。同日同额只是候选匹配；匹配不改既有流水。
-- **原子与并发**：最终确认携带 batch `expected_version` 和 UUID `Idempotency-Key`；一次选中行的 create/match/ignore 同事务，重放返回原结果，异 payload 重用 key 冲突。确认前重验账户/分类/账期状态；每次成功确认恰增一次 P22 data revision，并返回实际 affected scopes。
-- **恢复与兼容**：新实体、尝试、证据、resolution 和正式流水链接纳入 Archive、实体计数、哈希和恢复关系校验；原 PDF 默认排除。新增字段/端点可追加，旧客户端可忽略；旧 AI proposal/自动执行 API 不承担 PDF 行确认。
-- **确定的产品默认值**：允许部分确认，但每次确认原子、批次在全部行 resolution 前不能 `confirmed`；账单校验失败时可保存和审核，最终确认必须显著警示且持续保留 `failed`，绝不伪装为对平或生成 `balance_adjustment`。首个 v1.4 App 版本预留为 `1.4.0 (23)`，若其前有其他 Apple 构建则按顺序调整 build 号并记录。
+## 3. 已冻结的产品与技术决定
 
-## 4. 阶段、依赖与发布门
+1. D1：严格 `P30-A→P30-B→P30-C→P31→P32→P33→P34`，逐门验证与 QA 落盘后才可 F0；不做 v1.4 换皮。D2：加密只读离线快照，离线写入禁用且解释。
+2. D3：AI 自动执行退役，迁移置关闭，读取为 false，旧启用写入返回 `ai_auto_execute_retired`；提议永远人工确认。
+3. D4：常规 UI 只归档/恢复；D5：派生报销现金流金额跟随事实，只能改有限显示字段。
+4. D6：补 transaction revision/provenance 只读；D7：分类合并/拆分先有服务端 preview、映射和原子提交。
+5. D8：分类直接原子保存 + 凭证，失败即全部未修改；D9：本地 PDF 离开/后台/取消即停止并清理。
+6. macOS 为脊柱+检查器，iOS 为今日决策台+账目库；共享状态令牌、各自原生布局。账户默认仅昵称，重名时才最小化显示 `last_four`。
+7. 无客户端 stale 阈值，只有离线快照时间；冲突返回当前版本、可安全刷新资源/差异和稳定原因码，否则要求重新决定。
 
-| Phase | 依赖与交付 | 阶段退出门 |
+## 4. 目录、模块与切换策略
+
+- **只可复用的非视觉边界**：`APITransport`、`AccessKeyStore`、加密 `OfflineSnapshotStore`、`DataRevisionStore`、认证与其传输实现；V15 只经自己的 typed adapter 使用它们。View 禁止直连旧 `Data/`、DTO、`Features/*`、root、`FiscalDesign` 或旧状态/导航；仅可用中立金额、`CNYAmountParser`、Shanghai 日期和 V15 adapter。
+- **新代码唯一落点**：`App/Sources/FiscalKit/V15/`：`Foundation/`=DI、契约、并发/field/capability/preview/conflict/receipt/offline；`DesignSystem/`=令牌和控件；`Shared/`=状态表面、fixture/gallery；`Features/<domain>/{iOS,macOS}`=页面/VM；`AppShell/`=并行预览路由。`App/Apps/*/V15*Shell.swift` 只承载并行注入。
+- 每阶段以 `rg` 证明无旧视觉/模型/root import 或复制 View body；设计 HTML 只作视觉证据，绝不嵌入/WebView/翻译。F0–F4 仅由 fixture/gallery/测试启动且不改 root；F5 才原子接根并删除旧层。源清单变更先 `cd App && xcodegen generate`；只还原 scheme 噪声，绝不触碰用户目录迁移。
+- 改动 `App/project.yml` 或源文件清单后执行 `cd App && xcodegen generate`；只还原生成的 scheme 噪声，绝不还原用户的目录迁移。
+
+## 5. P30–P34 后端契约门（先行施工）
+
+| Phase | 已验证契约与证据 |
+| --- | --- |
+| P30-A/B/C | **Independent Review Verified，终审 0 findings**：facts/future、capability/409/receipt/revision、报销 candidates/reasons；证据 `archive/releases/v1.5.0/qa/p30/p30-{a,b,c}-results.md`。 |
+| P31 | **Independent Review Verified**：merchant、交易 history/provenance、分类 transform preview→commit、Archive；`archive/releases/v1.5.0/qa/p31/results.md`。 |
+| P32 | **Independent Review Verified**：唯一首页 `reports/facts` 与 revision-bound 四 scope；`archive/releases/v1.5.0/qa/p32/results.md`。 |
+| P33 | **Independent Review Verified**：future、信用、报销、分期与 Provider，无双算/幽灵；`archive/releases/v1.5.0/qa/p33/results.md`。 |
+| P34 | **Independent Review Verified**：月年报、同 revision 下钻、报告 PDF/CSV；`archive/releases/v1.5.0/qa/p34/results.md`。 |
+
+新增响应只追加；mutation 依其端点使用 UUID `Idempotency-Key`、`expected_version`、稳定错误和 P22 receipt/scope。certainty 固定 `exact_due / confirmed / expected / scheduled`；内部转账不改总现金，`after_confirmed_outflow` 不扣 expected/scheduled/预计回款。
+
+## 6. 审计缺口可追溯性
+
+- B01–B04、B07–B08 和 C01–C17 已分别由 P30–P34 收口：F1 不伪造检查器、预览、报告、离线写入、排序并发或 capability；报销灰按钮与所有未来/preview 流程仍只在 F3 实作并回归。
+
+## 7. Clean-room Apple 施工阶段与依赖
+
+**通用顺序**：每个阶段均为 Builder → Independent Review → Builder 修复/复测 → Review；只有终审 **0 findings** 才能解锁下一阶段。每轮 QA 写入 `archive/releases/v1.5.0/qa/frontend/f{n}-results.md`，含 commit-free changed paths、fixture、命令、截图、已知限制和 `rg` clean-room 结果。F0–F4 不删、不改接旧 root；F5 前不得并行启动后续 Feature Builder。
+
+| Block | 依赖、独占所有权与施工切片 | 退出门（含两端差异） |
 | --- | --- | --- |
-| P24 | 导入批次/页面/行/尝试/resolution、状态机、hash 去重、隐私/授权、Archive 与 `statement_imports` revision scope；**不写账本** | fresh PostgreSQL migration 往返；创建/失败/重试/放弃零 posting；重复文件不建第二批；Archive 往返且敏感日志扫描通过 |
-| P25 | Apple PDFKit 文本提取、Vision OCR、页型/上限/错误模型、发送前预览和三路径临时文件清理 | 合成夹具可重复给出页序/证据定位；未授权零外发；text/OCR/mixed 不静默漏页或重行 |
-| P26 | 独立账单结构化 Provider contract、严格 schema、attempt snapshot、质量事件和 synthetic provider 测试 | 非法/超限输出在候选前失败；取消/429/5xx 无半套候选或账本写入；无自动确认配置 |
-| P27 | 账单级确定性校验、行级强/候选去重、既有流水匹配、provenance 与原子正式确认 | 重放/并发/冲突不重复记账；批量任一失败零部分 posting；各种导入语义与手工领域服务的余额/账期/报表一致 |
-| P28 | macOS 三栏导入工作台、证据双向定位、筛选/批量预览、最终确认 sheet 与可恢复审核 | 用多页储蓄卡及信用卡合成夹具完成端到端审核；摘要与实际写入逐项一致；无原 PDF 时诚实降级 |
-| P29 | iOS 分步审核、跨端 optimistic conflict、Attention 入口、签名包与生产迁移/恢复/真机收口 | 全量自动门、备份/影子恢复/守恒、macOS+Kurisu 各完成真实受控账单主链路、production smoke 均通过后才可发布 |
+| **F0-A/B/C（Independent Review Verified）** | `Foundation` typed P30–P34 boundary、令牌/十态控件、11-fixture Gallery 与并行壳均终审 0；证据 `archive/releases/v1.5.0/qa/frontend/f0-results.md`。 | 158 FiscalKit tests、Gallery UI、75 PNG、双端/Gallery build 与 clean-room 通过；真实设备 VoiceOver 是发布门。 |
+| **F1 contract audit（Independent Review Verified）** | 已有 typed transport/offline/CNY、session/master-data/ledger/merchant 与 Gallery 边界；Feature 不得直连旧 repository/DTO/root。 | F2 仅可补本阶段 typed **read**，不改 DI、写入或 F1 Feature。 |
+| **F1-A 启动、连接与事实录入（Independent Review Verified）** | auth/system、主数据/账期只读与五类交易录入；Shanghai/CNY、field issue、幂等与离线禁写均收口。 | 三审 0；详 `qa/frontend/f1-results.md`。 |
+| **F1-B 账目库与交易检查器（Independent Review Verified）** | typed 账目 keyset/detail/history/provenance；iOS 搜索库、macOS 过去脊柱+检查器；能力按服务器、未知读回、409 重读。 | 三审 0；详 F1 QA。 |
+| **F1-C 主数据与商户（Independent Review Verified）** | typed 主数据/商户、归档/排序/transform/mapping；无 DELETE/伪 archive，重名才最小 `last_four`。 | 七审 0；详 F1 QA。 |
+| **F2 现在与决策面（Independent implementation review verified；历史 macOS runtime 曾 deferred，F5-A 已关闭）** | 唯一首页为 revision-bound facts/四 scope；详 §7.1 与 `qa/frontend/f2-results.md`。 | `F2C-MAC-UI-AUTOMATION` 历史上曾 deferred；F5-A Builder 的十个 exact macOS gate 已 23/0 全部 closed，并经 reviewer independent full mac Gallery 27/0 确认，不再是 publish blocker。 |
+| **F3 已知未来与高风险领域（F3-A/B1/B2/C/D/E/F/G Independent implementation review verified；历史 macOS runtime 曾 deferred，F5-A 已关闭）** | **独占** `Features/{Timeline,CashFlow,Credit,Installments,Reimbursements,Reconciliation,AI,StatementImport}/**`；各块先扩 `Foundation` typed adapter，再做 Feature。详 §7.2。 | 严格 `A→B1→B2→C→D→E→F→G` 已终审；历史 deferred F3 macOS gates 已在 F5-A exact 23/0 闭环并由 reviewer full 27/0 独立确认，不再是 publish blocker。 |
+| **F4 分析、报告与数据安全（Independent Review Verified；历史 F4C macOS runtime 曾 deferred，F5-A 已关闭）** | F1+P31/P34；F4-A typed Reports seam、F4-B Backend revision-binding 与 Apple export UI、F4-C encrypted Archive 均已终审。详细契约与证据见 [F4 执行记录](archive/plans/v1.5.0-f4-execution.md) 和 [`f4-results.md`](archive/releases/v1.5.0/qa/frontend/f4-results.md)。严格 `F4-A→F4-B→F4-C`。 | `F4C-MAC-UI-AUTOMATION` 历史上与既有九 gate 同为 deferred；十 gate 已由 F5-A Builder exact 23/0 全部 closed，reviewer independent full mac 27/0，均不再是 publish blocker。正式 root 与发布动作仍锁定。 |
+| **F5 唯一切换与源码收口（pre-package stop）** | 两正式 root 已原子切至 V15；旧视觉/UI test 层已删除；生产 Today 离线状态改为动态读取共享 revision/offline boundary；QA RootSmoke 的最终错误/离线路径不再伪造离线标记，而是先建立真实只读缓存再断网回退。版本已升为 `1.5.0 (24)`，源码整理为可提交状态。 | 按用户指令停止在 release package 之前：不再追加长验证/审查，不 archive/export，不签名、公证、tag/push 或部署。既有 VoiceOver/实体设备事项仍属后续人工发布门。 |
 
-各阶段只能在前一阶段的 Automated Verified 完整通过后开始其依赖写入；P28 可在 P27 API 契约冻结后并行完成只读/审核界面。每期结束必须记录 Automated、Production、Physical Device 三类独立证据；任一类不能替代另一类。
+### 7.1 F2 已验收索引
 
-## 5. 实施与验证约束
+F2-A typed facts、F2-B iOS Today 均 Independent Review Verified；F2-C 三栏 macOS 已获 implementation/test-design 终审 0。真实 macOS UI automation 曾三次 0/0（`testmanagerd` enabling automation timeout）而延期；该历史 gate 已由 F5-A Builder exact runtime 23/0 闭环，reviewer independent full mac Gallery 27/0 确认，不再是 publish blocker。固定事实契约、所有审查链、12 张 F2-C 图、恢复精确命令与禁止范围均在 `archive/releases/v1.5.0/qa/frontend/f2-results.md`；F3 不得改 F2。
 
-- P24–P27 后端修改必须覆盖 migration upgrade/downgrade/re-upgrade、fresh PostgreSQL、现有全量测试、Archive 往返、revision scope/receipt 和旧客户端读取兼容。数据库 head 不同不做应用 rollback；以验证备份恢复到隔离新库后再切换。
-- 解析器 fixtures 必须合成或不可逆脱敏；不得提交真实银行 PDF。真实账单只在受控本地或生产验收使用，且不进入命令回显、QA 文档或截图。
-- 每个正式确认经既有 transaction/credit/reimbursement 服务产生原有业务语义与 posting；新增 `statement_import` source/provenance 仅允许导入服务创建，公开 API 不可伪造。
-- P25/P28/P29 的耗时提取、OCR、哈希和大表格不得阻塞主线程；服务端对文件、页数、像素、字符、行数及 payload 设上限。记录 batch/attempt、版本、耗时、数量和稳定错误码，不记录正文。
-- 发布顺序：干净已提交 revision → 生产前备份 → 影子 migration/Archive/守恒 → 精确 revision 部署 → 生产 smoke/备份恢复 → macOS 与 Kurisu 签名包真机验收 → 更新 release manifest、tag/push。部署或生产写入须在当时另获用户授权。
+### 7.2 F3 串行施工计划（规划冻结）
 
-## 6. 用户决定与操作清单
+详细契约、body/token/key/receipt/readback、fixture 和截图矩阵见 [F3 执行记录](archive/plans/v1.5.0-f3-execution.md)。其结论是：先扩 schema-shaped `Foundation` adapter，Feature 不得 raw transport/旧层/root；预览输入、dismiss/cancel、expiry、409、unknown、分页/刷新和离线一律可见且有 generation 防护；有 `available_actions` 才按其 reason 禁用，无此字段不伪造 capability。
 
-- **P25 前**：用户提供首批实际使用的 2–3 类银行/信用卡版式名称，并只在受控设备上用于真实验收；不上传或提交原件。未给出时只交付合成夹具和通用阻止/降级行为，不宣称兼容某银行。
-- **P26/真实验收前**：用户选择并逐批授权实际 Provider/模型及可发送范围；这涉及账单隐私和外部成本，不能由工程默认开启。无真实授权时使用 synthetic provider 完成全部自动门。
-- **P29 生产前**：用户单独授权备份、迁移、部署与真实账单确认，并在 macOS 和 Kurisu 完成主链路验收。无固定网页操作；生产服务入口为 https://fiscal.linotsai.top ，但不得把凭证放入聊天、Git 或 QA。
+| 块 | 独占与解锁条件 |
+| --- | --- |
+| **F3-A（Independent implementation review verified；历史 `F3A-MAC-UI-AUTOMATION` 曾 deferred，F5-A 已 closed）** | `Features/Timeline/**`：仅 `future-events` 7/30/60/90、account、opaque cursor、revision 409 和安全只读 locator；不自算、不写。证据见 `qa/frontend/f3-results.md`；历史 deferred macOS runtime 已在 F5-A exact 23/0 闭环，并由 reviewer full 27/0 确认。 |
+| **F3-B1（Independent implementation review verified；历史 `F3B1-MAC-UI-AUTOMATION` 曾 deferred，F5-A 已 closed） / F3-B2（Independent implementation review verified；历史 `F3B2-MAC-UI-AUTOMATION` 曾 deferred，F5-A 已 closed）** | `Credit/**` schedule preview/token/commit 与 `Installments/**` 五态、unknown display-only、purchase/plan/settlement/reverse/cancel lifecycle 均已终审；F3-B2 四轮审查链以第四审 0 findings 收口；两 gate 均不再是 publish blocker。 |
+| **F3-C（Independent implementation review verified；历史 `F3C-MAC-UI-AUTOMATION` 曾 deferred，F5-A 已 closed）** | `Reimbursements/**`：审查链 `2×P1+2×P2 → 2×P2 → 1×P2 → 0 findings` 已终审；最终真实 iOS **12/0**、双端 Release/Gallery、15 张 macOS 图与 clean-room 证据保留。F5-A exact 23/0 与 reviewer full 27/0 已关闭其 macOS runtime，不再是 publish blocker。 |
+| **F3-D/E/F/G（Independent implementation review verified；历史 macOS runtime 曾 deferred，F5-A 已 closed）** | F3-G 七轮链 `4×P1+1×P2 → 1×P2 → 2×P2 → 1×P1+1×P3 → 1×P1+1×P2 → 1×P1 → 0 findings` 已终审；model 19/0、固定 UDID iOS 8/0、macOS UI BFT、四 Release、SnapshotTool/16 图证据已保留。历史 `F3G-MAC-UI-AUTOMATION` 与其余 F3 gate 已在 F5-A exact 23/0 闭环并由 reviewer independent full mac 27/0 确认，不再是 publish blocker。 |
 
-## 7. 里程碑索引与 Backlog
+每块 Builder→独立审查→修复/复测→终审 0 才能解锁下一块；完成后才可追加 `archive/releases/v1.5.0/qa/frontend/f3-results.md`。每块需 decode/model race tests、真正 iOS/macOS XCUITest（不可以 SnapshotTool/模型替代）、xcodegen、双端 Release/Gallery build、SnapshotTool 实跑、`git diff --check` 与 clean-room/root 搜索。截图是离线合成数据，覆盖浅/深、AX3/5、Reduce Motion、长内容、loading/empty/error/retry/offline/conflict/unknown；历史 `F2C-MAC-UI-AUTOMATION` 已在 F5-A exact 23/0 闭环并经 reviewer full 27/0 确认，不再是 F5/publish blocker。
 
-- 已完成：P20 可信基线、P21 核对、P22 Archive/revision、P23 AI 质量；证据见 `docs/qa/p20`–`p23` 与 `RELEASE_STATE.md`。
-- P24-A：`1d037bb0cd33df8bf20e060e6891c90e16956f2a` 已 Automated Verified，新增仅元数据导入基础，Alembic `20260812_0024`。范围明确排除 PDF 解析、Provider、ledger/posting、Apple、生产和设备验收。
-- P24-A 验证：Ruff/Pyright 通过；fresh PostgreSQL `head → 20260811_0023 → head` 通过；lifecycle/hash duplicate/zero ledger+posting/Archive/revision/log redaction 定向测试 **4 passed**。完整命令、临时库清理和脱敏证据见 [P24 QA](docs/qa/p24/results.md)。
-- 回归基线：历史 P10 `account_not_found` 已在 fresh PostgreSQL 独立复核并由 P21 测试时钟修正；P26-A fresh 全量后端为 **259 passed**，不再作为 P24/v1.4 阻断项（见 [P10 QA](docs/qa/p10/results.md) 与 [P26 QA](docs/qa/p26/results.md)）。
-- P25-A：`fbf3ea3` 已 Automated Verified。Apple 本地 PDFKit/Vision 提取以合成夹具验证 `text`/`scanned_image`/`mixed`/`unsupported` 页型、行级页号/坐标、稳定错误与成功/失败/取消清理；不调用网络/Provider、不接入批次或账本。证据见 [P25 QA](docs/qa/p25/results.md)。这不代表 P24 或完整 P25 phase 完成。
-- P24-B/P25-B：确定性脱敏 JSON evidence 以 batch/attempt/version guard 原子进入 `review_required`；Archive/fresh PG/API、Apple 108/mac+iOS builds 通过。无 Provider、PDF/image、posting；见 [P24 QA](docs/qa/p24/results.md)、[P25 QA](docs/qa/p25/results.md)。
-- P26-A：`a2d82e3` 已 Automated Verified。无网络 `synthetic_statement` 只写脱敏 attempt/snapshot；fresh PG **7/259 passed**、Apple 108/mac+iOS Debug 通过。无真实 Provider/密钥/PDF、确认或生产，见 [P26 QA](docs/qa/p26/results.md)。
-- P27：`68504fe`、`54d743c`、`7662861` 已 Automated Verified。versioned final draft、atomic receipt/provenance 与内部 domain adapter 完成；fresh PG **266/0/0**、Archive restore/replay、Apple 110/mac+iOS Debug 通过，见 [P27 QA](docs/qa/p27/results.md)。
-- P28-A：`9b77e07` 已 Verified。security-scoped temp intake 完成 hash/duplicate 与 `register → start → redacted evidence`；无 PDF/image/path/bookmark/raw name、自动重发。macOS **116/21**、P24 PG **4**、PG **266/0/0** 通过，见 [P28 QA](docs/qa/p28/results.md)。
-- P28-B：`d941eeb` / `1b0d89a`、QA `be7f7b0` 已 Verified。macOS 三栏审核仅 `review_available=true` 可写，无 run 为 evidence-only；Apple **8**、fresh PG **13/268** 通过。无 PDF/image、Provider、confirm、iOS UI 或生产。
-- P28-C：`71e6405` 已 Verified。无写 preview/receipt 与 `is_confirmed` 接入 macOS sheet；最终点击才 UUID+P27 confirm。fresh PG **14/269**、Ruff/Pyright、macOS/两端 Debug 通过，见 [P28 QA](docs/qa/p28/results.md)。P28 自动切片已绿，真机/生产仍未完成。
-- P29-A：`e56b0ea` 至 `f5a6223` 已 Automated Verified；Reviewer 修复 `4668036`、`4ceecbb`、`816d0dc` 与 QA `72ab96b` 经第二轮只读复审后 **0 findings**。iOS/Kurisu Files PDF intake 在前台以临时 security-scoped workspace 完成 hash/consent 与 `register → start → masked evidence`；不持久化 PDF、CGImage、URL、bookmark、原名或原文，不建后台队列/cache。中断/背景化取消本地工作并清 source/package/preview；普通提取取消/失败用 active version 精确 fail，response-unknown 只允许查询或重发同一脱敏包、绝不 fail/自动重发。
-- iOS 分步审核复用 P24–P28 API：evidence-only 不可编辑；异常/未解决优先、完整行表使用 `next_cursor`，续页版本变化拒绝合并；五种 resolution 和 final-create draft 均以新鲜版本、显式 active master IDs 处理，无默认推断。409 清空本地选择/表单并要求 Reload；preview 后才允许最终 tap 生成 UUID 并单一 confirm POST，响应未知仅可显式 receipt lookup；partial/frozen 行不可编辑或再选。Attention 只读派生 `statement_import_review` 与 `statement_import_failed`，不含文件名、金额、证据或 Provider 内容且不可忽略。
-- 隐私/恢复加固：`20260813_0029` 将历史和新导入的 `display_name` 固定为 `statement.pdf` 并以 DB CHECK 防回退；duplicate 按既有批次状态恢复；筛选空页安全推进 cursor；confirmation response-unknown 保留首 UUID、禁第二次 POST。自动证据：backend Ruff/Pyright 0 errors，P24/P28 fresh PG targeted **8 passed**，fresh PG JUnit **270/0/0/0**；macOS Swift **127 tests / 21 suites** 与 iOS Simulator Debug build 通过，详见 [P24 QA](docs/qa/p24/results.md)、[P28 QA](docs/qa/p28/results.md)、[P29 QA](docs/qa/p29/results.md)。无 Provider、真实账单、生产、tag 或 push。工程中仍没有 LocalAuthentication/Face ID seam，因此未声称设备认证。
-- Kurisu synthetic physical：`0c74e0d` 隔离 QA Keychain 与正式 bundle；`c2b9f55` 修复真机 List 行内动作、Attention/批次 deep link 只读恢复、逐行动作无障碍标签，并声明 iPhone/iPad 方向。2 页全合成 fixture 已在签名 QA 包完成 Files consent、PDFKit/Vision、synthetic provider、逐行 review、单行明确 preview/confirm、freeze/receipt/Attention deep link；一次性 DB 守恒 transaction/posting/provenance/receipt=`1/1/1/1`、orphan=`0`。Dynamic Type 与 VoiceOver 启动已观察；CoreDevice 不支持远程 rotation 且 memory warning 返回设备侧 ENOENT，未伪称完成。最终 macOS **129/21**、signed iOS generic-device build 通过，详见 [P29 QA](docs/qa/p29/results.md)。
-- Production：verified P23 backup → fresh `0023→0029` shadow → encrypted Archive empty-target restore → financial fingerprints 通过；production `ad956cd/0029` active/ready/public，post-backup isolated restore 通过，新导入链为零且账本守恒。Mac/Kurisu `1.4.0(23)` 已安装启动，Kurisu production data revision=`2`。
-- 当前：v1.4 发布链已收口。真实版式/外部 Provider、完整 VoiceOver 顺序和 memory warning 明确 carried forward，不得从 synthetic release 推断兼容。
-- 后续：v1.5（P30–P35）仅保留在 [执行记录 §4](docs/BACKLOG-v1.4-v1.5.md#4-v15--事实展现升级)，不得插入 v1.4。预算、建议、预测、银行连接器、通用附件、多人和投资仍明确不做。
-- 每次状态替换本文件当前事实/阶段/下一步；长篇测试输出和实现过程留在对应 QA 结果或 Git，不在此追加。
+## 8. 强制验收与测试矩阵
 
-## 8. Builder 下一实施块
+- **证据**：P30/P31–P34 如 §5；F0–F5 只写 `archive/releases/v1.5.0/qa/frontend/f{n}-results.md`，按轮记录 changed paths、fixture、命令、风险、截图和 clean-room `rg`，Plan 只替换状态/下一步。
+- **契约/数据**：每个 response/error/409/capability/cursor/revision/preview/receipt 都有 decode+fixture；金额经 `CNYAmountParser` minor units、业务日/显示为 Shanghai、timestamp UTC。后端仍以 Ruff/Pyright/fresh-PostgreSQL/Alembic/Archive/idempotency/守恒门收口。
+- **Apple/视觉**：每批 xcodegen、针对性 FiscalKit tests、iOS+macOS build；阶段收口加真实点击 XCUITest。每屏对照高保真但不复刻 HTML，并留 iPhone、mac 紧凑/舒适、浅深、AX3–5、VoiceOver、Reduce Motion、长内容/金额/分页证据；iOS 44pt、mac 28px+扩展点击区，状态不只靠颜色。
+- **并发/高风险**：任何预览输入/dismiss/cancel、分页/刷新 race、跨端 409、response-unknown、离线只读、月底均自动覆盖；F3 另守报销灰按钮双端 E2E（loading/empty/error/retry、field reasons、invalid→valid、preview/conflict/success）。
 
-执行 **v1.5 规划门**：只从 [执行记录 §4](docs/BACKLOG-v1.4-v1.5.md#4-v15--事实展现升级) 选择下一块；未获用户指令前不施工。
+## 9. 切换、回滚与发布门
 
-验收门：先重新审计 v1.4 carried risks 与 v1.5 契约，再由 Planner 冻结下一实施块。真实原件与外部 Provider 后续仍逐批 consent，不得因 v1.4 已发布而默认放宽。
+- 施工期只创建 additive Backend migration 与并行 V15 View；不在生产数据库做 down migration，不删除旧前端，直到 F5 双端 smoke 通过。每次 migration 都可从备份恢复到隔离新库验证；Archive 新关系先通过往返验证。
+- 切换后如发现前端故障，回滚到 v1.4.0 已发布 App/commit；新增 API 保持 additive。D3/D5 这类已批准业务收窄如需回退，以新的前向修复和用户批准处理，禁止盲目回滚数据库 head。
+- 发布前：干净已提交 revision、生产备份、影子 migration/Archive/财务守恒、精确 head 部署、production smoke、备份恢复、macOS+iOS 签名包的总览/历史/时间轴/月报导出/报销验收、release manifest/tag/push 全部通过。生产部署、备份、迁移、真实数据验收均须当时另获用户授权。
+- 用户网页操作清单（仅发布门获授权后）：在 [Fiscal 生产入口](https://fiscal.linotsai.top) 以真实但不进入截图/日志的数据完成总览、报销、报告导出与恢复后的只读核对；本计划阶段无需网页操作。
+
+## 10. 完成定义与当前下一步
+
+- v1.5.0 完成仅当：P30–P34 事实契约与迁移/Archive/守恒全绿；所有既有领域都有 V15 原生入口；旧视觉层已删除；双端正确呈现设计状态语法；报销无解释灰按钮的缺陷被 E2E 防回归；报告/CSV/PDF/下钻使用同一服务端口径；生产和签名设备门完成。
+- **当前停止点：发布包生成之前。** 源码版本为 `1.5.0 (24)`，正式 V15 root、旧层删除与最终离线回退均已落盘；本轮不再运行长测试、独立审查或构建。后续只有在用户再次授权时，才从当前干净源码 revision 生成并签名 iOS/macOS 发布包，再执行 tag/push 与生产部署。

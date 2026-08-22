@@ -13,16 +13,19 @@ xcuserdata/
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 .venv/
 venv/
+dist/
 
 # Environment and secrets
 .env
 .env.*
 !.env.example
+staging.env
 *.pem
 *.key
 

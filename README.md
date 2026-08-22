@@ -1,17 +1,14 @@
 # Fiscal
 
-Fiscal is a private, single-user personal-finance application for iOS 26 and macOS 26. Its canonical CNY ledger covers accounts, credit cycles, installments, reimbursements, reports and AI/OCR capture. The current v1.3.0 release train is P20–P23: production trust baseline, reconciliation, recoverable data, and AI quality controls. Product scope and release gates live in [`PROJECT_PLAN.md`](PROJECT_PLAN.md); the currently evidenced release state lives in [`RELEASE_STATE.md`](RELEASE_STATE.md).
+Fiscal is a private, single-user personal-finance application for iOS 26 and macOS 26. Its canonical CNY ledger covers accounts, credit cycles, installments, reimbursements, reports, AI/OCR capture, and manually reviewed PDF statement imports. The deployed release remains `v1.4.0 (23)`; the repository source is prepared as `v1.5.0 (24)` and intentionally stopped before release-package generation. Product scope and the current stop point live in [`PROJECT_PLAN.md`](PROJECT_PLAN.md); release manifests live under [`archive/releases/`](archive/releases/).
 
 ## Repository map
 
-- `backend/` — FastAPI, SQLAlchemy, Alembic, PostgreSQL access, system endpoints, master data, and the unified ledger.
-- `apple/` — native SwiftUI iOS/macOS applications and shared `FiscalKit`.
-- `infra/` — local PostgreSQL and VPS staging deployment scaffolding.
-- `docs/architecture/` — phase-level implementation contracts.
-- `docs/qa/` — acceptance checklists, results, and screenshots.
-- `design_handoff_fiscal_app/` — read-only visual contract; it is not production code.
-
-The current product uses one canonical CNY ledger across accounts, credit cycles, installments, reimbursements and reports. iOS remains list-first and chart-free with one custom bottom bar; macOS uses dense native tables, inspectors and report visualizations. P10 adds uncategorized batch handling, advanced search/filtering, device-local recording preferences, short read-only caching, semantic dark mode and filtered CSV export.
+- `App/` — native SwiftUI iOS/macOS applications and shared `FiscalKit`.
+- `Backend/` — FastAPI, SQLAlchemy, Alembic, PostgreSQL, the unified ledger, and `ops/` deployment tooling.
+- `archive/` — historical audits, design sources, plans, release contracts, QA results, and screenshots.
+- `AGENTS.md` — repository-specific engineering rules and verification gates.
+- `PROJECT_PLAN.md` — current product position, invariants, risks, and next authorized work.
 
 ## Toolchain
 
@@ -27,13 +24,13 @@ The current product uses one canonical CNY ledger across accounts, credit cycles
 Start PostgreSQL from the repository root:
 
 ```sh
-docker compose -f infra/compose.local.yml up -d postgres
+docker compose -f Backend/ops/compose.local.yml up -d postgres
 ```
 
 Then initialize and run the API:
 
 ```sh
-cd backend
+cd Backend
 cp .env.example .env
 uv sync --frozen
 uv run --frozen alembic upgrade head
@@ -49,12 +46,12 @@ curl -H 'Authorization: Bearer YOUR_CURRENT_ACCESS_KEY' \
   http://127.0.0.1:8000/api/v1/system/status
 ```
 
-The default token is local-development-only. Staging and production reject static tokens, require an independent pepper of at least 32 bytes, and use the personal access-passphrase/access-key model. P20 records whether a live deployment has fully exited the legacy transition layer in [`docs/qa/p20/results.md`](docs/qa/p20/results.md); do not infer that from this repository.
+The default token is local-development-only. Staging and production reject static tokens, require an independent pepper of at least 32 bytes, and use the personal access-passphrase/access-key model. P20 records whether a live deployment has fully exited the legacy transition layer in [`archive/releases/v1.0-v1.3/qa/p20/results.md`](archive/releases/v1.0-v1.3/qa/p20/results.md); do not infer that from this repository.
 
 Run backend gates:
 
 ```sh
-cd backend
+cd Backend
 uv lock --check
 uv sync --frozen --offline
 uv run --frozen ruff format --check .
@@ -69,7 +66,7 @@ uv run --frozen alembic upgrade head --sql
 Generate the Xcode project and run the two build gates:
 
 ```sh
-cd apple
+cd App
 xcodegen generate
 xcodebuild \
   -project Fiscal.xcodeproj \
@@ -100,16 +97,10 @@ never a production credential.
 
 ## Infrastructure
 
-See [`infra/README.md`](infra/README.md) for local PostgreSQL and staging, and [`infra/production/README.md`](infra/production/README.md) for the isolated HZ native deployment, migration, rollback, backup/restore and monitoring workflow.
+See [`Backend/ops/README.md`](Backend/ops/README.md) for local PostgreSQL and staging, and [`Backend/ops/production/README.md`](Backend/ops/production/README.md) for the isolated HZ native deployment, migration, rollback, backup/restore and monitoring workflow.
 
-## Phase contracts and acceptance
+## Release evidence
 
-- P1 contract/results: [`docs/architecture/p1-contracts.md`](docs/architecture/p1-contracts.md), [`docs/qa/p1/results.md`](docs/qa/p1/results.md)
-- P2 contract/checklist/results: [`docs/architecture/p2-contracts.md`](docs/architecture/p2-contracts.md), [`docs/qa/p2/checklist.md`](docs/qa/p2/checklist.md), [`docs/qa/p2/results.md`](docs/qa/p2/results.md)
-- P3 contract/checklist/results: [`docs/architecture/p3-contracts.md`](docs/architecture/p3-contracts.md), [`docs/qa/p3/checklist.md`](docs/qa/p3/checklist.md), [`docs/qa/p3/results.md`](docs/qa/p3/results.md)
-- P4–P9 contracts and results remain under `docs/architecture/` and `docs/qa/`.
-- P10 contract/checklist/results: [`docs/architecture/p10-contracts.md`](docs/architecture/p10-contracts.md), [`docs/qa/p10/checklist.md`](docs/qa/p10/checklist.md), [`docs/qa/p10/results.md`](docs/qa/p10/results.md)
-- Historical phase contracts/results remain under `docs/architecture/` and `docs/qa/`.
-- Current release evidence: [`docs/qa/p20/results.md`](docs/qa/p20/results.md); earlier P11–P19 records are historical evidence, not live state.
-
-The user approved the native iOS/macOS visual direction before P2. Each phase still requires real API integration, dual-platform screenshots, automated gates, and explicit acceptance before the next business slice begins.
+- Current manifest: [`archive/releases/v1.4.0/RELEASE_STATE.md`](archive/releases/v1.4.0/RELEASE_STATE.md).
+- Current final QA: [`archive/releases/v1.4.0/qa/p29/results.md`](archive/releases/v1.4.0/qa/p29/results.md).
+- Historical contracts and QA: [`archive/README.md`](archive/README.md).

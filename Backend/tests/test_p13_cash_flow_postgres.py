@@ -1,0 +1,379 @@
+from collections.abc import AsyncIterator
+from datetime import UTC, date, datetime, timedelta
+from os import environ
+from uuid import uuid4
+
+import pytest
+import pytest_asyncio
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from fiscal_api.api.p2_schemas import AccountDraft, CategoryDraft
+from fiscal_api.api.p3_schemas import TransactionDraft
+from fiscal_api.api.p6_schemas import (
+    ReimbursementAllocationDraft,
+    ReimbursementClaimDraft,
+    ReimbursementPartyDraft,
+    ReimbursementReceiptDraft,
+)
+from fiscal_api.api.p13_schemas import (
+    CashFlowAction,
+    CashFlowDraft,
+    CashFlowMutationScope,
+    CashFlowReplace,
+    CashFlowSettlementDraft,
+    CashFlowSystemKind,
+    CashFlowSystemReplace,
+)
+from fiscal_api.core.errors import APIError
+from fiscal_api.db.models import (
+    AccountKind,
+    CashFlowDirection,
+    CashFlowItem,
+    CashFlowRecurrence,
+    CashFlowStatus,
+    CashFlowSystemOverride,
+    CategoryDirection,
+    LedgerTransaction,
+    TransactionKind,
+)
+from fiscal_api.services.accounts import AccountService
+from fiscal_api.services.cash_flow import CashFlowService
+from fiscal_api.services.categories import CategoryService
+from fiscal_api.services.reimbursements import ReimbursementService
+from fiscal_api.services.transactions import TransactionService
+
+TEST_DATABASE_URL = environ.get("FISCAL_TEST_DATABASE_URL")
+pytestmark = pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
+
+
+@pytest_asyncio.fixture
+async def session() -> AsyncIterator[AsyncSession]:
+    assert TEST_DATABASE_URL is not None
+    engine = create_async_engine(TEST_DATABASE_URL)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "TRUNCATE cash_flow_system_overrides, reimbursement_operations, "
+                "reimbursement_receipt_revisions, reimbursement_claim_revisions, "
+                "reimbursement_receipt_allocations, reimbursement_receipts, "
+                "reimbursement_allocations, reimbursement_parties, reimbursement_claims, "
+                "cash_flow_item_revisions, "
+                "cash_flow_items, cash_flow_series, "
+                "transaction_revisions, postings, transactions, credit_cycles, categories, "
+                "accounts CASCADE"
+            )
+        )
+    async with factory() as database_session:
+        yield database_session
+    await engine.dispose()
+
+
+async def seed(session: AsyncSession):  # type: ignore[no-untyped-def]
+    account = await AccountService(session).create(
+        AccountDraft(name="银行卡", kind=AccountKind.DEBIT, opening_balance_minor=0)
+    )
+    category = await CategoryService(session).create(
+        CategoryDraft(
+            name="工资",
+            direction=CategoryDirection.INCOME,
+            icon="banknote",
+            color_hex="#3366FF",
+        )
+    )
+    return account, category
+
+
+async def test_monthly_create_is_idempotent_and_settle_creates_one_ledger_row(
+    session: AsyncSession,
+) -> None:
+    account, category = await seed(session)
+    service = CashFlowService(session)
+    create_key = uuid4()
+    draft = CashFlowDraft(
+        title="工资",
+        direction=CashFlowDirection.INFLOW,
+        planned_amount_minor=500_000,
+        expected_date=date(2026, 7, 21),
+        account_id=account.id,
+        category_id=category.id,
+        recurrence=CashFlowRecurrence.MONTHLY,
+        recurrence_end_date=date(2026, 12, 21),
+    )
+    first = await service.create(draft, create_key)
+    replay = await service.create(draft, create_key)
+    assert len(first.items) == 6
+    assert [item.id for item in replay.items] == [item.id for item in first.items]
+
+    item = first.items[0]
+    assert item.manual_item_id is not None
+    confirmed = await service.confirm(item.manual_item_id, item.version)
+    settle_key = uuid4()
+    settled = await service.settle(
+        item.manual_item_id,
+        CashFlowSettlementDraft(
+            expected_version=confirmed.version,
+            actual_amount_minor=510_000,
+            occurred_at=datetime(2026, 7, 21, 9, 0, tzinfo=UTC),
+            account_id=account.id,
+            category_id=category.id,
+        ),
+        settle_key,
+    )
+    replay_settlement = await service.settle(
+        item.manual_item_id,
+        CashFlowSettlementDraft(
+            expected_version=confirmed.version,
+            actual_amount_minor=510_000,
+            occurred_at=datetime(2026, 7, 21, 9, 0, tzinfo=UTC),
+            account_id=account.id,
+            category_id=category.id,
+        ),
+        settle_key,
+    )
+    assert settled.status is CashFlowStatus.SETTLED
+    assert replay_settlement.linked_transaction_id == settled.linked_transaction_id
+    assert settled.actual_amount_minor == 510_000
+    assert await session.scalar(select(func.count()).select_from(LedgerTransaction)) == 1
+
+
+async def test_monthly_bulk_edit_preserves_each_occurrence_date_and_series_end(
+    session: AsyncSession,
+) -> None:
+    account, _income_category = await seed(session)
+    expense_category = await CategoryService(session).create(
+        CategoryDraft(
+            name="车贷",
+            direction=CategoryDirection.EXPENSE,
+            icon="car",
+            color_hex="#CC3344",
+        )
+    )
+    service = CashFlowService(session)
+    created = await service.create(
+        CashFlowDraft(
+            title="车贷",
+            direction=CashFlowDirection.INFLOW,
+            planned_amount_minor=253_300,
+            expected_date=date(2026, 9, 22),
+            account_id=account.id,
+            recurrence=CashFlowRecurrence.MONTHLY,
+            recurrence_end_date=date(2029, 9, 22),
+        ),
+        uuid4(),
+    )
+    first = created.items[0]
+    assert first.manual_item_id is not None
+
+    updated = await service.update(
+        first.manual_item_id,
+        CashFlowReplace(
+            title="车贷",
+            direction=CashFlowDirection.OUTFLOW,
+            planned_amount_minor=253_300,
+            expected_date=date(2026, 9, 22),
+            account_id=account.id,
+            category_id=expense_category.id,
+            expected_version=first.version,
+            scope=CashFlowMutationScope.THIS_AND_FUTURE,
+        ),
+    )
+
+    assert len(updated.items) == 37
+    assert updated.items[0].expected_date == date(2026, 9, 22)
+    assert updated.items[-1].expected_date == date(2029, 9, 22)
+    assert all(item.expected_date.day == 22 for item in updated.items)
+    assert all(item.direction is CashFlowDirection.OUTFLOW for item in updated.items)
+    assert all(item.status is CashFlowStatus.EXPECTED for item in updated.items)
+
+
+async def test_reimbursement_override_never_freezes_current_fact_amount(
+    session: AsyncSession,
+) -> None:
+    account, _income_category = await seed(session)
+    expense_category = await CategoryService(session).create(
+        CategoryDraft(
+            name="差旅",
+            direction=CategoryDirection.EXPENSE,
+            icon="airplane",
+            color_hex="#445566",
+        )
+    )
+    expense = await TransactionService(session).create(
+        TransactionDraft(
+            kind=TransactionKind.EXPENSE,
+            amount_minor=30_000,
+            occurred_at=datetime(2026, 8, 1, tzinfo=UTC),
+            title="垫付差旅",
+            account_id=account.id,
+            category_id=expense_category.id,
+        ),
+        uuid4(),
+    )
+    reimbursements = ReimbursementService(session)
+    claim = await reimbursements.create(
+        ReimbursementClaimDraft(
+            title="差旅报销",
+            parties=[
+                ReimbursementPartyDraft(
+                    name="示例公司",
+                    expected_date=date(2026, 8, 20),
+                    allocations=[
+                        ReimbursementAllocationDraft(transaction_id=expense.id, amount_minor=30_000)
+                    ],
+                )
+            ],
+        ),
+        uuid4(),
+    )
+    claim = await reimbursements.lifecycle(claim.id, claim.version, "submit")
+    party = claim.parties[0]
+    cash_flow = CashFlowService(session)
+    original = next(
+        item for item in (await cash_flow.active()).items if item.system_reference_id == party.id
+    )
+    assert original.planned_amount_minor == 30_000
+
+    overridden = await cash_flow.update_system(
+        CashFlowSystemKind.REIMBURSEMENT,
+        party.id,
+        CashFlowSystemReplace(
+            title="更清晰的报销标题",
+            planned_amount_minor=1,
+            expected_date=date(2026, 8, 23),
+            status=CashFlowStatus.CONFIRMED,
+            expected_version=original.version,
+        ),
+    )
+    assert overridden.planned_amount_minor == 30_000
+    stored = await session.scalar(
+        select(CashFlowSystemOverride).where(CashFlowSystemOverride.system_reference_id == party.id)
+    )
+    assert stored is not None and stored.planned_amount_minor is None
+
+    await reimbursements.create_receipt(
+        claim.id,
+        ReimbursementReceiptDraft(
+            expected_claim_version=claim.version,
+            party_id=party.id,
+            amount_minor=10_000,
+            received_at=datetime.now(UTC) - timedelta(seconds=1),
+            destination_account_id=account.id,
+            title="部分到账",
+        ),
+        uuid4(),
+    )
+    refreshed = next(
+        item for item in (await cash_flow.active()).items if item.system_reference_id == party.id
+    )
+    assert refreshed.title == "更清晰的报销标题"
+    assert refreshed.expected_date == date(2026, 8, 23)
+    assert refreshed.planned_amount_minor == 20_000
+
+    # A legacy frozen value must also be ignored by read composition.
+    assert stored is not None
+    stored.planned_amount_minor = 9_999
+    await session.commit()
+    legacy_read = next(
+        item for item in (await cash_flow.active()).items if item.system_reference_id == party.id
+    )
+    assert legacy_read.planned_amount_minor == 20_000
+
+    completed = await cash_flow.update_system(
+        CashFlowSystemKind.REIMBURSEMENT,
+        party.id,
+        CashFlowSystemReplace(
+            title="更清晰的报销标题",
+            planned_amount_minor=8_888,
+            expected_date=date(2026, 8, 23),
+            status=CashFlowStatus.COMPLETED,
+            expected_version=legacy_read.version,
+        ),
+    )
+    assert completed.planned_amount_minor == 20_000
+    history_item = next(
+        item
+        for item in (await cash_flow.history(None)).items
+        if item.system_reference_id == party.id
+    )
+    assert history_item.planned_amount_minor == 20_000
+    await session.refresh(stored)
+    assert stored.planned_amount_minor is None
+
+
+async def test_void_and_restore_keep_cash_flow_and_ledger_in_sync(session: AsyncSession) -> None:
+    account, category = await seed(session)
+    service = CashFlowService(session)
+    created = await service.create(
+        CashFlowDraft(
+            title="奖金",
+            direction=CashFlowDirection.INFLOW,
+            planned_amount_minor=100_000,
+            expected_date=date(2026, 8, 1),
+            account_id=account.id,
+            category_id=category.id,
+        ),
+        uuid4(),
+    )
+    item = created.items[0]
+    assert item.manual_item_id is not None
+    confirmed = await service.confirm(item.manual_item_id, item.version)
+    settled = await service.settle(
+        item.manual_item_id,
+        CashFlowSettlementDraft(
+            expected_version=confirmed.version,
+            actual_amount_minor=100_000,
+            occurred_at=datetime(2026, 8, 1, 0, 0, tzinfo=UTC),
+            account_id=account.id,
+            category_id=category.id,
+        ),
+        uuid4(),
+    )
+    assert settled.linked_transaction_id is not None
+    ledger = TransactionService(session)
+    transaction = await ledger.get(settled.linked_transaction_id)
+    voided = await ledger.void(transaction.id, transaction.version)
+    reopened = await session.get(CashFlowItem, item.manual_item_id)
+    assert reopened is not None and reopened.status == CashFlowStatus.CONFIRMED.value
+    await ledger.restore(voided.id, voided.version)
+    restored = await session.get(CashFlowItem, item.manual_item_id)
+    assert restored is not None and restored.status == CashFlowStatus.SETTLED.value
+
+
+async def test_credit_system_item_is_read_only_and_requires_a_real_repayment(
+    session: AsyncSession,
+) -> None:
+    credit = await AccountService(session).create(
+        AccountDraft(
+            name="白条",
+            kind=AccountKind.CREDIT,
+            opening_balance_minor=47_751,
+            credit_limit_minor=1_000_000,
+            statement_day=1,
+            due_day=11,
+            opening_balance_as_of_date=date(2026, 6, 1),
+            opening_due_date=date(2026, 6, 11),
+        )
+    )
+    service = CashFlowService(session)
+    active = await service.active()
+    item = next(value for value in active.items if value.account_id == credit.id)
+    assert item.system_reference_id is not None
+    assert item.actions == [CashFlowAction.CONFIRM_REPAYMENT]
+
+    with pytest.raises(APIError) as caught:
+        await service.update_system(
+            CashFlowSystemKind.CREDIT_CYCLE,
+            item.system_reference_id,
+            CashFlowSystemReplace(
+                title="白条 6 月账单",
+                planned_amount_minor=47_751,
+                expected_date=date(2026, 6, 11),
+                status=CashFlowStatus.COMPLETED,
+                expected_version=item.version,
+            ),
+        )
+    assert caught.value.code == "cash_flow_credit_projection_read_only"
+    assert any(value.id == item.id for value in (await service.active()).items)
+    assert await session.scalar(select(func.count()).select_from(LedgerTransaction)) == 0

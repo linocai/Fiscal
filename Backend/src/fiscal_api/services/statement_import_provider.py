@@ -1,0 +1,39 @@
+"""P26 isolated statement provider contract.
+
+Only the synthetic adapter exists in this slice.  It neither reads settings nor opens a network
+connection; production adapters intentionally have no construction path here.
+"""
+
+from __future__ import annotations
+
+from typing import Protocol
+
+from fiscal_api.api.p26_schemas import (
+    StatementProviderDocument,
+    StatementProviderOutboundRequest,
+    StatementProviderResult,
+)
+
+
+class StatementImportProvider(Protocol):
+    provider_id: str
+    model_id: str
+    prompt_version: str
+    schema_version: str
+
+    async def parse(self, request: StatementProviderOutboundRequest) -> StatementProviderResult: ...
+
+
+class SyntheticStatementImportProvider:
+    provider_id = "synthetic_statement"
+    model_id = "synthetic-statement-v1"
+    prompt_version = "statement-p26-v1"
+    schema_version = "statement-provider-v1"
+
+    async def parse(self, request: StatementProviderOutboundRequest) -> StatementProviderResult:
+        # Intentional no-op parser: P26 validates transport, snapshots, and source references.
+        # P27 owns turning parsed candidates into import rows or ledger actions.
+        del request
+        return StatementProviderResult(
+            document=StatementProviderDocument(status="synthetic"), candidates=[]
+        )
