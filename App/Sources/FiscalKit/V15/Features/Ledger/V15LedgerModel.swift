@@ -8,6 +8,16 @@ public final class V15LedgerModel {
     public enum NextPagePhase: Equatable { case idle, loading, failed(V15Failure) }
     public enum MutationState: Equatable { case idle, working, reconciled(String), conflict(V15Conflict), failed(V15Failure) }
     public enum MutationAction: String, Equatable, Sendable { case void, restore, replace }
+    public struct BatchCategoryFailure: Sendable, Equatable, Identifiable {
+        public let id: UUID
+        public let title: String
+        public let message: String
+    }
+    public struct BatchCategoryResult: Sendable, Equatable {
+        public let succeededIDs: [UUID]
+        public let failures: [BatchCategoryFailure]
+        public let queued: Bool
+    }
 
     public var filter = V15LedgerFilter() { didSet { guard filter != oldValue else { return }; filterChanged() } }
     public private(set) var items: [V15Transaction] = []
@@ -39,6 +49,7 @@ public final class V15LedgerModel {
     private var detailGeneration: UInt64 = 0
     private var mutationGeneration: UInt64 = 0
     private var referenceGeneration: UInt64 = 0
+    private var lastReplacementCategoryID: UUID?
 
     public init(services: V15Services, offlineSnapshotAt: Date? = nil) {
         self.services = services
@@ -132,14 +143,157 @@ public final class V15LedgerModel {
 
     public func voidSelected() async { await mutate(.void) }
     public func restoreSelected() async { await mutate(.restore) }
-    public func retryLastMutation() async { guard let lastAction else { return }; await mutate(lastAction) }
+    public func replaceSelectedCategory(_ categoryID: UUID?) async {
+        guard let selected else { return }
+        guard let kind = V15ManualTransactionKind(rawValue: selected.kind) else {
+            mutation = .failed(.init(kind: .decoding, code: "category_replace_unsupported", message: "这类系统账目不能在此修改分类。"))
+            return
+        }
+        mutationGeneration &+= 1
+        let current = mutationGeneration
+        lastAction = .replace
+        lastReplacementCategoryID = categoryID
+        mutation = .working
+        let draft = V15TransactionCreateRequest(
+            kind: kind,
+            amountMinor: selected.amountMinor,
+            occurredAt: selected.occurredAt,
+            title: selected.title,
+            note: selected.note,
+            accountID: selected.accountID,
+            categoryID: categoryID,
+            destinationAccountID: selected.destinationAccountID,
+            creditCycleID: selected.creditCycleID
+        )
+        let request = V15TransactionReplaceRequest(draft: draft, expectedVersion: selected.version)
+        if isOffline {
+            _ = services.pendingWrites.enqueueCategory(
+                transactionID: selected.id,
+                transactionTitle: selected.title,
+                amountMinor: selected.amountMinor,
+                request: request
+            )
+            mutation = .reconciled("已加入待同步；服务器上次确认的分类保持不变。")
+            return
+        }
+        do {
+            let value = try await services.ledger.replace(
+                transactionID: selected.id,
+                request: request
+            )
+            guard current == mutationGeneration else { return }
+            self.selected = value
+            replaceInList(value)
+            mutation = .idle
+            await loadDetail(transactionID: value.id)
+        } catch let failure as V15Failure {
+            guard current == mutationGeneration else { return }
+            if failure.kind == .conflict, let conflict = failure.conflict {
+                mutation = .conflict(conflict)
+            } else if V15LedgerCreateService.outcomeMayBeUnknown(failure) {
+                await reconcileUnknown(.replace, transactionID: selected.id, generation: current)
+            } else {
+                mutation = .failed(failure)
+            }
+        } catch {
+            guard current == mutationGeneration else { return }
+            await reconcileUnknown(.replace, transactionID: selected.id, generation: current)
+        }
+    }
+    public func retryLastMutation() async {
+        guard let lastAction else { return }
+        if lastAction == .replace { await replaceSelectedCategory(lastReplacementCategoryID) }
+        else { await mutate(lastAction) }
+    }
+    public func replaceCategories(_ transactionIDs: Set<UUID>, categoryID: UUID) async -> BatchCategoryResult {
+        let targets = items.filter { transactionIDs.contains($0.id) }
+        var succeeded: [UUID] = []
+        var failures: [BatchCategoryFailure] = []
+        for transaction in targets {
+            guard let kind = V15ManualTransactionKind(rawValue: transaction.kind) else {
+                failures.append(.init(id: transaction.id, title: transaction.title, message: "系统账目不能在此批量修改分类。"))
+                continue
+            }
+            let draft = V15TransactionCreateRequest(
+                kind: kind,
+                amountMinor: transaction.amountMinor,
+                occurredAt: transaction.occurredAt,
+                title: transaction.title,
+                note: transaction.note,
+                accountID: transaction.accountID,
+                categoryID: categoryID,
+                destinationAccountID: transaction.destinationAccountID,
+                creditCycleID: transaction.creditCycleID
+            )
+            let request = V15TransactionReplaceRequest(draft: draft, expectedVersion: transaction.version)
+            if isOffline {
+                _ = services.pendingWrites.enqueueCategory(
+                    transactionID: transaction.id,
+                    transactionTitle: transaction.title,
+                    amountMinor: transaction.amountMinor,
+                    request: request
+                )
+                succeeded.append(transaction.id)
+                continue
+            }
+            do {
+                let value = try await services.ledger.replace(transactionID: transaction.id, request: request)
+                replaceInList(value)
+                succeeded.append(transaction.id)
+            } catch let failure as V15Failure {
+                if V15LedgerCreateService.outcomeMayBeUnknown(failure) {
+                    do {
+                        let current = try await services.ledger.get(transactionID: transaction.id)
+                        replaceInList(current)
+                        if current.categoryID == categoryID { succeeded.append(transaction.id) }
+                        else { failures.append(.init(id: transaction.id, title: transaction.title, message: "结果不明；当前分类未达到目标值。")) }
+                    } catch {
+                        failures.append(.init(id: transaction.id, title: transaction.title, message: "结果不明，暂时无法读取服务器事实。"))
+                    }
+                } else {
+                    failures.append(.init(id: transaction.id, title: transaction.title, message: failure.message))
+                }
+            } catch {
+                failures.append(.init(id: transaction.id, title: transaction.title, message: "结果不明，未自动重试。"))
+            }
+        }
+        return .init(succeededIDs: succeeded, failures: failures, queued: isOffline)
+    }
+    public func disabledReason(for action: MutationAction, transaction: V15Transaction? = nil) -> V15DisabledReason? {
+        guard let transaction = transaction ?? selected else {
+            return .init(code: "transaction_required", message: "请先选择一笔账目。", fieldPath: nil)
+        }
+        if isOffline && action != .replace {
+            return .init(code: "offline_read_only", message: "需要联网：此操作不能进入待同步队列。", fieldPath: nil)
+        }
+        switch action {
+        case .replace:
+            return V15ManualTransactionKind(rawValue: transaction.kind) == nil
+                ? .init(code: "category_replace_unsupported", message: "这类系统账目不能修改分类。", fieldPath: nil)
+                : nil
+        case .void:
+            guard let capability = transaction.availableActions.first(where: { $0.action == "void" }) else {
+                return .init(code: "void_capability_missing", message: "服务器没有提供作废能力。", fieldPath: nil)
+            }
+            return capability.enabled ? nil : .init(code: capability.reasonCode ?? "void_unavailable", message: capability.reasonMessage ?? "当前不能作废。", fieldPath: nil)
+        case .restore:
+            guard transaction.voidedAt != nil else {
+                return .init(code: "transaction_not_voided", message: "只有已作废账目可以恢复。", fieldPath: nil)
+            }
+            if let capability = transaction.availableActions.first(where: { $0.action == "void" }),
+               capability.reasonCode != "transaction_already_voided" {
+                return .init(code: capability.reasonCode ?? "restore_unavailable", message: capability.reasonMessage ?? "当前不能恢复。", fieldPath: nil)
+            }
+            return nil
+        }
+    }
     public func accountName(_ id: UUID?) -> String { guard let id else { return "未提供账户" }; return accounts.first(where: { $0.id == id })?.name ?? "账户信息不可读取" }
     public func categoryName(_ id: UUID?) -> String { guard let id else { return "未分类" }; return categories.first(where: { $0.id == id })?.name ?? "分类信息不可读取" }
 
     private func mutate(_ action: MutationAction) async {
         guard let selected else { return }; lastAction = action
         guard !isOffline else { mutation = .failed(.init(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。")); return }
-        guard action != .replace, let serverAction = selected.availableActions.first(where: { $0.action == action.rawValue }), serverAction.enabled else { return }
+        guard action != .replace, disabledReason(for: action, transaction: selected) == nil else { return }
         mutationGeneration &+= 1; let current = mutationGeneration; mutation = .working
         do {
             let value: V15Transaction
@@ -157,7 +311,12 @@ public final class V15LedgerModel {
             async let currentFact = services.ledger.get(transactionID: transactionID); async let history = services.ledger.revisions(transactionID: transactionID)
             let result = try await (currentFact, history); guard generation == mutationGeneration else { return }
             selected = result.0; revisions = result.1.items; replaceInList(result.0)
-            let happened = action == .void ? result.0.voidedAt != nil : result.0.voidedAt == nil
+            let happened: Bool
+            switch action {
+            case .void: happened = result.0.voidedAt != nil
+            case .restore: happened = result.0.voidedAt == nil
+            case .replace: happened = result.0.categoryID == lastReplacementCategoryID
+            }
             mutation = .reconciled(happened ? "连接中断后已读回服务器事实：操作已确认。" : "连接中断后未能确认操作是否执行；请基于当前事实重新决定。")
         } catch { guard generation == mutationGeneration else { return }; mutation = .reconciled("连接中断，且暂时无法读回服务器事实；没有重试写入，请稍后重新加载再决定。") }
     }

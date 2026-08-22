@@ -232,14 +232,16 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
     public let reconciliation: V15ReconciliationService
     public let statementImports: V15StatementImportService
     public let deepLinks: V15DeepLinkReadService
+    public let pendingWrites: V15PendingWriteStore
     private let revisionStore: DataRevisionStore?
     private let offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)?
 
     /// Production injects `V15APITransportAdapter(APITransport(...))`. Fixture
     /// and offline implementations use exactly the same feature-facing surface.
-    init(transport: any V15Transporting, revisionStore: DataRevisionStore? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, saveAccessKey: (@Sendable (String) async throws -> Void)? = nil) {
+    init(transport: any V15Transporting, revisionStore: DataRevisionStore? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, saveAccessKey: (@Sendable (String) async throws -> Void)? = nil, pendingWrites: V15PendingWriteStore = .init()) {
         self.revisionStore = revisionStore
         self.offlineSnapshotProvider = offlineSnapshotProvider
+        self.pendingWrites = pendingWrites
         session = .init(transport: transport, saveAccessKey: saveAccessKey)
         system = .init(transport: transport)
         masterData = .init(transport: transport, writable: { [weak revisionStore] in
@@ -297,7 +299,12 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
             baseURL: baseURL, session: session, accessKeyStore: accessKeyStore,
             responseCache: responseCache, offlineSnapshots: offlineSnapshots,
             revisionStore: revisionStore)
-        self.init(transport: V15APITransportAdapter(transport: api), revisionStore: revisionStore, saveAccessKey: { key in try await accessKeyStore.save(key) })
+        self.init(
+            transport: V15APITransportAdapter(transport: api),
+            revisionStore: revisionStore,
+            saveAccessKey: { key in try await accessKeyStore.save(key) },
+            pendingWrites: V15PendingWriteStore(defaults: .standard)
+        )
     }
 
     public var offlineSnapshotAt: Date? { offlineSnapshotProvider?() ?? revisionStore?.offlineSnapshotAt }

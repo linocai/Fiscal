@@ -4,7 +4,7 @@ import Observation
 @MainActor @Observable
 public final class V15RecordModel {
     public enum LoadPhase: Equatable { case idle, loading, loaded, empty, failed(String) }
-    public enum Submission: Equatable { case idle, submitting, success(V15Transaction), conflict(V15Conflict), failed(V15Failure) }
+    public enum Submission: Equatable { case idle, submitting, queued(UUID), success(V15Transaction), conflict(V15Conflict), failed(V15Failure) }
 
     public var kind: V15ManualTransactionKind = .expense { didSet { guard oldValue != kind else { return }; changeKind(from: oldValue) } }
     public var amountText = "" { didSet { guard oldValue != amountText else { return }; inputChanged() } }
@@ -110,10 +110,16 @@ public final class V15RecordModel {
 
     public func submit() async {
         validate(); guard localIssues.isEmpty else { return }
-        if isOffline {
-            submission = .failed(.init(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。")); return
-        }
         guard let request = request(), let identity = payloadIdentity(for: request) else { validate(); return }
+        if isOffline {
+            guard kind != .repayment else {
+                submission = .failed(.init(kind: .offlineReadOnly, code: "preview_requires_network", message: "需要联网：还款必须先读取服务器账期事实。"))
+                return
+            }
+            let id = services.pendingWrites.enqueueCreate(request)
+            submission = .queued(id)
+            return
+        }
         submitGeneration &+= 1; let current = submitGeneration; submission = .submitting; fieldIssues = []
         activePayloadIdentity = identity
         let key = idempotency.key(for: createScope, payloadIdentity: identity)
@@ -289,7 +295,9 @@ public final class V15RecordModel {
             else if creditCycles.first(where: { $0.id == creditCycleID && $0.accountID == destinationAccountID }) == nil { issues.append(.init(code: "credit_cycle_unavailable", message: "所选信用账期不可用，请重新选择。", fieldPath: "credit_cycle_id")) }
             validateNoCategoryOrCycle(&issues, allowsCycle: true)
         }
-        if isOffline { issues.append(.init(code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。", fieldPath: nil)) }
+        if isOffline && kind == .repayment {
+            issues.append(.init(code: "preview_requires_network", message: "需要联网：还款必须先读取服务器账期事实。", fieldPath: nil))
+        }
         localIssues = issues
     }
 

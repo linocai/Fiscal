@@ -24,7 +24,8 @@ public struct V15ColorToken: Sendable, Equatable {
 /// decision, and a provisional result. Do not add feature-specific colors.
 public enum V15Palette {
     public static let paper = V15ColorToken(lightHex: 0xFFFFFF, darkHex: 0x0F1615)
-    public static let card = V15ColorToken(lightHex: 0xF8F7F3, darkHex: 0x1A2423)
+    public static let card = V15ColorToken(lightHex: 0xFAF9F6, darkHex: 0x1A2423)
+    public static let canvas = V15ColorToken(lightHex: 0xF4F2EC, darkHex: 0x0B1110)
     public static let ink = V15ColorToken(lightHex: 0x14201F, darkHex: 0xE8EFED)
     public static let teal = V15ColorToken(lightHex: 0x0C5A5B, darkHex: 0x4FB3AC)
     public static let yellow = V15ColorToken(lightHex: 0xFCD668, darkHex: 0xB99333)
@@ -37,6 +38,15 @@ public enum V15Palette {
 }
 
 public enum V15Spacing {
+#if os(macOS)
+    public static let xxs: CGFloat = 3
+    public static let xs: CGFloat = 6
+    public static let sm: CGFloat = 8
+    public static let md: CGFloat = 12
+    public static let lg: CGFloat = 16
+    public static let xl: CGFloat = 20
+    public static let section: CGFloat = 24
+#else
     public static let xxs: CGFloat = 4
     public static let xs: CGFloat = 8
     public static let sm: CGFloat = 12
@@ -44,13 +54,21 @@ public enum V15Spacing {
     public static let lg: CGFloat = 20
     public static let xl: CGFloat = 28
     public static let section: CGFloat = 34
+#endif
 }
 
 public enum V15Radius {
+#if os(macOS)
+    public static let tag: CGFloat = 4
+    public static let control: CGFloat = 6
+    public static let card: CGFloat = 8
+    public static let decisionCard: CGFloat = 10
+#else
     public static let tag: CGFloat = 5
     public static let control: CGFloat = 10
     public static let card: CGFloat = 14
     public static let decisionCard: CGFloat = 16
+#endif
 }
 
 public enum V15Elevation {
@@ -69,6 +87,15 @@ public enum V15Motion {
 }
 
 public enum V15Typography {
+#if os(macOS)
+    public static let surfaceTitle = Font.system(size: 26, weight: .bold, design: .default)
+    public static let cardTitle = Font.system(size: 18, weight: .semibold, design: .default)
+    public static let body = Font.system(size: 14, weight: .regular, design: .default)
+    public static let secondary = Font.system(size: 12, weight: .regular, design: .default)
+    public static let label = Font.system(size: 10, weight: .semibold, design: .default)
+    public static let money = Font.system(size: 14, weight: .semibold, design: .monospaced)
+    public static let moneyLarge = Font.system(size: 28, weight: .semibold, design: .monospaced)
+#else
     public static let surfaceTitle = Font.system(size: 34, weight: .bold, design: .default)
     public static let cardTitle = Font.system(size: 22, weight: .semibold, design: .default)
     public static let body = Font.system(size: 17, weight: .regular, design: .default)
@@ -76,6 +103,7 @@ public enum V15Typography {
     public static let label = Font.system(size: 11, weight: .semibold, design: .default)
     public static let money = Font.system(size: 17, weight: .semibold, design: .monospaced)
     public static let moneyLarge = Font.system(size: 29, weight: .semibold, design: .monospaced)
+#endif
 }
 
 public enum V15Symbol {

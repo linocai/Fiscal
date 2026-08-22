@@ -64,11 +64,11 @@ private struct V15ButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(.body, design: .default, weight: .semibold))
+            .font(V15Typography.body.weight(.semibold))
             .foregroundStyle(spec.foreground.color.opacity(spec.foregroundOpacity))
             .padding(.horizontal, V15Spacing.md)
-            .padding(.vertical, V15Spacing.xs)
-            .frame(minHeight: V15Accessibility.minimumTouchTarget)
+            .padding(.vertical, buttonVerticalPadding)
+            .frame(minHeight: buttonHeight)
             .background((spec.background?.color ?? .clear).opacity(spec.backgroundOpacity * (configuration.isPressed && isEnabled ? 0.76 : 1)), in: RoundedRectangle(cornerRadius: V15Radius.control))
             .overlay { border }
             .contentShape(RoundedRectangle(cornerRadius: V15Radius.control))
@@ -77,6 +77,20 @@ private struct V15ButtonStyle: ButtonStyle {
     }
 
     private var spec: V15ButtonVisualSpec { .resolve(kind: kind, isEnabled: isEnabled) }
+    private var buttonHeight: CGFloat {
+#if os(macOS)
+        34
+#else
+        V15Accessibility.minimumTouchTarget
+#endif
+    }
+    private var buttonVerticalPadding: CGFloat {
+#if os(macOS)
+        5
+#else
+        V15Spacing.xs
+#endif
+    }
     @ViewBuilder private var border: some View {
         if let border = spec.border {
             RoundedRectangle(cornerRadius: V15Radius.control).stroke(border.color.opacity(isEnabled ? 0.40 : 0.35), lineWidth: 1)

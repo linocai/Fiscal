@@ -18,7 +18,47 @@ public struct V15ReportingMacView: View {
         switch model.phase { case .idle, .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f4a.loading"); case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.load() } }.accessibilityIdentifier("v15.f4a.error"); case .requiresReload(let failure): V15Section("报告版本已变化") { Text(failure.message); V15ActionButton("取最新数据重新决定") { Task { await model.reloadFresh() } }.accessibilityIdentifier("v15.f4a.conflict.reload") }.accessibilityIdentifier("v15.f4a.conflict"); case .empty: V15EmptyState(title: "该期间没有正式事实", explanation: "服务器没有返回正式报告。 ").accessibilityIdentifier("v15.f4a.empty"); case .loaded: rows }
     }.padding(V15Spacing.md) }.accessibilityElement(children: .contain).accessibilityIdentifier("v15.f4a.mac.spine") }
     @ViewBuilder private var rows: some View { if let report = model.report { VStack(alignment: .leading, spacing: V15Spacing.md) { V15Section("主口径 · 个人实际") { V15MoneyText(minorUnits: report.summary.personalRealizedMinor, direction: .balance, font: V15Typography.money).accessibilityIdentifier("v15.f4a.personal-realized") }; lensRows(report) } } }
-    @ViewBuilder private func lensRows(_ report: V15PeriodReport) -> some View { switch model.lens { case .categories: V15Section("分类") { ForEach(Array(report.categories.enumerated()), id: \.offset) { indexed in rowButton(indexed.element.categoryName, "分类", indexed.element.netConsumptionMinor, indexed.element.drillCapability, "category.\(indexed.offset)") } }; case .merchants: V15Section("商户") { ForEach(Array(report.merchants.enumerated()), id: \.offset) { indexed in rowButton(indexed.element.merchantName, "商户", indexed.element.netConsumptionMinor, indexed.element.drillCapability, "merchant.\(indexed.offset)") } }; case .accounts: V15Section("账户") { ForEach(Array(report.accounts.enumerated()), id: \.offset) { indexed in rowButton(indexed.element.accountName, indexed.element.accountKind.isKnown ? indexed.element.accountKind.rawValue : "服务器新增类型", indexed.element.closingBalanceMinor, indexed.element.drillCapability, "account.\(indexed.offset)") } }; case .sources: V15Section("来源") { ForEach(Array(report.sources.enumerated()), id: \.offset) { indexed in rowButton(indexed.element.source.isKnown ? indexed.element.source.rawValue : "服务器新增类型", "来源", nil, indexed.element.drillCapability, "source.\(indexed.offset)") } }; case .completeness: V15Section("完整性") { rowButton("导入与分类完整性", completenessDetail(report.completeness), nil, .disabled("此汇总没有可安全定位的明细筛选条件"), "completeness") } } }
+    @ViewBuilder private func lensRows(_ report: V15PeriodReport) -> some View {
+        switch model.lens {
+        case .overview:
+            V15Section("总览") {
+                factRow("收入", report.summary.incomeMinor, .inflow)
+                factRow("个人实际支出", report.summary.personalRealizedMinor, .outflow)
+                factRow("净收支", report.summary.netIncomeExpenseMinor, .balance)
+                Text(completenessDetail(report.completeness)).font(V15Typography.secondary)
+            }
+        case .spending:
+            V15Section("七种支出口径") {
+                Picker("当前口径", selection: Binding(get: { model.spendingMeasure }, set: { model.selectSpendingMeasure($0) })) {
+                    ForEach(V15ReportingModel.SpendingMeasure.allCases, id: \.self) { Text(spendingLabel($0)).tag($0) }
+                }.pickerStyle(.menu)
+                factRow(spendingLabel(model.spendingMeasure), model.spendingAmount(in: report.summary), spendingDirection(model.spendingMeasure))
+                Text("下方分类明细固定展示净消费；切换口径不会伪造分类拆分。").font(V15Typography.secondary)
+                ForEach(Array(report.categories.enumerated()), id: \.offset) { indexed in rowButton(indexed.element.categoryName, "\(indexed.element.transactionCount) 笔 · 净消费", indexed.element.netConsumptionMinor, indexed.element.drillCapability, "category.\(indexed.offset)") }
+            }
+        case .cashFlow:
+            V15Section("现金流") {
+                factRow("流入", report.summary.cashInflowMinor, .inflow)
+                factRow("流出", report.summary.cashOutflowMinor, .outflow)
+                factRow("净现金流", report.summary.cashNetMinor, .balance)
+                factRow("内部转入", report.summary.internalTransferInflowMinor, .neutral)
+                factRow("内部转出", report.summary.internalTransferOutflowMinor, .neutral)
+                ForEach(Array(report.accounts.enumerated()), id: \.offset) { indexed in rowButton(indexed.element.accountName, "期末余额", indexed.element.closingBalanceMinor, indexed.element.drillCapability, "account.\(indexed.offset)") }
+            }
+        case .debt:
+            V15Section("债务") {
+                factRow("信用欠款", report.summary.creditDebtAtPeriodEndMinor, .outflow)
+                factRow("未收报销", report.summary.reimbursementOutstandingAtPeriodEndMinor, .balance)
+                Text("均为期末服务器事实；不把未来计划计入已发生支出。").font(V15Typography.secondary)
+            }
+        case .categories: V15Section("分类") { ForEach(Array(report.categories.enumerated()), id: \.offset) { indexed in rowButton(indexed.element.categoryName, "分类", indexed.element.netConsumptionMinor, indexed.element.drillCapability, "category.\(indexed.offset)") } }
+        case .merchants: V15Section("商户") { ForEach(Array(report.merchants.enumerated()), id: \.offset) { indexed in rowButton(indexed.element.merchantName, "商户", indexed.element.netConsumptionMinor, indexed.element.drillCapability, "merchant.\(indexed.offset)") } }
+        case .accounts: V15Section("账户") { ForEach(Array(report.accounts.enumerated()), id: \.offset) { indexed in rowButton(indexed.element.accountName, indexed.element.accountKind.isKnown ? indexed.element.accountKind.rawValue : "服务器新增类型", indexed.element.closingBalanceMinor, indexed.element.drillCapability, "account.\(indexed.offset)") } }
+        case .sources: V15Section("来源") { ForEach(Array(report.sources.enumerated()), id: \.offset) { indexed in rowButton(indexed.element.source.isKnown ? indexed.element.source.rawValue : "服务器新增类型", "来源", nil, indexed.element.drillCapability, "source.\(indexed.offset)") } }
+        case .completeness: V15Section("完整性") { Text(completenessDetail(report.completeness)).font(V15Typography.secondary) }
+        }
+    }
+    private func factRow(_ title: String, _ amount: Int64, _ direction: V15MoneyDirection) -> some View { HStack { Text(title); Spacer(); V15MoneyText(minorUnits: amount, direction: direction, font: V15Typography.secondary) }.padding(.vertical, V15Spacing.xxs) }
     private func rowButton(_ title: String, _ detail: String, _ amount: Int64?, _ capability: V15ReportDrillCapability, _ id: String) -> some View {
         VStack(alignment: .leading, spacing: V15Spacing.xxs) {
             Button(action: {
@@ -55,7 +95,9 @@ public struct V15ReportingMacView: View {
     }.padding(V15Spacing.md) }.accessibilityElement(children: .contain).accessibilityIdentifier("v15.f4a.mac.inspector") }
     private func enabled(_ capability: V15ReportDrillCapability) -> Bool { if case .enabled = capability { true } else { false } }
     @ViewBuilder private var exportPanel: some View { VStack(alignment: .leading, spacing: V15Spacing.md) { Text("导出当前正式报告").font(V15Typography.cardTitle); if let owner = model.exportOwner { Text("\(owner.period.rawValue) · 上海业务日 · CNY · 版本 \(owner.expectedRevision)").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true) }; switch model.exportPhase { case .confirming(let format): Text(format == .pdf ? "PDF 仅供阅读；不含凭证、完整账户标识、账单或 Provider 原文。" : "CSV 用于逐行复核；不含凭证、完整账户标识、账单或 Provider 原文。").fixedSize(horizontal: false, vertical: true); HStack { Button("取消") { model.cancelExport() }.accessibilityIdentifier("v15.f4b.export.cancel"); Spacer(); Button("开始导出") { Task { await model.exportConfirmed() } }.buttonStyle(.borderedProminent).accessibilityIdentifier("v15.f4b.export.confirm") }; case .transferring: ProgressView("正在从服务器传输文件…").accessibilityIdentifier("v15.f4b.export.transfer"); Button("取消") { model.cancelExport() }.accessibilityIdentifier("v15.f4b.export.cancel"); case .ready(let artifact): Text("服务器文件已验证 · 版本 \(artifact.dataRevision)；请选择本地保存位置。").accessibilityIdentifier("v15.f4b.export.ready"); Button("存入文件…") { Task { await model.saveReadyArtifact(using: artifactSaver) } }.accessibilityIdentifier("v15.f4b.export.handoff"); case .saving: ProgressView("正在存入文件…").accessibilityIdentifier("v15.f4b.export.saving"); case .saveFailed(_, let failure): Text(failure.message).accessibilityIdentifier("v15.f4b.export.error"); Button("重试存入文件") { Task { await model.retrySave(using: artifactSaver) } }.accessibilityIdentifier("v15.f4b.export.save.retry"); Button("关闭") { model.dismissExport() }.accessibilityIdentifier("v15.f4b.export.done"); case .completed(let artifact): Text("已存入此设备 · 版本 \(artifact.dataRevision)").accessibilityIdentifier("v15.f4b.export.success"); Button("完成") { model.dismissExport() }.accessibilityIdentifier("v15.f4b.export.done"); case .requiresReload(let failure): Text(failure.message); Text("文件结果未知，未保留本地副本。请取最新数据重新决定。").font(V15Typography.secondary); Button("取最新数据重新决定") { Task { await model.reloadFresh() } }.accessibilityIdentifier("v15.f4b.export.reload"); case .failed(let failure): Text(failure.message).accessibilityIdentifier("v15.f4b.export.error"); Button("关闭") { model.dismissExport() }.accessibilityIdentifier("v15.f4b.export.done"); case .idle: EmptyView() } }.accessibilityElement(children: .contain).accessibilityIdentifier("v15.f4b.export.inspector") }
-    private func lensLabel(_ lens: V15ReportingModel.Lens) -> String { switch lens { case .categories: "分类"; case .merchants: "商户"; case .accounts: "账户"; case .sources: "来源"; case .completeness: "完整性" } }
+    private func lensLabel(_ lens: V15ReportingModel.Lens) -> String { switch lens { case .overview: "总览"; case .spending: "支出"; case .cashFlow: "现金流"; case .debt: "债务"; case .categories: "分类"; case .merchants: "商户"; case .accounts: "账户"; case .sources: "来源"; case .completeness: "完整性" } }
+    private func spendingLabel(_ measure: V15ReportingModel.SpendingMeasure) -> String { switch measure { case .grossConsumption: "消费总额"; case .merchantRefund: "商户退款"; case .netConsumption: "净消费"; case .expectedReimbursement: "预计可报销"; case .receivedReimbursement: "已收报销"; case .personalExpected: "个人预计承担"; case .personalRealized: "个人实际承担" } }
+    private func spendingDirection(_ measure: V15ReportingModel.SpendingMeasure) -> V15MoneyDirection { measure == .receivedReimbursement || measure == .merchantRefund ? .inflow : .outflow }
     private func completenessDetail(_ value: V15PeriodReport.Completeness) -> String { "未处理导入 \(value.unresolvedImportCount) · 失败导入 \(value.failedImportCount) · 未分类 \(value.uncategorizedTransactionCount) · 对账差异 \(value.openReconciliationDifferenceCount)" }
 }
 

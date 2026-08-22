@@ -16,14 +16,24 @@ public final class V15ReportingModel {
     public enum Phase: Equatable { case idle, loading, loaded, empty, failed(V15Failure), requiresReload(V15Failure) }
     public enum PagePhase: Equatable { case idle, loading, failed(V15Failure) }
     public enum ExportPhase: Equatable { case idle, confirming(V15ReportArtifactFormat), transferring(V15ReportArtifactFormat), ready(V15ReportArtifact), saving(V15ReportArtifact), saveFailed(V15ReportArtifact, V15Failure), completed(V15ReportArtifact), failed(V15Failure), requiresReload(V15Failure) }
-    public enum Lens: String, CaseIterable, Sendable { case categories, merchants, accounts, sources, completeness }
+    public enum Lens: String, CaseIterable, Sendable {
+        case overview, spending, cashFlow, debt
+        // Kept as model-compatible values for existing deep links/tests; the
+        // product surface exposes only the four lenses above.
+        case categories, merchants, accounts, sources, completeness
+        public static var allCases: [Lens] { [.overview, .spending, .cashFlow, .debt] }
+    }
+    public enum SpendingMeasure: String, CaseIterable, Sendable {
+        case grossConsumption, merchantRefund, netConsumption, expectedReimbursement, receivedReimbursement, personalExpected, personalRealized
+    }
     public struct ReportOwner: Equatable, Sendable { public let period: V15ReportPeriod; public let revision: Int64?; public let filter: V15ReportDrillFilter?; public let generation: UInt64 }
     public struct ExportOwner: Equatable, Sendable { public let period: V15ReportPeriod; public let format: V15ReportArtifactFormat; public let expectedRevision: Int64; public let generation: UInt64 }
 
     public private(set) var phase: Phase = .idle
     public private(set) var pagePhase: PagePhase = .idle
     public private(set) var selectedPeriod: V15ReportPeriod
-    public private(set) var lens: Lens = .categories
+    public private(set) var lens: Lens = .overview
+    public private(set) var spendingMeasure: SpendingMeasure = .personalRealized
     public private(set) var report: V15PeriodReport?
     public private(set) var drillItems: [V15PeriodReportDrillDown.Item] = []
     public private(set) var drillCapability: V15ReportDrillCapability?
@@ -130,6 +140,23 @@ public final class V15ReportingModel {
         guard self.lens != lens else { return }
         self.lens = lens
         invalidateDrillForPresentationChange()
+    }
+    public func selectSpendingMeasure(_ measure: SpendingMeasure) {
+        guard spendingMeasure != measure else { return }
+        spendingMeasure = measure
+        invalidateDrillForPresentationChange()
+    }
+
+    public func spendingAmount(in summary: V15PeriodReport.Summary) -> Int64 {
+        switch spendingMeasure {
+        case .grossConsumption: summary.grossConsumptionMinor
+        case .merchantRefund: summary.merchantRefundMinor
+        case .netConsumption: summary.netConsumptionMinor
+        case .expectedReimbursement: summary.expectedReimbursementMinor
+        case .receivedReimbursement: summary.receivedReimbursementMinor
+        case .personalExpected: summary.personalExpectedMinor
+        case .personalRealized: summary.personalRealizedMinor
+        }
     }
 
     public func selectPeriod(_ period: V15ReportPeriod) async {

@@ -58,14 +58,46 @@ public struct V15ReportingView: View {
     @ViewBuilder private var lensRows: some View {
         if let report = model.report {
             switch model.lens {
+            case .overview:
+                V15Section("总览") {
+                    factRow("收入", report.summary.incomeMinor, .inflow)
+                    factRow("个人实际支出", report.summary.personalRealizedMinor, .outflow)
+                    factRow("净收支", report.summary.netIncomeExpenseMinor, .balance)
+                    Text(completenessDetail(report.completeness)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                }
+            case .spending:
+                V15Section("七种支出口径") {
+                    Picker("当前口径", selection: Binding(get: { model.spendingMeasure }, set: { model.selectSpendingMeasure($0) })) {
+                        ForEach(V15ReportingModel.SpendingMeasure.allCases, id: \.self) { Text(spendingLabel($0)).tag($0) }
+                    }.pickerStyle(.menu)
+                    factRow(spendingLabel(model.spendingMeasure), model.spendingAmount(in: report.summary), spendingDirection(model.spendingMeasure))
+                    Text("下方分类明细固定展示净消费；切换口径不会伪造分类拆分。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                    ForEach(Array(report.categories.enumerated()), id: \.offset) { indexed in aggregateRow(title: indexed.element.categoryName, detail: "\(indexed.element.transactionCount) 笔 · 净消费", amount: indexed.element.netConsumptionMinor, capability: indexed.element.drillCapability, id: "category.\(indexed.offset)") }
+                }
+            case .cashFlow:
+                V15Section("现金流") {
+                    factRow("流入", report.summary.cashInflowMinor, .inflow)
+                    factRow("流出", report.summary.cashOutflowMinor, .outflow)
+                    factRow("净现金流", report.summary.cashNetMinor, .balance)
+                    factRow("内部转入", report.summary.internalTransferInflowMinor, .neutral)
+                    factRow("内部转出", report.summary.internalTransferOutflowMinor, .neutral)
+                    ForEach(Array(report.accounts.enumerated()), id: \.offset) { indexed in aggregateRow(title: indexed.element.accountName, detail: "\(accountKindLabel(indexed.element.accountKind)) · 期末余额", amount: indexed.element.closingBalanceMinor, capability: indexed.element.drillCapability, id: "account.\(indexed.offset)") }
+                }
+            case .debt:
+                V15Section("债务") {
+                    factRow("信用欠款", report.summary.creditDebtAtPeriodEndMinor, .outflow)
+                    factRow("未收报销", report.summary.reimbursementOutstandingAtPeriodEndMinor, .balance)
+                    Text("均为期末服务器事实；不把未来计划计入已发生支出。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                }
             case .categories: V15Section("分类") { ForEach(Array(report.categories.enumerated()), id: \.offset) { indexed in aggregateRow(title: indexed.element.categoryName, detail: "\(indexed.element.transactionCount) 笔 · 服务端分类", amount: indexed.element.netConsumptionMinor, capability: indexed.element.drillCapability, id: "category.\(indexed.offset)") } }
             case .merchants: V15Section("商户") { ForEach(Array(report.merchants.enumerated()), id: \.offset) { indexed in aggregateRow(title: indexed.element.merchantName, detail: "\(indexed.element.transactionCount) 笔 · 服务端商户", amount: indexed.element.netConsumptionMinor, capability: indexed.element.drillCapability, id: "merchant.\(indexed.offset)") } }
             case .accounts: V15Section("账户") { ForEach(Array(report.accounts.enumerated()), id: \.offset) { indexed in aggregateRow(title: indexed.element.accountName, detail: "\(accountKindLabel(indexed.element.accountKind)) · 期末余额", amount: indexed.element.closingBalanceMinor, capability: indexed.element.drillCapability, id: "account.\(indexed.offset)") } }
             case .sources: V15Section("来源") { ForEach(Array(report.sources.enumerated()), id: \.offset) { indexed in aggregateRow(title: sourceLabel(indexed.element.source), detail: "\(indexed.element.transactionCount) 笔 · 服务端来源", amount: nil, capability: indexed.element.drillCapability, id: "source.\(indexed.offset)") } }
-            case .completeness: V15Section("完整性") { aggregateRow(title: "导入与分类完整性", detail: completenessDetail(report.completeness), amount: nil, capability: .disabled("此汇总没有可安全定位的明细筛选条件"), id: "completeness") }
+            case .completeness: V15Section("完整性") { Text(completenessDetail(report.completeness)).font(V15Typography.secondary) }
             }
         }
     }
+    private func factRow(_ title: String, _ amount: Int64, _ direction: V15MoneyDirection) -> some View { HStack { Text(title); Spacer(); V15MoneyText(minorUnits: amount, direction: direction, font: V15Typography.secondary) }.padding(.vertical, V15Spacing.xxs) }
     private func aggregateRow(title: String, detail: String, amount: Int64?, capability: V15ReportDrillCapability, id: String) -> some View {
         VStack(alignment: .leading, spacing: V15Spacing.xxs) {
             Button(action: {
@@ -111,7 +143,9 @@ public struct V15ReportingView: View {
         if let failure = model.pageFailure, !model.drillItems.isEmpty { V15ServiceErrorState(message: failure.message) { Task { await model.retryNextPage() } }.accessibilityIdentifier("v15.f4a.drill.page-error") }
     }.padding(V15Spacing.md) } }.accessibilityIdentifier("v15.f4a.drill") }
     private func isEnabled(_ capability: V15ReportDrillCapability) -> Bool { if case .enabled = capability { true } else { false } }
-    private func lensLabel(_ lens: V15ReportingModel.Lens) -> String { switch lens { case .categories: "分类"; case .merchants: "商户"; case .accounts: "账户"; case .sources: "来源"; case .completeness: "完整性" } }
+    private func lensLabel(_ lens: V15ReportingModel.Lens) -> String { switch lens { case .overview: "总览"; case .spending: "支出"; case .cashFlow: "现金流"; case .debt: "债务"; case .categories: "分类"; case .merchants: "商户"; case .accounts: "账户"; case .sources: "来源"; case .completeness: "完整性" } }
+    private func spendingLabel(_ measure: V15ReportingModel.SpendingMeasure) -> String { switch measure { case .grossConsumption: "消费总额"; case .merchantRefund: "商户退款"; case .netConsumption: "净消费"; case .expectedReimbursement: "预计可报销"; case .receivedReimbursement: "已收报销"; case .personalExpected: "个人预计承担"; case .personalRealized: "个人实际承担" } }
+    private func spendingDirection(_ measure: V15ReportingModel.SpendingMeasure) -> V15MoneyDirection { measure == .receivedReimbursement || measure == .merchantRefund ? .inflow : .outflow }
     private func sourceLabel(_ source: V15ReportTransactionSource) -> String { source.isKnown ? source.rawValue : "服务器新增类型" }
     private func accountKindLabel(_ kind: V15ReportAccountKind) -> String { kind.isKnown ? kind.rawValue : "服务器新增类型" }
     private func completenessDetail(_ value: V15PeriodReport.Completeness) -> String { "未处理导入 \(value.unresolvedImportCount) · 失败导入 \(value.failedImportCount) · 未分类 \(value.uncategorizedTransactionCount) · 对账差异 \(value.openReconciliationDifferenceCount)" }

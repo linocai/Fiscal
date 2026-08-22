@@ -62,7 +62,7 @@ public final class V15BootstrapModel {
         switch failure.code {
         case "passphrase_not_set": phase = .passphraseNotSet
         case "invalid_passphrase": phase = .wrongPassphrase
-        case "authentication_required", "unauthorized": phase = .needsPassphrase
+        case "authentication_required", "unauthorized", "invalid_access_key": phase = .needsPassphrase
         case "database_unavailable", "schema_state_unavailable": phase = .systemNotReady
         default: phase = .failed(failure.message)
         }

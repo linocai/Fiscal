@@ -24,6 +24,6 @@ struct FiscalmacOSApp: App {
             )
         }
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 1_280, height: 820)
+        .defaultSize(width: 1_440, height: 900)
     }
 }

@@ -3,7 +3,9 @@ import SwiftUI
 public struct V15RecordView: View {
     @State private var editorPresented = false
     @State private var model: V15RecordModel
-    public init(services: V15Services, prefilled: Bool = false, repaymentPrefilled: Bool = false, occurredOn: Date = Date()) {
+    private let presentsEditorDirectly: Bool
+    @Environment(\.dismiss) private var dismiss
+    public init(services: V15Services, prefilled: Bool = false, repaymentPrefilled: Bool = false, occurredOn: Date = Date(), presentsEditorDirectly: Bool = false) {
         let record = V15RecordModel(services: services, occurredOn: occurredOn)
         if prefilled { record.title = "午餐"; record.amountText = "12.80"; record.accountID = V15F1AFixtures.accountID; record.categoryID = V15F1AFixtures.categoryID }
         if repaymentPrefilled {
@@ -15,14 +17,26 @@ public struct V15RecordView: View {
             record.creditCycleID = V15F1AFixtures.creditCycleID
         }
         _model = State(initialValue: record)
+        self.presentsEditorDirectly = presentsEditorDirectly
     }
     public var body: some View {
 #if os(iOS)
-        NavigationStack {
-            VStack(alignment: .leading, spacing: V15Spacing.lg) {
-                V15RecordHeader(open: { editorPresented = true })
-                Text("新账目会以服务器返回的交易编号、版本和分录为准。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-            }.padding(V15Spacing.lg).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(V15Palette.paper.color).navigationTitle("录入")
+        Group {
+            if presentsEditorDirectly {
+                NavigationStack {
+                    V15RecordEditor(model: model)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } }
+                        }
+                }
+            } else {
+                NavigationStack {
+                    VStack(alignment: .leading, spacing: V15Spacing.lg) {
+                        V15RecordHeader(open: { editorPresented = true })
+                        Text("新账目会以服务器返回的交易编号、版本和分录为准。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                    }.padding(V15Spacing.lg).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(V15Palette.paper.color).navigationTitle("录入")
+                }
+            }
         }
         .sheet(isPresented: $editorPresented, onDismiss: { model.dismiss() }) { V15RecordEditor(model: model).presentationDetents([.large]).accessibilityIdentifier("v15.f1a.record.sheet") }
         .accessibilityIdentifier("v15.f1a.record.ios")
@@ -129,6 +143,9 @@ private struct V15RecordEditor: View {
     }
     @ViewBuilder private var submissionState: some View {
         switch model.submission {
+        case .queued(let id):
+            V15SuccessReceiptState(title: "已加入待同步", detail: "本地凭证 \(id.uuidString) · 联网后使用同一幂等键提交", actionTitle: "录入下一笔", action: { model.newEntry() })
+                .accessibilityIdentifier("v15.f1a.record.queued")
         case .success(let transaction):
             V15SuccessReceiptState(title: "已保存事实", detail: "交易 \(transaction.id.uuidString) · v\(transaction.version) · \(transaction.postings.count) 条分录", actionTitle: "录入下一笔", action: { model.newEntry() })
                 .accessibilityIdentifier("v15.f1a.record.success")

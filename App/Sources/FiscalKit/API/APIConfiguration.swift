@@ -33,7 +33,13 @@ public enum APIConfiguration {
     /// Optional one-time QA bootstrap access key. Xcode scheme/environment values are never
     /// bundled in the app. Against a local/test backend the injected value equals the backend's
     /// static token, so static-token authentication still accepts it.
-    public static func bootstrapAccessKey(environment: [String: String] = ProcessInfo.processInfo.environment) -> String? {
-        environment["FISCAL_ACCESS_KEY"]
+    public static func bootstrapAccessKey(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        bundleIdentifier: String? = Bundle.main.bundleIdentifier
+    ) -> String? {
+        if bundleIdentifier == "com.linotsai.fiscal" || bundleIdentifier == "com.linotsai.fiscal.mac" {
+            return nil
+        }
+        return environment["FISCAL_ACCESS_KEY"]
     }
 }

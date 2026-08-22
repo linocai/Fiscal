@@ -94,7 +94,9 @@
 		45EB0BF5E3F0B2D46006F348 /* F3CGalleryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D346D69BA5D32781AC83CDF /* F3CGalleryUITests.swift */; };
 		47AB207089C1F68AF4078C10 /* AISettingsDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A96FD3E04393BDF8D525167 /* AISettingsDTO.swift */; };
 		47DD9F8FF2D3DFEECA226CD4 /* AIInputSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18FCC6EB2E38FE0813B18CB8 /* AIInputSubmission.swift */; };
+		485981A273F1A8BABE0FD9D3 /* V151MacWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8854F629EF1BDC56B69333 /* V151MacWorkspace.swift */; };
 		48AEC977E6D3137EB83192B3 /* F3AFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C20696A9B4B3503BB48AFF /* F3AFixtures.swift */; };
+		49A5F4774C91A1399280C776 /* V151IOSWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = D98D6CA6AB2E7A87A9DE13AD /* V151IOSWorkspace.swift */; };
 		4ABBAD1418CC4B242D0FC182 /* P17Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDD9FF6DB6523DE10952C11 /* P17Tests.swift */; };
 		4DFFC03E01D6350B8D552D2D /* F4AFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = D14846DD87DCE8E0A47BA646 /* F4AFixtures.swift */; };
 		4E8E488F5194E9A013CF1ABD /* AIProposalRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA7703B5970A868EC31D996 /* AIProposalRepository.swift */; };
@@ -188,7 +190,9 @@
 		83FEEB95FE249DC4D90EBADE /* F3AFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C20696A9B4B3503BB48AFF /* F3AFixtures.swift */; };
 		84EF06F7B21E09C7CCCC0D38 /* F3DFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61D9AC0741741AB715B1FDBF /* F3DFixtures.swift */; };
 		84F713F63841ABD5091E756C /* P28StatementImportIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F873A80478359CBF365C25E2 /* P28StatementImportIntakeTests.swift */; };
+		86525A022FF15BB0815E87A0 /* V151IOSWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = D98D6CA6AB2E7A87A9DE13AD /* V151IOSWorkspace.swift */; };
 		86C26B39BBB61B2BFC8ACFC5 /* F1CFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20EC676C02BC2CAC7AC4A41B /* F1CFixtures.swift */; };
+		870BCDAF9A82B67D65766358 /* V151MacWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8854F629EF1BDC56B69333 /* V151MacWorkspace.swift */; };
 		8716E081D62C9C6121F5E7E2 /* V15TodayMacView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B79983C8BFAB4DEEC0057F5A /* V15TodayMacView.swift */; };
 		878C9F5FBE1D239A564742B6 /* V15BootstrapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 920CDFD6207CD8E951156831 /* V15BootstrapView.swift */; };
 		87E967612D577596F0AC0F69 /* V15DesignSystemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD9180AA75E785909444A15E /* V15DesignSystemTests.swift */; };
@@ -198,6 +202,7 @@
 		892D5BE239B173E48EE7D648 /* CNYAmountParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24A7B2A351A5E11DF3A92D2C /* CNYAmountParser.swift */; };
 		89DACE2CCFB87E9E9B5176F1 /* F3B2GalleryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCEA6B4691ECB75E966E4BC2 /* F3B2GalleryUITests.swift */; };
 		8A0EA6BB43E7EE9385DAABD6 /* F1BGalleryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24BCD026A8F4732642884455 /* F1BGalleryUITests.swift */; };
+		8AB1A6815C6FA7F7108913AD /* V15PendingWriteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D66DC5D0F8EBB1A450DAD12 /* V15PendingWriteStore.swift */; };
 		8C1D9DDD6DBF93737C38C3F8 /* V15RecordViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCEFA7E167474714F20FD4F3 /* V15RecordViews.swift */; };
 		8C3520FB72EC576D0544255C /* P9InputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B37F87A62073E2D426AC5C /* P9InputTests.swift */; };
 		8DA13CE603B7D9F20E51869D /* V15FoundationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFF77DDF2913CE38F360DA0F /* V15FoundationTests.swift */; };
@@ -235,6 +240,7 @@
 		A34018D3EA6227B04CC38168 /* V15BootstrapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 920CDFD6207CD8E951156831 /* V15BootstrapView.swift */; };
 		A4A5F02D3C37B425F476E6B4 /* P16InfrastructureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 882403E1F959EBCF7E11F243 /* P16InfrastructureTests.swift */; };
 		A4E826BECE7C183D457E0337 /* V15ArchiveModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CA05D22F9BBA7F7D1D2F64F /* V15ArchiveModel.swift */; };
+		A5523EBE6ADFEF8D18A0677F /* V15PendingWriteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D66DC5D0F8EBB1A450DAD12 /* V15PendingWriteStore.swift */; };
 		A574998404CD71B8348BA9B6 /* V15RootSmokemacOSUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9FFB4CF47556819B2F799B6 /* V15RootSmokemacOSUITests.swift */; };
 		A62054ABE1C109E24B0A5756 /* V15Accessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = C628A88083EFF9C441BBD9A6 /* V15Accessibility.swift */; };
 		A6B47C6DDDA2B1B3EEF44775 /* FiscalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E2FF91C44F1DCC211426631D /* FiscalKit.framework */; };
@@ -593,6 +599,7 @@
 		49E5B2DE9824FEAA8C23DD73 /* V15GalleryiOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = V15GalleryiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4A5CF78F321F52F87722C386 /* AccessKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessKeyStore.swift; sourceTree = "<group>"; };
 		4CA05D22F9BBA7F7D1D2F64F /* V15ArchiveModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V15ArchiveModel.swift; sourceTree = "<group>"; };
+		4D66DC5D0F8EBB1A450DAD12 /* V15PendingWriteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V15PendingWriteStore.swift; sourceTree = "<group>"; };
 		4D97882660F312713851BCE4 /* P16HorizontalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P16HorizontalTests.swift; sourceTree = "<group>"; };
 		4EA7703B5970A868EC31D996 /* AIProposalRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProposalRepository.swift; sourceTree = "<group>"; };
 		4FD07A4C691EB74C0485AC92 /* V15CreditMacView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V15CreditMacView.swift; sourceTree = "<group>"; };
@@ -614,6 +621,7 @@
 		5C2C430AD2037E1D3CACC0A4 /* CaptureAuthorizationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureAuthorizationModel.swift; sourceTree = "<group>"; };
 		5CB89B668C9785D2064942E1 /* MasterDataDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasterDataDTO.swift; sourceTree = "<group>"; };
 		5DFD347A403BBE5D74B1F7F0 /* P11SecurityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P11SecurityTests.swift; sourceTree = "<group>"; };
+		5F8854F629EF1BDC56B69333 /* V151MacWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V151MacWorkspace.swift; sourceTree = "<group>"; };
 		61975243C0F4B54528AB4EB5 /* InstallmentModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallmentModel.swift; sourceTree = "<group>"; };
 		61D9AC0741741AB715B1FDBF /* F3DFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = F3DFixtures.swift; sourceTree = "<group>"; };
 		63FFA8BEAFA85BD83189EDC2 /* ReconciliationDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconciliationDTO.swift; sourceTree = "<group>"; };
@@ -708,6 +716,7 @@
 		D7EFCB4FE7E749FF13BD94B3 /* AuthRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthRepository.swift; sourceTree = "<group>"; };
 		D861BDB3034B1DF16C4CB8C3 /* ReconciliationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconciliationModel.swift; sourceTree = "<group>"; };
 		D92B53BF92AC2D00B95560B5 /* V15AIProposalComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V15AIProposalComponents.swift; sourceTree = "<group>"; };
+		D98D6CA6AB2E7A87A9DE13AD /* V151IOSWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V151IOSWorkspace.swift; sourceTree = "<group>"; };
 		D9BB5FDCFCE803A456803360 /* DataRevision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataRevision.swift; sourceTree = "<group>"; };
 		DA633FAA9610D9715709EE73 /* V15TodayReadModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V15TodayReadModel.swift; sourceTree = "<group>"; };
 		DA89012FB1EEC333B6456485 /* V15InstallmentMacView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V15InstallmentMacView.swift; sourceTree = "<group>"; };
@@ -1405,6 +1414,7 @@
 		AD270CA596074965F1584D69 /* State */ = {
 			isa = PBXGroup;
 			children = (
+				4D66DC5D0F8EBB1A450DAD12 /* V15PendingWriteStore.swift */,
 				C870A955ADC4E8A1020B4650 /* V15StateViews.swift */,
 			);
 			path = State;
@@ -1504,6 +1514,8 @@
 			children = (
 				20966D852F102F60C714043E /* V15GalleryShell.swift */,
 				6895B11F169D86DA050F16AB /* V15LiveAppShell.swift */,
+				D98D6CA6AB2E7A87A9DE13AD /* V151IOSWorkspace.swift */,
+				5F8854F629EF1BDC56B69333 /* V151MacWorkspace.swift */,
 			);
 			path = AppShell;
 			sourceTree = "<group>";
@@ -2122,6 +2134,8 @@
 				076BBA42AE5E0542A58F9DB2 /* TransactionLocalDraftStore.swift in Sources */,
 				830689914AD7D22FC9F5749F /* TransactionModels.swift in Sources */,
 				EC7C9011E02301DF54E04B1D /* TransactionRepository.swift in Sources */,
+				86525A022FF15BB0815E87A0 /* V151IOSWorkspace.swift in Sources */,
+				485981A273F1A8BABE0FD9D3 /* V151MacWorkspace.swift in Sources */,
 				500B2DDAAFF051F2A0B3A98F /* V15AIContracts.swift in Sources */,
 				E50ACB1B0F5E4144C3FE982D /* V15AIProposalComponents.swift in Sources */,
 				E54ECB89DD2A671AD7A779BC /* V15AIProposalMacView.swift in Sources */,
@@ -2160,6 +2174,7 @@
 				67526539A5850B37733D03F5 /* V15LiveAppShell.swift in Sources */,
 				01AA8ACEF553EE8667D3D10A /* V15MasterDataModel.swift in Sources */,
 				30452C3EB3CE0165F00C4878 /* V15MasterDataViews.swift in Sources */,
+				A5523EBE6ADFEF8D18A0677F /* V15PendingWriteStore.swift in Sources */,
 				3339C1B475B5A4BD02EAB648 /* V15ReconciliationContracts.swift in Sources */,
 				DF44861D104BC55FA664704E /* V15ReconciliationMacView.swift in Sources */,
 				AA5A419EA657B38D45F1A170 /* V15ReconciliationModel.swift in Sources */,
@@ -2275,6 +2290,8 @@
 				EB867FAA456DBB9A7DDB5F64 /* TransactionLocalDraftStore.swift in Sources */,
 				8E2A9F3F530D7AEC804E1A0E /* TransactionModels.swift in Sources */,
 				A93A8DAFC29E991E35413859 /* TransactionRepository.swift in Sources */,
+				49A5F4774C91A1399280C776 /* V151IOSWorkspace.swift in Sources */,
+				870BCDAF9A82B67D65766358 /* V151MacWorkspace.swift in Sources */,
 				CF4F3A800D6C5F9315F00373 /* V15AIContracts.swift in Sources */,
 				6A863F60AA81E9577921F426 /* V15AIProposalComponents.swift in Sources */,
 				280DFCD730C4398F20C725DA /* V15AIProposalMacView.swift in Sources */,
@@ -2313,6 +2330,7 @@
 				93EB4A493FD79A7039805328 /* V15LiveAppShell.swift in Sources */,
 				577F17456BD2D903C6367C0E /* V15MasterDataModel.swift in Sources */,
 				3DB80EB2F2EA83D2AF970686 /* V15MasterDataViews.swift in Sources */,
+				8AB1A6815C6FA7F7108913AD /* V15PendingWriteStore.swift in Sources */,
 				1026B34F76F56FCCECAEC8C4 /* V15ReconciliationContracts.swift in Sources */,
 				7BDA96AF49DD3FAB6664339A /* V15ReconciliationMacView.swift in Sources */,
 				E82CC8D8E51407D981A10116 /* V15ReconciliationModel.swift in Sources */,
@@ -2554,7 +2572,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal;
 				PRODUCT_NAME = Fiscal;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -2641,7 +2659,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.linotsai.fiscal;
 				PRODUCT_NAME = Fiscal;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -2811,7 +2829,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -2833,7 +2851,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.5.0;
+				MARKETING_VERSION = 1.5.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -3055,7 +3073,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -3071,7 +3089,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.5.0;
+				MARKETING_VERSION = 1.5.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
