@@ -238,6 +238,63 @@ struct F3FTests {
         #expect(await transport.mutationWires().filter { $0.method == "DELETE" }.count == 1)
     }
 
+    @Test("Ordinary refresh resolves an unknown completed delete without orphaning its write lock")
+    @MainActor func unknownDeleteOrdinaryRefreshConfirmsAbsence() async throws {
+        let transport = F3FTransport(mode: .deleteUnknown)
+        let model = await loaded(transport)
+        let deletedID = try #require(model.selectedProposal?.id)
+        await model.deleteSelected()
+        #expect(model.hasUnknownDirect)
+
+        await model.load()
+
+        #expect(!model.proposals.contains { $0.id == deletedID })
+        #expect(!model.writeLocked)
+        #expect(!model.hasUnknownDirect)
+        #expect(model.selectedProposal?.id == V15F3FFixtures.failedID)
+        #expect(await transport.mutationWires().filter { $0.method == "DELETE" }.count == 1)
+    }
+
+    @Test("Ordinary refresh keeps the unknown owner visible when the delete did not arrive")
+    @MainActor func unknownDeleteOrdinaryRefreshStillPresent() async throws {
+        let transport = F3FTransport(mode: .deleteUnknownStillPresent)
+        let model = await loaded(transport)
+        let owner = try #require(model.selectedProposal)
+        await model.deleteSelected()
+
+        await model.load()
+
+        #expect(model.selectedProposal?.id == owner.id)
+        #expect(model.proposals.contains { $0.id == owner.id })
+        #expect(model.writeLocked)
+        #expect(model.hasUnknownDirect)
+        #expect(model.readbackCompleted)
+        #expect(model.recoveryMessage?.contains("仍然存在") == true)
+        #expect(await transport.mutationWires().filter { $0.method == "DELETE" }.count == 1)
+    }
+
+    @Test("Ordinary refresh keeps a retryable recovery surface when delete readback fails")
+    @MainActor func unknownDeleteOrdinaryRefreshReadFailure() async throws {
+        let transport = F3FTransport(mode: .deleteUnknownReadFailure)
+        let model = await loaded(transport)
+        let owner = try #require(model.selectedProposal)
+        await model.deleteSelected()
+
+        await model.load()
+
+        #expect(model.selectedProposal?.id == owner.id)
+        #expect(model.writeLocked)
+        #expect(model.hasUnknownDirect)
+        #expect(!model.readbackCompleted)
+        #expect(model.recoveryMessage?.contains("检查最新状态失败") == true)
+        #expect(await transport.mutationWires().filter { $0.method == "DELETE" }.count == 1)
+
+        await model.load()
+        #expect(!model.writeLocked)
+        #expect(!model.hasUnknownDirect)
+        #expect(await transport.mutationWires().filter { $0.method == "DELETE" }.count == 1)
+    }
+
     @Test("Failed delete readback keeps the lock until a later fresh read confirms deletion")
     @MainActor func unknownDeleteReadbackFailureRetainsLock() async throws {
         let transport = F3FTransport(mode: .deleteUnknownReadFailure)

@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 目标版本：v1.5.5（31）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**RELEASE PREP COMPLETE · 等待部署与换包**
+> 目标版本：v1.5.5（32）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**QUICKFIX BUILD COMPLETE · 等待发布授权**
 
 ## 1. 当前目标与授权
 
@@ -330,6 +330,17 @@
 - 新失败能明确告诉用户是限流、上游异常、超时、连接失败、配置拒绝还是返回不可识别；生产日志足以定位但不泄露财务原文或凭证。
 - 全部工程门、复核、提交、标签、推送和签名包准备完成，状态停在“等待生产部署与换包”。
 
+### B13 · v1.5.5 未决删除刷新恢复快修（Build 32）— complete
+
+- 复审发现 `AI-155-03`：DELETE 已到达服务端但响应断开时，模型进入 unknown；若用户不用专用“读取最新内容”而点击普通刷新，服务端列表可能已无原条目，页面改选下一项，但旧 owner 的 `directAttempts` 仍使全局写入锁保持，恢复入口却随当前选择消失。macOS 与 iOS 共用模型，双端都会进入“有锁、无入口”。
+- 快修边界：保持 `MARKETING_VERSION=1.5.5`，仅把 `CURRENT_PROJECT_VERSION` 增至 `32`；不改 Backend、migration、DELETE 契约、用户确认文案或其他业务页面。
+- 修复原则：普通刷新遇到未决直接写入时，必须先按该 attempt 的 owner 做 fresh GET 收敛，而不是把列表响应直接当作写入结果。DELETE owner fresh GET 为 404 才确认删除；owner 仍存在则恢复该 owner 的 unknown 可见面；fresh GET 失败则继续保留 owner、锁和重试入口。任何分支都不得自动重发 DELETE。
+- 不变量：`writeLocked == true` 时必须存在当前用户可达的 recovery surface；刷新、选择变化和 owner 从列表消失不能制造孤儿锁。补 `deleteUnknown -> load()` 回归，覆盖 404 已删除、仍存在和读回失败，并断言 DELETE 始终只发一次。
+- 验收：F3-F 定向与全量 `FiscalKitTests` 通过；iOS F3-F UI 覆盖 unknown 后普通刷新仍能恢复；macOS/iOS 正式 target 均构建为 `1.5.5 (32)`；复核无新 findings 后停在 commit/tag/push/签名包和部署换包之前。
+- 结果：普通刷新现在优先收敛未决 owner；404 确认删除并解锁、仍存在时恢复原 owner 的结果未知面、读回失败时保留原 owner 与重试入口，所有路径均未重发 DELETE。macOS 与 iOS 复用同一修复。
+- 门禁：F3-F 34/34、全量 `FiscalKitTests` 410/410（41 suites）、iOS 对应 UI 场景 1/1 全绿；`FiscaliOS` 与 `FiscalmacOS` Release 均成功，成品 Info.plist 均为 `1.5.5 (32)`，`git diff --check` 通过。
+- 停止点：Build 32 当前仅为已验证源码，不执行 commit/tag/push、签名打包、Backend 部署、macOS 换包或 iOS 安装；既有 `v1.5.5` 标签保持不可变，后续发布 Build 32 时使用独立 build 标签。
+
 ## 6. 验收矩阵
 
 | 门 | 必须满足 |
@@ -382,3 +393,5 @@
 - 当前发布门没有产品阻断项；唯一环境限制是 macOS UI 自动化宿主未能启用 automation mode，已用可测试编译、正式构建和静态视觉矩阵补证并如实登记。
 - v1.5.5 源码已独立提交为 `a21e17c`；签名 macOS universal 包、iOS arm64 Development IPA、双端 dSYM、`RELEASE.txt` 与 `SHA256SUMS` 已从该干净提交生成，打包前后严格验签和可执行文件同一性核对通过。
 - 发布交接记录见 `archive/releases/v1.5.5/RELEASE_STATE.md`；记录提交为 `56c8480`，不可变 `v1.5.5` 标签指向该提交，`main` 与 `v1.5.4`/`v1.5.5` 标签均已推送。当前无本地施工动作，等待用户授权生产部署与 `/Applications/Fiscal.app` 换包。
+- v1.5.5（32）B13 快修已完成并通过 34 项问题域测试、410 项全量测试、iOS 用户路径自动化和双端 Release 构建；当前差异未提交，Build 31 的签名包不再作为下一次换包候选。
+- 下一动作：收到一条龙授权后提交并推送 Build 32，保留既有 `v1.5.5` 标签并创建独立 build 标签，再从干净提交签名、验签、打包和换包；在此之前不触碰生产 Backend 与现有安装。

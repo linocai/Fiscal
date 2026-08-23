@@ -200,6 +200,7 @@ public final class V15AIProposalModel {
     }
 
     public func load() async {
+        let directAttemptOwnerAtStart = activeDirectAttemptOwner
         listGeneration &+= 1; let generation = listGeneration
         pageGeneration &+= 1; pagePhase = .idle
         settings = nil
@@ -220,11 +221,16 @@ public final class V15AIProposalModel {
                 settingsLoadFailure = nil
                 authorizeStableCreateRecoveryAfterSafeSettings()
             }
+            accounts = newAccounts; expenseCategories = newExpense; incomeCategories = newIncome
+            creditCycles = newCycles
+            if directAttemptOwnerAtStart != nil {
+                _ = await recoverActiveDirectAttemptForRefresh()
+                phase = proposals.isEmpty ? .empty : .loaded
+                return
+            }
             proposals = page.items
             for proposal in proposals { invalidateConfirmationIfStale(proposal) }
             pendingCount = page.pendingCount; nextCursor = page.nextCursor
-            accounts = newAccounts; expenseCategories = newExpense; incomeCategories = newIncome
-            creditCycles = newCycles
             phase = proposals.isEmpty ? .empty : .loaded
             if let selected = selectedProposal, let fresh = proposals.first(where: { $0.id == selected.id }) { selectedProposal = fresh; restoreOwnerState(for: fresh.id) }
             else if let first = proposals.first { await select(first) }
@@ -507,6 +513,9 @@ public final class V15AIProposalModel {
 
         guard selectedProposal?.id == owner else {
             phase = proposals.isEmpty ? .empty : .loaded
+            mutationPhase = .succeeded(message)
+            readbackCompleted = false
+            recoveryMessage = nil
             return
         }
         selectionGeneration &+= 1
@@ -655,6 +664,45 @@ public final class V15AIProposalModel {
         if let reason = settingsSafetyReason { reasons.append(reason) }
         else if settings == nil { reasons.append(.init(code: "ai_settings_unavailable", message: settingsLoadFailure?.message ?? "AI 安全设置尚未读取完成。", fieldPath: nil)) }
         return Self.unique(reasons)
+    }
+
+    private var activeDirectAttemptOwner: UUID? {
+        directAttempts.keys.first { owner in
+            guard let state = directStates[owner] else { return false }
+            switch state.phase {
+            case .loading, .unknown, .conflict: return true
+            case .idle, .failed, .succeeded: return false
+            }
+        }
+    }
+
+    private func recoverActiveDirectAttemptForRefresh() async -> Bool {
+        guard let owner = activeDirectAttemptOwner, let state = directStates[owner] else { return false }
+        focusDirectAttemptOwner(owner)
+        switch state.phase {
+        case .loading:
+            return true
+        case .unknown:
+            await recoverUnknownDirect()
+            return true
+        case .conflict:
+            await reloadConflict()
+            return true
+        case .idle, .failed, .succeeded:
+            return false
+        }
+    }
+
+    private func focusDirectAttemptOwner(_ owner: UUID) {
+        guard selectedProposal?.id != owner, let proposal = proposals.first(where: { $0.id == owner }) else { return }
+        selectionGeneration &+= 1
+        selectedProposal = proposal
+        qualityEvents = []
+        detailPhase = .loaded
+        editorGeneration &+= 1
+        editorMode = .closed
+        confirmedReviews.removeValue(forKey: owner)
+        restoreOwnerState(for: owner)
     }
 
     private func createInputChanged() { if stableAttempt == nil { recoveryMessage = nil } }

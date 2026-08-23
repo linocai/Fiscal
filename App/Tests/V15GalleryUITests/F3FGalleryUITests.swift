@@ -106,6 +106,22 @@ import XCTest
         attach("f3f-ios-delete-unposted-confirmed")
     }
 
+    func testUnknownDeleteOrdinaryRefreshSafelyConfirmsTheServerResult() {
+        launch("ai-delete-unknown")
+        revealButton("v15.f3f.delete", enabled: true).tap()
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 6))
+        alert.buttons["v15.f3f.delete.confirm"].firstMatch.tap()
+
+        XCTAssertTrue(revealButton("v15.f3f.unknown.readback", enabled: true).waitForExistence(timeout: 8))
+        button("v15.f3f.refresh").tap()
+
+        XCTAssertTrue(reveal("v15.f3f.success").waitForExistence(timeout: 8))
+        XCTAssertTrue(revealButton("v15.f3f.delete", enabled: true).waitForExistence(timeout: 8))
+        XCTAssertFalse(element("v15.f3f.unknown.readback").exists)
+        attach("f3f-ios-delete-unknown-refresh-confirmed")
+    }
+
     func testFieldErrorStaysInSheetAndKeylessUnknownRequiresReadback() {
         launch("ai-field-error")
         revealButton("v15.f3f.review.open").tap()

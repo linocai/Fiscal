@@ -124,7 +124,7 @@ public enum V15F3FFixtures {
 
 actor F3FTransport: V15Transporting {
     enum Mode: Equatable {
-        case normal, empty, initialError, fieldError, conflict, conflictReloadFailure, createUnknown, directUnknown, directUnknownReadFailure, directUnknownReadDelayed, deleteUnknown, deleteUnknownReadFailure, settingsViolation, settingsViolationAfterSafe, settingsViolationAutoOnlyAfterSafe, settingsViolationEffectiveOnlyAfterSafe, settingsTransportAfterSafe, settingsViolationRace, createUnknownSettingsViolationAfterSafe, createUnknownSettingsTransportAfterSafe, directUnknownSettingsViolationAfterSafe, selectionRace, pageRace, pageError, cashFlow, cashFlowMissing, serverChanged, long
+        case normal, empty, initialError, fieldError, conflict, conflictReloadFailure, createUnknown, directUnknown, directUnknownReadFailure, directUnknownReadDelayed, deleteUnknown, deleteUnknownStillPresent, deleteUnknownReadFailure, settingsViolation, settingsViolationAfterSafe, settingsViolationAutoOnlyAfterSafe, settingsViolationEffectiveOnlyAfterSafe, settingsTransportAfterSafe, settingsViolationRace, createUnknownSettingsViolationAfterSafe, createUnknownSettingsTransportAfterSafe, directUnknownSettingsViolationAfterSafe, selectionRace, pageRace, pageError, cashFlow, cashFlowMissing, serverChanged, long
         static func route(_ route: String) -> Mode {
             switch route {
             case "ai-empty": .empty
@@ -137,6 +137,7 @@ actor F3FTransport: V15Transporting {
             case "ai-response-unknown-read-failure": .directUnknownReadFailure
             case "ai-response-unknown-read-delayed": .directUnknownReadDelayed
             case "ai-delete-unknown": .deleteUnknown
+            case "ai-delete-unknown-still-present": .deleteUnknownStillPresent
             case "ai-delete-unknown-read-failure": .deleteUnknownReadFailure
             case "ai-conflict-read-failure": .conflictReloadFailure
             case "ai-page-error": .pageError
@@ -294,6 +295,9 @@ actor F3FTransport: V15Transporting {
         directCount += 1
         if mode == .conflict || mode == .conflictReloadFailure {
             throw V15Failure(kind: .conflict, code: "resource_version_conflict", message: "内容版本已变化。", conflict: .init(reloadPath: "/api/v1/ai/proposals/\(id)", latestRevision: nil, currentVersion: 9, expectedVersion: 2, message: "内容版本已变化。"))
+        }
+        if mode == .deleteUnknownStillPresent, directCount == 1 {
+            throw V15Failure(kind: .responseUnknown, message: "删除响应未知。")
         }
         deleted.insert(id)
         if (mode == .deleteUnknown || mode == .deleteUnknownReadFailure), directCount == 1 {
