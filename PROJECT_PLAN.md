@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 目标版本：v1.5.5（31）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**BUILD COMPLETE · RELEASE PREP 进行中**
+> 目标版本：v1.5.5（31）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**RELEASE PREP COMPLETE · 等待部署与换包**
 
 ## 1. 当前目标与授权
 
@@ -380,4 +380,5 @@
 - v1.5.4 已独立提交为 `a80c5f7` 并创建本地不可变标签 `v1.5.4`；与 v1.5.5 一并在最终发布准备阶段推送，不部署该中间版本。
 - v1.5.5（31）B12-A 至 B12-D 已完成：未记账 AI 内容真正删除、双端确认与未知结果收敛、上游故障分类和安全日志均已进入源码并通过 Backend、共享模型、iOS UI、双端构建与 macOS 快照门禁。
 - 当前发布门没有产品阻断项；唯一环境限制是 macOS UI 自动化宿主未能启用 automation mode，已用可测试编译、正式构建和静态视觉矩阵补证并如实登记。
-- 下一动作：提交源码、创建不可变 `v1.5.5` 标签、推送 `main` 与 `v1.5.4`/`v1.5.5` 标签，生成并严格验签双端发布包与 SHA-256 记录；随后停在生产部署与 `/Applications/Fiscal.app` 换包之前。
+- v1.5.5 源码已独立提交为 `a21e17c`；签名 macOS universal 包、iOS arm64 Development IPA、双端 dSYM、`RELEASE.txt` 与 `SHA256SUMS` 已从该干净提交生成，打包前后严格验签和可执行文件同一性核对通过。
+- 发布交接记录见 `archive/releases/v1.5.5/RELEASE_STATE.md`。最后一步提交该记录、创建不可变 `v1.5.5` 标签并推送 `main` 与 `v1.5.4`/`v1.5.5` 标签；完成后无本地施工动作，等待用户授权生产部署与 `/Applications/Fiscal.app` 换包。
