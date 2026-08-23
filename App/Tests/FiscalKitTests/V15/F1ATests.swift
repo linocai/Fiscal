@@ -31,6 +31,35 @@ struct F1ATests {
         #expect(wire?["account_id"] as? String == V15F1AFixtures.accountID.uuidString)
     }
 
+    @Test("system, passphrase, provider, and quality facts use their exact backend contracts")
+    @MainActor func settingsAndSystemRoutes() async throws {
+        let transport = F1AControlledTransport()
+        let services = V15Services(transport: transport)
+
+        let session = try await services.session.changePassphrase(oldPassphrase: "old-passphrase", newPassphrase: "new-passphrase")
+        #expect(session.credentialGeneration == 3)
+        #expect((await transport.lastRequest())?.path == "auth/passphrase/change")
+        #expect((await transport.lastRequest())?.method == "POST")
+        #expect(await transport.lastBody() == .object(["old_passphrase": .string("old-passphrase"), "new_passphrase": .string("new-passphrase")]))
+
+        let operations = try await services.system.operationsStatus()
+        #expect(operations.schemaState == "current" && operations.backup.state == "verified")
+        #expect((await transport.lastRequest())?.path == "system/operations-status")
+
+        let revision = try await services.system.dataRevision()
+        #expect(revision.revision == 52)
+        #expect((await transport.lastRequest())?.path == "data-revision")
+        #expect((await transport.lastRequest())?.readCachePolicy == .reloadIgnoringCache)
+
+        let provider = try await services.ai.providerSettings()
+        #expect(provider.apiKeyConfigured && provider.baseURL == "https://ai.example.test/v1")
+        #expect((await transport.lastRequest())?.path == "ai/provider-settings")
+
+        let quality = try await services.ai.qualityMetrics()
+        #expect(quality.rows.first?.pending == 1 && quality.rows.first?.total == 8)
+        #expect((await transport.lastRequest())?.path == "ai/quality/metrics")
+    }
+
     @Test("CNY conversion, overflow and Shanghai day instant are deterministic")
     @MainActor func moneyAndDate() async {
         #expect(CNYAmountParser.minorUnits("12.80") == 1280)
@@ -148,12 +177,14 @@ actor F1AControlledTransport: V15Transporting {
     enum CreateOutcome: Sendable { case responseUnknown, validation, conflict, success }
     private var outcomes: [CreateOutcome]
     private var requests: [V15Request] = []
+    private var bodies: [JSONValue?] = []
     private var transactionKeys: [String] = []
 
     init(outcomes: [CreateOutcome] = []) { self.outcomes = outcomes }
 
     func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
         requests.append(request)
+        bodies.append(body)
         if request.path == "transactions" {
             transactionKeys.append(request.headers["Idempotency-Key"] ?? "")
             switch outcomes.isEmpty ? .success : outcomes.removeFirst() {
@@ -165,7 +196,15 @@ actor F1AControlledTransport: V15Transporting {
         }
         switch request.path {
         case "auth/session": return try decode(V15F1AFixtures.session)
+        case "auth/passphrase/change": return try decode(Data(#"{"access_key":"replacement-access-key","credential_generation":3}"#.utf8))
         case "system/status": return try decode(V15F1AFixtures.system)
+        case "system/operations-status":
+            return try decode(Data(#"{"service_version":"1.5.2","release_revision":"release-26","database":"ready","alembic_revision":"schema-26","release_alembic_revision":"schema-26","schema_state":"current","backup":{"state":"verified","created_at":"2026-08-22T10:00:00Z","age_hours":2,"duration_seconds":4,"size_bytes":4096},"restore":{"state":"verified","checked_at":"2026-08-22T09:00:00Z","age_hours":3,"duration_seconds":9},"disk":{"state":"healthy","checked_at":"2026-08-22T12:00:00Z","used_percent":41,"warning_percent":75,"failure_percent":90}}"#.utf8))
+        case "data-revision": return try decode(Data(#"{"revision":52}"#.utf8))
+        case "ai/provider-settings":
+            return try decode(Data(#"{"provider":"openai_compatible","base_url":"https://ai.example.test/v1","model":"fiscal-test","api_key_configured":true,"version":2,"updated_at":"2026-08-22T12:00:00Z"}"#.utf8))
+        case "ai/quality/metrics":
+            return try decode(Data(#"{"rows":[{"source":"text","provider":"openai_compatible","model":"fiscal-test","prompt_version":"p23-v1","transaction_kind":"expense","amount_band":"small","total":8,"parse_succeeded":7,"historical_unavailable":0,"confirm_unchanged":4,"confirm_edited":2,"ignored":0,"execute_failed":0,"automatic_execute":0,"manual_execute":6,"undone":0,"provider_retry":1,"final_failure":1,"pending":1,"terminal_outcomes":7}]}"#.utf8))
         case "accounts": return try decode(V15F1AFixtures.accounts)
         case "categories": return try decode(request.query.first(where: { $0.name == "direction" })?.value == "income" ? V15F1AFixtures.incomeCategories : V15F1AFixtures.categories)
         case "credit-accounts/\(V15F1AFixtures.creditID)/cycles": return try decode(V15F1AFixtures.creditCycles)
@@ -175,6 +214,7 @@ actor F1AControlledTransport: V15Transporting {
 
     func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data { Data() }
     func lastRequest() -> V15Request? { requests.last }
+    func lastBody() -> JSONValue? { bodies.last ?? nil }
     func createKeys() -> [String] { transactionKeys }
     private func decode<Response: Decodable>(_ data: Data) throws -> Response { try V15FixtureCodec.decoder.decode(Response.self, from: data) }
 }

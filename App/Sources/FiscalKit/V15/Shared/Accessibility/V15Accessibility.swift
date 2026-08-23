@@ -21,6 +21,39 @@ public enum V15Accessibility {
         }
         return message
     }
+
+    public static func stacksActionsVertically(at size: DynamicTypeSize) -> Bool {
+        size.isAccessibilitySize
+    }
+
+    public static func alignsIconsToTop(at size: DynamicTypeSize) -> Bool {
+        size.isAccessibilitySize
+    }
+}
+
+/// Shared AX layout primitive. At accessibility sizes metadata wraps first and
+/// actions move below it; money remains a separate non-wrapping view.
+public struct V15AdaptiveStack<Content: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    private let horizontalAlignment: VerticalAlignment
+    private let verticalAlignment: HorizontalAlignment
+    private let spacing: CGFloat
+    private let content: Content
+
+    public init(horizontalAlignment: VerticalAlignment = .top, verticalAlignment: HorizontalAlignment = .leading, spacing: CGFloat = V15Spacing.sm, @ViewBuilder content: () -> Content) {
+        self.horizontalAlignment = horizontalAlignment
+        self.verticalAlignment = verticalAlignment
+        self.spacing = spacing
+        self.content = content()
+    }
+
+    public var body: some View {
+        if V15Accessibility.stacksActionsVertically(at: dynamicTypeSize) {
+            VStack(alignment: verticalAlignment, spacing: spacing) { content }
+        } else {
+            HStack(alignment: horizontalAlignment, spacing: spacing) { content }
+        }
+    }
 }
 
 public enum V15AccessibilityCopy {

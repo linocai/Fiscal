@@ -63,7 +63,11 @@ public struct V15CreditView: View {
                         .accessibilityIdentifier("v15.f3b1.account.\(account.id)")
                 }
             } label: { Label(model.selectedAccount?.name ?? "选择信用账户", systemImage: "creditcard") }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
+            .padding(.horizontal, V15Spacing.sm)
+            .padding(.vertical, V15Spacing.xs)
+            .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+            .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(V15Palette.hairline.color) }
             .accessibilityIdentifier("v15.f3b1.account-picker")
         }
     }
@@ -99,10 +103,23 @@ public struct V15CreditView: View {
 
     private func accountSummary(_ account: V15CreditAccountSummary) -> some View {
         V15Section("当前信用事实", detail: "账单日 \(account.statementDay) · 还款日 \(account.dueDay)") {
-            HStack {
-                VStack(alignment: .leading) { Text("当前欠款").font(V15Typography.secondary); V15MoneyText(minorUnits: account.currentDebtMinor, direction: .outflow) }
-                Spacer()
-                Text(account.hasOverdueCycle ? "含逾期账期" : "无逾期账期").font(V15Typography.label).foregroundStyle(account.hasOverdueCycle ? V15Palette.gold.color : V15Palette.teal.color)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 135), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
+                creditMetric("信用额度", account.creditLimitMinor, .neutral)
+                creditMetric("当前欠款", account.currentDebtMinor, .outflow)
+                creditMetric("可用额度", account.availableCreditMinor, .balance)
+                creditMetric("超额", account.overLimitMinor, account.overLimitMinor > 0 ? .outflow : .neutral)
+            }
+            Text(account.hasOverdueCycle ? "含逾期账期" : "无逾期账期").font(V15Typography.label).foregroundStyle(account.hasOverdueCycle ? V15Palette.gold.color : V15Palette.teal.color)
+            if account.activeInstallmentCount > 0 || account.futureScheduledGrossMinor > 0 {
+                V15PreviewState {
+                    VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+                        Text("未来计划分期").font(V15Typography.body.weight(.semibold))
+                        HStack { Text("\(account.activeInstallmentCount) 个进行中计划").font(V15Typography.secondary); Spacer(); V15MoneyText(minorUnits: account.futureScheduledGrossMinor, direction: .outflow) }
+                        Text("未来计划总额不计入上面的当前欠款；已出账期数只由对应账期体现。")
+                            .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .accessibilityIdentifier("v15.f3b1.future-installments")
             }
             Button("调整账期") { model.openScheduleSheet() }.disabled(model.isOffline).accessibilityIdentifier("v15.f3b1.schedule.open")
             if model.isOffline { Text("离线快照不能修改账期。 ").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
@@ -114,7 +131,7 @@ public struct V15CreditView: View {
             VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                 Text(cycle.isOpeningCycle ? "期初账期" : "账期").font(V15Typography.label).foregroundStyle(cycle.isOverdue ? V15Palette.gold.color : V15Palette.teal.color)
                 Text("\(cycle.periodStart) 至 \(cycle.periodEnd)").font(V15Typography.body)
-                Text("还款日 \(cycle.dueDate) · \(cycle.isOverdue ? "已逾期" : String(describing: cycle.status))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                Text("还款日 \(cycle.dueDate) · \(cycleStatusLabel(cycle.status))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
             Spacer()
             V15MoneyText(minorUnits: cycle.remainingMinor, direction: .outflow, font: V15Typography.secondary)
@@ -131,13 +148,32 @@ public struct V15CreditView: View {
             if let cycle = model.selectedCycle {
                 V15Section("账期检查器", detail: "服务器版本 \(cycle.version)") {
                     Text("消费、期初、还款和分期金额均为服务端事实。 ").font(V15Typography.secondary)
-                    V15MoneyText(minorUnits: cycle.amountDueMinor, direction: .outflow)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
+                        creditMetric("本期应还", cycle.amountDueMinor, .outflow)
+                        creditMetric("已还", cycle.repaidMinor, .neutral)
+                        creditMetric("仍需还", cycle.remainingMinor, .outflow)
+                        creditMetric("本期消费", cycle.purchaseMinor, .outflow)
+                        creditMetric("分期本金", cycle.installmentPrincipalMinor, .neutral)
+                        creditMetric("分期手续费", cycle.installmentFeeMinor, .neutral)
+                    }
+                    if cycle.openingMinor != 0 { Text("含期初欠款 \(money(cycle.openingMinor))").font(V15Typography.secondary) }
                     if model.nextTransactionCursor != nil { Button("读取下一页账目") { Task { await model.loadNextTransactions() } }.accessibilityIdentifier("v15.f3b1.transactions.next") }
                     if case .failed(let failure) = model.transactionPagePhase { V15ServiceErrorState(message: failure.message) { Task { await model.loadNextTransactions() } }.accessibilityIdentifier("v15.f3b1.transactions.page-error") }
                 }
             }
         }
     }
+
+    private func creditMetric(_ title: String, _ value: V15MinorUnits, _ direction: V15MoneyDirection) -> some View {
+        VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+            Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+            V15MoneyText(minorUnits: value, direction: direction, font: V15Typography.money)
+        }
+        .padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading)
+        .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+    }
+    private func cycleStatusLabel(_ value: V15CreditCycleStatus) -> String { switch value { case .open: "开放"; case .unpaid: "未还"; case .partial: "部分已还"; case .overdue: "已逾期"; case .settled: "已结清"; case .unknown: "未知状态" } }
+    private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral).text }
 
     private var scheduleSheet: some View {
         NavigationStack {

@@ -112,8 +112,18 @@ public struct V15InstallmentMacView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: V15Spacing.lg) {
                         HStack(alignment: .firstTextBaseline) { VStack(alignment: .leading) { Text(plan.title).font(V15Typography.surfaceTitle); Text("\(plan.status.displayName) · v\(plan.version)").font(V15Typography.secondary) }; Spacer(); V15MoneyText(minorUnits: plan.totalFinancedMinor, direction: .outflow, font: V15Typography.moneyLarge) }
-                        if plan.isDisplayOnly { V15ArchiveReadOnlyState { Text("未知 future state 仅展示；不会推断操作或生命周期跃迁。") }.accessibilityIdentifier("v15.f3b2.mac.unknown") }
+                        if plan.isDisplayOnly { V15DisplayOnlyState(detail: "未知 future state 仅展示；不会推断操作或生命周期跃迁。").accessibilityIdentifier("v15.f3b2.mac.unknown") }
                         HStack(spacing: V15Spacing.sm) { metric("锁定", plan.lockedCount); metric("未来", plan.futureCount); metric("取消", plan.cancelledCount); metric("已结账期", plan.cycleSettledCount) }
+                        V15Section("金额分层") {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
+                                amountMetric("计划本金", plan.principalMinor)
+                                amountMetric("计划手续费", plan.feeMinor)
+                                amountMetric("计划总额", plan.totalFinancedMinor)
+                                amountMetric("未来未出账", plan.futureScheduledGrossMinor, provisional: true)
+                            }
+                            Text("未来未出账计划不等于当前精确信用欠款；当前欠款只在信用账户与账期中确认。")
+                                .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                        }.accessibilityIdentifier("v15.f3b2.mac.amount-layers")
                         V15Section("期次脊柱") {
                             ForEach(plan.periods) { period in
                                 V15LedgerRow(title: "第 \(period.sequence) 期 · \(period.status.rawValue)", detail: "账单 \(period.effectiveStatementDate) · 到期 \(period.dueDate) · \(period.locked ? "已锁定" : "未来")", amountMinor: period.amountDueMinor, direction: .outflow, marker: period.locked ? .ordinary : .provisional)
@@ -136,6 +146,7 @@ public struct V15InstallmentMacView: View {
     private func metric(_ title: String, _ value: Int) -> some View {
         VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title.uppercased()).font(V15Typography.label); Text("\(value) 期").font(V15Typography.cardTitle) }.padding(V15Spacing.md).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card))
     }
+    private func amountMetric(_ title: String, _ value: V15MinorUnits, provisional: Bool = false) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); V15MoneyText(minorUnits: value, direction: .neutral, font: V15Typography.body.weight(.semibold)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(provisional ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
 
     private var inspector: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -191,7 +202,7 @@ public struct V15InstallmentMacView: View {
         case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.refresh() } }
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.requestPlanPreview() } }
         case .succeeded: V15SuccessReceiptState(title: "计划已更新", detail: "服务端响应或 fresh GET 已确认。")
-        case .previewing, .committing: ProgressView("正在处理")
+        case .previewing, .committing: V15LoadingSkeleton(layout: .decisionCard)
         default: EmptyView()
         }
     }
@@ -229,17 +240,17 @@ public struct V15InstallmentMacView: View {
                 }
             }
             else { warning("没有 operation receipt，不能把计划状态变化当作本请求成功。", id: "v15.f3b2.mac.command.no-receipt") }
-        case .previewing, .committing: ProgressView("正在处理")
+        case .previewing, .committing: V15LoadingSkeleton(layout: .decisionCard)
         default: EmptyView()
         }
     }
 
     private func warning(_ text: String, id: String) -> some View { Text(text).font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true).padding(V15Spacing.md).background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.control)).accessibilityIdentifier(id) }
-    @ViewBuilder private func readback(_ phase: V15InstallmentModel.ReadbackPhase, prefix: String) -> some View { switch phase { case .loading: ProgressView(); case .confirmed: Text("最新事实已确认").accessibilityIdentifier("\(prefix).confirmed"); case .notConfirmed: Text("最新事实不能确认该请求已生效").accessibilityIdentifier("\(prefix).not-confirmed"); case .failed(let failure): Text("核对失败：\(failure.message)").accessibilityIdentifier("\(prefix).error"); case .idle: EmptyView() } }
-    @ViewBuilder private func commandReadback(_ phase: V15InstallmentModel.ReadbackPhase) -> some View { switch phase { case .loading: ProgressView("正在读取最新计划事实"); case .notConfirmed: Text("计划事实可能已变化或操作可能已发生，但 GET 无法证明付款账户、目标账单日、发生时间和 operation receipt 属于本请求；同一请求凭证仍保留。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("v15.f3b2.mac.command.readback.not-confirmed"); case .failed(let failure): Text("事实读取失败：\(failure.message)；同一请求凭证仍保留。").font(V15Typography.secondary).accessibilityIdentifier("v15.f3b2.mac.command.readback.error"); case .confirmed: Text("仅同一 key 重放 receipt 可确认。"); case .idle: EmptyView() } }
+    @ViewBuilder private func readback(_ phase: V15InstallmentModel.ReadbackPhase, prefix: String) -> some View { switch phase { case .loading: V15LoadingSkeleton(layout: .compact); case .confirmed: Text("最新事实已确认").accessibilityIdentifier("\(prefix).confirmed"); case .notConfirmed: Text("最新事实不能确认该请求已生效").accessibilityIdentifier("\(prefix).not-confirmed"); case .failed(let failure): Text("核对失败：\(failure.message)").accessibilityIdentifier("\(prefix).error"); case .idle: EmptyView() } }
+    @ViewBuilder private func commandReadback(_ phase: V15InstallmentModel.ReadbackPhase) -> some View { switch phase { case .loading: V15LoadingSkeleton(layout: .compact); case .notConfirmed: Text("计划事实可能已变化或操作可能已发生，但 GET 无法证明付款账户、目标账单日、发生时间和 operation receipt 属于本请求；同一请求凭证仍保留。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("v15.f3b2.mac.command.readback.not-confirmed"); case .failed(let failure): Text("事实读取失败：\(failure.message)；同一请求凭证仍保留。").font(V15Typography.secondary).accessibilityIdentifier("v15.f3b2.mac.command.readback.error"); case .confirmed: Text("仅同一 key 重放 receipt 可确认。"); case .idle: EmptyView() } }
     @ViewBuilder private func feeDetails(categoryID: Binding<UUID?>, occurredDateText: Binding<String>, prefix: String) -> some View {
         switch model.feeCategoryPhase {
-        case .loading: ProgressView("正在读取手续费支出分类").accessibilityIdentifier("\(prefix).fee-category.loading")
+        case .loading: V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("\(prefix).fee-category.loading")
         case .loaded:
             Picker("手续费支出分类", selection: categoryID) { Text("请选择").tag(UUID?.none); ForEach(model.expenseCategories) { Text($0.name).tag(Optional($0.id)) } }.pickerStyle(.menu).disabled(model.isOffline).accessibilityIdentifier("\(prefix).fee-category")
         case .empty: warning("暂无支出分类，请先创建分类；正手续费不能提交。", id: "\(prefix).fee-category.empty"); V15ActionButton("重新读取分类", kind: .secondary) { Task { await model.loadFeeCategories() } }.accessibilityIdentifier("\(prefix).fee-category.retry")
@@ -282,7 +293,7 @@ private struct V15InstallmentMacCreationView: View {
     @ViewBuilder private var purchaseCategorySurface: some View {
         switch model.feeCategoryPhase {
         case .loading:
-            ProgressView("正在读取支出分类").accessibilityIdentifier("v15.f3b2.mac.purchase.category.loading")
+            V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("v15.f3b2.mac.purchase.category.loading")
         case .loaded:
             Picker("支出分类", selection: $model.newPurchaseCategoryID) { Text("请选择").tag(UUID?.none); ForEach(model.expenseCategories) { Text($0.name).tag(Optional($0.id)) } }
                 .pickerStyle(.menu).disabled(model.isOffline).accessibilityIdentifier("v15.f3b2.mac.purchase.category")
@@ -303,7 +314,7 @@ private struct V15InstallmentMacCreationView: View {
             V15ActionButton("检查分期资格") { Task { await model.checkEligibility() } }.accessibilityIdentifier("v15.f3b2.mac.eligibility.check")
             if let eligibility = model.eligibility { Text(eligibility.eligible ? "可分期 · 服务端本金 \(eligibility.principalMinor) 分" : "不可分期 · \(eligibility.reasonCode ?? "无原因码")").foregroundStyle(eligibility.eligible ? V15Palette.teal.color : V15Palette.gold.color).accessibilityIdentifier("v15.f3b2.mac.eligibility.result") }
             switch model.eligibilityPurchasePhase {
-            case .loading: ProgressView("正在读取权威消费发生时间").accessibilityIdentifier("v15.f3b2.mac.eligibility.purchase.loading")
+            case .loading: V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("v15.f3b2.mac.eligibility.purchase.loading")
             case .failed(let failure):
                 Text("消费详情读取失败：\(failure.message)").font(V15Typography.secondary).accessibilityIdentifier("v15.f3b2.mac.eligibility.purchase.error")
                 V15ActionButton("重试消费详情", kind: .secondary) { Task { await model.checkEligibility() } }.accessibilityIdentifier("v15.f3b2.mac.eligibility.purchase.retry")
@@ -323,7 +334,7 @@ private struct V15InstallmentMacCreationView: View {
 
     @ViewBuilder private func feeDetails(categoryID: Binding<UUID?>, occurredDateText: Binding<String>, prefix: String) -> some View {
         switch model.feeCategoryPhase {
-        case .loading: ProgressView("正在读取手续费支出分类").accessibilityIdentifier("\(prefix).fee-category.loading")
+        case .loading: V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("\(prefix).fee-category.loading")
         case .loaded: Picker("手续费支出分类", selection: categoryID) { Text("请选择").tag(UUID?.none); ForEach(model.expenseCategories) { Text($0.name).tag(Optional($0.id)) } }.pickerStyle(.menu).disabled(model.isOffline).accessibilityIdentifier("\(prefix).fee-category")
         case .empty: Text("暂无支出分类，请先创建分类；正手续费不能提交。").font(V15Typography.secondary).accessibilityIdentifier("\(prefix).fee-category.empty"); V15ActionButton("重新读取分类", kind: .secondary) { Task { await model.loadFeeCategories() } }.accessibilityIdentifier("\(prefix).fee-category.retry")
         case .failed(let failure): Text("支出分类读取失败：\(failure.message)").font(V15Typography.secondary).accessibilityIdentifier("\(prefix).fee-category.error"); V15ActionButton("重试读取分类", kind: .secondary) { Task { await model.loadFeeCategories() } }.accessibilityIdentifier("\(prefix).fee-category.retry")

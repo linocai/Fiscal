@@ -4,6 +4,32 @@ import Testing
 
 @Suite("F4-A report facts and same-revision drill-down")
 struct F4ATests {
+    @MainActor @Test("category distribution never relabels net facts as an unsupported spending measure")
+    func categoryMeasureTruth() async throws {
+        let model = V15ReportingModel(services: V15Services(transport: F4ATransport(mode: .normal)))
+        await model.load()
+        let report = try #require(model.report)
+        let category = try #require(report.categories.first)
+        #expect(model.categoryAmount(category, for: .grossConsumption) == category.grossConsumptionMinor)
+        #expect(model.categoryAmount(category, for: .merchantRefund) == category.merchantRefundMinor)
+        #expect(model.categoryAmount(category, for: .netConsumption) == category.netConsumptionMinor)
+        #expect(model.categoryAmount(category, for: .personalRealized) == nil)
+        #expect(model.spendingAmount(.personalRealized, in: report.summary) == report.summary.personalRealizedMinor)
+    }
+
+    @MainActor @Test("nonzero summary remains a loaded report even without dimension rows")
+    func summaryOnlyIsNotEmpty() async {
+        let model = V15ReportingModel(services: V15Services(transport: F4ATransport(mode: .summaryOnly)))
+        await model.load()
+        guard case .loaded = model.phase else {
+            Issue.record("nonzero authoritative summary must not use the formal empty-period surface")
+            return
+        }
+        #expect(model.report?.accounts.isEmpty == true)
+        #expect(model.report?.categories.isEmpty == true)
+        #expect(model.report?.summary.personalRealizedMinor == 28_000)
+    }
+
     @Test("period bounds and forward-compatible report enums are display-only")
     func boundsAndEnums() throws {
         #expect(V15ReportMonth("0001-01") == nil)

@@ -19,7 +19,7 @@ public struct V15IOSLiveAppShell: View {
     public var body: some View {
         Group {
             if !prepared {
-                ProgressView("正在准备安全连接…")
+                V15LoadingSkeleton(layout: .decisionCard)
                     .accessibilityIdentifier("v15.live.bootstrap.preparing")
             } else if !isAvailable {
                 V15BootstrapView(services: services, onAvailable: { isAvailable = true })
@@ -53,7 +53,7 @@ public struct V15MacLiveAppShell: View {
     public var body: some View {
         Group {
             if !prepared {
-                ProgressView("正在准备安全连接…")
+                V15LoadingSkeleton(layout: .decisionCard)
                     .accessibilityIdentifier("v15.live.bootstrap.preparing")
             } else if !isAvailable {
                 V15BootstrapView(services: services, onAvailable: { isAvailable = true })

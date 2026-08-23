@@ -120,6 +120,7 @@ private struct V15LedgerDetail: View {
         }.padding(V15Spacing.md) }.background(V15Palette.paper.color).accessibilityIdentifier("v15.f1b.detail")
     }
     @ViewBuilder private func detail(_ transaction: V15Transaction) -> some View {
+        V15Section("可用操作") { actions(transaction) }
         V15Section("服务器事实", detail: "v\(transaction.version)") {
             Text(transaction.title).font(V15Typography.surfaceTitle).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("v15.f1b.detail.title")
             V15MoneyText(minorUnits: transaction.amountMinor, direction: direction(transaction), font: V15Typography.money)
@@ -132,7 +133,6 @@ private struct V15LedgerDetail: View {
             if transaction.voidedAt != nil { V15ArchiveReadOnlyState { Text("该账目已作废；当前服务器没有提供恢复授权。").font(V15Typography.secondary) } }
         }
         V15Section("分录") { ForEach(transaction.postings, id: \.id) { posting in HStack { Text(postingRole(posting.role) + " · " + model.accountName(posting.accountID)).font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true); Spacer(); V15MoneyText(minorUnits: posting.amountMinor, direction: posting.amountMinor < 0 ? .outflow : .inflow, font: V15Typography.secondary) } } }
-        V15Section("可用操作") { actions(transaction) }
         V15Section("版本历史") { if model.revisions.isEmpty { Text("服务器没有返回可读版本历史。").font(V15Typography.secondary) } else { ForEach(model.revisions) { revision in Text("v\(revision.version) · \(revision.event)").font(V15Typography.secondary).accessibilityIdentifier("v15.f1b.revision.\(revision.version)") } } }
         V15Section("来源与关联") { provenance }; mutationState
     }
@@ -144,7 +144,7 @@ private struct V15LedgerDetail: View {
         } else { Text(V15DisabledReason.unknownCapability.message).font(V15Typography.secondary).accessibilityIdentifier("v15.f1b.no-action") }
     }
     @ViewBuilder private var provenance: some View { if let provenance = model.provenance { Text("来源：\(provenance.source)").font(V15Typography.secondary); ForEach(provenance.links) { link in VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text("\(link.sourceType) → \(link.targetType)").font(V15Typography.secondary.weight(.medium)); if safeReadOnlyDestination(link) != nil { Text("关联事实：\(link.targetType)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) } } } } else { Text("正在读取服务器来源关系。").font(V15Typography.secondary) } }
-    @ViewBuilder private var mutationState: some View { switch model.mutation { case .idle: EmptyView(); case .working: V15LoadingSkeleton(); case .reconciled(let message): V15ArchiveReadOnlyState { Text(message).font(V15Typography.secondary) }; case .conflict(let conflict): V15ConflictState(conflict: conflict, reload: { Task { await model.retryDetail() } }); case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.retryLastMutation() } }) } }
+    @ViewBuilder private var mutationState: some View { switch model.mutation { case .idle: EmptyView(); case .working: V15LoadingSkeleton(); case .reconciled(let message): V15ServerFactState(title: "服务器读回", detail: message); case .conflict(let conflict): V15ConflictState(conflict: conflict, changes: model.mutationConflictChanges, reload: { Task { await model.retryDetail() } }); case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.retryLastMutation() } }) } }
     private func safeReadOnlyDestination(_ link: V15TransactionProvenanceLink) -> String? { guard let deepLink = link.deepLink, URL(string: deepLink)?.scheme == "fiscal" else { return nil }; return link.targetType }
 }
 

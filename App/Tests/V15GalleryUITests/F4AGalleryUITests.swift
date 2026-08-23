@@ -25,14 +25,14 @@ import XCTest
         return value
     }
 
-    func testPeriodLensSafeDrillPagingRetryAndReturn() {
+    func testPeriodFourLensSafeDrillPagingRetryAndReturn() {
         launch("reports-page-error")
         app.buttons["v15.f4a.period.toggle"].tap()
-        XCTAssertTrue(reveal("v15.f4a.personal-realized").exists)
+        XCTAssertTrue(element("v15.f4a.meta").waitForExistence(timeout: 6))
         app.buttons["v15.f4a.period.toggle"].tap()
-        app.segmentedControls["v15.f4a.lens"].buttons["商户"].tap()
-        XCTAssertTrue(reveal("v15.f4a.row.merchant.0").exists)
-        app.segmentedControls["v15.f4a.lens"].buttons["分类"].tap()
+        app.buttons["v15.f4a.lens.spending"].tap()
+        XCTAssertTrue(element("v15.f4a.surface.spending").waitForExistence(timeout: 6))
+        revealButton("v15.f4a.measure.netConsumption").tap()
         revealButton("v15.f4a.row.category.0").tap()
         XCTAssertTrue(element("v15.f4a.drill").waitForExistence(timeout: 6))
         XCTAssertTrue(element("v15.f4a.drill.item.00000000-0000-0000-0000-00000000F404").waitForExistence(timeout: 6))
@@ -46,9 +46,12 @@ import XCTest
 
     func testDisabledRowsDoNotOpenDrillAndConflictReloads() {
         launch()
-        revealButton("v15.f4a.disabled.category.1").tap()
-        XCTAssertTrue(element("v15.f4a.drill").waitForNonExistence(timeout: 1))
+        app.buttons["v15.f4a.lens.spending"].tap()
+        let disabledCategory = reveal("v15.f4a.row.category.1")
+        XCTAssertFalse(disabledCategory.isEnabled)
+        XCTAssertFalse(element("v15.f4a.drill").exists)
         launch("reports-conflict")
+        app.buttons["v15.f4a.lens.spending"].tap()
         revealButton("v15.f4a.row.category.0").tap()
         XCTAssertTrue(element("v15.f4a.conflict").waitForExistence(timeout: 6))
         app.buttons["v15.f4a.conflict.reload"].tap()
@@ -57,22 +60,23 @@ import XCTest
 
     func testCompletenessOnlyAndFirstPageDrillRetry() {
         launch("reports-completeness-only")
-        app.segmentedControls["v15.f4a.lens"].buttons["完整性"].tap()
-        XCTAssertTrue(reveal("v15.f4a.row.completeness").exists)
+        XCTAssertTrue(element("v15.f4a.surface.overview").waitForExistence(timeout: 6))
         XCTAssertFalse(element("v15.f4a.empty").exists)
 
         launch("reports-unknown-account")
-        app.segmentedControls["v15.f4a.lens"].buttons["账户"].tap()
-        revealButton("v15.f4a.disabled.account.0").tap()
-        XCTAssertTrue(element("v15.f4a.drill").waitForNonExistence(timeout: 1))
+        let disabledAccount = reveal("v15.f4a.row.overview.account.0")
+        XCTAssertFalse(disabledAccount.isEnabled)
+        XCTAssertFalse(element("v15.f4a.drill").exists)
 
         launch("reports-drill-first-error")
+        app.buttons["v15.f4a.lens.spending"].tap()
         revealButton("v15.f4a.row.category.0").tap()
         XCTAssertTrue(element("v15.f4a.drill.error").waitForExistence(timeout: 6))
         app.buttons["重试"].tap()
         XCTAssertTrue(element("v15.f4a.drill.item.00000000-0000-0000-0000-00000000F404").waitForExistence(timeout: 6))
 
         launch("reports-drill-empty")
+        app.buttons["v15.f4a.lens.spending"].tap()
         revealButton("v15.f4a.row.category.0").tap()
         XCTAssertTrue(element("v15.f4a.drill.empty").waitForExistence(timeout: 6))
     }

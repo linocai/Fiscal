@@ -66,6 +66,15 @@ public struct V15ReimbursementMacView: View {
                         VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(claim.title).font(V15Typography.surfaceTitle); Text("\(claim.status.displayName) · v\(claim.version)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
                         Spacer(); Text(money(claim.outstandingMinor)).font(V15Typography.moneyLarge).foregroundStyle(V15Palette.teal.color).monospacedDigit()
                     }
+                    V15Section("报销金额矩阵") {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 135), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
+                            claimAmountFact("已申报", claim.totalClaimedMinor)
+                            claimAmountFact("已到账", claim.receivedMinor)
+                            claimAmountFact("未到账", claim.outstandingMinor, emphasized: true)
+                        }
+                        Text("留存与释放只在取消未到账的服务端预览中出现，不从当前金额自行推算。")
+                            .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                    }.accessibilityIdentifier("v15.f3c.mac.amount-matrix")
                     if !claim.status.isKnown { V15EmptyState(title: "未知状态，只读", explanation: "服务端状态 \(claim.status.rawValue) 尚未被当前版本识别。") }
                     V15Section("当事人与分摊", detail: "\(claim.partyCount) 位") {
                         ForEach(claim.parties, id: \.id) { party in
@@ -199,7 +208,19 @@ public struct V15ReimbursementMacView: View {
         switch model.secondaryMutationPhase {
         case .previewed:
             if let preview = model.cancellationPreview {
-                V15PreviewState(version: "claim v\(preview.claimVersion)") { Text("释放 \(money(preview.releasedMinor))；目标状态 \(preview.proposedStatus)。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3c.mac.cancel.preview.result")
+                V15PreviewState(version: "claim v\(preview.claimVersion)") {
+                    VStack(alignment: .leading, spacing: V15Spacing.sm) {
+                        Text("取消未到账后的五项事实").font(V15Typography.body.weight(.semibold))
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 115), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
+                            claimAmountFact("已申报", preview.current.totalClaimedMinor)
+                            claimAmountFact("已到账", preview.current.receivedMinor)
+                            claimAmountFact("取消前未到账", preview.current.outstandingMinor)
+                            claimAmountFact("留存", preview.retainedReceivedMinor)
+                            claimAmountFact("释放", preview.releasedMinor, emphasized: true)
+                        }
+                        Text("状态 \(preview.current.status.displayName) → \(preview.proposedStatus)").font(V15Typography.secondary)
+                    }
+                }.accessibilityIdentifier("v15.f3c.mac.cancel.preview.result")
                 V15ActionButton("确认取消未到账", kind: .destructive, disabledReasons: model.selectedClaim.map { model.cancellationCommitReasons(for: $0) } ?? []) { Task { await model.commitCancellation() } }.accessibilityIdentifier("v15.f3c.mac.cancel.commit")
             } else if let preview = model.claimReplacePreview {
                 V15PreviewState(version: "claim v\(preview.claimVersion)") { Text("当前 \(money(preview.current.totalClaimedMinor)) → 服务端提议 \(money(preview.proposed.totalClaimedMinor))。\(preview.warnings.joined(separator: "；"))").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3c.mac.replace.preview.result")
@@ -313,6 +334,7 @@ public struct V15ReimbursementMacView: View {
 
     private func fieldIssues(_ values: [V15FieldIssue], path: String) -> [V15FieldIssue] { values.filter { $0.fieldPath == path || $0.fieldPath?.hasPrefix(path + ".") == true } }
     private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral, includeCurrency: true).text }
+    private func claimAmountFact(_ title: String, _ value: V15MinorUnits, emphasized: Bool = false) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)); V15MoneyText(minorUnits: value, direction: .neutral, font: V15Typography.body.weight(.semibold)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(emphasized ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
     private func receiptOperationOpenReasons(_ receipt: V15ReimbursementReceipt, claim: V15ReimbursementClaim) -> [V15DisabledReason] {
         if model.isReceiptActionApplicable(.replace, to: receipt, claim: claim) { return model.receiptActionReasons(for: receipt, claim: claim, action: .replace) }
         if model.isReceiptActionApplicable(.void, to: receipt, claim: claim) { return model.receiptActionReasons(for: receipt, claim: claim, action: .void) }

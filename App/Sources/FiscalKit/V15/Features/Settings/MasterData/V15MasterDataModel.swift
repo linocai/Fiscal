@@ -14,6 +14,7 @@ import Foundation
     public private(set) var isLoadingMerchants = false
     public private(set) var receipt: String?
     public private(set) var conflict: V15Conflict?
+    public private(set) var conflictChanges: [V15ConflictChange] = []
     public private(set) var writesRequireExplicitReload = false
     public private(set) var offlineSnapshotAt: Date?
     public var selectedSection: Section = .accounts
@@ -72,7 +73,7 @@ import Foundation
         let count = accounts.filter { $0.name.caseInsensitiveCompare(account.name) == .orderedSame }.count
         return count > 1 && account.lastFour != nil ? "\(account.name) · 尾号 \(account.lastFour!)" : account.name
     }
-    @discardableResult public func load() async -> Bool {
+    @discardableResult public func load(preservingConflict: Bool = false) async -> Bool {
         generation &+= 1; merchantPageGeneration &+= 1; isLoadingMerchants = false; merchantPageError = nil; let current = generation; phase = .loading
         do {
             async let accountState = services.masterData.accountOrderState()
@@ -83,7 +84,9 @@ import Foundation
             let state = try await accountState; let accountResult = try await allAccounts; let categoryResult = try await (expenses + incomes); let page = try await merchantPage
             guard current == generation else { return false }
             accounts = accountResult; accountRevision = state.listRevision; categories = categoryResult; merchants = page.items; merchantCursor = page.nextCursor; merchantPageError = nil; isLoadingMerchants = false
-            phase = .loaded; conflict = nil; writesRequireExplicitReload = false; return true
+            phase = .loaded
+            if !preservingConflict { conflict = nil; conflictChanges = []; writesRequireExplicitReload = false }
+            return true
         } catch is CancellationError { guard current == generation else { return false }; phase = .idle; return false
         } catch let failure as V15Failure { guard current == generation else { return false }; phase = .failed(failure); return false
         } catch { guard current == generation else { return false }; phase = .failed(.init(kind: .transport, message: "主数据读取失败。")); return false }
@@ -179,10 +182,49 @@ import Foundation
         }
     }
     public func commitSplit() async -> Bool { guard canWrite("无法提交拆分"), !transformRequiresRepreview else { if transformRequiresRepreview { transformMessage = "此预览已失效，请重新读取预览后再提交。" }; return false }; guard let root = selectedCategory, let preview = splitPreview else { return false }; let assignments = preview.requiredTransactionIDs.compactMap { id in splitAssignments[id].map { name in V15CategorySplitAssignment(transactionID: id, childName: name) } }; guard assignments.count == preview.requiredTransactionIDs.count else { transformFieldIssues = [.init(code: "split_assignment_required", message: "请逐笔指定归位子分类。", fieldPath: "assignments")]; return false }; let identity = "\(preview.previewToken)|\(assignments)"; do { let result = try await services.categories.commitSplit(rootID: root.id, request: .init(previewToken: preview.previewToken, assignments: assignments), idempotencyKey: idempotency.key(for: "split", payloadIdentity: identity)); idempotency.succeeded(scope: "split", payloadIdentity: identity); transformReceipt = result; transformMessage = "拆分已原子提交：重归类 \(result.reclassifiedTransactionCount) 笔。"; _ = await load(); return true } catch let failure as V15Failure where failure.kind == .conflict { await recoverTransformConflict(failure); return false } catch let failure as V15Failure { recordTransformFailure(failure); return false } catch { recordTransformFailure(.init(kind: .transport, message: "拆分未完成，请重新决定。")); return false } }
-    private func mutate(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15AccountResponse) -> Bool, _ operation: () async throws -> V15AccountResponse) async { do { let account = try await operation(); receipt = "账户已由服务器确认：\(account.name) · v\(account.version)"; if id == nil { unknownCreateLock = nil }; _ = await load() } catch let failure as V15Failure where failure.kind == .conflict { await recoverMutationConflict(failure) } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let account = try? await services.masterData.account(id: id), confirmed(account) { receipt = "已通过服务器读回确认：\(account.name) · v\(account.version)。未重发写入。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .accounts, identity: unknownCreateIdentity) } else { _ = await load(); receipt = "响应未确认：读回事实未证明本次更改；已完整刷新，未重发写入。" } } catch { apply(error) } }
-    private func mutateCategory(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15CategoryResponse) -> Bool, _ operation: () async throws -> V15CategoryResponse) async { do { let category = try await operation(); receipt = "分类已由服务器确认：\(category.name) · v\(category.version)"; if id == nil { unknownCreateLock = nil }; _ = await load() } catch let failure as V15Failure where failure.kind == .conflict { await recoverMutationConflict(failure) } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let category = try? await services.masterData.category(id: id), confirmed(category) { receipt = "已通过服务器读回确认：\(category.name) · v\(category.version)。未重发写入。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .categories, identity: unknownCreateIdentity) } else { _ = await load(); receipt = "响应未确认：读回事实未证明本次更改；已完整刷新，未重发写入。" } } catch { apply(error) } }
+    private func mutate(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15AccountResponse) -> Bool, _ operation: () async throws -> V15AccountResponse) async {
+        let previous = id.flatMap { target in accounts.first { $0.id == target } }
+        do { let account = try await operation(); receipt = "账户已由服务器确认：\(account.name) · v\(account.version)"; if id == nil { unknownCreateLock = nil }; _ = await load()
+        } catch let failure as V15Failure where failure.kind == .conflict { await recoverMutationConflict(failure, previousAccount: previous)
+        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let account = try? await services.masterData.account(id: id), confirmed(account) { receipt = "已通过服务器读回确认：\(account.name) · v\(account.version)。未重发写入。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .accounts, identity: unknownCreateIdentity) } else { _ = await load(); receipt = "响应未确认：读回事实未证明本次更改；已完整刷新，未重发写入。" } } catch { apply(error) }
+    }
+    private func mutateCategory(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15CategoryResponse) -> Bool, _ operation: () async throws -> V15CategoryResponse) async {
+        let previous = id.flatMap { target in flatten(categories).first { $0.id == target } }
+        do { let category = try await operation(); receipt = "分类已由服务器确认：\(category.name) · v\(category.version)"; if id == nil { unknownCreateLock = nil }; _ = await load()
+        } catch let failure as V15Failure where failure.kind == .conflict { await recoverMutationConflict(failure, previousCategory: previous)
+        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let category = try? await services.masterData.category(id: id), confirmed(category) { receipt = "已通过服务器读回确认：\(category.name) · v\(category.version)。未重发写入。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .categories, identity: unknownCreateIdentity) } else { _ = await load(); receipt = "响应未确认：读回事实未证明本次更改；已完整刷新，未重发写入。" } } catch { apply(error) }
+    }
     private func reloadOnConflict(_ error: Error) async { if let failure = error as? V15Failure, failure.kind == .conflict { await recoverMutationConflict(failure) } else { apply(error) } }
-    private func recoverMutationConflict(_ failure: V15Failure) async { conflict = failure.conflict; fieldIssues = failure.fieldIssues; writesRequireExplicitReload = true; if await load() { receipt = "服务器版本已变化，已重新读取完整列表；请基于最新数据重新决定。" } else { receipt = "服务器版本已变化，但重新读取失败；写入已停止，请显式重新读取后再决定。" } }
+    public func resolveConflictByReload() async {
+        guard conflict != nil else { return }
+        if await load() { receipt = "已读取最新服务器事实；现在可以重新决定。" }
+    }
+    private func recoverMutationConflict(_ failure: V15Failure, previousAccount: V15AccountResponse? = nil, previousCategory: V15CategoryResponse? = nil) async {
+        conflict = failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: failure.message)
+        fieldIssues = failure.fieldIssues; writesRequireExplicitReload = true
+        if await load(preservingConflict: true) {
+            if let previousAccount, let latest = accounts.first(where: { $0.id == previousAccount.id }) { conflictChanges = accountChanges(previous: previousAccount, current: latest) }
+            if let previousCategory, let latest = flatten(categories).first(where: { $0.id == previousCategory.id }) { conflictChanges = categoryChanges(previous: previousCategory, current: latest) }
+            receipt = "服务器版本已变化；已读取最新事实。请比较差异后显式重新读取以继续。"
+        } else { receipt = "服务器版本已变化，但重新读取失败；写入已停止，请显式重新读取后再决定。" }
+    }
+    private func accountChanges(previous: V15AccountResponse, current: V15AccountResponse) -> [V15ConflictChange] {
+        var changes: [V15ConflictChange] = []
+        if previous.name != current.name { changes.append(.init(field: "账户名称", previousValue: previous.name, currentValue: current.name)) }
+        if previous.openingBalanceMinor != current.openingBalanceMinor { changes.append(.init(field: "期初余额", previousValue: V15MoneyPresentation(minorUnits: previous.openingBalanceMinor, direction: .neutral).text, currentValue: V15MoneyPresentation(minorUnits: current.openingBalanceMinor, direction: .neutral).text)) }
+        if previous.archivedAt != current.archivedAt { changes.append(.init(field: "归档状态", previousValue: previous.archivedAt == nil ? "可编辑" : "已归档", currentValue: current.archivedAt == nil ? "可编辑" : "已归档")) }
+        if changes.isEmpty { changes.append(.init(field: "服务器版本", previousValue: "v\(previous.version)", currentValue: "v\(current.version)")) }
+        return changes
+    }
+    private func categoryChanges(previous: V15CategoryResponse, current: V15CategoryResponse) -> [V15ConflictChange] {
+        var changes: [V15ConflictChange] = []
+        if previous.name != current.name { changes.append(.init(field: "分类名称", previousValue: previous.name, currentValue: current.name)) }
+        if previous.icon != current.icon { changes.append(.init(field: "图标", previousValue: previous.icon, currentValue: current.icon)) }
+        if previous.colorHex != current.colorHex { changes.append(.init(field: "颜色", previousValue: previous.colorHex, currentValue: current.colorHex)) }
+        if previous.archivedAt != current.archivedAt { changes.append(.init(field: "归档状态", previousValue: previous.archivedAt == nil ? "可编辑" : "已归档", currentValue: current.archivedAt == nil ? "可编辑" : "已归档")) }
+        if changes.isEmpty { changes.append(.init(field: "服务器版本", previousValue: "v\(previous.version)", currentValue: "v\(current.version)")) }
+        return changes
+    }
     private func recoverTransformConflict(_ failure: V15Failure) async {
         let pending = pendingTransformPreview
         invalidatePreview(); pendingTransformPreview = pending
@@ -247,4 +289,108 @@ import Foundation
     public static func reorderHint(canMove: Bool, down: Bool) -> String { if canMove { return down ? "⌘⌥↓ 下移一位" : "⌘⌥↑ 上移一位" }; return down ? "已到末位，不能下移。" : "已到首位，不能上移。" }
     private func apply(_ error: Error) { if let failure = error as? V15Failure { fieldIssues = failure.fieldIssues; conflict = failure.conflict; receipt = failure.kind == .conflict ? "服务器版本已变化；写入已停止，请重新读取后再决定。" : failure.message } else { receipt = "操作未完成，请重新读取后再决定。" } }
     private func flatten(_ items: [V15CategoryResponse]) -> [V15CategoryResponse] { items + items.flatMap { flatten($0.children) } }
+}
+
+@MainActor @Observable
+public final class V15SettingsOverviewModel {
+    public enum Phase: Equatable { case idle, loading, loaded, offline(Date), failed(V15Failure) }
+    public private(set) var phase: Phase = .idle
+    public private(set) var accounts: [V15AccountResponse] = []
+    public private(set) var categories: [V15CategoryResponse] = []
+    public private(set) var claims: [V15ReimbursementClaim] = []
+    public private(set) var transactions: [V15Transaction] = []
+    public private(set) var claimsIncomplete = false
+    public private(set) var transactionsIncomplete = false
+    public private(set) var aiSettings: V15AISettings?
+    public private(set) var providerSettings: V15AIProviderSettings?
+    public private(set) var qualityMetrics: V15AIQualityMetrics?
+    public private(set) var failures: [String: V15Failure] = [:]
+    public private(set) var restoringID: UUID?
+    public private(set) var restoreFailure: V15Failure?
+    private let services: V15Services
+    private let offlineSnapshotProvider: @MainActor @Sendable () -> Date?
+    private var generation: UInt64 = 0
+
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil) {
+        self.services = services
+        self.offlineSnapshotProvider = { offlineSnapshotAt ?? services.offlineSnapshotAt }
+    }
+
+    public var offlineSnapshotAt: Date? { offlineSnapshotProvider() }
+    public var archivedAccounts: [V15AccountResponse] { accounts.filter { $0.archivedAt != nil } }
+    public var archivedCategories: [V15CategoryResponse] { flatten(categories).filter { $0.archivedAt != nil } }
+    public var archivedClaims: [V15ReimbursementClaim] { claims.filter { $0.archivedAt != nil } }
+    public var voidedClaims: [V15ReimbursementClaim] { claims.filter { $0.voidedAt != nil && $0.archivedAt == nil } }
+    public var voidedTransactions: [V15Transaction] { transactions.filter { $0.voidedAt != nil } }
+    public var archiveItemCount: Int { archivedAccounts.count + archivedCategories.count + archivedClaims.count + voidedClaims.count + voidedTransactions.count }
+    public var activeAccountCount: Int { accounts.filter { $0.archivedAt == nil }.count }
+    public var activeCategoryCount: Int { flatten(categories).filter { $0.archivedAt == nil }.count }
+    public var qualityTotal: Int { qualityMetrics?.rows.reduce(0) { $0 + $1.total } ?? 0 }
+    public var qualityPending: Int { qualityMetrics?.rows.reduce(0) { $0 + $1.pending } ?? 0 }
+    public var providerHost: String? { providerSettings?.baseURL.flatMap { URL(string: $0)?.host } }
+
+    public func load() async {
+        generation &+= 1
+        let current = generation
+        failures = [:]; restoreFailure = nil; clearFacts()
+        guard let snapshot = offlineSnapshotAt else {
+            phase = .loading
+            let masterData = services.masterData
+            let reimbursements = services.reimbursements
+            let ledger = services.ledger
+            let ai = services.ai
+            async let accountResult = Self.capture { try await masterData.accounts(includeArchived: true) }
+            async let categoryResult = Self.capture { try await masterData.categories(includeArchived: true) }
+            async let claimResult = Self.capture { try await reimbursements.claims(includeArchived: true, includeVoided: true, limit: 100) }
+            async let transactionResult = Self.capture { try await ledger.list(.init(limit: 100, includeVoided: true)) }
+            async let aiResult = Self.capture { try await ai.settings() }
+            async let providerResult = Self.capture { try await ai.providerSettings() }
+            async let qualityResult = Self.capture { try await ai.qualityMetrics() }
+            let results = await (accountResult, categoryResult, claimResult, transactionResult, aiResult, providerResult, qualityResult)
+            guard current == generation else { return }
+            if Task.isCancelled { phase = .idle; return }
+            apply(results.0, key: "accounts") { accounts = $0 }
+            apply(results.1, key: "categories") { categories = $0 }
+            apply(results.2, key: "claims") { claims = $0.items; claimsIncomplete = $0.nextCursor != nil }
+            apply(results.3, key: "transactions") { transactions = $0.items; transactionsIncomplete = $0.nextCursor != nil }
+            apply(results.4, key: "ai_settings") { aiSettings = $0 }
+            apply(results.5, key: "provider") { providerSettings = $0 }
+            apply(results.6, key: "quality") { qualityMetrics = $0 }
+            if accounts.isEmpty && categories.isEmpty && claims.isEmpty && transactions.isEmpty && aiSettings == nil && providerSettings == nil && qualityMetrics == nil {
+                phase = .failed(failures.values.first ?? .init(kind: .transport, message: "无法读取设置事实。"))
+            } else { phase = .loaded }
+            return
+        }
+        phase = .offline(snapshot)
+    }
+
+    public func restoreAccount(_ item: V15AccountResponse) async { await restore(id: item.id) { try await services.masterData.restoreAccount(id: item.id, expectedVersion: item.version) } }
+    public func restoreCategory(_ item: V15CategoryResponse) async { await restore(id: item.id) { try await services.masterData.restoreCategory(id: item.id, expectedVersion: item.version) } }
+    public func unarchiveClaim(_ item: V15ReimbursementClaim) async { await restore(id: item.id) { try await services.reimbursements.unarchive(claimID: item.id, request: .init(expectedVersion: item.version)) } }
+    public func restoreClaim(_ item: V15ReimbursementClaim) async { await restore(id: item.id) { try await services.reimbursements.restoreClaim(claimID: item.id, request: .init(expectedVersion: item.version)) } }
+    public func restoreTransaction(_ item: V15Transaction) async { await restore(id: item.id) { try await services.ledger.restore(transactionID: item.id, expectedVersion: item.version) } }
+    public func invalidate() { generation &+= 1; phase = .idle }
+
+    private func restore<Value: Sendable>(id: UUID, operation: () async throws -> Value) async {
+        guard offlineSnapshotAt == nil, restoringID == nil else { return }
+        restoringID = id; restoreFailure = nil
+        do { _ = try await operation(); restoringID = nil; await load() }
+        catch let failure as V15Failure { restoringID = nil; restoreFailure = failure }
+        catch { restoringID = nil; restoreFailure = .init(kind: .transport, message: "恢复未完成，请重新读取后再决定。") }
+    }
+    private func apply<Value>(_ result: Result<Value, V15Failure>, key: String, success: (Value) -> Void) {
+        switch result { case .success(let value): success(value); case .failure(let failure): failures[key] = failure }
+    }
+    private func clearFacts() {
+        accounts = []; categories = []; claims = []; transactions = []
+        claimsIncomplete = false; transactionsIncomplete = false
+        aiSettings = nil; providerSettings = nil; qualityMetrics = nil
+    }
+    private func flatten(_ items: [V15CategoryResponse]) -> [V15CategoryResponse] { items + items.flatMap { flatten($0.children) } }
+    private nonisolated static func capture<Value: Sendable>(_ operation: @Sendable () async throws -> Value) async -> Result<Value, V15Failure> {
+        do { return .success(try await operation()) }
+        catch is CancellationError { return .failure(.init(kind: .cancelled, message: "请求已取消。")) }
+        catch let failure as V15Failure { return .failure(failure) }
+        catch { return .failure(.init(kind: .transport, message: "无法读取设置事实。")) }
+    }
 }

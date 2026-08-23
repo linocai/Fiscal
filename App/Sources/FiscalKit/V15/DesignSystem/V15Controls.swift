@@ -27,32 +27,43 @@ public struct V15ActionButton: View {
     private let symbol: String?
     private let kind: V15ButtonKind
     private let disabledReasons: [V15DisabledReason]
+    private let controlAccessibilityIdentifier: String?
     private let action: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(_ title: String, symbol: String? = nil, kind: V15ButtonKind = .primary, disabledReason: V15DisabledReason? = nil, action: @escaping () -> Void) {
-        self.init(title, symbol: symbol, kind: kind, disabledReasons: disabledReason.map { [$0] } ?? [], action: action)
+    public init(_ title: String, symbol: String? = nil, kind: V15ButtonKind = .primary, disabledReason: V15DisabledReason? = nil, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
+        self.init(title, symbol: symbol, kind: kind, disabledReasons: disabledReason.map { [$0] } ?? [], accessibilityIdentifier: accessibilityIdentifier, action: action)
     }
 
-    public init(_ title: String, symbol: String? = nil, kind: V15ButtonKind = .primary, disabledReasons: [V15DisabledReason], action: @escaping () -> Void) {
-        self.title = title; self.symbol = symbol; self.kind = kind; self.disabledReasons = disabledReasons; self.action = action
+    public init(_ title: String, symbol: String? = nil, kind: V15ButtonKind = .primary, disabledReasons: [V15DisabledReason], accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
+        self.title = title; self.symbol = symbol; self.kind = kind; self.disabledReasons = disabledReasons; self.controlAccessibilityIdentifier = accessibilityIdentifier; self.action = action
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.xxs) {
-            Button(action: action) {
-                Label { Text(title).multilineTextAlignment(.center) } icon: {
-                    if let symbol { Image(systemName: symbol) }
+            Group {
+                if let controlAccessibilityIdentifier {
+                    actionControl.accessibilityIdentifier(controlAccessibilityIdentifier)
+                } else {
+                    actionControl
                 }
-                .frame(maxWidth: kind == .quiet ? nil : .infinity)
             }
-            .buttonStyle(V15ButtonStyle(kind: kind, reduceMotion: reduceMotion, dark: colorScheme == .dark))
-            .disabled(!disabledReasons.isEmpty)
-            .v15KeyboardFocusable()
-            .v15ActionAccessibility(label: title, hint: disabledReasons.isEmpty ? nil : disabledReasons.map(V15Accessibility.safeReason).joined(separator: "；"))
             V15DisabledReasonList(reasons: disabledReasons)
         }
+    }
+
+    private var actionControl: some View {
+        Button(action: action) {
+            Label { Text(title).multilineTextAlignment(.center) } icon: {
+                if let symbol { Image(systemName: symbol) }
+            }
+            .frame(maxWidth: kind == .quiet ? nil : .infinity)
+        }
+        .buttonStyle(V15ButtonStyle(kind: kind, reduceMotion: reduceMotion, dark: colorScheme == .dark))
+        .disabled(!disabledReasons.isEmpty)
+        .v15KeyboardFocusable()
+        .v15ActionAccessibility(label: title, hint: disabledReasons.isEmpty ? nil : disabledReasons.map(V15Accessibility.safeReason).joined(separator: "；"))
     }
 }
 

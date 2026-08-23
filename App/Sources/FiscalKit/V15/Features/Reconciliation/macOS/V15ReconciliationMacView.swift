@@ -126,6 +126,7 @@ public struct V15ReconciliationMacView: View {
                     if model.editorStep < 3 {
                         V15ActionButton(model.editorStep == 1 ? "确认目标" : "进入最终确认", kind: .secondary, disabledReasons: model.advanceReasons) { model.advanceEditor() }.accessibilityIdentifier("v15.f3e.mac.editor.next")
                     } else {
+                        if let actual = CNYAmountParser.minorUnits(model.actualBalanceText) { reconciliationComparison(actual: actual) }
                         Text("最终确认：保存锚点，不创建调整流水。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                         V15ActionButton("保存核对记录", disabledReasons: model.checkpointReasons) { Task { await model.createCheckpoint() } }.accessibilityIdentifier("v15.f3e.mac.submit")
                     }
@@ -187,13 +188,29 @@ public struct V15ReconciliationMacView: View {
 
     private func diagnosisView(_ diagnosis: V15ReconciliationDiagnosis) -> some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
-            HStack { Text("期初实际余额"); Spacer(); V15MoneyText(minorUnits: diagnosis.openingBalanceMinor, direction: .balance) }
-            HStack { Text("当前账面余额"); Spacer(); V15MoneyText(minorUnits: diagnosis.bookBalanceMinor, direction: .balance) }
-            if let difference = diagnosis.differenceMinor { HStack { Text("已知差额").fontWeight(.semibold); Spacer(); V15MoneyText(minorUnits: difference, direction: .neutral) } }
+            HStack(alignment: .top, spacing: V15Spacing.sm) {
+                reconciliationFact("账面", diagnosis.bookBalanceMinor)
+                if let actual = diagnosis.actualBalanceMinor { reconciliationFact("观察", actual) } else { reconciliationUnavailableFact("观察", detail: "尚未记录") }
+                if let difference = diagnosis.differenceMinor { reconciliationFact("差额", difference, emphasized: difference != 0) } else { reconciliationUnavailableFact("差额", detail: "等待观察值") }
+            }
+            Text("区间起点 \(money(diagnosis.openingBalanceMinor))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             Divider()
+            Text("区间证据 · \(diagnosis.entries.count) 笔账面变化").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+            if diagnosis.entries.isEmpty { Text("此区间没有可列出的账目证据。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
             ForEach(diagnosis.entries) { entry in V15LedgerRow(title: entry.title, detail: Self.timestamp(entry.occurredAt), amountMinor: entry.accountImpactMinor, direction: entry.accountImpactMinor >= 0 ? .inflow : .outflow) }
         }.padding(V15Spacing.md).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
     }
+
+    private func reconciliationComparison(actual: V15MinorUnits) -> some View {
+        HStack(alignment: .top, spacing: V15Spacing.sm) {
+            reconciliationFact("观察", actual)
+            if let book = model.diagnosis?.bookBalanceMinor { reconciliationFact("账面", book); reconciliationFact("差额", actual - book, emphasized: actual != book) }
+            else { reconciliationUnavailableFact("账面", detail: "读取中"); reconciliationUnavailableFact("差额", detail: "等待账面") }
+        }.accessibilityIdentifier("v15.f3e.mac.editor.comparison")
+    }
+    private func reconciliationFact(_ title: String, _ value: V15MinorUnits, emphasized: Bool = false) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); V15MoneyText(minorUnits: value, direction: .neutral, font: V15Typography.body.weight(.semibold)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(emphasized ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
+    private func reconciliationUnavailableFact(_ title: String, detail: String) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); Text("—").font(V15Typography.body.weight(.semibold)); Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
+    private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral).text }
 
     @MainActor private func prepareGalleryScenario() async {
         guard let scenario = initialGalleryScenario else { return }

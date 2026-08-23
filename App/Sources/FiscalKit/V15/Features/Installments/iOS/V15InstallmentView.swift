@@ -36,7 +36,7 @@ public struct V15InstallmentView: View {
 
     private var content: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: V15Spacing.md) {
+            VStack(alignment: .leading, spacing: V15Spacing.md) {
                 if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot).accessibilityIdentifier("v15.f3b2.offline") }
                 filterBar
                 V15Section("计划", detail: "\(model.plans.count) 项") {
@@ -68,7 +68,7 @@ public struct V15InstallmentView: View {
         switch model.pagePhase {
         case .idle:
             if model.nextCursor != nil { V15ActionButton("加载更多", kind: .secondary) { Task { await model.loadNextPage() } }.accessibilityIdentifier("v15.f3b2.page.next") }
-        case .loading: ProgressView("正在读取下一页")
+        case .loading: V15LoadingSkeleton(layout: .compact)
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.loadNextPage() } }.accessibilityIdentifier("v15.f3b2.page.error")
         }
     }
@@ -77,8 +77,21 @@ public struct V15InstallmentView: View {
         V15Section("计划详情", detail: "v\(plan.version)") {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 HStack { VStack(alignment: .leading) { Text(plan.title).font(V15Typography.cardTitle); Text(plan.status.displayName).font(V15Typography.secondary) }; Spacer(); V15MoneyText(minorUnits: plan.totalFinancedMinor, direction: .outflow) }
-                if plan.isDisplayOnly { V15ArchiveReadOnlyState { Text("未知 future state 仅展示；当前客户端不会猜测可用操作。").fixedSize(horizontal: false, vertical: true) }.accessibilityIdentifier("v15.f3b2.unknown-state") }
+                if plan.isDisplayOnly { V15DisplayOnlyState(detail: "未知 future state 仅展示；当前客户端不会猜测可用操作。").accessibilityIdentifier("v15.f3b2.unknown-state") }
                 HStack { fact("已锁定", "\(plan.lockedCount) 期"); fact("未来", "\(plan.futureCount) 期"); fact("已取消", "\(plan.cancelledCount) 期") }
+                V15Section("金额分层") {
+                    HStack(alignment: .top, spacing: V15Spacing.sm) {
+                        installmentAmountFact("计划本金", plan.principalMinor)
+                        installmentAmountFact("计划手续费", plan.feeMinor)
+                    }
+                    HStack(alignment: .top, spacing: V15Spacing.sm) {
+                        installmentAmountFact("计划总额", plan.totalFinancedMinor)
+                        installmentAmountFact("未来未出账", plan.futureScheduledGrossMinor, provisional: true)
+                    }
+                    Text("未来未出账计划不等于当前精确信用欠款；当前欠款只在信用账户与账期事实中确认。")
+                        .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityIdentifier("v15.f3b2.amount-layers")
                 ForEach(plan.periods) { period in
                     V15LedgerRow(title: "第 \(period.sequence) 期 · \(period.status.rawValue)", detail: "账单 \(period.effectiveStatementDate) · 到期 \(period.dueDate) · \(period.locked ? "已锁定" : "未来期")", amountMinor: period.amountDueMinor, direction: .outflow, marker: period.locked ? .ordinary : .provisional)
                 }
@@ -99,6 +112,7 @@ public struct V15InstallmentView: View {
     }
 
     private func fact(_ title: String, _ value: String) -> some View { VStack(alignment: .leading) { Text(title).font(V15Typography.label); Text(value).font(V15Typography.body.weight(.semibold)) }.frame(maxWidth: .infinity, alignment: .leading) }
+    private func installmentAmountFact(_ title: String, _ value: V15MinorUnits, provisional: Bool = false) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); V15MoneyText(minorUnits: value, direction: .neutral, font: V15Typography.body.weight(.semibold)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(provisional ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
 
     @ViewBuilder private func editor(_ value: Sheet) -> some View {
         NavigationStack {
@@ -149,7 +163,7 @@ public struct V15InstallmentView: View {
     @ViewBuilder private var purchaseCategorySurface: some View {
         switch model.feeCategoryPhase {
         case .loading:
-            ProgressView("正在读取支出分类").accessibilityIdentifier("v15.f3b2.purchase.category.loading")
+            V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("v15.f3b2.purchase.category.loading")
         case .empty:
             unknownState("暂无支出分类，请先创建分类。", id: "v15.f3b2.purchase.category.empty")
             V15ActionButton("重新读取支出分类", kind: .secondary) { Task { await model.loadFeeCategories() } }
@@ -174,7 +188,7 @@ public struct V15InstallmentView: View {
 
     @ViewBuilder private var purchasePreviewSurface: some View {
         switch model.purchasePhase {
-        case .previewing, .committing: ProgressView("正在取得服务端结果").accessibilityIdentifier("v15.f3b2.purchase.loading")
+        case .previewing, .committing: V15LoadingSkeleton(layout: .decisionCard).accessibilityIdentifier("v15.f3b2.purchase.loading")
         case .previewed:
             if let preview = model.purchasePreview { V15PreviewState { V15InstallmentPurchasePreviewDetails(preview: preview, prefix: "v15.f3b2.purchase.preview-detail") }.accessibilityIdentifier("v15.f3b2.purchase.preview-result") }
         case .succeeded:
@@ -195,13 +209,13 @@ public struct V15InstallmentView: View {
             V15Field("消费账目 ID", text: $model.purchaseTransactionIDText, prompt: "UUID", issues: issues("purchase_transaction_id")).accessibilityIdentifier("v15.f3b2.eligibility.transaction")
             V15ActionButton("检查分期资格") { Task { await model.checkEligibility() } }.accessibilityIdentifier("v15.f3b2.eligibility.check")
             switch model.eligibilityPhase {
-            case .loading: ProgressView("正在询问服务端")
+            case .loading: V15LoadingSkeleton(layout: .compact)
             case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.checkEligibility() } }
             default: if let value = model.eligibility { eligibilitySurface(value) }
             }
             switch model.eligibilityPurchasePhase {
             case .loading:
-                ProgressView("正在读取权威消费发生时间").accessibilityIdentifier("v15.f3b2.eligibility.purchase.loading")
+                V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("v15.f3b2.eligibility.purchase.loading")
             case .failed(let failure):
                 V15ServiceErrorState(message: "消费详情读取失败：\(failure.message)") { Task { await model.checkEligibility() } }
                     .accessibilityIdentifier("v15.f3b2.eligibility.purchase.error")
@@ -249,7 +263,7 @@ public struct V15InstallmentView: View {
 
     @ViewBuilder private var planPreviewSurface: some View {
         switch model.planPhase {
-        case .previewing, .committing: ProgressView("正在处理")
+        case .previewing, .committing: V15LoadingSkeleton(layout: .decisionCard)
         case .previewed:
             if let preview = model.planPreview { V15PreviewState(version: "计划 v\(preview.currentPlan.version)") { V15InstallmentPlanPreviewDetails(preview: preview, prefix: "v15.f3b2.edit.preview-detail") }.accessibilityIdentifier("v15.f3b2.edit.preview-result") }
         case .unknown:
@@ -278,7 +292,7 @@ public struct V15InstallmentView: View {
 
     @ViewBuilder private var commandPreviewSurface: some View {
         switch model.commandPhase {
-        case .previewing, .committing: ProgressView("正在处理").accessibilityIdentifier("v15.f3b2.command.loading")
+        case .previewing, .committing: V15LoadingSkeleton(layout: .decisionCard).accessibilityIdentifier("v15.f3b2.command.loading")
         case .previewed:
             if let preview = model.commandPreview { V15PreviewState { V15InstallmentCommandPreviewDetails(preview: preview, prefix: "v15.f3b2.command.preview-detail") }.accessibilityIdentifier("v15.f3b2.command.preview-result") }
         case .succeeded:
@@ -306,7 +320,7 @@ public struct V15InstallmentView: View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
             switch model.feeCategoryPhase {
             case .loading:
-                ProgressView("正在读取手续费支出分类")
+                V15LoadingSkeleton(layout: .compact)
                     .accessibilityIdentifier("\(prefix).fee-category.loading")
             case .empty:
                 unknownState("暂无支出分类，请先创建分类；正手续费不能提交。", id: "\(prefix).fee-category.empty")
@@ -342,11 +356,11 @@ public struct V15InstallmentView: View {
             .padding(V15Spacing.md).background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.control)).accessibilityElement(children: .combine).accessibilityIdentifier(id)
     }
     @ViewBuilder private func readbackSurface(_ phase: V15InstallmentModel.ReadbackPhase, prefix: String) -> some View {
-        switch phase { case .loading: ProgressView("正在强制读取最新事实"); case .confirmed: Text("最新事实与请求意图一致。") .accessibilityIdentifier("\(prefix).readback.confirmed"); case .notConfirmed: Text("最新事实不能确认该请求已生效；仍保持结果未知。") .accessibilityIdentifier("\(prefix).readback.not-confirmed"); case .failed(let failure): Text("核对失败：\(failure.message)").accessibilityIdentifier("\(prefix).readback.error"); case .idle: EmptyView() }
+        switch phase { case .loading: V15LoadingSkeleton(layout: .compact); case .confirmed: Text("最新事实与请求意图一致。") .accessibilityIdentifier("\(prefix).readback.confirmed"); case .notConfirmed: Text("最新事实不能确认该请求已生效；仍保持结果未知。") .accessibilityIdentifier("\(prefix).readback.not-confirmed"); case .failed(let failure): Text("核对失败：\(failure.message)").accessibilityIdentifier("\(prefix).readback.error"); case .idle: EmptyView() }
     }
     @ViewBuilder private func commandReadbackSurface(_ phase: V15InstallmentModel.ReadbackPhase) -> some View {
         switch phase {
-        case .loading: ProgressView("正在强制读取最新计划事实")
+        case .loading: V15LoadingSkeleton(layout: .compact)
         case .notConfirmed: Text("计划事实可能已变化或操作可能已发生，但 GET 无法证明付款账户、目标账单日、发生时间和 operation receipt 属于本请求；同一请求凭证仍保留。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("v15.f3b2.command.readback.not-confirmed")
         case .failed(let failure): Text("事实读取失败：\(failure.message)；同一请求凭证仍保留。").font(V15Typography.secondary).accessibilityIdentifier("v15.f3b2.command.readback.error")
         case .confirmed: Text("仅同一 key 重放返回的 operation receipt 可以确认该请求。").font(V15Typography.secondary)

@@ -58,7 +58,13 @@ struct V15AIProposalDetail: View {
                 }
                 Text(proposal.title ?? "未命名提案").font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
                 if let amount = proposal.amountMinor { V15MoneyText(minorUnits: amount, direction: .outflow, font: V15Typography.moneyLarge) }
-                Text(proposal.text).font(V15Typography.body).foregroundStyle(V15Palette.ink.color.opacity(0.72)).fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+                    Text("你输入的原文").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                    Text("「\(proposal.text)」").font(V15Typography.body).foregroundStyle(V15Palette.ink.color.opacity(0.76)).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                }
+                .padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading)
+                .background(V15Palette.ink.color.opacity(0.035), in: RoundedRectangle(cornerRadius: V15Radius.control))
+                .accessibilityIdentifier("v15.f3f.original-text")
             }
 
             V15Section("解析完整度") {
@@ -72,8 +78,12 @@ struct V15AIProposalDetail: View {
                 confidenceRow("金额", value: proposal.fieldConfidences.amountMinor)
                 confidenceRow("时间", value: proposal.fieldConfidences.occurredAt)
                 confidenceRow("标题", value: proposal.fieldConfidences.title)
+                confidenceRow("备注", value: proposal.fieldConfidences.note)
                 confidenceRow("账户", value: proposal.fieldConfidences.accountID)
                 confidenceRow("分类", value: proposal.fieldConfidences.categoryID)
+                confidenceRow("目标账户", value: proposal.fieldConfidences.destinationAccountID)
+                Text("置信度只用于排序与提示，不能跳过人工确认；低置信字段以未定底色标出。")
+                    .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                 if !proposal.missingFields.isEmpty {
                     Label("缺少字段：\(proposal.missingFields.joined(separator: "、"))", systemImage: V15Symbol.warning)
                         .font(V15Typography.secondary.weight(.medium)).foregroundStyle(V15Palette.gold.color).fixedSize(horizontal: false, vertical: true)
@@ -116,7 +126,16 @@ struct V15AIProposalDetail: View {
     }
 
     @ViewBuilder private func confidenceRow(_ label: String, value: Int?) -> some View {
-        HStack { Text(label).font(V15Typography.secondary); Spacer(); Text(value.map { "\($0 / 100)%" } ?? "未提供").font(V15Typography.money).foregroundStyle((value ?? 0) < 9_000 ? V15Palette.gold.color : V15Palette.teal.color) }
+        let needsReview = value.map { $0 < 9_000 } ?? true
+        HStack(spacing: V15Spacing.sm) {
+            RoundedRectangle(cornerRadius: 2).fill(needsReview ? V15Palette.yellow.color : V15Palette.teal.color.opacity(0.45)).frame(width: 4, height: 24).accessibilityHidden(true)
+            Text(label).font(V15Typography.secondary)
+            if needsReview { Text("需复核").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
+            Spacer()
+            Text(value.map { "\($0 / 100)%" } ?? "未提供").font(V15Typography.money).foregroundStyle(V15Palette.ink.color)
+        }
+        .padding(.horizontal, V15Spacing.sm).padding(.vertical, V15Spacing.xs)
+        .background(needsReview ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
     }
     private static func fieldLabel(_ raw: String) -> String { ["kind": "类型", "amount_minor": "金额", "occurred_at": "时间", "title": "标题", "note": "备注", "account_id": "账户", "category_id": "分类", "destination_account_id": "目标账户", "credit_cycle_id": "账期", "target": "目标" ][raw] ?? raw }
     private static func diffSummary(_ value: V15AIEventValue?) -> String { guard case .object(let object)? = value else { return "已修改" }; return "\(scalar(object["from"])) → \(scalar(object["to"]))" }

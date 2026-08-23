@@ -35,8 +35,25 @@ struct V15InstallmentPlanPreviewDetails: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            Text("当前 v\(preview.currentPlan.version) · 拟更新 \(preview.proposedPlan.installmentCount) 期 · 起始账单 \(preview.proposedPlan.startStatementDate) · 合计 \(money(preview.proposedPlan.totalFinancedMinor, .outflow))")
-                .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: V15Spacing.sm) {
+                planComparison(
+                    "现状 · v\(preview.currentPlan.version)",
+                    count: preview.currentPlan.installmentCount,
+                    start: preview.currentPlan.startStatementDate,
+                    total: preview.currentPlan.totalFinancedMinor,
+                    future: preview.currentPlan.futureScheduledGrossMinor,
+                    provisional: false
+                )
+                planComparison(
+                    "拟更新",
+                    count: preview.proposedPlan.installmentCount,
+                    start: preview.proposedPlan.startStatementDate,
+                    total: preview.proposedPlan.totalFinancedMinor,
+                    future: preview.proposedPlan.futureScheduledGrossMinor,
+                    provisional: true
+                )
+            }
+            .accessibilityIdentifier("\(prefix).comparison")
             periodSection("锁定期（保持服务端事实）", periods: preview.lockedPeriods, prefix: "\(prefix).locked")
             periodSection("未来期（拟更新）", periods: preview.futurePeriods, prefix: "\(prefix).future")
             cycleSection(preview.affectedCycles, prefix: "\(prefix).cycle")
@@ -53,21 +70,40 @@ struct V15InstallmentCommandPreviewDetails: View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
             switch preview {
             case .settlement(let value):
-                Text("结清金额 \(money(value.amountMinor, .outflow)) · 付款余额 \(money(value.paymentBalanceBeforeMinor, .neutral)) → \(money(value.paymentBalanceAfterMinor, .neutral)) · 债务 \(money(value.debtBeforeMinor, .outflow)) → \(money(value.debtAfterMinor, .outflow))")
-                    .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: V15Spacing.sm) {
+                    Text("提前结清事实").font(V15Typography.body.weight(.semibold))
+                    V15MoneyText(minorUnits: value.amountMinor, direction: .outflow, font: V15Typography.moneyLarge)
+                    HStack(alignment: .top, spacing: V15Spacing.sm) {
+                        beforeAfter("付款账户余额", before: value.paymentBalanceBeforeMinor, after: value.paymentBalanceAfterMinor, direction: .balance)
+                        beforeAfter("当前信用欠款", before: value.debtBeforeMinor, after: value.debtAfterMinor, direction: .outflow)
+                    }
+                    Text("结清款、付款账户余额和当前信用欠款是不同事实；未来期终止以服务端拟议计划为准。")
+                        .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityIdentifier("\(prefix).settlement.facts")
                 periodSection("结清后的服务端期次", periods: value.proposedPlan.periods, prefix: "\(prefix).settlement.period")
                 cycleSection(value.affectedCycles, prefix: "\(prefix).settlement.cycle")
                 warningSection(value.warnings, prefix: "\(prefix).settlement.warning")
             case .reverse(let value):
-                Text("服务端允许撤销：\(value.eligible ? "是" : "否") · 原还款 \(value.repaymentTransaction.title)（\(value.repaymentTransaction.id.uuidString)） · 付款余额 \(money(value.paymentBalanceBeforeMinor, .neutral)) → \(money(value.paymentBalanceAfterMinor, .neutral)) · 债务 \(money(value.debtBeforeMinor, .outflow)) → \(money(value.debtAfterMinor, .outflow))")
-                    .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("\(prefix).reverse.eligibility")
+                VStack(alignment: .leading, spacing: V15Spacing.sm) {
+                    Text("服务端允许撤销：\(value.eligible ? "是" : "否") · 原还款 \(value.repaymentTransaction.title)")
+                        .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
+                    HStack(alignment: .top, spacing: V15Spacing.sm) {
+                        beforeAfter("付款账户余额", before: value.paymentBalanceBeforeMinor, after: value.paymentBalanceAfterMinor, direction: .balance)
+                        beforeAfter("当前信用欠款", before: value.debtBeforeMinor, after: value.debtAfterMinor, direction: .outflow)
+                    }
+                }.accessibilityIdentifier("\(prefix).reverse.eligibility")
                 periodSection("恢复期次", periods: value.restoredPeriods, prefix: "\(prefix).reverse.period")
                 cycleSection(value.affectedCycles, prefix: "\(prefix).reverse.cycle")
                 warningSection(value.warnings, prefix: "\(prefix).reverse.warning")
             case .cancellation(let value):
-                Text("本金退款 \(money(value.principalRefundMinor, .inflow)) · 手续费退款 \(money(value.feeRefundMinor, .inflow)) · 债务 \(money(value.debtBeforeMinor, .outflow)) → \(money(value.debtAfterMinor, .outflow)) · 费用 \(money(value.expenseBeforeMinor, .outflow)) → \(money(value.expenseAfterMinor, .outflow))")
-                    .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: V15Spacing.sm) {
+                    HStack { previewFact("本金退款", value.principalRefundMinor, .inflow); previewFact("手续费退款", value.feeRefundMinor, .inflow) }
+                    HStack(alignment: .top, spacing: V15Spacing.sm) {
+                        beforeAfter("当前信用欠款", before: value.debtBeforeMinor, after: value.debtAfterMinor, direction: .outflow)
+                        beforeAfter("费用事实", before: value.expenseBeforeMinor, after: value.expenseAfterMinor, direction: .outflow)
+                    }
+                }
                 periodSection("取消期次", periods: value.cancelledPeriods, prefix: "\(prefix).cancellation.period")
                 periodSection("取消后的服务端期次", periods: value.proposedPlan.periods, prefix: "\(prefix).cancellation.proposed-period")
                 cycleSection(value.affectedCycles, prefix: "\(prefix).cancellation.cycle")
@@ -75,6 +111,38 @@ struct V15InstallmentCommandPreviewDetails: View {
             }
         }
     }
+}
+
+@MainActor
+private func planComparison(_ title: String, count: Int, start: String, total: V15MinorUnits, future: V15MinorUnits, provisional: Bool) -> some View {
+    VStack(alignment: .leading, spacing: V15Spacing.xs) {
+        Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+        Text("\(count) 期").font(V15Typography.cardTitle)
+        Text("起始账单 \(start)").font(V15Typography.secondary)
+        Text("计划合计 \(money(total, .neutral))").font(V15Typography.secondary)
+        Text("未来未出账 \(money(future, .neutral))").font(V15Typography.secondary.weight(.semibold))
+    }
+    .padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .topLeading)
+    .background(provisional ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+    .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(provisional ? V15Palette.yellow.color : V15Palette.hairline.color, style: StrokeStyle(lineWidth: 1, dash: provisional ? [4, 3] : [])) }
+}
+
+@MainActor
+private func beforeAfter(_ title: String, before: V15MinorUnits, after: V15MinorUnits, direction: V15MoneyDirection) -> some View {
+    VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+        Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+        Text(money(before, direction)).font(V15Typography.secondary.monospacedDigit())
+        Image(systemName: "arrow.down").font(.caption).foregroundStyle(V15Palette.ink.color.opacity(0.45))
+        Text(money(after, direction)).font(V15Typography.body.weight(.semibold).monospacedDigit())
+    }
+    .padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading)
+    .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+}
+
+@MainActor
+private func previewFact(_ title: String, _ value: V15MinorUnits, _ direction: V15MoneyDirection) -> some View {
+    VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); Text(money(value, direction)).font(V15Typography.body.weight(.semibold).monospacedDigit()) }
+        .padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
 }
 
 @ViewBuilder

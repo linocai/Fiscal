@@ -26,6 +26,12 @@ struct V15DesignSystemTests {
         #expect(outflow.text == "−12.34")
         #expect(balance.text == "¥1.00")
         #expect(V15MoneyPresentation(minorUnits: Int64.min, direction: .outflow).text == "−¥92,233,720,368,547,758.08")
+        let optimistic = V15MoneyTruthPresentation(displayedMinorUnits: 12_300, confirmedMinorUnits: 10_000, pendingCount: 3, direction: .balance)
+        #expect(optimistic.hasPendingValue)
+        #expect(optimistic.pendingLabel == "含 3 项未同步")
+        #expect(optimistic.displayed.text == "¥123.00")
+        #expect(optimistic.confirmed.text == "¥100.00")
+        #expect(!V15MoneyTruthPresentation(displayedMinorUnits: 100, confirmedMinorUnits: 100, pendingCount: -1, direction: .neutral).hasPendingValue)
     }
 
     @Test("platform dimensions and AX5 yielding order protect content")
@@ -48,10 +54,11 @@ struct V15DesignSystemTests {
         #expect(enabled.background == V15Palette.teal && enabled.foreground == V15Palette.primaryButtonText)
     }
 
-    @Test("state vocabulary preserves preview, conflict, archive and partial honesty")
+    @Test("state vocabulary preserves preview, conflict, archive and display-only honesty")
     func stateCopy() {
         #expect(V15StateCopy.preview == "预览 · 尚未提交")
         #expect(V15StateCopy.archive == "归档 · 只读")
+        #expect(V15StateCopy.displayOnly == "未知服务器状态 · 仅展示")
         #expect(V15StateCopy.conflict.contains("未做任何修改"))
         #expect(V15Motion.receiptDuration > 0)
         #expect(V15PresentationStatus(serverStatus: "future_server_state") == .unknown)

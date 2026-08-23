@@ -418,6 +418,19 @@ public struct V15SessionRequest: Codable, Sendable, Equatable {
     public init(passphrase: String) { self.passphrase = passphrase }
 }
 
+public struct V15PassphraseChangeRequest: Codable, Sendable, Equatable {
+    public let oldPassphrase: String
+    public let newPassphrase: String
+    public init(oldPassphrase: String, newPassphrase: String) {
+        self.oldPassphrase = oldPassphrase
+        self.newPassphrase = newPassphrase
+    }
+    enum CodingKeys: String, CodingKey {
+        case oldPassphrase = "old_passphrase"
+        case newPassphrase = "new_passphrase"
+    }
+}
+
 public struct V15SessionResponse: Codable, Sendable, Equatable {
     public let accessKey: String
     public let credentialGeneration: Int

@@ -176,15 +176,20 @@ import Testing
         await model.saveAccount(); await model.archiveOrRestoreAccount(); await model.saveCategory(); await model.archiveOrRestoreCategory(); await model.saveMerchant(); await model.reorderAccounts(moving: V15F1CFixtures.accountID, after: nil); await model.reorderCategories(moving: V15F1CFixtures.categoryID, after: nil); await model.commitMerge(); await model.commitSplit(); await model.confirmMapping(); await model.releaseMapping()
         #expect(await transport.writeCount() == 0)
     }
-    @Test("account and category conflicts reload once, never replay, and block only if reload fails") @MainActor func mutationConflictTakeover() async {
+    @Test("account and category conflicts retain field comparisons until explicit reload and never replay") @MainActor func mutationConflictTakeover() async {
         let transport = F1CConflictTransport(); let model = V15MasterDataModel(services: V15Services(transport: transport))
-        await model.load(); model.selectAccount(model.visibleAccounts.first); await model.saveAccount(); await model.archiveOrRestoreAccount(); await model.archiveOrRestoreAccount()
-        model.selectCategory(model.visibleCategories.first); await model.saveCategory(); await model.archiveOrRestoreCategory(); await model.archiveOrRestoreCategory()
-        let writes = await transport.mutationPaths()
-        #expect(writes.filter { $0.contains("accounts/") }.count == 3)
-        #expect(writes.filter { $0.contains("categories/") }.count == 3)
-        #expect(await transport.reloadCount() >= 6)
-        #expect(!model.writesRequireExplicitReload && model.receipt?.contains("已重新读取") == true)
+        await model.load(); model.selectAccount(model.visibleAccounts.first); await model.saveAccount()
+        #expect(model.writesRequireExplicitReload && model.conflict != nil && !model.conflictChanges.isEmpty)
+        await model.archiveOrRestoreAccount()
+        #expect((await transport.mutationPaths()).filter { $0.contains("accounts/") }.count == 1)
+        await model.resolveConflictByReload()
+        #expect(!model.writesRequireExplicitReload && model.conflict == nil)
+
+        model.selectCategory(model.visibleCategories.first); await model.saveCategory()
+        #expect(model.writesRequireExplicitReload && model.conflict != nil && !model.conflictChanges.isEmpty)
+        await model.resolveConflictByReload()
+        #expect(!model.writesRequireExplicitReload && model.conflict == nil)
+        #expect(await transport.reloadCount() >= 4)
 
         let failing = F1CConflictTransport(failReload: true); let blocked = V15MasterDataModel(services: V15Services(transport: failing))
         await blocked.load(); blocked.selectAccount(blocked.visibleAccounts.first); await blocked.saveAccount()

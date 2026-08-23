@@ -4,7 +4,7 @@ import Observation
 @MainActor @Observable
 public final class V15BootstrapModel {
     public enum Phase: Equatable {
-        case idle, loading, needsPassphrase, passphraseNotSet, wrongPassphrase, systemNotReady, ready, offlineReadOnly(Date), failed(String)
+        case idle, loading, needsPassphrase, passphraseNotSet, wrongPassphrase, invalidAccessKey, systemNotReady, ready, offlineReadOnly(Date), failed(String)
     }
 
     public private(set) var phase: Phase = .idle
@@ -25,9 +25,11 @@ public final class V15BootstrapModel {
         }
         do {
             let auth = try await services.session.status()
+            guard current == generation else { return }
+            authStatus = auth
             let system = try await services.system.status()
             guard current == generation else { return }
-            authStatus = auth; systemStatus = system
+            systemStatus = system
             phase = system.isReady ? .ready : .systemNotReady
         } catch is CancellationError {
             guard current == generation else { return }; phase = .idle
@@ -62,7 +64,8 @@ public final class V15BootstrapModel {
         switch failure.code {
         case "passphrase_not_set": phase = .passphraseNotSet
         case "invalid_passphrase": phase = .wrongPassphrase
-        case "authentication_required", "unauthorized", "invalid_access_key": phase = .needsPassphrase
+        case "authentication_required", "unauthorized": phase = .needsPassphrase
+        case "invalid_access_key": phase = .invalidAccessKey
         case "database_unavailable", "schema_state_unavailable": phase = .systemNotReady
         default: phase = .failed(failure.message)
         }

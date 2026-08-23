@@ -24,7 +24,7 @@ public struct V15ColorToken: Sendable, Equatable {
 /// decision, and a provisional result. Do not add feature-specific colors.
 public enum V15Palette {
     public static let paper = V15ColorToken(lightHex: 0xFFFFFF, darkHex: 0x0F1615)
-    public static let card = V15ColorToken(lightHex: 0xFAF9F6, darkHex: 0x1A2423)
+    public static let card = V15ColorToken(lightHex: 0xF8F7F3, darkHex: 0x1A2423)
     public static let canvas = V15ColorToken(lightHex: 0xF4F2EC, darkHex: 0x0B1110)
     public static let ink = V15ColorToken(lightHex: 0x14201F, darkHex: 0xE8EFED)
     public static let teal = V15ColorToken(lightHex: 0x0C5A5B, darkHex: 0x4FB3AC)
@@ -88,21 +88,21 @@ public enum V15Motion {
 
 public enum V15Typography {
 #if os(macOS)
-    public static let surfaceTitle = Font.system(size: 26, weight: .bold, design: .default)
-    public static let cardTitle = Font.system(size: 18, weight: .semibold, design: .default)
-    public static let body = Font.system(size: 14, weight: .regular, design: .default)
-    public static let secondary = Font.system(size: 12, weight: .regular, design: .default)
-    public static let label = Font.system(size: 10, weight: .semibold, design: .default)
-    public static let money = Font.system(size: 14, weight: .semibold, design: .monospaced)
-    public static let moneyLarge = Font.system(size: 28, weight: .semibold, design: .monospaced)
+    public static let surfaceTitle = Font.system(.title, design: .default, weight: .bold)
+    public static let cardTitle = Font.system(.title3, design: .default, weight: .semibold)
+    public static let body = Font.system(.body, design: .default, weight: .regular)
+    public static let secondary = Font.system(.callout, design: .default, weight: .regular)
+    public static let label = Font.system(.caption2, design: .default, weight: .semibold)
+    public static let money = Font.system(.body, design: .monospaced, weight: .semibold)
+    public static let moneyLarge = Font.system(.title, design: .monospaced, weight: .semibold)
 #else
-    public static let surfaceTitle = Font.system(size: 34, weight: .bold, design: .default)
-    public static let cardTitle = Font.system(size: 22, weight: .semibold, design: .default)
-    public static let body = Font.system(size: 17, weight: .regular, design: .default)
-    public static let secondary = Font.system(size: 15, weight: .regular, design: .default)
-    public static let label = Font.system(size: 11, weight: .semibold, design: .default)
-    public static let money = Font.system(size: 17, weight: .semibold, design: .monospaced)
-    public static let moneyLarge = Font.system(size: 29, weight: .semibold, design: .monospaced)
+    public static let surfaceTitle = Font.system(.largeTitle, design: .default, weight: .bold)
+    public static let cardTitle = Font.system(.title2, design: .default, weight: .semibold)
+    public static let body = Font.system(.body, design: .default, weight: .regular)
+    public static let secondary = Font.system(.subheadline, design: .default, weight: .regular)
+    public static let label = Font.system(.caption2, design: .default, weight: .semibold)
+    public static let money = Font.system(.body, design: .monospaced, weight: .semibold)
+    public static let moneyLarge = Font.system(.title, design: .monospaced, weight: .semibold)
 #endif
 }
 
@@ -159,6 +159,23 @@ public struct V15MoneyPresentation: Sendable, Equatable {
         }
         return chunks.reversed().joined(separator: ",")
     }
+}
+
+/// Keeps a local optimistic amount visibly separate from the last value
+/// confirmed by the server. A pending value is never presented as ledger fact.
+public struct V15MoneyTruthPresentation: Sendable, Equatable {
+    public let displayed: V15MoneyPresentation
+    public let confirmed: V15MoneyPresentation
+    public let pendingCount: Int
+
+    public init(displayedMinorUnits: Int64, confirmedMinorUnits: Int64, pendingCount: Int, direction: V15MoneyDirection, includeCurrency: Bool = true) {
+        displayed = .init(minorUnits: displayedMinorUnits, direction: direction, includeCurrency: includeCurrency)
+        confirmed = .init(minorUnits: confirmedMinorUnits, direction: direction, includeCurrency: includeCurrency)
+        self.pendingCount = max(0, pendingCount)
+    }
+
+    public var hasPendingValue: Bool { pendingCount > 0 }
+    public var pendingLabel: String? { hasPendingValue ? "含 \(pendingCount) 项未同步" : nil }
 }
 
 public struct V15MoneyText: View {

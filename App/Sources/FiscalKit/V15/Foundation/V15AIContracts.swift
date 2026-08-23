@@ -320,6 +320,46 @@ public struct V15AIQualityEvent: Codable, Sendable, Equatable, Identifiable {
     enum CodingKeys: String, CodingKey { case id, reason, details; case proposalID = "proposal_id", eventType = "event_type", occurredAt = "occurred_at" }
 }
 
+public struct V15AIProviderSettings: Codable, Sendable, Equatable {
+    public let provider: String?
+    public let baseURL: String?
+    public let model: String?
+    public let apiKeyConfigured: Bool
+    public let version: Int
+    public let updatedAt: Date
+    enum CodingKeys: String, CodingKey {
+        case provider, model, version
+        case baseURL = "base_url"
+        case apiKeyConfigured = "api_key_configured"
+        case updatedAt = "updated_at"
+    }
+}
+
+public struct V15AIQualityMetricsRow: Codable, Sendable, Equatable, Identifiable {
+    public var id: String { [source, provider ?? "none", model ?? "none", promptVersion ?? "none", transactionKind ?? "all", amountBand].joined(separator: "|") }
+    public let source: String
+    public let provider: String?
+    public let model: String?
+    public let promptVersion: String?
+    public let transactionKind: String?
+    public let amountBand: String
+    public let total, parseSucceeded, historicalUnavailable, confirmUnchanged, confirmEdited: Int
+    public let ignored, executeFailed, automaticExecute, manualExecute, undone: Int
+    public let providerRetry, finalFailure, pending, terminalOutcomes: Int
+    enum CodingKeys: String, CodingKey {
+        case source, provider, model, total, ignored, undone, pending
+        case promptVersion = "prompt_version", transactionKind = "transaction_kind", amountBand = "amount_band"
+        case parseSucceeded = "parse_succeeded", historicalUnavailable = "historical_unavailable"
+        case confirmUnchanged = "confirm_unchanged", confirmEdited = "confirm_edited"
+        case executeFailed = "execute_failed", automaticExecute = "automatic_execute", manualExecute = "manual_execute"
+        case providerRetry = "provider_retry", finalFailure = "final_failure", terminalOutcomes = "terminal_outcomes"
+    }
+}
+
+public struct V15AIQualityMetrics: Codable, Sendable, Equatable {
+    public let rows: [V15AIQualityMetricsRow]
+}
+
 public struct V15AIService: Sendable {
     private let transport: any V15Transporting
     private let writable: @MainActor @Sendable () throws -> Void
@@ -346,6 +386,14 @@ public struct V15AIService: Sendable {
 
     public func qualityEvents(proposalID: UUID, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> [V15AIQualityEvent] {
         try await transport.send(.init(path: "ai/proposals/\(proposalID)/quality-events", readCachePolicy: readCachePolicy), body: nil)
+    }
+
+    public func providerSettings(readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15AIProviderSettings {
+        try await transport.send(.init(path: "ai/provider-settings", readCachePolicy: readCachePolicy), body: nil)
+    }
+
+    public func qualityMetrics(readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15AIQualityMetrics {
+        try await transport.send(.init(path: "ai/quality/metrics", readCachePolicy: readCachePolicy), body: nil)
     }
 
     public func create(_ request: V15AIProposalCreate, idempotencyKey: UUID) async throws -> V15AIProposal {

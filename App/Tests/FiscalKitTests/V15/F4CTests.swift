@@ -125,6 +125,80 @@ import Testing
         #expect(await transport.recordedRequests().count == 2)
     }
 
+    @MainActor @Test("system facts load independently and passphrase success clears every credential field")
+    func systemFactsAndPassphraseSuccess() async throws {
+        let transport = F4CSystemTransport(passphraseOutcome: .success)
+        let model = V15SystemFactsModel(services: V15Services(transport: transport))
+        await model.load()
+        #expect(model.phase == .loaded)
+        #expect(model.systemStatus?.version == "1.5.2")
+        #expect(model.operationsStatus?.disk.state == "healthy")
+        #expect(model.dataRevision?.revision == 52)
+        #expect(model.authStatus?.credentialGeneration == 2)
+
+        model.oldPassphrase = "old-passphrase"
+        model.newPassphrase = "new-passphrase"
+        model.newPassphraseConfirmation = "new-passphrase"
+        #expect(model.passphraseDisabledReason == nil)
+        await model.changePassphrase()
+        #expect(model.oldPassphrase.isEmpty && model.newPassphrase.isEmpty && model.newPassphraseConfirmation.isEmpty)
+        guard case .succeeded(let generation) = model.passphrasePhase else { Issue.record("expected passphrase success"); return }
+        #expect(generation == 3)
+        #expect(await transport.passphraseBody() == .object(["old_passphrase": .string("old-passphrase"), "new_passphrase": .string("new-passphrase")]))
+    }
+
+    @MainActor @Test("a later failed facts refresh clears prior server facts instead of presenting them as current")
+    func failedSecondFactsReadDoesNotReuseFacts() async {
+        let transport = F4CSystemTransport(passphraseOutcome: .success)
+        let model = V15SystemFactsModel(services: V15Services(transport: transport))
+        await model.load()
+        #expect(model.phase == .loaded && model.systemStatus != nil)
+        await transport.failFactReads()
+        await model.load()
+        guard case .failed = model.phase else { Issue.record("all failed reads must not remain loaded"); return }
+        #expect(model.systemStatus == nil && model.operationsStatus == nil && model.dataRevision == nil && model.authStatus == nil)
+    }
+
+    @MainActor @Test("passphrase validation and uncertain outcomes fail closed without unsafe retry advice")
+    func passphraseFailureStates() async {
+        let invalid = V15SystemFactsModel(services: V15Services(transport: F4CSystemTransport(passphraseOutcome: .invalid)))
+        invalid.oldPassphrase = "old-passphrase"
+        invalid.newPassphrase = "new-passphrase"
+        invalid.newPassphraseConfirmation = "different-passphrase"
+        #expect(invalid.passphraseDisabledReason?.code == "passphrase_confirmation")
+        invalid.newPassphraseConfirmation = "new-passphrase"
+        await invalid.changePassphrase()
+        guard case .failed(let failure) = invalid.passphrasePhase else { Issue.record("expected invalid passphrase failure"); return }
+        #expect(failure.message == "当前口令不正确。")
+
+        let unknown = V15SystemFactsModel(services: V15Services(transport: F4CSystemTransport(passphraseOutcome: .unknown)))
+        unknown.oldPassphrase = "old-passphrase"
+        unknown.newPassphrase = "new-passphrase"
+        unknown.newPassphraseConfirmation = "new-passphrase"
+        await unknown.changePassphrase()
+        guard case .responseUnknown = unknown.passphrasePhase else { Issue.record("expected unknown outcome"); return }
+        #expect(unknown.passphraseDisabledReason?.code == "passphrase_result_unknown")
+        #expect(!unknown.oldPassphrase.isEmpty && !unknown.newPassphrase.isEmpty)
+    }
+
+    @MainActor @Test("credential-store failure after a successful passphrase rotation requires re-unlock and cannot be resubmitted")
+    func passphraseStoreFailureRequiresReunlock() async {
+        let services = V15Services(
+            transport: F4CSystemTransport(passphraseOutcome: .success),
+            saveAccessKey: { _ in throw CocoaError(.fileWriteNoPermission) }
+        )
+        let model = V15SystemFactsModel(services: services)
+        model.oldPassphrase = "old-passphrase"
+        model.newPassphrase = "new-passphrase"
+        model.newPassphraseConfirmation = "new-passphrase"
+        await model.changePassphrase()
+        guard case .requiresReunlock(let failure) = model.passphrasePhase else { Issue.record("expected terminal re-unlock state"); return }
+        #expect(failure.code == "access_key_store_failed")
+        #expect(model.oldPassphrase.isEmpty && model.newPassphrase.isEmpty && model.newPassphraseConfirmation.isEmpty)
+        #expect(model.passphraseDisabledReason?.code == "passphrase_reunlock_required")
+        #expect(model.passphraseEntryDisabled)
+    }
+
     #if os(macOS)
     @Test("native overwrite replaces only the selected destination")
     func atomicOverwrite() throws {
@@ -152,4 +226,41 @@ import Testing
         }
         Issue.record("Archive transfer did not reach a terminal state")
     }
+}
+
+private actor F4CSystemTransport: V15Transporting {
+    enum PassphraseOutcome: Sendable { case success, invalid, unknown }
+    private let passphraseOutcome: PassphraseOutcome
+    private var bodies: [String: JSONValue?] = [:]
+    private var shouldFailFactReads = false
+
+    init(passphraseOutcome: PassphraseOutcome) { self.passphraseOutcome = passphraseOutcome }
+
+    func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
+        bodies[request.path] = body
+        if shouldFailFactReads, request.path != "auth/passphrase/change" { throw V15Failure(kind: .transport, message: "fixture read failed") }
+        switch request.path {
+        case "system/status":
+            return try decode(Data(#"{"service":"fiscal","version":"1.5.2","environment":"test","status":"operational","database":"ready","currency":"CNY","business_timezone":"Asia/Shanghai","timestamp":"2026-08-22T12:00:00Z"}"#.utf8))
+        case "system/operations-status":
+            return try decode(Data(#"{"service_version":"1.5.2","release_revision":"release-26","database":"ready","alembic_revision":"schema-26","release_alembic_revision":"schema-26","schema_state":"current","backup":{"state":"verified","created_at":"2026-08-22T10:00:00Z","age_hours":2,"duration_seconds":4,"size_bytes":4096},"restore":{"state":"verified","checked_at":"2026-08-22T09:00:00Z","age_hours":3,"duration_seconds":9},"disk":{"state":"healthy","checked_at":"2026-08-22T12:00:00Z","used_percent":41,"warning_percent":75,"failure_percent":90}}"#.utf8))
+        case "data-revision":
+            return try decode(Data(#"{"revision":52}"#.utf8))
+        case "auth/status":
+            return try decode(Data(#"{"authentication_mode":"passphrase","passphrase_set":true,"credential_generation":2,"last_rotated_at":"2026-08-21T12:00:00Z","active_access_key_count":1,"server_time":"2026-08-22T12:00:00Z"}"#.utf8))
+        case "auth/passphrase/change":
+            switch passphraseOutcome {
+            case .success: return try decode(Data(#"{"access_key":"replacement-access-key","credential_generation":3}"#.utf8))
+            case .invalid: throw V15Failure(kind: .transport, code: "invalid_passphrase", message: "backend detail must not leak")
+            case .unknown: throw V15Failure(kind: .responseUnknown, code: "response_unknown", message: "unknown")
+            }
+        default:
+            throw V15Failure(kind: .transport, message: "fixture route missing")
+        }
+    }
+
+    func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data { Data() }
+    func passphraseBody() -> JSONValue? { bodies["auth/passphrase/change"] ?? nil }
+    func failFactReads() { shouldFailFactReads = true }
+    private func decode<Response: Decodable>(_ data: Data) throws -> Response { try V15FixtureCodec.decoder.decode(Response.self, from: data) }
 }

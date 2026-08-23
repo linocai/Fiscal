@@ -331,12 +331,21 @@ public struct V15SessionService: Sendable {
         catch { throw V15Failure(kind: .transport, code: "access_key_store_failed", message: "本机连接凭证未能保存。") }
     }
     public func status() async throws -> V15AuthStatus { try await transport.send(.init(path: "auth/status"), body: nil) }
+    public func changePassphrase(oldPassphrase: String, newPassphrase: String) async throws -> V15SessionResponse {
+        let request = V15PassphraseChangeRequest(oldPassphrase: oldPassphrase, newPassphrase: newPassphrase)
+        let response: V15SessionResponse = try await transport.send(.init(path: "auth/passphrase/change", method: "POST"), body: try V15BodyEncoder.encode(request))
+        do { try await saveAccessKey?(response.accessKey) }
+        catch { throw V15Failure(kind: .transport, code: "access_key_store_failed", message: "口令已修改，但本机新的连接凭证未能保存；请使用新口令重新解锁。") }
+        return response
+    }
 }
 
 public struct V15SystemService: Sendable {
     private let transport: any V15Transporting
     init(transport: any V15Transporting) { self.transport = transport }
     public func status() async throws -> V15SystemStatus { try await transport.send(.init(path: "system/status"), body: nil) }
+    public func operationsStatus() async throws -> OperationsStatusDTO { try await transport.send(.init(path: "system/operations-status"), body: nil) }
+    public func dataRevision() async throws -> DataRevisionResponse { try await transport.send(.init(path: "data-revision", readCachePolicy: .reloadIgnoringCache), body: nil) }
 }
 
 public struct V15MasterDataReadService: Sendable {
@@ -422,10 +431,10 @@ public struct V15LedgerCreateService: Sendable {
 public struct V15CreditCycleReadService: Sendable {
     private let transport: any V15Transporting
     init(transport: any V15Transporting) { self.transport = transport }
-    public func list(accountID: UUID, cursor: String? = nil, limit: Int = 100) async throws -> V15CreditCyclePage {
+    public func list(accountID: UUID, cursor: String? = nil, limit: Int = 100, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15CreditCyclePage {
         guard (1...100).contains(limit) else { throw V15Failure(kind: .decoding, code: "invalid_credit_cycle_limit", message: "账期每页数量须在 1 到 100 之间。") }
         var query = [URLQueryItem(name: "limit", value: String(limit))]; if let cursor { query.append(.init(name: "cursor", value: cursor)) }
-        return try await transport.send(.init(path: "credit-accounts/\(accountID)/cycles", query: query), body: nil)
+        return try await transport.send(.init(path: "credit-accounts/\(accountID)/cycles", query: query, readCachePolicy: readCachePolicy), body: nil)
     }
 }
 

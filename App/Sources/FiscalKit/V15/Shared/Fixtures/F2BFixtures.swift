@@ -3,7 +3,7 @@ import Foundation
 /// Gallery-only F2-B data.  It stays deliberately read-only and derives every
 /// facts/scope payload from the F2-A contract fixtures, so the Today surface
 /// never invents a second facts schema for visual states.
-enum V15F2BFixtures {
+public enum V15F2BFixtures {
     enum Route: String {
         case normal = "today"
         case calm = "today-calm"
@@ -21,9 +21,15 @@ enum V15F2BFixtures {
         case zeroFuture = "today-zero-future"
         case linkedRetry = "today-linked-retry"
         case unknownScope = "today-unknown-scope"
+        /// Formal-root normal-state QA uses ordinary business values.
+        case rootWorkspace = "today-root-workspace"
+        /// This is deliberately a separate root host route: it proves that
+        /// the production composition contains F2-A's Int64 boundary values
+        /// locally instead of letting them widen the whole screen.
+        case rootWorkspaceBoundary = "today-root-workspace-boundary"
     }
 
-    @MainActor static func services(route: String) -> V15Services {
+    @MainActor public static func services(route: String) -> V15Services {
         V15Services(transport: V15F2BFixtureTransport(route: Route(rawValue: route) ?? .normal))
     }
 
@@ -58,6 +64,10 @@ actor V15F2BFixtureTransport: V15Transporting {
                 }
                 if route == .refreshLensRace { try await Task.sleep(for: .seconds(2)) }
                 data = V15F2AFixtures.facts(revision: 43)
+            } else if route == .rootWorkspace {
+                data = V15F2BFixtures.rootWorkspaceFacts
+            } else if route == .rootWorkspaceBoundary {
+                data = V15F2AFixtures.facts()
             } else if route == .zeroFuture {
                 data = V15F2BFixtures.zeroFutureFacts
             } else {
@@ -68,7 +78,7 @@ actor V15F2BFixtureTransport: V15Transporting {
             // The zero-future gallery state is deliberately calm as well: it
             // isolates the facts.future zero presentation instead of hiding it
             // below unrelated attention rows in a compact window.
-            case .calm, .zeroFuture: data = V15F2AFixtures.emptyAttention
+            case .calm, .zeroFuture, .rootWorkspace, .rootWorkspaceBoundary: data = V15F2AFixtures.emptyAttention
             case .unknownAttention: data = V15F2BFixtures.unknownAttentionPage
             default: data = V15F2AFixtures.attention
             }
@@ -92,6 +102,15 @@ actor V15F2BFixtureTransport: V15Transporting {
                 throw V15Failure(kind: .transport, message: "账目只读信息暂时无法读取。")
             }
             data = V15F2AFixtures.transaction
+        case let path where path.hasPrefix("reports/monthly/"):
+            guard route == .rootWorkspace || route == .rootWorkspaceBoundary else {
+                throw V15Failure(kind: .transport, code: "unexpected_path", message: "F2-B fixture 不应请求：\(request.path)")
+            }
+            let period = String(path.dropFirst("reports/monthly/".count))
+            guard period.range(of: "^[0-9]{4}-(0[1-9]|1[0-2])$", options: .regularExpression) != nil else {
+                throw V15Failure(kind: .decoding, code: "invalid_month_period", message: "根壳 fixture 收到无效月报 period：\(period)")
+            }
+            data = V15F2BFixtures.rootWorkspaceMonthlyReport(period: period)
         default: throw V15Failure(kind: .transport, code: "unexpected_path", message: "F2-B fixture 不应请求：\(request.path)")
         }
         return try V15FixtureCodec.decoder.decode(Response.self, from: data)
@@ -105,6 +124,49 @@ actor V15F2BFixtureTransport: V15Transporting {
 }
 
 extension V15F2BFixtures {
+    static var rootWorkspaceFacts: Data {
+        var payload = try! JSONSerialization.jsonObject(with: V15F2AFixtures.facts()) as! [String: Any]
+        var cash = payload["cash"] as! [String: Any]
+        cash["current_balance_minor"] = 188_650
+        payload["cash"] = cash
+        var future = payload["future"] as! [String: Any]
+        future["after_confirmed_outflow_minor"] = 6_500
+        payload["future"] = future
+        return try! JSONSerialization.data(withJSONObject: payload)
+    }
+
+    /// A complete monthly V15PeriodReport for the exact requested month.  The
+    /// summary and report rows are intentionally ordinary synthetic amounts;
+    /// Int64 boundary validation has its own root route above.
+    static func rootWorkspaceMonthlyReport(period: String) -> Data {
+        var payload = try! JSONSerialization.jsonObject(with: Data(V15F4AFixtures.report(period: period).utf8)) as! [String: Any]
+        var summary = payload["summary"] as! [String: Any]
+        summary["income_minor"] = 245_000
+        summary["gross_consumption_minor"] = 136_400
+        summary["merchant_refund_minor"] = 4_500
+        summary["net_consumption_minor"] = 131_900
+        summary["expected_reimbursement_minor"] = 21_000
+        summary["received_reimbursement_minor"] = 8_000
+        summary["personal_expected_minor"] = 110_900
+        summary["personal_realized_minor"] = 123_456
+        summary["net_income_expense_minor"] = 121_544
+        summary["cash_inflow_minor"] = 253_000
+        summary["cash_outflow_minor"] = 136_400
+        summary["cash_net_minor"] = 116_600
+        summary["internal_transfer_inflow_minor"] = 10_000
+        summary["internal_transfer_outflow_minor"] = 10_000
+        summary["credit_debt_at_period_end_minor"] = 4_567
+        summary["reimbursement_outstanding_at_period_end_minor"] = 900
+        payload["summary"] = summary
+        var accounts = payload["accounts"] as! [[String: Any]]
+        accounts[0]["opening_balance_minor"] = 142_000
+        accounts[0]["closing_balance_minor"] = 188_650
+        accounts[0]["period_inflow_minor"] = 245_000
+        accounts[0]["period_outflow_minor"] = 136_400
+        payload["accounts"] = accounts
+        return try! JSONSerialization.data(withJSONObject: payload)
+    }
+
     static var zeroFutureFacts: Data {
         var payload = try! JSONSerialization.jsonObject(with: V15F2AFixtures.facts()) as! [String: Any]
         payload["future"] = [

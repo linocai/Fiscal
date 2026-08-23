@@ -1,0 +1,35 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "F5BD11B7-111F-44DA-B394-32EFE4E59989",
+        "deviceName" : "Fiscal-B7-iPhone13",
+        "exportedFileName" : "425643E3-9387-488C-904E-034D9A5533F0.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "v151-ios-workspace-390x844-ax5_0_3E77A36C-B080-4EBB-A64D-1E8F164C8E44.png",
+        "timestamp" : 1787451781.892
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "F5BD11B7-111F-44DA-B394-32EFE4E59989",
+        "deviceName" : "Fiscal-B7-iPhone13",
+        "exportedFileName" : "60CFA34D-74B1-4143-8974-B33657ED43F5.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "v151-ios-workspace-390x844-dark_0_CF61FA4D-BA79-4832-BADC-14E045F2AFD1.png",
+        "timestamp" : 1787451777.42
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "F5BD11B7-111F-44DA-B394-32EFE4E59989",
+        "deviceName" : "Fiscal-B7-iPhone13",
+        "exportedFileName" : "E89C369C-57F1-4AFC-99EE-E3629BDCE9C6.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "v151-ios-workspace-390x844-light_0_AC64FAF3-A2E1-4022-B768-FF0C729AEBB1.png",
+        "timestamp" : 1787451772.999
+      }
+    ],
+    "testIdentifier" : "V15RootSmokeUITests/testFormalWorkspaceFixtureRendersAt390x844LightDarkAndAX5()",
+    "testIdentifierURL" : "test://com.apple.xcode/Fiscal/V15RootSmokeUITests/V15RootSmokeUITests/testFormalWorkspaceFixtureRendersAt390x844LightDarkAndAX5"
+  }
+]

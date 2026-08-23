@@ -63,9 +63,13 @@ import XCTest
 
     private func replace(_ value: String, in field: XCUIElement) {
         focus(field); field.press(forDuration: 0.7)
-        if app.menuItems["Select All"].waitForExistence(timeout: 1) { app.menuItems["Select All"].tap() }
-        else if app.menuItems["全选"].waitForExistence(timeout: 1) { app.menuItems["全选"].tap() }
+        var selectedAll = false
+        if app.menuItems["Select All"].waitForExistence(timeout: 1) { app.menuItems["Select All"].tap(); selectedAll = true }
+        else if app.menuItems["全选"].waitForExistence(timeout: 1) { app.menuItems["全选"].tap(); selectedAll = true }
         if !hasKeyboardFocus(field) { focus(field) }
+        if !selectedAll, let current = field.value as? String, !current.isEmpty {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+        }
         field.typeText(value.isEmpty ? XCUIKeyboardKey.delete.rawValue : value)
     }
 

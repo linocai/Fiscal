@@ -1,0 +1,12 @@
+{
+  "result_bundle": "/private/tmp/fiscal-b7-root-ax5-r7-final.xcresult",
+  "test": "V15RootSmokeUITests/testFormalWorkspaceFixtureRendersAt390x844LightDarkAndAX5()",
+  "root": "V151IOSWorkspace",
+  "device": "iPhone 13 · 390×844",
+  "fixture": "today-root-workspace (business-scale facts and complete monthly report)",
+  "screenshots": [
+    { "mode": "light", "file": "light.png" },
+    { "mode": "dark", "file": "dark.png" },
+    { "mode": "AX5", "file": "ax5.png" }
+  ]
+}

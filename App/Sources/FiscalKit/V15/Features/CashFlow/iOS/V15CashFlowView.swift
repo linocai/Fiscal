@@ -95,9 +95,21 @@ public struct V15CashFlowView: View {
 
     private func detail(_ item: V15CashFlowItem) -> some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
+            HStack(spacing: V15Spacing.xs) {
+                Text(item.isSystem ? "系统派生" : "手工计划").font(V15Typography.label)
+                    .padding(.horizontal, V15Spacing.xs).padding(.vertical, V15Spacing.xxs)
+                    .background(item.isSystem ? V15Palette.provisional.color : V15Palette.selected.color, in: RoundedRectangle(cornerRadius: V15Radius.tag))
+                if item.isSystem { Text(sourceLabel(item)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
+            }
             HStack(alignment: .firstTextBaseline) { Text(item.title).font(V15Typography.cardTitle); Spacer(); Text("v\(item.version)").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
                 .accessibilityIdentifier("v15.f3d.detail")
             Text("\(item.expectedDate) · \(item.direction.displayName) · \(item.status.displayName)").font(V15Typography.secondary)
+            HStack(alignment: .top, spacing: V15Spacing.sm) {
+                cashFlowFact("计划金额", value: item.plannedAmountMinor, date: item.expectedDate, provisional: true)
+                if let actual = item.actualAmountMinor { cashFlowFact("实际入账", value: actual, date: item.actualDate ?? "日期未提供", provisional: false) }
+                else { cashFlowUnavailableFact("实际入账", detail: item.isSystem ? "回来源流程确认" : "尚未结算") }
+            }
+            .accessibilityIdentifier("v15.f3d.plan-actual")
             if item.isOverdue { Label("已逾期", systemImage: V15Symbol.warning).foregroundStyle(V15Palette.gold.color) }
             if item.isDisplayOnly { Text("服务端返回了当前客户端未知的状态或方向，因此只读展示。") .font(V15Typography.secondary).foregroundStyle(V15Palette.teal.color).accessibilityIdentifier("v15.f3d.display-only") }
             if item.isSystem {
@@ -118,6 +130,8 @@ public struct V15CashFlowView: View {
         }
         .padding(V15Spacing.md).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.decisionCard)).overlay { RoundedRectangle(cornerRadius: V15Radius.decisionCard).stroke(V15Palette.hairline.color) }
     }
+    private func cashFlowFact(_ title: String, value: V15MinorUnits, date: String, provisional: Bool) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); V15MoneyText(minorUnits: value, direction: .neutral, font: V15Typography.body.weight(.semibold)); Text(date).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(provisional ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
+    private func cashFlowUnavailableFact(_ title: String, detail: String) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); Text("—").font(V15Typography.body.weight(.semibold)); Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
 
     private var editorSheet: some View {
         NavigationStack {
@@ -133,9 +147,26 @@ public struct V15CashFlowView: View {
                 }
                 .padding(V15Spacing.md)
             }
+            .scrollDismissesKeyboard(.immediately)
             .background(V15Palette.paper.color)
             .navigationTitle(editorTitle)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismissEditor() }.accessibilityIdentifier("v15.f3d.editor.close") } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismissEditor() }.accessibilityIdentifier("v15.f3d.editor.close") }
+                if case .create = model.editorMode {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("创建") { Task { await model.create() } }
+                            .disabled(!model.createReasons.isEmpty)
+                            .accessibilityIdentifier("v15.f3d.create.submit")
+                    }
+                }
+                if case .edit = model.editorMode {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("保存") { Task { await model.update() } }
+                            .disabled(!model.updateReasons.isEmpty)
+                            .accessibilityIdentifier("v15.f3d.update.submit")
+                    }
+                }
+            }
         }
         .presentationDetents([.medium, .large])
         .accessibilityIdentifier("v15.f3d.editor")
@@ -143,6 +174,11 @@ public struct V15CashFlowView: View {
 
     private var manualEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
+            if case .create = model.editorMode {
+                V15FieldIssues(issues: model.createReasons.map { .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath) })
+            } else {
+                V15FieldIssues(issues: model.updateReasons.map { .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath) })
+            }
             V15Field("标题", text: $model.title, issues: issues(model.editorIssues, "title")).accessibilityIdentifier("v15.f3d.editor.title")
             V15Field("计划金额（元）", text: $model.amountText, prompt: "0.00", issues: issues(model.editorIssues, "planned_amount_minor")).accessibilityIdentifier("v15.f3d.editor.amount")
             Picker("方向", selection: $model.direction) { ForEach([V15CashFlowDirection.inflow, .outflow, .transfer]) { Text($0.displayName).tag($0) } }.pickerStyle(.segmented).accessibilityIdentifier("v15.f3d.editor.direction")
@@ -160,8 +196,6 @@ public struct V15CashFlowView: View {
                     .accessibilityIdentifier("v15.f3d.editor.series-boundary")
             }
             V15Field("备注", text: $model.note, issues: issues(model.editorIssues, "note"), axis: .vertical)
-            if case .create = model.editorMode { V15ActionButton("创建现金流", disabledReasons: model.createReasons) { Task { await model.create() } }.accessibilityIdentifier("v15.f3d.create.submit") }
-            else { V15ActionButton("保存修改", disabledReasons: model.updateReasons) { Task { await model.update() } }.accessibilityIdentifier("v15.f3d.update.submit") }
             recoveryActions
         }
     }

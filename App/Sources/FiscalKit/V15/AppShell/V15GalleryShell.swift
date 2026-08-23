@@ -148,10 +148,10 @@ public struct V15GalleryShell: View {
     }
     var body: some View {
 #if os(macOS)
-        V15DataSecurityMacView(model: model, saver: V15F4CFixtures.saver(route: route))
+        V15DataSecurityMacView(services: services, model: model, saver: V15F4CFixtures.saver(route: route))
             .task { startSnapshotTransferIfNeeded() }
 #else
-        V15DataSecurityView(model: model)
+        V15DataSecurityView(services: services, model: model)
 #endif
     }
 
@@ -171,11 +171,17 @@ public struct V15GalleryShell: View {
         self.route = route
         services = V15F4AFixtures.services(route: route)
     }
+    private var initialLens: V15ReportingModel.Lens {
+        if route.contains("spending") { return .spending }
+        if route.contains("cash-flow") { return .cashFlow }
+        if route.contains("debt") { return .debt }
+        return .overview
+    }
     var body: some View {
 #if os(macOS)
-        V15ReportingMacView(services: services, offlineSnapshotAt: route == "reports-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil, artifactSaver: V15F4AFixtures.artifactSaver(route: route))
+        V15ReportingMacView(services: services, offlineSnapshotAt: route == "reports-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil, initialLens: initialLens, artifactSaver: V15F4AFixtures.artifactSaver(route: route))
 #else
-        V15ReportingView(services: services, offlineSnapshotAt: route == "reports-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil)
+        V15ReportingView(services: services, offlineSnapshotAt: route == "reports-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil, initialLens: initialLens)
 #endif
     }
 }

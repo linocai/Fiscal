@@ -20,7 +20,7 @@ final class V15RootSmokeUITests: XCTestCase {
         "\(keychainServicePrefix)\(UUID().uuidString.lowercased())"
     }
 
-    private func launchApp(service: String, accessKey: String? = nil, cleanupOnly: Bool = false, forceTransportError: Bool = false) -> XCUIApplication {
+    private func launchApp(service: String, accessKey: String? = nil, cleanupOnly: Bool = false, forceTransportError: Bool = false, formalFixture: Bool = false, formalBoundary: Bool = false, scheme: String? = nil, extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["FISCAL_ROOT_SMOKE_KEYCHAIN_SERVICE"] = service
         if let accessKey {
@@ -32,6 +32,16 @@ final class V15RootSmokeUITests: XCTestCase {
         if forceTransportError {
             app.launchEnvironment["FISCAL_ROOT_SMOKE_FORCE_TRANSPORT_ERROR"] = "1"
         }
+        if formalFixture {
+            app.launchEnvironment["FISCAL_ROOT_SMOKE_FORMAL_FIXTURE"] = "1"
+        }
+        if formalBoundary {
+            app.launchEnvironment["FISCAL_ROOT_SMOKE_FORMAL_BOUNDARY"] = "1"
+        }
+        if let scheme {
+            app.launchEnvironment["FISCAL_ROOT_SMOKE_COLOR_SCHEME"] = scheme
+        }
+        app.launchArguments = extraArguments
         app.launch()
         return app
     }
@@ -86,5 +96,53 @@ final class V15RootSmokeUITests: XCTestCase {
         XCTAssertFalse(offlineApp.descendants(matching: .any)["v15.gallery.ios"].exists)
         offlineApp.terminate()
         assertAppCleanup(service: offlineService)
+    }
+
+    func testFormalWorkspaceFixtureRendersAt390x844LightDarkAndAX5() {
+        let service = uniqueKeychainService()
+        let cases: [(name: String, scheme: String?, arguments: [String])] = [
+            ("v151-ios-workspace-390x844-light", "light", []),
+            ("v151-ios-workspace-390x844-dark", "dark", []),
+            ("v151-ios-workspace-390x844-ax5", "light", ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        ]
+        for testCase in cases {
+            let app = launchApp(service: service, formalFixture: true, scheme: testCase.scheme, extraArguments: testCase.arguments)
+            let workspace = app.descendants(matching: .any)["v151.ios.workspace-marker"]
+            XCTAssertTrue(workspace.waitForExistence(timeout: 8), testCase.name)
+            let monthlyExpense = app.descendants(matching: .any)["v151.ios.today.monthly-expense"]
+            XCTAssertTrue(monthlyExpense.waitForExistence(timeout: 8), testCase.name)
+            XCTAssertTrue(monthlyExpense.label.contains("1,234.56"), testCase.name)
+            XCTAssertFalse(app.staticTexts["暂不可用"].exists, testCase.name)
+            XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.today").firstMatch.isHittable, testCase.name)
+            XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.ledger").firstMatch.isHittable, testCase.name)
+            XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.record").firstMatch.isHittable, testCase.name)
+            let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            attachment.name = testCase.name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            app.terminate()
+        }
+        assertAppCleanup(service: service)
+    }
+
+    func testFormalWorkspaceBoundaryKeepsMoneyLocalAndNavigationReachable() {
+        let service = uniqueKeychainService()
+        let app = launchApp(service: service, formalFixture: true, formalBoundary: true, scheme: "light")
+        let accountValue = app.descendants(matching: .any)["v151.ios.today.account-value"]
+        XCTAssertTrue(accountValue.waitForExistence(timeout: 8))
+        XCTAssertTrue(accountValue.label.contains("92,233,720,368,547,758.07"))
+        let frame = accountValue.frame
+        XCTAssertGreaterThan(frame.width, 0)
+        XCTAssertGreaterThanOrEqual(frame.minX, app.frame.minX)
+        XCTAssertLessThanOrEqual(frame.maxX, app.frame.maxX)
+        XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.today").firstMatch.isHittable)
+        XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.ledger").firstMatch.isHittable)
+        XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.record").firstMatch.isHittable)
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "v151-ios-workspace-boundary-390x844"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        app.terminate()
+        assertAppCleanup(service: service)
     }
 }

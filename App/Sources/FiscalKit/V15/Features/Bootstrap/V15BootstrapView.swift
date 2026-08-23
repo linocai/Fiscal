@@ -20,11 +20,11 @@ public struct V15BootstrapView: View {
                 Spacer(minLength: 28)
                 VStack(spacing: 15) {
                     Text("F")
-                        .font(.system(size: 45, weight: .bold, design: .serif))
+                        .font(.largeTitle.bold())
                         .foregroundStyle(V15Palette.teal.color)
                         .frame(width: 88, height: 88)
                         .background(V15Palette.yellow.color, in: RoundedRectangle(cornerRadius: 20))
-                    Text("Fiscal").font(.system(size: 27, weight: .bold))
+                    Text("Fiscal").font(V15Typography.surfaceTitle)
                     Text("输入个人口令以解锁本机账本")
                         .font(V15Typography.secondary)
                         .foregroundStyle(V15Palette.ink.color.opacity(0.58))
@@ -45,9 +45,15 @@ public struct V15BootstrapView: View {
     @ViewBuilder private var content: some View {
         switch model.phase {
         case .idle, .loading:
-            ProgressView("正在连接服务…").controlSize(.small).padding(.top, 18)
-        case .needsPassphrase, .wrongPassphrase:
+            V15LoadingSkeleton(layout: .compact).padding(.top, 18).accessibilityIdentifier("v15.f1a.connecting")
+        case .needsPassphrase, .wrongPassphrase, .invalidAccessKey:
             VStack(alignment: .leading, spacing: 12) {
+                if case .invalidAccessKey = model.phase {
+                    Label("访问密钥已过期或被撤销", systemImage: "key.slash")
+                        .font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.teal.color)
+                    Text("服务端只返回统一的失效状态，不会向客户端透露是会话过期还是设备被主动撤销。重新输入口令即可建立新会话。")
+                        .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                }
                 HStack(spacing: 8) {
                     Group {
                         if showsPassphrase { TextField("个人访问口令", text: $passphrase) }
@@ -67,12 +73,21 @@ public struct V15BootstrapView: View {
                         .font(V15Typography.secondary).foregroundStyle(V15Palette.teal.color)
                 }
                 V15ActionButton("解锁", action: unlock)
+                V15ActionButton("修改口令", kind: .quiet, disabledReason: .init(code: "authenticated_session_required", message: "修改口令需要有效会话；请先解锁，再到“系统与数据”中修改。", fieldPath: nil)) {}
             }
             .padding(.top, 20)
         case .passphraseNotSet: compactState(title: "尚未设置访问口令", message: "请先在服务器完成个人访问口令设置。", retry: false)
         case .systemNotReady: compactState(title: "服务尚未就绪", message: "服务器正在启动；请稍后重试。", retry: true)
-        case .ready: ProgressView("正在打开账簿…").controlSize(.small)
-        case .offlineReadOnly(let at): V15OfflineReadOnlyBanner(snapshotAt: at)
+        case .ready: V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("v15.f1a.opening")
+        case .offlineReadOnly(let at):
+            VStack(alignment: .leading, spacing: V15Spacing.sm) {
+                V15OfflineReadOnlyBanner(snapshotAt: at)
+                Text("设备离线与服务尚未就绪是两种不同状态。快照只读，不会排队提交系统或安全操作。")
+                    .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                V15ActionButton("查看上次快照", symbol: "clock.arrow.circlepath") { onAvailable() }
+                V15ActionButton("重试连接", symbol: V15Symbol.retry, kind: .secondary) { Task { await model.retry(); releaseShellIfAvailable() } }
+            }
+            .padding(.top, 18)
         case .failed(let message): compactState(title: "无法连接服务", message: message, retry: true)
         }
     }
@@ -82,7 +97,7 @@ public struct V15BootstrapView: View {
             Circle().fill(footnoteColor).frame(width: 7, height: 7)
             VStack(alignment: .leading, spacing: 2) {
                 Text(footnoteTitle).font(V15Typography.secondary.weight(.semibold))
-                Text("CNY · Asia/Shanghai").font(.system(size: 10, design: .monospaced)).foregroundStyle(V15Palette.ink.color.opacity(0.52))
+                Text(serviceVersionLine).font(V15Typography.label.monospacedDigit()).foregroundStyle(V15Palette.ink.color.opacity(0.52))
             }
             Spacer()
         }
@@ -93,11 +108,12 @@ public struct V15BootstrapView: View {
     }
 
     private var footnoteColor: Color {
-        switch model.phase { case .failed(_), .systemNotReady: V15Palette.yellow.color; default: V15Palette.teal.color }
+        switch model.phase { case .failed(_), .systemNotReady, .invalidAccessKey: V15Palette.yellow.color; default: V15Palette.teal.color }
     }
     private var footnoteTitle: String {
-        switch model.phase { case .failed(_): "服务暂不可用"; case .systemNotReady: "服务正在启动"; case .offlineReadOnly(_): "离线快照可用"; default: "服务可用" }
+        switch model.phase { case .failed(_): "服务暂不可用"; case .systemNotReady: "服务正在启动"; case .invalidAccessKey: "连接凭证失效"; case .offlineReadOnly(_): "离线快照可用"; default: "服务可用" }
     }
+    private var serviceVersionLine: String { [model.systemStatus.map { "v\($0.version)" }, "CNY", "Asia/Shanghai"].compactMap { $0 }.joined(separator: " · ") }
 
     private func compactState(title: String, message: String, retry: Bool) -> some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -120,7 +136,7 @@ public struct V15BootstrapView: View {
 
     private func releaseShellIfAvailable() {
         switch model.phase {
-        case .ready, .offlineReadOnly:
+        case .ready:
             onAvailable()
         default:
             break

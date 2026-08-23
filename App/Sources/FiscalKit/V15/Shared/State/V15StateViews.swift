@@ -4,6 +4,7 @@ public enum V15StateCopy {
     public static let unknownReason = "当前状态无法继续此操作，请检查所需信息后再试。"
     public static let preview = "预览 · 尚未提交"
     public static let archive = "归档 · 只读"
+    public static let displayOnly = "未知服务器状态 · 仅展示"
     public static let conflict = "服务器数据已变化 · 本次预览已作废，未做任何修改。"
 }
 
@@ -45,21 +46,91 @@ private struct V15StateContainer<Content: View>: View {
     }
 }
 
+public enum V15SkeletonLayout: Sendable, Equatable {
+    case compact
+    case decisionCard
+    case list(rows: Int)
+    case inspector
+}
+
 public struct V15LoadingSkeleton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    public init() {}
+    private let layout: V15SkeletonLayout
+
+    public init(layout: V15SkeletonLayout = .compact) { self.layout = layout }
+
     public var body: some View {
-        VStack(alignment: .leading, spacing: V15Spacing.xs) {
-            RoundedRectangle(cornerRadius: 4).fill(V15Palette.ink.color.opacity(0.10)).frame(width: 128, height: 18)
-            RoundedRectangle(cornerRadius: 4).fill(V15Palette.ink.color.opacity(0.07)).frame(maxWidth: .infinity).frame(height: 14)
-            RoundedRectangle(cornerRadius: 4).fill(V15Palette.ink.color.opacity(0.07)).frame(width: 180, height: 14)
-        }
+        geometry
         .padding(V15Spacing.md)
         .redacted(reason: .placeholder)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("正在加载")
         .accessibilityAddTraits(.updatesFrequently)
         .animation(reduceMotion ? nil : V15Motion.standard, value: reduceMotion)
+    }
+
+    @ViewBuilder private var geometry: some View {
+        switch layout {
+        case .compact:
+            VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                bar(width: 128, height: 18, strong: true)
+                flexibleBar(height: 14)
+                bar(width: 180, height: 14)
+            }
+        case .decisionCard:
+            VStack(alignment: .leading, spacing: V15Spacing.sm) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                        bar(width: 82, height: 11, strong: true)
+                        bar(width: 210, height: 22, strong: true)
+                    }
+                    Spacer(minLength: V15Spacing.sm)
+                    bar(width: 96, height: 22, strong: true)
+                }
+                flexibleBar(height: 15)
+                bar(width: 240, height: 15)
+                HStack { flexibleBar(height: 44); flexibleBar(height: 44) }
+            }
+        case .list(let requestedRows):
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<max(1, requestedRows), id: \.self) { index in
+                    HStack(spacing: V15Spacing.sm) {
+                        bar(width: 42, height: 13)
+                        VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+                            flexibleBar(height: 15, strong: index == 0)
+                            bar(width: 170, height: 12)
+                        }
+                        bar(width: 78, height: 15, strong: true)
+                    }
+                    .padding(.vertical, V15Spacing.sm)
+                    if index < max(1, requestedRows) - 1 { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
+                }
+            }
+        case .inspector:
+            VStack(alignment: .leading, spacing: V15Spacing.md) {
+                bar(width: 118, height: 22, strong: true)
+                ForEach(0..<3, id: \.self) { _ in
+                    VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+                        bar(width: 74, height: 11)
+                        flexibleBar(height: 16)
+                    }
+                }
+                flexibleBar(height: 44)
+            }
+        }
+    }
+
+    private func bar(width: CGFloat, height: CGFloat, strong: Bool = false) -> some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(V15Palette.ink.color.opacity(strong ? 0.10 : 0.07))
+            .frame(width: width, height: height)
+    }
+
+    private func flexibleBar(height: CGFloat, strong: Bool = false) -> some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(V15Palette.ink.color.opacity(strong ? 0.10 : 0.07))
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
     }
 }
 
@@ -95,11 +166,12 @@ public struct V15ServiceErrorState: View {
 
 public struct V15OfflineReadOnlyBanner: View {
     private let snapshotAt: Date
-    public init(snapshotAt: Date) { self.snapshotAt = snapshotAt }
+    private let pendingCount: Int
+    public init(snapshotAt: Date, pendingCount: Int = 0) { self.snapshotAt = snapshotAt; self.pendingCount = max(0, pendingCount) }
     public var body: some View {
         V15StateContainer(marker: V15Palette.yellow.color, background: V15Palette.provisional.color, dashed: true) {
             VStack(alignment: .leading, spacing: V15Spacing.xxs) {
-                Label("离线 · 只读", systemImage: V15Symbol.offline).font(V15Typography.secondary.weight(.semibold))
+                Label(pendingCount > 0 ? "离线 · \(pendingCount) 项待同步" : "离线 · 只读", systemImage: V15Symbol.offline).font(V15Typography.secondary.weight(.semibold))
                 Text("显示 \(snapshotLabel) 的快照；无法提交更改。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
             }
         }.v15StateAccessibility(hasAction: false)
@@ -108,22 +180,82 @@ public struct V15OfflineReadOnlyBanner: View {
     private var snapshotLabel: String { Self.snapshotLabel(for: snapshotAt) }
 }
 
+public struct V15ConflictChange: Identifiable, Sendable, Equatable {
+    public let id: String
+    public let field: String
+    public let previousValue: String
+    public let currentValue: String
+
+    public init(id: String? = nil, field: String, previousValue: String, currentValue: String) {
+        self.id = id ?? field
+        self.field = field
+        self.previousValue = previousValue
+        self.currentValue = currentValue
+    }
+}
+
 public struct V15ConflictState: View {
-    private let conflict: V15Conflict; private let reload: () -> Void
-    public init(conflict: V15Conflict, reload: @escaping () -> Void) { self.conflict = conflict; self.reload = reload }
+    private let conflict: V15Conflict
+    private let changes: [V15ConflictChange]
+    private let explanation: String?
+    private let reload: () -> Void
+
+    public init(conflict: V15Conflict, changes: [V15ConflictChange] = [], explanation: String? = nil, reload: @escaping () -> Void) {
+        self.conflict = conflict
+        self.changes = changes
+        self.explanation = explanation
+        self.reload = reload
+    }
+
     public var body: some View {
         V15StateContainer(marker: V15Palette.teal.color, background: V15Palette.selected.color) {
-            VStack(alignment: .leading, spacing: V15Spacing.xs) {
+            VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 Text("服务器数据已变化").font(V15Typography.cardTitle).foregroundStyle(V15Palette.teal.color)
                 Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
+                if !changes.isEmpty {
+                    VStack(alignment: .leading, spacing: V15Spacing.sm) {
+                        ForEach(changes) { change in comparison(change) }
+                    }
+                    .padding(V15Spacing.sm)
+                    .background(V15Palette.paper.color.opacity(0.72), in: RoundedRectangle(cornerRadius: V15Radius.control))
+                    .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(V15Palette.hairline.color) }
+                }
+                Text("未做任何修改。取回最新数据后，原预览会作废并重新计算。")
+                    .font(V15Typography.secondary.weight(.semibold))
+                    .foregroundStyle(V15Palette.ink.color)
+                    .fixedSize(horizontal: false, vertical: true)
                 V15ActionButton("取最新数据重新决定", symbol: V15Symbol.conflict, action: reload)
             }
-        }.v15StateAccessibility(hasAction: true, label: "版本冲突。\(detail)")
+        }.v15StateAccessibility(hasAction: true, label: accessibilitySummary)
     }
+
     private var detail: String {
         let versions: String
         if let expected = conflict.expectedVersion, let current = conflict.currentVersion { versions = "你看到的是 v\(expected)，服务器现在是 v\(current)。" } else { versions = "" }
-        return "\(versions)\(V15StateCopy.conflict)"
+        return "\(versions)\(explanation ?? V15StateCopy.conflict)"
+    }
+
+    private func comparison(_ change: V15ConflictChange) -> some View {
+        VStack(alignment: .leading, spacing: V15Spacing.xs) {
+            Text(change.field).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+            V15AdaptiveStack(spacing: V15Spacing.sm) {
+                comparisonValue("你看到的值", change.previousValue)
+                comparisonValue("服务器当前值", change.currentValue)
+            }
+        }
+    }
+
+    private func comparisonValue(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+            Text(label).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+            Text(value).font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var accessibilitySummary: String {
+        let changesSummary = changes.map { "\($0.field)，原值 \($0.previousValue)，当前值 \($0.currentValue)" }.joined(separator: "；")
+        return "版本冲突。\(detail)\(changesSummary.isEmpty ? "" : "；\(changesSummary)")。未做任何修改。"
     }
 }
 
@@ -140,21 +272,82 @@ public struct V15PreviewState<Content: View>: View {
     }
 }
 
+/// A fresh readback is authoritative about the current server record, but it
+/// is deliberately not presented as a write preview.  Callers use this when
+/// the backend has no preview/token endpoint for the pending decision.
+public struct V15ServerFactState: View {
+    private let title: String
+    private let detail: String
+
+    public init(title: String = "服务器当前事实", detail: String) {
+        self.title = title
+        self.detail = detail
+    }
+
+    public var body: some View {
+        V15StateContainer(marker: V15Palette.teal.color, background: V15Palette.selected.color, dashed: false) {
+            VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                Text(title).font(V15Typography.label).foregroundStyle(V15Palette.teal.color)
+                Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .v15StateAccessibility(hasAction: false, label: "\(title)。\(detail)")
+    }
+}
+
+/// The backend returned an enum or record the current client intentionally
+/// does not interpret. It is visible, readable, and explicitly non-actionable
+/// rather than borrowing archive styling.
+public struct V15DisplayOnlyState: View {
+    private let title: String
+    private let detail: String
+
+    public init(title: String = V15StateCopy.displayOnly, detail: String) {
+        self.title = title
+        self.detail = detail
+    }
+
+    public var body: some View {
+        V15StateContainer(marker: V15Palette.yellow.color, background: V15Palette.provisional.color, dashed: true) {
+            VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.72))
+                Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .v15StateAccessibility(hasAction: false, label: "\(title)。\(detail)。当前不可操作。")
+    }
+}
+
 public struct V15ArchiveReadOnlyState<Content: View>: View {
     private let content: Content
-    public init(@ViewBuilder content: () -> Content) { self.content = content() }
+    private let restoreTitle: String?
+    private let restore: (() -> Void)?
+
+    public init(restoreTitle: String? = nil, restore: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
+        self.content = content()
+        self.restoreTitle = restoreTitle
+        self.restore = restore
+    }
+
     public var body: some View {
-        content
+        VStack(alignment: .leading, spacing: V15Spacing.sm) {
+            content
+            if let restore {
+                V15ActionButton(restoreTitle ?? V15AccessibilityCopy.restore, symbol: V15Symbol.archive, kind: .secondary, action: restore)
+            }
+        }
             .padding(V15Spacing.md)
             .background(V15ArchiveHatch().clipShape(RoundedRectangle(cornerRadius: V15Radius.control)))
             .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(V15Palette.hairline.color, style: StrokeStyle(lineWidth: 1, dash: [4, 3])) }
             .overlay(alignment: .topTrailing) { Text(V15StateCopy.archive).font(V15Typography.label).padding(.horizontal, V15Spacing.xs).padding(.vertical, V15Spacing.xxs).background(V15Palette.ink.color.opacity(0.10), in: RoundedRectangle(cornerRadius: V15Radius.tag)) }
-            .v15StateAccessibility(hasAction: false, label: "归档，只读。历史已保留。")
+            .grayscale(restore == nil ? 0.28 : 0.18)
+            .v15StateAccessibility(hasAction: restore != nil, label: "归档，只读。历史已保留。")
     }
 }
 
-private struct V15ArchiveHatch: View {
-    var body: some View {
+public struct V15ArchiveHatch: View {
+    public init() {}
+    public var body: some View {
         Canvas { context, size in
             context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(V15Palette.card.color.opacity(0.65)))
             for offset in stride(from: -size.height, through: size.width, by: 10) {
@@ -165,6 +358,85 @@ private struct V15ArchiveHatch: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+public struct V15MoneyTruthState: View {
+    private let title: String
+    private let presentation: V15MoneyTruthPresentation
+    private let font: Font
+
+    public init(_ title: String, displayedMinorUnits: Int64, confirmedMinorUnits: Int64, pendingCount: Int, direction: V15MoneyDirection = .balance, font: Font = V15Typography.moneyLarge) {
+        self.title = title
+        presentation = .init(displayedMinorUnits: displayedMinorUnits, confirmedMinorUnits: confirmedMinorUnits, pendingCount: pendingCount, direction: direction)
+        self.font = font
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: V15Spacing.xs) {
+            Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+            HStack(alignment: .firstTextBaseline, spacing: V15Spacing.sm) {
+                V15MoneyTextValue(presentation.displayed, font: font)
+                    .overlay(alignment: .bottom) {
+                        if presentation.hasPendingValue {
+                            Rectangle().stroke(V15Palette.yellow.color, style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(height: 1).offset(y: 3)
+                        }
+                    }
+                if let pendingLabel = presentation.pendingLabel {
+                    Text(pendingLabel).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if presentation.hasPendingValue {
+                Text("服务器上次确认值 \(presentation.confirmed.text)")
+                    .font(V15Typography.secondary)
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var accessibilitySummary: String {
+        guard let pendingLabel = presentation.pendingLabel else { return "\(title)，\(presentation.displayed.text)" }
+        return "\(title)，本地显示 \(presentation.displayed.text)，\(pendingLabel)，服务器上次确认值 \(presentation.confirmed.text)"
+    }
+}
+
+public struct V15ProvisionalMoneyState: View {
+    private let title: String
+    private let amountMinor: Int64
+    private let detail: String
+
+    public init(_ title: String, amountMinor: Int64, detail: String) {
+        self.title = title
+        self.amountMinor = amountMinor
+        self.detail = detail
+    }
+
+    public var body: some View {
+        V15StateContainer(marker: V15Palette.yellow.color, background: V15Palette.provisional.color, dashed: true) {
+            VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                Text("\(title) · 尚未发生").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                V15MoneyText(minorUnits: amountMinor, direction: .neutral, font: V15Typography.moneyLarge)
+                Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .v15StateAccessibility(hasAction: false, label: "\(title)，尚未发生，\(V15MoneyPresentation(minorUnits: amountMinor, direction: .neutral).text)。\(detail)")
+    }
+}
+
+private struct V15MoneyTextValue: View {
+    let presentation: V15MoneyPresentation
+    let font: Font
+    init(_ presentation: V15MoneyPresentation, font: Font) { self.presentation = presentation; self.font = font }
+    var body: some View {
+        Text(presentation.text)
+            .font(font)
+            .monospacedDigit()
+            .foregroundStyle(presentation.direction == .neutral ? V15Palette.ink.color.opacity(0.66) : V15Palette.ink.color)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
     }
 }
 

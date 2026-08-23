@@ -1,6 +1,6 @@
 # Fiscal
 
-Fiscal is a private, single-user personal-finance application for iOS 26 and macOS 26. Its canonical CNY ledger covers accounts, credit cycles, installments, reimbursements, reports, AI/OCR capture, and manually reviewed PDF statement imports. The signed macOS `v1.5.1 (25)` release is installed locally; iOS distribution remains operator-managed. Product scope and the current stop point live in [`PROJECT_PLAN.md`](PROJECT_PLAN.md); release manifests live under [`archive/releases/`](archive/releases/).
+Fiscal is a private, single-user personal-finance application for iOS 26 and macOS 26. Its canonical CNY ledger covers accounts, credit cycles, installments, reimbursements, reports, AI/OCR capture, and manually reviewed PDF statement imports. The source tree and unsigned build gates are closed at `v1.5.2 (26)`; the signed macOS application installed locally remains `v1.5.1 (25)`, and iOS distribution remains operator-managed. Product scope and the current stop point live in [`PROJECT_PLAN.md`](PROJECT_PLAN.md); release manifests live under [`archive/releases/`](archive/releases/).
 
 ## Repository map
 
@@ -101,6 +101,7 @@ See [`Backend/ops/README.md`](Backend/ops/README.md) for local PostgreSQL and st
 
 ## Release evidence
 
-- Current manifest: [`archive/releases/v1.5.1/RELEASE_STATE.md`](archive/releases/v1.5.1/RELEASE_STATE.md).
+- Current source-closeout manifest: [`archive/releases/v1.5.2/RELEASE_STATE.md`](archive/releases/v1.5.2/RELEASE_STATE.md).
+- Current installed signed macOS release: [`archive/releases/v1.5.1/RELEASE_STATE.md`](archive/releases/v1.5.1/RELEASE_STATE.md).
 - Prior full QA history: [`archive/releases/v1.5.0/qa/frontend/f5-results.md`](archive/releases/v1.5.0/qa/frontend/f5-results.md).
 - Historical contracts and QA: [`archive/README.md`](archive/README.md).

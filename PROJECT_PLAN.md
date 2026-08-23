@@ -1,125 +1,132 @@
 # Fiscal · PROJECT_PLAN
 
-> 控制面版本：v1.5.1 ｜ 更新：2026-08-22（Asia/Shanghai）｜ 状态：**Review 与 P2 收口完成；macOS v1.5.1（25）已签名、换包并启动。**
+> 目标版本：v1.5.2（26）｜更新：2026-08-22（Asia/Shanghai）｜阶段：**BUILD · 源码收口完成**
 
-## 1. 本轮目标
+## 1. 当前目标与授权
 
-- 基于当前 `main` / v1.5.0 源码前向补救，不回退、不恢复旧 View。
-- v1.5.1 是一次**仅前端**的视觉与交互还原：iPhone 与 Mac 必须忠实实现 `Fiscal 前端设计启动/` 中的参考原型，不能再把原型解释成另一套通用 SwiftUI 产品。
-- 保留已经完成的 typed services、业务状态模型、认证、金额、时区、离线只读、并发与写入安全边界；只改变 SwiftUI 组合、导航、布局、排版、颜色、控件、状态表面和展示映射。
-- Plan + Build 与三轮 Review 已完成；用户现已授权修复最后一个 P2 后执行 macOS 签名、换包安装、Tag 与 GitHub 推送，不做 Apple 公证或 iOS/TestFlight。
+- 基线为 `main` / tag `v1.5.1` / commit `2f47d4e`，向前修复，不回退 v1.5.1 已完成的业务安全能力。
+- v1.5.2 是一次以独立审计为输入的**双端前端设计验收修复**：macOS 与 iPhone 必须忠实落实 `Fiscal 前端设计启动/`，解决 `F151-01` 至 `F151-17`。
+- 用户已授权进入修复工作流。本计划完成后可直接施工，无需再次确认每个普通前端改动。
+- 当前授权不包含：Backend/schema/migration 变更、生产部署、Apple 公证、TestFlight、签名换包、commit、tag 或 push。这些动作如需执行，收口后另行请求或等待用户指令。
 
-## 2. 权威顺序
+## 2. 权威与审计输入
 
-1. 当前用户指令：前端与参考原型一致；本轮仅 Plan + Build。
-2. `Fiscal 前端设计启动/Design/00-HANDOFF.md`：可点击原型是行为权威，静态高保真是视觉权威，设计文档是语义规则权威；冲突按其 §4 已冻结判断处理。
-3. 高保真文件：`Fiscal macOS 高保真.dc.html`、`Fiscal iOS 高保真.dc.html` 及导入、报销/分期、对账/启动门/系统、报表/钻取、现金流/AI/主数据/安全、深色模式和大字号稿。
-4. 可点击文件：`Fiscal 交互原型 macOS.dc.html`、`Fiscal 交互原型 iOS.dc.html`。
-5. 当前 Backend schema/service 与 V15 typed contracts：只提供事实，不为视觉方便改接口或伪造数据。
+优先级从高到低：
 
-禁止把既有 V15 Gallery、默认 `NavigationSplitView` / `List` 外观、通用大卡片或系统蓝色强调色当成设计权威。禁止嵌入 HTML/WebView。
+1. 当前用户指令与本计划。
+2. `Fiscal 前端设计启动/Design/00-HANDOFF.md`：语义与冲突裁决。
+3. 静态高保真 `.dc.html`：视觉权威。
+4. 可点击 iOS/macOS 原型：交互权威。
+5. `Fiscal 前端设计启动/Design/06-direction-decision-and-inventory.md`：屏幕和状态覆盖。
+6. Backend schema/service 与 V15 typed contracts：事实和可用能力权威。
+7. `archive/audits/frontend-audit-v1.5.1-2026-08-22.md`：本轮 17 项缺口的冻结记录。
 
-## 3. 不可变产品语法
+禁止事项：
 
-- 白/纸色是已确认事实底座；teal `#0C5A5B` 是需要决定、主动作和已提交；yellow `#FCD668` 是未定、预览、提议和陈旧。
-- 浅色：paper `#FFFFFF`、raised `#FAF9F6`、canvas `#F4F2EC`、ink `#14201F`、expense/debt `#8A6A12`。深色按原型重新配比，不做简单反色。
-- `preview ≠ commit`；冲突接管整面并要求重新决定；provisional 不得伪装成 fact；archive 不等于 delete；部分成功必须说明已完成、当前状态与剩余项。
-- 金额使用等宽数字、按列右对齐；收入带 `+` 且 teal，支出/欠款带 `−` 且金色，余额与量值使用中性墨色。
-- 客户端不自算会计真相。没有后端事实的参考文案只能作为布局占位，不进入正式 live 数据路径。
+- 不把现有 View、Gallery、默认 `NavigationStack` / `Form` / `List` 的外观当作设计权威。
+- 不嵌入 HTML/WebView，不以截图或静态假数据冒充正式 UI。
+- 不为匹配原型在客户端计算会计真相；后端未提供的数据必须显示真实空态、不可用态或禁用原因。
+- 不以“已有模型/按钮/入口”代替视觉与交互验收。
 
-## 4. 平台实现契约
+## 3. 冻结的审计问题
 
-### 4.1 macOS
+完整证据见 `archive/audits/frontend-audit-v1.5.1-2026-08-22.md`。
 
-- 设计基准 1440×900，窗口最小宽度 1000pt；自绘三栏，不使用系统默认 split/list 视觉。
-- 顶栏：交通灯留白、`Fiscal`、期间与条数、密度菜单、搜索入口。
-- 左栏约 256pt：镜头计数、时间、账户、归档/报表/系统与数据/设置；紧凑 13–15pt 排版，中性色选中面，teal 只用于“需要决定”的语义。
-- 中栏是账簿脊柱：未来 yellow 段、今天 teal 分隔、过去事实行、归档斜纹；行高、日期列、摘要列、金额列与键盘提示按原型。
-- 右栏约 320pt：检查器、字段、来源链、账本影响、修订历史和底部动作；单选随脊柱选择，多选切换批量操作面。
-- 账单导入、报表钻取、系统与数据使用单窗口接管，保留返回脊柱出口，不开新窗口。
+| 编号 | 等级 | 平台 | 问题 | 归属批次 |
+| --- | --- | --- | --- | --- |
+| F151-01 | A | Mac | 镜头不是脊柱筛选器，缺归档镜头 | B2 |
+| F151-02 | A | iOS | Today 卡缺卡内分类/还款/收款/现金流决定 | B3 |
+| F151-03 | A | 双端 | 报表缺权威构图 | B4 |
+| F151-04 | A | 双端 | 系统与数据、设置覆盖不完整 | B5 |
+| F151-05 | A | 双端 | 通用账户详情与独立待同步队列缺失 | B2、B3 |
+| F151-06 | A | 双端 | Dynamic Type AX5 未落地 | B1、B6 |
+| F151-07 | B | 双端 | 归档视觉语法未全局贯彻 | B1、B2、B5 |
+| F151-08 | B | 双端 | 离线乐观值缺真值标注 | B1、B2、B3 |
+| F151-09 | B | 双端 | 冲突缺字段级新旧对照 | B1、B3、B5 |
+| F151-10 | B | 双端 | 账单导入信息结构偏通用 | B5 |
+| F151-11 | B | 双端 | 重型业务页缺对象专属构图 | B5 |
+| F151-12 | B | 双端 | 加载态和原生控件破坏统一语言 | B1、B4、B5 |
+| F151-13 | B | 双端 | 量值被错误表现为收支 | B1、B2、B4 |
+| F151-14 | C | iOS | 重型入口隐藏且集合不一致 | B3 |
+| F151-15 | C | iOS | 底栏图标、徽标、交易详情偏占位 | B3 |
+| F151-16 | C | 双端 | 启动门状态与信息不完整 | B5 |
+| F151-17 | C | Mac | 窄窗口比例失衡 | B2、B6 |
 
-### 4.2 iPhone
+## 4. 不可回退契约
 
-- 设计基准 390×844，只做 iPhone，不为 iPad 预留分栏。
-- 主表面是“今日”决策台：34pt 标题、更新时间、账户价值主数字、信用欠款/本月支出/未收报销三数、决策卡队列。
-- 底部只保留今日、中央 teal 录入按钮、账目；不使用默认四 Tab 产品架构。
-- 离线条、待同步队列、卡内分类/还款/收款/现金流决定、冲突接管和凭证翻面按可点击原型。
-- “账目”以搜索优先的手机脊柱呈现；交易详情、账户/信用/分期/报销/现金流为次级面；录入、报表、导入、对账为全屏模态。
+- `preview ≠ commit`：预览和提交是两次决定，输入变化立即作废服务器预览。
+- 冲突必须接管当前决策面，展示旧/新事实并重新预览；不静默覆盖。
+- provisional、AI、未来、导入、待同步不伪装成 fact：yellow 左条、虚线/形状和文字三重冗余。
+- archive 不等于 delete：灰度、45°斜纹、“归档 · 只读”和恢复入口。
+- 部分成功必须说明做成什么、现在是什么、还剩什么。
+- CNY 金额只走 `CNYAmountParser`；业务日期和用户可见导出日期使用 `Asia/Shanghai`。
+- 保留 typed services、现有 Model、幂等键、离线写入白名单、generation/token 竞态守卫和错误展示链路。
+- iPhone 底部只保留今日、中央记一笔、账目；macOS 维持单窗口索引/脊柱/检查器和接管模式。
 
-## 5. Build 分块
+## 5. 施工计划
 
-### B1 · 精确设计系统与状态表面 ✅
+### B0 · 基线与验收夹具 — completed
 
-所有权：`App/Sources/FiscalKit/V15/DesignSystem/**`、`Shared/State/**`、必要的展示格式器。
+- 冻结 v1.5.1 审计为 `F151-01` 至 `F151-17`。
+- 保留 v1.5.1 计划摘要和发布证据，不重写历史。
+- 确定版本目标 `1.5.2 (26)`；版本号只在功能与验证收口时修改。
+- 后续每个批次开始前先对照对应高保真和可点击原型；完成后保存不含私人财务数据的合成 QA 图。
 
-- 用原型数值重建颜色、字体、间距、描边、圆角、阴影、斜纹、金额、来源标记、按钮、字段、预览、冲突、凭证、离线和空/错/加载表面。
-- 去掉系统蓝色、夸张大卡片、过度圆角和不受控 `Form/List` 默认样式。
+### B1–B6 · 已完成
 
-### B2 · macOS 主窗口 ✅
+- B1 共享状态、归档/离线真值、语义字体与 AX5；B2 Mac 七镜头、账户与显式 PendingWrites；B3 iOS Today/账目原位决定；B4 双端报表与钻取；B5 重型工作区、设置/系统/启动门；B6 视觉 QA、版本与门禁均已完成。
+- 历史验收、视觉矩阵、测试和能力边界见 `archive/audits/v1.5.2-build-gap-register.md` 与 `archive/releases/v1.5.2/RELEASE_STATE.md`；后端能力限制不得按前端完成处理。
 
-所有权：`V15/AppShell`、`Features/Ledger/**`、`Features/Today/macOS/**` 及新的 macOS-only 展示组件。
+### B7 · v1.5.2 独立复审修复 — completed
 
-- 完成顶栏、索引、脊柱、检查器、多选批量面和键盘/密度状态。
-- 用现有 ledger/detail/history/provenance/capability 数据驱动，不能以静态合成内容代替 live 列表。
+所有权：正式 iOS/macOS 根壳、共享状态组件、Ledger/PendingWrites、MasterData、DataSecurity、StatementImport 及其针对性测试；不改 Backend，不签名、不安装、不 commit/tag/push。
 
-### B3 · macOS 接管工作区 ✅
+- 让正式 `V151IOSWorkspace` 接入语义字体、AX5 重排与正式根壳视觉验证；不得用 Gallery 的另一套 Today View 代替验收。
+- 成功、读回确认、未知/仅展示与归档使用各自状态组件；成功凭证不得再显示或朗读为“归档 · 只读”。
+- 分类决定不得把本地摘要冒充服务器预览；当前 Backend 无独立 preview 契约时，展示服务器当前事实和明确能力限制，并更新能力登记。
+- 冲突必须保留接管态直至用户显式读取；对可 fresh GET 的对象计算并展示真实旧值/新值，不使用“预览时版本/服务器最新版本”等占位值。
+- 口令服务端已修改但本机凭证保存失败时进入不可重提的终态、清空输入并要求使用新口令重新解锁。
+- 系统与设置的每次读取只按本轮结果决定 loaded/failed；失败不得把上一轮值伪装为实时事实，若保留旧值必须带陈旧时间和错误标记。
+- 待同步统一采用 B2 冻结的显式同步语义；移除 Mac 启动静默 replay，冲突/结果不明继续禁止自动重放。
+- Mac 账单导入同凭证恢复补齐离线/仅展示门禁与可见原因；与 iOS 行为对称。
+- Mac 月份报表读取增加 generation/owner 守卫，旧月份响应不得覆盖当前月份。
+- 清理正式主路径残留的无语义 `ProgressView`、默认 `Form` 和不受控 bordered 控件，使用 Fiscal 骨架与控件语法。
+- 为上述路径补模型/组件/正式根壳测试；至少覆盖二次读取失败、access key 保存失败、普通主数据冲突、Mac 月份竞态、双端 PendingWrites 与状态组件语义。
 
-所有权：现有 macOS Reports、StatementImport、Reconciliation、DataSecurity、MasterData、CashFlow、AI、Credit、Installments、Reimbursements、Timeline View。
+完成门：已通过 r7。业务量级正式 root fixture 为请求月份返回完整 `Asia/Shanghai` 月报，iPhone 13（390×844）浅色、深色、AX5 三图均有服务器月支出数值；独立 F2-A `Int64.max` root 夹具证明金额仅在局部横滚而不撑宽整页，三个底栏动作仍可触达。两处未保留快照的伪字段差异已移除。`FiscalKitTests` 393/393 通过，正式 root UI 2/2 通过，iOS/macOS Debug 与无签名 Release 均通过；证据见版本记录。
 
-- 按对应高保真稿统一为接管式工作区；保留业务 Model 与真实服务调用，只重排和重绘。
+## 6. 验收矩阵
 
-### B4 · iPhone 主壳与日常流 ✅
+| 门 | 必须满足 |
+| --- | --- |
+| 语义 | preview、conflict、provisional、archive、partial success 五条规则逐屏成立 |
+| macOS 主壳 | 七镜头真实收敛脊柱；检查器不断链；1000pt 可用 |
+| iPhone Today | 四类决定均可卡内完成；冲突和错误不离开当前卡 |
+| 页面覆盖 | i-01 至 i-17、m-01 至 m-10 均有正式入口和关键状态 |
+| 报表 | 四镜头、七 neutral 口径、专用构图和真实钻取 |
+| 离线 | 服务器确认值、本地乐观值、待同步数和同步凭证同时可见 |
+| 归档 | 斜纹、灰度、只读标签、恢复入口同时存在 |
+| 可访问性 | iPhone AX5 无截断；金额不换行；禁用原因可见；触达达标 |
+| 视觉 | 浅/深色令牌一致，无系统蓝、无不受控 Form/List/Material |
+| 工程 | iOS App、macOS App、FiscalKitTests 全部通过，工作区无无关改动 |
 
-所有权：`V15/AppShell`、`Today/iOS`、`Ledger`、`Record`、Bootstrap 及新的 iOS-only 展示组件。
+## 7. 执行纪律
 
-- 完成今日决策台、离线/待同步、底部三入口、录入、搜索账目、详情和卡内处理。
+- 每次只推进一个可验证批次；批次开始前确认 `git status`，结束后记录 changed files、验证结果和未完成编号。
+- 新增或删除 Swift 源文件、修改 `App/project.yml` 后执行 `cd App && xcodegen generate`；仅 View 内容变化不提前重生成工程。
+- 双端共享语义先在 B1 完成，不在各业务页复制冲突、归档、离线或 AX5 逻辑。
+- 修改一端时按项目规则扫描另一端同类点，尤其 selection 收敛、预览失效、错误横幅和 generation 竞态。
+- 若后端不提供参考要求的事实，先记录为明确 blocker；未经用户授权不扩展 Backend。
+- 不使用真实财务数据做仓库内快照，不输出或提交私人余额。
 
-### B5 · iPhone 重活与详情 ✅
+## 8. 当前状态与下一动作
 
-所有权：现有 iOS Reports、StatementImport、Reconciliation、DataSecurity、MasterData、CashFlow、AI、Credit、Installments、Reimbursements、Timeline View。
-
-- 按参考稿统一全屏层级、预览、冲突、凭证、归档和危险操作，不改变业务语义。
-
-### B6 · 深色、大字号与版本收口 ✅
-
-- 深色令牌按 `Fiscal 深色模式.dc.html`；Dynamic Type 按“元信息换行 → 按钮纵向 → 固定高度变最小高度 → 图标顶对齐”，金额不换行。
-- 版本升至 `1.5.1 (25)`；只整理 v1.5.1 前端相关工作区，不生成包、tag、push 或部署。
-
-## 6. Build 完成门
-
-本轮不做 Independent Review。Builder 只做以下必要自检，避免再次用验证替代施工：
-
-1. 改源清单时才运行 `xcodegen generate`。
-2. 完成后只运行 iOS Simulator 与 macOS App target 的编译检查；不跑全量测试、长 UI 自动化、发布签名或生产验证。
-3. 逐屏用原型作视觉基线，确认主结构、栏宽、密度、排版、颜色、关键状态和交互路径已落入正式 live root。
-4. `git diff` 只能包含 v1.5.1 前端、版本和本计划相关改动；Backend、migration、生产配置不得变化。
-5. 完成 Build 后向用户报告改动与仍需人工观察的视觉点，然后停止，等待用户明确放行 Review。
-
-## 7. Build 收口记录
-
-- 正式 live root 已切换为原型结构：macOS 使用自绘顶栏 + 索引 + 账簿脊柱 + 检查器；iPhone 使用“今日 + 中央录入 + 账目”三入口。
-- 原有业务 Model、typed services 与安全边界继续复用；重活工作区由正式 root 接管，不嵌入 HTML/WebView，不改 Backend 或 migration。
-- 启动门已按参考稿重绘，并阻止正式包从 QA 环境变量覆盖生产 Keychain access key。
-- 版本已落为 `1.5.1 (25)`；正式 iOS 目标收窄为 iPhone 竖屏；macOS 默认窗口为 1440×900。
-- 已重新生成 Xcode 工程；macOS App target 与 iOS Simulator App target 的 Debug 短编译均通过。
-- 用户放行的首轮 Review 已完成，并发现 10 个前端行为阻断项；随后只针对这些阻断项返工，没有扩展后端或发布范围。
-- Build 阶段未运行全量测试或长 UI 自动化；获用户发布授权后，另行完成 Developer ID Release 构建、打包和本机换包。
-
-## 8. Review 修复收口
-
-- 未知分类写入不再无条件显示成功；只有读回分类与目标一致才确认完成。
-- macOS 已补正式“记一笔”/`⌘N`、复选与 Shift 多选、批量分类预览、部分失败结果、`j/k/空格/⌘↩` 实际快捷动作。
-- 待同步队列改为真实持久化 outbox：离线录入与分类决定可入队，双端显示数量、状态、重试/移除与同步回执；未知结果不自动重放。
-- macOS 月份切换同时驱动列表期间、顶栏期间和月报；Today 月报失败显示“暂不可用”，不再伪造为 0。
-- iPhone “选择分类”定位到对应账目并经过预览确认；“稍后”会从当前决策队列移出；其他卡片按来源进入对应工作区。
-- macOS 决策项按来源路由，不再把所有 source ID 当作交易 ID；作废/恢复、加入报销、改为分期均显示能力禁用原因。
-- 报表正式表面收敛为总览、支出、现金流、债务四个产品镜头，并提供七种支出口径；旧技术维度只保留模型兼容，不再出现在镜头选择器。
-- 已再次运行 `xcodegen generate`；iOS Simulator 与 macOS App target 的 Debug 短编译均通过。
-- 第二轮 Review 的四项问题已收口：iPhone 分类改为详情 Sheet 内的预览/确认流程；两端 attention 对后端全部已知 `source_type` 精确路由，系统异常与未知类型安全进入系统与数据；macOS 批量分类数量恢复真实字符串插值；iPhone 失败待同步项目在重试后立即重放。
-- 本轮未新增源文件，未重跑 xcodegen；iOS Simulator 与 macOS App target 的 Debug 短编译均再次通过。
-
-## 9. 当前下一步
-
-- 最终 Review 无 P0/P1；最后一个 Sheet 生命周期 P2 已在打包前修复并进入源码提交 `558ec4a`。
-- Developer ID 签名的 universal macOS v1.5.1（25）包已生成并通过解包验签；`/Applications/Fiscal.app` 已换包并成功启动，旧 v1.5.0（24）保留为可恢复备份。
-- 本提交作为 annotated `v1.5.1` Tag 的发布记录，随后只推送 `main` 与 Tag 到 `origin` 并停止；Apple 公证、iOS/TestFlight 与 Backend 部署均不在本次操作范围。
+- PLAN 已完成：v1.5.1 审计已归档，17 项问题均已映射到 B1–B6 和验收矩阵。
+- B1 已完成：共享字体/AX5、归档斜纹、字段级冲突、离线真值和最终几何骨架已通过双端编译及定向测试。
+- B2 已完成：macOS 七镜头、待同步显式提交、通用账户检查器、归档只读/恢复与窄窗口比例已接入，macOS App target 编译通过。
+- B3 前端施工已完成：iPhone Today 原位决策、账户详情、完整待同步队列、重活入口与底栏/详情层级均已接入；四项后端能力边界已单独登记。
+- B4 已完成：双端报表四镜头、七 neutral 口径、单窗口/全屏钻取、真实导出与全状态语法均已接入；四项报表事实能力边界已单独登记。
+- B5 已完成：账单导入、七类重型业务对象、系统与数据、设置和启动门均已按真实服务能力收口；能力缺口 CAP-152-09 已登记。
+- B6 的既有收口证据保留；B7 r7 已完成正式根壳正常态、F2-A 极值局部滚动与伪字段差异复验。剩余只是不扩展 Backend 的 CAP-152 能力边界。
+- 当前源码与未签名构建产物为 v1.5.2（26）；已安装的签名 macOS 版本仍为 v1.5.1（25）。
+- 本轮未执行 commit/tag/push、签名、换包安装、TestFlight 或 Backend 变更；如需进入发布，必须另行授权。

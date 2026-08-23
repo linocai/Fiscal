@@ -67,10 +67,10 @@ public final class V15ReportingModel {
     public var periodLabel: String { selectedPeriod.rawValue }
     public var canDrill: Bool { if case .enabled = drillCapability { true } else { false } }
     public var exportDisabledReason: String? {
-        if exportReloadGate != nil { return "报告版本已变化；请取最新数据重新决定。" }
-        if isOffline { return "离线快照不能导出；请连接服务器并重新读取报告。" }
-        guard (phase == .loaded || phase == .empty), let report, report.meta.dataRevision >= 0 else { return "请先读取当前正式报告后再导出。" }
-        if case .transferring = exportPhase { return "正在导出当前报告。" }
+        if exportReloadGate != nil { return "报表版本已变化；请取最新数据重新决定。" }
+        if isOffline { return "离线快照不能导出；请连接服务器并重新读取报表。" }
+        guard (phase == .loaded || phase == .empty), let report, report.meta.dataRevision >= 0 else { return "请先读取当前正式报表后再导出。" }
+        if case .transferring = exportPhase { return "正在导出当前报表。" }
         return nil
     }
 
@@ -148,7 +148,11 @@ public final class V15ReportingModel {
     }
 
     public func spendingAmount(in summary: V15PeriodReport.Summary) -> Int64 {
-        switch spendingMeasure {
+        spendingAmount(spendingMeasure, in: summary)
+    }
+
+    public func spendingAmount(_ measure: SpendingMeasure, in summary: V15PeriodReport.Summary) -> Int64 {
+        switch measure {
         case .grossConsumption: summary.grossConsumptionMinor
         case .merchantRefund: summary.merchantRefundMinor
         case .netConsumption: summary.netConsumptionMinor
@@ -156,6 +160,18 @@ public final class V15ReportingModel {
         case .receivedReimbursement: summary.receivedReimbursementMinor
         case .personalExpected: summary.personalExpectedMinor
         case .personalRealized: summary.personalRealizedMinor
+        }
+    }
+
+    /// The current report contract only carries category-level gross, refund
+    /// and net facts. Returning nil for the other four measures prevents a
+    /// view from silently relabelling net consumption as another measure.
+    public func categoryAmount(_ category: V15PeriodReport.Category, for measure: SpendingMeasure) -> Int64? {
+        switch measure {
+        case .grossConsumption: category.grossConsumptionMinor
+        case .merchantRefund: category.merchantRefundMinor
+        case .netConsumption: category.netConsumptionMinor
+        case .expectedReimbursement, .receivedReimbursement, .personalExpected, .personalRealized: nil
         }
     }
 
@@ -239,21 +255,21 @@ public final class V15ReportingModel {
         do {
             let result: V15PeriodReport
             switch selectedPeriod { case .month(let month): result = try await services.reports.monthly(month, readCachePolicy: fresh ? .reloadIgnoringCache : .standard); case .year(let year): result = try await services.reports.yearly(year, readCachePolicy: fresh ? .reloadIgnoringCache : .standard) }
-            guard current == generation, valid(result, for: selectedPeriod) else { if current == generation { phase = .failed(.init(kind: .decoding, code: "invalid_period_report", message: "服务器报告元数据不符合当前期间。")) }; return }
+            guard current == generation, valid(result, for: selectedPeriod) else { if current == generation { phase = .failed(.init(kind: .decoding, code: "invalid_period_report", message: "服务器报表元数据不符合当前期间。")) }; return }
             report = result; owner = .init(period: selectedPeriod, revision: result.meta.dataRevision, filter: nil, generation: current)
             if fresh { exportReloadGate = nil; exportPhase = .idle }
             phase = rowsAreEmpty(result) ? .empty : .loaded
         } catch let failure as V15Failure {
             guard current == generation else { return }
             if failure.kind == .conflict { takeConflict(failure, current) } else { phase = failure.kind == .cancelled ? .idle : .failed(failure) }
-        } catch { guard current == generation else { return }; phase = .failed(.init(kind: .transport, message: "报告读取失败。")) }
+        } catch { guard current == generation else { return }; phase = .failed(.init(kind: .transport, message: "报表读取失败。")) }
     }
 
     private func readDrill(cursor: String?, appending: Bool, owner captured: ReportOwner) async {
         guard let revision = captured.revision, let filter = captured.filter else { return }
         do {
             let page = try await services.reports.periodDrillDown(period: captured.period, expectedRevision: revision, filter: filter, cursor: cursor, limit: 50)
-            guard captured == owner, captured.generation == generation, page.meta.dataRevision == revision, page.dimension == .ledger, pageMatches(page, filter: filter) else { if captured == owner { takeConflict(.init(kind: .conflict, code: "period_report_changed", message: "报告版本已变化。"), captured.generation) }; return }
+            guard captured == owner, captured.generation == generation, page.meta.dataRevision == revision, page.dimension == .ledger, pageMatches(page, filter: filter) else { if captured == owner { takeConflict(.init(kind: .conflict, code: "period_report_changed", message: "报表版本已变化。"), captured.generation) }; return }
             drillItems = appending ? drillItems + page.items : page.items
             nextCursor = page.nextCursor
             if appending { pagePhase = .idle; pageFailure = nil }
@@ -263,7 +279,7 @@ public final class V15ReportingModel {
             if failure.kind == .conflict { takeConflict(failure, captured.generation) }
             else if appending { pagePhase = failure.kind == .cancelled ? .idle : .failed(failure); pageFailure = failure.kind == .cancelled ? nil : failure }
             else { drillPhase = failure.kind == .cancelled ? .idle : .failed(failure); drillFailure = failure.kind == .cancelled ? nil : failure; drillItems = [] }
-        } catch { guard captured == owner, captured.generation == generation else { return }; let failure = V15Failure(kind: .transport, message: appending ? "下一页报告明细读取失败。" : "报告明细读取失败。"); if appending { pagePhase = .failed(failure); pageFailure = failure } else { drillPhase = .failed(failure); drillFailure = failure; drillItems = [] } }
+        } catch { guard captured == owner, captured.generation == generation else { return }; let failure = V15Failure(kind: .transport, message: appending ? "下一页报表明细读取失败。" : "报表明细读取失败。"); if appending { pagePhase = .failed(failure); pageFailure = failure } else { drillPhase = .failed(failure); drillFailure = failure; drillItems = [] } }
     }
 
     private func takeConflict(_ failure: V15Failure, _ current: UInt64) {
@@ -295,7 +311,16 @@ public final class V15ReportingModel {
     private func removeTemporary(_ url: URL) { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     private func rowsAreEmpty(_ report: V15PeriodReport) -> Bool {
         let completeness = report.completeness
-        return report.accounts.isEmpty && report.categories.isEmpty && report.merchants.isEmpty && report.sources.isEmpty
+        let summary = report.summary
+        let hasSummaryFact = [
+            summary.incomeMinor, summary.grossConsumptionMinor, summary.merchantRefundMinor,
+            summary.netConsumptionMinor, summary.expectedReimbursementMinor, summary.receivedReimbursementMinor,
+            summary.personalExpectedMinor, summary.personalRealizedMinor, summary.netIncomeExpenseMinor,
+            summary.cashInflowMinor, summary.cashOutflowMinor, summary.cashNetMinor,
+            summary.internalTransferInflowMinor, summary.internalTransferOutflowMinor,
+            summary.creditDebtAtPeriodEndMinor, summary.reimbursementOutstandingAtPeriodEndMinor
+        ].contains(where: { $0 != 0 })
+        return !hasSummaryFact && report.accounts.isEmpty && report.categories.isEmpty && report.merchants.isEmpty && report.sources.isEmpty
             && completeness.unresolvedImportCount == 0 && completeness.failedImportCount == 0
             && completeness.uncategorizedTransactionCount == 0 && completeness.openReconciliationDifferenceCount == 0
     }

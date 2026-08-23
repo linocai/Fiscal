@@ -5,6 +5,16 @@ import Testing
 
 @Suite("F2-A current facts typed reads and safety")
 struct F2ATests {
+    @Test("formal root fixture returns a complete Shanghai monthly fact for the requested period")
+    @MainActor func formalRootFixtureMonthlyFact() async throws {
+        let services = V15F2BFixtures.services(route: "today-root-workspace")
+        let period = try #require(V15ReportMonth("2026-08"))
+        let report = try await services.reports.monthly(period)
+        #expect(report.meta.period == period.rawValue)
+        #expect(report.meta.timezone == "Asia/Shanghai")
+        #expect(report.summary.personalRealizedMinor == 123_456)
+    }
+
     @Test("facts decodes every server card, future field and all four exact drill-down unions")
     @MainActor func typedFactsAndScopes() async throws {
         let transport = V15F2ATransport()

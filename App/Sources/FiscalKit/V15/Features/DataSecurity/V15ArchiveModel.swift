@@ -170,6 +170,158 @@ public final class V15ArchiveModel {
     private static func removeTemporary(_ url: URL) { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
 }
 
+/// Read-only operations facts and the separately authenticated passphrase
+/// rotation flow share the System & Data surface, but never share archive
+/// transfer state or credentials.
+@MainActor @Observable
+public final class V15SystemFactsModel {
+    public enum Phase: Equatable { case idle, loading, loaded, offline(Date), failed(V15Failure) }
+    public enum PassphrasePhase: Equatable {
+        case idle, changing, succeeded(credentialGeneration: Int), failed(V15Failure), responseUnknown(V15Failure), requiresReunlock(V15Failure)
+    }
+
+    public private(set) var phase: Phase = .idle
+    public private(set) var systemStatus: V15SystemStatus?
+    public private(set) var operationsStatus: OperationsStatusDTO?
+    public private(set) var dataRevision: DataRevisionResponse?
+    public private(set) var authStatus: V15AuthStatus?
+    public private(set) var systemFailure: V15Failure?
+    public private(set) var operationsFailure: V15Failure?
+    public private(set) var revisionFailure: V15Failure?
+    public private(set) var authFailure: V15Failure?
+    public private(set) var passphrasePhase: PassphrasePhase = .idle
+    public var oldPassphrase = ""
+    public var newPassphrase = ""
+    public var newPassphraseConfirmation = ""
+
+    private let services: V15Services
+    private let offlineSnapshotProvider: @MainActor @Sendable () -> Date?
+    private var generation: UInt64 = 0
+    private var mutationGeneration: UInt64 = 0
+
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil) {
+        self.services = services
+        self.offlineSnapshotProvider = { offlineSnapshotAt ?? services.offlineSnapshotAt }
+    }
+
+    public var offlineSnapshotAt: Date? { offlineSnapshotProvider() }
+    public var isOffline: Bool { offlineSnapshotAt != nil }
+    public var isChangingPassphrase: Bool { if case .changing = passphrasePhase { true } else { false } }
+    public var passphraseEntryDisabled: Bool {
+        switch passphrasePhase {
+        case .changing, .requiresReunlock: true
+        default: false
+        }
+    }
+    public var passphraseDisabledReason: V15DisabledReason? {
+        if isOffline { return .init(code: "offline_read_only", message: "离线快照不能修改口令；请连接服务器。", fieldPath: nil) }
+        if case .requiresReunlock = passphrasePhase {
+            return .init(code: "passphrase_reunlock_required", message: "口令已经修改，但本机无法保存新凭证；请使用新口令重新解锁。", fieldPath: nil)
+        }
+        if case .responseUnknown = passphrasePhase {
+            return .init(code: "passphrase_result_unknown", message: "修改结果未知；不要重复提交，请先尝试用新口令重新解锁。", fieldPath: nil)
+        }
+        guard (8...128).contains(oldPassphrase.count) else { return .init(code: "old_passphrase_length", message: "当前口令须为 8 到 128 个字符。", fieldPath: "old_passphrase") }
+        guard (8...128).contains(newPassphrase.count) else { return .init(code: "new_passphrase_length", message: "新口令须为 8 到 128 个字符。", fieldPath: "new_passphrase") }
+        guard newPassphrase != oldPassphrase else { return .init(code: "passphrase_unchanged", message: "新口令必须与当前口令不同。", fieldPath: "new_passphrase") }
+        guard newPassphrase == newPassphraseConfirmation else { return .init(code: "passphrase_confirmation", message: "两次输入的新口令不一致。", fieldPath: "new_passphrase_confirmation") }
+        if isChangingPassphrase { return .init(code: "passphrase_changing", message: "正在修改口令。", fieldPath: nil) }
+        return nil
+    }
+
+    public func load() async {
+        generation &+= 1
+        let current = generation
+        resetFactFailures()
+        clearFacts()
+        guard let snapshot = offlineSnapshotAt else {
+            phase = .loading
+            let systemService = services.system
+            let sessionService = services.session
+            async let system = Self.capture { try await systemService.status() }
+            async let operations = Self.capture { try await systemService.operationsStatus() }
+            async let revision = Self.capture { try await systemService.dataRevision() }
+            async let auth = Self.capture { try await sessionService.status() }
+            let results = await (system, operations, revision, auth)
+            guard current == generation else { return }
+            if Task.isCancelled { phase = .idle; return }
+            switch results.0 { case .success(let value): systemStatus = value; case .failure(let failure): systemFailure = failure }
+            switch results.1 { case .success(let value): operationsStatus = value; case .failure(let failure): operationsFailure = failure }
+            switch results.2 { case .success(let value): dataRevision = value; case .failure(let failure): revisionFailure = failure }
+            switch results.3 { case .success(let value): authStatus = value; case .failure(let failure): authFailure = failure }
+            if systemStatus != nil || operationsStatus != nil || dataRevision != nil || authStatus != nil {
+                phase = .loaded
+            } else {
+                phase = .failed(systemFailure ?? operationsFailure ?? revisionFailure ?? authFailure ?? .init(kind: .transport, message: "无法读取系统事实。"))
+            }
+            return
+        }
+        phase = .offline(snapshot)
+    }
+
+    public func changePassphrase() async {
+        guard passphraseDisabledReason == nil else { return }
+        mutationGeneration &+= 1
+        let current = mutationGeneration
+        let old = oldPassphrase
+        let new = newPassphrase
+        passphrasePhase = .changing
+        do {
+            let response = try await services.session.changePassphrase(oldPassphrase: old, newPassphrase: new)
+            guard current == mutationGeneration else { return }
+            clearPassphrases()
+            passphrasePhase = .succeeded(credentialGeneration: response.credentialGeneration)
+        } catch is CancellationError {
+            guard current == mutationGeneration else { return }
+            passphrasePhase = .idle
+        } catch let failure as V15Failure {
+            guard current == mutationGeneration else { return }
+            if failure.kind == .responseUnknown {
+                passphrasePhase = .responseUnknown(failure)
+            } else if failure.code == "access_key_store_failed" {
+                clearPassphrases()
+                passphrasePhase = .requiresReunlock(failure)
+            } else if failure.code == "invalid_passphrase" {
+                passphrasePhase = .failed(.init(kind: failure.kind, code: failure.code, message: "当前口令不正确。"))
+            } else {
+                passphrasePhase = .failed(failure)
+            }
+        } catch {
+            guard current == mutationGeneration else { return }
+            passphrasePhase = .failed(.init(kind: .transport, code: "passphrase_change_failed", message: "无法修改口令。"))
+        }
+    }
+
+    public func resetPassphraseFlow() {
+        mutationGeneration &+= 1
+        clearPassphrases()
+        passphrasePhase = .idle
+    }
+
+    public func invalidate() {
+        generation &+= 1
+        mutationGeneration &+= 1
+        resetPassphraseFlow()
+        phase = .idle
+    }
+
+    private func resetFactFailures() {
+        systemFailure = nil; operationsFailure = nil; revisionFailure = nil; authFailure = nil
+    }
+    private func clearFacts() {
+        systemStatus = nil; operationsStatus = nil; dataRevision = nil; authStatus = nil
+    }
+    private func clearPassphrases() {
+        oldPassphrase = ""; newPassphrase = ""; newPassphraseConfirmation = ""
+    }
+    private nonisolated static func capture<Value: Sendable>(_ operation: @Sendable () async throws -> Value) async -> Result<Value, V15Failure> {
+        do { return .success(try await operation()) }
+        catch is CancellationError { return .failure(.init(kind: .cancelled, message: "请求已取消。")) }
+        catch let failure as V15Failure { return .failure(failure) }
+        catch { return .failure(.init(kind: .transport, message: "无法读取系统事实。")) }
+    }
+}
+
 private extension V15ArchiveModel.Phase {
     var acceptsCredentials: Bool {
         switch self { case .idle, .confirming: true; default: false }

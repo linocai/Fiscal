@@ -86,6 +86,15 @@ public struct V15ReimbursementView: View {
                 Spacer()
                 Text(V15MoneyPresentation(minorUnits: claim.outstandingMinor, direction: .inflow, includeCurrency: true).text).font(V15Typography.money).foregroundStyle(V15Palette.teal.color).monospacedDigit()
             }
+            V15Section("报销金额矩阵") {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 125), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
+                    claimAmountFact("已申报", claim.totalClaimedMinor)
+                    claimAmountFact("已到账", claim.receivedMinor)
+                    claimAmountFact("未到账", claim.outstandingMinor, emphasized: true)
+                }
+                Text("留存与释放不是当前余额字段，只在取消未到账的服务端预览中出现；五个概念不会互相替代。")
+                    .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+            }.accessibilityIdentifier("v15.f3c.amount-matrix")
             if !claim.status.isKnown { V15EmptyState(title: "未知报销状态", explanation: "服务器返回 \(claim.status.rawValue)；当前版本只展示，不允许操作。").accessibilityIdentifier("v15.f3c.claim.unknown-state") }
             else {
                 if claim.archivedAt != nil { V15ArchiveReadOnlyState { Text("历史与到账记录已保留；恢复后才可继续操作。").font(V15Typography.secondary) } }
@@ -127,7 +136,19 @@ public struct V15ReimbursementView: View {
         switch model.secondaryMutationPhase {
         case .previewed:
             if let preview = model.cancellationPreview {
-                V15PreviewState(version: "claim v\(preview.claimVersion)") { Text("将释放 \(money(preview.releasedMinor))；保留已到账 \(money(preview.retainedReceivedMinor))；新状态 \(preview.proposedStatus)。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3c.cancel.preview.result")
+                V15PreviewState(version: "claim v\(preview.claimVersion)") {
+                    VStack(alignment: .leading, spacing: V15Spacing.sm) {
+                        Text("取消未到账后的五项事实").font(V15Typography.body.weight(.semibold))
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
+                            claimAmountFact("已申报", preview.current.totalClaimedMinor)
+                            claimAmountFact("已到账", preview.current.receivedMinor)
+                            claimAmountFact("取消前未到账", preview.current.outstandingMinor)
+                            claimAmountFact("留存", preview.retainedReceivedMinor)
+                            claimAmountFact("释放", preview.releasedMinor, emphasized: true)
+                        }
+                        Text("状态 \(preview.current.status.displayName) → \(preview.proposedStatus)").font(V15Typography.secondary)
+                    }
+                }.accessibilityIdentifier("v15.f3c.cancel.preview.result")
                 V15ActionButton("确认取消未到账", kind: .destructive, disabledReasons: model.selectedClaim.map { model.cancellationCommitReasons(for: $0) } ?? []) { Task { await model.commitCancellation() } }.accessibilityIdentifier("v15.f3c.cancel.commit")
             } else if let preview = model.claimReplacePreview {
                 V15PreviewState(version: "claim v\(preview.claimVersion)") { Text("标题将更新为“\(preview.proposed.title)”；金额矩阵仍以服务端提议为准。") }.accessibilityIdentifier("v15.f3c.replace.preview.result")
@@ -177,6 +198,8 @@ public struct V15ReimbursementView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.md) {
                     factRefreshSurface
+                    secondarySurface
+                    directSurface
                     switch sheet {
                     case .claimReplacement: claimReplacementEditor
                     case .cancellation: cancellationEditor
@@ -184,13 +207,23 @@ public struct V15ReimbursementView: View {
                     case .receiptReplacement(let id): receiptReplacementEditor(id: id)
                     case .receiptActions(let id): receiptActionsEditor(id: id)
                     }
-                    secondarySurface
-                    directSurface
                 }.padding(V15Spacing.md)
             }
+            .scrollDismissesKeyboard(.immediately)
             .background(V15Palette.paper.color)
             .navigationTitle(operationTitle(sheet))
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { operationSheet = nil } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("关闭") { operationSheet = nil } }
+                if case .receiptReplacement(let id) = sheet,
+                   let claim = model.selectedClaim,
+                   let receipt = model.receipts.first(where: { $0.id == id }) {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("预览") { Task { await model.previewReceiptReplacement(receipt) } }
+                            .disabled(!model.receiptReplacementPreviewReasons(for: receipt, claim: claim).isEmpty)
+                            .accessibilityIdentifier("v15.f3c.receipt.replace.preview")
+                    }
+                }
+            }
         }
         .presentationDetents([.large])
         .accessibilityIdentifier("v15.f3c.sheet.operation")
@@ -255,12 +288,13 @@ public struct V15ReimbursementView: View {
             Text("收款账户 \(receipt.destinationAccountID.uuidString)").font(V15Typography.secondary).textSelection(.enabled)
             V15Field("到账标题", text: Binding(get: { model.receiptReplacementTitle }, set: { model.receiptReplacementTitle = $0 }), issues: issues(model.secondaryIssues, prefix: "title"))
                 .accessibilityIdentifier("v15.f3c.receipt.replace.title")
-            V15Field("到账金额（元）", text: Binding(get: { model.receiptReplacementAmountText }, set: { model.receiptReplacementAmountText = $0 }), issues: issues(model.secondaryIssues, prefix: "amount_minor"))
-                .accessibilityIdentifier("v15.f3c.receipt.replace.amount")
             V15Field("到账日期", text: Binding(get: { model.receiptReplacementDateText }, set: { model.receiptReplacementDateText = $0 }), prompt: "YYYY-MM-DD", issues: issues(model.secondaryIssues, prefix: "received_at"))
                 .accessibilityIdentifier("v15.f3c.receipt.replace.date")
-            V15ActionButton("预览到账修改", kind: .secondary, disabledReasons: model.receiptReplacementPreviewReasons(for: receipt, claim: claim)) { Task { await model.previewReceiptReplacement(receipt) } }
-                .accessibilityIdentifier("v15.f3c.receipt.replace.preview")
+            V15Field("到账金额（元）", text: Binding(get: { model.receiptReplacementAmountText }, set: { model.receiptReplacementAmountText = $0 }), issues: issues(model.secondaryIssues, prefix: "amount_minor"))
+                .accessibilityIdentifier("v15.f3c.receipt.replace.amount")
+            V15FieldIssues(issues: model.receiptReplacementPreviewReasons(for: receipt, claim: claim).map {
+                .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath)
+            })
         }
     }
 
@@ -322,7 +356,9 @@ public struct V15ReimbursementView: View {
                         }
                     }
                 }.padding(V15Spacing.md)
-            }.background(V15Palette.paper.color).navigationTitle("新建报销单").toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismissNewClaim() } } }
+            }
+            .scrollDismissesKeyboard(.immediately)
+            .background(V15Palette.paper.color).navigationTitle("新建报销单").toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismissNewClaim() } } }
         }
         .presentationDetents([.large])
         .accessibilityIdentifier("v15.f3c.sheet.claim")
@@ -362,8 +398,8 @@ public struct V15ReimbursementView: View {
                         }
                     }
                     V15Field("到账标题", text: Binding(get: { model.receiptTitle }, set: { model.receiptTitle = $0 }), prompt: "例如：公司回款", issues: issues(model.receiptIssues, prefix: "title")).accessibilityIdentifier("v15.f3c.receipt.title")
-                    V15Field("到账金额（元）", text: Binding(get: { model.receiptAmountText }, set: { model.receiptAmountText = $0 }), prompt: "0.00", issues: issues(model.receiptIssues, prefix: "amount_minor")).accessibilityIdentifier("v15.f3c.receipt.amount")
                     V15Field("到账日期", text: Binding(get: { model.receiptDateText }, set: { model.receiptDateText = $0 }), prompt: "YYYY-MM-DD", issues: issues(model.receiptIssues, prefix: "received_at")).accessibilityIdentifier("v15.f3c.receipt.date")
+                    V15Field("到账金额（元）", text: Binding(get: { model.receiptAmountText }, set: { model.receiptAmountText = $0 }), prompt: "0.00", issues: issues(model.receiptIssues, prefix: "amount_minor")).accessibilityIdentifier("v15.f3c.receipt.amount")
                     receiptAccountSurface
                     V15ActionButton("预览到账影响", kind: .secondary, disabledReasons: model.receiptPreviewDisabledReasons) { Task { await model.previewReceipt() } }.accessibilityIdentifier("v15.f3c.receipt.preview")
                     if let preview = model.receiptPreview {
@@ -377,7 +413,10 @@ public struct V15ReimbursementView: View {
                         }
                     }
                 }.padding(V15Spacing.md)
-            }.background(V15Palette.paper.color).navigationTitle("登记到账").toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismissReceipt() }.accessibilityIdentifier("v15.f3c.receipt.close") } }
+            }
+            .id(model.receiptPhase == .succeeded)
+            .scrollDismissesKeyboard(.immediately)
+            .background(V15Palette.paper.color).navigationTitle("登记到账").toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismissReceipt() }.accessibilityIdentifier("v15.f3c.receipt.close") } }
         }.presentationDetents([.large]).accessibilityIdentifier("v15.f3c.sheet.receipt")
     }
 
@@ -419,5 +458,6 @@ public struct V15ReimbursementView: View {
     }
     private func issues(_ values: [V15FieldIssue], prefix: String) -> [V15FieldIssue] { values.filter { $0.fieldPath == prefix || $0.fieldPath?.hasPrefix(prefix + ".") == true } }
     private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral, includeCurrency: true).text }
+    private func claimAmountFact(_ title: String, _ value: V15MinorUnits, emphasized: Bool = false) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)); V15MoneyText(minorUnits: value, direction: .neutral, font: V15Typography.body.weight(.semibold)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(emphasized ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
 }
 #endif

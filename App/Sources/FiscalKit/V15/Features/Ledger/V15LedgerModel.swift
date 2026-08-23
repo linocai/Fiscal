@@ -35,6 +35,7 @@ public final class V15LedgerModel {
     public private(set) var accounts: [V15AccountResponse] = []
     public private(set) var categories: [V15CategoryResponse] = []
     public private(set) var mutation: MutationState = .idle
+    public private(set) var mutationConflictChanges: [V15ConflictChange] = []
     public private(set) var lastAction: MutationAction?
     public private(set) var deepLinkError: String?
     public private(set) var filterIssues: [V15FieldIssue] = []
@@ -117,6 +118,18 @@ public final class V15LedgerModel {
     }
 
     public func select(_ transaction: V15Transaction) async { await loadDetail(transactionID: transaction.id) }
+    public func clearSelection() {
+        detailGeneration &+= 1
+        mutationGeneration &+= 1
+        requestedDetailID = nil
+        selected = nil
+        detailPhase = .idle
+        revisions = []
+        provenance = nil
+        selectedCycle = nil
+        cycleReadError = nil
+        mutation = .idle
+    }
     public func retryDetail() async { guard let requestedDetailID else { return }; await loadDetail(transactionID: requestedDetailID) }
     public func loadDetail(transactionID: UUID) async {
         detailGeneration &+= 1; let current = detailGeneration
@@ -154,6 +167,7 @@ public final class V15LedgerModel {
         lastAction = .replace
         lastReplacementCategoryID = categoryID
         mutation = .working
+        mutationConflictChanges = []
         let draft = V15TransactionCreateRequest(
             kind: kind,
             amountMinor: selected.amountMinor,
@@ -189,6 +203,12 @@ public final class V15LedgerModel {
         } catch let failure as V15Failure {
             guard current == mutationGeneration else { return }
             if failure.kind == .conflict, let conflict = failure.conflict {
+                if let latest = try? await services.ledger.get(transactionID: selected.id) {
+                    guard current == mutationGeneration else { return }
+                    mutationConflictChanges = categoryConflictChanges(previous: selected, current: latest)
+                    self.selected = latest
+                    replaceInList(latest)
+                }
                 mutation = .conflict(conflict)
             } else if V15LedgerCreateService.outcomeMayBeUnknown(failure) {
                 await reconcileUnknown(.replace, transactionID: selected.id, generation: current)
@@ -199,6 +219,16 @@ public final class V15LedgerModel {
             guard current == mutationGeneration else { return }
             await reconcileUnknown(.replace, transactionID: selected.id, generation: current)
         }
+    }
+    private func categoryConflictChanges(previous: V15Transaction, current: V15Transaction) -> [V15ConflictChange] {
+        var changes: [V15ConflictChange] = []
+        if previous.categoryID != current.categoryID {
+            changes.append(.init(field: "分类", previousValue: categoryName(previous.categoryID), currentValue: categoryName(current.categoryID)))
+        }
+        if previous.version != current.version {
+            changes.append(.init(field: "账目版本", previousValue: "v\(previous.version)", currentValue: "v\(current.version)"))
+        }
+        return changes
     }
     public func retryLastMutation() async {
         guard let lastAction else { return }

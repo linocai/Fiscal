@@ -37,7 +37,7 @@ public struct V15MasterDataView: View {
     }
     private func row(title: String, detail: String, selected: Bool, action: @escaping () -> Void) -> some View { Button(action: action) { HStack { VStack(alignment: .leading, spacing: 3) { Text(title).font(V15Typography.body.weight(.medium)).fixedSize(horizontal: false, vertical: true); Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.65)) }; Spacer(); Image(systemName: "chevron.right").foregroundStyle(V15Palette.ink.color.opacity(0.45)) }.padding(V15Spacing.md).background(selected ? V15Palette.teal.color.opacity(0.10) : .clear) }.buttonStyle(.plain).v15PlatformHitArea() }
     @ViewBuilder private var inspector: some View { VStack(alignment: .leading, spacing: V15Spacing.md) { HStack { Text("检查器").font(V15Typography.surfaceTitle); Spacer(); Button { prepareNew() } label: { Image(systemName: "plus") }.disabled(model.writeDisabledReason != nil).accessibilityHint(model.writeDisabledReason?.message ?? "").v15PlatformHitArea() }; editorContent; V15ActionButton("保存", symbol: "checkmark", disabledReason: model.saveDisabledReason, action: { Task { await save() } }).accessibilityIdentifier("v15.f1c.save.macos"); Spacer() }.padding(V15Spacing.md) }
-    @ViewBuilder private var editorContent: some View { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { if let text = model.receipt { V15ArchiveReadOnlyState { Text(text).font(V15Typography.secondary) } }; if let reason = model.unknownCreateReloadReason { V15ActionButton("重新读取后再确认", symbol: "arrow.clockwise", kind: .quiet, disabledReason: model.isOffline ? model.writeDisabledReason : nil, action: { Task { await model.reloadAfterUnknownCreate() } }).accessibilityIdentifier("v15.f1c.create-unknown.reload"); Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; if let conflict = model.conflict { V15ConflictState(conflict: conflict, reload: { Task { await model.load() } }) }
+    @ViewBuilder private var editorContent: some View { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { if let text = model.receipt { V15SuccessReceiptState(title: "服务器已确认", detail: text) }; if let reason = model.unknownCreateReloadReason { V15ActionButton("重新读取后再确认", symbol: "arrow.clockwise", kind: .quiet, disabledReason: model.isOffline ? model.writeDisabledReason : nil, action: { Task { await model.reloadAfterUnknownCreate() } }).accessibilityIdentifier("v15.f1c.create-unknown.reload"); Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; if let conflict = model.conflict { V15ConflictState(conflict: conflict, changes: model.conflictChanges, reload: { Task { await model.resolveConflictByReload() } }) }
         switch model.selectedSection { case .accounts: accountEditor; case .categories: categoryEditor; case .merchants: merchantEditor }
     }.padding(V15Spacing.md) } }
     private var accountEditor: some View { Group { let archived = model.selectedAccount?.archivedAt != nil; let existing = model.selectedAccount != nil; V15Section("账户") { V15Field("账户昵称", text: $model.accountName, prompt: "例如 日常现金", issues: model.fieldIssues).disabled(archived).accessibilityIdentifier("v15.f1c.account.name"); Picker("账户类型", selection: $model.accountKind) { Text("现金").tag(V15AccountKind.cash); Text("借记").tag(V15AccountKind.debit); Text("信用").tag(V15AccountKind.credit) }.pickerStyle(.menu).disabled(archived || existing).onChange(of: model.accountKind) { _, _ in model.clearCreditFieldsIfNeeded() }; if existing { Text("账户类型创建后不可在此修改。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.65)) }; V15Field("期初余额（元）", text: $model.openingBalance, prompt: "0.00", issues: model.fieldIssues).disabled(archived); if model.accountKind == .credit { V15Field("信用额度（元）", text: $model.creditLimit, prompt: "10000.00", issues: model.fieldIssues).disabled(archived); V15Field("账单日", text: $model.statementDay, prompt: "1–28", issues: model.fieldIssues).disabled(archived); V15Field("还款日", text: $model.dueDay, prompt: "1–28", issues: model.fieldIssues).disabled(archived); Picker("账期方式", selection: $model.cycleMode) { Text("账单日截点").tag("statement_day_cutoff"); Text("上个自然月").tag("previous_calendar_month") }.pickerStyle(.menu).disabled(archived); if CNYAmountParser.minorUnits(model.openingBalance) ?? 0 > 0 { V15Field("期初余额日期", text: $model.openingBalanceAsOfDate, prompt: "YYYY-MM-DD", issues: model.fieldIssues).disabled(archived); V15Field("期初到期日期", text: $model.openingDueDate, prompt: "YYYY-MM-DD", issues: model.fieldIssues).disabled(archived) } } }; archiveAction(title: archived ? "恢复账户" : "归档账户", action: { Task { await model.archiveOrRestoreAccount() } }); if !archived, model.selectedAccount != nil { HStack { Button("上移") { Task { await model.reorderAccounts(moving: model.selectedAccountID!, after: accountAfter(model.selectedAccountID!, down: false)) } }.disabled(!accountCanMove(model.selectedAccountID!, down: false)).accessibilityHint(V15MasterDataModel.reorderHint(canMove: accountCanMove(model.selectedAccountID!, down: false), down: false)).keyboardShortcut(.upArrow, modifiers: [.command, .option]); Button("下移") { Task { await model.reorderAccounts(moving: model.selectedAccountID!, after: accountAfter(model.selectedAccountID!, down: true)) } }.disabled(!accountCanMove(model.selectedAccountID!, down: true)).accessibilityHint(V15MasterDataModel.reorderHint(canMove: accountCanMove(model.selectedAccountID!, down: true), down: true)).keyboardShortcut(.downArrow, modifiers: [.command, .option]) }.accessibilityIdentifier("v15.f1c.account.reorder") } } }
@@ -54,4 +54,299 @@ public struct V15MasterDataView: View {
     private func categorySiblingIDs(_ id: UUID) -> [UUID] { guard let source = model.visibleCategories.first(where: { $0.id == id }) else { return [] }; return model.visibleCategories.filter { $0.archivedAt == nil && $0.direction == source.direction && $0.parentID == source.parentID }.map(\.id) }
     private func prepareNew() { switch model.selectedSection { case .accounts: model.selectedAccountID = nil; model.accountName = ""; model.accountKind = .cash; model.openingBalance = "0"; model.creditLimit = ""; model.statementDay = ""; model.dueDay = ""; model.cycleMode = "statement_day_cutoff"; model.openingBalanceAsOfDate = ""; model.openingDueDate = ""; case .categories: model.selectedCategoryID = nil; model.categoryName = ""; model.categoryDirection = .expense; case .merchants: model.selectedMerchantID = nil; model.merchantName = ""; model.merchantAliases = "" } }
     private func save() async { switch model.selectedSection { case .accounts: await model.saveAccount(); case .categories: await model.saveCategory(); case .merchants: await model.saveMerchant() } }
+}
+
+public struct V15SettingsView: View {
+    private enum Pane: String, CaseIterable, Identifiable {
+        case masterData, archive, ai, security
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .masterData: "主数据"
+            case .archive: "归档区"
+            case .ai: "AI 与识别"
+            case .security: "系统与数据"
+            }
+        }
+        var symbol: String {
+            switch self {
+            case .masterData: "tray.full"
+            case .archive: "archivebox"
+            case .ai: "sparkles"
+            case .security: "lock.shield"
+            }
+        }
+    }
+
+    private let services: V15Services
+    private let offlineSnapshotAt: Date?
+    @State private var model: V15SettingsOverviewModel
+    @State private var presentedPane: Pane?
+    @State private var selectedPane: Pane = .masterData
+
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil) {
+        self.services = services
+        self.offlineSnapshotAt = offlineSnapshotAt
+        _model = State(initialValue: .init(services: services, offlineSnapshotAt: offlineSnapshotAt))
+    }
+
+    public var body: some View {
+        Group {
+#if os(iOS)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: V15Spacing.lg) {
+                    phaseSurface
+                    masterDataOverview
+                    archiveDirectory
+                    aiOverview
+                    navigationCard("系统与数据", detail: "运行状态、加密归档、恢复边界与个人口令", symbol: "lock.shield") { presentedPane = .security }
+                }
+                .padding(V15Spacing.md)
+            }
+            .background(V15Palette.paper.color)
+            .navigationTitle("设置")
+        }
+        .sheet(item: $presentedPane) { pane in
+            switch pane {
+            case .masterData: V15MasterDataView(services: services, offlineSnapshotAt: model.offlineSnapshotAt)
+            case .archive: NavigationStack { ScrollView { archiveDirectory.padding(V15Spacing.md) }.navigationTitle("归档区") }
+            case .ai: NavigationStack { ScrollView { aiDetail.padding(V15Spacing.md) }.navigationTitle("AI 与识别") }
+            case .security: V15DataSecurityView(services: services, offlineSnapshotAt: model.offlineSnapshotAt)
+            }
+        }
+#else
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                Text("设置").font(V15Typography.surfaceTitle).padding(.horizontal, V15Spacing.md).padding(.vertical, V15Spacing.sm)
+                ForEach(Pane.allCases) { pane in
+                    Button { selectedPane = pane } label: {
+                        HStack(spacing: V15Spacing.sm) {
+                            Image(systemName: pane.symbol).frame(width: 18)
+                            Text(pane.title)
+                            Spacer()
+                        }
+                        .font(V15Typography.body.weight(selectedPane == pane ? .semibold : .regular))
+                        .padding(.horizontal, V15Spacing.md).frame(height: 42)
+                        .background(selectedPane == pane ? V15Palette.selected.color : .clear, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+            }
+            .padding(V15Spacing.sm).frame(width: 230).background(V15Palette.card.color)
+            Divider()
+            macDetail
+        }
+#endif
+        }
+        .task { await model.load() }
+        .onDisappear { model.invalidate() }
+        .accessibilityIdentifier("v15.settings")
+    }
+
+    @ViewBuilder private var phaseSurface: some View {
+        switch model.phase {
+        case .idle, .loading:
+            V15LoadingSkeleton()
+        case .offline(let at):
+            V15OfflineReadOnlyBanner(snapshotAt: at)
+        case .failed(let failure):
+            V15ServiceErrorState(message: failure.message, retry: { Task { await model.load() } })
+        case .loaded:
+            EmptyView()
+        }
+        if let failure = model.restoreFailure {
+            if let conflict = failure.conflict {
+                V15ConflictState(conflict: conflict, reload: { Task { await model.load() } })
+            } else {
+                V15ServiceErrorState(message: failure.message, retry: { Task { await model.load() } })
+            }
+        }
+    }
+
+    private var masterDataOverview: some View {
+        V15Section("主数据") {
+            VStack(spacing: 0) {
+                overviewRow("账户", value: "\(model.activeAccountCount) 个", detail: "按账簿顺序排列", symbol: "creditcard") { presentedPane = .masterData }
+                Divider()
+                overviewRow("分类", value: "\(model.activeCategoryCount) 个", detail: "支持排序、合并与拆分", symbol: "tag") { presentedPane = .masterData }
+                Divider()
+                overviewRow("归档区", value: model.archiveCountLabel, detail: "历史仍保留，只读项目可恢复", symbol: "archivebox") { presentedPane = .archive }
+            }
+        }
+    }
+
+    private var archiveDirectory: some View {
+        VStack(alignment: .leading, spacing: V15Spacing.md) {
+            VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                Text("归档区").font(V15Typography.cardTitle)
+                Text("归档不会删除历史事实。灰色斜纹项目只读；恢复后才可重新参与编辑。")
+                    .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+            }
+            archiveFailures
+            if model.archiveItemCount == 0 && !model.hasArchiveReadFailure {
+                V15EmptyState(title: "归档区为空", explanation: "已归档的账户、分类、报销单和已作废账目会出现在这里。")
+            }
+            ForEach(model.archivedAccounts) { item in
+                archiveRow(title: item.name, detail: "账户 · \(accountKind(item.kind)) · \(item.usageCount) 项关联", id: item.id) { await model.restoreAccount(item) }
+            }
+            ForEach(model.archivedCategories) { item in
+                archiveRow(title: "\(item.icon)  \(item.name)", detail: "分类 · \(directionLabel(item.direction)) · \(item.usageCount) 笔历史使用", id: item.id) { await model.restoreCategory(item) }
+            }
+            ForEach(model.archivedClaims, id: \.id) { item in
+                archiveRow(title: item.title, detail: "报销单 · \(item.status.displayName) · \(money(item.totalClaimedMinor))", id: item.id) { await model.unarchiveClaim(item) }
+            }
+            ForEach(model.voidedClaims, id: \.id) { item in
+                archiveRow(title: item.title, detail: "已作废报销单 · \(money(item.totalClaimedMinor))", id: item.id) { await model.restoreClaim(item) }
+            }
+            ForEach(model.voidedTransactions, id: \.id) { item in
+                archiveRow(title: item.title, detail: "已作废账目 · \(item.businessDate) · \(money(item.amountMinor))", id: item.id) { await model.restoreTransaction(item) }
+            }
+            if model.claimsIncomplete || model.transactionsIncomplete {
+                Text("当前只显示前 100 项；完整范围请进入对应工作台。")
+                    .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+            }
+        }
+        .accessibilityIdentifier("v15.settings.archive")
+    }
+
+    private var aiOverview: some View {
+        navigationCard(
+            "AI 与识别",
+            detail: aiSummary,
+            symbol: "sparkles"
+        ) { presentedPane = .ai }
+    }
+
+    private var aiDetail: some View {
+        VStack(alignment: .leading, spacing: V15Spacing.lg) {
+            V15Section("解析服务") {
+                factRow("配置状态", model.providerSettings?.apiKeyConfigured == true ? "已配置" : (model.failures["provider"] == nil ? "未配置" : "读取失败"))
+                factRow("Provider", model.providerSettings?.provider ?? "未提供")
+                factRow("模型", model.providerSettings?.model ?? "未提供")
+                factRow("服务主机", model.providerHost ?? "未提供")
+                factRow("自动执行", model.aiSettings == nil ? "未提供" : "关闭（所有提案均需确认）")
+                factRow("OCR 来源", enabledLabel(model.aiSettings?.ocrSourceEnabled))
+                factRow("快捷指令文本", enabledLabel(model.aiSettings?.shortcutTextSourceEnabled))
+            }
+            if let failure = model.failures["provider"] ?? model.failures["ai_settings"] {
+                V15ServiceErrorState(message: failure.message, retry: { Task { await model.load() } })
+            }
+            V15Section("识别质量") {
+                factRow("统计样本", "\(model.qualityTotal) 条")
+                factRow("待形成结果", "\(model.qualityPending) 条")
+                if let rows = model.qualityMetrics?.rows, !rows.isEmpty {
+                    ForEach(rows) { row in
+                        VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+                            Text([row.source, row.provider, row.model, row.transactionKind, row.amountBand].compactMap { $0 }.joined(separator: " · "))
+                                .font(V15Typography.body.weight(.medium)).fixedSize(horizontal: false, vertical: true)
+                            Text("解析成功 \(row.parseSucceeded) · 原样确认 \(row.confirmUnchanged) · 修改后确认 \(row.confirmEdited) · 最终失败 \(row.finalFailure)")
+                                .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, V15Spacing.xs)
+                    }
+                } else if model.failures["quality"] == nil {
+                    Text("服务尚未形成识别质量样本。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                }
+            }
+            if let failure = model.failures["quality"] {
+                V15ServiceErrorState(message: failure.message, retry: { Task { await model.load() } })
+            }
+        }
+        .accessibilityIdentifier("v15.settings.ai")
+    }
+
+#if os(macOS)
+    @ViewBuilder private var macDetail: some View {
+        switch selectedPane {
+        case .masterData:
+            V15MasterDataView(services: services, offlineSnapshotAt: model.offlineSnapshotAt)
+        case .archive:
+            ScrollView { VStack(alignment: .leading, spacing: V15Spacing.lg) { phaseSurface; archiveDirectory }.padding(V15Spacing.xl).frame(maxWidth: 860, alignment: .leading) }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(V15Palette.paper.color)
+        case .ai:
+            ScrollView { VStack(alignment: .leading, spacing: V15Spacing.lg) { phaseSurface; aiDetail }.padding(V15Spacing.xl).frame(maxWidth: 860, alignment: .leading) }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(V15Palette.paper.color)
+        case .security:
+            V15DataSecurityMacView(services: services, offlineSnapshotAt: model.offlineSnapshotAt)
+        }
+    }
+#endif
+
+    @ViewBuilder private var archiveFailures: some View {
+        ForEach(["accounts", "categories", "claims", "transactions"], id: \.self) { key in
+            if let failure = model.failures[key] {
+                V15ServiceErrorState(message: failure.message, retry: { Task { await model.load() } })
+            }
+        }
+    }
+
+    private func archiveRow(title: String, detail: String, id: UUID, restore: @escaping @MainActor () async -> Void) -> some View {
+        V15ArchiveReadOnlyState(restoreTitle: model.restoringID == id ? "正在恢复…" : "恢复") {
+            Task { await restore() }
+        } content: {
+            VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+                Text(title).font(V15Typography.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityIdentifier("v15.settings.archive.\(id)")
+    }
+
+    private func navigationCard(_ title: String, detail: String, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: V15Spacing.md) {
+                Image(systemName: symbol).font(.system(size: 20, weight: .medium)).foregroundStyle(V15Palette.teal.color).frame(width: 28)
+                VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+                    Text(title).font(V15Typography.cardTitle)
+                    Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(V15Palette.ink.color.opacity(0.40))
+            }
+            .padding(V15Spacing.md).frame(maxWidth: .infinity, alignment: .leading)
+            .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.decisionCard))
+            .overlay { RoundedRectangle(cornerRadius: V15Radius.decisionCard).stroke(V15Palette.hairline.color) }
+        }
+        .buttonStyle(.plain).v15PlatformHitArea()
+    }
+
+    private func overviewRow(_ title: String, value: String, detail: String, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: V15Spacing.sm) {
+                Image(systemName: symbol).foregroundStyle(V15Palette.teal.color).frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack { Text(title).font(V15Typography.body.weight(.semibold)); Spacer(); Text(value).font(V15Typography.body.monospaced()) }
+                    Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                }
+                Image(systemName: "chevron.right").foregroundStyle(V15Palette.ink.color.opacity(0.36))
+            }
+            .padding(.vertical, V15Spacing.sm)
+        }
+        .buttonStyle(.plain).v15PlatformHitArea()
+    }
+
+    private func factRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(V15Typography.secondary)
+            Spacer()
+            Text(value).font(V15Typography.body.monospaced()).multilineTextAlignment(.trailing)
+        }
+    }
+    private var aiSummary: String {
+        if let failure = model.failures["provider"] ?? model.failures["ai_settings"] { return "解析服务读取失败 · \(failure.message)" }
+        let configured = model.providerSettings?.apiKeyConfigured == true ? "解析服务已配置" : "解析服务未配置"
+        if let metrics = model.qualityMetrics { return "\(configured) · \(metrics.rows.count) 组识别质量统计" }
+        return "\(configured) · 识别质量尚未提供"
+    }
+    private func accountKind(_ value: V15AccountKind) -> String { switch value { case .cash: "现金"; case .debit: "借记"; case .credit: "信用"; case .unknown: "未知类型" } }
+    private func directionLabel(_ value: String) -> String { value == "income" ? "收入" : value == "expense" ? "支出" : value }
+    private func money(_ value: Int64) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral).text }
+    private func enabledLabel(_ value: Bool?) -> String { value.map { $0 ? "已启用" : "已停用" } ?? "未提供" }
+}
+
+private extension V15SettingsOverviewModel {
+    var hasArchiveReadFailure: Bool { ["accounts", "categories", "claims", "transactions"].contains { failures[$0] != nil } }
+    var archiveCountLabel: String { (claimsIncomplete || transactionsIncomplete) ? "至少 \(archiveItemCount) 项" : "\(archiveItemCount) 项" }
 }

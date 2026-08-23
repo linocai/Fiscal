@@ -161,7 +161,7 @@ public struct V15ReconciliationView: View {
         } else {
             V15Section("确认并保存") {
                 Text(model.selectedTarget?.label ?? "—").font(V15Typography.cardTitle)
-                if let amount = CNYAmountParser.minorUnits(model.actualBalanceText) { V15MoneyText(minorUnits: amount, direction: .balance, font: V15Typography.moneyLarge) }
+                if let amount = CNYAmountParser.minorUnits(model.actualBalanceText) { reconciliationComparison(actual: amount) }
                 Text("截至 \(model.asOfDateText) · API按UTC时间戳保存").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 Text("保存只建立核对证据，不会创建余额调整流水。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
             }.accessibilityIdentifier("v15.f3e.editor.step3")
@@ -216,12 +216,27 @@ public struct V15ReconciliationView: View {
 
     private func diagnosisCard(_ value: V15ReconciliationDiagnosis) -> some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
-            HStack { Text("账面余额").font(V15Typography.secondary); Spacer(); V15MoneyText(minorUnits: value.bookBalanceMinor, direction: .balance) }
-            if let actual = value.actualBalanceMinor { HStack { Text("上次实际余额").font(V15Typography.secondary); Spacer(); V15MoneyText(minorUnits: actual, direction: .balance) } }
-            if let difference = value.differenceMinor { HStack { Text("已知差额").font(V15Typography.body.weight(.semibold)); Spacer(); V15MoneyText(minorUnits: difference, direction: .neutral) } }
+            HStack(alignment: .top, spacing: V15Spacing.sm) {
+                reconciliationFact("账面", value.bookBalanceMinor)
+                if let actual = value.actualBalanceMinor { reconciliationFact("观察", actual) } else { reconciliationUnavailableFact("观察", detail: "尚未记录") }
+                if let difference = value.differenceMinor { reconciliationFact("差额", difference, emphasized: difference != 0) } else { reconciliationUnavailableFact("差额", detail: "等待观察值") }
+            }
+            Divider()
+            Text("区间证据 · \(value.entries.count) 笔账面变化").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+            if value.entries.isEmpty { Text("此区间没有可列出的账目证据。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
             ForEach(value.entries) { entry in V15LedgerRow(title: entry.title, detail: Self.timestamp(entry.occurredAt), amountMinor: entry.accountImpactMinor, direction: entry.accountImpactMinor >= 0 ? .inflow : .outflow) }
         }.padding(V15Spacing.md).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
     }
+
+    private func reconciliationComparison(actual: V15MinorUnits) -> some View {
+        HStack(alignment: .top, spacing: V15Spacing.sm) {
+            reconciliationFact("观察", actual)
+            if let book = model.diagnosis?.bookBalanceMinor { reconciliationFact("账面", book); reconciliationFact("差额", actual - book, emphasized: actual != book) }
+            else { reconciliationUnavailableFact("账面", detail: "读取中"); reconciliationUnavailableFact("差额", detail: "等待账面") }
+        }.accessibilityIdentifier("v15.f3e.editor.comparison")
+    }
+    private func reconciliationFact(_ title: String, _ value: V15MinorUnits, emphasized: Bool = false) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); V15MoneyText(minorUnits: value, direction: .neutral, font: V15Typography.body.weight(.semibold)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(emphasized ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
+    private func reconciliationUnavailableFact(_ title: String, detail: String) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); Text("—").font(V15Typography.body.weight(.semibold)); Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
 
     private func stateLabel(_ value: V15ReconciliationState) -> String { switch value { case .open: "有差额"; case .reconciled: "已核平"; case .unknown(let raw): "未知状态（\(raw)）" } }
     private func severityLabel(_ value: V15AttentionSeverity) -> String { switch value { case .critical: "重要"; case .warning: "需要留意"; case .info: "提示" } }

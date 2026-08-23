@@ -11,6 +11,9 @@ struct V15RootSmokeiOSApp: App {
     private let accessKeyStore: AccessKeyStore
     private let offlineSnapshots: OfflineSnapshotStore
     private let cleanupOnly: Bool
+    private let formalFixture: Bool
+    private let formalFixtureRoute: String
+    private let preferredScheme: ColorScheme?
 
     init() {
         let environment = ProcessInfo.processInfo.environment
@@ -36,6 +39,11 @@ struct V15RootSmokeiOSApp: App {
             keyStore: SnapshotKeyStore(service: "\(keychainService).offline-snapshot")
         )
         cleanupOnly = environment["FISCAL_ROOT_SMOKE_CLEANUP_ONLY"] == "1"
+        formalFixture = environment["FISCAL_ROOT_SMOKE_FORMAL_FIXTURE"] == "1"
+        formalFixtureRoute = environment["FISCAL_ROOT_SMOKE_FORMAL_BOUNDARY"] == "1"
+            ? "today-root-workspace-boundary"
+            : "today-root-workspace"
+        preferredScheme = environment["FISCAL_ROOT_SMOKE_COLOR_SCHEME"] == "dark" ? .dark : environment["FISCAL_ROOT_SMOKE_COLOR_SCHEME"] == "light" ? .light : nil
         let revisionStore = DataRevisionStore()
         services = V15Services(
             baseURL: baseURL,
@@ -49,6 +57,11 @@ struct V15RootSmokeiOSApp: App {
         WindowGroup {
             if cleanupOnly {
                 V15RootSmokeCleanupView(accessKeyStore: accessKeyStore, offlineSnapshots: offlineSnapshots)
+            } else if formalFixture {
+                // Test-only host: this is the actual formal workspace, fed by
+                // deterministic read-only facts rather than the Gallery shell.
+                V151IOSWorkspace(services: V15F2BFixtures.services(route: formalFixtureRoute))
+                    .preferredColorScheme(preferredScheme)
             } else {
                 IOSRootView(services: services, bootstrapAccessKey: APIConfiguration.bootstrapAccessKey())
             }

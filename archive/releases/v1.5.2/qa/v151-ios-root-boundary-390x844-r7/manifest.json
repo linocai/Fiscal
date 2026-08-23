@@ -1,0 +1,9 @@
+{
+  "result_bundle": "/private/tmp/fiscal-b7-root-ax5-r7-final.xcresult",
+  "test": "V15RootSmokeUITests/testFormalWorkspaceBoundaryKeepsMoneyLocalAndNavigationReachable()",
+  "root": "V151IOSWorkspace",
+  "device": "iPhone 13 · 390×844",
+  "fixture": "today-root-workspace-boundary (F2-A Int64.max facts)",
+  "screenshot": "boundary.png",
+  "contract": "Money remains unscaled, unwrapped and accessible in a bounded local horizontal scroller; the three bottom actions remain hittable."
+}

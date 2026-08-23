@@ -108,10 +108,19 @@ public struct V15CashFlowMacView: View {
 
     private func itemInspector(_ item: V15CashFlowItem) -> some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
+            HStack(spacing: V15Spacing.xs) {
+                Text(item.isSystem ? "系统派生" : "手工计划").font(V15Typography.label)
+                    .padding(.horizontal, V15Spacing.xs).padding(.vertical, V15Spacing.xxs)
+                    .background(item.isSystem ? V15Palette.provisional.color : V15Palette.selected.color, in: RoundedRectangle(cornerRadius: V15Radius.tag))
+                if item.isSystem { Text(sourceLabel(item)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
+            }
             Text(item.title).font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
             Text("\(item.expectedDate) · \(item.direction.displayName) · \(item.status.displayName) · v\(item.version)").font(V15Typography.secondary)
-            Text(money(item.plannedAmountMinor)).font(V15Typography.money).monospacedDigit()
-            if let actual = item.actualAmountMinor { Text("实际 \(money(actual)) · \(item.actualDate ?? "日期未知")").font(V15Typography.secondary) }
+            HStack(alignment: .top, spacing: V15Spacing.sm) {
+                cashFlowFact("计划金额", value: item.plannedAmountMinor, date: item.expectedDate, provisional: true)
+                if let actual = item.actualAmountMinor { cashFlowFact("实际入账", value: actual, date: item.actualDate ?? "日期未提供", provisional: false) }
+                else { cashFlowUnavailableFact("实际入账", detail: item.isSystem ? "回来源流程确认" : "尚未结算") }
+            }.accessibilityIdentifier("v15.f3d.mac.plan-actual")
             if item.isDisplayOnly { Label("未知状态或方向，只读展示", systemImage: V15Symbol.warning).foregroundStyle(V15Palette.teal.color).accessibilityIdentifier("v15.f3d.mac.display-only") }
             if item.isSystem {
                 V15Section("系统来源") { Text(item.systemKind == .creditCycle ? "信用账单应还来自真实账期；请到还款流程。" : "报销金额跟随报销事实；实际到账请到报销流程。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true) }
@@ -184,6 +193,9 @@ public struct V15CashFlowMacView: View {
     private func categoryControl(selection: Binding<UUID?>, categories: [V15CategoryResponse]) -> some View { V15PickerRow("分类", selection: selection) { Text("未分类").tag(UUID?.none); ForEach(categories) { Text($0.name).tag(UUID?.some($0.id)) } } }
     private func fieldIssues(_ values: [V15FieldIssue], _ path: String) -> [V15FieldIssue] { values.filter { $0.fieldPath == path || $0.fieldPath?.hasPrefix(path + ".") == true } }
     private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral, includeCurrency: true).text }
+    private func sourceLabel(_ item: V15CashFlowItem) -> String { item.systemKind == .creditCycle ? "由信用周期派生" : item.systemKind == .reimbursement ? "由报销事实派生" : item.source }
+    private func cashFlowFact(_ title: String, value: V15MinorUnits, date: String, provisional: Bool) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); V15MoneyText(minorUnits: value, direction: .neutral, font: V15Typography.body.weight(.semibold)); Text(date).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(provisional ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
+    private func cashFlowUnavailableFact(_ title: String, detail: String) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); Text("—").font(V15Typography.body.weight(.semibold)); Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
     private var editorTitle: String { switch model.editorMode { case .create: "新建现金流"; case .edit: "修改现金流"; case .settle: "兑现入账"; case .systemEdit: "系统事项显示"; case .none: "检查器" } }
     private func editOpenReasons(_ item: V15CashFlowItem) -> [V15DisabledReason] { var values: [V15DisabledReason] = []; if model.writeLocked { values.append(.init(code: "write_locked", message: "当前有未完成写入或事实刷新。", fieldPath: nil)) }; if !item.allows(.edit) { values.append(.init(code: "server_action_unavailable", message: "服务端未允许修改。", fieldPath: "actions")) }; return values }
     private func settleOpenReasons(_ item: V15CashFlowItem) -> [V15DisabledReason] { var values: [V15DisabledReason] = []; if model.writeLocked { values.append(.init(code: "write_locked", message: "当前有未完成写入或事实刷新。", fieldPath: nil)) }; if !item.allows(.settle) { values.append(.init(code: "server_action_unavailable", message: "服务端未允许入账。", fieldPath: "actions")) }; return values }

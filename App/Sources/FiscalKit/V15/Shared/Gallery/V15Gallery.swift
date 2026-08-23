@@ -402,7 +402,7 @@ private struct V15GalleryStateSurface: View {
         Group {
             switch fixture {
             case .loading:
-                V15LoadingSkeleton()
+                V15LoadingSkeleton(layout: .decisionCard)
             case .empty:
                 V15EmptyState(title: "这个筛选下没有事项", explanation: "没有需要处理的已知未来事项。空态不会伪装成加载失败。")
             case .serviceError:
@@ -422,9 +422,15 @@ private struct V15GalleryStateSurface: View {
                 .accessibilityIdentifier("v15.gallery.order.disabled-reasons")
                 .accessibilityValue("收款账户仍在加载。请先获取服务端预览；输入变化后预览会自动作废。")
             case .offlineReadOnly:
-                V15OfflineReadOnlyBanner(snapshotAt: Date(timeIntervalSince1970: 1_786_809_540))
+                VStack(alignment: .leading, spacing: V15Spacing.md) {
+                    V15OfflineReadOnlyBanner(snapshotAt: Date(timeIntervalSince1970: 1_786_809_540), pendingCount: 3)
+                    V15MoneyTruthState("账户价值", displayedMinorUnits: 10_468_055, confirmedMinorUnits: 10_452_055, pendingCount: 3)
+                }
             case .conflict:
-                V15ConflictState(conflict: V15FixtureLibrary.conflict.conflict!, reload: retry)
+                V15ConflictState(conflict: V15FixtureLibrary.conflict.conflict!, changes: [
+                    .init(field: "本次还款金额", previousValue: "¥3,280.40", currentValue: "¥1,280.40"),
+                    .init(field: "账期版本", previousValue: "v7", currentValue: "v8")
+                ], reload: retry)
                     .accessibilityIdentifier("v15.gallery.order.action.reload")
                     .accessibilityValue(retryCount == 0 ? "尚未取最新数据" : "已取最新数据 \(retryCount) 次")
             case .preview:
@@ -439,12 +445,11 @@ private struct V15GalleryStateSurface: View {
                     }
                 }
             case .archiveReadOnly:
-                V15ArchiveReadOnlyState {
+                V15ArchiveReadOnlyState(restore: {}) {
                     VStack(alignment: .leading, spacing: V15Spacing.xs) {
                         Text("已归档的旧报销单").font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color)
                         Text("归档不是删除。历史金额与来源保持只读，可恢复后再继续处理。")
                             .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
-                        V15ActionButton("恢复归档项", symbol: V15Symbol.archive, kind: .secondary, action: {})
                     }
                 }
             case .successReceipt:

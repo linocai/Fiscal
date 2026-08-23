@@ -18,6 +18,14 @@ private struct V15GallerySnapshotTool {
             try renderF4C(to: output)
             return
         }
+        if environment["FISCAL_V15_SNAPSHOT_SCOPE"] == "f4a" {
+            try renderF4A(to: output)
+            return
+        }
+        if environment["FISCAL_V15_SNAPSHOT_SCOPE"] == "f3g" {
+            try renderF3G(to: output)
+            return
+        }
 
         for fixture in V15GalleryFixture.allCases {
             try render(V15GalleryShell(fixture: fixture, density: .comfortable), to: output.appendingPathComponent("macos-\(fixture.id)-light.png"), colorScheme: .light, size: CGSize(width: 1240, height: 760))
@@ -198,22 +206,47 @@ private struct V15GallerySnapshotTool {
             let statementImport = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f3g-route", route])
             try render(statementImport, to: output.appendingPathComponent("f3g-mac-\(style).png"), colorScheme: scheme, size: size, dynamicTypeSize: type, settlingDelay: 8)
         }
-        let f4ARoutes: [(String, String, ColorScheme, CGSize, DynamicTypeSize)] = [
+        try renderF4A(to: output)
+        try renderF4B(to: output)
+        try renderF4C(to: output)
+    }
+
+    @MainActor
+    private static func renderF3G(to output: URL) throws {
+        let routes: [(String, String, ColorScheme, CGSize, DynamicTypeSize)] = [
+            ("statement-import", "workbench-light", .light, CGSize(width: 1440, height: 900), .large),
+            ("statement-import", "workbench-dark", .dark, CGSize(width: 1180, height: 820), .large),
+            ("statement-import-source-unavailable", "evidence-degraded", .light, CGSize(width: 1180, height: 820), .large),
+            ("statement-import-partial", "partial-receipt", .dark, CGSize(width: 1440, height: 900), .accessibility5),
+            ("statement-import-preview", "preview", .light, CGSize(width: 1440, height: 900), .large)
+        ]
+        for (route, style, scheme, size, type) in routes {
+            let workbench = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f3g-route", route])
+            try render(workbench, to: output.appendingPathComponent("f3g-mac-\(style).png"), colorScheme: scheme, size: size, dynamicTypeSize: type, settlingDelay: 1.2)
+        }
+    }
+
+    @MainActor
+    private static func renderF4A(to output: URL) throws {
+        let routes: [(String, String, ColorScheme, CGSize, DynamicTypeSize)] = [
             ("reports", "report-light", .light, CGSize(width: 1440, height: 900), .large),
             ("reports", "report-dark", .dark, CGSize(width: 1180, height: 820), .large),
             ("reports", "report-ax5", .light, CGSize(width: 1440, height: 1080), .accessibility5),
+            ("reports-spending", "spending-light", .light, CGSize(width: 1440, height: 900), .large),
+            ("reports-spending", "spending-dark", .dark, CGSize(width: 1180, height: 820), .large),
+            ("reports-cash-flow", "cash-flow", .light, CGSize(width: 1440, height: 900), .large),
+            ("reports-debt", "debt", .dark, CGSize(width: 1180, height: 820), .large),
+            ("reports-summary-only", "summary-only", .light, CGSize(width: 1180, height: 820), .large),
             ("reports-empty", "empty", .light, CGSize(width: 1440, height: 900), .large),
             ("reports-loading", "loading", .dark, CGSize(width: 1180, height: 820), .large),
             ("reports-error", "error", .light, CGSize(width: 1440, height: 900), .large),
             ("reports-offline", "offline", .dark, CGSize(width: 1180, height: 820), .accessibility5),
             ("reports-unknown", "unknown", .light, CGSize(width: 1440, height: 900), .large)
         ]
-        for (route, style, scheme, size, type) in f4ARoutes {
+        for (route, style, scheme, size, type) in routes {
             let reports = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f4a-route", route])
             try render(reports, to: output.appendingPathComponent("f4a-mac-\(style).png"), colorScheme: scheme, size: size, dynamicTypeSize: type, settlingDelay: route == "reports-loading" ? 0.2 : 0.8)
         }
-        try renderF4B(to: output)
-        try renderF4C(to: output)
     }
 
     @MainActor

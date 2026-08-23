@@ -298,6 +298,33 @@ public final class V15ReimbursementModel {
         catch { guard generation == listGeneration else { return }; phase = .failed(.init(kind: .transport, message: "报销单读取失败。")) }
     }
 
+    /// Opens a server-addressed claim without depending on its presence in the
+    /// first list page. Today decision cards use this path so an attention item
+    /// cannot silently resolve to a different reimbursement claim.
+    public func openClaim(id: UUID, readCachePolicy: V15ReadCachePolicy = .standard) async {
+        invalidateAllReads()
+        let generation = listGeneration
+        phase = .loading
+        claims = []
+        selectedClaim = nil
+        receipts = []
+        nextClaimCursor = nil
+        nextReceiptCursor = nil
+        do {
+            let claim = try await services.reimbursements.claim(id: id, readCachePolicy: readCachePolicy)
+            guard generation == listGeneration else { return }
+            claims = [claim]
+            phase = .loaded
+            await selectClaim(claim, readCachePolicy: readCachePolicy)
+        } catch let failure as V15Failure {
+            guard generation == listGeneration else { return }
+            phase = failure.kind == .cancelled ? .idle : .failed(failure)
+        } catch {
+            guard generation == listGeneration else { return }
+            phase = .failed(.init(kind: .transport, message: "报销单读取失败。"))
+        }
+    }
+
     public func refresh() async {
         invalidateAllReads(); let generation = listGeneration; let previous = selectedClaim?.id
         phase = .loading

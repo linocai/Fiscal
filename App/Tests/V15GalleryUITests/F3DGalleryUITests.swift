@@ -41,8 +41,12 @@ import XCTest
         XCTAssertTrue(field.waitForExistence(timeout: 6), "missing field \(fieldID)")
         field.tap()
         field.press(forDuration: 0.7)
-        if app.menuItems["Select All"].waitForExistence(timeout: 1) { app.menuItems["Select All"].tap() }
-        else if app.menuItems["全选"].waitForExistence(timeout: 1) { app.menuItems["全选"].tap() }
+        var selectedAll = false
+        if app.menuItems["Select All"].waitForExistence(timeout: 1) { app.menuItems["Select All"].tap(); selectedAll = true }
+        else if app.menuItems["全选"].waitForExistence(timeout: 1) { app.menuItems["全选"].tap(); selectedAll = true }
+        if !selectedAll, let current = field.value as? String, !current.isEmpty {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+        }
         field.typeText(text.isEmpty ? XCUIKeyboardKey.delete.rawValue : text)
     }
 
