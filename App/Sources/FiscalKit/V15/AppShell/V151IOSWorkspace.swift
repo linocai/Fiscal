@@ -211,7 +211,7 @@ private struct V151IOSTodayDashboard: View {
                     Text("支出口径：个人实际承担").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
                 }
             } else {
-                Text("正在读取账簿事实").font(V15Typography.cardTitle)
+                Text("正在读取账目").font(V15Typography.cardTitle)
             }
         }
         .padding(.horizontal, 20).padding(.top, 15).padding(.bottom, 18)
@@ -297,12 +297,12 @@ private struct V151IOSTodayDashboard: View {
                 HStack {
                     Text("待同步 · \(services.pendingWrites.count)").font(V15Typography.label).foregroundStyle(V15Palette.teal.color)
                     Spacer()
-                    Button("查看队列") { openDestination(.pendingSync) }.buttonStyle(.borderless)
+                    Button("查看待同步") { openDestination(.pendingSync) }.buttonStyle(.borderless)
                 }
                 if let receipt = services.pendingWrites.lastSyncReceipt {
                     V15SuccessReceiptState(title: "同步已完成", detail: receipt)
                 }
-                Text("顶部数值仍是服务器上次确认值；\(services.pendingWrites.count) 项本地写入尚未计入汇总。")
+                Text("顶部数值暂不包含 \(services.pendingWrites.count) 项待同步更改。")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.62))
                     .fixedSize(horizontal: false, vertical: true)
@@ -343,9 +343,9 @@ private struct V151IOSTodayDashboard: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) { Circle().stroke(V15Palette.teal.color, lineWidth: 2).frame(width: 11, height: 11); Text("信用账单待处理").font(V15Typography.secondary.weight(.semibold)).foregroundStyle(V15Palette.teal.color) }
             V15MoneyText(minorUnits: amount, direction: .outflow, font: V15Typography.moneyLarge)
-            Text("查看服务器确认的账期，并可在当前卡内记录还款。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+            Text("查看当前账期，并可在这里记录还款。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
             V15AdaptiveStack(spacing: 8) {
-                V15ActionButton("记录还款", disabledReason: event == nil ? .init(code: "credit_cycle_required", message: "服务器未提供可定位的当期账期，请进入信用账期选择。", fieldPath: nil) : nil) { creditDecisionExpanded.toggle() }
+                V15ActionButton("记录还款", disabledReason: event == nil ? .init(code: "credit_cycle_required", message: "暂时无法确定当期账期，请先选择信用账期。", fieldPath: nil) : nil) { creditDecisionExpanded.toggle() }
                 V15ActionButton("查看账期", kind: .secondary) { openDestination(.credit) }
             }
             if creditDecisionExpanded, let event {
@@ -366,7 +366,7 @@ private struct V151IOSTodayDashboard: View {
     private var calmState: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("今天没有需要你决定的事项").font(V15Typography.cardTitle)
-            Text("账簿事实仍然保留在“账目”中；这里只表示决策队列为空。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+            Text("全部账目仍可在“账目”中查看。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: 15))
     }
@@ -392,7 +392,7 @@ private struct V151IOSTodayDashboard: View {
     private func offlineBanner(_ at: Date) -> some View {
         HStack(spacing: 12) {
             Rectangle().fill(V15Palette.yellow.color).frame(width: 3)
-            VStack(alignment: .leading, spacing: 2) { Text("离线 · 只读快照").font(V15Typography.secondary.weight(.semibold)); Text("显示 \(V15TodayReadModel.shanghaiDateLabel(model.offlineAsOf ?? at)) 的事实").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.58)) }
+            VStack(alignment: .leading, spacing: 2) { Text("离线 · 仅可查看").font(V15Typography.secondary.weight(.semibold)); Text("数据保存于 \(V15TodayReadModel.shanghaiDateLabel(model.offlineAsOf ?? at))").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.58)) }
             Spacer(); V15ActionButton("查看", kind: .secondary) { openLedger(nil) }
         }.padding(.horizontal, 16).frame(minHeight: 62).background(V15Palette.provisional.color)
     }
@@ -503,7 +503,7 @@ private struct V151IOSTodayDashboard: View {
     private func attentionDirection(_ item: V15AttentionItem) -> V15MoneyDirection { if item.sourceType.contains("uncategorized") || item.sourceType.contains("credit") { return .outflow }; return .neutral }
     private func pendingStatus(_ item: V15PendingWriteStore.Item) -> String {
         let status: String
-        switch item.status { case .queued: status = "等待联网后同步"; case .syncing: status = "正在同步"; case .requiresDecision: status = "服务器事实已变化，需要重新决定"; case .outcomeUnknown: status = "结果不明，需要人工核对"; case .failed: status = "同步失败" }
+        switch item.status { case .queued: status = "等待联网后同步"; case .syncing: status = "正在同步"; case .requiresDecision: status = "数据已变化，需要重新决定"; case .outcomeUnknown: status = "结果不明，需要核对"; case .failed: status = "同步失败" }
         return item.message.map { "\(status) · \($0)" } ?? status
     }
 }
@@ -544,10 +544,10 @@ private struct V151IOSCategoryInlineDecision: View {
                     .pickerStyle(.menu)
                     .onChange(of: categoryID) { _, _ in previewed = false }
                     if previewed {
-                        V15ServerFactState(detail: "已读取账目 \(model.selected.map { "v\($0.version)" } ?? "当前版本") 的服务器当前事实。服务端未提供分类预览；确认会直接提交分类修改。")
+                        V15ServerFactState(detail: "已取得这笔账目的最新内容。确认后会直接修改分类。")
                         V15ActionButton("确认分类") { Task { await commit() } }
                     } else {
-                        V15ActionButton("读取服务器当前账目", disabledReason: categoryID == nil ? .init(code: "category_required", message: "请先选择分类。", fieldPath: nil) : (model.isOffline ? .init(code: "category_read_requires_network", message: "需要联网读取服务器当前账目。", fieldPath: nil) : nil)) { Task { await readCurrentFact() } }
+                        V15ActionButton("取最新账目", disabledReason: categoryID == nil ? .init(code: "category_required", message: "请先选择分类。", fieldPath: nil) : (model.isOffline ? .init(code: "category_read_requires_network", message: "需要联网取得最新账目。", fieldPath: nil) : nil)) { Task { await readCurrentFact() } }
                     }
                     mutationState
                 }
@@ -560,7 +560,7 @@ private struct V151IOSCategoryInlineDecision: View {
         switch model.mutation {
         case .idle: EmptyView()
         case .working: V15LoadingSkeleton(layout: .decisionCard)
-        case .reconciled(let message): V15ServerFactState(title: "待同步状态", detail: message)
+        case .reconciled(let message): V15ServerFactState(title: "数据更新中", detail: message)
         case .conflict(let conflict):
             V15ConflictState(conflict: conflict, changes: model.mutationConflictChanges) { Task { await load() } }
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await commit() } }
@@ -580,7 +580,7 @@ private struct V151IOSCategoryInlineDecision: View {
         await model.replaceSelectedCategory(categoryID)
         switch model.mutation {
         case .idle:
-            receipt = "分类已保存；现在显示服务器返回的最新账目版本。"
+            receipt = "分类已保存；现在显示最新账目。"
         case .reconciled(let message): receipt = message
         default: break
         }
@@ -644,12 +644,12 @@ private struct V151IOSRepaymentInlineDecision: View {
             }
             if previewed {
                 V15PreviewState {
-                    Text("已重新读取服务器账期事实。当前交易写入端点不提供独立 preview token；确认将以显示的来源、目标、账期和金额直接建立还款事实。")
+                    Text("请核对来源、目标、账期和金额；确认后将直接记录还款。")
                         .font(V15Typography.secondary)
                 }
                 V15ActionButton("确认还款", disabledReasons: model.allIssues.map { .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath) }) { Task { await submit() } }
             } else {
-                V15ActionButton("读取服务器账期", disabledReason: model.isOffline ? .init(code: "preview_requires_network", message: "需要联网读取最新账期。", fieldPath: nil) : nil) { Task { await refreshPreview() } }
+                V15ActionButton("更新账期", disabledReason: model.isOffline ? .init(code: "preview_requires_network", message: "需要联网取得最新账期。", fieldPath: nil) : nil) { Task { await refreshPreview() } }
             }
             submissionState
         }
@@ -664,9 +664,9 @@ private struct V151IOSRepaymentInlineDecision: View {
         switch model.submission {
         case .idle: EmptyView()
         case .submitting: V15LoadingSkeleton(layout: .decisionCard)
-        case .queued: V15ServiceErrorState(message: "还款需要服务器账期事实，不会离线排队。") { Task { await refreshPreview() } }
+        case .queued: V15ServiceErrorState(message: "还款需要联网确认当前账期，不能离线排队。") { Task { await refreshPreview() } }
         case .success(let transaction):
-            V15SuccessReceiptState(title: "还款已记录", detail: "服务器已确认 · v\(transaction.version) · \(transaction.businessDate)")
+            V15SuccessReceiptState(title: "还款已记录", detail: transaction.businessDate)
             V15ActionButton("完成") { onResolved() }
         case .conflict(let conflict):
             V15ConflictState(conflict: conflict, changes: conflictChanges, explanation: conflictExplanation) { Task {
@@ -700,29 +700,28 @@ private struct V151IOSRepaymentInlineDecision: View {
 
     @MainActor private func readConflictFacts(before: V15CreditCycle?) async {
         guard let accountID = model.destinationAccountID, let cycleID = model.creditCycleID else {
-            conflictExplanation = "提交前未能保留完整账期定位；当前接口只可按版本冲突重新读取，不能编造字段对照。"
+            conflictExplanation = "账期已经变化，请取最新数据后重新确认。"
             return
         }
         do {
             let fresh = try await services.creditCycles.list(accountID: accountID, readCachePolicy: .reloadIgnoringCache)
                 .items.first(where: { $0.id == cycleID })
             guard let fresh else {
-                conflictExplanation = "已强制读取服务器账期，但该账期不再返回；不能提供字段级对照。"
+                conflictExplanation = "原账期已不存在，请重新选择。"
                 return
             }
-            conflictExplanation = "已强制读取服务器当前账期事实。"
+            conflictExplanation = "已取得最新账期。"
             guard let before else {
                 conflictChanges = []
-                conflictExplanation = "已强制读取服务器当前账期 v\(fresh.version)，但提交前快照未保留；不能提供字段级旧/新对照。"
+                conflictExplanation = "已取得最新账期，请重新核对后确认。"
                 return
             }
             conflictChanges = [
-                .init(field: "账期版本", previousValue: "v\(before.version)", currentValue: "v\(fresh.version)"),
                 .init(field: "待还金额", previousValue: V15MoneyPresentation(minorUnits: before.remainingMinor, direction: .outflow).text, currentValue: V15MoneyPresentation(minorUnits: fresh.remainingMinor, direction: .outflow).text),
                 .init(field: "账单日 / 还款日", previousValue: "\(before.statementDate) / \(before.dueDate)", currentValue: "\(fresh.statementDate) / \(fresh.dueDate)")
             ]
         } catch {
-            conflictExplanation = "强制读取最新账期事实失败；当前只能根据服务器版本冲突重新决定，不能编造字段对照。"
+            conflictExplanation = "暂时无法取得最新账期，请稍后再试。"
         }
     }
 
@@ -752,7 +751,7 @@ private struct V151IOSReimbursementInlineDecision: View {
             Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
             switch model.phase {
             case .idle, .loading: V15LoadingSkeleton(layout: .decisionCard)
-            case .empty: V15EmptyState(title: "报销单不可用", explanation: "服务器没有返回这张报销单。")
+            case .empty: V15EmptyState(title: "无法显示报销单", explanation: "暂时没有取得这张报销单的数据。")
             case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await load() } }
             case .loaded: receiptEditor
             }
@@ -786,18 +785,18 @@ private struct V151IOSReimbursementInlineDecision: View {
         case .previewed:
             if let preview = model.receiptPreview {
                 V15PreviewState {
-                    Text("报销单 v\(preview.claimVersion) · 实收 \(V15MoneyPresentation(minorUnits: preview.amountMinor, direction: .neutral).text)\n已收 \(V15MoneyPresentation(minorUnits: preview.claimReceivedBeforeMinor, direction: .neutral).text) → \(V15MoneyPresentation(minorUnits: preview.claimReceivedAfterMinor, direction: .neutral).text)\n将由服务器创建报销收款交易。")
+                    Text("实收 \(V15MoneyPresentation(minorUnits: preview.amountMinor, direction: .neutral).text)\n已收 \(V15MoneyPresentation(minorUnits: preview.claimReceivedBeforeMinor, direction: .neutral).text) → \(V15MoneyPresentation(minorUnits: preview.claimReceivedAfterMinor, direction: .neutral).text)\n确认后将记录这笔报销收款。")
                         .font(V15Typography.secondary)
                 }
             }
             V15ActionButton("确认收款", disabledReasons: model.receiptCommitDisabledReasons) { Task { await commitReceipt() } }
         case .succeeded:
             if let result = model.receiptResult {
-                V15SuccessReceiptState(title: "收款已登记", detail: "\(V15MoneyPresentation(minorUnits: result.amountMinor, direction: .neutral).text) · 服务器 v\(result.version)")
+                V15SuccessReceiptState(title: "收款已登记", detail: V15MoneyPresentation(minorUnits: result.amountMinor, direction: .neutral).text)
             }
             V15ActionButton("完成") { onResolved() }
         case .unknown:
-            V15ServiceErrorState(message: "服务器结果不明，请使用原凭证重试或进入报销工作区核对。") { Task { await model.retryUnknownReceipt() } }
+            V15ServiceErrorState(message: "这笔收款可能已经保存。请检查最新状态，系统不会重复登记。") { Task { await model.retryUnknownReceipt() } }
         case .conflict(let conflict):
             V15ConflictState(conflict: conflict, changes: conflictChanges, explanation: conflictExplanation) { Task {
                 conflictChanges = []; conflictExplanation = nil
@@ -823,20 +822,19 @@ private struct V151IOSReimbursementInlineDecision: View {
     @MainActor private func readConflictFacts(before: V15ReimbursementClaim?) async {
         do {
             let fresh = try await services.reimbursements.claim(id: claimID, readCachePolicy: .reloadIgnoringCache)
-            conflictExplanation = "已强制读取服务器当前报销事实。"
+            conflictExplanation = "已取得最新报销信息。"
             guard let before else {
                 conflictChanges = []
-                conflictExplanation = "已强制读取服务器当前报销单 v\(fresh.version)，但提交前快照未保留；不能提供字段级旧/新对照。"
+                conflictExplanation = "已取得最新报销信息，请重新核对后确认。"
                 return
             }
             conflictChanges = [
-                .init(field: "报销单版本", previousValue: "v\(before.version)", currentValue: "v\(fresh.version)"),
                 .init(field: "已收金额", previousValue: V15MoneyPresentation(minorUnits: before.receivedMinor, direction: .inflow).text, currentValue: V15MoneyPresentation(minorUnits: fresh.receivedMinor, direction: .inflow).text),
                 .init(field: "待收金额", previousValue: V15MoneyPresentation(minorUnits: before.outstandingMinor, direction: .neutral).text, currentValue: V15MoneyPresentation(minorUnits: fresh.outstandingMinor, direction: .neutral).text),
                 .init(field: "到账笔数", previousValue: "\(before.receiptCount)", currentValue: "\(fresh.receiptCount)")
             ]
         } catch {
-            conflictExplanation = "强制读取最新报销事实失败；当前只能根据服务器版本冲突重新决定，不能编造字段对照。"
+            conflictExplanation = "暂时无法取得最新报销信息，请稍后再试。"
         }
     }
 }
@@ -863,15 +861,15 @@ private struct V151IOSCashFlowInlineDecision: View {
                     await load(fresh: true)
                 } }
             case .succeeded(let value):
-                V15SuccessReceiptState(title: "现金流已确认", detail: "\(value.title) · \(value.status.displayName) · 服务器 v\(value.version)")
+                V15SuccessReceiptState(title: "现金流已确认", detail: "\(value.title) · \(value.status.displayName)")
                 V15ActionButton("完成") { onResolved() }
             case .ready, .previewed:
                 if let item {
                     Text("确认现金流").font(.title3.weight(.semibold))
                     HStack { Text(item.title); Spacer(); V15MoneyText(minorUnits: item.plannedAmountMinor, direction: .neutral, font: V15Typography.money) }
-                    Text("预期 \(item.expectedDate) · \(item.status.displayName) · v\(item.version)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                    Text("预期 \(item.expectedDate) · \(item.status.displayName)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
                     if case .previewed = phase {
-                        V15PreviewState { Text("已 fresh GET 服务器当前事实。确认只改变这一次事项的状态；不会创建入账交易。").font(V15Typography.secondary) }
+                        V15PreviewState { Text("已取得最新状态。确认只改变这一次事项，不会创建入账交易。").font(V15Typography.secondary) }
                         V15ActionButton("确认本次", disabledReason: confirmReason(item)) { Task { await confirm(item) } }
                     } else {
                         V15ActionButton("读取影响", disabledReason: confirmReason(item)) { Task { await load(fresh: true, preview: true) } }
@@ -883,9 +881,9 @@ private struct V151IOSCashFlowInlineDecision: View {
     }
 
     private func confirmReason(_ item: V15CashFlowItem) -> V15DisabledReason? {
-        if services.offlineSnapshotAt != nil { return .init(code: "offline_read_only", message: "离线快照只可查看。", fieldPath: nil) }
+        if services.offlineSnapshotAt != nil { return .init(code: "offline_read_only", message: "离线时只可查看。", fieldPath: nil) }
         guard item.manualItemID != nil else { return .init(code: "system_projection", message: "系统投影必须在对应业务流程处理。", fieldPath: nil) }
-        guard item.allows(.confirm) else { return .init(code: "confirm_unavailable", message: "服务器没有允许确认这一事项。", fieldPath: nil) }
+        guard item.allows(.confirm) else { return .init(code: "confirm_unavailable", message: "当前状态不能确认这项现金流。", fieldPath: nil) }
         return nil
     }
 
@@ -896,7 +894,7 @@ private struct V151IOSCashFlowInlineDecision: View {
             item = value
             phase = preview ? .previewed : .ready
         } catch let failure as V15Failure { phase = .failed(failure) }
-        catch { phase = .failed(.init(kind: .transport, message: "现金流事实读取失败。")) }
+        catch { phase = .failed(.init(kind: .transport, message: "暂时无法取得现金流信息。")) }
     }
 
     @MainActor private func confirm(_ value: V15CashFlowItem) async {
@@ -912,22 +910,21 @@ private struct V151IOSCashFlowInlineDecision: View {
                 await readConflictFacts(before: value)
             }
             else { phase = .failed(failure) }
-        } catch { phase = .failed(.init(kind: .responseUnknown, message: "确认结果不明，请进入现金流工作区核对。")) }
+        } catch { phase = .failed(.init(kind: .responseUnknown, message: "确认结果不明，请打开现金流详情核对。")) }
     }
 
     @MainActor private func readConflictFacts(before: V15CashFlowItem) async {
         do {
             let fresh = try await services.cashFlow.item(id: itemID, readCachePolicy: .reloadIgnoringCache)
             item = fresh
-            conflictExplanation = "已强制读取服务器当前现金流事实。"
+            conflictExplanation = "已取得最新现金流信息。"
             conflictChanges = [
-                .init(field: "事项版本", previousValue: "v\(before.version)", currentValue: "v\(fresh.version)"),
                 .init(field: "状态", previousValue: before.status.displayName, currentValue: fresh.status.displayName),
                 .init(field: "计划金额", previousValue: V15MoneyPresentation(minorUnits: before.plannedAmountMinor, direction: .neutral).text, currentValue: V15MoneyPresentation(minorUnits: fresh.plannedAmountMinor, direction: .neutral).text),
                 .init(field: "预计日期", previousValue: before.expectedDate, currentValue: fresh.expectedDate)
             ]
         } catch {
-            conflictExplanation = "强制读取最新现金流事实失败；当前只能根据服务器版本冲突重新决定，不能编造字段对照。"
+            conflictExplanation = "暂时无法取得最新现金流信息，请稍后再试。"
         }
     }
 }
@@ -993,10 +990,10 @@ private struct V151IOSLedger: View {
                 } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
             }
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                workspaceEntry("报表", detail: "四镜头", symbol: "chart.bar") { openDestination(.reports) }
+                workspaceEntry("报表", detail: "收支、资产、信用与分类", symbol: "chart.bar") { openDestination(.reports) }
                 workspaceEntry("账单导入", detail: "逐行处置", symbol: "doc.text.viewfinder") { openDestination(.statementImport) }
                 workspaceEntry("报销", detail: "记录收款", symbol: "person.2") { openDestination(.reimbursements) }
-                workspaceEntry("对账", detail: "账户 checkpoint", symbol: "checkmark.seal") { openDestination(.reconciliation) }
+                workspaceEntry("对账", detail: "账户核对记录", symbol: "checkmark.seal") { openDestination(.reconciliation) }
             }
             if !model.accounts.isEmpty {
                 VStack(alignment: .leading, spacing: 7) {
@@ -1123,7 +1120,7 @@ private struct V151IOSLedger: View {
                     Text("归档 · 只读。可使用下方的恢复入口。").font(V15Typography.secondary)
                 }
             }
-            V15Section("服务器事实", detail: "v\(transaction.version)") {
+            V15Section("账目详情") {
                 detailRow("类型", transactionKindLabel(transaction.kind))
                 detailRow("账户", model.accountName(transaction.accountID))
                 detailRow("分类", model.categoryName(transaction.categoryID))
@@ -1145,7 +1142,7 @@ private struct V151IOSLedger: View {
             }
             V15ActionButton("改为分期", kind: .secondary, disabledReason: installmentReason(transaction)) { openDestination(.installments) }
             mutationState
-            V15Section("修订历史") { ForEach(model.revisions) { revision in Text("v\(revision.version) · \(revision.event)").font(V15Typography.secondary.monospaced()) } }
+            V15Section("修改历史") { ForEach(model.revisions) { revision in Text(revision.displayEvent).font(V15Typography.secondary) } }
         }
     }
 
@@ -1180,7 +1177,7 @@ private struct V151IOSLedger: View {
 
     private var categoryEditor: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("确认前会读取服务器当前账目；当前服务没有分类预览接口。")
+            Text("确认前会取得这笔账目的最新内容。")
                 .font(V15Typography.secondary)
                 .foregroundStyle(V15Palette.ink.color.opacity(0.58))
             V15Section("目标分类") {
@@ -1191,7 +1188,7 @@ private struct V151IOSLedger: View {
                 .onChange(of: categoryID) { _, _ in categoryPreviewed = false }
             }
             if categoryPreviewed {
-                V15ServerFactState(detail: "已读取账目 \(model.selected.map { "v\($0.version)" } ?? "当前版本") 的服务器当前事实。确认会直接提交分类修改。")
+                V15ServerFactState(detail: "已取得这笔账目的最新内容。确认后会直接修改分类。")
             }
             if categoryPreviewed {
                 V15ActionButton("确认分类") {
@@ -1199,7 +1196,7 @@ private struct V151IOSLedger: View {
                     Task { await model.replaceSelectedCategory(categoryID) }
                 }
             } else {
-                V15ActionButton("读取服务器当前账目", disabledReason: model.isOffline ? .init(code: "category_read_requires_network", message: "需要联网读取服务器当前账目。", fieldPath: nil) : nil) { Task { await readCategoryCurrentFact() } }
+                V15ActionButton("取最新账目", disabledReason: model.isOffline ? .init(code: "category_read_requires_network", message: "需要联网取得最新账目。", fieldPath: nil) : nil) { Task { await readCategoryCurrentFact() } }
             }
         }
     }
@@ -1248,8 +1245,8 @@ private struct V151IOSLedger: View {
     private struct SelectedAccountID: Identifiable { let id: UUID }
     private func shortDate(_ value: String) -> String { value.count >= 5 ? String(value.suffix(5)) : value }
     private func direction(_ transaction: V15Transaction) -> V15MoneyDirection { switch transaction.kind { case "income", "reimbursement_receipt": .inflow; case "transfer": .neutral; default: .outflow } }
-    private func transactionKindLabel(_ value: String) -> String { V15LedgerReadKind(rawValue: value)?.displayName ?? value }
-    private func sourceLabel(_ value: String) -> String { V15LedgerReadSource(rawValue: value)?.displayName ?? value }
+    private func transactionKindLabel(_ value: String) -> String { V15LedgerReadKind(rawValue: value)?.displayName ?? "账目" }
+    private func sourceLabel(_ value: String) -> String { V15LedgerReadSource(rawValue: value)?.displayName ?? "其他来源" }
 }
 
 private struct V151IOSAccountDetail: View {
@@ -1289,7 +1286,7 @@ private struct V151IOSAccountDetail: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(account.name).font(.title2.weight(.bold))
-                    Text("服务器确认余额 · v\(account.version)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.60))
+                    Text("当前余额").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.60))
                 }
                 Spacer()
                 if account.archivedAt != nil { Text("归档 · 只读").font(.caption.weight(.semibold)).foregroundStyle(V15Palette.ink.color.opacity(0.58)) }
@@ -1298,7 +1295,7 @@ private struct V151IOSAccountDetail: View {
             if account.archivedAt != nil {
                 V15ArchiveReadOnlyState { Text("归档账户不能在详情层编辑；恢复入口位于账户与分类设置。").font(V15Typography.secondary) }
             }
-            V15Section("账户事实", detail: "\(account.usageCount) 项关联") {
+            V15Section("账户详情", detail: "\(account.usageCount) 项关联") {
                 accountRow("类型", accountKind(account.kind))
                 accountRow("机构", account.institution ?? "未设置")
                 accountRow("尾号", account.lastFour.map { "•••• \($0)" } ?? "未设置")
@@ -1314,7 +1311,7 @@ private struct V151IOSAccountDetail: View {
                 V15ActionButton("查看信用账期", kind: .secondary) { dismiss(); openDestination(.credit) }
             }
             V15ActionButton("账户与分类设置", kind: .secondary) { dismiss(); openDestination(.settings) }
-            Text("对账 checkpoint 历史尚无通用账户详情端点；不在客户端伪造记录。")
+            Text("这个账户暂时没有可查看的核对记录。")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58)).fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -1329,7 +1326,7 @@ private struct V151IOSAccountDetail: View {
         phase = .loading
         do { phase = .loaded(try await services.masterData.account(id: accountID)) }
         catch let failure as V15Failure { phase = .failed(failure) }
-        catch { phase = .failed(.init(kind: .transport, message: "账户事实读取失败。")) }
+        catch { phase = .failed(.init(kind: .transport, message: "暂时无法取得账户信息。")) }
     }
 }
 
@@ -1340,18 +1337,18 @@ private struct V151IOSPendingSyncQueue: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("待同步写入 · \(services.pendingWrites.count)").font(.title2.weight(.bold))
-                    Text("这里的项目尚未计入服务器汇总；同步成功后以服务器回读为准。")
+                    Text("待同步 · \(services.pendingWrites.count)").font(.title2.weight(.bold))
+                    Text("这些更改暂未计入汇总；同步成功后会自动更新。")
                         .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
                 }
                 if let receipt = services.pendingWrites.lastSyncReceipt {
                     V15SuccessReceiptState(title: "同步已完成", detail: receipt)
-                    V15ActionButton("收起凭证", kind: .secondary) { services.pendingWrites.dismissReceipt() }
+                    V15ActionButton("收起结果", kind: .secondary) { services.pendingWrites.dismissReceipt() }
                 }
                 if services.pendingWrites.items.isEmpty {
                     V15EmptyState(title: "没有待同步项目", explanation: "离线记账和离线分类决定会出现在这里。")
                 } else {
-                    V15ActionButton("同步全部", disabledReason: services.offlineSnapshotAt != nil ? .init(code: "offline", message: "当前仍是离线快照。", fieldPath: nil) : nil) {
+                    V15ActionButton("同步全部", disabledReason: services.offlineSnapshotAt != nil ? .init(code: "offline", message: "当前仍处于离线状态。", fieldPath: nil) : nil) {
                         Task { await services.pendingWrites.replay(using: services) }
                     }
                     ForEach(services.pendingWrites.items) { item in pendingCard(item) }
@@ -1376,7 +1373,7 @@ private struct V151IOSPendingSyncQueue: View {
                 if let amount = item.amountMinor { V15MoneyText(minorUnits: amount, direction: .neutral, includeCurrency: false, font: .subheadline.weight(.semibold).monospacedDigit()) }
             }
             if item.status == .requiresDecision || item.status == .outcomeUnknown {
-                Text("该项不会自动重放。请移除后回到原对象重新决定，或在账目中核对服务器事实。")
+                Text("这项更改不会自动重试。请移除后回到原记录重新操作，或在账目中检查最新状态。")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
             }
             V15AdaptiveStack(spacing: 8) {

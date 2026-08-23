@@ -36,7 +36,7 @@ public struct V15TodayView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { await model.refresh() } } label: { Label("重新读取", systemImage: V15Symbol.retry) }
                         .accessibilityIdentifier("v15.f2b.refresh")
-                        .accessibilityHint("只重新读取服务器当前事实。")
+                        .accessibilityHint("重新取得最新数据。")
                 }
             }
         }
@@ -90,7 +90,7 @@ private struct V15TodayHeader: View {
     let model: V15TodayReadModel
     var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.xs) {
-            Text("当前事实")
+            Text("今日概览")
                 .font(V15Typography.label)
                 .foregroundStyle(V15Palette.teal.color)
             if let facts = model.facts {
@@ -98,21 +98,21 @@ private struct V15TodayHeader: View {
                     .font(V15Typography.surfaceTitle)
                     .foregroundStyle(V15Palette.ink.color)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("近 \(facts.window.dateFrom) 至 \(facts.window.dateTo) · \(facts.meta.currency) · 数据版本 \(facts.meta.dataRevision)")
+                Text("\(facts.window.dateFrom) 至 \(facts.window.dateTo) · \(facts.meta.currency)")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                Text("正在取得当前事实")
+                Text("正在更新概览")
                     .font(V15Typography.surfaceTitle)
                     .foregroundStyle(V15Palette.ink.color)
-                Text("口径为 Asia/Shanghai · CNY")
+                Text("上海业务日 · CNY")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(model.facts.map { "当前事实，截至 \(V15TodayReadModel.shanghaiDateLabel($0.meta.asOf))，CNY，数据版本 \($0.meta.dataRevision)" } ?? "正在取得当前事实，Asia Shanghai，CNY")
+        .accessibilityLabel(model.facts.map { "今日概览，截至 \(V15TodayReadModel.shanghaiDateLabel($0.meta.asOf))，人民币" } ?? "正在更新今日概览")
         .accessibilityIdentifier("v15.f2b.snapshot")
     }
 }
@@ -128,7 +128,7 @@ private struct V15TodayAttentionQueue: View {
             case .loaded:
                 let items = model.attention.sorted(by: V15TodayPresentation.attentionOrder)
                 if items.isEmpty {
-                    V15EmptyState(title: "目前没有需要你决定的事项", explanation: "这只表示关注队列为空，不代表没有财务数据。")
+                    V15EmptyState(title: "目前没有需要你决定的事项", explanation: "这只表示待办列表为空，不代表没有财务数据。")
                         .accessibilityIdentifier("v15.f2b.attention.calm")
                 } else {
                     ForEach(items) { item in
@@ -239,9 +239,9 @@ private struct V15TodayKnownFuture: View {
 private struct V15TodayFutureTotals: View {
     let future: V15Facts.FutureTotals
     var body: some View {
-        V15Section("未来口径", detail: "服务端当前窗口；不计入当前现金") {
+        V15Section("未来安排", detail: "不计入当前现金") {
             if isZero {
-                Text("当前窗口内未来口径均为零。")
+                Text("目前没有会影响现金的未来安排。")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     .accessibilityIdentifier("v15.f2b.future-totals.zero")
@@ -250,7 +250,7 @@ private struct V15TodayFutureTotals: View {
             V15TodayFutureTotalPair(title: "已确认", outflow: future.confirmedOutflowMinor, inflow: future.confirmedInflowMinor)
             V15TodayFutureTotalPair(title: "预计", outflow: future.expectedOutflowMinor, inflow: future.expectedInflowMinor)
             V15TodayFutureTotalPair(title: "已安排", outflow: future.scheduledOutflowMinor, inflow: future.scheduledInflowMinor)
-            V15TodayFutureTotalRow(title: "确认后现金（服务端口径）", amount: future.afterConfirmedOutflowMinor, direction: .balance)
+            V15TodayFutureTotalRow(title: "预计变动后现金", amount: future.afterConfirmedOutflowMinor, direction: .balance)
         }
         .accessibilityIdentifier("v15.f2b.future-totals")
     }
@@ -302,7 +302,7 @@ private struct V15TodayFactsCards: View {
     let open: (V15DrillDownScope?) -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
-        V15Section("四项事实", detail: "同一数据版本 \(facts.meta.dataRevision)") {
+        V15Section("财务概览") {
             if dynamicTypeSize.isAccessibilitySize || requiresSingleColumn {
                 VStack(spacing: V15Spacing.sm) { cards }
             } else {
@@ -338,7 +338,7 @@ private struct V15TodayFactCard: View {
                 Text(title).font(V15Typography.secondary.weight(.semibold)).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
                 V15MoneyText(minorUnits: amount, direction: direction, font: V15Typography.money)
                 Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
-                Text(scope == nil ? "该事实范围当前不可打开" : "查看同版本明细").font(V15Typography.label).foregroundStyle(V15Palette.teal.color)
+                Text(scope == nil ? "当前无法查看此范围" : "查看明细").font(V15Typography.label).foregroundStyle(V15Palette.teal.color)
             }
             .frame(maxWidth: .infinity, minHeight: 148, alignment: .leading)
             .padding(V15Spacing.md)
@@ -348,7 +348,7 @@ private struct V15TodayFactCard: View {
         .buttonStyle(.plain)
         .disabled(scope == nil)
         .v15PlatformHitArea()
-        .v15ActionAccessibility(label: title, hint: scope == nil ? "该事实范围当前不可打开。" : "打开同一数据版本的只读明细。")
+        .v15ActionAccessibility(label: title, hint: scope == nil ? "当前无法查看此范围。" : "打开只读明细。")
         .accessibilityIdentifier("v15.f2b.fact.\(identifier)")
     }
 }
@@ -368,7 +368,7 @@ private struct V15TodayScopeSheet: View {
                     if let snapshotAt = model.offlineSnapshotAt { V15TodayOfflineStatus(factsAsOf: model.offlineAsOf, fallbackSnapshotAt: snapshotAt) }
                     switch model.scopePhase {
                     case .idle, .loading: V15LoadingSkeleton()
-                    case .empty: V15EmptyState(title: "该范围暂无明细", explanation: "这是当前事实范围的空结果，不代表全部财务数据为空。")
+                    case .empty: V15EmptyState(title: "该范围暂无明细", explanation: "这不代表其他财务数据为空。")
                         .accessibilityIdentifier("v15.f2b.scope.empty")
                     case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { retryScope() })
                         .accessibilityIdentifier("v15.f2b.scope.error")
@@ -399,11 +399,11 @@ private struct V15TodayScopeSheet: View {
     }
     private var scopeTitle: String {
         switch model.selectedScope?.scopeType {
-        case "cash_accounts": "事实明细 · 账户余额"
-        case "credit_cycles": "事实明细 · 信用账期"
-        case "reimbursement_outstanding": "事实明细 · 待回款"
-        case "completeness_issues": "事实明细 · 待完善记录"
-        default: "事实明细 · 当前范围"
+        case "cash_accounts": "明细 · 账户余额"
+        case "credit_cycles": "明细 · 信用账期"
+        case "reimbursement_outstanding": "明细 · 待回款"
+        case "completeness_issues": "明细 · 待完善记录"
+        default: "明细"
         }
     }
     private func retryScope() { if let scope = model.selectedScope { Task { await model.openScope(scope) } } }
@@ -436,12 +436,12 @@ private struct V15TodayScopeRow: View {
         }
         .buttonStyle(.plain)
         .v15PlatformHitArea()
-        .v15ActionAccessibility(label: title, hint: isUnknown ? "未知服务器项目，只显示安全说明。" : "打开只读检查器。")
+        .v15ActionAccessibility(label: title, hint: isUnknown ? "暂时无法识别，只能查看。" : "打开只读详情。")
         .accessibilityIdentifier("v15.f2b.scope.row.\(safeID)")
     }
     private var isUnknown: Bool { if case .unknown = item { true } else { false } }
-    private var title: String { switch item { case .cashAccount(let v): v.name; case .creditCycle(let v): v.accountName; case .reimbursementOutstanding(let v): v.partyName; case .completenessIssue(let v): "记录待完善 · \(String(describing: v.issueType))"; case .unknown: "未知服务器明细" } }
-    private var detail: String { switch item { case .cashAccount(let v): v.lastReconciledAt.map { "最近核对 \(V15TodayReadModel.shanghaiDateLabel($0))" } ?? "服务器未提供核对时间"; case .creditCycle(let v): "还款日 \(v.dueDate)"; case .reimbursementOutstanding(let v): v.expectedDate.map { "预计 \($0)" } ?? "服务器未提供预计日"; case .completenessIssue(let v): "共 \(v.count) 项"; case .unknown: "当前版本无法安全打开该项目。" } }
+    private var title: String { switch item { case .cashAccount(let v): v.name; case .creditCycle(let v): v.accountName; case .reimbursementOutstanding(let v): v.partyName; case .completenessIssue(let v): "记录待完善 · \(String(describing: v.issueType))"; case .unknown: "暂时无法识别的明细" } }
+    private var detail: String { switch item { case .cashAccount(let v): v.lastReconciledAt.map { "最近核对 \(V15TodayReadModel.shanghaiDateLabel($0))" } ?? "暂无核对时间"; case .creditCycle(let v): "还款日 \(v.dueDate)"; case .reimbursementOutstanding(let v): v.expectedDate.map { "预计 \($0)" } ?? "暂无预计日"; case .completenessIssue(let v): "共 \(v.count) 项"; case .unknown: "当前只能查看，不能操作。" } }
     private var money: (V15MinorUnits, V15MoneyDirection)? { switch item { case .cashAccount(let v): (v.currentBalanceMinor, .balance); case .creditCycle(let v): (v.remainingMinor, .outflow); case .reimbursementOutstanding(let v): (v.outstandingMinor, .inflow); case .completenessIssue(let v): v.amountMinor.map { ($0, .neutral) }; case .unknown: nil } }
     private var safeID: String { switch item { case .cashAccount(let v): v.accountID.uuidString; case .creditCycle(let v): v.cycleID.uuidString; case .reimbursementOutstanding(let v): v.claimID.uuidString; case .completenessIssue(let v): "issue-\(v.count)"; case .unknown: "unknown" } }
 }
@@ -456,15 +456,15 @@ private struct V15TodayReadOnlyInspector: View {
                     switch model.linkedReadPhase {
                     case .idle, .loading: V15LoadingSkeleton()
                     case .requiresFactsReload(let failure): V15TodayReloadRequired(failure: failure, reload: { Task { await model.refresh() } })
-                    case .localFactsInspector(let label): V15EmptyState(title: label, explanation: "当前阶段仅展示同版本事实说明，不发起额外请求。")
+                    case .localFactsInspector(let label): V15EmptyState(title: label, explanation: "当前仅供查看。")
                     case .unavailable(let explanation): V15EmptyState(title: "暂不可打开", explanation: explanation)
                         .accessibilityIdentifier("v15.f2b.readonly.unavailable")
                     case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.retryLinkedRead() } })
                         .accessibilityIdentifier("v15.f2b.readonly.error")
                     case .account(let account):
-                        V15Section("账户只读信息", detail: "服务器版本 \(account.version)") { Text(account.name).font(V15Typography.surfaceTitle); Text("这是只读检查器；不会显示或执行写入操作。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
+                        V15Section("账户详情") { Text(account.name).font(V15Typography.surfaceTitle); Text("当前仅供查看。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
                     case .transaction(let transaction):
-                        V15Section("账目只读信息", detail: "服务器版本 \(transaction.version)") { Text(transaction.title).font(V15Typography.surfaceTitle); V15MoneyText(minorUnits: transaction.amountMinor, direction: transaction.amountMinor < 0 ? .outflow : .inflow); Text("业务日（上海）：\(transaction.businessDate)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)); Text("这是只读检查器；不会显示或执行写入操作。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
+                        V15Section("账目详情") { Text(transaction.title).font(V15Typography.surfaceTitle); V15MoneyText(minorUnits: transaction.amountMinor, direction: transaction.amountMinor < 0 ? .outflow : .inflow); Text("业务日（上海）：\(transaction.businessDate)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)); Text("当前仅供查看。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
                     }
                 }
                 .padding(V15Spacing.md)
@@ -494,16 +494,16 @@ private struct V15TodayOfflineStatus: View {
         VStack(alignment: .leading, spacing: V15Spacing.xxs) {
             V15OfflineReadOnlyBanner(snapshotAt: displayedAt)
             Text(factsAsOf == nil
-                 ? "尚未取得当前事实；显示离线快照保存时间。"
-                 : "当前显示的事实截止时间：\(V15OfflineReadOnlyBanner.snapshotLabel(for: displayedAt))；离线期间仅可查看。")
+                 ? "尚未取得最新数据；显示上次保存时间。"
+                 : "当前数据截止于 \(V15OfflineReadOnlyBanner.snapshotLabel(for: displayedAt))；离线期间仅可查看。")
                 .font(V15Typography.secondary)
                 .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(factsAsOf == nil
-                            ? "离线只读，尚未取得当前事实，显示离线快照保存时间。"
-                            : "离线只读，当前显示的事实截止时间：\(V15OfflineReadOnlyBanner.snapshotLabel(for: displayedAt))。")
+                            ? "离线时只可查看，尚未取得最新数据；这里显示上次保存时间。"
+                            : "离线只读，当前数据截止于 \(V15OfflineReadOnlyBanner.snapshotLabel(for: displayedAt))。")
     }
 }
 
@@ -511,8 +511,8 @@ private struct V15TodayReloadRequired: View {
     let failure: V15Failure
     let reload: () -> Void
     var body: some View {
-        V15ServiceErrorState(message: "\(failure.message) 需重新读取当前事实后才能继续。", retry: reload)
-            .accessibilityLabel("当前事实版本已变化。\(failure.message)。取最新数据重新决定。")
+        V15ServiceErrorState(message: "\(failure.message) 需取得最新数据后才能继续。", retry: reload)
+            .accessibilityLabel("数据已变化。\(failure.message)。取最新数据重新决定。")
     }
 }
 
@@ -538,7 +538,7 @@ enum V15TodayPresentation {
         }
     }
     static func certaintyLabel(_ certainty: String) -> String {
-        switch certainty { case "exact_due": "确切到期"; case "confirmed": "已确认"; case "expected": "预计"; case "scheduled": "已安排"; default: "服务器状态待确认" }
+        switch certainty { case "exact_due": "确切到期"; case "confirmed": "已确认"; case "expected": "预计"; case "scheduled": "已安排"; default: "状态待确认" }
     }
 }
 

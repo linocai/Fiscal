@@ -45,7 +45,7 @@ struct F3CTests {
         }
         #expect(decoded == expected)
         #expect(decoded.last?.isKnown == false)
-        #expect(decoded.last?.displayName.contains("future_server_state") == true)
+        #expect(decoded.last?.displayName == "暂时无法识别")
     }
 
     @Test("validation arrays and domain reason objects preserve exact field paths")
@@ -267,8 +267,8 @@ struct F3CTests {
         #expect(model.directMutationPhase == .unknown)
         await model.readBackUnknownDirect()
         #expect(model.directMutationPhase == .unknown)
-        #expect(model.directReadbackMessage?.contains("无法归因") == true)
-        #expect(model.directReadbackMessage?.contains("符合目标字段与版本变化") == true)
+        #expect(model.directReadbackMessage?.contains("数据已经变化") == true)
+        #expect(model.directReadbackMessage?.contains("仍无法确认是否由本次操作造成") == true)
         #expect(model.canAbandonUnknownDirect)
         let wires = await transport.recordedWires()
         #expect(wires.filter { $0.method == "POST" && $0.path.hasSuffix("/void") }.count == 1)
@@ -346,7 +346,7 @@ struct F3CTests {
         #expect(await prealreadyTransport.recordedWires().filter { $0.method == "POST" && $0.path.hasSuffix("/void") }.isEmpty)
         #expect(prealready.directClaimReasons(for: prealready.selectedClaim!, action: .void).contains { $0.code == "claim_not_voidable" })
 
-        for (mode, expectedCopy) in [(F3CTransport.Mode.directClaimUnknownNoAdvance, "版本没有前进"), (.directClaimUnknownMismatch, "不匹配")] {
+        for (mode, expectedCopy) in [(F3CTransport.Mode.directClaimUnknownNoAdvance, "数据没有变化"), (.directClaimUnknownMismatch, "不完全一致")] {
             let transport = F3CTransport(mode: mode); let model = await loadedModel(transport)
             await model.performDirectClaim(.void); await model.readBackUnknownDirect()
             #expect(model.directMutationPhase == .unknown && model.hasRecoverableDirectAttempt)
@@ -368,8 +368,8 @@ struct F3CTests {
         #expect(model.directMutationPhase == .unknown && model.hasRecoverableDirectAttempt)
         await model.readBackUnknownDirect()
         #expect(model.directMutationPhase == .unknown && model.hasRecoverableDirectAttempt)
-        #expect(model.directReadbackMessage?.contains("双版本变化") == true)
-        #expect(model.directReadbackMessage?.contains("无法归因") == true)
+        #expect(model.directReadbackMessage?.contains("数据已经变化") == true)
+        #expect(model.directReadbackMessage?.contains("仍无法确认是否由本次操作造成") == true)
         let wires = await transport.recordedWires()
         #expect(wires.filter { $0.method == "POST" && $0.path == "reimbursement-receipts/\(V15F3CFixtures.receiptID)/void" }.count == 1)
         #expect(wires.filter { $0.method == "GET" && $0.cache == .reloadIgnoringCache }.contains { $0.path == "reimbursement-receipts/\(V15F3CFixtures.receiptID)" })
@@ -511,8 +511,8 @@ struct F3CTests {
         #expect(model.hasPendingFactRefresh)
         #expect(!model.isFactRefreshInFlight)
         #expect(model.factRefreshRetryReasons.isEmpty)
-        #expect(model.factRefreshMessage?.contains("写入已被服务端接受") == true)
-        #expect(model.factRefreshMessage?.contains("无法归因") == true)
+        #expect(model.factRefreshMessage?.contains("到账已经保存") == true)
+        #expect(model.factRefreshMessage?.contains("最新报销数据读取失败") == true)
         #expect(model.receiptActionReasons(for: receipt, claim: model.selectedClaim!, action: .void).contains { $0.code == "receipt_fact_refresh_required" })
         #expect(await transport.recordedWires().filter { $0.method == "PUT" }.count == 1)
         await model.retryFactRefresh()
@@ -523,7 +523,7 @@ struct F3CTests {
         let createTransport = F3CTransport(mode: .receiptFactRefreshFailure)
         let create = await loadedModel(createTransport)
         await create.openReceipt(); await create.previewReceipt(); await create.commitReceipt()
-        #expect(create.hasPendingFactRefresh && create.factRefreshMessage?.contains("只可重试读取") == true)
+        #expect(create.hasPendingFactRefresh && create.factRefreshMessage?.contains("请重新读取") == true)
         #expect(await createTransport.recordedWires().filter { $0.method == "POST" && $0.path.hasSuffix("/receipts") }.count == 1)
         create.dismissReceipt()
         #expect(create.hasPendingFactRefresh && !create.isFactRefreshInFlight && create.factRefreshRetryReasons.isEmpty)
@@ -535,7 +535,7 @@ struct F3CTests {
         let direct = await loadedModel(directTransport)
         let directReceipt = try #require(direct.receipts.first)
         await direct.performDirectReceipt(directReceipt, action: .void)
-        #expect(direct.hasPendingFactRefresh && direct.factRefreshMessage?.contains("只可重试读取") == true)
+        #expect(direct.hasPendingFactRefresh && direct.factRefreshMessage?.contains("请重新读取") == true)
         #expect(await directTransport.recordedWires().filter { $0.method == "POST" && $0.path.hasSuffix("/void") }.count == 1)
         await direct.retryFactRefresh()
         #expect(!direct.hasPendingFactRefresh && direct.directMutationPhase == .succeeded && direct.selectedClaim?.version == 4)

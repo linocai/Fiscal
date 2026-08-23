@@ -196,7 +196,7 @@ public final class V15InstallmentModel {
     public var expenseCategoryLoadingReason: V15DisabledReason? {
         switch feeCategoryPhase {
         case .loaded: return expenseCategories.isEmpty ? reason("expense_categories_empty", "暂无支出分类，请先创建分类。") : nil
-        case .loading: return reason("fee_categories_loading", "正在读取服务端支出分类，请稍候。")
+        case .loading: return reason("fee_categories_loading", "正在读取支出分类，请稍候。")
         case .empty: return reason("expense_categories_empty", "暂无支出分类，请先创建分类。")
         case .failed: return reason("expense_categories_failed", "支出分类读取失败，请重试。")
         case .idle: return reason("expense_categories_required", "请先读取支出分类。")
@@ -205,16 +205,16 @@ public final class V15InstallmentModel {
     public var feeCategoryLoadingReason: V15DisabledReason? { expenseCategoryLoadingReason }
 
     public var planMutationDisabledReason: V15DisabledReason? {
-        if isOffline { return reason("offline_read_only", "离线快照仅可查看，无法修改分期。") }
+        if isOffline { return reason("offline_read_only", "离线时只可查看，无法修改分期。") }
         guard let plan = selectedPlan else { return reason("plan_required", "请先选择一项分期计划。") }
-        if plan.isDisplayOnly { return reason("unknown_plan_status", "服务端返回了当前版本不认识的状态；本计划仅可查看。") }
-        if currentState.unknownCommand != nil { return currentState.commandPhase == .committing ? reason("command_in_flight", "操作请求已经发出，结果将按原计划保存；可切换计划，回到本计划查看结果。") : reason("unknown_command_pending", "上一笔操作结果未知；只有完全相同 body 与 key 的重放回执可以确认。fresh GET 仅刷新计划事实。") }
-        if currentState.updateAttempt != nil { return currentState.planPhase == .committing ? reason("update_in_flight", "计划修改请求已经发出，结果将按原计划保存；可切换计划，回到本计划查看结果。") : reason("unknown_update_pending", "计划修改结果未知；该 PUT 不可重发，请先刷新核对。") }
+        if plan.isDisplayOnly { return reason("unknown_plan_status", "暂时无法识别此计划状态；当前只供查看。") }
+        if currentState.unknownCommand != nil { return currentState.commandPhase == .committing ? reason("command_in_flight", "操作正在处理中；你可以切换计划，稍后回来查看结果。") : reason("unknown_command_pending", "上一笔操作结果暂时不明，请先安全检查结果。") }
+        if currentState.updateAttempt != nil { return currentState.planPhase == .committing ? reason("update_in_flight", "计划修改正在处理中；你可以切换计划，稍后回来查看结果。") : reason("unknown_update_pending", "计划修改结果暂时不明，请先检查最新状态。") }
         return nil
     }
     public var purchasePreviewDisabledReason: V15DisabledReason? {
-        if isOffline { return reason("offline_read_only", "离线快照仅可查看，无法创建分期消费。") }
-        if currentPurchaseOwnerState?.attempt != nil { return purchasePhase == .committing ? reason("purchase_in_flight", "创建请求已经发出；结果只保存到原信用账户，可切换账户并在返回后查看。") : reason("unknown_purchase_pending", "此信用账户上一笔创建结果未知，请使用同一请求凭证重试。") }
+        if isOffline { return reason("offline_read_only", "离线时只可查看，无法创建分期消费。") }
+        if currentPurchaseOwnerState?.attempt != nil { return purchasePhase == .committing ? reason("purchase_in_flight", "创建操作正在处理中；结果会保存到原信用账户。") : reason("unknown_purchase_pending", "此信用账户上一笔创建结果暂时不明，请先安全检查结果。") }
         if let value = expenseCategoryLoadingReason { return value }
         if let value = feeBoundaryDisabledReason(totalFeeText: newPurchaseFeeText, occurredDateText: newPurchaseFeeOccurredDateText, purchaseOccurredAt: now(), preserving: nil) { return value }
         var issues: [V15FieldIssue] = []
@@ -222,30 +222,30 @@ public final class V15InstallmentModel {
         return issues.first.map(disabledReason(for:)) ?? reason("purchase_fields_invalid", "请补齐有效金额、标题、信用账户、消费分类、期数、账单日期；正手续费还须选择手续费支出分类和发生日期。")
     }
     public var purchaseCommitDisabledReason: V15DisabledReason? {
-        if isOffline { return reason("offline_read_only", "离线快照仅可查看，无法创建分期消费。") }
-        if currentPurchaseOwnerState?.attempt != nil { return reason("purchase_in_flight", "创建请求已经发出，请返回原账户查看结果。") }
+        if isOffline { return reason("offline_read_only", "离线时只可查看，无法创建分期消费。") }
+        if currentPurchaseOwnerState?.attempt != nil { return reason("purchase_in_flight", "正在创建，请返回原账户查看结果。") }
         if let value = purchasePreviewDisabledReason { return value }
-        guard purchasePreview != nil, let request = purchasePreparedRequest else { return reason("preview_required", "请先预览服务端拆分结果。") }
+        guard purchasePreview != nil, let request = purchasePreparedRequest else { return reason("preview_required", "请先查看分期预览。") }
         guard purchasePhase == .previewed else { return reason("preview_not_current", "预览不再有效，请重新预览。") }
         if let issue = wireFeeBoundaryIssue(totalFeeMinor: request.totalFeeMinor, feeOccurredAt: request.feeOccurredAt, purchaseOccurredAt: request.purchase.occurredAt) { return .init(code: issue.code, message: issue.message, fieldPath: issue.fieldPath) }
         return nil
     }
     public var createPlanDisabledReason: V15DisabledReason? {
-        if isOffline { return reason("offline_read_only", "离线快照仅可查看，无法创建分期计划。") }
-        if currentCreateOwnerState?.attempt != nil { return createPlanPhase == .committing ? reason("create_in_flight", "创建请求已经发出；结果只保存到原消费账目，可切换消费并在返回后查看。") : reason("unknown_create_pending", "此消费账目上一笔创建结果未知，请使用同一请求凭证重试。") }
-        guard eligibility?.eligible == true else { return reason(eligibility?.reasonCode ?? "eligibility_required", eligibility == nil ? "请先检查消费是否可分期。" : "服务端判定该消费当前不可分期。") }
+        if isOffline { return reason("offline_read_only", "离线时只可查看，无法创建分期计划。") }
+        if currentCreateOwnerState?.attempt != nil { return createPlanPhase == .committing ? reason("create_in_flight", "创建操作正在处理中；结果会保存到原消费账目。") : reason("unknown_create_pending", "此消费上一笔创建结果暂时不明，请先安全检查结果。") }
+        guard eligibility?.eligible == true else { return reason(eligibility?.reasonCode ?? "eligibility_required", eligibility == nil ? "请先检查消费是否可分期。" : "该消费当前不可分期。") }
         switch eligibilityPurchasePhase {
-        case .loading: return reason("purchase_detail_loading", "正在读取权威消费发生时间，请稍候。")
+        case .loading: return reason("purchase_detail_loading", "正在读取消费时间，请稍候。")
         case .failed: return reason("purchase_detail_failed", "消费详情读取失败，请重试分期资格检查。")
-        case .empty: return reason("purchase_detail_empty", "服务端未返回消费详情，请重试。")
-        case .idle: return reason("purchase_detail_required", "请先读取权威消费详情。")
+        case .empty: return reason("purchase_detail_empty", "暂时没有读取到消费详情，请重试。")
+        case .idle: return reason("purchase_detail_required", "请先读取消费详情。")
         case .loaded: break
         }
         guard let requestedID = parsedPurchaseTransactionID(), eligibilityPurchase?.id == requestedID, eligibilityPurchase?.kind == "credit_purchase" else { return reason("purchase_detail_mismatch", "消费详情与当前账目不匹配，请重新检查。") }
         if let value = feeBoundaryDisabledReason(totalFeeText: createFeeText, occurredDateText: createFeeOccurredDateText, purchaseOccurredAt: eligibilityPurchase?.occurredAt, preserving: nil) { return value }
         var issues: [V15FieldIssue] = []
         guard createPlanRequest(recordIssues: false, issuesSink: { issues = $0 }) == nil else { return nil }
-        return issues.first.map(disabledReason(for:)) ?? reason("create_fields_invalid", "请选择服务端允许的起始账期并填写 2–60 期；正手续费还须选择手续费支出分类和发生日期。")
+        return issues.first.map(disabledReason(for:)) ?? reason("create_fields_invalid", "请选择可用的起始账期并填写 2–60 期；正手续费还须选择支出分类和发生日期。")
     }
     public var planPreviewDisabledReason: V15DisabledReason? {
         if let value = planMutationDisabledReason { return value }
@@ -253,22 +253,22 @@ public final class V15InstallmentModel {
         if let value = feeBoundaryDisabledReason(totalFeeText: editFeeText, occurredDateText: editFeeOccurredDateText, purchaseOccurredAt: selectedPurchase?.occurredAt, preserving: editOriginalFeeOccurredAt) { return value }
         var issues: [V15FieldIssue] = []
         guard replacementRequest(recordIssues: false, issuesSink: { issues = $0 }) == nil else { return nil }
-        return issues.first.map(disabledReason(for:)) ?? reason("plan_fields_invalid", "请补齐计划、消费、期数与账期字段；正手续费还须选择手续费支出分类和发生日期。")
+        return issues.first.map(disabledReason(for:)) ?? reason("plan_fields_invalid", "请补齐计划、消费、期数与账期信息；有手续费时还须选择手续费分类和发生日期。")
     }
     public var planCommitDisabledReason: V15DisabledReason? {
         if let value = planMutationDisabledReason { return value }
         if let value = planPreviewDisabledReason { return value }
-        guard planPreview != nil, let request = currentState.planPreparedRequest, planPhase == .previewed else { return reason("preview_required", "请先预览服务端锁定期、未来期和账期影响。") }
+        guard planPreview != nil, let request = currentState.planPreparedRequest, planPhase == .previewed else { return reason("preview_required", "请先预览锁定期、未来期和账期影响。") }
         if let issue = wireFeeBoundaryIssue(totalFeeMinor: request.totalFeeMinor, feeOccurredAt: request.feeOccurredAt, purchaseOccurredAt: request.purchase.occurredAt) { return .init(code: issue.code, message: issue.message, fieldPath: issue.fieldPath) }
         return nil
     }
     public var commandPreviewDisabledReason: V15DisabledReason? {
         if let value = planMutationDisabledReason { return value }
-        return commandRequest(recordIssues: false) == nil ? reason("command_fields_invalid", commandKind == .settleEarly ? "请选择付款账户和服务端账单日期。" : "当前操作缺少有效的计划版本。") : nil
+        return commandRequest(recordIssues: false) == nil ? reason("command_fields_invalid", commandKind == .settleEarly ? "请选择付款账户和账单日期。" : "当前计划已经更新，请重新载入后再操作。") : nil
     }
     public var commandCommitDisabledReason: V15DisabledReason? {
         if let value = commandPreviewDisabledReason { return value }
-        guard commandPreview != nil, currentState.commandPreparedRequest != nil, commandPhase == .previewed else { return reason("preview_required", "请先预览服务端影响后再确认。") }
+        guard commandPreview != nil, currentState.commandPreparedRequest != nil, commandPhase == .previewed else { return reason("preview_required", "请先查看操作预览后再确认。") }
         return nil
     }
 
@@ -366,7 +366,7 @@ public final class V15InstallmentModel {
         eligibilityPurchaseGeneration &+= 1; let purchaseGeneration = eligibilityPurchaseGeneration
         eligibility = nil; eligibilityPurchase = nil; cycleOptions = []; createDraftPhase = .idle; fieldIssues = []
         guard let id = parsedPurchaseTransactionID() else {
-            fieldIssues = [.init(code: "purchase_transaction_id_invalid", message: "请输入有效的消费账目 ID。", fieldPath: "purchase_transaction_id")]
+            fieldIssues = [.init(code: "purchase_transaction_id_invalid", message: "请选择有效的消费账目。", fieldPath: "purchase_transaction_id")]
             eligibilityPhase = .idle; eligibilityPurchasePhase = .idle
             return
         }
@@ -381,7 +381,7 @@ public final class V15InstallmentModel {
             let (result, options) = try await eligibilityLoad
             guard ownsEligibility(generation: generation, transactionID: id) else { return }
             if result.purchaseTransactionID != id {
-                eligibilityPhase = .failed(.init(kind: .decoding, code: "eligibility_purchase_mismatch", message: "分期资格响应与当前消费不匹配。"))
+                eligibilityPhase = .failed(.init(kind: .decoding, code: "eligibility_purchase_mismatch", message: "分期资格与当前消费不匹配，请重新检查。"))
             } else {
                 eligibility = result; cycleOptions = options
                 if createStartStatementDate.isEmpty { isApplyingDraft = true; createStartStatementDate = result.startOptions.first(where: { $0.eligible })?.statementDate ?? ""; isApplyingDraft = false }
@@ -398,7 +398,7 @@ public final class V15InstallmentModel {
             let purchase = try await purchaseLoad
             guard ownsEligibilityPurchase(generation: purchaseGeneration, transactionID: id) else { return }
             guard purchase.id == id, purchase.kind == "credit_purchase" else {
-                eligibilityPurchasePhase = .failed(.init(kind: .decoding, code: "purchase_detail_mismatch", message: "权威消费详情与当前账目不匹配。"))
+                eligibilityPurchasePhase = .failed(.init(kind: .decoding, code: "purchase_detail_mismatch", message: "消费详情与当前账目不匹配。"))
                 return
             }
             eligibilityPurchase = purchase; eligibilityPurchasePhase = .loaded
@@ -541,7 +541,7 @@ public final class V15InstallmentModel {
                 if selectedPlan?.id == planID { selectedPlan = plan; selectedPurchase = purchase; applyEditDraft(plan: plan, purchase: purchase) }
             } else { mutate(planID) { $0.updateReadback = .notConfirmed } }
         } catch let failure as V15Failure { guard readbackGeneration[planID] == generation, ownsUpdateOperation(planID: planID, operationID: attempt.operationID) else { return }; mutate(planID) { $0.updateReadback = .failed(failure) } }
-        catch { guard readbackGeneration[planID] == generation, ownsUpdateOperation(planID: planID, operationID: attempt.operationID) else { return }; mutate(planID) { $0.updateReadback = .failed(.init(kind: .transport, message: "计划事实核对失败。")) } }
+        catch { guard readbackGeneration[planID] == generation, ownsUpdateOperation(planID: planID, operationID: attempt.operationID) else { return }; mutate(planID) { $0.updateReadback = .failed(.init(kind: .transport, message: "检查最新计划失败。")) } }
     }
 
     public func requestCommandPreview() async {
@@ -589,7 +589,7 @@ public final class V15InstallmentModel {
             case (.reverseSettlement, .action(let request)): receipt = .reverse(try await services.installments.reverseSettlement(planID: attempt.planID, request: request, idempotencyKey: attempt.key))
             case (.cancelFuture, .action(let request)): receipt = .cancellation(try await services.installments.cancelFuture(planID: attempt.planID, request: request, idempotencyKey: attempt.key))
             default:
-                let failure = V15Failure(kind: .decoding, message: "操作类型与请求不匹配。")
+                let failure = V15Failure(kind: .decoding, message: "当前操作信息不匹配，请重新打开后再试。")
                 idempotency.abandon(scope: "installment-command-\(attempt.planID.uuidString)-\(attempt.kind.rawValue)", payloadIdentity: attempt.identity)
                 mutate(attempt.planID) { $0.commandPhase = .failed(failure); $0.unknownCommand = nil }
                 return
@@ -620,7 +620,7 @@ public final class V15InstallmentModel {
             replacePlan(plan); if selectedPlan?.id == planID { selectedPlan = plan }
             mutate(planID) { $0.commandReadback = .notConfirmed; $0.commandPhase = .unknown }
         } catch let failure as V15Failure { guard readbackGeneration[planID] == generation, ownsCommandOperation(planID: planID, operationID: attempt.operationID) else { return }; mutate(planID) { $0.commandReadback = .failed(failure) } }
-        catch { guard readbackGeneration[planID] == generation, ownsCommandOperation(planID: planID, operationID: attempt.operationID) else { return }; mutate(planID) { $0.commandReadback = .failed(.init(kind: .transport, message: "操作事实核对失败。")) } }
+        catch { guard readbackGeneration[planID] == generation, ownsCommandOperation(planID: planID, operationID: attempt.operationID) else { return }; mutate(planID) { $0.commandReadback = .failed(.init(kind: .transport, message: "检查操作结果失败。")) } }
     }
 
     public func abandonUnknownCommandAndReload() async {
@@ -658,7 +658,7 @@ public final class V15InstallmentModel {
         if editTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { issues.append(.init(code: "title_required", message: "请填写消费标题。", fieldPath: "purchase.title")) }
         if editAccountID == nil { issues.append(.init(code: "account_required", message: "请选择信用账户。", fieldPath: "purchase.account_id")) }
         if let disabled = expenseCategoryLoadingReason { issues.append(.init(code: disabled.code, message: disabled.message, fieldPath: "purchase.category_id")) }
-        if editCategoryID == nil || !expenseCategories.contains(where: { $0.id == editCategoryID }) { issues.append(.init(code: "category_required", message: "请选择服务端返回的有效支出分类。", fieldPath: "purchase.category_id")) }
+        if editCategoryID == nil || !expenseCategories.contains(where: { $0.id == editCategoryID }) { issues.append(.init(code: "category_required", message: "请选择有效的支出分类。", fieldPath: "purchase.category_id")) }
         if !isDate(editStartStatementDate) { issues.append(.init(code: "date_invalid", message: "起始账单日期须为 YYYY-MM-DD。", fieldPath: "start_statement_date")) }
         let feeDetails = validatedFeeDetails(totalFeeMinor: fee, categoryID: editFeeCategoryID, occurredDateText: editFeeOccurredDateText, purchaseOccurredAt: purchase.occurredAt, preserving: editOriginalFeeOccurredAt, issues: &issues)
         if recordIssues { fieldIssues = issues }; issuesSink?(issues)
@@ -675,7 +675,7 @@ public final class V15InstallmentModel {
         if newPurchaseTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { issues.append(.init(code: "title_required", message: "请填写消费标题。", fieldPath: "purchase.title")) }
         if newPurchaseAccountID == nil { issues.append(.init(code: "account_required", message: "请选择信用账户。", fieldPath: "purchase.account_id")) }
         if let disabled = expenseCategoryLoadingReason { issues.append(.init(code: disabled.code, message: disabled.message, fieldPath: "purchase.category_id")) }
-        if newPurchaseCategoryID == nil || !expenseCategories.contains(where: { $0.id == newPurchaseCategoryID }) { issues.append(.init(code: "category_required", message: "请选择服务端返回的有效支出分类。", fieldPath: "purchase.category_id")) }
+        if newPurchaseCategoryID == nil || !expenseCategories.contains(where: { $0.id == newPurchaseCategoryID }) { issues.append(.init(code: "category_required", message: "请选择有效的支出分类。", fieldPath: "purchase.category_id")) }
         if !newPurchaseStartStatementDate.isEmpty && !isDate(newPurchaseStartStatementDate) { issues.append(.init(code: "date_invalid", message: "账单日期须为 YYYY-MM-DD。", fieldPath: "start_statement_date")) }
         let feeDetails = validatedFeeDetails(totalFeeMinor: fee, categoryID: newPurchaseFeeCategoryID, occurredDateText: newPurchaseFeeOccurredDateText, purchaseOccurredAt: purchaseOccurredAt, preserving: nil, issues: &issues)
         if recordIssues { fieldIssues = issues }; issuesSink?(issues)
@@ -687,11 +687,11 @@ public final class V15InstallmentModel {
     private func createPlanRequest(recordIssues: Bool, issuesSink: (([V15FieldIssue]) -> Void)? = nil) -> V15InstallmentCreateRequest? {
         var issues: [V15FieldIssue] = []
         let id = UUID(uuidString: purchaseTransactionIDText.trimmingCharacters(in: .whitespacesAndNewlines)); let count = Int(createInstallmentCountText); let fee = CNYAmountParser.minorUnits(createFeeText)
-        if id == nil { issues.append(.init(code: "purchase_required", message: "请输入有效的消费账目 ID。", fieldPath: "purchase_transaction_id")) }
-        if id != eligibilityPurchase?.id || eligibilityPurchase?.kind != "credit_purchase" { issues.append(.init(code: "purchase_detail_required", message: "请先读取与当前 ID 匹配的权威消费详情。", fieldPath: "purchase_transaction_id")) }
+        if id == nil { issues.append(.init(code: "purchase_required", message: "请选择有效的消费账目。", fieldPath: "purchase_transaction_id")) }
+        if id != eligibilityPurchase?.id || eligibilityPurchase?.kind != "credit_purchase" { issues.append(.init(code: "purchase_detail_required", message: "请先读取当前消费的详情。", fieldPath: "purchase_transaction_id")) }
         if count == nil || !(2...60).contains(count!) { issues.append(.init(code: "count_invalid", message: "分期期数须为 2–60。", fieldPath: "installment_count")) }
         if fee == nil || fee! < 0 { issues.append(.init(code: "fee_invalid", message: "手续费须为非负元金额。", fieldPath: "total_fee_minor")) }
-        if !isDate(createStartStatementDate) || !cycleOptions.contains(where: { $0.statementDate == createStartStatementDate && $0.eligible }) { issues.append(.init(code: "start_not_eligible", message: "请选择服务端返回的可用起始账期。", fieldPath: "start_statement_date")) }
+        if !isDate(createStartStatementDate) || !cycleOptions.contains(where: { $0.statementDate == createStartStatementDate && $0.eligible }) { issues.append(.init(code: "start_not_eligible", message: "请选择可用的起始账期。", fieldPath: "start_statement_date")) }
         let feeDetails = validatedFeeDetails(totalFeeMinor: fee, categoryID: createFeeCategoryID, occurredDateText: createFeeOccurredDateText, purchaseOccurredAt: eligibilityPurchase?.occurredAt, preserving: nil, issues: &issues)
         if recordIssues { fieldIssues = issues }; issuesSink?(issues)
         guard issues.isEmpty, let id, let count, let fee else { return nil }
@@ -704,7 +704,7 @@ public final class V15InstallmentModel {
         let result: UnknownCommandAttempt.Request?
         if commandKind == .settleEarly {
             if paymentAccountID == nil { issues.append(.init(code: "payment_account_required", message: "请选择现金或借记付款账户。", fieldPath: "payment_account_id")) }
-            if !isDate(targetStatementDate) { issues.append(.init(code: "target_date_invalid", message: "请选择服务端计划中的账单日期。", fieldPath: "target_statement_date")) }
+            if !isDate(targetStatementDate) { issues.append(.init(code: "target_date_invalid", message: "请选择计划中的账单日期。", fieldPath: "target_statement_date")) }
             result = paymentAccountID.map { .settlement(.init(expectedVersion: plan.version, occurredAt: now(), paymentAccountID: $0, targetStatementDate: targetStatementDate)) }
         } else { result = .action(.init(expectedVersion: plan.version, occurredAt: now())) }
         if recordIssues { fieldIssues = issues }; return issues.isEmpty ? result : nil
@@ -812,7 +812,7 @@ public final class V15InstallmentModel {
         let occurrence = feeOccurrence(occurredDateText, purchaseOccurredAt: purchaseOccurredAt, preserving: original)
         if let issue = occurrence.issue { issues.append(issue) }
         guard let categoryID, expenseCategories.contains(where: { $0.id == categoryID }) else {
-            issues.append(.init(code: "fee_category_required", message: "正手续费必须选择服务端返回的有效支出分类。", fieldPath: "fee_category_id"))
+            issues.append(.init(code: "fee_category_required", message: "正手续费必须选择有效的支出分类。", fieldPath: "fee_category_id"))
             return nil
         }
         guard let occurredAt = occurrence.date else { return nil }
@@ -821,7 +821,7 @@ public final class V15InstallmentModel {
     private func feeOccurrence(_ value: String, purchaseOccurredAt: Date?, preserving original: Date?) -> (date: Date?, issue: V15FieldIssue?) {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let purchaseOccurredAt else {
-            return (nil, .init(code: "purchase_occurred_at_required", message: "必须先读取权威消费发生时间，才能确定手续费时间。", fieldPath: "fee_occurred_at"))
+            return (nil, .init(code: "purchase_occurred_at_required", message: "请先读取消费时间，再确定手续费时间。", fieldPath: "fee_occurred_at"))
         }
         let referenceNow = now()
         let purchaseBusinessDate = ShanghaiBusinessDate.string(for: purchaseOccurredAt)

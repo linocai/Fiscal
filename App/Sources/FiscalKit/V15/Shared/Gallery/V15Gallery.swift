@@ -25,11 +25,11 @@ public enum V15GalleryFixture: String, CaseIterable, Identifiable, Sendable {
         case .serviceError: "读取失败"
         case .fieldInvalid: "填写内容需要修正"
         case .disabledReasons: "暂不能提交"
-        case .offlineReadOnly: "离线快照"
+        case .offlineReadOnly: "离线数据"
         case .conflict: "需要重新决定"
         case .preview: "预览尚未提交"
         case .archiveReadOnly: "归档项"
-        case .successReceipt: "已保存凭证"
+        case .successReceipt: "已保存"
         case .partialProgress: "部分完成"
         }
     }
@@ -38,14 +38,14 @@ public enum V15GalleryFixture: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .loading: "正在加载决策数据"
         case .empty: "没有待处理事项"
-        case .serviceError: "服务读取失败，可以重试"
-        case .fieldInvalid: "录入字段无效，需要修正金额"
+        case .serviceError: "暂时无法加载，可以重试"
+        case .fieldInvalid: "录入内容有误，需要修正金额"
         case .disabledReasons: "提交不可用，原因已显示"
-        case .offlineReadOnly: "离线快照只读，无法提交更改"
-        case .conflict: "服务器数据已变化，需要取最新数据重新决定"
-        case .preview: "预览尚未提交，显示的是服务端计算结果"
+        case .offlineReadOnly: "离线时只可查看，无法提交更改"
+        case .conflict: "数据已变化，需要读取最新内容后重新决定"
+        case .preview: "预览尚未提交，确认前不会修改数据"
         case .archiveReadOnly: "归档项只读，可以恢复"
-        case .successReceipt: "操作已保存，凭证可追溯"
+        case .successReceipt: "操作已保存，结果可查看"
         case .partialProgress: "部分完成，仍有剩余项"
         }
     }
@@ -145,7 +145,7 @@ private struct V15GalleryIOSHeader: View {
             Text("今日先看需要你决定的事")
                 .font(V15Typography.cardTitle)
                 .foregroundStyle(V15Palette.ink.color)
-            Text("离线 fixture · 不连接网络 · 选择一种状态查看它在 iPhone 的决策卡重排。")
+            Text("离线示例 · 不连接网络 · 选择一种状态查看它在 iPhone 上的显示效果。")
                 .font(V15Typography.secondary)
                 .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 .fixedSize(horizontal: false, vertical: true)
@@ -268,7 +268,7 @@ private struct V15GalleryMacIndex: View {
     var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.xs) {
             Text("状态索引").font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color).padding(.top, V15Spacing.lg)
-            Text("离线 fixture").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+            Text("离线示例").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             Divider().padding(.vertical, V15Spacing.xs)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: density == .compact ? 0 : V15Spacing.xxs) {
@@ -321,8 +321,8 @@ private struct V15GalleryMacSpine: View {
             VStack(alignment: .leading, spacing: density == .compact ? V15Spacing.sm : V15Spacing.lg) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: V15Spacing.xxs) {
-                        Text("账簿脊柱").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
-                        Text("2026 年 8 月 15 日 · 同一 fixture 的桌面阅读密度")
+                        Text("账目").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
+                        Text("2026 年 8 月 15 日 · 桌面显示效果")
                             .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     }
                     Spacer(minLength: V15Spacing.sm)
@@ -336,7 +336,7 @@ private struct V15GalleryMacSpine: View {
             .padding(density == .compact ? V15Spacing.md : V15Spacing.xl)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("账簿脊柱，\(selection.accessibilitySummary)")
+        .accessibilityLabel("账目，\(selection.accessibilitySummary)")
         .accessibilityHint(reducesMotion ? "减少动态效果已启用。" : "")
         .transaction { transaction in if reducesMotion { transaction.animation = nil } }
     }
@@ -368,20 +368,19 @@ private struct V15GalleryMacInspector: View {
     let fixture: V15GalleryFixture
     var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            Text("检查器").font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color)
+            Text("详情").font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color)
             Text(fixture.title).font(V15Typography.secondary.weight(.semibold)).foregroundStyle(V15Palette.teal.color)
             Divider()
-            V15InspectorPair(label: "状态 ID", value: fixture.id)
-            V15InspectorPair(label: "数据来源", value: "离线 fixture")
-            V15InspectorPair(label: "写入", value: "不连接网络")
+            V15InspectorPair(label: "数据来源", value: "示例数据")
+            V15InspectorPair(label: "保存", value: "示例不会联网")
             V15InspectorPair(label: "键盘", value: "Tab 聚焦 · Return 执行")
             Spacer(minLength: 0)
-            Text("这里是并行 V15 壳，只证明状态语法与平台布局；不代表业务导航。")
+            Text("这里用于预览不同状态下的界面与操作。")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
         }
         .padding(V15Spacing.lg)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("检查器。\(fixture.accessibilitySummary)")
+        .accessibilityLabel("详情。\(fixture.accessibilitySummary)")
     }
 }
 
@@ -417,10 +416,10 @@ private struct V15GalleryStateSurface: View {
             case .disabledReasons:
                 V15ActionButton("提交报销", symbol: "arrow.right.circle", disabledReasons: [
                     .init(code: "account_loading", message: "收款账户仍在加载。", fieldPath: "destination_account_id"),
-                    .init(code: "preview_missing", message: "请先获取服务端预览；输入变化后预览会自动作废。", fieldPath: nil)
+                    .init(code: "preview_missing", message: "请先查看预览；输入变化后需要重新预览。", fieldPath: nil)
                 ], action: {})
                 .accessibilityIdentifier("v15.gallery.order.disabled-reasons")
-                .accessibilityValue("收款账户仍在加载。请先获取服务端预览；输入变化后预览会自动作废。")
+                .accessibilityValue("收款账户仍在加载。请先查看预览；输入变化后需要重新预览。")
             case .offlineReadOnly:
                 VStack(alignment: .leading, spacing: V15Spacing.md) {
                     V15OfflineReadOnlyBanner(snapshotAt: Date(timeIntervalSince1970: 1_786_809_540), pendingCount: 3)
@@ -429,15 +428,15 @@ private struct V15GalleryStateSurface: View {
             case .conflict:
                 V15ConflictState(conflict: V15FixtureLibrary.conflict.conflict!, changes: [
                     .init(field: "本次还款金额", previousValue: "¥3,280.40", currentValue: "¥1,280.40"),
-                    .init(field: "账期版本", previousValue: "v7", currentValue: "v8")
+                    .init(field: "账期设置", previousValue: "修改前", currentValue: "最新")
                 ], reload: retry)
                     .accessibilityIdentifier("v15.gallery.order.action.reload")
                     .accessibilityValue(retryCount == 0 ? "尚未取最新数据" : "已取最新数据 \(retryCount) 次")
             case .preview:
-                V15PreviewState(version: "账户 v4 · 账期 v2") {
+                V15PreviewState(version: "账期调整预览") {
                     VStack(alignment: .leading, spacing: V15Spacing.xs) {
                         Text("信用账期将重排").font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color)
-                        Text("服务器预览：还款日从 9 月 5 日调整为 9 月 10 日；不会在确认前写入。")
+                        Text("还款日将从 9 月 5 日调整为 9 月 10 日；确认前不会修改。")
                             .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
                         V15ActionButton("确认账期调整", action: {})
                             .accessibilityIdentifier("v15.gallery.order.action.confirm")
@@ -453,9 +452,9 @@ private struct V15GalleryStateSurface: View {
                     }
                 }
             case .successReceipt:
-                V15SuccessReceiptState(title: "已保存到账凭证", detail: "凭证 #00000000-0016 · data revision 7。余额和事实将在下一次读取后以服务端结果为准。")
+                V15SuccessReceiptState(title: "到账已保存", detail: "余额和到账记录将在刷新后显示最新结果。")
             case .partialProgress:
-                V15PartialProgressState(succeeded: "已确认 8 条导入行", currentState: "2 条仍需选择分类", remaining: "修正后再确认剩余行；没有创建部分账本写入。")
+                V15PartialProgressState(succeeded: "已确认 8 条账单记录", currentState: "2 条仍需选择分类", remaining: "修正后再确认剩余内容；未处理的内容没有记到账目。")
             }
         }
         .accessibilityIdentifier("v15.gallery.state.\(fixture.id)")
@@ -467,10 +466,10 @@ private struct V15GalleryPagination: View {
         HStack {
             Text("第 1 页 / 1 页").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             Spacer()
-            V15ActionButton("没有更多结果", symbol: "chevron.right", kind: .quiet, disabledReason: .init(code: "end_of_cursor", message: "已到达此 fixture 的稳定分页边界。", fieldPath: nil), action: {})
+            V15ActionButton("没有更多结果", symbol: "chevron.right", kind: .quiet, disabledReason: .init(code: "end_of_cursor", message: "已经显示全部内容。", fieldPath: nil), action: {})
                 .frame(maxWidth: 210)
                 .accessibilityIdentifier("v15.gallery.order.pagination")
-                .accessibilityValue("已到达此 fixture 的稳定分页边界。")
+                .accessibilityValue("已经显示全部内容。")
         }
         .accessibilityElement(children: .contain)
     }
@@ -479,11 +478,11 @@ private struct V15GalleryPagination: View {
 private struct V15GalleryEvidenceNote: View {
     let fixture: V15GalleryFixture
     var body: some View {
-        Text("状态 ID：\(fixture.id) · 支持浅/深色、默认/AX3/AX5。长中文会换行；金额保持等宽单行，布局优先让元信息和按钮让步。")
+        Text("支持浅色、深色和较大字体。长文字会自动换行，金额保持清晰易读。")
             .font(V15Typography.secondary)
             .foregroundStyle(V15Palette.ink.color.opacity(0.66))
             .fixedSize(horizontal: false, vertical: true)
-            .accessibilityLabel("取证说明。\(fixture.accessibilitySummary)")
+            .accessibilityLabel("显示说明。\(fixture.accessibilitySummary)")
     }
 }
 
@@ -495,7 +494,7 @@ private struct V15GalleryFieldErrorSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.lg) {
                     Text("登记到账").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
-                    V15ServiceErrorState(message: "服务端拒绝了本次提交：金额格式无效。错误在当前 sheet 内显示，不会被主界面遮住。", retry: {})
+                    V15ServiceErrorState(message: "金额格式无效，请在当前页面修改后重试。", retry: {})
                     V15Field("到账金额", text: $amount, prompt: "0.00", issues: [V15FixtureLibrary.fieldInvalid.fieldIssues[0]])
                     V15ActionButton("保存", disabledReason: .init(code: "amount_invalid", message: "请将到账金额修正为最多两位小数。", fieldPath: "amount_minor"), action: {})
                 }
@@ -506,6 +505,6 @@ private struct V15GalleryFieldErrorSheet: View {
         }
         .accessibilityIdentifier("v15.gallery.field-error-sheet")
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("登记到账录入面板。服务端错误和字段错误均在面板内显示。")
+        .accessibilityLabel("登记到账录入面板。错误会在当前面板内显示。")
     }
 }

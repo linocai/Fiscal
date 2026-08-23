@@ -27,7 +27,7 @@ public struct V15FutureTimelineView: View {
     }
     private var header: some View { VStack(alignment: .leading, spacing: V15Spacing.xs) {
         Text("未来时间线").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
-        Text(model.meta.map { "服务器截至 \(V15TodayReadModel.shanghaiDateLabel($0.asOf)) · 数据版本 \($0.dataRevision)" } ?? "仅展示服务器已经确认的未来事项，不计算预测。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+        Text(model.meta.map { "更新于 \(V15TodayReadModel.shanghaiDateLabel($0.asOf))" } ?? "这里只显示已经确认的未来事项，不计算预测。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
     }.accessibilityIdentifier("v15.f3a.header") }
     private var windowPicker: some View { Picker("时间窗口", selection: Binding(get: { model.selectedWindowDays }, set: { value in Task { await model.setWindowDays(value) } })) {
         Text("7天").tag(7); Text("30天").tag(30); Text("60天").tag(60); Text("90天").tag(90)
@@ -69,8 +69,8 @@ public struct V15FutureTimelineView: View {
         switch model.phase {
         case .idle, .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3a.loading")
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.reload() } }.accessibilityIdentifier("v15.f3a.error")
-        case .requiresReload(let failure): V15Section("未来事项版本已变化") { Text(failure.message).font(V15Typography.body); V15ActionButton("取最新数据重新决定", symbol: V15Symbol.conflict) { Task { await model.reload() } }.accessibilityIdentifier("v15.f3a.conflict.reload") }.accessibilityIdentifier("v15.f3a.conflict")
-        case .empty: V15EmptyState(title: "当前窗口没有已知未来事项", explanation: "这只表示服务器在此窗口没有返回已知事项，不代表未来没有变化。").accessibilityIdentifier("v15.f3a.empty")
+        case .requiresReload(let failure): V15Section("未来事项已更新") { Text(failure.message).font(V15Typography.body); V15ActionButton("取最新数据重新决定", symbol: V15Symbol.conflict) { Task { await model.reload() } }.accessibilityIdentifier("v15.f3a.conflict.reload") }.accessibilityIdentifier("v15.f3a.conflict")
+        case .empty: V15EmptyState(title: "目前没有未来事项", explanation: "新的计划或账期出现后会显示在这里。").accessibilityIdentifier("v15.f3a.empty")
         case .loaded: timeline
         }
     }
@@ -83,7 +83,7 @@ public struct V15FutureTimelineView: View {
     @ViewBuilder private var inspector: some View { switch model.inspectorPhase {
         case .idle: V15EmptyState(title: "选择一个未来事项", explanation: "这里只显示当前条目的本地只读说明。")
         case .unavailable(let message): V15EmptyState(title: "暂不可打开", explanation: message).accessibilityIdentifier("v15.f3a.inspector.unavailable")
-        case .showing(let item): ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { HStack { Text("未来事项检查器").font(V15Typography.cardTitle); Spacer(); Button("关闭") { inspectorShown = false }.accessibilityIdentifier("v15.f3a.inspector.close") }; V15FutureEventRow(event: item); V15Section("只读说明") { Text("当前阶段只展示该事项，不会打开后续领域页面，也不会提交任何变更。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) } }.padding(V15Spacing.md) }.accessibilityIdentifier("v15.f3a.inspector")
+        case .showing(let item): ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { HStack { Text("未来事项详情").font(V15Typography.cardTitle); Spacer(); Button("关闭") { inspectorShown = false }.accessibilityIdentifier("v15.f3a.inspector.close") }; V15FutureEventRow(event: item); V15Section("说明") { Text("当前仅供查看，不会提交任何更改。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) } }.padding(V15Spacing.md) }.accessibilityIdentifier("v15.f3a.inspector")
         } }
 }
 

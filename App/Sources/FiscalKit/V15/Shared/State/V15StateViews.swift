@@ -4,8 +4,8 @@ public enum V15StateCopy {
     public static let unknownReason = "当前状态无法继续此操作，请检查所需信息后再试。"
     public static let preview = "预览 · 尚未提交"
     public static let archive = "归档 · 只读"
-    public static let displayOnly = "未知服务器状态 · 仅展示"
-    public static let conflict = "服务器数据已变化 · 本次预览已作废，未做任何修改。"
+    public static let displayOnly = "暂时无法识别 · 仅供查看"
+    public static let conflict = "数据已更新 · 本次预览已作废，未做任何修改。"
 }
 
 public enum V15PresentationStatus: Sendable, Equatable {
@@ -172,7 +172,7 @@ public struct V15OfflineReadOnlyBanner: View {
         V15StateContainer(marker: V15Palette.yellow.color, background: V15Palette.provisional.color, dashed: true) {
             VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                 Label(pendingCount > 0 ? "离线 · \(pendingCount) 项待同步" : "离线 · 只读", systemImage: V15Symbol.offline).font(V15Typography.secondary.weight(.semibold))
-                Text("显示 \(snapshotLabel) 的快照；无法提交更改。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                Text("显示 \(snapshotLabel) 保存的数据；当前无法提交更改。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
             }
         }.v15StateAccessibility(hasAction: false)
     }
@@ -210,7 +210,7 @@ public struct V15ConflictState: View {
     public var body: some View {
         V15StateContainer(marker: V15Palette.teal.color, background: V15Palette.selected.color) {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                Text("服务器数据已变化").font(V15Typography.cardTitle).foregroundStyle(V15Palette.teal.color)
+                Text("数据已更新").font(V15Typography.cardTitle).foregroundStyle(V15Palette.teal.color)
                 Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
                 if !changes.isEmpty {
                     VStack(alignment: .leading, spacing: V15Spacing.sm) {
@@ -231,7 +231,7 @@ public struct V15ConflictState: View {
 
     private var detail: String {
         let versions: String
-        if let expected = conflict.expectedVersion, let current = conflict.currentVersion { versions = "你看到的是 v\(expected)，服务器现在是 v\(current)。" } else { versions = "" }
+        if conflict.expectedVersion != nil, conflict.currentVersion != nil { versions = "你看到的内容已经更新。" } else { versions = "" }
         return "\(versions)\(explanation ?? V15StateCopy.conflict)"
     }
 
@@ -240,7 +240,7 @@ public struct V15ConflictState: View {
             Text(change.field).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             V15AdaptiveStack(spacing: V15Spacing.sm) {
                 comparisonValue("你看到的值", change.previousValue)
-                comparisonValue("服务器当前值", change.currentValue)
+                comparisonValue("最新值", change.currentValue)
             }
         }
     }
@@ -255,7 +255,7 @@ public struct V15ConflictState: View {
 
     private var accessibilitySummary: String {
         let changesSummary = changes.map { "\($0.field)，原值 \($0.previousValue)，当前值 \($0.currentValue)" }.joined(separator: "；")
-        return "版本冲突。\(detail)\(changesSummary.isEmpty ? "" : "；\(changesSummary)")。未做任何修改。"
+        return "数据已更新。\(detail)\(changesSummary.isEmpty ? "" : "；\(changesSummary)")。未做任何修改。"
     }
 }
 
@@ -268,7 +268,7 @@ public struct V15PreviewState<Content: View>: View {
                 Text(version.map { "\(V15StateCopy.preview) · \($0)" } ?? V15StateCopy.preview).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 content
             }
-        }.v15StateAccessibility(hasAction: true, label: "\(V15StateCopy.preview)。预览结果不是已确认事实。")
+        }.v15StateAccessibility(hasAction: true, label: "\(V15StateCopy.preview)。预览结果尚未确认。")
     }
 }
 
@@ -279,7 +279,7 @@ public struct V15ServerFactState: View {
     private let title: String
     private let detail: String
 
-    public init(title: String = "服务器当前事实", detail: String) {
+    public init(title: String = "已取得最新数据", detail: String) {
         self.title = title
         self.detail = detail
     }
@@ -387,7 +387,7 @@ public struct V15MoneyTruthState: View {
                 }
             }
             if presentation.hasPendingValue {
-                Text("服务器上次确认值 \(presentation.confirmed.text)")
+                Text("上次同步值 \(presentation.confirmed.text)")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     .fixedSize(horizontal: false, vertical: true)
@@ -399,7 +399,7 @@ public struct V15MoneyTruthState: View {
 
     private var accessibilitySummary: String {
         guard let pendingLabel = presentation.pendingLabel else { return "\(title)，\(presentation.displayed.text)" }
-        return "\(title)，本地显示 \(presentation.displayed.text)，\(pendingLabel)，服务器上次确认值 \(presentation.confirmed.text)"
+        return "\(title)，本地显示 \(presentation.displayed.text)，\(pendingLabel)，上次同步值 \(presentation.confirmed.text)"
     }
 }
 

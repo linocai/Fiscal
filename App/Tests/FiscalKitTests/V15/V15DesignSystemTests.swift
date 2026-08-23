@@ -58,7 +58,7 @@ struct V15DesignSystemTests {
     func stateCopy() {
         #expect(V15StateCopy.preview == "预览 · 尚未提交")
         #expect(V15StateCopy.archive == "归档 · 只读")
-        #expect(V15StateCopy.displayOnly == "未知服务器状态 · 仅展示")
+        #expect(V15StateCopy.displayOnly == "暂时无法识别 · 仅供查看")
         #expect(V15StateCopy.conflict.contains("未做任何修改"))
         #expect(V15Motion.receiptDuration > 0)
         #expect(V15PresentationStatus(serverStatus: "future_server_state") == .unknown)

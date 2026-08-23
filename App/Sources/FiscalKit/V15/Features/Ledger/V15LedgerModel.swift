@@ -187,7 +187,7 @@ public final class V15LedgerModel {
                 amountMinor: selected.amountMinor,
                 request: request
             )
-            mutation = .reconciled("已加入待同步；服务器上次确认的分类保持不变。")
+            mutation = .reconciled("已加入待同步；同步前仍显示上次保存的分类。")
             return
         }
         do {
@@ -226,7 +226,7 @@ public final class V15LedgerModel {
             changes.append(.init(field: "分类", previousValue: categoryName(previous.categoryID), currentValue: categoryName(current.categoryID)))
         }
         if previous.version != current.version {
-            changes.append(.init(field: "账目版本", previousValue: "v\(previous.version)", currentValue: "v\(current.version)"))
+            changes.append(.init(field: "账目数据", previousValue: "你打开时", currentValue: "已更新"))
         }
         return changes
     }
@@ -278,7 +278,7 @@ public final class V15LedgerModel {
                         if current.categoryID == categoryID { succeeded.append(transaction.id) }
                         else { failures.append(.init(id: transaction.id, title: transaction.title, message: "结果不明；当前分类未达到目标值。")) }
                     } catch {
-                        failures.append(.init(id: transaction.id, title: transaction.title, message: "结果不明，暂时无法读取服务器事实。"))
+                        failures.append(.init(id: transaction.id, title: transaction.title, message: "结果暂时不明，请稍后重新读取。"))
                     }
                 } else {
                     failures.append(.init(id: transaction.id, title: transaction.title, message: failure.message))
@@ -294,7 +294,7 @@ public final class V15LedgerModel {
             return .init(code: "transaction_required", message: "请先选择一笔账目。", fieldPath: nil)
         }
         if isOffline && action != .replace {
-            return .init(code: "offline_read_only", message: "需要联网：此操作不能进入待同步队列。", fieldPath: nil)
+            return .init(code: "offline_read_only", message: "需要联网，当前暂时无法完成此操作。", fieldPath: nil)
         }
         switch action {
         case .replace:
@@ -303,7 +303,7 @@ public final class V15LedgerModel {
                 : nil
         case .void:
             guard let capability = transaction.availableActions.first(where: { $0.action == "void" }) else {
-                return .init(code: "void_capability_missing", message: "服务器没有提供作废能力。", fieldPath: nil)
+                return .init(code: "void_capability_missing", message: "当前状态不能作废。", fieldPath: nil)
             }
             return capability.enabled ? nil : .init(code: capability.reasonCode ?? "void_unavailable", message: capability.reasonMessage ?? "当前不能作废。", fieldPath: nil)
         case .restore:
@@ -322,7 +322,7 @@ public final class V15LedgerModel {
 
     private func mutate(_ action: MutationAction) async {
         guard let selected else { return }; lastAction = action
-        guard !isOffline else { mutation = .failed(.init(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。")); return }
+        guard !isOffline else { mutation = .failed(.init(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。")); return }
         guard action != .replace, disabledReason(for: action, transaction: selected) == nil else { return }
         mutationGeneration &+= 1; let current = mutationGeneration; mutation = .working
         do {
@@ -347,8 +347,8 @@ public final class V15LedgerModel {
             case .restore: happened = result.0.voidedAt == nil
             case .replace: happened = result.0.categoryID == lastReplacementCategoryID
             }
-            mutation = .reconciled(happened ? "连接中断后已读回服务器事实：操作已确认。" : "连接中断后未能确认操作是否执行；请基于当前事实重新决定。")
-        } catch { guard generation == mutationGeneration else { return }; mutation = .reconciled("连接中断，且暂时无法读回服务器事实；没有重试写入，请稍后重新加载再决定。") }
+            mutation = .reconciled(happened ? "连接恢复后已确认操作成功。" : "连接恢复后仍无法确认操作结果；请根据最新状态重新决定。")
+        } catch { guard generation == mutationGeneration else { return }; mutation = .reconciled("连接中断，暂时无法确认操作结果；系统没有重复保存，请稍后重新加载。") }
     }
 
     private func loadSelectedCycle(for transaction: V15Transaction, generation: UInt64) async {
@@ -358,7 +358,7 @@ public final class V15LedgerModel {
         do {
             let page = try await services.creditCycles.list(accountID: creditID)
             guard generation == detailGeneration, requestedDetailID == transaction.id else { return }
-            selectedCycle = page.items.first(where: { $0.id == cycleID }); if selectedCycle == nil { cycleReadError = "服务器未返回对应账期。" }
+            selectedCycle = page.items.first(where: { $0.id == cycleID }); if selectedCycle == nil { cycleReadError = "没有找到对应账期。" }
         } catch { guard generation == detailGeneration, requestedDetailID == transaction.id else { return }; cycleReadError = "账期信息不可读取。" }
     }
 

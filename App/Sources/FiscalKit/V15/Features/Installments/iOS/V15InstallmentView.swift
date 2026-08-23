@@ -1,7 +1,7 @@
 import SwiftUI
 
 public struct V15InstallmentView: View {
-    private enum Sheet: String, Identifiable { case purchase, existingPurchase, edit, command; var id: String { rawValue } }
+    private enum Sheet: String, Identifiable { case purchase, edit, command; var id: String { rawValue } }
     @State private var model: V15InstallmentModel
     @State private var sheet: Sheet?
 
@@ -22,8 +22,7 @@ public struct V15InstallmentView: View {
             .background(V15Palette.paper.color.ignoresSafeArea())
             .navigationTitle("分期")
             .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button { sheet = .existingPurchase } label: { Label("已有消费", systemImage: "link.badge.plus") }.accessibilityIdentifier("v15.f3b2.existing.open")
+                ToolbarItem(placement: .primaryAction) {
                     Button { sheet = .purchase } label: { Label("新分期消费", systemImage: "plus") }.accessibilityIdentifier("v15.f3b2.purchase.open")
                 }
             }
@@ -74,10 +73,10 @@ public struct V15InstallmentView: View {
     }
 
     private func detail(_ plan: V15InstallmentPlan) -> some View {
-        V15Section("计划详情", detail: "v\(plan.version)") {
+        V15Section("计划详情", detail: plan.status.displayName) {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 HStack { VStack(alignment: .leading) { Text(plan.title).font(V15Typography.cardTitle); Text(plan.status.displayName).font(V15Typography.secondary) }; Spacer(); V15MoneyText(minorUnits: plan.totalFinancedMinor, direction: .outflow) }
-                if plan.isDisplayOnly { V15DisplayOnlyState(detail: "未知 future state 仅展示；当前客户端不会猜测可用操作。").accessibilityIdentifier("v15.f3b2.unknown-state") }
+                if plan.isDisplayOnly { V15DisplayOnlyState(detail: "暂时无法识别此计划状态，当前只供查看。").accessibilityIdentifier("v15.f3b2.unknown-state") }
                 HStack { fact("已锁定", "\(plan.lockedCount) 期"); fact("未来", "\(plan.futureCount) 期"); fact("已取消", "\(plan.cancelledCount) 期") }
                 V15Section("金额分层") {
                     HStack(alignment: .top, spacing: V15Spacing.sm) {
@@ -88,15 +87,15 @@ public struct V15InstallmentView: View {
                         installmentAmountFact("计划总额", plan.totalFinancedMinor)
                         installmentAmountFact("未来未出账", plan.futureScheduledGrossMinor, provisional: true)
                     }
-                    Text("未来未出账计划不等于当前精确信用欠款；当前欠款只在信用账户与账期事实中确认。")
+                    Text("未来未出账金额不等于当前欠款；当前欠款请以信用账户和账期页面为准。")
                         .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityIdentifier("v15.f3b2.amount-layers")
                 ForEach(plan.periods) { period in
-                    V15LedgerRow(title: "第 \(period.sequence) 期 · \(period.status.rawValue)", detail: "账单 \(period.effectiveStatementDate) · 到期 \(period.dueDate) · \(period.locked ? "已锁定" : "未来期")", amountMinor: period.amountDueMinor, direction: .outflow, marker: period.locked ? .ordinary : .provisional)
+                    V15LedgerRow(title: "第 \(period.sequence) 期 · \(period.status.displayName)", detail: "账单 \(period.effectiveStatementDate) · 到期 \(period.dueDate) · \(period.locked ? "已锁定" : "未来期")", amountMinor: period.amountDueMinor, direction: .outflow, marker: period.locked ? .ordinary : .provisional)
                 }
                 if let debt = model.liabilities {
-                    V15Section("未来负债", detail: "服务端口径") {
+                    V15Section("未来负债", detail: "按月汇总") {
                         V15MoneyText(minorUnits: debt.totalFutureScheduledGrossMinor, direction: .outflow)
                         ForEach(debt.groups) { group in Text("\(group.month) · \(group.periodCount) 期 · \(V15MoneyPresentation(minorUnits: group.totalScheduledGrossMinor, direction: .outflow).text)").font(V15Typography.secondary) }
                     }.accessibilityIdentifier("v15.f3b2.liabilities")
@@ -121,7 +120,6 @@ public struct V15InstallmentView: View {
                     sheetErrorSurface
                     switch value {
                     case .purchase: purchaseEditor
-                    case .existingPurchase: existingPurchaseEditor
                     case .edit: planEditor
                     case .command: commandEditor
                     }
@@ -135,7 +133,7 @@ public struct V15InstallmentView: View {
         .accessibilityIdentifier("v15.f3b2.sheet.\(value.rawValue)")
     }
 
-    private func sheetTitle(_ value: Sheet) -> String { switch value { case .purchase: "新分期消费"; case .existingPurchase: "已有消费转分期"; case .edit: "修改计划"; case .command: "计划操作" } }
+    private func sheetTitle(_ value: Sheet) -> String { switch value { case .purchase: "新分期消费"; case .edit: "修改计划"; case .command: "计划操作" } }
 
     @ViewBuilder private var sheetErrorSurface: some View {
         V15FieldIssues(issues: model.fieldIssues).accessibilityIdentifier("v15.f3b2.sheet.field-issues")
@@ -144,7 +142,7 @@ public struct V15InstallmentView: View {
 
     private var purchaseEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            Text("1 · 消费事实").font(V15Typography.cardTitle)
+            Text("1 · 消费信息").font(V15Typography.cardTitle)
             V15Field("标题", text: $model.newPurchaseTitle, prompt: "例如 工作设备", issues: issues("purchase.title")).accessibilityIdentifier("v15.f3b2.purchase.title")
             V15Field("金额（元）", text: $model.newPurchaseAmountText, prompt: "3299.00", issues: issues("purchase.amount_minor")).accessibilityIdentifier("v15.f3b2.purchase.amount")
             Picker("信用账户", selection: $model.newPurchaseAccountID) { Text("请选择").tag(UUID?.none); ForEach(model.creditAccounts) { Text($0.name).tag(Optional($0.id)) } }.pickerStyle(.menu).accessibilityIdentifier("v15.f3b2.purchase.account")
@@ -154,7 +152,7 @@ public struct V15InstallmentView: View {
             V15Field("手续费（元）", text: $model.newPurchaseFeeText, prompt: "0.00", issues: issues("total_fee_minor")).accessibilityIdentifier("v15.f3b2.purchase.fee")
             if positiveFee(model.newPurchaseFeeText) { feeDetails(categoryID: $model.newPurchaseFeeCategoryID, occurredDateText: $model.newPurchaseFeeOccurredDateText, prefix: "v15.f3b2.purchase") }
             V15Field("起始账单日", text: $model.newPurchaseStartStatementDate, prompt: "YYYY-MM-DD", issues: issues("start_statement_date")).accessibilityIdentifier("v15.f3b2.purchase.start")
-            V15ActionButton("预览服务端拆分", disabledReason: model.purchasePreviewDisabledReason) { Task { await model.requestPurchasePreview() } }.accessibilityIdentifier("v15.f3b2.purchase.preview")
+            V15ActionButton("查看分期预览", disabledReason: model.purchasePreviewDisabledReason) { Task { await model.requestPurchasePreview() } }.accessibilityIdentifier("v15.f3b2.purchase.preview")
             purchasePreviewSurface
             V15ActionButton("确认创建", disabledReason: model.purchaseCommitDisabledReason) { Task { await model.commitPurchase() } }.accessibilityIdentifier("v15.f3b2.purchase.commit")
         }
@@ -192,58 +190,15 @@ public struct V15InstallmentView: View {
         case .previewed:
             if let preview = model.purchasePreview { V15PreviewState { V15InstallmentPurchasePreviewDetails(preview: preview, prefix: "v15.f3b2.purchase.preview-detail") }.accessibilityIdentifier("v15.f3b2.purchase.preview-result") }
         case .succeeded:
-            if let receipt = model.purchaseReceipt { V15SuccessReceiptState(title: "分期消费已创建", detail: "计划 \(receipt.plan.id.uuidString) · v\(receipt.plan.version)").accessibilityIdentifier("v15.f3b2.purchase.receipt") }
+            if model.purchaseReceipt != nil { V15SuccessReceiptState(title: "分期消费已创建", detail: "可以关闭并查看分期计划。").accessibilityIdentifier("v15.f3b2.purchase.receipt") }
         case .unknown:
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                unknownState("创建结果未知；只能使用完全相同的 body 与 Idempotency-Key 重试。", id: "v15.f3b2.purchase.unknown")
-                V15ActionButton("同一请求凭证重试", disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能重试写入。", fieldPath: nil) : nil) { Task { await model.retryUnknownPurchase() } }.accessibilityIdentifier("v15.f3b2.purchase.retry")
+                unknownState("这笔可能已经创建。安全检查不会重复记账。", id: "v15.f3b2.purchase.unknown")
+                V15ActionButton("安全检查创建结果", disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能检查创建结果。", fieldPath: nil) : nil) { Task { await model.retryUnknownPurchase() } }.accessibilityIdentifier("v15.f3b2.purchase.retry")
             }
         case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.refresh() } }.accessibilityIdentifier("v15.f3b2.purchase.conflict")
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.requestPurchasePreview() } }
         case .idle: EmptyView()
-        }
-    }
-
-    private var existingPurchaseEditor: some View {
-        VStack(alignment: .leading, spacing: V15Spacing.md) {
-            V15Field("消费账目 ID", text: $model.purchaseTransactionIDText, prompt: "UUID", issues: issues("purchase_transaction_id")).accessibilityIdentifier("v15.f3b2.eligibility.transaction")
-            V15ActionButton("检查分期资格") { Task { await model.checkEligibility() } }.accessibilityIdentifier("v15.f3b2.eligibility.check")
-            switch model.eligibilityPhase {
-            case .loading: V15LoadingSkeleton(layout: .compact)
-            case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.checkEligibility() } }
-            default: if let value = model.eligibility { eligibilitySurface(value) }
-            }
-            switch model.eligibilityPurchasePhase {
-            case .loading:
-                V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("v15.f3b2.eligibility.purchase.loading")
-            case .failed(let failure):
-                V15ServiceErrorState(message: "消费详情读取失败：\(failure.message)") { Task { await model.checkEligibility() } }
-                    .accessibilityIdentifier("v15.f3b2.eligibility.purchase.error")
-            case .loaded:
-                if let purchase = model.eligibilityPurchase {
-                    V15SuccessReceiptState(title: "消费详情已读取", detail: "服务端业务日期 \(purchase.businessDate) · 精确发生时间已用于手续费边界")
-                        .accessibilityIdentifier("v15.f3b2.eligibility.purchase.loaded")
-                }
-            case .empty, .idle: EmptyView()
-            }
-            V15Field("期数", text: $model.createInstallmentCountText, prompt: "2–60", issues: issues("installment_count"))
-            V15Field("手续费（元）", text: $model.createFeeText, prompt: "0.00", issues: issues("total_fee_minor"))
-                .accessibilityIdentifier("v15.f3b2.existing.fee")
-            if positiveFee(model.createFeeText) { feeDetails(categoryID: $model.createFeeCategoryID, occurredDateText: $model.createFeeOccurredDateText, prefix: "v15.f3b2.existing") }
-            Picker("起始账期", selection: $model.createStartStatementDate) { Text("请选择").tag(""); ForEach(model.cycleOptions.filter(\.eligible)) { Text("\($0.statementDate) · 到期 \($0.dueDate)").tag($0.statementDate) } }.pickerStyle(.menu).accessibilityIdentifier("v15.f3b2.eligibility.options")
-            V15ActionButton("创建计划", disabledReason: model.createPlanDisabledReason) { Task { await model.createPlan() } }.accessibilityIdentifier("v15.f3b2.existing.commit")
-            if model.createPlanPhase == .succeeded { V15SuccessReceiptState(title: "分期计划已创建", detail: "服务端已返回计划事实。").accessibilityIdentifier("v15.f3b2.existing.success") }
-            if model.createPlanPhase == .unknown {
-                unknownState("创建结果未知；不得换 key 再建，只能复用完全相同的请求凭证。", id: "v15.f3b2.existing.unknown")
-                V15ActionButton("同一请求凭证重试", disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能重试写入。", fieldPath: nil) : nil) { Task { await model.retryUnknownCreatePlan() } }.accessibilityIdentifier("v15.f3b2.existing.retry")
-            }
-        }
-    }
-
-    private func eligibilitySurface(_ value: V15InstallmentEligibility) -> some View {
-        Group {
-            if value.eligible { V15SuccessReceiptState(title: "可分期", detail: "服务端本金 \(V15MoneyPresentation(minorUnits: value.principalMinor, direction: .outflow).text) · 自然账期 \(value.naturalStatementDate)").accessibilityIdentifier("v15.f3b2.eligibility.success") }
-            else { unknownState("不可分期：\(value.reasonCode ?? "服务端未提供原因码")", id: "v15.f3b2.eligibility.reason") }
         }
     }
 
@@ -257,7 +212,7 @@ public struct V15InstallmentView: View {
             V15Field("起始账单日", text: $model.editStartStatementDate, issues: issues("start_statement_date")).accessibilityIdentifier("v15.f3b2.edit.start")
             V15ActionButton("预览锁定期与账期影响", disabledReason: model.planPreviewDisabledReason) { Task { await model.requestPlanPreview() } }.accessibilityIdentifier("v15.f3b2.edit.preview")
             planPreviewSurface
-            V15ActionButton("确认修改（无重试凭证）", disabledReason: model.planCommitDisabledReason) { Task { await model.commitPlanUpdate() } }.accessibilityIdentifier("v15.f3b2.edit.commit")
+            V15ActionButton("确认修改", disabledReason: model.planCommitDisabledReason) { Task { await model.commitPlanUpdate() } }.accessibilityIdentifier("v15.f3b2.edit.commit")
         }
     }
 
@@ -265,13 +220,13 @@ public struct V15InstallmentView: View {
         switch model.planPhase {
         case .previewing, .committing: V15LoadingSkeleton(layout: .decisionCard)
         case .previewed:
-            if let preview = model.planPreview { V15PreviewState(version: "计划 v\(preview.currentPlan.version)") { V15InstallmentPlanPreviewDetails(preview: preview, prefix: "v15.f3b2.edit.preview-detail") }.accessibilityIdentifier("v15.f3b2.edit.preview-result") }
+            if let preview = model.planPreview { V15PreviewState(version: "修改预览") { V15InstallmentPlanPreviewDetails(preview: preview, prefix: "v15.f3b2.edit.preview-detail") }.accessibilityIdentifier("v15.f3b2.edit.preview-result") }
         case .unknown:
-            VStack(alignment: .leading, spacing: V15Spacing.sm) { unknownState("PUT 结果未知；没有 token/key，绝不会自动重发。只能 fresh GET 计划与消费后逐字段核对。", id: "v15.f3b2.edit.unknown"); V15ActionButton("刷新事实核对") { Task { await model.readBackUnknownPlanUpdate() } }.accessibilityIdentifier("v15.f3b2.edit.readback"); readbackSurface(model.updateReadbackPhase, prefix: "v15.f3b2.edit") }
+            VStack(alignment: .leading, spacing: V15Spacing.sm) { unknownState("暂时无法确认修改是否成功。检查最新状态不会重复保存。", id: "v15.f3b2.edit.unknown"); V15ActionButton("检查最新状态") { Task { await model.readBackUnknownPlanUpdate() } }.accessibilityIdentifier("v15.f3b2.edit.readback"); readbackSurface(model.updateReadbackPhase, prefix: "v15.f3b2.edit") }
         case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.refresh() } }
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.requestPlanPreview() } }
         case .succeeded:
-            V15SuccessReceiptState(title: "计划事实已更新", detail: "服务端已返回或 fresh GET 已逐字段确认。")
+            V15SuccessReceiptState(title: "计划已更新", detail: "可以关闭并查看最新计划。")
                 .accessibilityIdentifier(model.updateReadbackPhase == .confirmed ? "v15.f3b2.edit.readback.confirmed" : "v15.f3b2.edit.success")
         case .idle: EmptyView()
         }
@@ -284,7 +239,7 @@ public struct V15InstallmentView: View {
                 Picker("付款账户", selection: $model.paymentAccountID) { Text("请选择").tag(UUID?.none); ForEach(model.paymentAccounts) { Text($0.name).tag(Optional($0.id)) } }.pickerStyle(.menu).accessibilityIdentifier("v15.f3b2.command.payment")
                 V15Field("目标账单日", text: $model.targetStatementDate, prompt: "YYYY-MM-DD", issues: issues("target_statement_date")).accessibilityIdentifier("v15.f3b2.command.target")
             }
-            V15ActionButton("预览服务端影响", disabledReason: model.commandPreviewDisabledReason) { Task { await model.requestCommandPreview() } }.accessibilityIdentifier("v15.f3b2.command.preview")
+            V15ActionButton("查看操作预览", disabledReason: model.commandPreviewDisabledReason) { Task { await model.requestCommandPreview() } }.accessibilityIdentifier("v15.f3b2.command.preview")
             commandPreviewSurface
             V15ActionButton("确认\(model.commandKind.title)", kind: model.commandKind == .cancelFuture ? .destructive : .primary, disabledReason: model.commandCommitDisabledReason) { Task { await model.commitCommand() } }.accessibilityIdentifier("v15.f3b2.command.commit")
         }
@@ -298,16 +253,16 @@ public struct V15InstallmentView: View {
         case .succeeded:
             if let receipt = model.commandReceipt {
                 VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                    V15SuccessReceiptState(title: "\(model.commandKind.title)已完成", detail: "operation_id \(receipt.operationID.uuidString) · replayed \(receipt.replayed ? "是" : "否") · 系统流水 \(receipt.systemTransactionCount) 笔").accessibilityIdentifier("v15.f3b2.command.receipt")
+                    V15SuccessReceiptState(title: "\(model.commandKind.title)已完成", detail: "已生成 \(receipt.systemTransactionCount) 笔相关账目").accessibilityIdentifier("v15.f3b2.command.receipt")
                     ForEach(receipt.systemTransactions, id: \.id) { transaction in
-                        V15LedgerRow(title: transaction.title, detail: "\(transaction.kind) · \(transaction.id.uuidString)", amountMinor: transaction.amountMinor, direction: .neutral)
+                        V15LedgerRow(title: transaction.title, detail: "相关账目", amountMinor: transaction.amountMinor, direction: .neutral)
                             .accessibilityIdentifier("v15.f3b2.command.transaction.\(transaction.id.uuidString)")
                     }
                 }
             }
-            else { V15SuccessReceiptState(title: "服务端事实已确认", detail: "刷新结果与请求意图一致。") }
+            else { V15SuccessReceiptState(title: "操作已确认", detail: "最新状态与本次操作一致。") }
         case .unknown:
-            VStack(alignment: .leading, spacing: V15Spacing.sm) { unknownState("结果未知；只有完全相同的 body + Idempotency-Key 重放并取得 operation receipt 才能确认。fresh GET 只能提示计划事实变化，不能归因于本请求。", id: "v15.f3b2.command.unknown"); V15ActionButton("同一请求凭证重试", disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能重试写入。", fieldPath: nil) : nil) { Task { await model.retryUnknownCommand() } }.accessibilityIdentifier("v15.f3b2.command.retry"); V15ActionButton("刷新计划事实（不确认请求）", kind: .secondary) { Task { await model.readBackUnknownCommand() } }.accessibilityIdentifier("v15.f3b2.command.readback"); V15ActionButton("放弃请求凭证并刷新", kind: .quiet) { Task { await model.abandonUnknownCommandAndReload() } }; commandReadbackSurface(model.commandReadbackPhase) }
+            VStack(alignment: .leading, spacing: V15Spacing.sm) { unknownState("暂时无法确认操作结果。安全检查不会重复扣款或记账。", id: "v15.f3b2.command.unknown"); V15ActionButton("安全检查操作结果", disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能检查操作结果。", fieldPath: nil) : nil) { Task { await model.retryUnknownCommand() } }.accessibilityIdentifier("v15.f3b2.command.retry"); V15ActionButton("检查最新计划", kind: .secondary) { Task { await model.readBackUnknownCommand() } }.accessibilityIdentifier("v15.f3b2.command.readback"); V15ActionButton("停止恢复并刷新", kind: .quiet) { Task { await model.abandonUnknownCommandAndReload() } }; commandReadbackSurface(model.commandReadbackPhase) }
         case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.refresh() } }.accessibilityIdentifier("v15.f3b2.command.conflict")
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.requestCommandPreview() } }
         case .idle: EmptyView()
@@ -345,7 +300,7 @@ public struct V15InstallmentView: View {
             V15Field("手续费发生日期（上海）", text: occurredDateText, prompt: "YYYY-MM-DD", issues: issues("fee_occurred_at"))
                 .disabled(model.isOffline)
                 .accessibilityIdentifier("\(prefix).fee-date")
-            if model.isOffline { Text("离线快照仅可查看，不能填写或提交手续费事实。").font(V15Typography.secondary).accessibilityIdentifier("\(prefix).fee.offline") }
+            if model.isOffline { Text("离线时只可查看，不能填写或保存手续费。").font(V15Typography.secondary).accessibilityIdentifier("\(prefix).fee.offline") }
         }
     }
 
@@ -356,14 +311,14 @@ public struct V15InstallmentView: View {
             .padding(V15Spacing.md).background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.control)).accessibilityElement(children: .combine).accessibilityIdentifier(id)
     }
     @ViewBuilder private func readbackSurface(_ phase: V15InstallmentModel.ReadbackPhase, prefix: String) -> some View {
-        switch phase { case .loading: V15LoadingSkeleton(layout: .compact); case .confirmed: Text("最新事实与请求意图一致。") .accessibilityIdentifier("\(prefix).readback.confirmed"); case .notConfirmed: Text("最新事实不能确认该请求已生效；仍保持结果未知。") .accessibilityIdentifier("\(prefix).readback.not-confirmed"); case .failed(let failure): Text("核对失败：\(failure.message)").accessibilityIdentifier("\(prefix).readback.error"); case .idle: EmptyView() }
+        switch phase { case .loading: V15LoadingSkeleton(layout: .compact); case .confirmed: Text("最新状态与本次操作一致。") .accessibilityIdentifier("\(prefix).readback.confirmed"); case .notConfirmed: Text("最新状态仍不能确认本次操作结果。") .accessibilityIdentifier("\(prefix).readback.not-confirmed"); case .failed(let failure): Text("核对失败：\(failure.message)").accessibilityIdentifier("\(prefix).readback.error"); case .idle: EmptyView() }
     }
     @ViewBuilder private func commandReadbackSurface(_ phase: V15InstallmentModel.ReadbackPhase) -> some View {
         switch phase {
         case .loading: V15LoadingSkeleton(layout: .compact)
-        case .notConfirmed: Text("计划事实可能已变化或操作可能已发生，但 GET 无法证明付款账户、目标账单日、发生时间和 operation receipt 属于本请求；同一请求凭证仍保留。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("v15.f3b2.command.readback.not-confirmed")
-        case .failed(let failure): Text("事实读取失败：\(failure.message)；同一请求凭证仍保留。").font(V15Typography.secondary).accessibilityIdentifier("v15.f3b2.command.readback.error")
-        case .confirmed: Text("仅同一 key 重放返回的 operation receipt 可以确认该请求。").font(V15Typography.secondary)
+        case .notConfirmed: Text("计划可能已经变化，但仍无法确认付款账户、账单日和时间是否属于本次操作。你仍可继续安全检查。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("v15.f3b2.command.readback.not-confirmed")
+        case .failed(let failure): Text("读取最新计划失败：\(failure.message)。你仍可继续安全检查。").font(V15Typography.secondary).accessibilityIdentifier("v15.f3b2.command.readback.error")
+        case .confirmed: Text("本次操作已安全确认。").font(V15Typography.secondary)
         case .idle: EmptyView()
         }
     }

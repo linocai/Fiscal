@@ -67,8 +67,8 @@ public final class V15ReportingModel {
     public var periodLabel: String { selectedPeriod.rawValue }
     public var canDrill: Bool { if case .enabled = drillCapability { true } else { false } }
     public var exportDisabledReason: String? {
-        if exportReloadGate != nil { return "报表版本已变化；请取最新数据重新决定。" }
-        if isOffline { return "离线快照不能导出；请连接服务器并重新读取报表。" }
+        if exportReloadGate != nil { return "报表数据已更新；请读取最新内容后重新决定。" }
+        if isOffline { return "离线时不能导出；请恢复连接并刷新报表。" }
         guard (phase == .loaded || phase == .empty), let report, report.meta.dataRevision >= 0 else { return "请先读取当前正式报表后再导出。" }
         if case .transferring = exportPhase { return "正在导出当前报表。" }
         return nil
@@ -255,7 +255,7 @@ public final class V15ReportingModel {
         do {
             let result: V15PeriodReport
             switch selectedPeriod { case .month(let month): result = try await services.reports.monthly(month, readCachePolicy: fresh ? .reloadIgnoringCache : .standard); case .year(let year): result = try await services.reports.yearly(year, readCachePolicy: fresh ? .reloadIgnoringCache : .standard) }
-            guard current == generation, valid(result, for: selectedPeriod) else { if current == generation { phase = .failed(.init(kind: .decoding, code: "invalid_period_report", message: "服务器报表元数据不符合当前期间。")) }; return }
+            guard current == generation, valid(result, for: selectedPeriod) else { if current == generation { phase = .failed(.init(kind: .decoding, code: "invalid_period_report", message: "报表内容与当前期间不一致，请重新读取。")) }; return }
             report = result; owner = .init(period: selectedPeriod, revision: result.meta.dataRevision, filter: nil, generation: current)
             if fresh { exportReloadGate = nil; exportPhase = .idle }
             phase = rowsAreEmpty(result) ? .empty : .loaded
@@ -269,7 +269,7 @@ public final class V15ReportingModel {
         guard let revision = captured.revision, let filter = captured.filter else { return }
         do {
             let page = try await services.reports.periodDrillDown(period: captured.period, expectedRevision: revision, filter: filter, cursor: cursor, limit: 50)
-            guard captured == owner, captured.generation == generation, page.meta.dataRevision == revision, page.dimension == .ledger, pageMatches(page, filter: filter) else { if captured == owner { takeConflict(.init(kind: .conflict, code: "period_report_changed", message: "报表版本已变化。"), captured.generation) }; return }
+            guard captured == owner, captured.generation == generation, page.meta.dataRevision == revision, page.dimension == .ledger, pageMatches(page, filter: filter) else { if captured == owner { takeConflict(.init(kind: .conflict, code: "period_report_changed", message: "报表数据已经更新。"), captured.generation) }; return }
             drillItems = appending ? drillItems + page.items : page.items
             nextCursor = page.nextCursor
             if appending { pagePhase = .idle; pageFailure = nil }

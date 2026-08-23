@@ -28,15 +28,15 @@ public struct V15AIProposalMacView: View {
     private var spine: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                Text("AI 提案").font(V15Typography.cardTitle)
-                Text("\(model.pendingCount) 笔待人工确认").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                Text("AI 记账").font(V15Typography.cardTitle)
+                Text("\(model.pendingCount) 笔待确认").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }.padding(V15Spacing.md)
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                     switch model.phase {
                     case .idle, .loading: V15LoadingSkeleton()
-                    case .empty: V15EmptyState(title: "没有提案", explanation: "在右侧输入文字建立提案。")
+                    case .empty: V15EmptyState(title: "没有待确认内容", explanation: "在右侧输入记账文字。")
                     case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.load() } }
                     case .loaded:
                         ForEach(model.proposals) { proposal in V15AIProposalRow(proposal: proposal, selected: model.selectedProposal?.id == proposal.id) { Task { await model.select(proposal) } } }
@@ -61,12 +61,12 @@ public struct V15AIProposalMacView: View {
     private var detail: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: V15Spacing.section) {
-                HStack { Text("提案事实").font(V15Typography.surfaceTitle); Spacer(); Button("刷新") { Task { await model.load() } } }
+                HStack { Text("内容详情").font(V15Typography.surfaceTitle); Spacer(); Button("刷新") { Task { await model.load() } } }
                 V15AIMutationSurface(model: model)
                 switch model.detailPhase {
-                case .idle: V15EmptyState(title: "选择一项提案", explanation: "中栏显示解析事实与质量事件。")
+                case .idle: V15EmptyState(title: "选择一项内容", explanation: "这里显示识别结果和待补充内容。")
                 case .loading: V15LoadingSkeleton()
-                case .empty: V15EmptyState(title: "没有详情", explanation: "服务端没有返回此提案。")
+                case .empty: V15EmptyState(title: "没有详情", explanation: "暂时没有取得这项内容。")
                 case .failed(let failure): V15ServiceErrorState(message: failure.message) { if let proposal = model.selectedProposal { Task { await model.select(proposal) } } }
                 case .loaded: if let proposal = model.selectedProposal { V15AIProposalDetail(proposal: proposal, events: model.qualityEvents) }
                 }
@@ -81,18 +81,17 @@ public struct V15AIProposalMacView: View {
             VStack(alignment: .leading, spacing: V15Spacing.lg) {
                 V15Section("安全边界") {
                     Label("只接受人工确认", systemImage: "hand.raised.fill").font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.teal.color)
-                    Text("effective_auto_execute=false").font(.caption.monospaced()).foregroundStyle(V15Palette.ink.color.opacity(0.66)).accessibilityIdentifier("v15.f3f.d3-invariant")
-                    Text("不提供策略放宽、提供方密钥或财务聊天入口。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("每一笔都由你确认，AI 不会自动记账。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("v15.f3f.d3-invariant")
                     if let reason = model.settingsSafetyReason {
                         V15ServiceErrorState(message: reason.message) { Task { await model.load() } }
                             .accessibilityIdentifier("v15.f3f.d3-contract-banner")
                     }
                     if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot) }
                 }
-                V15Section("新建提案") {
+                V15Section("新建待确认内容") {
                     Picker("来源", selection: $model.source) { ForEach(V15AIProposalSource.allCases) { Text($0.displayName).tag($0) } }.pickerStyle(.menu)
                     V15Field("记账文字", text: $model.inputText, prompt: "午餐 132 元", axis: .vertical)
-                    V15ActionButton("生成待确认提案", kind: .primary, disabledReasons: model.createReasons) { Task { await model.create() } }.accessibilityIdentifier("v15.f3f.create.submit")
+                    V15ActionButton("生成待确认账目", kind: .primary, disabledReasons: model.createReasons) { Task { await model.create() } }.accessibilityIdentifier("v15.f3f.create.submit")
                     V15AIStableCreateRecoverySurface(model: model)
                 }
                 if let proposal = model.selectedProposal {
@@ -108,8 +107,8 @@ public struct V15AIProposalMacView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: V15Spacing.xxs) {
-                    Text("人工审核").font(V15Typography.cardTitle)
-                    Text("保存审核与人工执行是两个独立步骤。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                    Text("检查并修改").font(V15Typography.cardTitle)
+                    Text("保存修改后，还需要由你确认记账。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 }
                 Spacer()
                 Button("关闭") { showsReview = false }.disabled(model.mutationPhase == .loading)
@@ -120,9 +119,9 @@ public struct V15AIProposalMacView: View {
                     V15AIEditorFields(model: model)
                     V15AIMutationSurface(model: model)
                     HStack(alignment: .top, spacing: V15Spacing.sm) {
-                        V15ActionButton("保存并确认审核内容", kind: .secondary, disabledReasons: model.confirmReasons) { Task { await model.confirmDraft() } }.accessibilityIdentifier("v15.f3f.editor.confirm")
+                        V15ActionButton("保存修改", kind: .secondary, disabledReasons: model.confirmReasons) { Task { await model.confirmDraft() } }.accessibilityIdentifier("v15.f3f.editor.confirm")
                         if let proposal = model.selectedProposal {
-                            V15ActionButton("人工执行", kind: .primary, disabledReasons: model.actionReasons(.execute, proposal: proposal)) { Task { await model.execute(); if model.selectedProposal?.status == .executed { showsReview = false } } }.accessibilityIdentifier("v15.f3f.editor.execute")
+                            V15ActionButton("确认记账", kind: .primary, disabledReasons: model.actionReasons(.execute, proposal: proposal)) { Task { await model.execute(); if model.selectedProposal?.status == .executed { showsReview = false } } }.accessibilityIdentifier("v15.f3f.editor.execute")
                         }
                     }
                 }.padding(V15Spacing.lg)

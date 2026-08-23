@@ -33,7 +33,7 @@ public struct V15ReconciliationMacView: View {
         HStack(spacing: V15Spacing.md) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("余额核对").font(V15Typography.cardTitle)
-                Text("证据锚点 · 不自动改账").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                Text("保存核对记录 · 不自动改账").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
             Spacer()
             if model.offlineSnapshotAt != nil { Label("离线只读", systemImage: V15Symbol.offline).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3e.mac.offline") }
@@ -72,9 +72,9 @@ public struct V15ReconciliationMacView: View {
             VStack(alignment: .leading, spacing: V15Spacing.md) {
                 V15Section("核对记录", detail: model.selectedTarget?.label) {
                     switch model.checkpointPhase {
-                    case .idle: V15EmptyState(title: "请选择目标", explanation: "读取其核对锚点。")
+                    case .idle: V15EmptyState(title: "请选择目标", explanation: "查看对应的核对记录。")
                     case .loading: V15LoadingSkeleton()
-                    case .empty: V15EmptyState(title: "暂无核对记录", explanation: "在右侧输入实际余额建立首个锚点。").accessibilityIdentifier("v15.f3e.mac.checkpoints.empty")
+                    case .empty: V15EmptyState(title: "暂无核对记录", explanation: "在右侧输入实际余额，保存第一条记录。").accessibilityIdentifier("v15.f3e.mac.checkpoints.empty")
                     case .failed(let failure): V15ServiceErrorState(message: failure.message) { if let target = model.selectedTarget { Task { await model.selectTarget(target) } } }.accessibilityIdentifier("v15.f3e.mac.checkpoints.error")
                     case .loaded:
                         ForEach(model.checkpoints) { checkpoint in
@@ -87,7 +87,7 @@ public struct V15ReconciliationMacView: View {
                     V15Field("忽略到（上海日期）", text: $model.ignoreUntilDateText, prompt: "YYYY-MM-DD")
                     switch model.attentionPhase {
                     case .idle, .loading: V15LoadingSkeleton()
-                    case .empty: V15EmptyState(title: "没有待处理事项", explanation: "当前事实平静。")
+                    case .empty: V15EmptyState(title: "没有待处理事项", explanation: "当前没有需要你处理的核对问题。")
                     case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.refreshAttention() } }
                     case .loaded:
                         ForEach(model.attention) { item in
@@ -108,7 +108,7 @@ public struct V15ReconciliationMacView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: V15Spacing.lg) {
                 mutationSurface
-                V15Section("差额检查器", detail: model.asOfDateText) {
+                V15Section("核对结果", detail: model.asOfDateText) {
                     switch model.diagnosisPhase {
                     case .idle: V15EmptyState(title: "等待目标", explanation: "选择目标后显示账面区间。")
                     case .loading: V15LoadingSkeleton()
@@ -118,7 +118,7 @@ public struct V15ReconciliationMacView: View {
                         if let diagnosis = model.diagnosis { diagnosisView(diagnosis).accessibilityIdentifier("v15.f3e.mac.diagnosis") }
                     }
                 }
-                V15Section("建立核对锚点") {
+                V15Section("保存核对记录") {
                     Text(model.selectedTarget?.label ?? "尚未选择目标").font(V15Typography.cardTitle)
                     V15Field("实际余额（元）", text: $model.actualBalanceText, prompt: "0.00", issues: model.checkpointIssues.filter { $0.fieldPath == "actual_balance_minor" }).accessibilityIdentifier("v15.f3e.mac.amount")
                     V15Field("核对日期", text: $model.asOfDateText, prompt: "YYYY-MM-DD", issues: model.checkpointIssues.filter { $0.fieldPath == "as_of" }).accessibilityIdentifier("v15.f3e.mac.as-of")
@@ -127,7 +127,7 @@ public struct V15ReconciliationMacView: View {
                         V15ActionButton(model.editorStep == 1 ? "确认目标" : "进入最终确认", kind: .secondary, disabledReasons: model.advanceReasons) { model.advanceEditor() }.accessibilityIdentifier("v15.f3e.mac.editor.next")
                     } else {
                         if let actual = CNYAmountParser.minorUnits(model.actualBalanceText) { reconciliationComparison(actual: actual) }
-                        Text("最终确认：保存锚点，不创建调整流水。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                        Text("最终确认：保存核对记录，不会创建调整账目。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                         V15ActionButton("保存核对记录", disabledReasons: model.checkpointReasons) { Task { await model.createCheckpoint() } }.accessibilityIdentifier("v15.f3e.mac.submit")
                     }
                     if !model.serverIssues.isEmpty { V15FieldIssues(issues: model.serverIssues).accessibilityIdentifier("v15.f3e.mac.remote-issues") }
@@ -153,16 +153,16 @@ public struct V15ReconciliationMacView: View {
             V15PreviewState {
                 VStack(alignment: .leading, spacing: V15Spacing.xs) {
                     Text("\(model.mutationIntentLabel)结果未知").font(V15Typography.cardTitle)
-                    Text(model.unknownFactsMessage ?? "不会重发，也不会伪归因。").font(V15Typography.secondary)
-                    V15ActionButton("只读取最新事实", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线不能fresh GET。", fieldPath: nil) : nil) { Task { await model.readFreshFactsForUnknown() } }.accessibilityIdentifier("v15.f3e.mac.unknown.readback")
-                    V15ActionButton("人工核对后解除锁", kind: .quiet, disabledReason: model.canAbandonUnknown ? nil : .init(code: "fresh_read_required", message: "请先完成fresh GET。", fieldPath: nil)) { model.abandonUnknown() }.accessibilityIdentifier("v15.f3e.mac.unknown.abandon")
+                    Text(model.unknownFactsMessage ?? "系统不会重复保存；请核对最新状态。").font(V15Typography.secondary)
+                    V15ActionButton("检查最新状态", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能检查最新状态。", fieldPath: nil) : nil) { Task { await model.readFreshFactsForUnknown() } }.accessibilityIdentifier("v15.f3e.mac.unknown.readback")
+                    V15ActionButton("核对后继续", kind: .quiet, disabledReason: model.canAbandonUnknown ? nil : .init(code: "fresh_read_required", message: "请先检查最新状态。", fieldPath: nil)) { model.abandonUnknown() }.accessibilityIdentifier("v15.f3e.mac.unknown.abandon")
                 }
             }.accessibilityIdentifier("v15.f3e.mac.unknown")
         }
         if model.hasAcceptedRefreshGate {
-            V15PartialProgressState(succeeded: "服务器已接受写入", currentState: model.acceptedRefreshMessage ?? "事实刷新未完成", remaining: "只重试GET")
+            V15PartialProgressState(succeeded: "刚才的更改已经保存", currentState: model.acceptedRefreshMessage ?? "最新数据还没有全部更新", remaining: "接下来只会重新读取")
                 .accessibilityIdentifier("v15.f3e.mac.fact-refresh")
-            V15ActionButton("重试事实刷新", kind: .secondary, disabledReasons: model.factRefreshRetryReasons) { Task { await model.retryAcceptedRefresh() } }
+            V15ActionButton("重新读取", kind: .secondary, disabledReasons: model.factRefreshRetryReasons) { Task { await model.retryAcceptedRefresh() } }
                 .accessibilityIdentifier("v15.f3e.mac.fact-refresh.retry")
         }
         if case .conflict(let conflict) = model.mutationPhase { V15ConflictState(conflict: conflict) { Task { await model.reloadAfterConflict() } }.accessibilityIdentifier("v15.f3e.mac.conflict") }

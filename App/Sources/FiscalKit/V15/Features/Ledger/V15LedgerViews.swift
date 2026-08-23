@@ -111,7 +111,7 @@ private struct V15LedgerDetail: View {
     var body: some View {
         ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) {
             switch model.detailPhase {
-            case .idle: V15EmptyState(title: "选择一笔账目", explanation: "这里显示服务器确认的分录、版本与历史。")
+            case .idle: V15EmptyState(title: "选择一笔账目", explanation: "这里显示账目详情、关联记录与历史。")
             case .loading: V15LoadingSkeleton()
             case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.retryDetail() } })
             case .loaded: if let selected = model.selected { detail(selected) }
@@ -121,33 +121,36 @@ private struct V15LedgerDetail: View {
     }
     @ViewBuilder private func detail(_ transaction: V15Transaction) -> some View {
         V15Section("可用操作") { actions(transaction) }
-        V15Section("服务器事实", detail: "v\(transaction.version)") {
+        V15Section("账目详情", detail: transactionKindLabel(transaction.kind)) {
             Text(transaction.title).font(V15Typography.surfaceTitle).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("v15.f1b.detail.title")
             V15MoneyText(minorUnits: transaction.amountMinor, direction: direction(transaction), font: V15Typography.money)
-            Text("业务日（上海）：\(transaction.businessDate) · 来源：\(transaction.source)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+            Text("业务日（上海）：\(transaction.businessDate) · 来源：\(sourceLabel(transaction.source))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
             Text("账户：\(model.accountName(transaction.accountID))").font(V15Typography.secondary)
             if transaction.destinationAccountID != nil { Text("目标账户：\(model.accountName(transaction.destinationAccountID))").font(V15Typography.secondary) }
             Text("分类：\(model.categoryName(transaction.categoryID))").font(V15Typography.secondary)
             if let cycle = model.selectedCycle { Text("信用账期：\(cycle.periodStart) 至 \(cycle.periodEnd) · 还款日 \(cycle.dueDate)").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true) }
             if let cycleReadError = model.cycleReadError { Text(cycleReadError).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
-            if transaction.voidedAt != nil { V15ArchiveReadOnlyState { Text("该账目已作废；当前服务器没有提供恢复授权。").font(V15Typography.secondary) } }
+            if transaction.voidedAt != nil { V15ArchiveReadOnlyState { Text("该账目已作废，目前不能恢复。").font(V15Typography.secondary) } }
         }
         V15Section("分录") { ForEach(transaction.postings, id: \.id) { posting in HStack { Text(postingRole(posting.role) + " · " + model.accountName(posting.accountID)).font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true); Spacer(); V15MoneyText(minorUnits: posting.amountMinor, direction: posting.amountMinor < 0 ? .outflow : .inflow, font: V15Typography.secondary) } } }
-        V15Section("版本历史") { if model.revisions.isEmpty { Text("服务器没有返回可读版本历史。").font(V15Typography.secondary) } else { ForEach(model.revisions) { revision in Text("v\(revision.version) · \(revision.event)").font(V15Typography.secondary).accessibilityIdentifier("v15.f1b.revision.\(revision.version)") } } }
+        V15Section("变更历史") { if model.revisions.isEmpty { Text("暂无可查看的变更历史。").font(V15Typography.secondary) } else { ForEach(model.revisions) { revision in Text(revision.displayEvent).font(V15Typography.secondary).accessibilityIdentifier("v15.f1b.revision.\(revision.version)") } } }
         V15Section("来源与关联") { provenance }; mutationState
     }
     @ViewBuilder private func actions(_ transaction: V15Transaction) -> some View {
         let void = transaction.availableActions.first(where: { $0.action == "void" })
         if let void {
-            let capability = model.isOffline ? V15Capability.disabled(action: "void", reason: .init(code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。", fieldPath: nil)) : void.capability(knownActions: ["void"])
-            switch capability { case .enabled: V15InspectorAction("作废账目", detail: "此操作以服务器版本 v\(transaction.version) 为准。", action: { Task { await model.voidSelected() } }).accessibilityIdentifier("v15.f1b.void"); case .disabled(_, let reason): V15InspectorAction("作废账目", detail: "服务器未授权作废。", disabledReason: reason, action: {}).accessibilityIdentifier("v15.f1b.void.disabled") }
+            let capability = model.isOffline ? V15Capability.disabled(action: "void", reason: .init(code: "offline_read_only", message: "离线时只可查看，无法提交更改。", fieldPath: nil)) : void.capability(knownActions: ["void"])
+            switch capability { case .enabled: V15InspectorAction("作废账目", detail: "作废后会保留历史记录。", action: { Task { await model.voidSelected() } }).accessibilityIdentifier("v15.f1b.void"); case .disabled(_, let reason): V15InspectorAction("作废账目", detail: "当前状态不能作废。", disabledReason: reason, action: {}).accessibilityIdentifier("v15.f1b.void.disabled") }
         } else { Text(V15DisabledReason.unknownCapability.message).font(V15Typography.secondary).accessibilityIdentifier("v15.f1b.no-action") }
     }
-    @ViewBuilder private var provenance: some View { if let provenance = model.provenance { Text("来源：\(provenance.source)").font(V15Typography.secondary); ForEach(provenance.links) { link in VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text("\(link.sourceType) → \(link.targetType)").font(V15Typography.secondary.weight(.medium)); if safeReadOnlyDestination(link) != nil { Text("关联事实：\(link.targetType)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) } } } } else { Text("正在读取服务器来源关系。").font(V15Typography.secondary) } }
-    @ViewBuilder private var mutationState: some View { switch model.mutation { case .idle: EmptyView(); case .working: V15LoadingSkeleton(); case .reconciled(let message): V15ServerFactState(title: "服务器读回", detail: message); case .conflict(let conflict): V15ConflictState(conflict: conflict, changes: model.mutationConflictChanges, reload: { Task { await model.retryDetail() } }); case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.retryLastMutation() } }) } }
+    @ViewBuilder private var provenance: some View { if let provenance = model.provenance { Text("来源：\(sourceLabel(provenance.source))").font(V15Typography.secondary); if !provenance.links.isEmpty { Text("已关联 \(provenance.links.count) 条相关记录").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) } } else { Text("正在读取来源信息。").font(V15Typography.secondary) } }
+    @ViewBuilder private var mutationState: some View { switch model.mutation { case .idle: EmptyView(); case .working: V15LoadingSkeleton(); case .reconciled(let message): V15ServerFactState(title: "数据已更新", detail: message); case .conflict(let conflict): V15ConflictState(conflict: conflict, changes: model.mutationConflictChanges, reload: { Task { await model.retryDetail() } }); case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.retryLastMutation() } }) } }
+    private func sourceLabel(_ source: String) -> String { switch source { case "manual": "手工录入"; case "statement_import": "账单导入"; case "reimbursement": "报销"; case "installment": "分期"; default: "其他" } }
+    private func transactionKindLabel(_ kind: String) -> String { switch kind { case "income": "收入"; case "expense": "支出"; case "transfer": "转账"; case "repayment": "还款"; case "reimbursement_receipt": "报销到账"; default: "账目" } }
     private func safeReadOnlyDestination(_ link: V15TransactionProvenanceLink) -> String? { guard let deepLink = link.deepLink, URL(string: deepLink)?.scheme == "fiscal" else { return nil }; return link.targetType }
 }
 
 private func postingRole(_ role: String) -> String { switch role { case "debit": "借方"; case "credit": "贷方"; default: "分录" } }
 private func direction(_ transaction: V15Transaction) -> V15MoneyDirection { switch transaction.kind { case "income", "reimbursement_receipt": .inflow; case "transfer": .neutral; default: .outflow } }
-private func transactionDetail(_ transaction: V15Transaction) -> String { "\(transaction.businessDate) · \(transaction.source)\(transaction.voidedAt == nil ? "" : " · 已作废")" }
+private func transactionDetail(_ transaction: V15Transaction) -> String { "\(transaction.businessDate) · \(transactionSourceLabel(transaction.source))\(transaction.voidedAt == nil ? "" : " · 已作废")" }
+private func transactionSourceLabel(_ source: String) -> String { switch source { case "manual": "手工录入"; case "statement_import": "账单导入"; case "reimbursement": "报销"; case "installment": "分期"; case "cash_flow": "现金流"; case "ai_text": "AI 文本"; case "ocr": "OCR"; default: "其他来源" } }

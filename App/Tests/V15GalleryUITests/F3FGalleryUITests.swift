@@ -39,7 +39,7 @@ import XCTest
         launch()
         reveal("v15.f3f.proposal.00000000-0000-0000-0000-00000000F304").tap()
         XCTAssertTrue(reveal("v15.f3f.unknown-readonly").waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "未知状态（future_review）")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "暂时无法识别")).firstMatch.exists)
         attach("f3f-ios-queue-confidence-unknown")
     }
 
@@ -132,7 +132,7 @@ import XCTest
         launch("ai-offline")
         XCTAssertTrue(element("v15.f3f.offline").waitForExistence(timeout: 6))
         XCTAssertFalse(revealButton("v15.f3f.create.submit", enabled: false).isEnabled)
-        XCTAssertTrue(app.staticTexts["离线快照只可查看，不会发送写请求。"].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "当前无法提交更改")).firstMatch.exists)
     }
 
     func testEmptyErrorContractViolationConflictAndAX5LongStatesAreReachable() {

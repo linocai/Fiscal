@@ -43,7 +43,7 @@ extension V15Transporting {
         // Fixture transports that only model report exports cannot
         // accidentally succeed for the Archive POST contract.
         guard request.method == "GET", body == nil else {
-            throw V15Failure(kind: .decoding, code: "artifact_body_unsupported", message: "文件请求不符合接口契约。")
+            throw V15Failure(kind: .decoding, code: "artifact_body_unsupported", message: "暂时无法处理这个文件请求。")
         }
         return try await fetchArtifactResponse(request, accept: accept)
     }
@@ -72,13 +72,13 @@ enum V15BodyEncoder {
 
     static func data<Value: Encodable>(_ value: Value) throws -> Data {
         do { return try encoder.encode(value) }
-        catch { throw V15Failure(kind: .decoding, code: "request_encode_failed", message: "请求不符合接口契约。") }
+        catch { throw V15Failure(kind: .decoding, code: "request_encode_failed", message: "暂时无法准备这次操作。") }
     }
 
     static func encode<Value: Encodable>(_ value: Value) throws -> JSONValue {
         do { return try JSONDecoder().decode(JSONValue.self, from: data(value)) }
         catch let failure as V15Failure { throw failure }
-        catch { throw V15Failure(kind: .decoding, code: "request_encode_failed", message: "请求不符合接口契约。") }
+        catch { throw V15Failure(kind: .decoding, code: "request_encode_failed", message: "暂时无法准备这次操作。") }
     }
 }
 
@@ -135,9 +135,9 @@ public enum V15ErrorMapper {
     public static func map(_ error: FiscalAPIError) -> V15Failure {
         switch error {
         case .transport:
-            return .init(kind: .responseUnknown, code: "response_unknown", message: "连接在服务器确认前中断；请使用同一请求凭证重试。")
+            return .init(kind: .responseUnknown, code: "response_unknown", message: "连接中断，暂时无法确认结果。安全检查不会重复保存。")
         case .invalidResponse:
-            return .init(kind: .decoding, code: "invalid_response", message: "服务器响应无法解析。")
+            return .init(kind: .decoding, code: "invalid_response", message: "收到的数据无法读取。")
         case .rateLimited:
             return .init(kind: .transport, code: "rate_limited", message: error.displayMessage)
         case .unauthorized(let detail):
@@ -245,41 +245,41 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
         session = .init(transport: transport, saveAccessKey: saveAccessKey)
         system = .init(transport: transport)
         masterData = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。") }
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         ledger = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。") }
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         creditCycles = .init(transport: transport)
         reports = .init(transport: transport)
         archives = .init(transport: transport)
         attention = .init(transport: transport)
         merchants = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。") }
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         categories = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。") }
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         credit = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。") }
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         reimbursements = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。") }
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         installments = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。") }
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         cashFlow = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。") }
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         ai = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。") }
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         reconciliation = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。") }
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         statementImports = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。") }
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         deepLinks = .init(transport: transport)
     }
@@ -442,11 +442,11 @@ public struct V15ReportsService: Sendable {
     private let transport: any V15Transporting
     init(transport: any V15Transporting) { self.transport = transport }
     public func facts(windowDays: Int = 30, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15Facts {
-        guard (1...90).contains(windowDays) else { throw V15Failure(kind: .decoding, code: "invalid_facts_window", message: "当前事实窗口须在 1 到 90 天之间。") }
+        guard (1...90).contains(windowDays) else { throw V15Failure(kind: .decoding, code: "invalid_facts_window", message: "查询天数须在 1 到 90 天之间。") }
         return try await transport.send(.init(path: "reports/facts", query: [.init(name: "window_days", value: String(windowDays))], readCachePolicy: readCachePolicy), body: nil)
     }
     public func drillDown(scope: V15DrillDownScope, cursor: String? = nil, limit: Int = 50) async throws -> V15FactDrillDown {
-        guard ["cash_accounts", "credit_cycles", "reimbursement_outstanding", "completeness_issues"].contains(scope.scopeType) else { throw V15Failure(kind: .decoding, code: "unsupported_facts_scope", message: "当前版本无法读取该事实范围。") }
+        guard ["cash_accounts", "credit_cycles", "reimbursement_outstanding", "completeness_issues"].contains(scope.scopeType) else { throw V15Failure(kind: .decoding, code: "unsupported_facts_scope", message: "暂时无法读取这项数据。") }
         guard (1...100).contains(limit) else { throw V15Failure(kind: .decoding, code: "invalid_facts_limit", message: "事实下钻每页数量须在 1 到 100 之间。") }
         var query = [URLQueryItem(name: "scope", value: scope.scopeType), .init(name: "expected_data_revision", value: String(scope.expectedDataRevision)), .init(name: "limit", value: String(limit))]
         if let cursor { query.append(.init(name: "cursor", value: cursor)) }

@@ -93,7 +93,7 @@ import Testing
         await model.saveReadyArtifact(using: F4CArchiveSaver(mode: .cancelled))
         #expect(model.phase == .idle && model.temporaryURL == nil && model.password.isEmpty && model.passwordConfirmation.isEmpty && !FileManager.default.fileExists(atPath: directory.path))
         #expect(await transport.recordedRequests().count == 1)
-        #expect(model.restoreDisabledReason.contains("全新空目标"))
+        #expect(model.restoreDisabledReason.contains("不提供直接恢复入口"))
     }
 
     @MainActor @Test("temporary write failure leaves no partial directory and can be explicitly retried")

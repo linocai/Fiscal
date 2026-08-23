@@ -63,9 +63,9 @@ public final class V15ReimbursementModel {
     public var isFactRefreshInFlight: Bool { selectedClaim.flatMap { factRefreshGates[$0.id]?.phase } == .refreshing }
     public var factRefreshRetryReasons: [V15DisabledReason] {
         guard let gate = selectedClaim.flatMap({ factRefreshGates[$0.id] }) else {
-            return [.init(code: "receipt_fact_refresh_not_required", message: "当前没有待收敛的到账事实。", fieldPath: nil)]
+            return [.init(code: "receipt_fact_refresh_not_required", message: "当前没有需要更新的到账数据。", fieldPath: nil)]
         }
-        if isOffline { return [.init(code: "offline_read_only", message: "离线时不能读取最新服务端事实。", fieldPath: nil)] }
+        if isOffline { return [.init(code: "offline_read_only", message: "离线时不能读取最新数据。", fieldPath: nil)] }
         if gate.phase == .refreshing { return [.init(code: "receipt_fact_refresh_loading", message: "最新报销单与到账列表正在读取，请稍候。", fieldPath: nil)] }
         return []
     }
@@ -190,22 +190,22 @@ public final class V15ReimbursementModel {
     }
     public var createClaimDisabledReasons: [V15DisabledReason] {
         var reasons = newClaimIssues.map(reason)
-        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线快照仅可查看，无法新建报销单。", fieldPath: nil)) }
-        if createAttempt != nil { reasons.append(.init(code: "claim_attempt_in_flight", message: "上一笔新建请求仍在提交或结果未知；只能使用同一请求键恢复。", fieldPath: nil)) }
+        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时只可查看，无法新建报销单。", fieldPath: nil)) }
+        if createAttempt != nil { reasons.append(.init(code: "claim_attempt_in_flight", message: "上一笔新建操作仍在处理中，或结果暂时不明。请先安全检查保存结果。", fieldPath: nil)) }
         if candidatesPhase == .loading { reasons.append(.init(code: "candidates_loading", message: "垫付候选仍在读取，请稍候。", fieldPath: "parties[0].allocations[0].transaction_id")) }
         return uniqueReasons(reasons)
     }
     public var receiptPreviewDisabledReasons: [V15DisabledReason] {
         var reasons = receiptIssues.map(reason)
-        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线快照仅可查看，无法登记到账。", fieldPath: nil)) }
+        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时只可查看，无法登记到账。", fieldPath: nil)) }
         if receiptAccountsPhase == .loading { reasons.append(.init(code: "receipt_accounts_loading", message: "收款账户仍在读取，请稍候。", fieldPath: "destination_account_id")) }
-        if let id = selectedClaim?.id, receiptAttempts[id] != nil { reasons.append(.init(code: "receipt_attempt_in_flight", message: "上一笔到账请求仍在提交或结果未知；只能使用同一请求键恢复。", fieldPath: nil)) }
+        if let id = selectedClaim?.id, receiptAttempts[id] != nil { reasons.append(.init(code: "receipt_attempt_in_flight", message: "上一笔到账操作仍在处理中，或结果暂时不明。请先安全检查保存结果。", fieldPath: nil)) }
         if let id = selectedClaim?.id, factRefreshGates[id] != nil { reasons.append(factRefreshReason) }
         return uniqueReasons(reasons)
     }
     public var receiptCommitDisabledReasons: [V15DisabledReason] {
         var reasons = receiptPreviewDisabledReasons
-        guard receiptPreview != nil else { reasons.append(.init(code: "preview_required", message: "请先预览服务端到账影响。", fieldPath: nil)); return uniqueReasons(reasons) }
+        guard receiptPreview != nil else { reasons.append(.init(code: "preview_required", message: "请先查看到账预览。", fieldPath: nil)); return uniqueReasons(reasons) }
         guard let owner = selectedClaim?.id, let request = makeReceiptDraft(recordIssues: false), receiptStates[owner]?.preparedDraft == request else { reasons.append(.init(code: "preview_input_changed", message: "到账内容已变化，请重新预览。", fieldPath: nil)); return uniqueReasons(reasons) }
         return uniqueReasons(reasons)
     }
@@ -227,13 +227,13 @@ public final class V15ReimbursementModel {
 
     public func claimActionReasons(for claim: V15ReimbursementClaim, action: ClaimAction) -> [V15DisabledReason] {
         var reasons: [V15DisabledReason] = []
-        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线快照仅可查看，无法修改报销事实。", fieldPath: nil)) }
+        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时只可查看，无法修改报销单。", fieldPath: nil)) }
         if !claim.status.isKnown { reasons.append(.init(code: "unknown_status", message: "未知报销状态只可查看。", fieldPath: "status")) }
         if receiptPagePhase == .loading { reasons.append(.init(code: "claim_facts_loading", message: "报销详情仍在读取，请稍候。", fieldPath: nil)) }
-        if case .failed = receiptPagePhase { reasons.append(.init(code: "claim_reload_required", message: "报销详情读取失败，请先刷新事实。", fieldPath: nil)) }
+        if case .failed = receiptPagePhase { reasons.append(.init(code: "claim_reload_required", message: "报销详情读取失败，请先刷新。", fieldPath: nil)) }
         if factRefreshGates[claim.id] != nil { reasons.append(factRefreshReason) }
         if secondaryAttempts[claim.id] != nil { reasons.append(.init(code: "secondary_attempt_in_flight", message: "上一笔预览提交仍在恢复，不能开始新的取消。", fieldPath: nil)) }
-        if directAttempts[claim.id] != nil { reasons.append(.init(code: "direct_attempt_unknown", message: "直接命令结果尚未归因，请先核对并处理恢复。", fieldPath: nil)) }
+        if directAttempts[claim.id] != nil { reasons.append(.init(code: "direct_attempt_unknown", message: "上一项操作结果暂时不明，请先检查最新状态。", fieldPath: nil)) }
         guard isClaimActionApplicable(action, to: claim) else {
             reasons.append(claimInapplicableReason(action, claim: claim))
             return uniqueReasons(reasons)
@@ -246,14 +246,14 @@ public final class V15ReimbursementModel {
     public func receiptOpenReasons(for claim: V15ReimbursementClaim) -> [V15DisabledReason] {
         if receiptAttempts[claim.id] != nil { return [] }
         var reasons: [V15DisabledReason] = []
-        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线快照仅可查看。", fieldPath: nil)) }
+        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时只可查看。", fieldPath: nil)) }
         if !claim.status.isKnown { reasons.append(.init(code: "unknown_status", message: "未知状态只可查看。", fieldPath: "status")) }
         if claim.outstandingMinor <= 0 { reasons.append(.init(code: "nothing_outstanding", message: "该报销单没有未到账金额。", fieldPath: "outstanding_minor")) }
         if claim.archivedAt != nil { reasons.append(.init(code: "claim_archived", message: "归档报销单只读，请先恢复。", fieldPath: "archived_at")) }
         if claim.voidedAt != nil { reasons.append(.init(code: "claim_voided", message: "已作废报销单只读，请先恢复。", fieldPath: "voided_at")) }
         if factRefreshGates[claim.id] != nil { reasons.append(factRefreshReason) }
         if secondaryAttempts[claim.id] != nil { reasons.append(.init(code: "secondary_attempt_in_flight", message: "另一笔预览提交仍在处理。", fieldPath: nil)) }
-        if directAttempts[claim.id] != nil { reasons.append(.init(code: "direct_attempt_unknown", message: "直接命令仍在处理或结果未知。", fieldPath: nil)) }
+        if directAttempts[claim.id] != nil { reasons.append(.init(code: "direct_attempt_unknown", message: "上一项操作仍在处理中，或结果暂时不明。", fieldPath: nil)) }
         return uniqueReasons(reasons)
     }
     public func directClaimReasons(for claim: V15ReimbursementClaim, action: DirectClaimAction) -> [V15DisabledReason] {
@@ -272,13 +272,13 @@ public final class V15ReimbursementModel {
 
     public func receiptActionReasons(for receipt: V15ReimbursementReceipt, claim: V15ReimbursementClaim, action: ReceiptAction) -> [V15DisabledReason] {
         var reasons: [V15DisabledReason] = []
-        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线快照仅可查看，无法修改到账事实。", fieldPath: nil)) }
+        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时只可查看，无法修改到账记录。", fieldPath: nil)) }
         if !claim.status.isKnown { reasons.append(.init(code: "unknown_status", message: "未知报销状态只可查看。", fieldPath: "status")) }
-        if receiptPagePhase == .loading { reasons.append(.init(code: "claim_facts_loading", message: "报销与到账事实仍在读取。", fieldPath: nil)) }
-        if case .failed = receiptPagePhase { reasons.append(.init(code: "claim_reload_required", message: "报销与到账事实读取失败，请先刷新。", fieldPath: nil)) }
+        if receiptPagePhase == .loading { reasons.append(.init(code: "claim_facts_loading", message: "正在读取报销与到账记录。", fieldPath: nil)) }
+        if case .failed = receiptPagePhase { reasons.append(.init(code: "claim_reload_required", message: "报销与到账记录读取失败，请先刷新。", fieldPath: nil)) }
         if factRefreshGates[claim.id] != nil { reasons.append(factRefreshReason) }
         if secondaryAttempts[claim.id] != nil { reasons.append(.init(code: "secondary_attempt_in_flight", message: "预览提交仍在处理或结果未知。", fieldPath: nil)) }
-        if directAttempts[claim.id] != nil { reasons.append(.init(code: "direct_attempt_unknown", message: "直接命令仍在处理或结果未知。", fieldPath: nil)) }
+        if directAttempts[claim.id] != nil { reasons.append(.init(code: "direct_attempt_unknown", message: "上一项操作仍在处理中，或结果暂时不明。", fieldPath: nil)) }
         if !isReceiptActionApplicable(action, to: receipt, claim: claim) { reasons.append(receiptInapplicableReason(action, receipt: receipt, claim: claim)) }
         return uniqueReasons(reasons)
     }
@@ -373,7 +373,7 @@ public final class V15ReimbursementModel {
     }
 
     public func openNewClaim() async {
-        guard !isOffline else { newClaimPhase = .failed(.init(kind: .offlineReadOnly, message: "离线快照仅可查看，无法新建报销单。")); return }
+        guard !isOffline else { newClaimPhase = .failed(.init(kind: .offlineReadOnly, message: "离线时只可查看，无法新建报销单。")); return }
         if let attempt = createAttempt {
             newClaimSessionID = attempt.editorID; newClaimSheetVisible = true
             isApplyingNewClaim = true
@@ -425,7 +425,7 @@ public final class V15ReimbursementModel {
             validateReceipt()
             return
         }
-        guard claim.status.isKnown else { withReceiptState(claim.id) { $0.phase = .failed(.init(kind: .decoding, code: "unknown_claim_status", message: "服务器返回了未知状态，只能查看。")) }; receiptSheetVisible = false; return }
+        guard claim.status.isKnown else { withReceiptState(claim.id) { $0.phase = .failed(.init(kind: .decoding, code: "unknown_claim_status", message: "暂时无法识别此状态，只能查看。")) }; receiptSheetVisible = false; return }
         withReceiptState(claim.id) { state in state = ReceiptState(); state.phase = .loading; state.selectedPartyID = claim.parties.first(where: { $0.outstandingMinor > 0 })?.id }
         isApplyingReceipt = true; receiptTitle = "报销到账"; receiptAmountText = ""; receiptDateText = ShanghaiBusinessDate.string(for: now()); isApplyingReceipt = false
         if let party = claim.parties.first(where: { $0.id == selectedPartyID }) { receiptAmountText = formatMinor(party.outstandingMinor) }
@@ -502,7 +502,7 @@ public final class V15ReimbursementModel {
         guard let preview = secondaryStates[claim.id]?.claimPreview else {
             reasons.append(.init(code: "preview_required", message: "请先预览报销单修改。", fieldPath: nil)); return uniqueReasons(reasons)
         }
-        if preview.claimVersion != claim.version { reasons.append(.init(code: "claim_version_changed", message: "报销事实版本已变化，请重新预览。", fieldPath: "expected_version")) }
+        if preview.claimVersion != claim.version { reasons.append(.init(code: "claim_version_changed", message: "报销单已经更新，请重新预览。", fieldPath: "expected_version")) }
         if secondaryStates[claim.id]?.preparedClaimRequest == nil { reasons.append(.init(code: "preview_input_changed", message: "报销内容已变化，请重新预览。", fieldPath: nil)) }
         return uniqueReasons(reasons)
     }
@@ -511,7 +511,7 @@ public final class V15ReimbursementModel {
         guard let preview = secondaryStates[claim.id]?.cancelPreview else {
             reasons.append(.init(code: "preview_required", message: "请先预览取消未到账。", fieldPath: nil)); return uniqueReasons(reasons)
         }
-        if preview.claimVersion != claim.version { reasons.append(.init(code: "claim_version_changed", message: "报销事实版本已变化，请重新预览。", fieldPath: "expected_version")) }
+        if preview.claimVersion != claim.version { reasons.append(.init(code: "claim_version_changed", message: "报销单已经更新，请重新预览。", fieldPath: "expected_version")) }
         return uniqueReasons(reasons)
     }
     public func receiptReplacementPreviewReasons(for receipt: V15ReimbursementReceipt, claim: V15ReimbursementClaim) -> [V15DisabledReason] {
@@ -539,8 +539,8 @@ public final class V15ReimbursementModel {
         guard let preview = secondaryStates[claim.id]?.receiptPreview else {
             reasons.append(.init(code: "preview_required", message: "请先预览到账记录修改。", fieldPath: nil)); return uniqueReasons(reasons)
         }
-        if preview.claimVersion != claim.version { reasons.append(.init(code: "claim_version_changed", message: "报销事实版本已变化，请重新预览。", fieldPath: "expected_claim_version")) }
-        if preview.receiptVersion != receipt.version { reasons.append(.init(code: "receipt_version_changed", message: "到账记录版本已变化，请重新预览。", fieldPath: "expected_receipt_version")) }
+        if preview.claimVersion != claim.version { reasons.append(.init(code: "claim_version_changed", message: "报销单已经更新，请重新预览。", fieldPath: "expected_claim_version")) }
+        if preview.receiptVersion != receipt.version { reasons.append(.init(code: "receipt_version_changed", message: "到账记录已经更新，请重新预览。", fieldPath: "expected_receipt_version")) }
         if secondaryStates[claim.id]?.preparedReceiptRequest == nil { reasons.append(.init(code: "preview_input_changed", message: "到账内容已变化，请重新预览。", fieldPath: nil)) }
         return uniqueReasons(reasons)
     }
@@ -614,7 +614,7 @@ public final class V15ReimbursementModel {
             guard ownsDirect(attempt, owner: claim.id) else { return }
             let refreshGate = beginFactRefresh(owner: claim.id, source: .directReceipt)
             directAttempts[claim.id] = nil; replaceReceipt(result, owner: claim.id)
-            withDirectState(claim.id) { $0.phase = .loading; $0.message = "到账命令已被服务端接受，正在读取最新报销事实。" }
+            withDirectState(claim.id) { $0.phase = .loading; $0.message = "到账已经保存，正在读取最新报销数据。" }
             await convergeFacts(refreshGate)
         }
         catch let failure as V15Failure { guard ownsDirect(attempt, owner: claim.id) else { return }; if failure.kind == .responseUnknown || failure.kind == .cancelled || failure.kind == .offlineReadOnly { withDirectState(claim.id) { $0.phase = .unknown } } else { directAttempts[claim.id] = nil; withDirectState(claim.id) { $0.phase = failure.kind == .conflict && failure.conflict != nil ? .conflict(failure.conflict!) : .failed(failure) } } }
@@ -645,13 +645,13 @@ public final class V15ReimbursementModel {
             if let freshClaimResult { applyClaimSuccess(freshClaimResult) }
             if let freshReceiptResult { replaceReceipt(freshReceiptResult, owner: owner) }
             withDirectState(owner) { $0.phase = .unknown; $0.message = message; $0.didReadback = true }
-        } catch let failure as V15Failure { guard generation == directReadbackGenerations[owner], ownsDirect(attempt, owner: owner) else { return }; withDirectState(owner) { $0.phase = .unknown; $0.message = "事实核对失败：\(failure.message)。原请求仍无法归因并保持写入锁，请重试读取。"; $0.didReadback = false } }
-        catch { guard generation == directReadbackGenerations[owner], ownsDirect(attempt, owner: owner) else { return }; withDirectState(owner) { $0.phase = .unknown; $0.message = "事实核对失败，操作仍无法归因并保持写入锁，请重试读取。"; $0.didReadback = false } }
+        } catch let failure as V15Failure { guard generation == directReadbackGenerations[owner], ownsDirect(attempt, owner: owner) else { return }; withDirectState(owner) { $0.phase = .unknown; $0.message = "检查最新状态失败：\(failure.message)。请重试读取，系统不会重复操作。"; $0.didReadback = false } }
+        catch { guard generation == directReadbackGenerations[owner], ownsDirect(attempt, owner: owner) else { return }; withDirectState(owner) { $0.phase = .unknown; $0.message = "检查最新状态失败。请重试读取，系统不会重复操作。"; $0.didReadback = false } }
     }
     public func abandonUnknownDirect() {
         guard let owner = selectedClaim?.id, canAbandonUnknownDirect else { return }
         directAttempts[owner] = nil
-        withDirectState(owner) { $0.phase = .idle; $0.message = "已按最新服务端事实解除本地写入锁；未把未知请求记为成功。"; $0.didReadback = false }
+        withDirectState(owner) { $0.phase = .idle; $0.message = "已结束本次结果恢复；不会把未确认的操作记为成功。"; $0.didReadback = false }
     }
 
     public func retryFactRefresh() async {
@@ -752,7 +752,7 @@ public final class V15ReimbursementModel {
         guard let candidate = selectedCandidate else { issues.append(.init(code: "candidate_required", message: "请选择一笔垫付。", fieldPath: "parties[0].allocations[0].transaction_id")); if recordIssues { newClaimIssues = issues }; return nil }
         if !candidate.eligibility.eligible { issues.append(contentsOf: candidate.eligibility.reasonDetails.map { .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath ?? "parties[0].allocations[0].transaction_id") }) }
         guard let amount = CNYAmountParser.minorUnits(allocationAmountText), amount > 0 else { issues.append(.init(code: "amount_invalid", message: "分摊金额须为正数，且最多两位小数。", fieldPath: "parties[0].allocations[0].amount_minor")); if recordIssues { newClaimIssues = issues }; return nil }
-        if amount > candidate.availableMinor { issues.append(.init(code: "amount_exceeds_available", message: "分摊金额不能超过服务端可报销余额。", fieldPath: "parties[0].allocations[0].amount_minor")) }
+        if amount > candidate.availableMinor { issues.append(.init(code: "amount_exceeds_available", message: "分摊金额不能超过可报销余额。", fieldPath: "parties[0].allocations[0].amount_minor")) }
         let date = expectedDateText.nilIfEmpty; if !strictDateOrEmpty(date) { issues.append(.init(code: "date_invalid", message: "预计日期必须为 YYYY-MM-DD。", fieldPath: "parties[0].expected_date")) }
         if recordIssues { newClaimIssues = issues }; guard issues.isEmpty else { return nil }
         return .init(title: title, parties: [.init(name: party, expectedDate: date, allocations: [.init(transactionID: candidate.transactionID, amountMinor: amount)])])
@@ -799,14 +799,14 @@ public final class V15ReimbursementModel {
     private func replaceClaimInList(_ claim: V15ReimbursementClaim) { if let index = claims.firstIndex(where: { $0.id == claim.id }) { claims[index] = claim } else { claims.insert(claim, at: 0) } }
     private func replaceReceipt(_ receipt: V15ReimbursementReceipt, owner: UUID) { guard selectedClaim?.id == owner else { return }; if let index = receipts.firstIndex(where: { $0.id == receipt.id }) { receipts[index] = receipt } else { receipts.insert(receipt, at: 0) } }
     private func beginFactRefresh(owner: UUID, source: FactRefreshSource) -> FactRefreshGate {
-        let gate = FactRefreshGate(operationID: UUID(), owner: owner, source: source, phase: .refreshing, message: "服务端已接受到账写入；正在读取最新报销单与到账列表。")
+        let gate = FactRefreshGate(operationID: UUID(), owner: owner, source: source, phase: .refreshing, message: "到账已经保存；正在读取最新报销单与到账列表。")
         factRefreshGates[owner] = gate
         return gate
     }
     private func convergeFacts(_ gate: FactRefreshGate) async {
         guard factRefreshGates[gate.owner]?.operationID == gate.operationID else { return }
         factRefreshGates[gate.owner]?.phase = .refreshing
-        factRefreshGates[gate.owner]?.message = "服务端已接受到账写入；正在读取最新报销单与到账列表。"
+        factRefreshGates[gate.owner]?.message = "到账已经保存；正在读取最新报销单与到账列表。"
         do {
             async let claimRequest = services.reimbursements.claim(id: gate.owner, readCachePolicy: .reloadIgnoringCache)
             async let receiptsRequest = services.reimbursements.receipts(claimID: gate.owner, readCachePolicy: .reloadIgnoringCache)
@@ -828,13 +828,13 @@ public final class V15ReimbursementModel {
         } catch let failure as V15Failure {
             guard factRefreshGates[gate.owner]?.operationID == gate.operationID else { return }
             factRefreshGates[gate.owner]?.phase = .failed
-            factRefreshGates[gate.owner]?.message = "到账写入已被服务端接受，但最新报销事实读取失败：\(failure.message)。当前展示无法归因到最终版本，写入保持锁定；只可重试读取，不会再次发送到账写入。"
+            factRefreshGates[gate.owner]?.message = "到账已经保存，但最新报销数据读取失败：\(failure.message)。请重新读取；不会重复登记到账。"
             markFactRefreshFailure(gate.source, owner: gate.owner, failure: failure)
         } catch {
             guard factRefreshGates[gate.owner]?.operationID == gate.operationID else { return }
-            let failure = V15Failure(kind: .transport, message: "到账写入已完成，但最新报销事实读取失败。")
+            let failure = V15Failure(kind: .transport, message: "到账已经保存，但最新报销数据读取失败。")
             factRefreshGates[gate.owner]?.phase = .failed
-            factRefreshGates[gate.owner]?.message = "到账写入已被服务端接受，但最新报销事实读取失败。当前展示无法归因到最终版本，写入保持锁定；只可重试读取，不会再次发送到账写入。"
+            factRefreshGates[gate.owner]?.message = "到账已经保存，但最新报销数据读取失败。请重新读取；不会重复登记到账。"
             markFactRefreshFailure(gate.source, owner: gate.owner, failure: failure)
         }
     }
@@ -854,7 +854,7 @@ public final class V15ReimbursementModel {
         switch action { case .submit: claim.submittedAt != nil; case .retractSubmission: claim.submittedAt == nil && claim.status == .draft; case .reopen: claim.cancelledAt == nil && (claim.status == .pending || claim.status == .partialReceived); case .void: claim.voidedAt != nil; case .restore: claim.voidedAt == nil; case .archive: claim.archivedAt != nil; case .unarchive: claim.archivedAt == nil }
     }
     private func directReceiptTargetSatisfied(_ receipt: V15ReimbursementReceipt, action: DirectReceiptAction) -> Bool { action == .void ? receipt.voidedAt != nil : receipt.voidedAt == nil }
-    private var factRefreshReason: V15DisabledReason { .init(code: "receipt_fact_refresh_required", message: "到账写入已经发出，但最新报销事实尚未收敛；请重试读取后再操作。", fieldPath: nil) }
+    private var factRefreshReason: V15DisabledReason { .init(code: "receipt_fact_refresh_required", message: "到账已经保存，最新报销数据还没有更新完成；请重新读取后再操作。", fieldPath: nil) }
     private func claimAction(_ action: DirectClaimAction) -> ClaimAction {
         switch action { case .submit: .submit; case .retractSubmission: .retractSubmission; case .reopen: .reopen; case .void: .void; case .restore: .restore; case .archive: .archive; case .unarchive: .unarchive }
     }
@@ -867,7 +867,7 @@ public final class V15ReimbursementModel {
             if claim.submittedAt == nil { return .init(code: "draft_not_cancellable", message: "报销单尚未提交，没有可取消的未到账金额。", fieldPath: "submitted_at") }
             if claim.cancelledAt != nil { return .init(code: "status_not_cancellable", message: "报销单已经取消，不能重复取消。", fieldPath: "cancelled_at") }
             if claim.outstandingMinor <= 0 { return .init(code: "nothing_outstanding", message: "报销单没有可取消的未到账金额。", fieldPath: "outstanding_minor") }
-            return .init(code: "claim_not_cancellable", message: "当前服务端事实不允许取消未到账。", fieldPath: "status")
+            return .init(code: "claim_not_cancellable", message: "当前状态不允许取消未到账。", fieldPath: "status")
         case .submit: return .init(code: "claim_not_submittable", message: "只有未提交、未取消、未归档且未作废的报销单可提交。", fieldPath: "status")
         case .retractSubmission: return .init(code: "claim_not_retractable", message: "只有已提交且尚无到账金额的报销单可撤回提交。", fieldPath: "status")
         case .reopen: return .init(code: "claim_not_reopenable", message: "只有已取消且未归档、未作废的报销单可重新打开。", fieldPath: "status")
@@ -885,16 +885,16 @@ public final class V15ReimbursementModel {
         }
     }
     private func directClaimReadbackMessage(before: V15ReimbursementClaim, fresh: V15ReimbursementClaim, action: DirectClaimAction, expectedVersion: Int) -> String {
-        if directClaimTargetSatisfied(before, action: action) { return "写入前事实已经满足目标，fresh GET 无法证明本次请求；保持结果未知与写入锁。" }
-        if fresh.version <= expectedVersion { return "服务端版本没有前进，无法证明本次请求；保持结果未知与写入锁。" }
-        if fresh.version == expectedVersion + 1, directClaimTargetSatisfied(fresh, action: action) { return "最新事实符合目标字段与版本变化，但后端没有操作归因标记；事实变化但无法归因，保持写入锁。" }
-        return "最新事实发生变化但与原请求的精确状态转移不匹配；事实变化但无法归因，保持写入锁。"
+        if directClaimTargetSatisfied(before, action: action) { return "操作前已经是目标状态，仍无法确认本次结果。请核对后继续。" }
+        if fresh.version <= expectedVersion { return "数据没有变化，仍无法确认本次结果。请核对后继续。" }
+        if fresh.version == expectedVersion + 1, directClaimTargetSatisfied(fresh, action: action) { return "数据已经变化，但仍无法确认是否由本次操作造成。请核对后继续。" }
+        return "最新状态与本次操作不完全一致，暂时无法确认结果。请核对后继续。"
     }
     private func directReceiptReadbackMessage(beforeClaim: V15ReimbursementClaim, beforeReceipt: V15ReimbursementReceipt, freshClaim: V15ReimbursementClaim, freshReceipt: V15ReimbursementReceipt, action: DirectReceiptAction, request: V15ReimbursementReceiptVersionRequest) -> String {
-        if directReceiptTargetSatisfied(beforeReceipt, action: action) { return "写入前到账事实已经满足目标，fresh GET 无法证明本次请求；保持结果未知与写入锁。" }
-        if freshClaim.version <= request.expectedClaimVersion || freshReceipt.version <= request.expectedReceiptVersion { return "报销单或到账记录版本没有同时前进，无法证明本次请求；保持结果未知与写入锁。" }
-        if freshClaim.version == request.expectedClaimVersion + 1, freshReceipt.version == request.expectedReceiptVersion + 1, directReceiptTargetSatisfied(freshReceipt, action: action), beforeClaim.id == freshClaim.id, beforeReceipt.id == freshReceipt.id { return "最新事实符合目标字段与双版本变化，但后端没有操作归因标记；事实变化但无法归因，保持写入锁。" }
-        return "最新到账事实发生变化但与原请求的精确状态转移不匹配；事实变化但无法归因，保持写入锁。"
+        if directReceiptTargetSatisfied(beforeReceipt, action: action) { return "操作前已经是目标状态，仍无法确认本次结果。请核对后继续。" }
+        if freshClaim.version <= request.expectedClaimVersion || freshReceipt.version <= request.expectedReceiptVersion { return "报销单或到账记录没有同步变化，仍无法确认本次结果。请核对后继续。" }
+        if freshClaim.version == request.expectedClaimVersion + 1, freshReceipt.version == request.expectedReceiptVersion + 1, directReceiptTargetSatisfied(freshReceipt, action: action), beforeClaim.id == freshClaim.id, beforeReceipt.id == freshReceipt.id { return "数据已经变化，但仍无法确认是否由本次操作造成。请核对后继续。" }
+        return "最新到账状态与本次操作不完全一致，暂时无法确认结果。请核对后继续。"
     }
     private func partyDraft(_ party: V15ReimbursementParty) -> V15ReimbursementPartyDraft { .init(id: party.id, name: party.name, expectedDate: party.expectedDate, note: party.note, allocations: party.allocations.map { .init(id: $0.id, transactionID: $0.transactionID, amountMinor: $0.amountMinor) }) }
     private func claimIdentity(_ request: V15ReimbursementClaimDraft) -> String { request.parties.flatMap(\.allocations).reduce("\(request.title)|\(request.parties.map(\.name).joined(separator: ","))") { "\($0)|\($1.transactionID)|\($1.amountMinor)" } }

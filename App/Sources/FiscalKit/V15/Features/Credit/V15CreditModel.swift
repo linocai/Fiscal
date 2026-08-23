@@ -105,27 +105,27 @@ public final class V15CreditModel {
             return .init(code: "schedule_command_in_flight", message: "账期变更正在提交/刷新结果，请稍候；此时不能重新预览或重复提交。", fieldPath: nil)
         }
         guard scheduleState.unknownAttempt != nil else { return nil }
-        return .init(code: "unknown_schedule_recovery_required", message: "上一笔账期变更结果尚未确认；请使用同一请求重试、刷新账户后核对，或明确放弃后刷新账户。", fieldPath: nil)
+        return .init(code: "unknown_schedule_recovery_required", message: "上一笔账期变更结果尚未确认；请安全重试相同操作、刷新账户后核对，或停止检查后刷新账户。", fieldPath: nil)
     }
     /// Preview has a deliberately narrow enablement predicate so ordinary
     /// field validation can still surface its inline reasons.  An unresolved
     /// command and offline mode are the only states that must not dispatch it.
     public var schedulePreviewDisabledReason: V15DisabledReason? {
         if let command = scheduleCommandDisabledReason { return command }
-        if isOffline { return .init(code: "offline_read_only", message: "离线快照仅可查看，无法修改账期。", fieldPath: nil) }
+        if isOffline { return .init(code: "offline_read_only", message: "离线时只可查看，无法修改账期。", fieldPath: nil) }
         return nil
     }
     public var canRequestSchedulePreview: Bool { schedulePreviewDisabledReason == nil }
     public var scheduleDisabledReason: V15DisabledReason? {
         if let command = scheduleCommandDisabledReason { return command }
-        if isOffline { return .init(code: "offline_read_only", message: "离线快照仅可查看，无法修改账期。", fieldPath: nil) }
-        if scheduleReloadRequired { return .init(code: "reload_required", message: "账期事实已变化，请先刷新账户后重新预览。", fieldPath: nil) }
+        if isOffline { return .init(code: "offline_read_only", message: "离线时只可查看，无法修改账期。", fieldPath: nil) }
+        if scheduleReloadRequired { return .init(code: "reload_required", message: "账期已经更新，请先刷新账户后重新预览。", fieldPath: nil) }
         if let issue = scheduleIssues.first { return .init(code: issue.code, message: issue.message, fieldPath: issue.fieldPath) }
-        guard let preview = schedulePreview else { return .init(code: "preview_required", message: "请先预览服务端影响后再提交。", fieldPath: nil) }
-        guard let token = preview.previewToken else { return .init(code: "preview_token_missing", message: "服务器未提供可提交的预览令牌。", fieldPath: nil) }
+        guard let preview = schedulePreview else { return .init(code: "preview_required", message: "请先查看账期预览后再提交。", fieldPath: nil) }
+        guard let token = preview.previewToken else { return .init(code: "preview_token_missing", message: "这个预览暂时不能提交，请重新预览。", fieldPath: nil) }
         guard preview.previewExpiresAt.map({ $0 > now() }) ?? false else { return .init(code: "preview_expired", message: "预览已过期，请重新预览。", fieldPath: nil) }
         guard preview.availableActions.contains("commit_schedule_change") else {
-            return .init(code: "server_action_unavailable", message: "服务端本次预览未允许提交账期变更。", fieldPath: nil)
+            return .init(code: "server_action_unavailable", message: "本次预览暂时不能提交账期变更。", fieldPath: nil)
         }
         _ = token
         return nil
@@ -134,7 +134,7 @@ public final class V15CreditModel {
     public var isCommitting: Bool { if case .committing = schedulePhase { return true }; return false }
     public var unknownRetryDisabledReason: V15DisabledReason? {
         guard case .unknown = schedulePhase, isOffline else { return nil }
-        return .init(code: "offline_read_only", message: "离线快照仅可查看，无法使用同一请求键重试。", fieldPath: nil)
+        return .init(code: "offline_read_only", message: "离线时无法检查保存结果。", fieldPath: nil)
     }
 
     public func load() async {
@@ -164,7 +164,7 @@ public final class V15CreditModel {
         let previousAccountID = selectedAccount?.id
         selectedAccountVersion = nil; invalidatePreview(for: previousAccountID, abandonKey: state(for: previousAccountID).unknownAttempt == nil)
         selectedAccount = account; cycles = []; nextCycleCursor = nil; cyclePagePhase = .idle; selectedCycle = nil; cycleDetailPhase = .idle; cycleTransactions = []; nextTransactionCursor = nil; transactionPagePhase = .idle; applyDraft(from: account)
-        do { let master = try await services.masterData.account(id: account.id); guard isCurrentList(current, accountID: account.id) else { return }; selectedAccountVersion = master.version } catch { guard isCurrentList(current, accountID: account.id) else { return }; phase = .failed(.init(kind: .transport, message: "信用账户版本读取失败。")); return }
+        do { let master = try await services.masterData.account(id: account.id); guard isCurrentList(current, accountID: account.id) else { return }; selectedAccountVersion = master.version } catch { guard isCurrentList(current, accountID: account.id) else { return }; phase = .failed(.init(kind: .transport, message: "信用账户数据读取失败。")); return }
         await loadCycles(reset: true, generation: current)
     }
 
@@ -269,7 +269,7 @@ public final class V15CreditModel {
         // recovery state must stay byte-for-byte visible while a prior command
         // is unresolved, and it must produce zero preview wire traffic.
         guard scheduleCommandDisabledReason == nil else { return }
-        guard !isOffline else { mutateScheduleState(for: account.id) { $0.phase = .failed(.init(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法修改账期。")) }; return }
+        guard !isOffline else { mutateScheduleState(for: account.id) { $0.phase = .failed(.init(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法修改账期。")) }; return }
         guard let request = validRequest(account: account) else { mutateScheduleState(for: account.id) { $0.phase = .idle }; return }
         let current = nextPreviewGeneration(for: account.id)
         mutateScheduleState(for: account.id) { state in state.phase = .previewing; state.preview = nil; state.serverReasons = []; state.serverFieldIssues = [] }
@@ -320,7 +320,7 @@ public final class V15CreditModel {
               let attempt = scheduleState.unknownAttempt,
               attempt.accountID == accountID else { return }
         guard !isOffline else {
-            mutateScheduleState(for: accountID) { $0.retryNotice = "离线快照仅可查看，无法使用同一请求键重试。" }
+            mutateScheduleState(for: accountID) { $0.retryNotice = "离线时无法检查保存结果。" }
             return
         }
         let current = nextCommitGeneration(for: accountID)
@@ -337,7 +337,7 @@ public final class V15CreditModel {
             if failure.kind == .conflict, let conflict = failure.conflict { mutateScheduleState(for: accountID) { $0.unknownAttempt = nil }; enterScheduleConflict(conflict, accountID: accountID) }
             else if V15LedgerCreateService.outcomeMayBeUnknown(failure) { mutateScheduleState(for: accountID) { $0.preview = nil; $0.phase = .unknown } }
             else if failure.kind == .offlineReadOnly {
-                mutateScheduleState(for: accountID) { $0.retryNotice = "离线快照仅可查看，无法使用同一请求键重试。"; $0.phase = .unknown }
+                mutateScheduleState(for: accountID) { $0.retryNotice = "离线时无法检查保存结果。"; $0.phase = .unknown }
             }
             else { mutateScheduleState(for: accountID) { $0.unknownAttempt = nil; $0.serverFieldIssues = failure.fieldIssues; $0.phase = .failed(failure) } }
         } catch { guard isCurrentCommit(current, accountID: accountID, attempt: attempt) else { return }; mutateScheduleState(for: accountID) { $0.preview = nil; $0.phase = .unknown } }
@@ -368,7 +368,7 @@ public final class V15CreditModel {
               attempt.accountID == accountID,
               unknownReadbackPhase != .loading else { return }
         guard offlineSnapshotAt == nil else {
-            mutateScheduleState(for: accountID) { $0.readbackNotice = "离线快照不能核对当前服务器事实。"; $0.readbackPhase = .notConfirmed }
+            mutateScheduleState(for: accountID) { $0.readbackNotice = "离线时无法检查最新状态。"; $0.readbackPhase = .notConfirmed }
             return
         }
         let current = nextReadbackGeneration(for: accountID)
@@ -407,7 +407,7 @@ public final class V15CreditModel {
             // snapshot marker is checked after the full fresh-read chain so
             // no snapshot fact can ever confirm an ambiguous write.
             if offlineSnapshotAt != nil {
-                mutateScheduleState(for: accountID) { $0.readbackNotice = "离线快照不能核对当前服务器事实。"; $0.readbackPhase = .notConfirmed; $0.phase = .unknown }
+                mutateScheduleState(for: accountID) { $0.readbackNotice = "离线时无法检查最新状态。"; $0.readbackPhase = .notConfirmed; $0.phase = .unknown }
             } else if intended {
                 idempotency.succeeded(scope: "credit-schedule:\(attempt.accountID.uuidString)", payloadIdentity: attempt.payloadIdentity)
                 mutateScheduleState(for: accountID) { $0.preview = nil; $0.unknownAttempt = nil; $0.readbackPhase = .confirmed; $0.phase = .readbackConfirmed }
@@ -439,7 +439,7 @@ public final class V15CreditModel {
     }
     private func validateScheduleInput() {
         var issues: [V15FieldIssue] = []
-        if cycleMode == .unknown { issues.append(.init(code: "cycle_mode_invalid", message: "请选择服务器支持的账期方式。", fieldPath: "cycle_mode")) }
+        if cycleMode == .unknown { issues.append(.init(code: "cycle_mode_invalid", message: "请选择可用的账期方式。", fieldPath: "cycle_mode")) }
         for (text, field, label) in [(statementDayText, "statement_day", "账单日"), (dueDayText, "due_day", "还款日")] {
             guard let day = Int(text), (1...28).contains(day) else { issues.append(.init(code: "day_invalid", message: "\(label)须为 1 到 28 的整数。", fieldPath: field)); continue }
         }
@@ -448,7 +448,7 @@ public final class V15CreditModel {
     }
     private func validRequest(account: V15CreditAccountSummary) -> V15CreditScheduleChangeRequest? {
         validateScheduleInput(); guard scheduleIssues.isEmpty, let statement = Int(statementDayText), let due = Int(dueDayText), cycleMode != .unknown else { return nil }
-        guard let accountVersion = selectedAccountVersion else { mutateScheduleState(for: account.id) { $0.issues = [.init(code: "account_version_loading", message: "正在读取账户版本，暂不能预览。", fieldPath: "expected_version")] }; return nil }
+        guard let accountVersion = selectedAccountVersion else { mutateScheduleState(for: account.id) { $0.issues = [.init(code: "account_version_loading", message: "正在读取账户数据，暂时不能预览。", fieldPath: "expected_version")] }; return nil }
         return .init(expectedVersion: accountVersion, cycleMode: cycleMode.rawValue, statementDay: statement, dueDay: due)
     }
     private func currentRequestIdentity(account: V15CreditAccountSummary) -> String { requestIdentity(.init(expectedVersion: selectedAccountVersion ?? -1, cycleMode: cycleMode.rawValue, statementDay: Int(statementDayText) ?? 0, dueDay: Int(dueDayText) ?? 0)) }

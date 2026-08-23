@@ -38,7 +38,7 @@ public struct V15CreditMacView: View {
     @ViewBuilder private var cycles: some View {
         ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) {
             if let account = model.selectedAccount {
-                HStack(alignment: .top) { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text("账期脊柱").font(V15Typography.surfaceTitle); Text("当前欠款").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)); V15MoneyText(minorUnits: account.currentDebtMinor, direction: .outflow) }; Spacer(); Button("调整账期") { model.openScheduleSheet() }.disabled(model.isOffline).keyboardShortcut("s", modifiers: [.command, .option]).accessibilityIdentifier("v15.f3b1.schedule.open") }
+                HStack(alignment: .top) { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text("账期").font(V15Typography.surfaceTitle); Text("当前欠款").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)); V15MoneyText(minorUnits: account.currentDebtMinor, direction: .outflow) }; Spacer(); Button("调整账期") { model.openScheduleSheet() }.disabled(model.isOffline).keyboardShortcut("s", modifiers: [.command, .option]).accessibilityIdentifier("v15.f3b1.schedule.open") }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 125), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
                     creditMetric("信用额度", account.creditLimitMinor, .neutral)
                     creditMetric("当前欠款", account.currentDebtMinor, .outflow)
@@ -53,7 +53,7 @@ public struct V15CreditMacView: View {
                         }
                     }.accessibilityIdentifier("v15.f3b1.mac.future-installments")
                 }
-                if account.hasOverdueCycle { Text("存在逾期账期；请先查看服务器事实。 ").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) }
+                if account.hasOverdueCycle { Text("存在逾期账期，请先查看详情。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) }
             }
             switch model.phase {
             case .idle, .loading: V15LoadingSkeleton()
@@ -77,14 +77,14 @@ public struct V15CreditMacView: View {
     }
     @ViewBuilder private var inspector: some View {
         ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) {
-            Text("检查器").font(V15Typography.surfaceTitle)
+            Text("详情").font(V15Typography.surfaceTitle)
             switch model.cycleDetailPhase {
-            case .idle: V15EmptyState(title: "选择一个账期", explanation: "账期详情、分期期间和账目均来自服务器。")
+            case .idle: V15EmptyState(title: "选择一个账期", explanation: "这里显示账期详情、分期和相关账目。")
             case .loading: V15LoadingSkeleton()
             case .failed(let failure): V15ServiceErrorState(message: failure.message) {}
             case .loaded:
                 if let cycle = model.selectedCycle {
-                    V15Section("账期事实", detail: "版本 \(cycle.version)") {
+                    V15Section("账期详情") {
                         Text("账单日 \(cycle.statementDate) · 还款日 \(cycle.dueDate)").font(V15Typography.secondary)
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
                             creditMetric("本期应还", cycle.amountDueMinor, .outflow)
@@ -118,7 +118,7 @@ private struct V15CreditScheduleMacSheet: View {
             TextField("还款日（1–28）", text: $model.dueDayText).accessibilityIdentifier("v15.f3b1.schedule.due-day")
             ForEach(model.scheduleIssues, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) }
             ForEach(model.scheduleServerFieldIssues, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) }.accessibilityIdentifier("v15.f3b1.schedule.server-field-reasons")
-            Button("预览服务端影响") { Task { await model.requestSchedulePreview() } }
+            Button("取预览") { Task { await model.requestSchedulePreview() } }
                 .disabled(!model.canRequestSchedulePreview)
                 .accessibilityIdentifier("v15.f3b1.schedule.preview")
             if let reason = model.schedulePreviewDisabledReason {
@@ -140,18 +140,18 @@ private struct V15CreditScheduleMacSheet: View {
         case .idle: EmptyView()
         case .previewing, .committing: V15LoadingSkeleton()
         case .previewed:
-            if let preview = model.schedulePreview { V15Section("服务端影响", detail: "\(preview.affectedCycleCount) 个账期") { Text("消费 \(preview.purchaseCount) 笔 · 还款 \(preview.repaymentCount) 笔 · 分期 \(preview.installmentPeriodCount) 期").font(V15Typography.secondary); if let version = preview.expectedAccountVersion { Text("预览基于账户版本 \(version)").font(V15Typography.secondary).accessibilityIdentifier("v15.f3b1.schedule.preview.account-version") }; ForEach(preview.warnings + preview.conflicts, id: \.self) { Text($0).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) }; Button("提交账期变更") { Task { await model.commitSchedule() } }.disabled(!model.canCommitSchedule).accessibilityIdentifier("v15.f3b1.schedule.commit"); if let reason = model.scheduleDisabledReason { Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.commit-reason") } }.accessibilityIdentifier("v15.f3b1.schedule.preview") }
-        case .succeeded(let result): V15Section("已提交", detail: "数据版本 \(result.dataRevision.map(String.init) ?? "未提供")") { Text("服务器已返回账期变更结果。 ").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3b1.schedule.receipt")
-        case .readbackConfirmed: V15Section("已由账户事实确认") { Text("服务器当前账期与原提交意图一致；这是只读核对，不是提交回执。 ").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3b1.schedule.readback-confirmed")
+            if let preview = model.schedulePreview { V15Section("影响预览", detail: "\(preview.affectedCycleCount) 个账期") { Text("消费 \(preview.purchaseCount) 笔 · 还款 \(preview.repaymentCount) 笔 · 分期 \(preview.installmentPeriodCount) 期").font(V15Typography.secondary); ForEach(preview.warnings + preview.conflicts, id: \.self) { Text($0).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) }; Button("确认账期变更") { Task { await model.commitSchedule() } }.disabled(!model.canCommitSchedule).accessibilityIdentifier("v15.f3b1.schedule.commit"); if let reason = model.scheduleDisabledReason { Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.commit-reason") } }.accessibilityIdentifier("v15.f3b1.schedule.preview") }
+        case .succeeded: V15Section("已提交") { Text("账期已更新。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3b1.schedule.receipt")
+        case .readbackConfirmed: V15Section("已核对") { Text("当前账期与刚才的修改一致。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3b1.schedule.readback-confirmed")
         case .unknown: V15Section("提交结果未知") {
-            Text("只可使用同一请求键重试，或刷新账户后核对。 ").font(V15Typography.secondary)
+            Text("可以安全检查保存结果，或刷新账户后核对。").font(V15Typography.secondary)
             switch model.unknownReadbackPhase {
             case .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.loading")
-            case .notConfirmed: Text(model.unknownReadbackNotice ?? "尚未确认：服务器事实不足以证明原提交已生效。 ").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.not-confirmed")
+            case .notConfirmed: Text(model.unknownReadbackNotice ?? "尚未确认这次修改是否生效。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.not-confirmed")
             case .failed(let failure): Text(failure.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.error")
             case .idle, .confirmed: EmptyView()
             }
-            Button("用同一请求重试") { Task { await model.retryUnknownCommit() } }
+            Button("安全检查保存结果") { Task { await model.retryUnknownCommit() } }
                 .disabled(model.unknownReadbackPhase == .loading || model.unknownRetryDisabledReason != nil)
                 .accessibilityIdentifier("v15.f3b1.schedule.unknown.retry")
             if let reason = model.unknownRetryDisabledReason {
@@ -186,7 +186,7 @@ public struct V15CreditMacGalleryEvidence: View {
                 Spacer()
             }.padding(V15Spacing.md).frame(minWidth: 220)
             VStack(alignment: .leading, spacing: V15Spacing.md) {
-                Text(scenario == "credit-page-error" ? "账期脊柱" : "调整账期").font(V15Typography.surfaceTitle)
+                Text(scenario == "credit-page-error" ? "账期" : "调整账期").font(V15Typography.surfaceTitle)
                 if scenario == "credit-page-error" {
                     V15Section("账期读取失败") { Text("下一页账期读取失败。请保留当前账期后重试。").font(V15Typography.secondary); Button("重试读取下一页") {} }
                 } else {
@@ -202,8 +202,8 @@ public struct V15CreditMacGalleryEvidence: View {
     }
     @ViewBuilder private var notice: some View {
         switch scenario {
-        case "credit-expired": V15Section("预览已过期") { Text("预览已过期，请重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color); Button("重新预览服务端影响") {} }
-        case "credit-disabled": V15Section("服务器未允许提交") { Text("服务端本次预览未允许提交账期变更。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color); Button("提交账期变更") {}.disabled(true) }
+        case "credit-expired": V15Section("预览已过期") { Text("预览已过期，请重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color); Button("重新取预览") {} }
+        case "credit-disabled": V15Section("暂时无法提交") { Text("当前预览不允许确认账期变更。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color); Button("确认账期变更") {}.disabled(true) }
         default: V15Section("账期已变化") { Text("账期数据已变化。请刷新账户后重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color); Button("刷新账户后重新预览") {} }
         }
     }

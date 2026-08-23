@@ -105,7 +105,7 @@ public final class V15CashFlowModel {
     public var updateReasons: [V15DisabledReason] {
         var reasons = baseWriteReasons() + editorIssues.map(Self.reason)
         guard case .edit(let id) = editorMode, let item = selectedItem, item.id == id else { reasons.append(.init(code: "editor_owner_changed", message: "请选择要修改的现金流事项。", fieldPath: nil)); return Self.unique(reasons) }
-        if !item.allows(.edit) { reasons.append(.init(code: "server_action_unavailable", message: "服务端没有允许修改此事项。", fieldPath: "actions")) }
+        if !item.allows(.edit) { reasons.append(.init(code: "server_action_unavailable", message: "此事项当前不能修改。", fieldPath: "actions")) }
         if item.manualItemID == nil { reasons.append(.init(code: "manual_item_required", message: "系统事项必须使用受限的系统编辑入口。", fieldPath: "manual_item_id")) }
         if item.seriesID == nil && mutationScope == .thisAndFuture { reasons.append(.init(code: "scope_unavailable", message: "单次事项没有“本次及以后”的范围。", fieldPath: "scope")) }
         if (item.status == .settled || item.status == .cancelled) && mutationScope != .occurrence { reasons.append(.init(code: "completed_scope_invalid", message: "已入账或已取消事项只能修改本次。", fieldPath: "scope")) }
@@ -114,7 +114,7 @@ public final class V15CashFlowModel {
     public var settleReasons: [V15DisabledReason] {
         var reasons = baseWriteReasons() + settleIssues.map(Self.reason)
         guard case .settle(let id) = editorMode, let item = selectedItem, item.id == id else { reasons.append(.init(code: "settle_owner_changed", message: "请选择要入账的现金流事项。", fieldPath: nil)); return Self.unique(reasons) }
-        if !item.allows(.settle) { reasons.append(.init(code: "server_action_unavailable", message: "服务端没有允许此事项入账。", fieldPath: "actions")) }
+        if !item.allows(.settle) { reasons.append(.init(code: "server_action_unavailable", message: "此事项当前不能入账。", fieldPath: "actions")) }
         return Self.unique(reasons)
     }
     public var systemUpdateReasons: [V15DisabledReason] {
@@ -122,7 +122,7 @@ public final class V15CashFlowModel {
         guard case .systemEdit(let id) = editorMode, let item = selectedItem, item.id == id else { reasons.append(.init(code: "system_owner_changed", message: "请选择系统事项。", fieldPath: nil)); return Self.unique(reasons) }
         if item.systemKind == .creditCycle { reasons.append(.init(code: "credit_projection_read_only", message: "信用账单投影来自真实债务，请到还款流程处理。", fieldPath: "system_kind")) }
         if item.systemKind != .reimbursement || item.systemReferenceID == nil { reasons.append(.init(code: "system_item_unsupported", message: "此系统事项没有可用的受限编辑入口。", fieldPath: "system_kind")) }
-        if !item.allows(.edit) { reasons.append(.init(code: "server_action_unavailable", message: "服务端没有允许修改此系统事项。", fieldPath: "actions")) }
+        if !item.allows(.edit) { reasons.append(.init(code: "server_action_unavailable", message: "此自动事项当前不能修改。", fieldPath: "actions")) }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { reasons.append(.init(code: "title_required", message: "请填写标题。", fieldPath: "title")) }
         if trimmed.count > 120 { reasons.append(.init(code: "title_too_long", message: "标题最多 120 个字符。", fieldPath: "title")) }
@@ -136,7 +136,7 @@ public final class V15CashFlowModel {
         if item.isDisplayOnly { reasons.append(.init(code: "unknown_cash_flow_fact", message: "未知状态或方向只可查看。", fieldPath: "status")) }
         guard item.manualItemID != nil else { reasons.append(.init(code: "manual_item_required", message: "系统投影不能使用手工事项命令。", fieldPath: "manual_item_id")); return Self.unique(reasons) }
         let serverAction: V15CashFlowAction = action == .confirm ? .confirm : .cancel
-        if !item.allows(serverAction) { reasons.append(.init(code: "server_action_unavailable", message: "服务端没有允许“\(action == .confirm ? "确认" : "取消")”。", fieldPath: "actions")) }
+        if !item.allows(serverAction) { reasons.append(.init(code: "server_action_unavailable", message: "当前状态不能执行此操作。", fieldPath: "actions")) }
         if item.seriesID == nil && mutationScope == .thisAndFuture { reasons.append(.init(code: "scope_unavailable", message: "单次事项没有“本次及以后”的范围。", fieldPath: "scope")) }
         if (item.status == .settled || item.status == .cancelled) && mutationScope != .occurrence { reasons.append(.init(code: "completed_scope_invalid", message: "已入账或已取消事项只能操作本次。", fieldPath: "scope")) }
         return Self.unique(reasons)
@@ -264,15 +264,15 @@ public final class V15CashFlowModel {
             case .system(let kind, let reference, _): observed = try await services.cashFlow.active(accountID: nil, readCachePolicy: .reloadIgnoringCache).items.first { $0.systemKind == kind && $0.systemReferenceID == reference }
             }
             guard token == detailGeneration, directAttempt == attempt else { return }
-            if let observed { if selectedItem?.id == attempt.owner { selectedItem = observed }; replaceVisible(observed); directReadbackMessage = "已读取最新服务端事实：\(observed.status.displayName) · v\(observed.version)。接口没有操作标记，无法把该事实归因于刚才的命令；不会自动确认成功。" }
-            else { directReadbackMessage = "fresh GET 未找到该事项。接口没有操作标记，仍无法归因；不会自动确认成功。" }
+            if let observed { if selectedItem?.id == attempt.owner { selectedItem = observed }; replaceVisible(observed); directReadbackMessage = "最新状态为“\(observed.status.displayName)”，但仍无法确认是否由刚才的操作造成。请核对后继续。" }
+            else { directReadbackMessage = "最新列表中没有找到此事项，但仍无法确认刚才的操作结果。请核对后继续。" }
             directReadbackCompleted = true; mutationPhase = .unknown
         } catch let failure as V15Failure {
             guard token == detailGeneration, directAttempt == attempt else { return }
-            directReadbackMessage = "fresh GET 失败：\(failure.message)。写入继续锁定。"; mutationPhase = .unknown
+            directReadbackMessage = "检查最新状态失败：\(failure.message)。暂时不能继续保存。"; mutationPhase = .unknown
         } catch {
             guard token == detailGeneration, directAttempt == attempt else { return }
-            directReadbackMessage = "fresh GET 失败，写入继续锁定。"; mutationPhase = .unknown
+            directReadbackMessage = "检查最新状态失败，暂时不能继续保存。"; mutationPhase = .unknown
         }
     }
 
@@ -293,7 +293,7 @@ public final class V15CashFlowModel {
             returned.forEach(replaceVisible)
             if let first = returned.first, selectionStillOwned(by: attempt) { selectedItem = first }
             let gate = FactRefreshGate(operationID: UUID(), owner: attempt.owner, manualItemID: ownerID, filterID: accountFilterID, month: historyMonth)
-            factRefreshGate = gate; mutationPhase = .loading; factRefreshMessage = "写入已被服务端接受，正在刷新现金流事实与历史。"
+            factRefreshGate = gate; mutationPhase = .loading; factRefreshMessage = "更改已经保存，正在更新现金流与历史。"
             await convergeFacts(gate)
         } catch let failure as V15Failure {
             guard stableAttempt == attempt else { return }
@@ -318,14 +318,14 @@ public final class V15CashFlowModel {
             guard directAttempt == attempt else { return }
             directAttempt = nil; resultItems = returned; returned.forEach(replaceVisible); if selectedItem?.id == attempt.owner, let owner = returned.first(where: { $0.id == attempt.owner }) ?? returned.first { selectedItem = owner }
             let gate = FactRefreshGate(operationID: UUID(), owner: attempt.owner, manualItemID: manualID, filterID: accountFilterID, month: historyMonth)
-            factRefreshGate = gate; mutationPhase = .loading; factRefreshMessage = "命令已被服务端接受，正在刷新现金流事实与历史。"
+            factRefreshGate = gate; mutationPhase = .loading; factRefreshMessage = "操作已经完成，正在更新现金流与历史。"
             await convergeFacts(gate)
         } catch let failure as V15Failure {
             guard directAttempt == attempt else { return }; serverIssues = failure.fieldIssues
-            if Self.outcomeUnknown(failure) { mutationPhase = .unknown; directReadbackMessage = "命令结果未知。此接口没有幂等键，不能重发；只能 fresh GET 查看最新事实。" }
+            if Self.outcomeUnknown(failure) { mutationPhase = .unknown; directReadbackMessage = "暂时无法确认操作结果。检查最新状态不会重复操作。" }
             else { directAttempt = nil; mutationPhase = failure.kind == .conflict && failure.conflict != nil ? .conflict(failure.conflict!) : .failed(failure) }
         } catch {
-            guard directAttempt == attempt else { return }; mutationPhase = .unknown; directReadbackMessage = "命令结果未知。此接口没有幂等键，不能重发；只能 fresh GET 查看最新事实。"
+            guard directAttempt == attempt else { return }; mutationPhase = .unknown; directReadbackMessage = "暂时无法确认操作结果。检查最新状态不会重复操作。"
         }
     }
 
@@ -367,10 +367,10 @@ public final class V15CashFlowModel {
             factRefreshGate = nil; factRefreshMessage = nil; mutationPhase = .succeeded; editorMode = .none
         } catch let failure as V15Failure {
             guard factRefreshGate == gate else { return }
-            mutationPhase = .failed(failure); factRefreshMessage = "写入已被接受，但最新 active/history/detail 事实未全部收敛：\(failure.message)。只可重试 fresh GET，不会重发写入。"
+            mutationPhase = .failed(failure); factRefreshMessage = "更改已经保存，但最新数据没有全部更新：\(failure.message)。重新读取不会重复保存。"
         } catch {
             guard factRefreshGate == gate else { return }
-            mutationPhase = .failed(.init(kind: .transport, message: "写入已完成，但最新现金流事实读取失败。")); factRefreshMessage = "写入已被接受，但最新 active/history/detail 事实未全部收敛。只可重试 fresh GET，不会重发写入。"
+            mutationPhase = .failed(.init(kind: .transport, message: "更改已经保存，但最新现金流读取失败。")); factRefreshMessage = "更改已经保存，但最新数据没有全部更新。重新读取不会重复保存。"
         }
     }
 
@@ -549,10 +549,10 @@ public final class V15CashFlowModel {
 
     private func baseWriteReasons() -> [V15DisabledReason] {
         var reasons: [V15DisabledReason] = []
-        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线快照仅可查看，不能写入现金流。", fieldPath: nil)) }
-        if stableAttempt != nil { reasons.append(.init(code: "stable_attempt_pending", message: "上一笔带请求键的操作仍在提交或结果未知；只能用同一请求键恢复。", fieldPath: nil)) }
-        if directAttempt != nil { reasons.append(.init(code: "direct_attempt_pending", message: "上一笔无请求键命令仍未定论；不能重发或开始新写入。", fieldPath: nil)) }
-        if factRefreshGate != nil { reasons.append(.init(code: "fact_refresh_required", message: "写入已接受，但最新事实尚未全部收敛；只能重试读取。", fieldPath: nil)) }
+        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时只可查看，不能保存现金流。", fieldPath: nil)) }
+        if stableAttempt != nil { reasons.append(.init(code: "stable_attempt_pending", message: "上一笔操作仍在处理中，或结果暂时不明。请先安全检查保存结果。", fieldPath: nil)) }
+        if directAttempt != nil { reasons.append(.init(code: "direct_attempt_pending", message: "上一笔操作结果暂时不明。请先检查最新状态。", fieldPath: nil)) }
+        if factRefreshGate != nil { reasons.append(.init(code: "fact_refresh_required", message: "更改已经保存，最新数据还没有更新完成；请重新读取。", fieldPath: nil)) }
         return Self.unique(reasons)
     }
 

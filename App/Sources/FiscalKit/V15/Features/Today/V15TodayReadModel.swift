@@ -86,7 +86,7 @@ public final class V15TodayReadModel {
                 if !validFactsMeta(result.meta) {
                     facts = nil
                     if requiresFactsReload { factsPhase = .requiresReload(factsReloadFailure ?? reloadRequiredFailure()); holdFactsReloadGate() }
-                    else { factsPhase = .failed(.init(kind: .decoding, code: "invalid_facts_meta", message: "服务器当前事实元数据不符合固定口径。")) }
+                    else { factsPhase = .failed(.init(kind: .decoding, code: "invalid_facts_meta", message: "今日概览的数据范围不一致，请重新读取。")) }
                 } else if let requiredFactsRevision, result.meta.dataRevision < requiredFactsRevision {
                     facts = nil
                     factsPhase = .requiresReload(factsReloadFailure ?? reloadRequiredFailure())
@@ -111,7 +111,7 @@ public final class V15TodayReadModel {
         } catch {
             if currentFacts == factsGeneration {
                 if requiresFactsReload { factsPhase = .requiresReload(factsReloadFailure ?? reloadRequiredFailure()); holdFactsReloadGate() }
-                else { factsPhase = .failed(.init(kind: .transport, message: "当前事实读取失败。")) }
+                else { factsPhase = .failed(.init(kind: .transport, message: "今日概览读取失败。")) }
             }
         }
 
@@ -149,11 +149,11 @@ public final class V15TodayReadModel {
     public func openScope(_ scope: V15DrillDownScope) async {
         guard !holdFactsReloadGate() else { return }
         guard let facts else {
-            scopePhase = .failed(.init(kind: .decoding, code: "facts_missing", message: "请先读取当前事实。"))
+            scopePhase = .failed(.init(kind: .decoding, code: "facts_missing", message: "请先读取今日概览。"))
             return
         }
         guard validScope(scope, for: facts) else {
-            scopePhase = .failed(.init(kind: .decoding, code: "unsupported_facts_scope", message: "当前版本无法打开该事实范围。"))
+            scopePhase = .failed(.init(kind: .decoding, code: "unsupported_facts_scope", message: "暂时无法打开这项详情。"))
             return
         }
         scopeGeneration &+= 1
@@ -164,9 +164,9 @@ public final class V15TodayReadModel {
 
     public func openScope(type: String) async {
         guard !holdFactsReloadGate() else { return }
-        guard let facts else { scopePhase = .failed(.init(kind: .decoding, code: "facts_missing", message: "请先读取当前事实。")); return }
+        guard let facts else { scopePhase = .failed(.init(kind: .decoding, code: "facts_missing", message: "请先读取今日概览。")); return }
         let scopes = [facts.cash.scope, facts.credit.scope, facts.reimbursements.scope, facts.completeness.scope].compactMap { $0 }
-        guard let scope = scopes.first(where: { $0.scopeType == type }) else { scopePhase = .failed(.init(kind: .decoding, code: "unsupported_facts_scope", message: "当前版本无法打开该事实范围。")); return }
+        guard let scope = scopes.first(where: { $0.scopeType == type }) else { scopePhase = .failed(.init(kind: .decoding, code: "unsupported_facts_scope", message: "暂时无法打开这项详情。")); return }
         await openScope(scope)
     }
 
@@ -190,7 +190,7 @@ public final class V15TodayReadModel {
         case .cashAccount(let value): await openLinkedRead(value.deepLink)
         case .creditCycle, .reimbursementOutstanding, .completenessIssue, .unknown:
             retryableLinkedRead = nil
-            linkedReadPhase = .unavailable("该事实的后续页面将在后续阶段提供；当前仅保留只读说明。")
+            linkedReadPhase = .unavailable("这项数据的详情暂时无法打开。")
         }
     }
 
@@ -213,7 +213,7 @@ public final class V15TodayReadModel {
         let current = linkGeneration
         guard let destination = parseLink(raw) else {
             retryableLinkedRead = nil
-            linkedReadPhase = .unavailable("链接不符合当前只读安全规则，未发起请求。")
+            linkedReadPhase = .unavailable("此链接暂时无法打开。")
             return
         }
         switch destination {
@@ -286,7 +286,7 @@ public final class V15TodayReadModel {
             let page = try await services.reports.drillDown(scope: scope, cursor: cursor)
             guard generation == scopeGeneration, selectedScope == scope else { return }
             guard page.meta.dataRevision == scope.expectedDataRevision, page.scope.scopeType == scope.scopeType, page.scope.expectedDataRevision == scope.expectedDataRevision else {
-                takeFactsConflict(.init(kind: .conflict, code: "report_facts_scope_changed", message: "当前事实版本已变化，请重新读取。"), generation: generation)
+                takeFactsConflict(.init(kind: .conflict, code: "report_facts_scope_changed", message: "今日概览已经更新，请重新读取。"), generation: generation)
                 return
             }
             scopeItems = appending ? scopeItems + page.items : page.items
@@ -305,7 +305,7 @@ public final class V15TodayReadModel {
             }
         } catch {
             guard generation == scopeGeneration, selectedScope == scope else { return }
-            let failure = V15Failure(kind: .transport, message: appending ? "下一页事实读取失败。" : "事实范围读取失败。")
+            let failure = V15Failure(kind: .transport, message: appending ? "下一页加载失败。" : "这项数据加载失败。")
             if appending { nextPagePhase = .failed(failure); nextPageFailure = failure } else { scopePhase = .failed(failure) }
         }
     }
@@ -315,7 +315,7 @@ public final class V15TodayReadModel {
         requiresFactsReload = true
         factsReloadFailure = failure
         requiredFactsRevision = [failure.conflict?.currentDataRevision, failure.conflict?.latestRevision].compactMap { $0 }.max()
-        factsReloadRequiredReason = .init(code: "facts_reload_required", message: "当前事实版本已变化，需重新读取后才能继续。", fieldPath: nil)
+        factsReloadRequiredReason = .init(code: "facts_reload_required", message: "今日概览已经更新，请重新读取后再继续。", fieldPath: nil)
         facts = nil
         factsPhase = .requiresReload(failure)
         scopeGeneration &+= 1
@@ -337,7 +337,7 @@ public final class V15TodayReadModel {
         linkedReadPhase = .requiresFactsReload(failure)
         return true
     }
-    private func reloadRequiredFailure() -> V15Failure { .init(kind: .conflict, code: "facts_reload_required", message: factsReloadRequiredReason?.message ?? "当前事实已变化，请先重新读取。") }
+    private func reloadRequiredFailure() -> V15Failure { .init(kind: .conflict, code: "facts_reload_required", message: factsReloadRequiredReason?.message ?? "数据已经更新，请先刷新。") }
     private func invalidateLinkedRead() { linkGeneration &+= 1; retryableLinkedRead = nil; linkedReadPhase = .idle }
     private func validFactsMeta(_ meta: V15FactsMeta) -> Bool { meta.timezone == "Asia/Shanghai" && meta.currency == "CNY" && meta.schemaVersion == "1" && meta.dataRevision >= 0 }
     private func validScope(_ scope: V15DrillDownScope, for facts: V15Facts) -> Bool {
@@ -348,10 +348,19 @@ public final class V15TodayReadModel {
     private func parseLink(_ raw: String) -> LinkDestination? {
         guard let components = URLComponents(string: raw), components.scheme == "fiscal", components.percentEncodedQuery == nil, components.fragment == nil, let host = components.host else { return nil }
         let pieces = components.path.split(separator: "/").map(String.init)
-        if host == "reports", pieces.count == 2, pieces[0] == "facts", ["cash_accounts", "credit_cycles", "reimbursement_outstanding", "completeness_issues"].contains(pieces[1]) { return .localFacts("当前事实范围：\(pieces[1])") }
+        if host == "reports", pieces.count == 2, pieces[0] == "facts", ["cash_accounts", "credit_cycles", "reimbursement_outstanding", "completeness_issues"].contains(pieces[1]) { return .localFacts(scopeTitle(pieces[1])) }
         if host == "accounts", pieces.count == 1, let id = UUID(uuidString: pieces[0]) { return .account(id) }
         if host == "transactions", pieces.count == 1, let id = UUID(uuidString: pieces[0]) { return .transaction(id) }
         if ["credit", "reimbursements", "cash-flow", "reconciliation", "statement-imports", "ai", "settings"].contains(host) { return .unavailable("该目标暂不可在当前阶段打开。") }
         return nil
+    }
+    private func scopeTitle(_ value: String) -> String {
+        switch value {
+        case "cash_accounts": "现金账户"
+        case "credit_cycles": "信用账期"
+        case "reimbursement_outstanding": "待报销"
+        case "completeness_issues": "需要补充的信息"
+        default: "相关数据"
+        }
     }
 }

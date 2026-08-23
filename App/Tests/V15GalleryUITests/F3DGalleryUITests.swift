@@ -75,7 +75,7 @@ import XCTest
         XCTAssertFalse(revealButton("v15.f3d.create.open", enabled: false).isEnabled)
         launch("cash-flow-long")
         let unknownStatus = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label CONTAINS %@", "未知状态（future_state）"))
+            .matching(NSPredicate(format: "label CONTAINS %@", "暂时无法识别"))
             .firstMatch
         XCTAssertTrue(unknownStatus.waitForExistence(timeout: 8))
         attach("f3d-ios-display-only-ax5")

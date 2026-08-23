@@ -33,11 +33,11 @@ public struct V15FutureTimelineMacView: View {
         }
     }
     @ViewBuilder private var spine: some View { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) {
-        HStack { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text("日期脊柱").font(V15Typography.cardTitle); Text(model.meta.map { "上海业务日 · 版本 \($0.dataRevision)" } ?? "正在读取服务器未来事项").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; Spacer(); Button { Task { await model.reload() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityIdentifier("v15.f3a.reload") }
+        HStack { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text("未来日程").font(V15Typography.cardTitle); Text(model.meta.map { "更新于 \(V15TodayReadModel.shanghaiDateLabel($0.asOf))" } ?? "正在读取未来事项").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; Spacer(); Button { Task { await model.reload() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityIdentifier("v15.f3a.reload") }
         switch model.phase {
         case .idle, .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3a.loading")
         case .failed(let f): V15ServiceErrorState(message: f.message) { Task { await model.reload() } }.accessibilityIdentifier("v15.f3a.error")
-        case .requiresReload(let f): V15Section("未来事项版本已变化") { Text(f.message); V15ActionButton("取最新数据重新决定") { Task { await model.reload() } }.accessibilityIdentifier("v15.f3a.conflict.reload") }.accessibilityIdentifier("v15.f3a.conflict")
+        case .requiresReload(let f): V15Section("未来事项已更新") { Text(f.message); V15ActionButton("取最新数据重新决定") { Task { await model.reload() } }.accessibilityIdentifier("v15.f3a.conflict.reload") }.accessibilityIdentifier("v15.f3a.conflict")
         case .empty: V15EmptyState(title: "当前窗口没有已知未来事项", explanation: "这不代表未来没有变化。").accessibilityIdentifier("v15.f3a.empty")
         case .loaded: rows
         }
@@ -46,7 +46,7 @@ public struct V15FutureTimelineMacView: View {
         if model.hasNextPage { V15ActionButton("读取下一页", kind: .secondary, disabledReason: model.isLoadingNextPage ? .init(code: "loading_next_page", message: "正在读取下一页。", fieldPath: nil) : nil) { Task { await model.loadNextPage() } }.keyboardShortcut(.downArrow, modifiers: [.command, .option]).accessibilityIdentifier("v15.f3a.next") }
         if let f = model.pageFailure { V15ServiceErrorState(message: f.message) { Task { await model.retryNextPage() } }.accessibilityIdentifier("v15.f3a.page-error") }
     } }
-    @ViewBuilder private var inspector: some View { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { HStack { Text("检查器").font(V15Typography.cardTitle); Spacer(); Button("关闭") { selectedID = nil; model.closeInspector() }.buttonStyle(.borderless).accessibilityIdentifier("v15.f3a.inspector.close") }
+    @ViewBuilder private var inspector: some View { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { HStack { Text("详情").font(V15Typography.cardTitle); Spacer(); Button("关闭") { selectedID = nil; model.closeInspector() }.buttonStyle(.borderless).accessibilityIdentifier("v15.f3a.inspector.close") }
         switch model.inspectorPhase { case .idle: V15EmptyState(title: "选择一个未来事项", explanation: "此处只显示本地只读事件说明。")
         case .unavailable(let message): V15EmptyState(title: "暂不可打开", explanation: message).accessibilityIdentifier("v15.f3a.inspector.unavailable")
         case .showing(let event): V15Section("未来事项") { V15FutureEventRow(event: event); Text("当前阶段不会打开其他领域页面，也不会提交任何变更。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true) }.accessibilityIdentifier("v15.f3a.inspector") }
@@ -67,7 +67,7 @@ private struct V15FutureEventRow: View {
 struct V15FutureTimelineMacPageErrorEvidence: View {
     private let event = V15FutureEvent(sourceType: .creditCycle, sourceID: V15F3AFixtures.creditID, date: "2026-08-20", direction: .outflow, amountMinor: 922_337_203_685_477_580, certainty: .exactDue, title: "超长中文信用账期到期事项，用于确认无截断展示", deepLink: "fiscal://credit/cycles/\(V15F3AFixtures.creditID.uuidString)", accountID: V15F3AFixtures.accountID, claimID: nil, partyID: nil, cycleID: V15F3AFixtures.creditID)
     var body: some View { HSplitView { VStack(alignment: .leading, spacing: V15Spacing.md) { Text("已知未来").font(V15Typography.surfaceTitle); Text("只读时间线").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)); ForEach([7,30,60,90], id: \.self) { Text("未来 \($0) 天").padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background($0 == 30 ? V15Palette.selected.color : .clear, in: RoundedRectangle(cornerRadius: V15Radius.control)) }; Spacer() }.padding(V15Spacing.md).frame(minWidth: 190)
-        ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { Text("日期脊柱").font(V15Typography.cardTitle); Text("上海业务日 · 版本 77").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)); V15FutureEventRow(event: event); V15ActionButton("读取下一页", kind: .secondary) {}.accessibilityIdentifier("v15.f3a.next"); V15ServiceErrorState(message: "下一页未来事项读取失败。") {}.accessibilityIdentifier("v15.f3a.page-error") }.padding(V15Spacing.md) }.frame(minWidth: 390)
-        VStack(alignment: .leading, spacing: V15Spacing.md) { Text("检查器").font(V15Typography.cardTitle); Spacer(); V15EmptyState(title: "选择一个未来事项", explanation: "此处只显示本地只读事件说明。"); Spacer() }.padding(V15Spacing.md).frame(minWidth: 280) }.background(V15Palette.paper.color).accessibilityIdentifier("v15.f3a.timeline.macos") }
+        ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { Text("未来日程").font(V15Typography.cardTitle); Text("上海业务日").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)); V15FutureEventRow(event: event); V15ActionButton("读取下一页", kind: .secondary) {}.accessibilityIdentifier("v15.f3a.next"); V15ServiceErrorState(message: "暂时无法读取更多未来事项。") {}.accessibilityIdentifier("v15.f3a.page-error") }.padding(V15Spacing.md) }.frame(minWidth: 390)
+        VStack(alignment: .leading, spacing: V15Spacing.md) { Text("详情").font(V15Typography.cardTitle); Spacer(); V15EmptyState(title: "选择一个未来事项", explanation: "这里显示只读详情。"); Spacer() }.padding(V15Spacing.md).frame(minWidth: 280) }.background(V15Palette.paper.color).accessibilityIdentifier("v15.f3a.timeline.macos") }
 }
 #endif

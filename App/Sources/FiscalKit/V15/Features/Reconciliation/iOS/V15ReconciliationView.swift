@@ -32,8 +32,8 @@ public struct V15ReconciliationView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
-            Text("账面事实与实际余额").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
-            Text("核对只保存锚点，不自动改账。差额需要通过正式流水修正。").font(V15Typography.body).foregroundStyle(V15Palette.ink.color.opacity(0.68)).fixedSize(horizontal: false, vertical: true)
+            Text("账面余额与实际余额").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
+            Text("核对只保存记录，不会自动改账。差额需要通过账目修正。").font(V15Typography.body).foregroundStyle(V15Palette.ink.color.opacity(0.68)).fixedSize(horizontal: false, vertical: true)
             if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot).accessibilityIdentifier("v15.f3e.offline") }
         }
     }
@@ -61,7 +61,7 @@ public struct V15ReconciliationView: View {
                     }.scrollIndicators(.hidden)
                 }
             }
-            V15ActionButton(model.hasUnknownAttempt ? "返回未知写入核对" : "开始余额核对", symbol: "checkmark.circle", disabledReasons: model.editorOpenReasons) { model.beginEditor(); showsEditor = true }
+            V15ActionButton(model.hasUnknownAttempt ? "检查上次保存结果" : "开始余额核对", symbol: "checkmark.circle", disabledReasons: model.editorOpenReasons) { model.beginEditor(); showsEditor = true }
                 .accessibilityIdentifier("v15.f3e.editor.open")
         }
     }
@@ -104,7 +104,7 @@ public struct V15ReconciliationView: View {
                 .accessibilityIdentifier("v15.f3e.ignore.expiry")
             switch model.attentionPhase {
             case .idle, .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3e.attention.loading")
-            case .empty: V15EmptyState(title: "没有待处理事项", explanation: "当前核对与相关业务事实平静。").accessibilityIdentifier("v15.f3e.attention.empty")
+            case .empty: V15EmptyState(title: "没有待处理事项", explanation: "当前没有需要你处理的核对问题。").accessibilityIdentifier("v15.f3e.attention.empty")
             case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.refreshAttention() } }.accessibilityIdentifier("v15.f3e.attention.error")
             case .loaded:
                 ForEach(model.attention) { item in
@@ -162,14 +162,14 @@ public struct V15ReconciliationView: View {
             V15Section("确认并保存") {
                 Text(model.selectedTarget?.label ?? "—").font(V15Typography.cardTitle)
                 if let amount = CNYAmountParser.minorUnits(model.actualBalanceText) { reconciliationComparison(actual: amount) }
-                Text("截至 \(model.asOfDateText) · API按UTC时间戳保存").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                Text("截至 \(model.asOfDateText) · 按上海日期保存").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 Text("保存只建立核对证据，不会创建余额调整流水。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
             }.accessibilityIdentifier("v15.f3e.editor.step3")
         }
     }
 
     @ViewBuilder private var mutationSurface: some View {
-        if let message = model.successMessage { V15SuccessReceiptState(title: "事实已刷新", detail: message).accessibilityIdentifier("v15.f3e.success") }
+        if let message = model.successMessage { V15SuccessReceiptState(title: "数据已更新", detail: message).accessibilityIdentifier("v15.f3e.success") }
         if model.mutationPhase == .loading, !model.hasAcceptedRefreshGate {
             V15LoadingSkeleton().accessibilityIdentifier("v15.f3e.mutation.loading")
         }
@@ -178,15 +178,15 @@ public struct V15ReconciliationView: View {
                 VStack(alignment: .leading, spacing: V15Spacing.xs) {
                     Text("\(model.mutationIntentLabel)结果未知").font(V15Typography.cardTitle)
                     Text(model.unknownFactsMessage ?? "不会重发，也不会根据相似记录推断成功。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
-                    V15ActionButton("只读取最新事实", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线不能执行fresh GET。", fieldPath: nil) : nil) { Task { await model.readFreshFactsForUnknown() } }.accessibilityIdentifier("v15.f3e.unknown.readback")
-                    V15ActionButton("人工核对后解除锁", kind: .quiet, disabledReason: model.canAbandonUnknown ? nil : .init(code: "fresh_read_required", message: "请先完成fresh GET。", fieldPath: nil)) { model.abandonUnknown() }.accessibilityIdentifier("v15.f3e.unknown.abandon")
+                    V15ActionButton("检查最新状态", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能检查最新状态。", fieldPath: nil) : nil) { Task { await model.readFreshFactsForUnknown() } }.accessibilityIdentifier("v15.f3e.unknown.readback")
+                    V15ActionButton("核对后继续", kind: .quiet, disabledReason: model.canAbandonUnknown ? nil : .init(code: "fresh_read_required", message: "请先检查最新状态。", fieldPath: nil)) { model.abandonUnknown() }.accessibilityIdentifier("v15.f3e.unknown.abandon")
                 }
             }.accessibilityIdentifier("v15.f3e.unknown")
         }
         if model.hasAcceptedRefreshGate {
-            V15PartialProgressState(succeeded: "服务器已接受写入", currentState: model.acceptedRefreshMessage ?? "部分最新事实读取失败", remaining: "只重试GET，不再写入")
+            V15PartialProgressState(succeeded: "刚才的更改已经保存", currentState: model.acceptedRefreshMessage ?? "部分最新数据暂时没有更新", remaining: "接下来只会重新读取，不会重复保存")
                 .accessibilityIdentifier("v15.f3e.fact-refresh")
-            V15ActionButton("重试事实刷新", kind: .secondary, disabledReasons: model.factRefreshRetryReasons) { Task { await model.retryAcceptedRefresh() } }.accessibilityIdentifier("v15.f3e.fact-refresh.retry")
+            V15ActionButton("重新读取", kind: .secondary, disabledReasons: model.factRefreshRetryReasons) { Task { await model.retryAcceptedRefresh() } }.accessibilityIdentifier("v15.f3e.fact-refresh.retry")
         }
         if case .conflict(let conflict) = model.mutationPhase { V15ConflictState(conflict: conflict) { Task { await model.reloadAfterConflict() } }.accessibilityIdentifier("v15.f3e.conflict") }
         if case .failed(let failure) = model.mutationPhase, !model.hasAcceptedRefreshGate, model.hasFailedMutation {
@@ -238,7 +238,7 @@ public struct V15ReconciliationView: View {
     private func reconciliationFact(_ title: String, _ value: V15MinorUnits, emphasized: Bool = false) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); V15MoneyText(minorUnits: value, direction: .neutral, font: V15Typography.body.weight(.semibold)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(emphasized ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
     private func reconciliationUnavailableFact(_ title: String, detail: String) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); Text("—").font(V15Typography.body.weight(.semibold)); Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
 
-    private func stateLabel(_ value: V15ReconciliationState) -> String { switch value { case .open: "有差额"; case .reconciled: "已核平"; case .unknown(let raw): "未知状态（\(raw)）" } }
+    private func stateLabel(_ value: V15ReconciliationState) -> String { switch value { case .open: "有差额"; case .reconciled: "已核平"; case .unknown: "暂时无法识别" } }
     private func severityLabel(_ value: V15AttentionSeverity) -> String { switch value { case .critical: "重要"; case .warning: "需要留意"; case .info: "提示" } }
     private static func timestamp(_ date: Date) -> String { let formatter = DateFormatter(); formatter.locale = Locale(identifier: "zh_Hans_CN"); formatter.timeZone = ShanghaiBusinessDate.timeZone; formatter.dateFormat = "yyyy-MM-dd HH:mm"; return formatter.string(from: date) }
 }

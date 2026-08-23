@@ -62,7 +62,7 @@ public struct V15StatementImportMacView: View {
                     .font(V15Typography.label)
                     .padding(.horizontal, 8).frame(height: 24)
                     .background(V15Palette.card.color, in: Capsule())
-                Text("批次 v\(batch.version)").font(V15Typography.secondary.monospacedDigit()).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                Text(batch.status.displayName).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
             }
             Spacer(minLength: 12)
             Button("选择 PDF") { importer = true }
@@ -88,14 +88,14 @@ public struct V15StatementImportMacView: View {
                     if let board = model.workbench {
                         let pages = Array(Set(board.rows.compactMap(\.pageNumber))).sorted()
                         if pages.isEmpty {
-                            V15EmptyState(title: "没有页面引用", explanation: "服务器没有为当前复核行返回页码。")
+                            V15EmptyState(title: "没有页面引用", explanation: "当前复核行没有可查看的页码。")
                         } else {
                             ForEach(pages, id: \.self) { page in
                                 pageButton(page, rows: board.rows.filter { $0.pageNumber == page })
                             }
                         }
                         if board.sourceUnavailableCount > 0 {
-                            Label("\(board.sourceUnavailableCount) 页证据降级", systemImage: "exclamationmark.triangle")
+                            Label("\(board.sourceUnavailableCount) 页识别内容不可用", systemImage: "exclamationmark.triangle")
                                 .font(V15Typography.secondary.weight(.semibold))
                                 .padding(V15Spacing.sm)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -124,19 +124,19 @@ public struct V15StatementImportMacView: View {
             V15LoadingSkeleton()
         case .awaitingProviderConsent:
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                Toggle("仅发送脱敏证据", isOn: $model.providerAuthorized)
+                Toggle("仅发送脱敏内容", isOn: $model.providerAuthorized)
                     .accessibilityIdentifier("v15.f3g.mac.provider-consent")
                 Text("execution_scope = request_bound").font(V15Typography.secondary.monospacedDigit())
-                Button("请求内解析") { model.requestProviderAttempt() }
+                Button("开始解析") { model.requestProviderAttempt() }
                     .disabled(!model.providerAuthorized || !model.writeReasons.isEmpty)
             }
         case .providerResponseUnknown:
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 Text("解析结果未知；不会创建一份新授权重试。 ").font(V15Typography.secondary)
-                V15ActionButton("使用同一凭证恢复", disabledReason: providerRecoveryDisabledReason, accessibilityIdentifier: "v15.f3g.mac.provider-recover") { model.requestProviderRecovery() }
+                V15ActionButton("继续恢复解析", disabledReason: providerRecoveryDisabledReason, accessibilityIdentifier: "v15.f3g.mac.provider-recover") { model.requestProviderRecovery() }
             }
         case .reviewing:
-            Button("运行服务器校验") { model.requestValidation() }
+            Button("校验账单") { model.requestValidation() }
                 .accessibilityIdentifier("v15.f3g.mac.validation")
                 .disabled(!model.writeReasons.isEmpty)
         default:
@@ -151,9 +151,9 @@ public struct V15StatementImportMacView: View {
     }
 
     private var providerRecoveryDisabledReason: V15DisabledReason? {
-        if model.isOffline { return .init(code: "offline_read_only", message: "离线快照不能恢复 Provider 请求。", fieldPath: nil) }
+        if model.isOffline { return .init(code: "offline_read_only", message: "离线时不能恢复解析。", fieldPath: nil) }
         if model.writeReasons.contains(where: { $0.code == "unknown_import_status" }) {
-            return .init(code: "unknown_import_status", message: "服务器返回未知账单状态；当前仅可展示，不能恢复 Provider 请求。", fieldPath: nil)
+            return .init(code: "unknown_import_status", message: "暂时无法识别账单状态；当前只供查看，不能恢复解析。", fieldPath: nil)
         }
         return nil
     }
@@ -184,7 +184,7 @@ public struct V15StatementImportMacView: View {
 
     private func pageEvidence(_ page: V15StatementWorkbenchPage) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("第 \(page.pageNumber) 页 · \(page.sourceAvailable ? "脱敏证据" : "来源不可用")")
+            Text("第 \(page.pageNumber) 页 · \(page.sourceAvailable ? "脱敏内容" : "内容不可用")")
                 .font(V15Typography.label)
             Text(page.evidenceTextMasked ?? "图像与文本不可用；保留页码、位置框和结构化候选。")
                 .font(V15Typography.secondary)
@@ -199,7 +199,7 @@ public struct V15StatementImportMacView: View {
     private var privacyNote: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("保存什么").font(V15Typography.label)
-            Text("哈希 · 页码引用 · 脱敏证据 · 结构化候选 · 你的修正 · 来源记录。原始 PDF 与完整文本不长期保存。")
+            Text("保留页码、脱敏内容、识别结果、你的修正和来源记录。原始 PDF 与完整文本不会长期保存。")
                 .font(V15Typography.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -218,7 +218,7 @@ public struct V15StatementImportMacView: View {
                     }
                 }
                 Spacer()
-                Picker("证据", selection: Binding(get: { model.workbenchFilter.evidenceState ?? "all" }, set: { model.requestWorkbenchEvidenceFilter($0 == "all" ? nil : $0) })) {
+                Picker("识别内容", selection: Binding(get: { model.workbenchFilter.evidenceState ?? "all" }, set: { model.requestWorkbenchEvidenceFilter($0 == "all" ? nil : $0) })) {
                     Text("全部").tag("all"); Text("可用").tag("available"); Text("缺失").tag("unavailable")
                 }
                 .pickerStyle(.segmented)
@@ -231,7 +231,7 @@ public struct V15StatementImportMacView: View {
             Group {
                 if let board = model.workbench {
                     if board.rows.isEmpty {
-                        V15EmptyState(title: "没有可复核行", explanation: "服务器尚未返回账单行。")
+                        V15EmptyState(title: "没有可复核行", explanation: "暂时没有读取到账单明细。")
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         ScrollView {
@@ -346,7 +346,7 @@ public struct V15StatementImportMacView: View {
     private var footerHints: some View {
         HStack(spacing: 18) {
             Text("选择行后在右侧处置")
-            Text("保存处置 ≠ 写入账本")
+            Text("保存处理方式不会改动账目")
             Spacer()
             if let count = model.workbench?.rows.count { Text("已载入 \(count) 行") }
         }
@@ -358,7 +358,7 @@ public struct V15StatementImportMacView: View {
 
     @ViewBuilder private var inspector: some View {
         VStack(alignment: .leading, spacing: 0) {
-            paneHeader("处置", detail: selectedRow.map { "第 \($0.rowNumber) 行 · row v\($0.rowVersion)" } ?? "选择一行")
+            paneHeader("处置", detail: selectedRow.map { "第 \($0.rowNumber) 行" } ?? "选择一行")
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.md) {
                     if let message = model.resolutionReadbackMessage {
@@ -372,7 +372,7 @@ public struct V15StatementImportMacView: View {
                             .accessibilityIdentifier("v15.f3g.mac.resolution-readback-error")
                     }
                     if let row = selectedRow { inspectorRow(row) }
-                    else { Text("选择一行以查看脱敏证据、候选、版本与完整处置集。 ").font(V15Typography.secondary) }
+                    else { Text("选择一行以查看脱敏信息、匹配候选和可用操作。").font(V15Typography.secondary) }
                     Divider()
                     V15ActionButton("确认预览", disabledReasons: model.previewReasons, accessibilityIdentifier: "v15.f3g.mac.preview-inspector") { model.requestPreview(); confirmation = true }
                     ForEach(model.previewReasons, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
@@ -392,8 +392,8 @@ public struct V15StatementImportMacView: View {
     private func inspectorRow(_ row: V15StatementWorkbenchRow) -> some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
             VStack(alignment: .leading, spacing: 6) {
-                HStack { Text("脱敏证据").font(V15Typography.label); Spacer(); if row.evidenceTextMasked == nil { Text("证据降级").font(V15Typography.label) } }
-                Text(row.evidenceTextMasked ?? "页面图像不可用；这里只保留结构化候选与版本事实。")
+                HStack { Text("脱敏内容").font(V15Typography.label); Spacer(); if row.evidenceTextMasked == nil { Text("内容不可用").font(V15Typography.label) } }
+                Text(row.evidenceTextMasked ?? "页面图像不可用；这里只保留识别出的候选信息。")
                     .font(V15Typography.body)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -419,7 +419,7 @@ public struct V15StatementImportMacView: View {
                 resolutionButton("有意忽略", resolution: .ignoreIntentional, row: row)
                 resolutionButton("待定", resolution: .unresolved, row: row)
             }
-            Text("保存处置不会写入账本。只有“确认已选行”才会创建或关联交易。")
+            Text("保存处理方式不会改动账目。只有“确认已选行”才会创建或关联交易。")
                 .font(V15Typography.secondary)
                 .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 .fixedSize(horizontal: false, vertical: true)
@@ -463,13 +463,13 @@ public struct V15StatementImportMacView: View {
         }
         if case .responseUnknown = model.phase {
             Text("确认结果未知；不会重发。 ").font(V15Typography.secondary)
-            Button("读取同一凭证的收据") { model.requestReceiptReadback() }.accessibilityIdentifier("v15.f3g.mac.readback")
+            Button("检查确认结果") { model.requestReceiptReadback() }.accessibilityIdentifier("v15.f3g.mac.readback")
         }
     }
 
     private var confirmationSheet: some View {
         VStack(alignment: .leading, spacing: V15Spacing.lg) {
-            Text("服务器确认预览").font(V15Typography.surfaceTitle)
+            Text("确认预览").font(V15Typography.surfaceTitle)
             confirmationContent
             Spacer(minLength: 0)
         }
@@ -481,7 +481,7 @@ public struct V15StatementImportMacView: View {
     @ViewBuilder private var confirmationContent: some View {
         if model.isPreviewLoading {
             V15LoadingSkeleton()
-            Text("正在获取服务器确认预览…").accessibilityIdentifier("v15.f3g.mac.preview-loading")
+            Text("正在准备确认预览…").accessibilityIdentifier("v15.f3g.mac.preview-loading")
             Text("尚未创建流水。 ").font(V15Typography.secondary)
         } else if let failure = model.previewFailure {
             Text(failure.kind == .conflict ? "确认预览已过期" : "确认预览暂不可用")
@@ -491,16 +491,16 @@ public struct V15StatementImportMacView: View {
             Button("重试获取预览") { model.requestPreview() }.accessibilityIdentifier("v15.f3g.mac.preview-retry")
         } else if model.isConfirmationInFlight {
             V15LoadingSkeleton(layout: .decisionCard).accessibilityIdentifier("v15.f3g.mac.confirming")
-            Text("请求已提交；请勿重复确认。 ").font(V15Typography.secondary)
+            Text("正在确认，请勿重复操作。").font(V15Typography.secondary)
         } else if let receipt = model.receipt {
             Label("确认完成", systemImage: "checkmark.circle.fill").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.teal.color)
             Text("\(receipt.status) · 新建 \(receipt.createdCount) · 匹配 \(receipt.matchedCount) · 跳过 \(receipt.skippedCount)")
                 .accessibilityIdentifier("v15.f3g.mac.sheet-receipt")
         } else if case .responseUnknown = model.phase {
             Text("确认结果未知").font(V15Typography.cardTitle).accessibilityIdentifier("v15.f3g.mac.sheet-response-unknown")
-            Text("不会盲目重发；关闭后只能用同一请求凭证读取收据。 ")
+            Text("检查确认结果不会重复导入。")
         } else if let preview = model.preview {
-            Text("确认 \(preview.counts.selected) 行 · batch v\(preview.batchVersion)").font(V15Typography.cardTitle)
+            Text("确认 \(preview.counts.selected) 行").font(V15Typography.cardTitle)
             HStack(spacing: 12) {
                 metric("新建", preview.counts.createNew)
                 metric("匹配", preview.counts.matchExisting)
@@ -520,10 +520,10 @@ public struct V15StatementImportMacView: View {
                 .padding(V15Spacing.sm)
                 .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
             }
-            Text("本次确认对所选行是原子的：要么全部生效，要么全部不生效。")
+            Text("所选行会一起确认；如果其中一行失败，本次不会导入任何一行。")
                 .font(V15Typography.secondary)
             HStack {
-                V15ActionButton("返回", kind: .secondary, disabledReason: model.isConfirmationInFlight ? .init(code: "confirmation_in_flight", message: "正在确认，请等待服务器结果。", fieldPath: nil) : nil) { confirmation = false }
+                V15ActionButton("返回", kind: .secondary, disabledReason: model.isConfirmationInFlight ? .init(code: "confirmation_in_flight", message: "正在确认，请稍候。", fieldPath: nil) : nil) { confirmation = false }
                 Spacer()
                 V15ActionButton("确认 \(preview.counts.selected) 行", disabledReasons: model.confirmReasons, accessibilityIdentifier: "v15.f3g.mac.confirm") { model.requestConfirm() }
             }

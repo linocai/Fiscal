@@ -63,7 +63,7 @@ public struct V15StatementImportView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: V15Spacing.xs) {
             Text("本地脱敏，人工确认入账").font(V15Typography.surfaceTitle)
-            Text("原始 PDF 不长期保存。服务器只接收哈希、页码引用、脱敏证据和你的处置；确认前没有任何账本事实。")
+            Text("原始 PDF 不会长期保存；确认前不会把内容记到账目。")
                 .font(V15Typography.body)
                 .foregroundStyle(V15Palette.ink.color.opacity(0.68))
                 .fixedSize(horizontal: false, vertical: true)
@@ -81,7 +81,7 @@ public struct V15StatementImportView: View {
                     .disabled(!model.writeReasons.isEmpty)
                 Label("本机提取文本与位置框", systemImage: "checkmark.shield")
                     .font(V15Typography.secondary)
-                Label("解析服务需另行授权，默认不发送", systemImage: "shield")
+                Label("智能解析需另行授权，默认不会发送账单", systemImage: "shield")
                     .font(V15Typography.secondary)
                 if let batch = model.batch {
                     HStack {
@@ -101,7 +101,7 @@ public struct V15StatementImportView: View {
         case .localProcessing, .registering, .extracting:
             V15Section("2 · 提取进度") {
                 V15LoadingSkeleton().accessibilityIdentifier("v15.f3g.local-processing")
-                Text("可以离开，但当前设备上的原始文件和临时提取会立即丢弃；服务器批次状态仍可恢复。")
+                Text("可以离开；当前设备上的原始文件和临时提取会丢弃，导入进度仍可继续。")
                     .font(V15Typography.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -109,27 +109,27 @@ public struct V15StatementImportView: View {
             V15Section("2 · 解析授权") {
                 VStack(alignment: .leading, spacing: V15Spacing.sm) {
                     Button { model.providerAuthorized.toggle() } label: {
-                        Label(model.providerAuthorized ? "已确认仅发送脱敏证据" : "确认仅发送脱敏文本与标准化位置框", systemImage: model.providerAuthorized ? "checkmark.shield.fill" : "shield")
+                        Label(model.providerAuthorized ? "已确认仅发送脱敏内容" : "确认仅发送脱敏文字和页面位置", systemImage: model.providerAuthorized ? "checkmark.shield.fill" : "shield")
                     }
                     .accessibilityIdentifier("v15.f3g.provider-consent")
                     Text("本次范围 request_bound；离开、断线或取消不会在后台继续。")
                         .font(V15Typography.secondary)
-                    V15ActionButton("在本次请求内解析", disabledReason: (!model.providerAuthorized ? .init(code: "consent_required", message: "请先确认本次脱敏证据授权。", fieldPath: nil) : model.writeReasons.first), accessibilityIdentifier: "v15.f3g.provider-start") {
+                    V15ActionButton("开始解析", disabledReason: (!model.providerAuthorized ? .init(code: "consent_required", message: "请先确认本次脱敏信息授权。", fieldPath: nil) : model.writeReasons.first), accessibilityIdentifier: "v15.f3g.provider-start") {
                         model.requestProviderAttempt()
                     }
                 }
             }
         case .providerResponseUnknown:
             V15Section("解析结果待确认") {
-                Text("结果未知时不会用一份新授权盲目重试；恢复只复用同一证据摘要和请求凭证。")
+                Text("如果解析结果暂时不明，可以安全恢复，不会重复处理。")
                     .font(V15Typography.body)
-                Button("使用同一凭证恢复") { model.requestProviderRecovery() }
+                Button("继续恢复解析") { model.requestProviderRecovery() }
                     .accessibilityIdentifier("v15.f3g.provider-recover")
                     .disabled(model.isOffline || model.writeReasons.contains { $0.code == "unknown_import_status" })
             }
         case .reviewing:
-            V15Section("3 · 服务器校验") {
-                V15ActionButton("运行服务器校验", symbol: "checkmark.shield", disabledReason: model.writeReasons.first, accessibilityIdentifier: "v15.f3g.validation-run") { model.requestValidation() }
+            V15Section("3 · 校验账单") {
+                V15ActionButton("校验账单", symbol: "checkmark.shield", disabledReason: model.writeReasons.first, accessibilityIdentifier: "v15.f3g.validation-run") { model.requestValidation() }
             }
         default:
             EmptyView()
@@ -143,7 +143,7 @@ public struct V15StatementImportView: View {
                     batchProgress(board)
                     checkSummary(board)
                     if board.rows.isEmpty {
-                        V15EmptyState(title: "没有可复核行", explanation: "服务器尚未返回账单行。")
+                        V15EmptyState(title: "没有可复核行", explanation: "暂时没有读取到账单明细。")
                     } else {
                         let index = min(reviewIndex, board.rows.count - 1)
                         rowStep(board.rows[index], index: index, total: board.rows.count)
@@ -158,7 +158,7 @@ public struct V15StatementImportView: View {
                             .frame(maxWidth: .infinity)
                     }
                     auxiliaryReads(board)
-                    V15ActionButton("获取服务器确认预览", symbol: "eye", disabledReason: model.previewReasons.first, accessibilityIdentifier: "v15.f3g.preview") {
+                    V15ActionButton("查看确认预览", symbol: "eye", disabledReason: model.previewReasons.first, accessibilityIdentifier: "v15.f3g.preview") {
                         model.requestPreview(); showingConfirmation = true
                     }
                     disabledReasons(model.previewReasons)
@@ -182,7 +182,7 @@ public struct V15StatementImportView: View {
             }
             .frame(height: 6)
             if board.sourceUnavailableCount > 0 {
-                Label("证据降级 · \(board.sourceUnavailableCount) 页来源不可用", systemImage: "exclamationmark.triangle")
+                Label("\(board.sourceUnavailableCount) 页识别内容不可用", systemImage: "exclamationmark.triangle")
                     .font(V15Typography.secondary.weight(.semibold))
                     .padding(9)
                     .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.tag))
@@ -214,7 +214,7 @@ public struct V15StatementImportView: View {
             HStack {
                 Text("第 \(row.rowNumber) 行 / \(total)").font(V15Typography.cardTitle)
                 Spacer()
-                Text("row v\(row.rowVersion)").font(V15Typography.secondary.monospacedDigit())
+                Text("第 \(row.rowNumber) 行").font(V15Typography.secondary.monospacedDigit())
             }
             evidenceCard(row)
             if !row.candidates.isEmpty {
@@ -241,7 +241,7 @@ public struct V15StatementImportView: View {
                 resolutionButton("有意忽略", resolution: .ignoreIntentional, row: row)
                 resolutionButton("待定", resolution: .unresolved, row: row)
             }
-            Text("保存处置不会写入账本。只有批次层的“确认已选行”才会创建或关联交易。")
+            Text("保存处理方式不会改动账目。只有“确认已选行”才会创建或关联交易。")
                 .font(V15Typography.secondary)
                 .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 .fixedSize(horizontal: false, vertical: true)
@@ -260,9 +260,9 @@ public struct V15StatementImportView: View {
     private func evidenceCard(_ row: V15StatementWorkbenchRow) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text("第 \(row.pageNumber.map(String.init) ?? "—") 页 · 脱敏证据").font(V15Typography.label)
+                Text("第 \(row.pageNumber.map(String.init) ?? "—") 页 · 脱敏内容").font(V15Typography.label)
                 Spacer()
-                if row.evidenceTextMasked == nil { Text("证据降级").font(V15Typography.label) }
+                if row.evidenceTextMasked == nil { Text("内容不可用").font(V15Typography.label) }
             }
             Text(row.evidenceTextMasked ?? "页面图像与文本均不可用；只保留行号、页码与结构化候选。")
                 .font(V15Typography.body)
@@ -296,7 +296,7 @@ public struct V15StatementImportView: View {
     @ViewBuilder private func auxiliaryReads(_ board: V15StatementWorkbench) -> some View {
         DisclosureGroup("批次筛选") {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                Picker("证据来源", selection: Binding(get: { model.workbenchFilter.evidenceState ?? "all" }, set: { model.requestWorkbenchEvidenceFilter($0 == "all" ? nil : $0) })) {
+                Picker("识别内容", selection: Binding(get: { model.workbenchFilter.evidenceState ?? "all" }, set: { model.requestWorkbenchEvidenceFilter($0 == "all" ? nil : $0) })) {
                     Text("全部").tag("all"); Text("仅可用").tag("available"); Text("仅不可用").tag("unavailable")
                 }
                 .accessibilityIdentifier("v15.f3g.filter")
@@ -339,7 +339,7 @@ public struct V15StatementImportView: View {
     @ViewBuilder private var result: some View {
         if let receipt = model.receipt {
             let remaining = model.workbench?.rows.filter { !$0.isConfirmed }.count ?? 0
-            V15Section("确认凭证") {
+            V15Section("确认结果") {
                 VStack(alignment: .leading, spacing: V15Spacing.sm) {
                     Label("已确认 \(receipt.confirmedRowIDs.count) 行", systemImage: "checkmark.circle.fill")
                         .font(V15Typography.surfaceTitle)
@@ -348,7 +348,7 @@ public struct V15StatementImportView: View {
                         .font(V15Typography.body.monospacedDigit())
                     Text(remaining > 0 ? "批次状态：部分确认 · 当前已载入范围剩余 \(remaining) 行" : "当前已载入范围已经处理完毕")
                         .font(V15Typography.secondary)
-                    Text("新建交易带有账单导入来源；任何校验差异仍需修正源事实，不会被自动抹平。")
+                    Text("新建交易会标记为账单导入；如有校验差异，仍需回到账单明细修正。")
                         .font(V15Typography.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -357,8 +357,8 @@ public struct V15StatementImportView: View {
         }
         if case .responseUnknown = model.phase {
             V15Section("确认结果未知") {
-                Text("不会盲目重发确认；仅以相同请求凭证读取收据。")
-                Button("读取确认收据") { model.requestReceiptReadback() }.accessibilityIdentifier("v15.f3g.receipt-readback")
+                Text("检查确认结果不会重复导入。")
+                Button("检查确认结果") { model.requestReceiptReadback() }.accessibilityIdentifier("v15.f3g.receipt-readback")
             }
         }
     }
@@ -399,7 +399,7 @@ public struct V15StatementImportView: View {
     @ViewBuilder private var confirmationContent: some View {
         if model.isPreviewLoading {
             V15LoadingSkeleton()
-            Text("正在获取服务器确认预览…").accessibilityIdentifier("v15.f3g.preview-loading")
+            Text("正在准备确认预览…").accessibilityIdentifier("v15.f3g.preview-loading")
             Text("尚未创建或关联任何流水。请保持当前页面。 ").font(V15Typography.secondary)
         } else if let failure = model.previewFailure {
             Text(failure.kind == .conflict ? "确认预览已过期" : "确认预览暂不可用")
@@ -409,17 +409,17 @@ public struct V15StatementImportView: View {
             Button("重试获取预览") { model.requestPreview() }.accessibilityIdentifier("v15.f3g.preview-retry")
         } else if model.isConfirmationInFlight {
             V15LoadingSkeleton(layout: .decisionCard).accessibilityIdentifier("v15.f3g.confirming")
-            Text("请求已经提交；请勿重复确认。 ").font(V15Typography.secondary)
+            Text("正在确认，请勿重复操作。").font(V15Typography.secondary)
         } else if let receipt = model.receipt {
             Label("确认完成", systemImage: "checkmark.circle.fill").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.teal.color)
             Text("\(receipt.status) · 新建 \(receipt.createdCount) · 匹配 \(receipt.matchedCount) · 跳过 \(receipt.skippedCount)")
                 .accessibilityIdentifier("v15.f3g.sheet-receipt")
         } else if case .responseUnknown = model.phase {
             Text("确认结果未知").font(V15Typography.surfaceTitle).accessibilityIdentifier("v15.f3g.sheet-response-unknown")
-            Text("不会盲目重发确认；关闭后只能使用相同请求凭证读取收据。")
+            Text("检查确认结果不会重复导入。")
         } else if let preview = model.preview {
             Text("确认 \(preview.counts.selected) 行").font(V15Typography.surfaceTitle)
-            Text("预览 · 尚未提交 · batch v\(preview.batchVersion)").font(V15Typography.label)
+            Text("预览 · 尚未提交").font(V15Typography.label)
             adaptiveActions {
                 previewMetric("新建", preview.counts.createNew)
                 previewMetric("匹配", preview.counts.matchExisting)
@@ -440,10 +440,10 @@ public struct V15StatementImportView: View {
                 .padding(V15Spacing.md)
                 .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.decisionCard))
             }
-            Text("本次确认对所选行是原子的：要么全部生效，要么全部不生效。批次仍有 \(preview.counts.batchUnresolved) 行待定。")
+            Text("所选行会一起确认；如果其中一行失败，本次不会导入任何一行。仍有 \(preview.counts.batchUnresolved) 行待处理。")
                 .font(V15Typography.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("将原样提交服务器返回的行与版本，不由客户端重建。")
+            Text("将按上方预览确认所选行。")
                 .font(V15Typography.secondary)
             V15ActionButton("确认 \(preview.counts.selected) 行", symbol: "checkmark", disabledReason: model.confirmReasons.first, accessibilityIdentifier: "v15.f3g.confirm") { model.requestConfirm() }
             disabledReasons(model.confirmReasons)

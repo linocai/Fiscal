@@ -51,7 +51,7 @@ public struct V15BootstrapView: View {
                 if case .invalidAccessKey = model.phase {
                     Label("访问密钥已过期或被撤销", systemImage: "key.slash")
                         .font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.teal.color)
-                    Text("服务端只返回统一的失效状态，不会向客户端透露是会话过期还是设备被主动撤销。重新输入口令即可建立新会话。")
+                    Text("登录已失效，请重新输入访问口令。")
                         .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                 }
                 HStack(spacing: 8) {
@@ -76,19 +76,19 @@ public struct V15BootstrapView: View {
                 V15ActionButton("修改口令", kind: .quiet, disabledReason: .init(code: "authenticated_session_required", message: "修改口令需要有效会话；请先解锁，再到“系统与数据”中修改。", fieldPath: nil)) {}
             }
             .padding(.top, 20)
-        case .passphraseNotSet: compactState(title: "尚未设置访问口令", message: "请先在服务器完成个人访问口令设置。", retry: false)
-        case .systemNotReady: compactState(title: "服务尚未就绪", message: "服务器正在启动；请稍后重试。", retry: true)
+        case .passphraseNotSet: compactState(title: "尚未设置访问口令", message: "请先完成个人访问口令设置。", retry: false)
+        case .systemNotReady: compactState(title: "系统尚未就绪", message: "系统正在启动；请稍后重试。", retry: true)
         case .ready: V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("v15.f1a.opening")
         case .offlineReadOnly(let at):
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 V15OfflineReadOnlyBanner(snapshotAt: at)
-                Text("设备离线与服务尚未就绪是两种不同状态。快照只读，不会排队提交系统或安全操作。")
+                Text("设备当前离线，只能查看上次保存的数据；系统和安全设置不会在离线时提交。")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
-                V15ActionButton("查看上次快照", symbol: "clock.arrow.circlepath") { onAvailable() }
+                V15ActionButton("查看上次数据", symbol: "clock.arrow.circlepath") { onAvailable() }
                 V15ActionButton("重试连接", symbol: V15Symbol.retry, kind: .secondary) { Task { await model.retry(); releaseShellIfAvailable() } }
             }
             .padding(.top, 18)
-        case .failed(let message): compactState(title: "无法连接服务", message: message, retry: true)
+        case .failed(let message): compactState(title: "无法连接", message: message, retry: true)
         }
     }
 
@@ -111,9 +111,9 @@ public struct V15BootstrapView: View {
         switch model.phase { case .failed(_), .systemNotReady, .invalidAccessKey: V15Palette.yellow.color; default: V15Palette.teal.color }
     }
     private var footnoteTitle: String {
-        switch model.phase { case .failed(_): "服务暂不可用"; case .systemNotReady: "服务正在启动"; case .invalidAccessKey: "连接凭证失效"; case .offlineReadOnly(_): "离线快照可用"; default: "服务可用" }
+        switch model.phase { case .failed(_): "暂时无法连接"; case .systemNotReady: "系统正在启动"; case .invalidAccessKey: "连接密钥已失效"; case .offlineReadOnly(_): "可查看上次数据"; default: "连接正常" }
     }
-    private var serviceVersionLine: String { [model.systemStatus.map { "v\($0.version)" }, "CNY", "Asia/Shanghai"].compactMap { $0 }.joined(separator: " · ") }
+    private var serviceVersionLine: String { "人民币 · 上海时区" }
 
     private func compactState(title: String, message: String, retry: Bool) -> some View {
         VStack(alignment: .leading, spacing: 9) {

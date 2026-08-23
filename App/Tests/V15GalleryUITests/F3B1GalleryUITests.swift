@@ -130,7 +130,7 @@ import XCTest
         replace("25", in: element("v15.f3b1.schedule.statement-day")); replace("10", in: element("v15.f3b1.schedule.due-day")); element("v15.f3b1.schedule.preview").tap(); XCTAssertTrue(element("v15.f3b1.schedule.preview").waitForExistence(timeout: 5)); element("v15.f3b1.schedule.commit").tap()
         XCTAssertTrue(element("v15.f3b1.schedule.unknown").waitForExistence(timeout: 5)); element("v15.f3b1.schedule.unknown.readback").tap()
         let offlineReadback = element("v15.f3b1.schedule.unknown.readback.not-confirmed")
-        XCTAssertTrue(offlineReadback.waitForExistence(timeout: 6)); XCTAssertTrue(offlineReadback.label.contains("离线快照不能核对当前服务器事实")); XCTAssertTrue(element("v15.f3b1.schedule.unknown.retry").exists)
+        XCTAssertTrue(offlineReadback.waitForExistence(timeout: 6)); XCTAssertTrue(offlineReadback.label.contains("离线时无法检查最新状态")); XCTAssertTrue(element("v15.f3b1.schedule.unknown.retry").exists)
         launch("credit-unknown-offline-recovery"); element("v15.f3b1.schedule.open").tap()
         replace("25", in: element("v15.f3b1.schedule.statement-day")); replace("10", in: element("v15.f3b1.schedule.due-day")); element("v15.f3b1.schedule.preview").tap(); XCTAssertTrue(element("v15.f3b1.schedule.preview").waitForExistence(timeout: 5)); element("v15.f3b1.schedule.commit").tap()
         XCTAssertTrue(element("v15.f3b1.schedule.unknown").waitForExistence(timeout: 5))

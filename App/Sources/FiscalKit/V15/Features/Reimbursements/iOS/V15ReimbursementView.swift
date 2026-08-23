@@ -36,7 +36,7 @@ public struct V15ReimbursementView: View {
             }
             .background(V15Palette.paper.color)
             .navigationTitle("报销")
-            .toolbar { ToolbarItem(placement: .primaryAction) { Button { Task { await model.refresh() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityLabel("刷新报销事实").accessibilityIdentifier("v15.f3c.refresh") } }
+            .toolbar { ToolbarItem(placement: .primaryAction) { Button { Task { await model.refresh() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityLabel("刷新报销数据").accessibilityIdentifier("v15.f3c.refresh") } }
         }
         .task { if model.phase == .idle { await model.load() } }
         .sheet(isPresented: Binding(get: { model.newClaimSheetVisible }, set: { if !$0 { model.dismissNewClaim() } })) { newClaimSheet }
@@ -48,8 +48,8 @@ public struct V15ReimbursementView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
             Text("从垫付到到账，逐笔可追溯").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
-            Text("金额、状态与到账分配都来自服务端；预览不是已提交事实。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
-            V15ActionButton("新建报销单", symbol: "plus", disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线快照仅可查看，无法新建报销单。", fieldPath: nil) : nil) { Task { await model.openNewClaim() } }
+            Text("预览会列出金额、状态和到账分配，确认前不会保存。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+            V15ActionButton("新建报销单", symbol: "plus", disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时只可查看，无法新建报销单。", fieldPath: nil) : nil) { Task { await model.openNewClaim() } }
                 .accessibilityIdentifier("v15.f3c.claim.new.open")
         }
     }
@@ -63,7 +63,7 @@ public struct V15ReimbursementView: View {
             V15Section("报销单", detail: "\(model.claims.count) 笔") {
                 VStack(spacing: 0) {
                     ForEach(model.claims, id: \.id) { claim in
-                        V15LedgerRow(title: claim.title, detail: "\(claim.status.displayName) · v\(claim.version) · \(claim.partyCount) 位当事人", amountMinor: claim.outstandingMinor, direction: .inflow, marker: claim.status.isKnown ? .decision : .provisional) { Task { await model.selectClaim(claim) } }
+                        V15LedgerRow(title: claim.title, detail: "\(claim.status.displayName) · \(claim.partyCount) 位当事人", amountMinor: claim.outstandingMinor, direction: .inflow, marker: claim.status.isKnown ? .decision : .provisional) { Task { await model.selectClaim(claim) } }
                             .accessibilityIdentifier("v15.f3c.claim.\(claim.id)")
                         Divider()
                     }
@@ -81,7 +81,7 @@ public struct V15ReimbursementView: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                     Text(claim.title).font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color).accessibilityIdentifier("v15.f3c.claim.detail")
-                    Text("\(claim.status.displayName) · 报销单 v\(claim.version)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                    Text("\(claim.status.displayName) · \(claim.partyCount) 位当事人").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 }
                 Spacer()
                 Text(V15MoneyPresentation(minorUnits: claim.outstandingMinor, direction: .inflow, includeCurrency: true).text).font(V15Typography.money).foregroundStyle(V15Palette.teal.color).monospacedDigit()
@@ -92,10 +92,10 @@ public struct V15ReimbursementView: View {
                     claimAmountFact("已到账", claim.receivedMinor)
                     claimAmountFact("未到账", claim.outstandingMinor, emphasized: true)
                 }
-                Text("留存与释放不是当前余额字段，只在取消未到账的服务端预览中出现；五个概念不会互相替代。")
+                Text("留存与释放只会在取消未到账的预览中出现，不会混入当前余额。")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
             }.accessibilityIdentifier("v15.f3c.amount-matrix")
-            if !claim.status.isKnown { V15EmptyState(title: "未知报销状态", explanation: "服务器返回 \(claim.status.rawValue)；当前版本只展示，不允许操作。").accessibilityIdentifier("v15.f3c.claim.unknown-state") }
+            if !claim.status.isKnown { V15EmptyState(title: "暂时无法识别此状态", explanation: "当前只供查看，不能修改。").accessibilityIdentifier("v15.f3c.claim.unknown-state") }
             else {
                 if claim.archivedAt != nil { V15ArchiveReadOnlyState { Text("历史与到账记录已保留；恢复后才可继续操作。").font(V15Typography.secondary) } }
                 ForEach(claim.parties, id: \.id) { party in
@@ -120,7 +120,7 @@ public struct V15ReimbursementView: View {
                 else if model.receipts.isEmpty { Text("暂无到账记录").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
                 ForEach(model.receipts, id: \.id) { receipt in
                     VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                        V15LedgerRow(title: receipt.title, detail: "到账记录 v\(receipt.version)\(receipt.voidedAt == nil ? "" : " · 已作废")", amountMinor: receipt.amountMinor, direction: .inflow, marker: receipt.voidedAt == nil ? .ordinary : .archive)
+                        V15LedgerRow(title: receipt.title, detail: receipt.voidedAt == nil ? "已到账" : "已作废", amountMinor: receipt.amountMinor, direction: .inflow, marker: receipt.voidedAt == nil ? .ordinary : .archive)
                             .accessibilityIdentifier("v15.f3c.receipt.\(receipt.id)")
                         V15ActionButton("管理此到账记录", kind: .quiet, disabledReasons: receiptOperationOpenReasons(receipt, claim: claim)) { operationSheet = .receiptActions(receipt.id) }.accessibilityIdentifier("v15.f3c.receipt.actions.\(receipt.id)")
                     }
@@ -136,9 +136,9 @@ public struct V15ReimbursementView: View {
         switch model.secondaryMutationPhase {
         case .previewed:
             if let preview = model.cancellationPreview {
-                V15PreviewState(version: "claim v\(preview.claimVersion)") {
+                V15PreviewState(version: "取消预览") {
                     VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                        Text("取消未到账后的五项事实").font(V15Typography.body.weight(.semibold))
+                        Text("取消未到账后的金额").font(V15Typography.body.weight(.semibold))
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
                             claimAmountFact("已申报", preview.current.totalClaimedMinor)
                             claimAmountFact("已到账", preview.current.receivedMinor)
@@ -151,20 +151,20 @@ public struct V15ReimbursementView: View {
                 }.accessibilityIdentifier("v15.f3c.cancel.preview.result")
                 V15ActionButton("确认取消未到账", kind: .destructive, disabledReasons: model.selectedClaim.map { model.cancellationCommitReasons(for: $0) } ?? []) { Task { await model.commitCancellation() } }.accessibilityIdentifier("v15.f3c.cancel.commit")
             } else if let preview = model.claimReplacePreview {
-                V15PreviewState(version: "claim v\(preview.claimVersion)") { Text("标题将更新为“\(preview.proposed.title)”；金额矩阵仍以服务端提议为准。") }.accessibilityIdentifier("v15.f3c.replace.preview.result")
+                V15PreviewState(version: "修改预览") { Text("标题将更新为“\(preview.proposed.title)”；确认后会按预览中的金额保存。") }.accessibilityIdentifier("v15.f3c.replace.preview.result")
                 V15ActionButton("确认修改报销单", kind: .destructive, disabledReasons: model.selectedClaim.map { model.claimReplacementCommitReasons(for: $0) } ?? []) { Task { await model.commitCurrentClaimReplacement() } }.accessibilityIdentifier("v15.f3c.replace.commit")
             } else if let preview = model.replacementReceiptPreview, let receipt = model.selectedReplacementReceipt, let claim = model.selectedClaim {
-                V15PreviewState(version: "claim v\(preview.claimVersion) · receipt v\(preview.receiptVersion ?? receipt.version)") { Text("到账后金额 \(money(preview.amountMinor))；报销单已到账将更新为 \(money(preview.claimReceivedAfterMinor))。") }.accessibilityIdentifier("v15.f3c.receipt.replace.preview.result")
+                V15PreviewState(version: "到账修改预览") { Text("到账后金额 \(money(preview.amountMinor))；报销单已到账将更新为 \(money(preview.claimReceivedAfterMinor))。") }.accessibilityIdentifier("v15.f3c.receipt.replace.preview.result")
                 V15ActionButton("确认修改到账", kind: .destructive, disabledReasons: model.receiptReplacementCommitReasons(for: receipt, claim: claim)) { Task { await model.commitReceiptReplacement(receipt) } }.accessibilityIdentifier("v15.f3c.receipt.replace.commit")
             }
         case .unknown:
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                unknownState("取消/替换请求结果未知。只能用同一请求键恢复。", retry: { Task { await model.retryUnknownSecondary() } })
+                unknownState("暂时无法确认是否保存成功。安全检查不会重复操作。", retry: { Task { await model.retryUnknownSecondary() } })
                 V15ActionButton("放弃本次恢复", kind: .quiet) { model.abandonUnknownSecondary() }.accessibilityIdentifier("v15.f3c.secondary.abandon")
             }.accessibilityIdentifier("v15.f3c.secondary.unknown")
         case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.refresh() } }.accessibilityIdentifier("v15.f3c.secondary.conflict")
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.refresh() } }
-        case .succeeded: V15SuccessReceiptState(title: "报销事实已更新", detail: "服务端已返回新的版本事实。").accessibilityIdentifier("v15.f3c.secondary.success")
+        case .succeeded: V15SuccessReceiptState(title: "报销数据已更新", detail: "你可以继续查看或操作。").accessibilityIdentifier("v15.f3c.secondary.success")
         default: EmptyView()
         }
     }
@@ -172,19 +172,19 @@ public struct V15ReimbursementView: View {
     @ViewBuilder private var factRefreshSurface: some View {
         if model.hasPendingFactRefresh {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                Label(model.isFactRefreshInFlight ? "事实刷新中" : "到账事实尚未收敛", systemImage: model.isFactRefreshInFlight ? "arrow.triangle.2.circlepath" : V15Symbol.warning)
+                Label(model.isFactRefreshInFlight ? "正在更新数据" : "到账数据尚未更新完成", systemImage: model.isFactRefreshInFlight ? "arrow.triangle.2.circlepath" : V15Symbol.warning)
                     .font(V15Typography.cardTitle)
                     .foregroundStyle(V15Palette.teal.color)
                     .accessibilityIdentifier("v15.f3c.fact-refresh.required")
-                Text(model.factRefreshMessage ?? "到账写入已被接受，但最新报销事实尚未收敛。")
+                Text(model.factRefreshMessage ?? "到账已经保存，但最新报销数据还没有全部更新。")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("最新 claim 与 receipts 同时读取成功前，当前展示无法归因到最终版本。重试只执行 fresh GET，不会再次发送 POST 或 PUT。")
+                Text("重新读取不会再次登记到账，可以安全重试。")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     .fixedSize(horizontal: false, vertical: true)
-                V15ActionButton("仅重试读取最新事实", kind: .secondary, disabledReasons: model.factRefreshRetryReasons) { Task { await model.retryFactRefresh() } }
+                V15ActionButton("重新读取", kind: .secondary, disabledReasons: model.factRefreshRetryReasons) { Task { await model.retryFactRefresh() } }
                     .accessibilityIdentifier("v15.f3c.fact-refresh.retry")
             }
             .padding(V15Spacing.md)
@@ -231,7 +231,7 @@ public struct V15ReimbursementView: View {
 
     @ViewBuilder private var claimReplacementEditor: some View {
         if let claim = model.selectedClaim {
-            Text("先编辑，再由服务端预览完整报销矩阵；预览后输入变化会立即失效。")
+            Text("先编辑并查看完整预览；修改任何输入后需要重新预览。")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             V15Field("报销标题", text: Binding(get: { model.claimReplacementTitle }, set: { model.claimReplacementTitle = $0 }), issues: issues(model.secondaryIssues, prefix: "title"))
                 .accessibilityIdentifier("v15.f3c.replace.title")
@@ -244,7 +244,7 @@ public struct V15ReimbursementView: View {
 
     @ViewBuilder private var cancellationEditor: some View {
         if let claim = model.selectedClaim {
-            Text("取消只影响尚未到账金额；已到账事实会保留。")
+            Text("取消只影响尚未到账金额；已经到账的记录会保留。")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             V15ActionButton("预览取消未到账", kind: .secondary, disabledReasons: model.cancelReasons(for: claim)) { Task { await model.previewCancellation() } }
                 .accessibilityIdentifier("v15.f3c.cancel.preview")
@@ -253,7 +253,7 @@ public struct V15ReimbursementView: View {
 
     @ViewBuilder private var claimActionsEditor: some View {
         if let claim = model.selectedClaim {
-            Text("只显示后端当前事实允许的状态动作；读取或写入未收敛时会逐项说明原因。")
+            Text("这里只显示当前可用的操作；暂时不可用时会说明原因。")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             ForEach(V15ReimbursementModel.DirectClaimAction.allCases, id: \.rawValue) { action in
                 if model.isClaimActionApplicable(model.typedClaimAction(for: action), to: claim) {
@@ -266,7 +266,7 @@ public struct V15ReimbursementView: View {
 
     @ViewBuilder private func receiptActionsEditor(id: UUID) -> some View {
         if let claim = model.selectedClaim, let receipt = model.receipts.first(where: { $0.id == id }) {
-            V15LedgerRow(title: receipt.title, detail: "receipt v\(receipt.version)", amountMinor: receipt.amountMinor, direction: .inflow, marker: receipt.voidedAt == nil ? .ordinary : .archive)
+            V15LedgerRow(title: receipt.title, detail: receipt.voidedAt == nil ? "已到账" : "已作废", amountMinor: receipt.amountMinor, direction: .inflow, marker: receipt.voidedAt == nil ? .ordinary : .archive)
             if model.isReceiptActionApplicable(.replace, to: receipt, claim: claim) {
                 V15ActionButton("修改到账记录", kind: .secondary, disabledReasons: model.receiptActionReasons(for: receipt, claim: claim, action: .replace)) { model.openReceiptReplacement(receipt); operationSheet = .receiptReplacement(receipt.id) }
                     .accessibilityIdentifier("v15.f3c.receipt.replace.open")
@@ -283,9 +283,8 @@ public struct V15ReimbursementView: View {
 
     @ViewBuilder private func receiptReplacementEditor(id: UUID) -> some View {
         if let claim = model.selectedClaim, let receipt = model.receipts.first(where: { $0.id == id }) {
-            Text("当事人和收款账户沿用原记录；金额、日期和标题由服务端重新预览分配。")
+            Text("当事人和收款账户沿用原记录；金额、日期和标题需要重新预览。")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-            Text("收款账户 \(receipt.destinationAccountID.uuidString)").font(V15Typography.secondary).textSelection(.enabled)
             V15Field("到账标题", text: Binding(get: { model.receiptReplacementTitle }, set: { model.receiptReplacementTitle = $0 }), issues: issues(model.secondaryIssues, prefix: "title"))
                 .accessibilityIdentifier("v15.f3c.receipt.replace.title")
             V15Field("到账日期", text: Binding(get: { model.receiptReplacementDateText }, set: { model.receiptReplacementDateText = $0 }), prompt: "YYYY-MM-DD", issues: issues(model.secondaryIssues, prefix: "received_at"))
@@ -306,7 +305,7 @@ public struct V15ReimbursementView: View {
         if model.isReceiptActionApplicable(.replace, to: receipt, claim: claim) { return model.receiptActionReasons(for: receipt, claim: claim, action: .replace) }
         if model.isReceiptActionApplicable(.void, to: receipt, claim: claim) { return model.receiptActionReasons(for: receipt, claim: claim, action: .void) }
         if model.isReceiptActionApplicable(.restore, to: receipt, claim: claim) { return model.receiptActionReasons(for: receipt, claim: claim, action: .restore) }
-        return [.init(code: "no_receipt_action", message: "当前到账事实没有可用操作。", fieldPath: "status")]
+        return [.init(code: "no_receipt_action", message: "当前到账记录没有可用操作。", fieldPath: "status")]
     }
     private func claimActionTitle(_ action: V15ReimbursementModel.DirectClaimAction) -> String {
         switch action { case .submit: "提交报销单"; case .retractSubmission: "撤回提交"; case .reopen: "重新打开"; case .void: "作废报销单"; case .restore: "恢复报销单"; case .archive: "归档报销单"; case .unarchive: "取消归档" }
@@ -320,12 +319,12 @@ public struct V15ReimbursementView: View {
         switch model.directMutationPhase {
         case .unknown, .loading:
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                Text("直接命令待核对")
+                Text("操作结果待核对")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     .accessibilityIdentifier("v15.f3c.direct.unknown")
-                unknownState(model.directReadbackMessage ?? "直接命令结果未知；禁止再次发送，只能读取最新事实核对。", retry: { Task { await model.readBackUnknownDirect() } })
-                V15ActionButton("按最新事实解除写入锁", kind: .quiet, disabledReason: model.canAbandonUnknownDirect ? nil : .init(code: "fresh_readback_required", message: "请先读取最新服务端事实，再明确解除本地写入锁。", fieldPath: nil)) { model.abandonUnknownDirect() }.accessibilityIdentifier("v15.f3c.direct.abandon")
+                unknownState(model.directReadbackMessage ?? "暂时无法确认操作结果。检查最新状态不会重复操作。", retry: { Task { await model.readBackUnknownDirect() } })
+                V15ActionButton("核对后继续", kind: .quiet, disabledReason: model.canAbandonUnknownDirect ? nil : .init(code: "fresh_readback_required", message: "请先检查最新状态。", fieldPath: nil)) { model.abandonUnknownDirect() }.accessibilityIdentifier("v15.f3c.direct.abandon")
             }
         case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.refresh() } }
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.refresh() } }
@@ -351,7 +350,7 @@ public struct V15ReimbursementView: View {
                         .accessibilityIdentifier("v15.f3c.claim.create")
                     if model.hasRecoverableCreateAttempt && model.newClaimPhase == .unknown {
                         HStack(alignment: .top) {
-                            V15ActionButton("同一请求键重试", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能重试写入。", fieldPath: nil) : nil) { Task { await model.retryUnknownCreateClaim() } }.accessibilityIdentifier("v15.f3c.claim.retry-same-key")
+                            V15ActionButton("安全检查保存结果", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能检查保存结果。", fieldPath: nil) : nil) { Task { await model.retryUnknownCreateClaim() } }.accessibilityIdentifier("v15.f3c.claim.retry-same-key")
                             V15ActionButton("放弃恢复", kind: .quiet) { model.abandonUnknownCreateClaim() }.accessibilityIdentifier("v15.f3c.claim.abandon")
                         }
                     }
@@ -403,12 +402,12 @@ public struct V15ReimbursementView: View {
                     receiptAccountSurface
                     V15ActionButton("预览到账影响", kind: .secondary, disabledReasons: model.receiptPreviewDisabledReasons) { Task { await model.previewReceipt() } }.accessibilityIdentifier("v15.f3c.receipt.preview")
                     if let preview = model.receiptPreview {
-                        V15PreviewState(version: "claim v\(preview.claimVersion)") { Text("报销单已到账将从 \(money(preview.claimReceivedBeforeMinor)) 变为 \(money(preview.claimReceivedAfterMinor))；服务端会保存 \(preview.persistedAllocations.count) 条分配。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3c.receipt.preview.result")
+                        V15PreviewState(version: "到账预览") { Text("报销单已到账将从 \(money(preview.claimReceivedBeforeMinor)) 变为 \(money(preview.claimReceivedAfterMinor))；将保存 \(preview.persistedAllocations.count) 条分配。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3c.receipt.preview.result")
                     }
                     V15ActionButton("确认登记到账", disabledReasons: model.receiptCommitDisabledReasons) { Task { await model.commitReceipt() } }.accessibilityIdentifier("v15.f3c.receipt.commit")
                     if model.hasRecoverableReceiptAttempt && model.receiptPhase == .unknown {
                         HStack(alignment: .top) {
-                            V15ActionButton("同一请求键重试", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能重试写入。", fieldPath: nil) : nil) { Task { await model.retryUnknownReceipt() } }.accessibilityIdentifier("v15.f3c.receipt.retry-same-key")
+                            V15ActionButton("安全检查保存结果", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能检查保存结果。", fieldPath: nil) : nil) { Task { await model.retryUnknownReceipt() } }.accessibilityIdentifier("v15.f3c.receipt.retry-same-key")
                             V15ActionButton("放弃恢复", kind: .quiet) { model.abandonUnknownReceipt() }.accessibilityIdentifier("v15.f3c.receipt.abandon")
                         }
                     }
@@ -436,8 +435,8 @@ public struct V15ReimbursementView: View {
         switch phase {
         case .failed(let failure): nonRetryableMessage(title: "操作未完成", message: failure.message).accessibilityIdentifier("v15.f3c.sheet.error")
         case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.refresh() } }.accessibilityIdentifier("v15.f3c.sheet.conflict")
-        case .unknown: nonRetryableMessage(title: "请求结果未知", message: "服务器可能已经完成请求；保留原请求体与同一请求键。请使用下方同一请求键恢复操作，或明确放弃恢复。").accessibilityIdentifier("v15.f3c.sheet.unknown")
-        case .succeeded: V15SuccessReceiptState(title: "服务端已确认", detail: "新版本事实已返回，可关闭后查看。", actionTitle: nil).accessibilityIdentifier("v15.f3c.sheet.success")
+        case .unknown: nonRetryableMessage(title: "保存结果暂时不明", message: "这笔可能已经保存。安全检查不会重复登记，你也可以停止恢复。").accessibilityIdentifier("v15.f3c.sheet.unknown")
+        case .succeeded: V15SuccessReceiptState(title: "已保存", detail: "可以关闭并查看最新结果。", actionTitle: nil).accessibilityIdentifier("v15.f3c.sheet.success")
         default: EmptyView()
         }
         V15FieldIssues(issues: serverIssues).accessibilityIdentifier("v15.f3c.sheet.remote-reasons")

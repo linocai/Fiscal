@@ -113,9 +113,9 @@ public struct V15ReportingMacView: View {
                 .padding(28)
                 .accessibilityIdentifier("v15.f4a.error")
         case .requiresReload(let failure):
-            reportCard("报表版本已变化") {
+            reportCard("报表数据已更新") {
                 Text(failure.message)
-                Text("未修改任何事实。旧版本钻取与导出均已失效。")
+                Text("没有修改任何数据。请取最新数据后继续。")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 V15ActionButton("取最新数据重新决定", symbol: V15Symbol.conflict) { Task { await model.reloadFresh() } }
@@ -124,7 +124,7 @@ public struct V15ReportingMacView: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("v15.f4a.conflict")
         case .empty:
-            V15EmptyState(title: "这个期间没有报表事实", explanation: "这是正式空期间，不是加载失败。请选择上一个期间继续查看。")
+            V15EmptyState(title: "这个期间没有报表数据", explanation: "可以选择其他期间继续查看。")
                 .padding(28)
                 .accessibilityIdentifier("v15.f4a.empty")
         case .loaded:
@@ -148,12 +148,12 @@ public struct V15ReportingMacView: View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 5) {
                 Text("报表是看法，不是地点").font(V15Typography.surfaceTitle)
-                Text("四个镜头共享同一期间与同一条钻取路径。")
+                Text("收支、资产、信用和分类使用同一期间。")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
             Spacer(minLength: 20)
-            Text("上海业务日 \(meta.dateFrom) 至 \(meta.dateTo)\nCNY · 数据版本 \(meta.dataRevision) · schema \(meta.reportSchemaVersion)")
+                Text("上海业务日 \(meta.dateFrom) 至 \(meta.dateTo)\nCNY")
                 .font(V15Typography.secondary)
                 .foregroundStyle(V15Palette.ink.color.opacity(0.62))
                 .multilineTextAlignment(.trailing)
@@ -174,7 +174,7 @@ public struct V15ReportingMacView: View {
 
     private func overviewSurface(_ report: V15PeriodReport) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("总览 · 一个期间的正式事实").font(V15Typography.cardTitle)
+            Text("期间总览").font(V15Typography.cardTitle)
             metricGrid([
                 ("收入", report.summary.incomeMinor, .inflow),
                 ("个人实际承担", report.summary.personalRealizedMinor, .outflow),
@@ -184,11 +184,11 @@ public struct V15ReportingMacView: View {
             HStack(alignment: .top, spacing: 18) {
                 reportCard("数据完整性") {
                     completenessRows(report.completeness)
-                    Text("这些是仍需处理的服务器事实，不会从总额中消失。")
+                    Text("这些记录仍需处理，但已经计入总额。")
                         .font(V15Typography.secondary)
                         .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 }
-                reportCard("账户期末快照") {
+                reportCard("期末账户余额") {
                     ForEach(Array(report.accounts.enumerated()), id: \.offset) { indexed in
                         aggregateRow(title: indexed.element.accountName, detail: "\(accountKindLabel(indexed.element.accountKind)) · 期末余额", amount: indexed.element.closingBalanceMinor, capability: indexed.element.drillCapability, id: "overview.account.\(indexed.offset)")
                     }
@@ -214,7 +214,7 @@ public struct V15ReportingMacView: View {
                         }
                         .menuStyle(.borderlessButton)
                     }
-                    Text("量值不带收支颜色或符号；七个口径是同一期间事实的不同看法，不能相加。")
+                    Text("这些数字是同一期间的不同统计方式，不能相加。")
                         .font(V15Typography.secondary)
                         .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                         .fixedSize(horizontal: false, vertical: true)
@@ -230,10 +230,8 @@ public struct V15ReportingMacView: View {
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             VStack(alignment: .leading, spacing: 18) {
-                unavailableCard("日趋势 · \(spendingLabel(model.spendingMeasure))", "当前报表接口没有按日序列。这里不使用客户端账目拼接趋势；服务端提供同口径序列后才能显示。")
-                unavailableCard("口径切换影响整屏", "分类分布只有在服务器返回当前口径的分类事实时才会出现；不存在的口径不会改名复用净消费。")
                 reportCard("期间为空时") {
-                    Text("正式空期间使用无重试按钮的空态，并提供期间切换；它与加载失败是两种状态。")
+                    Text("可以切换到其他期间继续查看。")
                         .font(V15Typography.secondary)
                         .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 }
@@ -268,7 +266,6 @@ public struct V15ReportingMacView: View {
                             .font(V15Typography.secondary)
                             .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     }
-                    unavailableCard("未来 30 天预测", "当前正式报表没有预测序列与日期确定性字段。未来计划不会被混入本期现金流。")
                 }
                 .frame(width: 350)
             }
@@ -285,7 +282,7 @@ public struct V15ReportingMacView: View {
                 ("待收报销", report.summary.reimbursementOutstandingAtPeriodEndMinor, .balance)
             ])
             HStack(alignment: .top, spacing: 18) {
-                reportCard("信用账户期末事实") {
+                reportCard("信用账户期末余额") {
                     let creditAccounts = report.accounts.filter { $0.accountKind == .credit }
                     if creditAccounts.isEmpty {
                         Text("本期报表没有信用账户行。")
@@ -297,7 +294,6 @@ public struct V15ReportingMacView: View {
                         }
                     }
                 }
-                unavailableCard("账单周期与未来分期计划", "当前报表契约只返回期末信用欠款，不返回可用额度、逾期、账期或未来分期序列。它们不会被客户端推算并计入当前欠款。")
             }
         }
         .accessibilityElement(children: .contain)
@@ -305,7 +301,7 @@ public struct V15ReportingMacView: View {
     }
 
     private func sevenMeasures(_ summary: V15PeriodReport.Summary) -> some View {
-        reportCard("七个口径 · 互不等价") {
+        reportCard("支出统计方式") {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 0) {
                 ForEach(V15ReportingModel.SpendingMeasure.allCases, id: \.self) { measure in
                     Button { model.selectSpendingMeasure(measure) } label: {
@@ -336,7 +332,7 @@ public struct V15ReportingMacView: View {
             model.categoryAmount(category, for: model.spendingMeasure).map { (category, $0) }
         }
         if available.count == report.categories.count {
-            reportCard("按分类 · \(spendingLabel(model.spendingMeasure)) · 点行下钻") {
+                reportCard("按分类 · \(spendingLabel(model.spendingMeasure)) · 点按查看明细") {
                 let maximum = max(available.map { max($0.1, 0) }.max() ?? 0, 1)
                 ForEach(Array(available.enumerated()), id: \.offset) { indexed in
                     categoryRow(indexed.element.0, amount: indexed.element.1, maximum: maximum, id: indexed.offset)
@@ -344,8 +340,7 @@ public struct V15ReportingMacView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 14) {
-                unavailableCard("按分类 · \(spendingLabel(model.spendingMeasure))", "当前报表只提供总消费、商户退款和净消费的分类事实。不会把净消费改名成当前口径；下方单独保留可验算的净消费分类。")
-                reportCard("可下钻事实 · 净消费") {
+                reportCard("分类明细 · 净消费") {
                     let maximum = max(report.categories.map { max($0.netConsumptionMinor, 0) }.max() ?? 0, 1)
                     ForEach(Array(report.categories.enumerated()), id: \.offset) { indexed in
                         categoryRow(indexed.element, amount: indexed.element.netConsumptionMinor, maximum: maximum, id: indexed.offset)
@@ -384,7 +379,7 @@ public struct V15ReportingMacView: View {
             .disabled(!isEnabled(category.drillCapability))
             .accessibilityIdentifier("v15.f4a.row.category.\(id)")
             if category.categoryID == nil {
-                Text("未分类事实仍计入总额，但没有安全分类筛选 ID，暂不能下钻。")
+                Text("未分类金额仍计入总额，暂时不能查看明细。")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
@@ -511,7 +506,7 @@ public struct V15ReportingMacView: View {
     private func unavailableCard(_ title: String, _ reason: String) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Label(title, systemImage: "minus.circle").font(V15Typography.body.weight(.semibold))
-            Text("服务暂未提供 · \(reason)")
+            Text("暂时没有这项数据 · \(reason)")
                 .font(V15Typography.secondary)
                 .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 .fixedSize(horizontal: false, vertical: true)
@@ -531,7 +526,7 @@ public struct V15ReportingMacView: View {
                 Text("\(lensLabel(model.lens)) · \(model.periodLabel) ›").font(V15Typography.secondary.weight(.semibold)).foregroundStyle(V15Palette.ink.color.opacity(0.62))
                 Text(model.selectedDrillLabel ?? "明细").font(V15Typography.cardTitle)
                 Spacer()
-                Text("数据版本 \(model.owner.revision.map(String.init) ?? "—")").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                Text("与当前报表范围一致").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
             }
             .padding(.horizontal, 22)
             .frame(height: 46)
@@ -539,8 +534,6 @@ public struct V15ReportingMacView: View {
             Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
             ScrollView([.vertical, .horizontal]) {
                 VStack(alignment: .leading, spacing: 14) {
-                    unavailableCard("权威稿的逐行口径列", "当前钻取契约返回总消费、商户退款、净消费，不返回逐行已收报销与个人实际承担。下表按真实三列显示。")
-                        .frame(width: 760)
                     drillTable
                 }
                 .padding(22)
@@ -555,7 +548,7 @@ public struct V15ReportingMacView: View {
             switch model.drillPhase {
             case .loading: V15LoadingSkeleton().frame(width: 760).accessibilityIdentifier("v15.f4a.drill.loading")
             case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.retryCurrentDrill() } }.frame(width: 760).accessibilityIdentifier("v15.f4a.drill.error")
-            case .idle: V15EmptyState(title: "没有同版本明细", explanation: "服务器为这个稳定筛选返回了空结果。 ").frame(width: 760).accessibilityIdentifier("v15.f4a.drill.empty")
+            case .idle: V15EmptyState(title: "没有明细", explanation: "当前筛选范围内没有记录。").frame(width: 760).accessibilityIdentifier("v15.f4a.drill.empty")
             }
         } else {
             VStack(spacing: 0) {
@@ -615,24 +608,24 @@ public struct V15ReportingMacView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("导出当前正式报表").font(V15Typography.cardTitle)
             if let owner = model.exportOwner {
-                Text("\(owner.period.rawValue) · 上海业务日 · CNY · 数据版本 \(owner.expectedRevision)")
+            Text("\(owner.period.rawValue) · 上海业务日 · CNY")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
             switch model.exportPhase {
             case .confirming(let format):
-                Text(format == .pdf ? "PDF 仅供阅读；不含凭证、完整账户标识、账单或 Provider 原文。" : "CSV 用于逐行复核；不含凭证、完整账户标识、账单或 Provider 原文。")
+                Text(format == .pdf ? "PDF 仅供阅读；不含口令、完整账户标识、账单或 AI 原始内容。" : "CSV 用于逐行复核；不含口令、完整账户标识、账单或 AI 原始内容。")
                 HStack {
                     V15ActionButton("取消", kind: .secondary) { model.cancelExport() }
                     V15ActionButton("开始导出") { Task { await model.exportConfirmed() } }
                         .accessibilityIdentifier("v15.f4b.export.confirm")
                 }
             case .transferring:
-                V15LoadingSkeleton(); Text("正在从服务器传输文件…").font(V15Typography.secondary)
+                V15LoadingSkeleton(); Text("正在准备文件…").font(V15Typography.secondary)
                 V15ActionButton("取消", kind: .secondary) { model.cancelExport() }
-            case .ready(let artifact):
+            case .ready:
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("服务器文件已验证 · 数据版本 \(artifact.dataRevision)；请选择本地保存位置。")
+                    Text("文件已准备好，请选择保存位置。")
                     V15ActionButton("存入文件…") { Task { await model.saveReadyArtifact(using: artifactSaver) } }
                         .accessibilityIdentifier("v15.f4b.export.handoff")
                 }
@@ -646,8 +639,8 @@ public struct V15ReportingMacView: View {
                 V15ActionButton("重试保存") { Task { await model.retrySave(using: artifactSaver) } }
                     .accessibilityIdentifier("v15.f4b.export.save.retry")
                 V15ActionButton("关闭", kind: .secondary) { model.dismissExport() }
-            case .completed(let artifact):
-                V15SuccessReceiptState(title: "报表已存入此设备", detail: "数据版本 \(artifact.dataRevision)")
+            case .completed:
+                V15SuccessReceiptState(title: "报表已存入此设备", detail: "可以在文件中查看")
                     .accessibilityIdentifier("v15.f4b.export.success")
                 V15ActionButton("完成") { model.dismissExport() }
             case .requiresReload(let failure):
@@ -683,7 +676,7 @@ public struct V15ReportingMacView: View {
     private func sourceLabel(_ source: V15ReportTransactionSource) -> String {
         switch source {
         case .manual: "手工录入"; case .system: "系统派生"; case .aiText: "AI 文本"; case .ocr: "OCR"
-        case .legacyImport: "旧版导入"; case .cashFlow: "现金流"; case .statementImport: "账单导入"; case .unknown: "服务器新增来源"
+        case .legacyImport: "旧版导入"; case .cashFlow: "现金流"; case .statementImport: "账单导入"; case .unknown: "其他来源"
         }
     }
 
@@ -691,12 +684,12 @@ public struct V15ReportingMacView: View {
         switch kind {
         case .income: "收入"; case .expense: "支出"; case .transfer: "转账"; case .creditPurchase: "信用消费"
         case .repayment: "还款"; case .installmentFee: "分期手续费"; case .installmentRefund: "分期退款"
-        case .reimbursementReceipt: "报销收款"; case .unknown: "服务器新增类型"
+        case .reimbursementReceipt: "报销收款"; case .unknown: "其他类型"
         }
     }
 
     private func accountKindLabel(_ kind: V15ReportAccountKind) -> String {
-        switch kind { case .cash: "现金"; case .debit: "借记"; case .credit: "信用"; case .unknown: "服务器新增类型" }
+        switch kind { case .cash: "现金"; case .debit: "借记"; case .credit: "信用"; case .unknown: "其他类型" }
     }
 }
 

@@ -18,7 +18,7 @@ public enum V15StatementImportStatus: Sendable, Equatable, Decodable {
     public var displayName: String { switch self {
     case .created: "已登记"; case .extracting: "本地提取中"; case .parsing: "解析中"; case .reviewRequired: "需要复核"
     case .readyToConfirm: "可确认"; case .partiallyConfirmed: "部分已确认"; case .confirmed: "已确认"
-    case .failed: "失败"; case .abandoned: "已取消"; case .unknown(let value): "未知状态（\(value)）"
+    case .failed: "失败"; case .abandoned: "已取消"; case .unknown: "暂时无法识别"
     } }
     public var isDisplayOnly: Bool { if case .unknown = self { true } else { false } }
 }
@@ -42,7 +42,7 @@ public enum V15StatementResolution: Sendable, Equatable, Decodable, Encodable {
     } }
     public var displayName: String { switch self {
     case .unresolved: "未解决"; case .createNew: "新建流水"; case .matchExisting: "匹配既有流水"
-    case .ignoreNonTransaction: "忽略：非交易"; case .ignoreIntentional: "忽略：有意不导入"; case .unknown(let value): "未知方案（\(value)）"
+    case .ignoreNonTransaction: "忽略：非交易"; case .ignoreIntentional: "忽略：有意不导入"; case .unknown: "暂时无法识别"
     } }
     public var isExecutable: Bool { if case .unknown = self { false } else { self != .unresolved } }
 }

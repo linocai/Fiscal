@@ -176,7 +176,7 @@ public struct V15AISettings: Decodable, Sendable, Equatable {
             throw V15Failure(
                 kind: .decoding,
                 code: "ai_settings_contract_violation",
-                message: "服务端违反 D3 自动执行退役契约；本会话已锁定所有写入。"
+                message: "AI 安全设置异常，本次使用期间已暂停所有修改。"
             )
         }
         autoExecuteEnabled = false

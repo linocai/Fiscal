@@ -49,20 +49,20 @@ import Foundation
     public init(services: V15Services, offlineSnapshotAt: Date? = nil) { self.services = services; self.offlineSnapshotAt = offlineSnapshotAt }
     public var isOffline: Bool { offlineSnapshotAt != nil }
     public var writeDisabledReason: V15DisabledReason? {
-        if isOffline { return .init(code: "offline_read_only", message: "离线快照仅可查看，无法提交更改。", fieldPath: nil) }
-        if writesRequireExplicitReload { return unknownCreateLock == nil ? .init(code: "reload_required_after_conflict", message: "上次冲突后的重新读取未完成；请先显式重新读取后再决定。", fieldPath: nil) : .init(code: "reload_required_after_unknown_create", message: "新建结果未确认且重新读取失败；所有写入已停止，请先显式重新读取。", fieldPath: nil) }
+        if isOffline { return .init(code: "offline_read_only", message: "离线时只可查看，无法提交更改。", fieldPath: nil) }
+        if writesRequireExplicitReload { return unknownCreateLock == nil ? .init(code: "reload_required_after_conflict", message: "上次数据更新后还没有成功重新读取；请先刷新。", fieldPath: nil) : .init(code: "reload_required_after_unknown_create", message: "新建结果暂时不明且重新读取失败；请先刷新。", fieldPath: nil) }
         return nil
     }
     public var saveDisabledReason: V15DisabledReason? {
         if let reason = writeDisabledReason { return reason }
         guard let lock = unknownCreateLock, lock.section == selectedSection, !lock.explicitlyReloaded,
               currentCreatePayloadIdentity == lock.payloadIdentity else { return nil }
-        return .init(code: "create_response_unknown", message: "上次新建结果未确认；相同草稿不会再次提交。请先显式重新读取后再确认，或修改草稿形成新的提交意图。", fieldPath: nil)
+        return .init(code: "create_response_unknown", message: "上次新建结果尚未确认。为避免重复保存，请先刷新列表确认；也可以修改内容后重新提交。", fieldPath: nil)
     }
     public var unknownCreateReloadReason: V15DisabledReason? {
         guard let lock = unknownCreateLock, !lock.explicitlyReloaded else { return nil }
         let sameDraft = lock.section == selectedSection && currentCreatePayloadIdentity == lock.payloadIdentity
-        return .init(code: "create_response_unknown", message: sameDraft ? "上次新建结果未确认；可重新读取服务器事实，但不会据此猜测已创建。" : "仍有一项新建结果未确认；请重新读取服务器事实后再继续写入。", fieldPath: nil)
+        return .init(code: "create_response_unknown", message: sameDraft ? "上次新建结果暂时不明；请检查最新状态。" : "仍有一项新建结果暂时不明；请检查最新状态后再继续。", fieldPath: nil)
     }
     public var selectedAccount: V15AccountResponse? { accounts.first { $0.id == selectedAccountID } }
     public var selectedCategory: V15CategoryResponse? { flatten(categories).first { $0.id == selectedCategoryID } }
@@ -116,31 +116,31 @@ import Foundation
             } else {
                 value = try await services.merchants.create(.init(name: expectedName, aliases: aliases))
             }
-            receipt = "商户已由服务器确认：\(value.name) · v\(value.version)"
+            receipt = "商户“\(value.name)”已保存"
             if merchant == nil { unknownCreateLock = nil }
             await load()
         } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) {
             if let id, let read = try? await services.merchants.get(id: id), read.name == expectedName, read.aliases == aliases {
-                receipt = "已通过服务器读回确认商户：\(read.name) · v\(read.version)。未重发写入。"
+                receipt = "已确认商户“\(read.name)”保存成功，没有重复保存。"
             } else {
                 if let createIdentity { await lockUnknownCreate(section: .merchants, identity: createIdentity); return }
-                else { receipt = "响应未确认：已读回但未证明结果，未重发写入。" }
+                else { receipt = "暂时无法确认保存结果；系统没有重复保存。" }
             }
             await load()
         } catch { apply(error) }
     }
     public func submitMerchantSearch() async { guard merchantSearch == committedMerchantSearch else { merchantPageGeneration &+= 1; merchantCursor = nil; merchantPageError = nil; isLoadingMerchants = false; committedMerchantSearch = merchantSearch; await load(); return }; await load() }
     public func loadNextMerchants() async { guard merchantSearch == committedMerchantSearch, let cursor = merchantCursor, !isLoadingMerchants else { return }; merchantPageGeneration &+= 1; let current = merchantPageGeneration; isLoadingMerchants = true; merchantPageError = nil; do { let page = try await services.merchants.list(query: committedMerchantSearch, cursor: cursor, limit: 50); guard current == merchantPageGeneration else { return }; merchants += page.items.filter { item in !merchants.contains(where: { $0.id == item.id }) }; merchantCursor = page.nextCursor } catch let failure as V15Failure { guard current == merchantPageGeneration else { return }; merchantPageError = failure } catch is CancellationError { guard current == merchantPageGeneration else { return }; merchantPageError = nil } catch { guard current == merchantPageGeneration else { return }; merchantPageError = .init(kind: .transport, message: "下一页商户读取失败。") }; guard current == merchantPageGeneration else { return }; isLoadingMerchants = false }
-    public func loadMapping() async { guard let id = UUID(uuidString: mappingTransactionID) else { fieldIssues = [.init(code: "transaction_id_invalid", message: "请输入有效的交易 ID。", fieldPath: "transaction_id")]; return }; do { mapping = try await services.merchants.mapping(transactionID: id); receipt = mapping == nil ? "该交易尚未映射商户。" : "已读取服务器映射：\(mapping!.merchant.name)。" } catch { apply(error) } }
-    public func confirmMapping() async { guard canWrite("无法提交更改") else { return }; guard let transactionID = UUID(uuidString: mappingTransactionID), let merchant = selectedMerchant else { fieldIssues = [.init(code: "mapping_required", message: "请选择商户并输入交易 ID。", fieldPath: "mapping")]; return }; let version = mapping?.mappingVersion; let identity = "confirm|\(transactionID)|\(merchant.id)|\(version.map(String.init) ?? "new")"; let key = idempotency.key(for: "merchant-mapping", payloadIdentity: identity); do { let result = try await services.merchants.confirmMapping(transactionID: transactionID, request: .init(merchantID: merchant.id, expectedMappingVersion: version), idempotencyKey: key); mapping = result.mapping; receipt = "映射已确认：\(result.action) · 交易 v\(result.transactionVersion)。"; idempotency.succeeded(scope: "merchant-mapping", payloadIdentity: identity) } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let read = try? await services.merchants.mapping(transactionID: transactionID), read.merchant.id == merchant.id { mapping = read; receipt = "已读回确认商户映射；未重复提交。"; idempotency.succeeded(scope: "merchant-mapping", payloadIdentity: identity) } else { receipt = "映射响应未确认；已读回但未证明结果，未重复提交。" } } catch { apply(error) } }
-    public func releaseMapping() async { guard canWrite("无法提交更改") else { return }; guard let transactionID = UUID(uuidString: mappingTransactionID), let mapping else { return }; let identity = "release|\(transactionID)|\(mapping.mappingVersion)"; let key = idempotency.key(for: "merchant-release", payloadIdentity: identity); do { let result = try await services.merchants.releaseMapping(transactionID: transactionID, request: .init(expectedMappingVersion: mapping.mappingVersion), idempotencyKey: key); self.mapping = result.mapping; receipt = "映射已解除：交易 v\(result.transactionVersion)。"; idempotency.succeeded(scope: "merchant-release", payloadIdentity: identity) } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { do { let read = try await services.merchants.mapping(transactionID: transactionID); if read == nil { self.mapping = nil; receipt = "已读回确认映射解除；未重复提交。"; idempotency.succeeded(scope: "merchant-release", payloadIdentity: identity) } else { receipt = "解除响应未确认；未重复提交。" } } catch { receipt = "解除响应未确认且无法读回；未重复提交。" } } catch { apply(error) } }
-    public func reorderAccounts(moving id: UUID, after target: UUID?) async { guard canWrite("无法提交更改") else { return }; guard selectedAccount?.archivedAt == nil, let revision = accountRevision else { receipt = "归档账户只能恢复，不能排序。"; return }; var ids = accounts.filter { $0.archivedAt == nil }.sorted { $0.sortOrder < $1.sortOrder }.map(\.id); ids.removeAll { $0 == id }; if let target, let index = ids.firstIndex(of: target) { ids.insert(id, at: index + 1) } else { ids.insert(id, at: 0) }; do { _ = try await services.masterData.reorderAccounts(.init(orderedIDs: ids, expectedListRevision: revision)); receipt = "账户排序已由服务器确认。"; _ = await load() } catch { await reloadOnConflict(error) } }
-    public func reorderCategories(moving id: UUID, after target: UUID?) async { guard canWrite("无法提交更改") else { return }; guard let category = selectedCategory ?? flatten(categories).first(where: { $0.id == id }) else { return }; guard category.archivedAt == nil else { receipt = "归档分类只能恢复，不能排序。"; return }; let key = category.direction + ":" + (category.parentID?.uuidString ?? "root"); do { let state = try await services.masterData.categoryOrderState(direction: V15CategoryDirection(rawValue: category.direction) ?? .unknown, parentID: category.parentID); categoryRevisions[key] = state.listRevision; var ids = state.items.map(\.id); ids.removeAll { $0 == id }; if let target, let index = ids.firstIndex(of: target) { ids.insert(id, at: index + 1) } else { ids.insert(id, at: 0) }; _ = try await services.masterData.reorderCategories(parentID: category.parentID, request: .init(orderedIDs: ids, expectedListRevision: state.listRevision)); receipt = "分类排序已由服务器确认。"; _ = await load() } catch { await reloadOnConflict(error) } }
+    public func loadMapping() async { guard let id = UUID(uuidString: mappingTransactionID) else { fieldIssues = [.init(code: "transaction_id_invalid", message: "无法识别这笔交易。", fieldPath: "transaction_id")]; return }; do { mapping = try await services.merchants.mapping(transactionID: id); receipt = mapping == nil ? "这笔交易尚未关联商户。" : "已关联商户：\(mapping!.merchant.name)。" } catch { apply(error) } }
+    public func confirmMapping() async { guard canWrite("无法提交更改") else { return }; guard let transactionID = UUID(uuidString: mappingTransactionID), let merchant = selectedMerchant else { fieldIssues = [.init(code: "mapping_required", message: "请选择要关联的商户。", fieldPath: "mapping")]; return }; let version = mapping?.mappingVersion; let identity = "confirm|\(transactionID)|\(merchant.id)|\(version.map(String.init) ?? "new")"; let key = idempotency.key(for: "merchant-mapping", payloadIdentity: identity); do { let result = try await services.merchants.confirmMapping(transactionID: transactionID, request: .init(merchantID: merchant.id, expectedMappingVersion: version), idempotencyKey: key); mapping = result.mapping; receipt = "商户关联已保存。"; idempotency.succeeded(scope: "merchant-mapping", payloadIdentity: identity) } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let read = try? await services.merchants.mapping(transactionID: transactionID), read.merchant.id == merchant.id { mapping = read; receipt = "已确认商户关联保存成功，没有重复保存。"; idempotency.succeeded(scope: "merchant-mapping", payloadIdentity: identity) } else { receipt = "暂时无法确认商户关联结果；系统没有重复保存。" } } catch { apply(error) } }
+    public func releaseMapping() async { guard canWrite("无法提交更改") else { return }; guard let transactionID = UUID(uuidString: mappingTransactionID), let mapping else { return }; let identity = "release|\(transactionID)|\(mapping.mappingVersion)"; let key = idempotency.key(for: "merchant-release", payloadIdentity: identity); do { let result = try await services.merchants.releaseMapping(transactionID: transactionID, request: .init(expectedMappingVersion: mapping.mappingVersion), idempotencyKey: key); self.mapping = result.mapping; receipt = "商户关联已解除。"; idempotency.succeeded(scope: "merchant-release", payloadIdentity: identity) } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { do { let read = try await services.merchants.mapping(transactionID: transactionID); if read == nil { self.mapping = nil; receipt = "已确认商户关联解除成功，没有重复操作。"; idempotency.succeeded(scope: "merchant-release", payloadIdentity: identity) } else { receipt = "暂时无法确认解除结果；系统没有重复操作。" } } catch { receipt = "暂时无法确认解除结果，请稍后检查。" } } catch { apply(error) } }
+    public func reorderAccounts(moving id: UUID, after target: UUID?) async { guard canWrite("无法提交更改") else { return }; guard selectedAccount?.archivedAt == nil, let revision = accountRevision else { receipt = "归档账户只能恢复，不能排序。"; return }; var ids = accounts.filter { $0.archivedAt == nil }.sorted { $0.sortOrder < $1.sortOrder }.map(\.id); ids.removeAll { $0 == id }; if let target, let index = ids.firstIndex(of: target) { ids.insert(id, at: index + 1) } else { ids.insert(id, at: 0) }; do { _ = try await services.masterData.reorderAccounts(.init(orderedIDs: ids, expectedListRevision: revision)); receipt = "账户排序已保存。"; _ = await load() } catch { await reloadOnConflict(error) } }
+    public func reorderCategories(moving id: UUID, after target: UUID?) async { guard canWrite("无法提交更改") else { return }; guard let category = selectedCategory ?? flatten(categories).first(where: { $0.id == id }) else { return }; guard category.archivedAt == nil else { receipt = "归档分类只能恢复，不能排序。"; return }; let key = category.direction + ":" + (category.parentID?.uuidString ?? "root"); do { let state = try await services.masterData.categoryOrderState(direction: V15CategoryDirection(rawValue: category.direction) ?? .unknown, parentID: category.parentID); categoryRevisions[key] = state.listRevision; var ids = state.items.map(\.id); ids.removeAll { $0 == id }; if let target, let index = ids.firstIndex(of: target) { ids.insert(id, at: index + 1) } else { ids.insert(id, at: 0) }; _ = try await services.masterData.reorderCategories(parentID: category.parentID, request: .init(orderedIDs: ids, expectedListRevision: state.listRevision)); receipt = "分类排序已保存。"; _ = await load() } catch { await reloadOnConflict(error) } }
     public func beginTransformFlow() { invalidatePreview(); transformMessage = nil; transformFailure = nil; transformFieldIssues = []; transformRequiresRepreview = false }
     public func previewMerge(targetID: UUID) async {
         guard let source = selectedCategory, let target = flatten(categories).first(where: { $0.id == targetID }) else { return }
         beginTransformFlow(); pendingTransformPreview = .merge(targetID)
-        guard !isOffline else { recordTransformFailure(.init(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法读取合并预览。")); return }
+        guard !isOffline else { recordTransformFailure(.init(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法预览合并结果。")); return }
         previewGeneration &+= 1; let current = previewGeneration
         do {
             let result = try await services.categories.mergePreview(sourceID: source.id, request: .init(targetID: target.id, sourceExpectedVersion: source.version, targetExpectedVersion: target.version))
@@ -162,7 +162,7 @@ import Foundation
     public func previewSplit() async {
         guard let root = selectedCategory else { return }
         beginTransformFlow(); pendingTransformPreview = .split
-        guard !isOffline else { recordTransformFailure(.init(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看，无法读取拆分预览。")); return }
+        guard !isOffline else { recordTransformFailure(.init(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法预览拆分结果。")); return }
         previewGeneration &+= 1; let current = previewGeneration
         let names = splitChildNames.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         guard names.count >= 2 else { transformFieldIssues = [.init(code: "split_children_required", message: "至少填写两个新子分类。", fieldPath: "split_children")]; return }
@@ -184,20 +184,20 @@ import Foundation
     public func commitSplit() async -> Bool { guard canWrite("无法提交拆分"), !transformRequiresRepreview else { if transformRequiresRepreview { transformMessage = "此预览已失效，请重新读取预览后再提交。" }; return false }; guard let root = selectedCategory, let preview = splitPreview else { return false }; let assignments = preview.requiredTransactionIDs.compactMap { id in splitAssignments[id].map { name in V15CategorySplitAssignment(transactionID: id, childName: name) } }; guard assignments.count == preview.requiredTransactionIDs.count else { transformFieldIssues = [.init(code: "split_assignment_required", message: "请逐笔指定归位子分类。", fieldPath: "assignments")]; return false }; let identity = "\(preview.previewToken)|\(assignments)"; do { let result = try await services.categories.commitSplit(rootID: root.id, request: .init(previewToken: preview.previewToken, assignments: assignments), idempotencyKey: idempotency.key(for: "split", payloadIdentity: identity)); idempotency.succeeded(scope: "split", payloadIdentity: identity); transformReceipt = result; transformMessage = "拆分已原子提交：重归类 \(result.reclassifiedTransactionCount) 笔。"; _ = await load(); return true } catch let failure as V15Failure where failure.kind == .conflict { await recoverTransformConflict(failure); return false } catch let failure as V15Failure { recordTransformFailure(failure); return false } catch { recordTransformFailure(.init(kind: .transport, message: "拆分未完成，请重新决定。")); return false } }
     private func mutate(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15AccountResponse) -> Bool, _ operation: () async throws -> V15AccountResponse) async {
         let previous = id.flatMap { target in accounts.first { $0.id == target } }
-        do { let account = try await operation(); receipt = "账户已由服务器确认：\(account.name) · v\(account.version)"; if id == nil { unknownCreateLock = nil }; _ = await load()
+        do { let account = try await operation(); receipt = "账户“\(account.name)”已保存"; if id == nil { unknownCreateLock = nil }; _ = await load()
         } catch let failure as V15Failure where failure.kind == .conflict { await recoverMutationConflict(failure, previousAccount: previous)
-        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let account = try? await services.masterData.account(id: id), confirmed(account) { receipt = "已通过服务器读回确认：\(account.name) · v\(account.version)。未重发写入。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .accounts, identity: unknownCreateIdentity) } else { _ = await load(); receipt = "响应未确认：读回事实未证明本次更改；已完整刷新，未重发写入。" } } catch { apply(error) }
+        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let account = try? await services.masterData.account(id: id), confirmed(account) { receipt = "已确认“\(account.name)”保存成功，没有重复保存。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .accounts, identity: unknownCreateIdentity) } else { _ = await load(); receipt = "暂时无法确认本次更改；已刷新数据，没有重复保存。" } } catch { apply(error) }
     }
     private func mutateCategory(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15CategoryResponse) -> Bool, _ operation: () async throws -> V15CategoryResponse) async {
         let previous = id.flatMap { target in flatten(categories).first { $0.id == target } }
-        do { let category = try await operation(); receipt = "分类已由服务器确认：\(category.name) · v\(category.version)"; if id == nil { unknownCreateLock = nil }; _ = await load()
+        do { let category = try await operation(); receipt = "分类“\(category.name)”已保存"; if id == nil { unknownCreateLock = nil }; _ = await load()
         } catch let failure as V15Failure where failure.kind == .conflict { await recoverMutationConflict(failure, previousCategory: previous)
-        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let category = try? await services.masterData.category(id: id), confirmed(category) { receipt = "已通过服务器读回确认：\(category.name) · v\(category.version)。未重发写入。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .categories, identity: unknownCreateIdentity) } else { _ = await load(); receipt = "响应未确认：读回事实未证明本次更改；已完整刷新，未重发写入。" } } catch { apply(error) }
+        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let category = try? await services.masterData.category(id: id), confirmed(category) { receipt = "已确认“\(category.name)”保存成功，没有重复保存。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .categories, identity: unknownCreateIdentity) } else { _ = await load(); receipt = "暂时无法确认本次更改；已刷新数据，没有重复保存。" } } catch { apply(error) }
     }
     private func reloadOnConflict(_ error: Error) async { if let failure = error as? V15Failure, failure.kind == .conflict { await recoverMutationConflict(failure) } else { apply(error) } }
     public func resolveConflictByReload() async {
         guard conflict != nil else { return }
-        if await load() { receipt = "已读取最新服务器事实；现在可以重新决定。" }
+        if await load() { receipt = "已读取最新数据；现在可以重新决定。" }
     }
     private func recoverMutationConflict(_ failure: V15Failure, previousAccount: V15AccountResponse? = nil, previousCategory: V15CategoryResponse? = nil) async {
         conflict = failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: failure.message)
@@ -205,15 +205,15 @@ import Foundation
         if await load(preservingConflict: true) {
             if let previousAccount, let latest = accounts.first(where: { $0.id == previousAccount.id }) { conflictChanges = accountChanges(previous: previousAccount, current: latest) }
             if let previousCategory, let latest = flatten(categories).first(where: { $0.id == previousCategory.id }) { conflictChanges = categoryChanges(previous: previousCategory, current: latest) }
-            receipt = "服务器版本已变化；已读取最新事实。请比较差异后显式重新读取以继续。"
-        } else { receipt = "服务器版本已变化，但重新读取失败；写入已停止，请显式重新读取后再决定。" }
+            receipt = "数据已经更新；已读取最新内容。请比较差异后再继续。"
+        } else { receipt = "数据已经更新，但重新读取失败；请稍后重试。" }
     }
     private func accountChanges(previous: V15AccountResponse, current: V15AccountResponse) -> [V15ConflictChange] {
         var changes: [V15ConflictChange] = []
         if previous.name != current.name { changes.append(.init(field: "账户名称", previousValue: previous.name, currentValue: current.name)) }
         if previous.openingBalanceMinor != current.openingBalanceMinor { changes.append(.init(field: "期初余额", previousValue: V15MoneyPresentation(minorUnits: previous.openingBalanceMinor, direction: .neutral).text, currentValue: V15MoneyPresentation(minorUnits: current.openingBalanceMinor, direction: .neutral).text)) }
         if previous.archivedAt != current.archivedAt { changes.append(.init(field: "归档状态", previousValue: previous.archivedAt == nil ? "可编辑" : "已归档", currentValue: current.archivedAt == nil ? "可编辑" : "已归档")) }
-        if changes.isEmpty { changes.append(.init(field: "服务器版本", previousValue: "v\(previous.version)", currentValue: "v\(current.version)")) }
+        if changes.isEmpty { changes.append(.init(field: "数据状态", previousValue: "你打开时", currentValue: "已更新")) }
         return changes
     }
     private func categoryChanges(previous: V15CategoryResponse, current: V15CategoryResponse) -> [V15ConflictChange] {
@@ -222,20 +222,20 @@ import Foundation
         if previous.icon != current.icon { changes.append(.init(field: "图标", previousValue: previous.icon, currentValue: current.icon)) }
         if previous.colorHex != current.colorHex { changes.append(.init(field: "颜色", previousValue: previous.colorHex, currentValue: current.colorHex)) }
         if previous.archivedAt != current.archivedAt { changes.append(.init(field: "归档状态", previousValue: previous.archivedAt == nil ? "可编辑" : "已归档", currentValue: current.archivedAt == nil ? "可编辑" : "已归档")) }
-        if changes.isEmpty { changes.append(.init(field: "服务器版本", previousValue: "v\(previous.version)", currentValue: "v\(current.version)")) }
+        if changes.isEmpty { changes.append(.init(field: "数据状态", previousValue: "你打开时", currentValue: "已更新")) }
         return changes
     }
     private func recoverTransformConflict(_ failure: V15Failure) async {
         let pending = pendingTransformPreview
         invalidatePreview(); pendingTransformPreview = pending
         transformFailure = failure; transformFieldIssues = failure.fieldIssues; transformRequiresRepreview = true; writesRequireExplicitReload = true; conflict = failure.conflict
-        if await load() { transformMessage = "服务器版本已变化，已重新读取完整列表；请重新读取预览后再提交。" }
-        else { transformMessage = "服务器版本已变化，但重新读取失败；写入已停止，请显式重新读取后重新预览。" }
+        if await load() { transformMessage = "数据已经更新，已重新读取完整列表；请重新查看预览后再提交。" }
+        else { transformMessage = "数据已经更新，但重新读取失败；请稍后重试并重新预览。" }
     }
     public func reloadAfterTransformConflict() async {
         writesRequireExplicitReload = true
         if await load() { transformFailure = nil; transformMessage = "已重新读取完整列表；请重新读取预览后再提交。"; transformRequiresRepreview = true }
-        else { transformMessage = "重新读取失败；写入仍已停止，请稍后显式重新读取。"; transformRequiresRepreview = true }
+        else { transformMessage = "重新读取失败；请稍后刷新并重新预览。"; transformRequiresRepreview = true }
     }
     public func retryTransformPreview() async {
         if writesRequireExplicitReload { await reloadAfterTransformConflict(); return }
@@ -252,22 +252,22 @@ import Foundation
         writesRequireExplicitReload = true
         if await load() {
             unknownCreateLock = .init(section: lock.section, payloadIdentity: lock.payloadIdentity, explicitlyReloaded: true)
-            receipt = "已重新读取服务器事实；结果仍未确认。请重新决定后再提交，系统不会猜测已创建对象。"
+            receipt = "已重新读取最新数据；结果仍未确认。请重新决定后再提交，系统不会假定已经创建。"
         } else {
             writesRequireExplicitReload = true
-            receipt = "重新读取失败；新建结果仍未确认，所有写入已停止。"
+            receipt = "重新读取失败；新建结果仍未确认，请稍后重试。"
         }
     }
     private func lockUnknownCreate(section: Section, identity: String) async {
         unknownCreateLock = .init(section: section, payloadIdentity: identity)
         let refreshed = await load()
-        if refreshed { receipt = "新建响应未确认；已读取服务器列表但无法安全定位对象。相同草稿不会再次提交，请显式重新读取后再确认或修改草稿。" }
-        else { writesRequireExplicitReload = true; receipt = "新建响应未确认且重新读取失败；所有写入已停止，请显式重新读取后再决定。" }
+        if refreshed { receipt = "新建结果暂时不明；已刷新列表但仍无法确认。为避免重复保存，请修改内容或稍后再次检查。" }
+        else { writesRequireExplicitReload = true; receipt = "新建结果暂时不明且刷新失败；请稍后再试。" }
     }
     private func canSubmitCreate(section: Section, identity: String?) -> Bool {
         guard let identity else { return true }
         guard let lock = unknownCreateLock, lock.section == section, lock.payloadIdentity == identity, !lock.explicitlyReloaded else { return true }
-        receipt = "新建结果未确认；相同草稿不会再次提交。请先显式重新读取后再确认，或修改草稿形成新的提交意图。"
+        receipt = "上次新建结果尚未确认。为避免重复保存，请先刷新列表确认；也可以修改内容后重新提交。"
         return false
     }
     private var currentCreatePayloadIdentity: String? {
@@ -285,9 +285,9 @@ import Foundation
     }
     private func accountCreateIdentity(name: String, kind: V15AccountKind, opening: Int64, credit: Int64?, statement: Int?, due: Int?, mode: String?, asOf: String?, dueDate: String?) -> String { identity(["account", name, kind.rawValue, String(opening), credit.map(String.init) ?? "∅", statement.map(String.init) ?? "∅", due.map(String.init) ?? "∅", mode ?? "∅", asOf ?? "∅", dueDate ?? "∅"]) }
     private func identity(_ fields: [String]) -> String { fields.map { "\($0.utf8.count):\($0)" }.joined(separator: "|") }
-    private func canWrite(_ action: String) -> Bool { if isOffline { receipt = "离线快照仅可查看，\(action)。"; return false }; if writesRequireExplicitReload { receipt = unknownCreateLock == nil ? "上次冲突后的重新读取未完成，\(action)；请显式重新读取后再决定。" : "新建结果未确认且重新读取失败，\(action)；请显式重新读取后再决定。"; return false }; return true }
+    private func canWrite(_ action: String) -> Bool { if isOffline { receipt = "离线时只可查看，\(action)。"; return false }; if writesRequireExplicitReload { receipt = unknownCreateLock == nil ? "数据更新后刷新未完成，\(action)；请先刷新再决定。" : "新建结果尚未确认且刷新失败，\(action)；请先刷新再决定。"; return false }; return true }
     public static func reorderHint(canMove: Bool, down: Bool) -> String { if canMove { return down ? "⌘⌥↓ 下移一位" : "⌘⌥↑ 上移一位" }; return down ? "已到末位，不能下移。" : "已到首位，不能上移。" }
-    private func apply(_ error: Error) { if let failure = error as? V15Failure { fieldIssues = failure.fieldIssues; conflict = failure.conflict; receipt = failure.kind == .conflict ? "服务器版本已变化；写入已停止，请重新读取后再决定。" : failure.message } else { receipt = "操作未完成，请重新读取后再决定。" } }
+    private func apply(_ error: Error) { if let failure = error as? V15Failure { fieldIssues = failure.fieldIssues; conflict = failure.conflict; receipt = failure.kind == .conflict ? "数据已经更新；请重新读取后再决定。" : failure.message } else { receipt = "操作未完成，请重新读取后再决定。" } }
     private func flatten(_ items: [V15CategoryResponse]) -> [V15CategoryResponse] { items + items.flatMap { flatten($0.children) } }
 }
 
@@ -357,7 +357,7 @@ public final class V15SettingsOverviewModel {
             apply(results.5, key: "provider") { providerSettings = $0 }
             apply(results.6, key: "quality") { qualityMetrics = $0 }
             if accounts.isEmpty && categories.isEmpty && claims.isEmpty && transactions.isEmpty && aiSettings == nil && providerSettings == nil && qualityMetrics == nil {
-                phase = .failed(failures.values.first ?? .init(kind: .transport, message: "无法读取设置事实。"))
+                phase = .failed(failures.values.first ?? .init(kind: .transport, message: "无法读取设置。"))
             } else { phase = .loaded }
             return
         }
@@ -389,8 +389,8 @@ public final class V15SettingsOverviewModel {
     private func flatten(_ items: [V15CategoryResponse]) -> [V15CategoryResponse] { items + items.flatMap { flatten($0.children) } }
     private nonisolated static func capture<Value: Sendable>(_ operation: @Sendable () async throws -> Value) async -> Result<Value, V15Failure> {
         do { return .success(try await operation()) }
-        catch is CancellationError { return .failure(.init(kind: .cancelled, message: "请求已取消。")) }
+        catch is CancellationError { return .failure(.init(kind: .cancelled, message: "操作已取消。")) }
         catch let failure as V15Failure { return .failure(failure) }
-        catch { return .failure(.init(kind: .transport, message: "无法读取设置事实。")) }
+        catch { return .failure(.init(kind: .transport, message: "无法读取设置。")) }
     }
 }

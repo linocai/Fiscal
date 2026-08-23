@@ -33,7 +33,7 @@ public struct V15RecordView: View {
                 NavigationStack {
                     VStack(alignment: .leading, spacing: V15Spacing.lg) {
                         V15RecordHeader(open: { editorPresented = true })
-                        Text("新账目会以服务器返回的交易编号、版本和分录为准。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                        Text("保存后会显示最终金额、账户和分录。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     }.padding(V15Spacing.lg).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(V15Palette.paper.color).navigationTitle("录入")
                 }
             }
@@ -43,8 +43,8 @@ public struct V15RecordView: View {
 #else
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: V15Spacing.lg) {
-                Text("账目脊柱").font(V15Typography.surfaceTitle)
-                Text("新的事实录入在此开始。保存后只显示服务端实际返回的凭证。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                Text("记一笔").font(V15Typography.surfaceTitle)
+                Text("在这里记录一笔新账目。保存后会显示最终结果。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 V15RecordHeader(open: {})
                 Spacer()
             }.padding(V15Spacing.lg).frame(minWidth: 330, maxWidth: .infinity, alignment: .topLeading)
@@ -58,7 +58,7 @@ public struct V15RecordView: View {
 private struct V15RecordHeader: View {
     let open: () -> Void
     var body: some View {
-        V15Section("手工事实") {
+        V15Section("账目信息") {
             V15ActionButton("新建账目", symbol: "plus", action: open).accessibilityIdentifier("v15.f1a.record.open")
         }
     }
@@ -143,11 +143,11 @@ private struct V15RecordEditor: View {
     }
     @ViewBuilder private var submissionState: some View {
         switch model.submission {
-        case .queued(let id):
-            V15SuccessReceiptState(title: "已加入待同步", detail: "本地凭证 \(id.uuidString) · 联网后使用同一幂等键提交", actionTitle: "录入下一笔", action: { model.newEntry() })
+        case .queued:
+            V15SuccessReceiptState(title: "已加入待同步", detail: "联网后会安全保存，不会重复记账。", actionTitle: "录入下一笔", action: { model.newEntry() })
                 .accessibilityIdentifier("v15.f1a.record.queued")
         case .success(let transaction):
-            V15SuccessReceiptState(title: "已保存事实", detail: "交易 \(transaction.id.uuidString) · v\(transaction.version) · \(transaction.postings.count) 条分录", actionTitle: "录入下一笔", action: { model.newEntry() })
+            V15SuccessReceiptState(title: "账目已保存", detail: "已生成 \(transaction.postings.count) 条分录", actionTitle: "录入下一笔", action: { model.newEntry() })
                 .accessibilityIdentifier("v15.f1a.record.success")
         case .conflict(let conflict): V15ConflictState(conflict: conflict, reload: { Task { await model.reloadAfterConflict() } })
         case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.submit() } })

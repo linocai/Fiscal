@@ -10,7 +10,7 @@ public enum V15CashFlowDirection: Sendable, Equatable, Hashable, Codable, Identi
     public func encode(to encoder: Encoder) throws { var container = encoder.singleValueContainer(); try container.encode(rawValue) }
     public init(rawValue: String) { switch rawValue { case "inflow": self = .inflow; case "outflow": self = .outflow; case "transfer": self = .transfer; default: self = .unknown(rawValue) } }
     public var rawValue: String { switch self { case .inflow: "inflow"; case .outflow: "outflow"; case .transfer: "transfer"; case .unknown(let value): value } }
-    public var displayName: String { switch self { case .inflow: "流入"; case .outflow: "流出"; case .transfer: "转账"; case .unknown(let value): "未知方向（\(value)）" } }
+    public var displayName: String { switch self { case .inflow: "流入"; case .outflow: "流出"; case .transfer: "转账"; case .unknown: "暂时无法识别" } }
     public var isActionable: Bool { if case .unknown = self { false } else { true } }
 }
 
@@ -23,7 +23,7 @@ public enum V15CashFlowStatus: Sendable, Equatable, Hashable, Codable {
     }
     public func encode(to encoder: Encoder) throws { var container = encoder.singleValueContainer(); try container.encode(rawValue) }
     public var rawValue: String { switch self { case .expected: "expected"; case .confirmed: "confirmed"; case .settled: "settled"; case .cancelled: "cancelled"; case .completed: "completed"; case .unknown(let value): value } }
-    public var displayName: String { switch self { case .expected: "预计"; case .confirmed: "已确认"; case .settled: "已入账"; case .cancelled: "已取消"; case .completed: "已完成"; case .unknown(let value): "未知状态（\(value)）" } }
+    public var displayName: String { switch self { case .expected: "预计"; case .confirmed: "已确认"; case .settled: "已入账"; case .cancelled: "已取消"; case .completed: "已完成"; case .unknown: "暂时无法识别" } }
     public var isKnown: Bool { if case .unknown = self { false } else { true } }
 }
 

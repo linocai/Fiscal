@@ -113,7 +113,7 @@ public final class V15RecordModel {
         guard let request = request(), let identity = payloadIdentity(for: request) else { validate(); return }
         if isOffline {
             guard kind != .repayment else {
-                submission = .failed(.init(kind: .offlineReadOnly, code: "preview_requires_network", message: "需要联网：还款必须先读取服务器账期事实。"))
+                submission = .failed(.init(kind: .offlineReadOnly, code: "preview_requires_network", message: "需要联网：还款前必须先读取最新账期。"))
                 return
             }
             let id = services.pendingWrites.enqueueCreate(request)
@@ -138,7 +138,7 @@ public final class V15RecordModel {
             // A non-classified transport exception has unknown server outcome.
             // Keep its payload-bound key so explicit retry cannot duplicate it.
             guard current == submitGeneration else { return }
-            submission = .failed(.init(kind: .responseUnknown, code: "response_unknown", message: "连接在服务器确认前中断；请使用同一请求凭证重试。"))
+            submission = .failed(.init(kind: .responseUnknown, code: "response_unknown", message: "连接中断，暂时无法确认是否保存成功。安全检查不会重复记账。"))
         }
     }
 
@@ -280,7 +280,7 @@ public final class V15RecordModel {
         case .creditPurchase:
             if selected?.kind != .credit { issues.append(.init(code: "credit_account_required", message: "信用卡消费需要选择信用账户。", fieldPath: "account_id")) }
             if destinationAccountID != nil { issues.append(.init(code: "destination_not_allowed", message: "信用卡消费不使用目标账户。", fieldPath: "destination_account_id")) }
-            if creditCycleID != nil { issues.append(.init(code: "credit_cycle_server_owned", message: "信用卡消费账期由服务器按业务日期确定。", fieldPath: "credit_cycle_id")) }
+            if creditCycleID != nil { issues.append(.init(code: "credit_cycle_server_owned", message: "信用卡消费账期会按消费日期自动确定。", fieldPath: "credit_cycle_id")) }
             validateCategory(category, expected: .expense, issues: &issues)
         case .transfer:
             if selected?.kind != .cash && selected?.kind != .debit { issues.append(.init(code: "source_account_type", message: "转出账户必须是现金或借记账户。", fieldPath: "account_id")) }
@@ -296,7 +296,7 @@ public final class V15RecordModel {
             validateNoCategoryOrCycle(&issues, allowsCycle: true)
         }
         if isOffline && kind == .repayment {
-            issues.append(.init(code: "preview_requires_network", message: "需要联网：还款必须先读取服务器账期事实。", fieldPath: nil))
+            issues.append(.init(code: "preview_requires_network", message: "需要联网：还款前必须先读取最新账期。", fieldPath: nil))
         }
         localIssues = issues
     }

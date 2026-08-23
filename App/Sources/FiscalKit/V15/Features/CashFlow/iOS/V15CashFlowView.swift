@@ -23,7 +23,7 @@ public struct V15CashFlowView: View {
             }
             .background(V15Palette.paper.color)
             .navigationTitle("现金流")
-            .toolbar { ToolbarItem(placement: .primaryAction) { Button { Task { await model.refresh() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityLabel("刷新现金流事实").accessibilityIdentifier("v15.f3d.refresh") } }
+            .toolbar { ToolbarItem(placement: .primaryAction) { Button { Task { await model.refresh() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityLabel("刷新现金流数据").accessibilityIdentifier("v15.f3d.refresh") } }
         }
         .task { if model.phase == .idle { await model.load() } }
         .sheet(isPresented: Binding(get: { model.editorMode != .none }, set: { if !$0 { model.dismissEditor() } })) { editorSheet }
@@ -33,7 +33,7 @@ public struct V15CashFlowView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
             Text("计划、确认、兑现，逐笔看清").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
-            Text("列表、状态、金额与可用动作均来自服务端；系统报销与信用账单不会从时间轴反推。")
+            Text("集中查看未来收支、已完成记录，以及报销和信用账单安排。")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
             if let summary = model.active?.summary {
                 HStack(alignment: .top, spacing: V15Spacing.sm) {
@@ -74,7 +74,7 @@ public struct V15CashFlowView: View {
             V15Field("历史月份", text: Binding(get: { model.historyMonth }, set: { value in Task { await model.setHistoryMonth(value) } }), prompt: "YYYY-MM").accessibilityIdentifier("v15.f3d.history.month")
             switch model.historyPhase {
             case .idle, .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3d.history.loading")
-            case .empty: V15EmptyState(title: "本月没有现金流历史", explanation: "已入账、取消或完成的事项会由服务端返回。", actionTitle: "重试") { Task { await model.setHistoryMonth(model.historyMonth) } }.accessibilityIdentifier("v15.f3d.history.empty")
+            case .empty: V15EmptyState(title: "本月没有现金流历史", explanation: "已入账、取消或完成的事项会显示在这里。", actionTitle: "重试") { Task { await model.setHistoryMonth(model.historyMonth) } }.accessibilityIdentifier("v15.f3d.history.empty")
             case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.setHistoryMonth(model.historyMonth) } }.accessibilityIdentifier("v15.f3d.history.error")
             case .loaded: itemList(model.history?.items ?? [], title: model.history?.month ?? "历史", list: .history)
             }
@@ -101,7 +101,7 @@ public struct V15CashFlowView: View {
                     .background(item.isSystem ? V15Palette.provisional.color : V15Palette.selected.color, in: RoundedRectangle(cornerRadius: V15Radius.tag))
                 if item.isSystem { Text(sourceLabel(item)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
             }
-            HStack(alignment: .firstTextBaseline) { Text(item.title).font(V15Typography.cardTitle); Spacer(); Text("v\(item.version)").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
+            HStack(alignment: .firstTextBaseline) { Text(item.title).font(V15Typography.cardTitle); Spacer(); Text(item.status.displayName).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
                 .accessibilityIdentifier("v15.f3d.detail")
             Text("\(item.expectedDate) · \(item.direction.displayName) · \(item.status.displayName)").font(V15Typography.secondary)
             HStack(alignment: .top, spacing: V15Spacing.sm) {
@@ -111,9 +111,9 @@ public struct V15CashFlowView: View {
             }
             .accessibilityIdentifier("v15.f3d.plan-actual")
             if item.isOverdue { Label("已逾期", systemImage: V15Symbol.warning).foregroundStyle(V15Palette.gold.color) }
-            if item.isDisplayOnly { Text("服务端返回了当前客户端未知的状态或方向，因此只读展示。") .font(V15Typography.secondary).foregroundStyle(V15Palette.teal.color).accessibilityIdentifier("v15.f3d.display-only") }
+            if item.isDisplayOnly { Text("暂时无法识别此事项的状态或方向，当前只供查看。") .font(V15Typography.secondary).foregroundStyle(V15Palette.teal.color).accessibilityIdentifier("v15.f3d.display-only") }
             if item.isSystem {
-                Label(item.systemKind == .creditCycle ? "信用账单投影 · 请到还款流程处理" : "报销事实投影 · 到账请回报销流程登记", systemImage: "link")
+                Label(item.systemKind == .creditCycle ? "信用账单安排 · 请到还款页面处理" : "报销到账安排 · 请到报销页面登记", systemImage: "link")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                 V15ActionButton("修改显示信息", kind: .secondary, disabledReasons: systemOpenReasons(item)) { model.openEdit(item) }.accessibilityIdentifier("v15.f3d.system.edit.open")
             } else {
@@ -191,7 +191,7 @@ public struct V15CashFlowView: View {
             }
             if case .edit = model.editorMode, model.selectedItem?.seriesID != nil {
                 Picker("修改范围", selection: $model.mutationScope) { ForEach(V15CashFlowMutationScope.allCases) { Text($0.displayName).tag($0) } }.pickerStyle(.segmented).accessibilityIdentifier("v15.f3d.editor.scope")
-                Text("重复边界由服务端原系列保留；“本次及以后”只按原月序移动，不修改结束日期或系列长度。")
+                Text("选择“本次及以后”会按原来的月份顺序移动，不改变结束日期或总次数。")
                     .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("v15.f3d.editor.series-boundary")
             }
@@ -202,7 +202,7 @@ public struct V15CashFlowView: View {
 
     private var settlementEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            Text("计划金额不会自动成为实际金额；请明确填写本次真实入账事实。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+            Text("计划金额不会自动成为实际金额；请填写本次真实入账金额。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             V15Field("实际金额（元）", text: $model.settleAmountText, issues: issues(model.settleIssues, "actual_amount_minor")).accessibilityIdentifier("v15.f3d.settle.amount")
             V15Field("发生日期", text: $model.settleDateText, prompt: "YYYY-MM-DD", issues: issues(model.settleIssues, "occurred_at")).accessibilityIdentifier("v15.f3d.settle.date")
             accountPickers(source: $model.settleAccountID, destination: $model.settleDestinationAccountID, transfer: model.selectedItem?.direction == .transfer)
@@ -216,11 +216,11 @@ public struct V15CashFlowView: View {
 
     private var systemEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            Text("仅修改报销投影的标题、备注与预计日期。计划金额继续使用当前服务端事实，实际到账必须回到报销流程登记。") .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("这里只能修改标题、备注与预计日期。实际到账请回到报销页面登记。") .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
             V15Field("显示标题", text: $model.title)
             V15Field("预计日期", text: $model.expectedDateText, prompt: "YYYY-MM-DD")
             V15Field("显示备注", text: $model.note, axis: .vertical)
-            if let item = model.selectedItem { Text("服务端事实金额：\(money(item.plannedAmountMinor))（不可编辑）").font(V15Typography.money).monospacedDigit() }
+            if let item = model.selectedItem { Text("计划金额：\(money(item.plannedAmountMinor))（不可编辑）").font(V15Typography.money).monospacedDigit() }
             V15ActionButton("保存显示信息", disabledReasons: model.systemUpdateReasons) { Task { await model.updateSystem() } }.accessibilityIdentifier("v15.f3d.system.update")
             recoveryActions
         }
@@ -236,10 +236,10 @@ public struct V15CashFlowView: View {
             V15ServiceErrorState(message: message) { Task { await model.retryFactRefresh() } }.accessibilityIdentifier("v15.f3d.fact-refresh")
         } else {
             switch model.mutationPhase {
-            case .unknown: V15ServiceErrorState(message: model.directReadbackMessage ?? "请求结果未知。带请求键的操作只能同键恢复；无请求键命令只能 fresh GET。") { if model.hasUnknownStableAttempt { Task { await model.retryUnknownStable() } } else { Task { await model.readBackUnknownDirect() } } }.accessibilityIdentifier("v15.f3d.unknown")
+            case .unknown: V15ServiceErrorState(message: model.directReadbackMessage ?? "暂时无法确认操作结果。安全检查不会重复保存。") { if model.hasUnknownStableAttempt { Task { await model.retryUnknownStable() } } else { Task { await model.readBackUnknownDirect() } } }.accessibilityIdentifier("v15.f3d.unknown")
             case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.reloadAfterConflict() } }.accessibilityIdentifier("v15.f3d.conflict")
             case .failed(let failure): V15ServiceErrorState(message: failure.message) { if model.hasFactRefreshGate { Task { await model.retryFactRefresh() } } else { Task { await model.refresh() } } }.accessibilityIdentifier("v15.f3d.mutation.error")
-            case .succeeded: V15SuccessReceiptState(title: "现金流事实已更新", detail: "active、history 与事项详情已重新读取。").accessibilityIdentifier("v15.f3d.success")
+            case .succeeded: V15SuccessReceiptState(title: "现金流已更新", detail: "未来安排、历史与详情均已更新。").accessibilityIdentifier("v15.f3d.success")
             case .loading: V15LoadingSkeleton()
             case .idle: EmptyView()
             }
@@ -248,11 +248,11 @@ public struct V15CashFlowView: View {
 
     @ViewBuilder private var recoveryActions: some View {
         if model.hasUnknownStableAttempt {
-            HStack(alignment: .top) { V15ActionButton("同一请求键重试", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线不能重试写入。", fieldPath: nil) : nil) { Task { await model.retryUnknownStable() } }.accessibilityIdentifier("v15.f3d.unknown.retry-same-key"); V15ActionButton("放弃恢复", kind: .quiet) { model.abandonUnknownStable() }.accessibilityIdentifier("v15.f3d.unknown.abandon-stable") }
+            HStack(alignment: .top) { V15ActionButton("安全检查保存结果", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能检查保存结果。", fieldPath: nil) : nil) { Task { await model.retryUnknownStable() } }.accessibilityIdentifier("v15.f3d.unknown.retry-same-key"); V15ActionButton("停止恢复", kind: .quiet) { model.abandonUnknownStable() }.accessibilityIdentifier("v15.f3d.unknown.abandon-stable") }
         }
         if model.hasUnknownDirectAttempt {
-            V15ActionButton("只读取最新事实", kind: .secondary) { Task { await model.readBackUnknownDirect() } }.accessibilityIdentifier("v15.f3d.unknown.readback")
-            V15ActionButton("按最新事实解除写入锁", kind: .quiet, disabledReason: model.canAbandonUnknownDirect ? nil : .init(code: "fresh_readback_required", message: "请先完成 fresh GET。", fieldPath: nil)) { model.abandonUnknownDirect() }.accessibilityIdentifier("v15.f3d.unknown.abandon-direct")
+            V15ActionButton("检查最新状态", kind: .secondary) { Task { await model.readBackUnknownDirect() } }.accessibilityIdentifier("v15.f3d.unknown.readback")
+            V15ActionButton("核对后继续", kind: .quiet, disabledReason: model.canAbandonUnknownDirect ? nil : .init(code: "fresh_readback_required", message: "请先检查最新状态。", fieldPath: nil)) { model.abandonUnknownDirect() }.accessibilityIdentifier("v15.f3d.unknown.abandon-direct")
         }
     }
 
@@ -264,12 +264,12 @@ public struct V15CashFlowView: View {
     }
     private func categoryPicker(selection: Binding<UUID?>, categories: [V15CategoryResponse]) -> some View { V15PickerRow("分类", selection: selection) { Text("未分类").tag(UUID?.none); ForEach(categories) { Text($0.name).tag(UUID?.some($0.id)) } } }
     private func issues(_ values: [V15FieldIssue], _ path: String) -> [V15FieldIssue] { values.filter { $0.fieldPath == path || $0.fieldPath?.hasPrefix(path + ".") == true } }
-    private func sourceLabel(_ item: V15CashFlowItem) -> String { item.isSystem ? "系统事实" : item.source == "manual" ? "手工" : item.source }
+    private func sourceLabel(_ item: V15CashFlowItem) -> String { item.isSystem ? "自动生成" : item.source == "manual" ? "手工" : "其他" }
     private func moneyDirection(_ item: V15CashFlowItem) -> V15MoneyDirection { item.direction == .inflow ? .inflow : item.direction == .outflow ? .outflow : .neutral }
     private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral, includeCurrency: true).text }
     private var editorTitle: String { switch model.editorMode { case .create: "新建现金流"; case .edit: "修改现金流"; case .settle: "兑现入账"; case .systemEdit: "系统事项显示"; case .none: "现金流" } }
-    private func editOpenReasons(_ item: V15CashFlowItem) -> [V15DisabledReason] { var reasons: [V15DisabledReason] = []; if model.writeLocked { reasons.append(.init(code: "write_locked", message: "当前有未完成写入或事实刷新。", fieldPath: nil)) }; if !item.allows(.edit) { reasons.append(.init(code: "server_action_unavailable", message: "服务端未允许修改。", fieldPath: "actions")) }; return reasons }
-    private func settleOpenReasons(_ item: V15CashFlowItem) -> [V15DisabledReason] { var reasons: [V15DisabledReason] = []; if model.writeLocked { reasons.append(.init(code: "write_locked", message: "当前有未完成写入或事实刷新。", fieldPath: nil)) }; if !item.allows(.settle) { reasons.append(.init(code: "server_action_unavailable", message: "服务端未允许入账。", fieldPath: "actions")) }; return reasons }
-    private func systemOpenReasons(_ item: V15CashFlowItem) -> [V15DisabledReason] { var reasons: [V15DisabledReason] = []; if model.writeLocked { reasons.append(.init(code: "write_locked", message: "当前有未完成写入或事实刷新。", fieldPath: nil)) }; if item.systemKind == .creditCycle { reasons.append(.init(code: "credit_projection_read_only", message: "信用账单投影只读。", fieldPath: "system_kind")) }; if !item.allows(.edit) { reasons.append(.init(code: "server_action_unavailable", message: "服务端未允许修改。", fieldPath: "actions")) }; return reasons }
+    private func editOpenReasons(_ item: V15CashFlowItem) -> [V15DisabledReason] { var reasons: [V15DisabledReason] = []; if model.writeLocked { reasons.append(.init(code: "write_locked", message: "上一项操作还没有完成。", fieldPath: nil)) }; if !item.allows(.edit) { reasons.append(.init(code: "server_action_unavailable", message: "当前状态不能修改。", fieldPath: "actions")) }; return reasons }
+    private func settleOpenReasons(_ item: V15CashFlowItem) -> [V15DisabledReason] { var reasons: [V15DisabledReason] = []; if model.writeLocked { reasons.append(.init(code: "write_locked", message: "上一项操作还没有完成。", fieldPath: nil)) }; if !item.allows(.settle) { reasons.append(.init(code: "server_action_unavailable", message: "当前状态不能入账。", fieldPath: "actions")) }; return reasons }
+    private func systemOpenReasons(_ item: V15CashFlowItem) -> [V15DisabledReason] { var reasons: [V15DisabledReason] = []; if model.writeLocked { reasons.append(.init(code: "write_locked", message: "上一项操作还没有完成。", fieldPath: nil)) }; if item.systemKind == .creditCycle { reasons.append(.init(code: "credit_projection_read_only", message: "信用账单安排只供查看。", fieldPath: "system_kind")) }; if !item.allows(.edit) { reasons.append(.init(code: "server_action_unavailable", message: "当前状态不能修改。", fieldPath: "actions")) }; return reasons }
 }
 #endif

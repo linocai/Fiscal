@@ -162,7 +162,7 @@ public final class V15PendingWriteStore {
             return true
         } catch let failure as V15Failure {
             if failure.kind == .conflict {
-                update(id, status: .requiresDecision, message: "服务器事实已变化，需要重新决定。")
+                update(id, status: .requiresDecision, message: "数据已经更新，需要重新决定。")
             } else if V15LedgerCreateService.outcomeMayBeUnknown(failure) {
                 await reconcileUnknown(item, services: services)
             } else {
@@ -178,7 +178,7 @@ public final class V15PendingWriteStore {
         guard item.kind == .categoryReplace,
               let transactionID = item.transactionID,
               let request = item.replaceRequest else {
-            update(item.id, status: .outcomeUnknown, message: "服务器结果不明；不会自动重放。")
+            update(item.id, status: .outcomeUnknown, message: "操作结果暂时不明；系统不会自动重复操作。")
             return
         }
         let expectedCategory = request.categoryID
@@ -190,7 +190,7 @@ public final class V15PendingWriteStore {
                 update(item.id, status: .outcomeUnknown, message: "当前分类与待提交值不同，需要重新决定。")
             }
         } catch {
-            update(item.id, status: .outcomeUnknown, message: "暂时无法读取服务器事实，需要稍后人工核对。")
+            update(item.id, status: .outcomeUnknown, message: "暂时无法读取最新数据，需要稍后核对。")
         }
     }
 

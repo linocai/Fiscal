@@ -110,33 +110,33 @@ public final class V15AIProposalModel {
     public var hasUnknownDirect: Bool { selectedProposal.flatMap { directStates[$0.id] }.map { if case .unknown = $0.phase { true } else { false } } ?? false }
     public var isDirectReadbackLoading: Bool { selectedProposal.flatMap { directStates[$0.id] }?.isReadbackLoading ?? false }
     public var directReadbackDisabledReason: V15DisabledReason? {
-        if isDirectReadbackLoading { return .init(code: "ai_readback_in_flight", message: "正在读取最新服务端事实，请等待本次读取结束。", fieldPath: nil) }
-        if isOffline { return .init(code: "offline_read_only", message: "离线时无法读取服务端最新事实。", fieldPath: nil) }
+        if isDirectReadbackLoading { return .init(code: "ai_readback_in_flight", message: "正在读取最新数据，请稍候。", fieldPath: nil) }
+        if isOffline { return .init(code: "offline_read_only", message: "离线时无法读取最新数据。", fieldPath: nil) }
         return nil
     }
     public var writeLocked: Bool { stableAttempt != nil || !directAttempts.isEmpty || mutationPhase == .loading }
     public var effectiveAutoExecute: Bool { settings?.effectiveAutoExecute ?? false }
     public var settingsSafetyReason: V15DisabledReason? {
         guard settingsContractViolation != nil else { return nil }
-        return .init(code: "ai_d3_contract_violation", message: "服务端返回了已退役的自动执行状态；本会话已锁定所有写入。请重建本页后重新读取安全设置。", fieldPath: "effective_auto_execute")
+        return .init(code: "ai_d3_contract_violation", message: "AI 安全设置异常；本页已停止所有保存操作。请重新打开此页面。", fieldPath: "effective_auto_execute")
     }
     public var unknownCreateRetryReasons: [V15DisabledReason] {
         guard let attempt = stableAttempt else {
-            return [.init(code: "ai_create_recovery_missing", message: "没有可重试的未知新建请求。", fieldPath: nil)]
+            return [.init(code: "ai_create_recovery_missing", message: "没有可安全重试的创建操作。", fieldPath: nil)]
         }
         var reasons: [V15DisabledReason] = []
-        if stableRecoveryPhase != .unknown { reasons.append(.init(code: "ai_create_recovery_in_flight", message: "正在等待本次新建请求的结果，不能并发重试。", fieldPath: nil)) }
-        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时不会发送写请求。", fieldPath: nil)) }
+        if stableRecoveryPhase != .unknown { reasons.append(.init(code: "ai_create_recovery_in_flight", message: "正在等待本次创建结果，请稍候。", fieldPath: nil)) }
+        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时不能创建。", fieldPath: nil)) }
         if let reason = settingsSafetyReason { reasons.append(reason) }
-        else if isSettingsLoading { reasons.append(.init(code: "ai_settings_loading", message: "正在读取服务端 AI 安全设置，请等待完成。", fieldPath: nil)) }
-        else if settings == nil { reasons.append(.init(code: "ai_settings_unavailable", message: settingsLoadFailure?.message ?? "尚未确认服务端 AI 安全设置。", fieldPath: nil)) }
-        if attempt.mutationGeneration != mutationGeneration { reasons.append(.init(code: "ai_create_recovery_generation_mismatch", message: "安全设置已变化；请先成功读取新的 false-only 设置后再用原凭证重试。", fieldPath: nil)) }
+        else if isSettingsLoading { reasons.append(.init(code: "ai_settings_loading", message: "正在读取 AI 安全设置，请稍候。", fieldPath: nil)) }
+        else if settings == nil { reasons.append(.init(code: "ai_settings_unavailable", message: settingsLoadFailure?.message ?? "AI 安全设置尚未读取完成。", fieldPath: nil)) }
+        if attempt.mutationGeneration != mutationGeneration { reasons.append(.init(code: "ai_create_recovery_generation_mismatch", message: "安全设置已经变化；请先重新读取设置，再安全检查原内容。", fieldPath: nil)) }
         if !directAttempts.isEmpty { reasons.append(.init(code: "ai_write_in_flight", message: "另一项写操作仍在进行或结果未知。", fieldPath: nil)) }
         return Self.unique(reasons)
     }
     public var unknownCreateAbandonReasons: [V15DisabledReason] {
-        guard stableAttempt != nil else { return [.init(code: "ai_create_recovery_missing", message: "没有可放弃的未知新建请求。", fieldPath: nil)] }
-        guard stableRecoveryPhase == .unknown else { return [.init(code: "ai_create_recovery_in_flight", message: "正在等待本次新建请求的结果，暂时不能放弃。", fieldPath: nil)] }
+        guard stableAttempt != nil else { return [.init(code: "ai_create_recovery_missing", message: "没有可停止检查的创建操作。", fieldPath: nil)] }
+        guard stableRecoveryPhase == .unknown else { return [.init(code: "ai_create_recovery_in_flight", message: "正在等待本次创建结果，暂时不能停止。", fieldPath: nil)] }
         return []
     }
     public var activeAccounts: [V15AccountResponse] { accounts.filter(\.isActive) }
@@ -149,8 +149,8 @@ public final class V15AIProposalModel {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { reasons.append(.init(code: "ai_text_required", message: "请输入要解析的记账文字。", fieldPath: "text")) }
         if inputText.count > 2_000 { reasons.append(.init(code: "ai_text_too_long", message: "记账文字最多 2000 个字符。", fieldPath: "text")) }
-        if source == .ocr && settings?.ocrSourceEnabled == false { reasons.append(.init(code: "ai_ocr_disabled", message: "服务端当前未开放 OCR 来源。", fieldPath: "source")) }
-        if source == .shortcutText && settings?.shortcutTextSourceEnabled == false { reasons.append(.init(code: "ai_shortcut_disabled", message: "服务端当前未开放快捷指令来源。", fieldPath: "source")) }
+        if source == .ocr && settings?.ocrSourceEnabled == false { reasons.append(.init(code: "ai_ocr_disabled", message: "当前未启用 OCR 来源。", fieldPath: "source")) }
+        if source == .shortcutText && settings?.shortcutTextSourceEnabled == false { reasons.append(.init(code: "ai_shortcut_disabled", message: "当前未启用快捷指令来源。", fieldPath: "source")) }
         return Self.unique(reasons)
     }
 
@@ -158,12 +158,12 @@ public final class V15AIProposalModel {
     public var confirmReasons: [V15DisabledReason] {
         var reasons = baseWriteReasons() + editorIssues.map(Self.reason)
         guard case .reviewing(let owner) = editorMode, selectedProposal?.id == owner else {
-            reasons.append(.init(code: "ai_editor_owner_changed", message: "提案选择已变化，请重新打开审核表。", fieldPath: nil))
+            reasons.append(.init(code: "ai_editor_owner_changed", message: "当前内容已变化，请重新打开编辑页面。", fieldPath: nil))
             return Self.unique(reasons)
         }
-        guard selectedProposal?.status == .pending else { reasons.append(.init(code: "ai_pending_required", message: "只有待确认提案可以保存审核。", fieldPath: "status")); return Self.unique(reasons) }
+        guard selectedProposal?.status == .pending else { reasons.append(.init(code: "ai_pending_required", message: "只有待确认内容可以保存修改。", fieldPath: "status")); return Self.unique(reasons) }
         if selectedProposal?.target.isDisplayOnly == true { reasons.append(.init(code: "ai_target_read_only", message: "未知目标只可查看，不能人工确认。", fieldPath: "target")) }
-        if selectedProposal?.isDisplayOnly == true { reasons.append(.init(code: "ai_unknown_read_only", message: "未知服务端事实只可查看。", fieldPath: "status")) }
+        if selectedProposal?.isDisplayOnly == true { reasons.append(.init(code: "ai_unknown_read_only", message: "暂时无法识别这项内容的状态，当前只供查看。", fieldPath: "status")) }
         return Self.unique(reasons)
     }
 
@@ -172,17 +172,17 @@ public final class V15AIProposalModel {
         if proposal.isDisplayOnly { reasons.append(.init(code: "ai_unknown_read_only", message: "未知状态、目标或交易类型只可查看。", fieldPath: "status")) }
         switch action {
         case .replace:
-            if proposal.status != .pending { reasons.append(.init(code: "ai_pending_required", message: "只有待确认提案可以审核。", fieldPath: "status")) }
+            if proposal.status != .pending { reasons.append(.init(code: "ai_pending_required", message: "只有待确认内容可以修改。", fieldPath: "status")) }
         case .execute:
-            if proposal.status != .pending { reasons.append(.init(code: "ai_pending_required", message: "只有待确认提案可以执行。", fieldPath: "status")) }
-            if !matchesConfirmedReview(proposal) { reasons.append(.init(code: "ai_human_confirmation_required", message: "请先保存与当前服务端版本完全一致的审核内容，再人工执行。", fieldPath: "draft")) }
+            if proposal.status != .pending { reasons.append(.init(code: "ai_pending_required", message: "只有待确认内容可以记账。", fieldPath: "status")) }
+            if !matchesConfirmedReview(proposal) { reasons.append(.init(code: "ai_human_confirmation_required", message: "内容已经更新，请重新检查并保存后再记账。", fieldPath: "draft")) }
         case .ignore:
-            if proposal.status != .pending { reasons.append(.init(code: "ai_pending_required", message: "只有待确认提案可以忽略。", fieldPath: "status")) }
+            if proposal.status != .pending { reasons.append(.init(code: "ai_pending_required", message: "只有待确认内容可以忽略。", fieldPath: "status")) }
         case .retry:
-            if proposal.status != .failed { reasons.append(.init(code: "ai_failed_required", message: "只有失败提案可以重试解析。", fieldPath: "status")) }
+            if proposal.status != .failed { reasons.append(.init(code: "ai_failed_required", message: "只有解析失败的内容可以重试。", fieldPath: "status")) }
         case .undo:
-            if proposal.status != .executed { reasons.append(.init(code: "ai_executed_required", message: "只有已执行提案可以撤销。", fieldPath: "status")) }
-            if proposal.transactionID != nil && proposal.transactionVersion == nil { reasons.append(.init(code: "ai_transaction_version_required", message: "缺少交易版本，不能安全撤销。", fieldPath: "transaction_version")) }
+            if proposal.status != .executed { reasons.append(.init(code: "ai_executed_required", message: "只有已记账内容可以撤销。", fieldPath: "status")) }
+            if proposal.transactionID != nil && proposal.transactionVersion == nil { reasons.append(.init(code: "ai_transaction_version_required", message: "交易数据不完整，暂时不能安全撤销。", fieldPath: "transaction_version")) }
         }
         return Self.unique(reasons)
     }
@@ -225,7 +225,7 @@ public final class V15AIProposalModel {
         } catch {
             guard generation == listGeneration else { return }
             isSettingsLoading = false
-            let failure = V15Failure(kind: .transport, message: "AI 提案读取失败。")
+            let failure = V15Failure(kind: .transport, message: "AI 内容读取失败。")
             enterSettingsUnavailable(failure)
             phase = phaseAfterSettingsFailure(failure)
         }
@@ -269,7 +269,7 @@ public final class V15AIProposalModel {
             detailPhase = failure.kind == .cancelled ? .idle : .failed(failure)
         } catch {
             guard generation == selectionGeneration, selectedProposal?.id == proposal.id else { return }
-            detailPhase = .failed(.init(kind: .transport, message: "AI 提案详情读取失败。"))
+            detailPhase = .failed(.init(kind: .transport, message: "AI 内容详情读取失败。"))
         }
     }
 
@@ -290,7 +290,7 @@ public final class V15AIProposalModel {
     public func abandonUnknownCreate() {
         guard unknownCreateAbandonReasons.isEmpty else { return }
         stableAttempt = nil; stableRecoveryPhase = nil
-        recoveryMessage = "已放弃本机未知请求；没有把任何服务端提案归因给它。"
+        recoveryMessage = "已停止检查这次操作；不会把其他内容误认为本次结果。"
     }
 
     public func openReview(_ proposal: V15AIProposal) {
@@ -334,31 +334,31 @@ public final class V15AIProposalModel {
 
     public func recoverUnknownDirect() async {
         guard let proposal = selectedProposal, let attempt = directAttempts[proposal.id], case .unknown = directStates[proposal.id]?.phase, directStates[proposal.id]?.isReadbackLoading != true else { return }
-        let generation = beginReadback(owner: proposal.id, phase: .unknown, message: "正在只读取服务端最新事实；不会重发写入。")
+        let generation = beginReadback(owner: proposal.id, phase: .unknown, message: "正在读取最新数据；不会重复保存。")
         do {
             let fresh = try await services.ai.proposal(id: attempt.proposalID, readCachePolicy: .reloadIgnoringCache)
             guard ownsReadback(owner: attempt.proposalID, attempt: attempt, generation: generation) else { return }
             replaceListFact(fresh); updateSelectionIfOwned(fresh, owner: attempt.proposalID)
-            setDirectState(.init(phase: .unknown, readbackCompleted: true, message: "已读取最新服务端事实；无法证明该变化由本次未知请求造成，因此不会自动重发或记为成功。"), for: attempt.proposalID)
+            setDirectState(.init(phase: .unknown, readbackCompleted: true, message: "数据已经变化，但仍无法确认是否由本次操作造成。系统不会自动重复操作。"), for: attempt.proposalID)
         } catch let failure as V15Failure {
             guard ownsReadback(owner: attempt.proposalID, attempt: attempt, generation: generation) else { return }
-            let message = failure.kind == .cancelled ? "fresh GET 已取消；写入继续锁定；请重试读取。" : "fresh GET 失败：\(failure.message)。写入继续锁定；请重试读取。"
+            let message = failure.kind == .cancelled ? "检查最新状态已取消，请重试读取。" : "检查最新状态失败：\(failure.message)。请重试读取。"
             setDirectState(.init(phase: .unknown, readbackCompleted: false, message: message, issues: failure.fieldIssues), for: attempt.proposalID)
         } catch {
             guard ownsReadback(owner: attempt.proposalID, attempt: attempt, generation: generation) else { return }
-            setDirectState(.init(phase: .unknown, readbackCompleted: false, message: "fresh GET 失败，写入继续锁定；请重试读取。"), for: attempt.proposalID)
+            setDirectState(.init(phase: .unknown, readbackCompleted: false, message: "检查最新状态失败，请重试读取。"), for: attempt.proposalID)
         }
     }
 
     public func abandonUnknownDirect() {
         guard let owner = selectedProposal?.id, directAttempts[owner] != nil, case .unknown = directStates[owner]?.phase, directStates[owner]?.readbackCompleted == true else { return }
         directAttempts[owner] = nil; directStates[owner] = nil; mutationPhase = .idle; readbackCompleted = false
-        recoveryMessage = "已解除本机写锁；没有把最新事实伪归因为未知请求的回执。"
+        recoveryMessage = "已结束本次结果恢复；不会把最新数据误认为本次操作结果。"
     }
 
     public func reloadConflict() async {
         guard let proposal = selectedProposal, case .conflict = directStates[proposal.id]?.phase, let attempt = directAttempts[proposal.id], directStates[proposal.id]?.isReadbackLoading != true else { return }
-        let generation = beginReadback(owner: proposal.id, phase: directStates[proposal.id]?.phase ?? .conflict(.init(reloadPath: nil, latestRevision: nil, message: "冲突仍需重新读取。")), message: "正在重新读取冲突后的服务端事实；不会重发写入。")
+        let generation = beginReadback(owner: proposal.id, phase: directStates[proposal.id]?.phase ?? .conflict(.init(reloadPath: nil, latestRevision: nil, message: "数据已更新，需要重新读取。")), message: "正在读取最新数据；不会重复保存。")
         do {
             let fresh = try await services.ai.proposal(id: attempt.proposalID, readCachePolicy: .reloadIgnoringCache)
             guard ownsReadback(owner: attempt.proposalID, attempt: attempt, generation: generation) else { return }
@@ -367,10 +367,10 @@ public final class V15AIProposalModel {
             if selectedProposal?.id == attempt.proposalID { mutationPhase = .idle; reviewConfirmed = false; if case .reviewing(let owner) = editorMode, owner == attempt.proposalID { dismissEditor() } }
         } catch let failure as V15Failure {
             guard ownsReadback(owner: attempt.proposalID, attempt: attempt, generation: generation) else { return }
-            setDirectState(.init(phase: .conflict(failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: "冲突仍需重新读取。")), message: "冲突后的 fresh GET 失败：\(failure.message)。仍需重试读取。", issues: failure.fieldIssues), for: attempt.proposalID)
+            setDirectState(.init(phase: .conflict(failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: "数据已更新，需要重新读取。")), message: "读取最新数据失败：\(failure.message)。请重试读取。", issues: failure.fieldIssues), for: attempt.proposalID)
         } catch {
             guard ownsReadback(owner: attempt.proposalID, attempt: attempt, generation: generation) else { return }
-            if case .conflict(let conflict) = directStates[attempt.proposalID]?.phase { setDirectState(.init(phase: .conflict(conflict), message: "冲突后的 fresh GET 失败；仍需重试读取。"), for: attempt.proposalID) }
+            if case .conflict(let conflict) = directStates[attempt.proposalID]?.phase { setDirectState(.init(phase: .conflict(conflict), message: "读取最新数据失败；请重试读取。"), for: attempt.proposalID) }
         }
     }
 
@@ -381,12 +381,12 @@ public final class V15AIProposalModel {
             stableAttempt = nil; stableRecoveryPhase = nil
             inputText = ""; proposals.removeAll { $0.id == proposal.id }; proposals.insert(proposal, at: 0); pendingCount += proposal.status == .pending ? 1 : 0
             await select(proposal)
-            mutationPhase = .succeeded("提案已建立并停留在人工确认队列。")
+            mutationPhase = .succeeded("待确认内容已建立。")
         } catch let failure as V15Failure {
             guard stableAttempt == attempt, attempt.mutationGeneration == mutationGeneration else { return }
             if Self.outcomeMayBeUnknown(failure) {
                 stableRecoveryPhase = .unknown
-                recoveryMessage = "响应未知；只能用同一凭证重试完全相同的文本，或放弃，绝不会换键盲发。"
+                recoveryMessage = "结果暂时不明；可以安全检查相同内容，或停止恢复。"
             } else {
                 stableAttempt = nil; stableRecoveryPhase = nil
                 mutationPhase = failure.kind == .conflict ? .conflict(failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: failure.message)) : .failed(failure)
@@ -394,7 +394,7 @@ public final class V15AIProposalModel {
         } catch {
             guard stableAttempt == attempt, attempt.mutationGeneration == mutationGeneration else { return }
             stableRecoveryPhase = .unknown
-            recoveryMessage = "响应未知；只能用同一凭证重试完全相同的文本，或放弃，绝不会换键盲发。"
+            recoveryMessage = "结果暂时不明；可以安全检查相同内容，或停止恢复。"
         }
     }
 
@@ -410,11 +410,11 @@ public final class V15AIProposalModel {
             let result: V15AIProposal
             let message: String
             switch attempt.intent {
-            case .replace(let id, let request): result = try await services.ai.replace(id: id, request: request); message = "审核内容已由你确认；现在可以人工执行。"
+            case .replace(let id, let request): result = try await services.ai.replace(id: id, request: request); message = "修改已保存；现在可以确认记账。"
             case .execute(let id, let request): result = try await services.ai.execute(id: id, expectedVersion: request.expectedVersion).proposal; message = "已按人工确认内容执行。"
-            case .ignore(let id, let request): result = try await services.ai.ignore(id: id, expectedVersion: request.expectedVersion); message = "提案已忽略。"
-            case .retry(let id, let request): result = try await services.ai.retry(id: id, expectedVersion: request.expectedVersion); message = "已重新解析并回到人工确认队列。"
-            case .undo(let id, let request): result = try await services.ai.undo(id: id, expectedVersion: request.expectedVersion, expectedTransactionVersion: request.expectedTransactionVersion).proposal; message = "已撤销对应记账事实。"
+            case .ignore(let id, let request): result = try await services.ai.ignore(id: id, expectedVersion: request.expectedVersion); message = "已忽略。"
+            case .retry(let id, let request): result = try await services.ai.retry(id: id, expectedVersion: request.expectedVersion); message = "已重新解析并回到待确认列表。"
+            case .undo(let id, let request): result = try await services.ai.undo(id: id, expectedVersion: request.expectedVersion, expectedTransactionVersion: request.expectedTransactionVersion).proposal; message = "已撤销对应账目。"
             }
             guard directAttempts[attempt.proposalID] == attempt, attempt.mutationGeneration == mutationGeneration else { return }
             directAttempts[attempt.proposalID] = nil; directStates[attempt.proposalID] = nil; replaceListFact(result)
@@ -433,9 +433,9 @@ public final class V15AIProposalModel {
         } catch let failure as V15Failure {
             guard directAttempts[attempt.proposalID] == attempt, attempt.mutationGeneration == mutationGeneration else { return }
             if failure.kind == .conflict {
-                setDirectState(.init(phase: .conflict(failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: failure.message)), message: "服务器数据已变化；必须 fresh GET 后再决定。", issues: failure.fieldIssues), for: attempt.proposalID)
+                setDirectState(.init(phase: .conflict(failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: failure.message)), message: "数据已经更新；请读取最新内容后再决定。", issues: failure.fieldIssues), for: attempt.proposalID)
             } else if Self.outcomeMayBeUnknown(failure) {
-                setDirectState(.init(phase: .unknown, message: "写入响应未知；先读取服务端最新事实，禁止重发这个无幂等键操作。", issues: failure.fieldIssues), for: attempt.proposalID)
+                setDirectState(.init(phase: .unknown, message: "暂时无法确认操作结果；请先检查最新状态。系统不会重复操作。", issues: failure.fieldIssues), for: attempt.proposalID)
             } else {
                 directAttempts[attempt.proposalID] = nil; directStates[attempt.proposalID] = nil
                 setDirectState(.init(phase: .failed(failure), message: failure.message, issues: failure.fieldIssues), for: attempt.proposalID)
@@ -443,7 +443,7 @@ public final class V15AIProposalModel {
             confirmedReviews.removeValue(forKey: attempt.proposalID)
         } catch {
             guard directAttempts[attempt.proposalID] == attempt, attempt.mutationGeneration == mutationGeneration else { return }
-            setDirectState(.init(phase: .unknown, message: "写入响应未知；先读取服务端最新事实，禁止重发这个无幂等键操作。"), for: attempt.proposalID)
+            setDirectState(.init(phase: .unknown, message: "暂时无法确认操作结果；请先检查最新状态。系统不会重复操作。"), for: attempt.proposalID)
             confirmedReviews.removeValue(forKey: attempt.proposalID)
         }
     }
@@ -524,14 +524,14 @@ public final class V15AIProposalModel {
         guard settingsContractViolation == nil else { return }
         settings = nil
         settingsLoadFailure = failure
-        invalidateMutationsForSettingsGate(failure, recoveryMessage: "安全设置读取失败；已停止所有写入。可继续只读查看并重新读取设置。")
+        invalidateMutationsForSettingsGate(failure, recoveryMessage: "无法读取安全设置；为保护数据，已暂停更改。你仍可以查看现有内容，并刷新后重试。")
     }
 
     private func enterSettingsContractViolation(_ failure: V15Failure) {
         settingsContractViolation = failure
         settings = nil
         settingsLoadFailure = nil
-        invalidateMutationsForSettingsGate(failure, recoveryMessage: "D3 安全设置契约无效；写入结果不再可信。未知操作只能 fresh GET，不会重发写入。")
+        invalidateMutationsForSettingsGate(failure, recoveryMessage: "AI 安全设置异常；暂时无法确认操作结果。检查最新状态不会重复保存。")
     }
 
     private func authorizeStableCreateRecoveryAfterSafeSettings() {
@@ -541,7 +541,7 @@ public final class V15AIProposalModel {
               attempt.mutationGeneration != mutationGeneration
         else { return }
         stableAttempt = attempt.rebased(to: mutationGeneration)
-        recoveryMessage = "安全设置已重新读取为 false；可以只用原始凭证和完全相同的文本重试。"
+        recoveryMessage = "安全设置已更新；现在可以安全检查完全相同的文本。"
     }
 
     private func invalidateMutationsForSettingsGate(_ failure: V15Failure, recoveryMessage message: String) {
@@ -578,10 +578,10 @@ public final class V15AIProposalModel {
 
     private func baseWriteReasons() -> [V15DisabledReason] {
         var reasons: [V15DisabledReason] = []
-        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线快照只可查看，不会发送写请求。", fieldPath: nil)) }
+        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时只可查看，不能修改。", fieldPath: nil)) }
         if writeLocked { reasons.append(.init(code: "ai_write_in_flight", message: "上一项写操作仍在进行或结果未知。", fieldPath: nil)) }
         if let reason = settingsSafetyReason { reasons.append(reason) }
-        else if settings == nil { reasons.append(.init(code: "ai_settings_unavailable", message: settingsLoadFailure?.message ?? "尚未确认服务端 AI 安全设置。", fieldPath: nil)) }
+        else if settings == nil { reasons.append(.init(code: "ai_settings_unavailable", message: settingsLoadFailure?.message ?? "AI 安全设置尚未读取完成。", fieldPath: nil)) }
         return Self.unique(reasons)
     }
 

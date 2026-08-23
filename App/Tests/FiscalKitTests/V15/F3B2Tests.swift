@@ -33,7 +33,7 @@ struct F3B2Tests {
         let page = try V15FixtureCodec.decoder.decode(V15InstallmentPlanPage.self, from: Data(V15F3B2Fixtures.page().utf8))
         #expect(page.items.map(\.status) == [.active, .completed, .settledEarly, .partiallyCancelled, .cancelled, .unknown("future_server_state")])
         #expect(page.items.last?.isDisplayOnly == true)
-        #expect(page.items.last?.status.displayName.contains("future_server_state") == true)
+        #expect(page.items.last?.status.displayName == "暂时无法识别")
         #expect(page.items.first?.periods.first?.amountDueMinor == 56_650)
         #expect(page.nextCursor == "opaque-installment-next")
     }

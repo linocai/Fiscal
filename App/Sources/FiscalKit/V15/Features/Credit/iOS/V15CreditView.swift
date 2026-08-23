@@ -47,7 +47,7 @@ public struct V15CreditView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                 Text("已知未来 · 信用账期").font(V15Typography.label).foregroundStyle(V15Palette.teal.color)
-                Text("只以服务器账期和影响预览为准").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
+                Text("账期与金额以最新数据为准").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
             }
             Spacer()
             Button { Task { await model.reloadSelectedAccount() } } label: { Image(systemName: V15Symbol.retry) }
@@ -82,7 +82,7 @@ public struct V15CreditView: View {
             V15EmptyState(title: "目前没有信用账户", explanation: "账户创建和维护在主数据中完成。")
         case .loaded:
             if let account = model.selectedAccount { accountSummary(account) }
-            V15Section("账期脊柱", detail: "上海业务日；点击查看账期事实") {
+            V15Section("账期", detail: "点击查看详情") {
                 ForEach(model.cycles) { cycle in
                     Button { Task { await model.selectCycle(cycle) } } label: { cycleRow(cycle) }
                         .buttonStyle(.plain).v15PlatformHitArea()
@@ -102,7 +102,7 @@ public struct V15CreditView: View {
     }
 
     private func accountSummary(_ account: V15CreditAccountSummary) -> some View {
-        V15Section("当前信用事实", detail: "账单日 \(account.statementDay) · 还款日 \(account.dueDay)") {
+        V15Section("信用概览", detail: "账单日 \(account.statementDay) · 还款日 \(account.dueDay)") {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 135), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
                 creditMetric("信用额度", account.creditLimitMinor, .neutral)
                 creditMetric("当前欠款", account.currentDebtMinor, .outflow)
@@ -122,7 +122,7 @@ public struct V15CreditView: View {
                 .accessibilityIdentifier("v15.f3b1.future-installments")
             }
             Button("调整账期") { model.openScheduleSheet() }.disabled(model.isOffline).accessibilityIdentifier("v15.f3b1.schedule.open")
-            if model.isOffline { Text("离线快照不能修改账期。 ").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
+            if model.isOffline { Text("离线时不能修改账期。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
         }
     }
 
@@ -146,8 +146,8 @@ public struct V15CreditView: View {
         case .failed(let failure): V15ServiceErrorState(message: failure.message) {}
         case .loaded:
             if let cycle = model.selectedCycle {
-                V15Section("账期检查器", detail: "服务器版本 \(cycle.version)") {
-                    Text("消费、期初、还款和分期金额均为服务端事实。 ").font(V15Typography.secondary)
+                V15Section("账期详情") {
+                    Text("这里汇总消费、期初余额、还款和分期金额。").font(V15Typography.secondary)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
                         creditMetric("本期应还", cycle.amountDueMinor, .outflow)
                         creditMetric("已还", cycle.repaidMinor, .neutral)
@@ -187,7 +187,7 @@ public struct V15CreditView: View {
                     TextField("账单日（1–28）", text: $model.statementDayText).accessibilityIdentifier("v15.f3b1.schedule.statement-day")
                     TextField("还款日（1–28）", text: $model.dueDayText).accessibilityIdentifier("v15.f3b1.schedule.due-day")
                     reasons
-                    Button("第 2 步 · 预览服务端影响") { Task { await model.requestSchedulePreview() } }
+                    Button("第 2 步 · 取预览") { Task { await model.requestSchedulePreview() } }
                         .disabled(!model.canRequestSchedulePreview)
                         .accessibilityIdentifier("v15.f3b1.schedule.preview")
                     if let reason = model.schedulePreviewDisabledReason {
@@ -216,8 +216,8 @@ public struct V15CreditView: View {
 
     @ViewBuilder private var reasons: some View {
         if !model.scheduleIssues.isEmpty { V15Section("请先修正") { ForEach(model.scheduleIssues, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) } }.accessibilityIdentifier("v15.f3b1.schedule.local-reasons") }
-        if !model.scheduleServerFieldIssues.isEmpty { V15Section("服务器要求修正") { ForEach(model.scheduleServerFieldIssues, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) } }.accessibilityIdentifier("v15.f3b1.schedule.server-field-reasons") }
-        if !model.scheduleServerReasons.isEmpty { V15Section("服务器影响说明") { ForEach(model.scheduleServerReasons, id: \.self) { Text($0).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) } }.accessibilityIdentifier("v15.f3b1.schedule.server-reasons") }
+        if !model.scheduleServerFieldIssues.isEmpty { V15Section("需要修正") { ForEach(model.scheduleServerFieldIssues, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) } }.accessibilityIdentifier("v15.f3b1.schedule.server-field-reasons") }
+        if !model.scheduleServerReasons.isEmpty { V15Section("影响说明") { ForEach(model.scheduleServerReasons, id: \.self) { Text($0).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) } }.accessibilityIdentifier("v15.f3b1.schedule.server-reasons") }
     }
 
     @ViewBuilder private var previewSurface: some View {
@@ -228,7 +228,7 @@ public struct V15CreditView: View {
             if let preview = model.schedulePreview {
                 V15Section("第 3 步 · 确认影响", detail: "受影响账期 \(preview.affectedCycleCount) 个") {
                     Text("消费 \(preview.purchaseCount) 笔 · 还款 \(preview.repaymentCount) 笔 · 分期 \(preview.installmentPeriodCount) 期").font(V15Typography.secondary)
-                    if let version = preview.expectedAccountVersion { Text("预览基于账户版本 \(version)").font(V15Typography.secondary).accessibilityIdentifier("v15.f3b1.schedule.preview.account-version") }
+                    if preview.expectedAccountVersion != nil { Text("预览基于当前账户数据").font(V15Typography.secondary).accessibilityIdentifier("v15.f3b1.schedule.preview.account-version") }
                     ForEach(preview.affectedCycles, id: \.cycleID) { item in Text("\(item.oldStatementDate) / \(item.oldDueDate) → \(item.newStatementDate) / \(item.newDueDate)，保留 \(item.preservedCheckpointCount) 个检查点").font(V15Typography.secondary) }
                     Button("提交账期变更") { Task { await model.commitSchedule() } }
                         .disabled(!model.canCommitSchedule)
@@ -237,17 +237,17 @@ public struct V15CreditView: View {
                 }.accessibilityIdentifier("v15.f3b1.schedule.preview")
             }
         case .committing: V15LoadingSkeleton().accessibilityIdentifier("v15.f3b1.schedule.committing")
-        case .succeeded(let result): V15Section("已提交", detail: "服务器数据版本 \(result.dataRevision.map(String.init) ?? "未提供")") { Text("账期已按服务端结果更新。 ").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3b1.schedule.receipt")
-        case .readbackConfirmed: V15Section("已由账户事实确认") { Text("服务器当前账期与原提交意图一致；这是只读核对，不是提交回执。 ").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3b1.schedule.readback-confirmed")
+        case .succeeded: V15Section("已提交") { Text("账期已更新。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3b1.schedule.receipt")
+        case .readbackConfirmed: V15Section("已核对") { Text("当前账期与刚才的修改一致。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3b1.schedule.readback-confirmed")
         case .unknown: V15Section("提交结果未知") {
-            Text("仅可用同一请求键重试，或刷新账户后核对。 ").font(V15Typography.secondary)
+            Text("可以安全检查保存结果，或刷新账户后核对。").font(V15Typography.secondary)
             switch model.unknownReadbackPhase {
             case .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.loading")
-            case .notConfirmed: Text(model.unknownReadbackNotice ?? "尚未确认：服务器事实不足以证明原提交已生效。 ").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.not-confirmed")
+            case .notConfirmed: Text(model.unknownReadbackNotice ?? "尚未确认这次修改是否生效。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.not-confirmed")
             case .failed(let failure): Text(failure.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.error")
             case .idle, .confirmed: EmptyView()
             }
-            Button("用同一请求重试") { Task { await model.retryUnknownCommit() } }
+            Button("安全检查保存结果") { Task { await model.retryUnknownCommit() } }
                 .disabled(model.unknownReadbackPhase == .loading || model.unknownRetryDisabledReason != nil)
                 .accessibilityIdentifier("v15.f3b1.schedule.unknown.retry")
             if let reason = model.unknownRetryDisabledReason {
@@ -260,7 +260,7 @@ public struct V15CreditView: View {
                 .disabled(model.unknownReadbackPhase == .loading)
                 .accessibilityIdentifier("v15.f3b1.schedule.unknown.abandon")
             if let fixtureReconnectAction {
-                Button("恢复在线连接") { fixtureReconnectAction() }.accessibilityIdentifier("v15.f3b1.fixture.reconnect")
+                Button("恢复连接") { fixtureReconnectAction() }.accessibilityIdentifier("v15.f3b1.fixture.reconnect")
             }
         }.accessibilityIdentifier("v15.f3b1.schedule.unknown")
         case .conflict(let conflict): V15Section("账期已变化") { Text(conflict.message).font(V15Typography.secondary); if let error = model.scheduleReloadError { Text(error.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.conflict.reload-error") }; Button("刷新账户后重新预览") { Task { await model.reloadAfterConflict() } }.accessibilityIdentifier("v15.f3b1.schedule.conflict.reload") }.accessibilityIdentifier("v15.f3b1.schedule.conflict")

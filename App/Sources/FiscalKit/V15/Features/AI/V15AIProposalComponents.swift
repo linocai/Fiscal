@@ -9,9 +9,9 @@ struct V15AIProposalRow: View {
             HStack(alignment: .top, spacing: V15Spacing.sm) {
                 RoundedRectangle(cornerRadius: 2).fill(marker).frame(width: 4, height: 34).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: V15Spacing.xxs) {
-                    Text(proposal.title ?? "未命名提案").font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.ink.color).lineLimit(2)
+                    Text(proposal.title ?? "未命名内容").font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.ink.color).lineLimit(2)
                     Text("\(Self.statusLabel(proposal.status)) · \(proposal.source.displayName)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                    if !proposal.missingFields.isEmpty { Text("缺少：\(proposal.missingFields.joined(separator: "、"))").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).lineLimit(2) }
+                    if !proposal.missingFields.isEmpty { Text("待补充：\(proposal.missingFields.map(Self.fieldLabel).joined(separator: "、"))").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).lineLimit(2) }
                 }
                 Spacer(minLength: V15Spacing.xs)
                 if let amount = proposal.amountMinor { V15MoneyText(minorUnits: amount, direction: .outflow) }
@@ -24,7 +24,7 @@ struct V15AIProposalRow: View {
         .background(selected ? V15Palette.selected.color : .clear, in: RoundedRectangle(cornerRadius: V15Radius.control))
         .v15PlatformHitArea()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(Self.statusLabel(proposal.status))，\(proposal.title ?? "未命名提案")，\(proposal.missingFields.isEmpty ? "字段完整" : "缺少\(proposal.missingFields.joined(separator: "、"))")")
+        .accessibilityLabel("\(Self.statusLabel(proposal.status))，\(proposal.title ?? "未命名内容")，\(proposal.missingFields.isEmpty ? "内容完整" : "待补充\(proposal.missingFields.map(Self.fieldLabel).joined(separator: "、"))")")
         .accessibilityIdentifier("v15.f3f.proposal.\(proposal.id)")
     }
 
@@ -35,13 +35,17 @@ struct V15AIProposalRow: View {
     static func statusLabel(_ status: V15AIProposalStatus) -> String {
         switch status {
         case .processing: "解析中"
-        case .pending: "待人工确认"
-        case .executed: "已人工执行"
+        case .pending: "待确认"
+        case .executed: "已记账"
         case .failed: "解析失败"
         case .ignored: "已忽略"
         case .undone: "已撤销"
-        case .unknown(let raw): "未知状态（\(raw)）"
+        case .unknown: "暂时无法识别"
         }
+    }
+
+    private static func fieldLabel(_ raw: String) -> String {
+        ["kind": "类型", "amount_minor": "金额", "occurred_at": "时间", "title": "标题", "note": "备注", "account_id": "账户", "category_id": "分类", "destination_account_id": "目标账户", "credit_cycle_id": "账期", "target": "目标"][raw] ?? "其他内容"
     }
 }
 
@@ -54,9 +58,8 @@ struct V15AIProposalDetail: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(V15AIProposalRow.statusLabel(proposal.status)).font(V15Typography.label).foregroundStyle(V15Palette.teal.color)
                     Spacer()
-                    Text("v\(proposal.version)").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.55))
                 }
-                Text(proposal.title ?? "未命名提案").font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
+                Text(proposal.title ?? "未命名内容").font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
                 if let amount = proposal.amountMinor { V15MoneyText(minorUnits: amount, direction: .outflow, font: V15Typography.moneyLarge) }
                 VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                     Text("你输入的原文").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62))
@@ -67,7 +70,7 @@ struct V15AIProposalDetail: View {
                 .accessibilityIdentifier("v15.f3f.original-text")
             }
 
-            V15Section("解析完整度") {
+                V15Section("识别结果") {
                 if proposal.target == .cashFlow {
                     Label("执行目标：未来现金流（不会创建即时交易）", systemImage: "calendar.badge.clock")
                         .font(V15Typography.body.weight(.medium)).foregroundStyle(V15Palette.teal.color)
@@ -82,36 +85,34 @@ struct V15AIProposalDetail: View {
                 confidenceRow("账户", value: proposal.fieldConfidences.accountID)
                 confidenceRow("分类", value: proposal.fieldConfidences.categoryID)
                 confidenceRow("目标账户", value: proposal.fieldConfidences.destinationAccountID)
-                Text("置信度只用于排序与提示，不能跳过人工确认；低置信字段以未定底色标出。")
+                Text("识别把握只用于排序和提醒，不能跳过你的确认；不确定的内容会以浅色标出。")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                 if !proposal.missingFields.isEmpty {
-                    Label("缺少字段：\(proposal.missingFields.joined(separator: "、"))", systemImage: V15Symbol.warning)
+                    Label("待补充：\(proposal.missingFields.map(Self.fieldLabel).joined(separator: "、"))", systemImage: V15Symbol.warning)
                         .font(V15Typography.secondary.weight(.medium)).foregroundStyle(V15Palette.gold.color).fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("v15.f3f.missing-fields")
                 }
-                if !proposal.reasonCodes.isEmpty { Text("原因：\(proposal.reasonCodes.joined(separator: " · "))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true) }
                 if let explanation = proposal.explanation { Text(explanation).font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true) }
             }
 
             if proposal.errorCode != nil || proposal.errorMessage != nil {
-                V15Section("错误事实") {
-                    Label(proposal.errorMessage ?? "服务端没有提供错误说明。", systemImage: V15Symbol.warning).font(V15Typography.body).fixedSize(horizontal: false, vertical: true)
-                    if let code = proposal.errorCode { Text(code).font(.caption.monospaced()).foregroundStyle(V15Palette.ink.color.opacity(0.6)) }
+                V15Section("处理失败") {
+                    Label(proposal.errorMessage ?? "没有可用的错误说明。", systemImage: V15Symbol.warning).font(V15Typography.body).fixedSize(horizontal: false, vertical: true)
                 }.accessibilityIdentifier("v15.f3f.proposal-error")
             }
 
-            V15Section("人工编辑差异") {
+            V15Section("你的修改") {
                 if let diff = proposal.finalFieldDiff, !diff.isEmpty {
                     ForEach(diff.keys.sorted(), id: \.self) { key in
                         HStack(alignment: .top) { Text(Self.fieldLabel(key)).font(V15Typography.secondary.weight(.semibold)); Spacer(); Text(Self.diffSummary(diff[key])).font(V15Typography.secondary).multilineTextAlignment(.trailing) }
                     }
                 } else {
-                    Text(proposal.qualityStatus == .historicalUnavailable ? "历史提案没有可用的解析快照。" : "尚未保存人工编辑差异。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                    Text(proposal.qualityStatus == .historicalUnavailable ? "历史记录没有可用的识别详情。" : "尚未保存修改。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 }
             }.accessibilityIdentifier("v15.f3f.diff")
 
-            V15Section("质量事件") {
-                if events.isEmpty { Text("暂时没有质量事件。会保留解析、人工确认、失败与撤销事实。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
+            V15Section("处理记录") {
+                if events.isEmpty { Text("暂时没有处理记录。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
                 ForEach(events) { event in
                     HStack(alignment: .top, spacing: V15Spacing.sm) {
                         Circle().fill(V15Palette.teal.color).frame(width: 7, height: 7).padding(.top, 6)
@@ -137,10 +138,10 @@ struct V15AIProposalDetail: View {
         .padding(.horizontal, V15Spacing.sm).padding(.vertical, V15Spacing.xs)
         .background(needsReview ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
     }
-    private static func fieldLabel(_ raw: String) -> String { ["kind": "类型", "amount_minor": "金额", "occurred_at": "时间", "title": "标题", "note": "备注", "account_id": "账户", "category_id": "分类", "destination_account_id": "目标账户", "credit_cycle_id": "账期", "target": "目标" ][raw] ?? raw }
+    private static func fieldLabel(_ raw: String) -> String { ["kind": "类型", "amount_minor": "金额", "occurred_at": "时间", "title": "标题", "note": "备注", "account_id": "账户", "category_id": "分类", "destination_account_id": "目标账户", "credit_cycle_id": "账期", "target": "目标" ][raw] ?? "其他内容" }
     private static func diffSummary(_ value: V15AIEventValue?) -> String { guard case .object(let object)? = value else { return "已修改" }; return "\(scalar(object["from"])) → \(scalar(object["to"]))" }
     private static func scalar(_ value: V15AIEventValue?) -> String { switch value { case .string(let value): value; case .integer(let value): String(value); case .decimal(let value): "\(value)"; case .bool(let value): value ? "true" : "false"; case .null: "空"; case .array, .object: "结构化内容"; case nil: "空" } }
-    private static func eventLabel(_ value: V15AIQualityEventType) -> String { switch value { case .parsed: "已解析"; case .confirmUnchanged: "人工确认未改"; case .confirmEdited: "人工确认并编辑"; case .ignored: "已忽略"; case .executeFailed: "执行失败"; case .historicalAutomaticExecute: "历史自动执行事件（只读）"; case .manualExecute: "人工执行"; case .undone: "已撤销"; case .providerRetry: "提供方重试"; case .finalFailure: "最终失败"; case .unknown(let raw): "未知事件（\(raw)）" } }
+    private static func eventLabel(_ value: V15AIQualityEventType) -> String { switch value { case .parsed: "已解析"; case .confirmUnchanged: "确认时未修改"; case .confirmEdited: "确认时已修改"; case .ignored: "已忽略"; case .executeFailed: "记账失败"; case .historicalAutomaticExecute: "历史自动处理（只读）"; case .manualExecute: "已记账"; case .undone: "已撤销"; case .providerRetry: "已重试解析"; case .finalFailure: "最终失败"; case .unknown: "其他事件" } }
 }
 
 struct V15AIMutationSurface: View {
@@ -150,25 +151,25 @@ struct V15AIMutationSurface: View {
             switch model.mutationPhase {
             case .idle: EmptyView()
             case .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3f.mutation.loading")
-            case .succeeded(let message): V15SuccessReceiptState(title: "服务端事实已更新", detail: message).accessibilityIdentifier("v15.f3f.success")
+            case .succeeded(let message): V15SuccessReceiptState(title: "数据已更新", detail: message).accessibilityIdentifier("v15.f3f.success")
             case .failed(let failure): V15ServiceErrorState(message: failure.message) {}.accessibilityIdentifier("v15.f3f.mutation.error")
             case .conflict(let conflict):
                 V15PreviewState {
                     VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                        Text("服务端版本已变化").font(V15Typography.cardTitle)
+                        Text("数据已更新").font(V15Typography.cardTitle)
                         Text(model.recoveryMessage ?? conflict.message).font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
-                        V15ActionButton("只读取冲突后的最新提案", symbol: V15Symbol.retry, kind: .secondary, disabledReason: model.directReadbackDisabledReason) { Task { await model.reloadConflict() } }
+                        V15ActionButton("读取最新内容", symbol: V15Symbol.retry, kind: .secondary, disabledReason: model.directReadbackDisabledReason) { Task { await model.reloadConflict() } }
                             .accessibilityIdentifier("v15.f3f.conflict.reload")
                     }
                 }.accessibilityIdentifier("v15.f3f.conflict")
             case .unknown:
                 V15PreviewState {
                     VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                        Text("写入结果未知").font(V15Typography.cardTitle)
+                        Text("操作结果暂时不明").font(V15Typography.cardTitle)
                         Text(model.recoveryMessage ?? "不根据相似记录猜测成功。 ").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
                         if model.hasUnknownDirect {
-                            V15ActionButton("只读取最新提案", kind: .secondary, disabledReason: model.directReadbackDisabledReason) { Task { await model.recoverUnknownDirect() } }.accessibilityIdentifier("v15.f3f.unknown.readback")
-                            V15ActionButton("人工核对后解除锁", kind: .quiet, disabledReason: model.readbackCompleted ? nil : .init(code: "fresh_read_required", message: "请先完成一次服务端最新事实读取。", fieldPath: nil)) { model.abandonUnknownDirect() }.accessibilityIdentifier("v15.f3f.unknown.abandon")
+                            V15ActionButton("读取最新内容", kind: .secondary, disabledReason: model.directReadbackDisabledReason) { Task { await model.recoverUnknownDirect() } }.accessibilityIdentifier("v15.f3f.unknown.readback")
+                            V15ActionButton("核对后继续", kind: .quiet, disabledReason: model.readbackCompleted ? nil : .init(code: "fresh_read_required", message: "请先读取最新内容。", fieldPath: nil)) { model.abandonUnknownDirect() }.accessibilityIdentifier("v15.f3f.unknown.abandon")
                         }
                     }
                 }
@@ -185,15 +186,15 @@ struct V15AIStableCreateRecoverySurface: View {
         if model.hasStableCreateRecovery {
             V15PreviewState {
                 VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                    Text(model.hasUnknownCreate ? "新建提案结果未知" : "正在等待新建提案结果").font(V15Typography.cardTitle)
-                    Text(model.recoveryMessage ?? "此请求使用固定凭证；不会用新文本或新凭证重新发送。")
+                    Text(model.hasUnknownCreate ? "创建结果暂时不明" : "正在等待创建结果").font(V15Typography.cardTitle)
+                    Text(model.recoveryMessage ?? "系统会用相同内容安全检查，不会创建重复记录。")
                         .font(V15Typography.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    V15ActionButton("用同一凭证重试相同文本", symbol: V15Symbol.retry, kind: .secondary, disabledReasons: model.unknownCreateRetryReasons) {
+                    V15ActionButton("安全重试相同内容", symbol: V15Symbol.retry, kind: .secondary, disabledReasons: model.unknownCreateRetryReasons) {
                         Task { await model.retryUnknownCreate() }
                     }
                     .accessibilityIdentifier("v15.f3f.unknown.create-retry")
-                    V15ActionButton("放弃这次未知请求", kind: .quiet, disabledReasons: model.unknownCreateAbandonReasons) {
+                    V15ActionButton("停止检查", kind: .quiet, disabledReasons: model.unknownCreateAbandonReasons) {
                         model.abandonUnknownCreate()
                     }
                     .accessibilityIdentifier("v15.f3f.unknown.create-abandon")
@@ -211,7 +212,7 @@ struct V15AIEditorFields: View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
             if model.isCashFlowReview {
                 Label("未来现金流草案", systemImage: "calendar.badge.clock").font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.teal.color)
-                Text("服务端仍要求兼容的 draft wire；执行时会按确认后的方向、计划金额和预计日期创建现金流事项。")
+                Text("执行时会按你确认的方向、计划金额和预计日期创建现金流事项。")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
             }
             Picker(model.isCashFlowReview ? "现金流方向" : "交易类型", selection: $model.kind) { ForEach(model.reviewKinds) { Text($0.displayName).tag($0) } }.pickerStyle(.menu).accessibilityIdentifier("v15.f3f.editor.kind")
@@ -255,13 +256,13 @@ struct V15AIProposalActions: View {
     var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
             if proposal.status == .pending {
-                V15ActionButton("审核字段", kind: .secondary, disabledReasons: model.actionReasons(.replace, proposal: proposal), action: openReview).accessibilityIdentifier("v15.f3f.review.open")
-                V15ActionButton("人工执行", symbol: "checkmark.circle", kind: .primary, disabledReasons: model.actionReasons(.execute, proposal: proposal)) { Task { await model.execute() } }.accessibilityIdentifier("v15.f3f.execute")
-                V15ActionButton("忽略提案", kind: .quiet, disabledReasons: model.actionReasons(.ignore, proposal: proposal)) { Task { await model.ignore() } }.accessibilityIdentifier("v15.f3f.ignore")
+                V15ActionButton("检查并修改", kind: .secondary, disabledReasons: model.actionReasons(.replace, proposal: proposal), action: openReview).accessibilityIdentifier("v15.f3f.review.open")
+                V15ActionButton("确认记账", symbol: "checkmark.circle", kind: .primary, disabledReasons: model.actionReasons(.execute, proposal: proposal)) { Task { await model.execute() } }.accessibilityIdentifier("v15.f3f.execute")
+                V15ActionButton("忽略", kind: .quiet, disabledReasons: model.actionReasons(.ignore, proposal: proposal)) { Task { await model.ignore() } }.accessibilityIdentifier("v15.f3f.ignore")
             } else if proposal.status == .failed {
                 V15ActionButton("重新解析", symbol: V15Symbol.retry, kind: .secondary, disabledReasons: model.actionReasons(.retry, proposal: proposal)) { Task { await model.retryParsing() } }.accessibilityIdentifier("v15.f3f.retry")
             } else if proposal.status == .executed {
-                V15ActionButton("撤销这笔人工执行", kind: .destructive, disabledReasons: model.actionReasons(.undo, proposal: proposal)) { Task { await model.undo() } }.accessibilityIdentifier("v15.f3f.undo")
+                V15ActionButton("撤销这笔记账", kind: .destructive, disabledReasons: model.actionReasons(.undo, proposal: proposal)) { Task { await model.undo() } }.accessibilityIdentifier("v15.f3f.undo")
             } else {
                 Text(proposal.status.isDisplayOnly ? "未知未来状态只可查看。" : "此状态没有可用写操作。")
                     .font(V15Typography.secondary)

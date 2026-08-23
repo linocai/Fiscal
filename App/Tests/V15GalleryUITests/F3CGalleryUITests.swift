@@ -298,7 +298,7 @@ import XCTest
         XCTAssertTrue(unknown.waitForExistence(timeout: 7))
         XCTAssertFalse(revealButton("v15.f3c.direct.abandon", requireHittable: false).isEnabled)
         app.buttons["重试"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "无法归因")).firstMatch.waitForExistence(timeout: 7))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "仍无法确认")).firstMatch.waitForExistence(timeout: 7))
         XCTAssertTrue(revealButton("v15.f3c.direct.abandon").isEnabled)
         revealButton("v15.f3c.direct.abandon").tap()
         XCTAssertFalse(element("v15.f3c.direct.unknown").waitForExistence(timeout: 2))

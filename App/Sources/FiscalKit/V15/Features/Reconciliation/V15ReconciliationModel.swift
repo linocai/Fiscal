@@ -115,18 +115,18 @@ public final class V15ReconciliationModel {
         return nil
     }
     public var mutationIntentLabel: String {
-        switch mutationIntentKind { case .checkpoint: "核对锚点"; case .attentionIgnore: "忽略关注事项"; case nil: "对账写入" }
+        switch mutationIntentKind { case .checkpoint: "余额核对"; case .attentionIgnore: "忽略关注事项"; case nil: "余额核对" }
     }
     public var factRefreshRetryReasons: [V15DisabledReason] {
         var reasons: [V15DisabledReason] = []
-        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线不能刷新最新事实。", fieldPath: nil)) }
-        if mutationPhase == .loading { reasons.append(.init(code: "fact_refresh_in_progress", message: "最新事实正在刷新，请勿重复发起。", fieldPath: nil)) }
+        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时不能读取最新数据。", fieldPath: nil)) }
+        if mutationPhase == .loading { reasons.append(.init(code: "fact_refresh_in_progress", message: "正在读取最新数据，请勿重复操作。", fieldPath: nil)) }
         return Self.unique(reasons)
     }
     public var failedMutationRetryReasons: [V15DisabledReason] {
         var reasons: [V15DisabledReason] = []
-        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线不能重试写入。", fieldPath: nil)) }
-        if acceptedRefreshGate != nil { reasons.append(.init(code: "accepted_refresh_pending", message: "上一笔已接受写入仍在刷新事实，不能开始另一笔写入。", fieldPath: nil)) }
+        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时不能重试保存。", fieldPath: nil)) }
+        if acceptedRefreshGate != nil { reasons.append(.init(code: "accepted_refresh_pending", message: "上一笔更改正在更新数据，请稍候。", fieldPath: nil)) }
         if mutationPhase == .loading { reasons.append(.init(code: "write_in_progress", message: "操作正在进行。", fieldPath: nil)) }
         guard let failed = activeFailedMutation else {
             reasons.append(.init(code: "mutation_owner_mismatch", message: "请返回该操作所属目标后重试。", fieldPath: nil))
@@ -160,9 +160,9 @@ public final class V15ReconciliationModel {
     public var editorOpenReasons: [V15DisabledReason] {
         var reasons: [V15DisabledReason] = []
         if selectedTarget == nil { reasons.append(.init(code: "target_required", message: "请先选择核对目标。", fieldPath: "target")) }
-        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线快照只可查看。", fieldPath: nil)) }
+        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时只可查看。", fieldPath: nil)) }
         if acceptedRefreshGate != nil || mutationPhase == .loading { reasons.append(.init(code: "write_locked", message: "当前操作尚未完成，请稍候。", fieldPath: nil)) }
-        if unknownAttempt != nil && activeUnknownAttempt == nil { reasons.append(.init(code: "unknown_write_other_owner", message: "另一核对目标有结果未知的写入；请返回原目标处理。", fieldPath: nil)) }
+        if unknownAttempt != nil && activeUnknownAttempt == nil { reasons.append(.init(code: "unknown_write_other_owner", message: "另一项核对的保存结果暂时不明；请返回原项目处理。", fieldPath: nil)) }
         return Self.unique(reasons)
     }
     public var editorDismissReasons: [V15DisabledReason] {
@@ -172,7 +172,7 @@ public final class V15ReconciliationModel {
     public func ignoreReasons(for item: V15AttentionItem) -> [V15DisabledReason] {
         var reasons = baseWriteReasons()
         guard let action = item.availableActions.first(where: { $0.action == "ignore" }) else {
-            reasons.append(.init(code: "attention_action_unknown", message: "服务端没有提供可安全忽略此事项的能力。", fieldPath: "available_actions"))
+            reasons.append(.init(code: "attention_action_unknown", message: "此事项目前不能安全忽略。", fieldPath: "available_actions"))
             return Self.unique(reasons)
         }
         if !action.enabled {
@@ -292,7 +292,7 @@ public final class V15ReconciliationModel {
             guard owns(attempt) else { return }
             serverIssues = failure.fieldIssues
             if V15LedgerCreateService.outcomeMayBeUnknown(failure) {
-                mutationPhase = .unknown; unknownFactsMessage = "服务器确认前连接中断或响应不可用。此无键写入不会重发；请只读取最新事实后决定是否解除锁。"
+                mutationPhase = .unknown; unknownFactsMessage = "连接中断，暂时无法确认是否保存成功。检查最新状态不会重复保存。"
             } else if failure.kind == .conflict {
                 unknownAttempt = nil; failedMutationIntent = nil; mutationPhase = .conflict(failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: failure.message))
             } else {
@@ -300,10 +300,10 @@ public final class V15ReconciliationModel {
             }
         } catch is CancellationError {
             guard owns(attempt) else { return }
-            mutationPhase = .unknown; unknownFactsMessage = "任务在服务器响应前取消。写入可能已到达服务器；不会重发，请只读取最新事实。"
+            mutationPhase = .unknown; unknownFactsMessage = "操作中途取消，暂时无法确认是否保存成功。检查最新状态不会重复保存。"
         } catch {
             guard owns(attempt) else { return }
-            mutationPhase = .unknown; unknownFactsMessage = "写入后的响应不可用。为避免重复提交，本次结果保持未知，只允许fresh GET。"
+            mutationPhase = .unknown; unknownFactsMessage = "暂时无法确认是否保存成功。请先检查最新状态，避免重复保存。"
         }
     }
 
@@ -326,7 +326,7 @@ public final class V15ReconciliationModel {
             guard owns(attempt) else { return }
             serverIssues = failure.fieldIssues
             if V15LedgerCreateService.outcomeMayBeUnknown(failure) {
-                mutationPhase = .unknown; unknownFactsMessage = "忽略请求的响应丢失、取消或不可解析。不会重发；fresh GET 也不能证明是哪次操作造成当前事实。"
+                mutationPhase = .unknown; unknownFactsMessage = "暂时无法确认这次忽略是否成功。检查最新状态不会重复操作。"
             } else if failure.kind == .conflict {
                 unknownAttempt = nil; failedMutationIntent = nil; mutationPhase = .conflict(failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: failure.message))
             } else {
@@ -334,10 +334,10 @@ public final class V15ReconciliationModel {
             }
         } catch is CancellationError {
             guard owns(attempt) else { return }
-            mutationPhase = .unknown; unknownFactsMessage = "忽略任务在服务器响应前取消，结果可能已生效。不会重发，只允许fresh GET。"
+            mutationPhase = .unknown; unknownFactsMessage = "操作中途取消，结果可能已经生效。请先检查最新状态。"
         } catch {
             guard owns(attempt) else { return }
-            mutationPhase = .unknown; unknownFactsMessage = "忽略写入后的响应不可用。为避免重复提交，本次结果保持未知，只允许fresh GET。"
+            mutationPhase = .unknown; unknownFactsMessage = "暂时无法确认这次忽略是否成功。请先检查最新状态，避免重复操作。"
         }
     }
 
@@ -353,25 +353,25 @@ public final class V15ReconciliationModel {
                 let newRows = latest.filter { !before.contains($0.id) }
                 let matching = newRows.contains { Self.matches($0, request: request) }
                 unknownFactsMessage = matching
-                    ? "fresh GET 看到了相同的新事实，但响应没有 operation marker，不能归因为本次写入。请人工核对后解除锁。"
-                    : "fresh GET 未找到可唯一归因的结果。本次写入仍为未知；解除锁不会重发。"
+                    ? "最新数据已经变化，但仍无法确认是否由本次操作造成。请核对后继续。"
+                    : "最新数据仍无法确认本次操作结果。继续不会重复保存。"
             case .ignore(let item, _, let before):
                 let latest = try await services.reconciliation.attention(readCachePolicy: .reloadIgnoringCache)
                 guard unknownAttempt == attempt else { return }
                 attention = latest.items; attentionPhase = latest.items.isEmpty ? .empty : .loaded
                 let wasPresent = before.contains(item.id); let isPresent = latest.items.contains { $0.id == item.id }
                 unknownFactsMessage = wasPresent && !isPresent
-                    ? "fresh GET 中该事项已不可见，但没有 operation marker，不能归因为本次忽略。请核对后解除锁。"
-                    : "fresh GET 仍显示该事项或无法证明本次结果；不会自动重发。"
+                    ? "该事项已不再显示，但仍无法确认是否由本次操作造成。请核对后继续。"
+                    : "该事项仍然显示，或暂时无法确认本次结果。系统不会自动重复操作。"
             }
             guard unknownAttempt == attempt else { return }
             unknownFreshFactsLoaded = true; mutationPhase = .unknown
         } catch let failure as V15Failure {
             guard unknownAttempt == attempt else { return }
-            mutationPhase = .unknown; unknownFactsMessage = "fresh GET 失败：\(failure.message)；写入仍保持锁定。"
+            mutationPhase = .unknown; unknownFactsMessage = "检查最新状态失败：\(failure.message)；暂时不能继续保存。"
         } catch {
             guard unknownAttempt == attempt else { return }
-            mutationPhase = .unknown; unknownFactsMessage = "fresh GET 失败；写入仍保持锁定。"
+            mutationPhase = .unknown; unknownFactsMessage = "检查最新状态失败；暂时不能继续保存。"
         }
     }
 
@@ -434,8 +434,8 @@ public final class V15ReconciliationModel {
             acceptedRefreshGate = nil; mutationPhase = .succeeded
             switch gate.intent { case .checkpoint: successMessage = "核对记录已保存，详情、差额诊断与关注事项均已刷新。"; case .ignore: successMessage = "关注事项已按指定截止时间忽略，列表已刷新。" }
         } else {
-            mutationPhase = .failed(.init(kind: .transport, code: "accepted_refresh_failed", message: "写入已被服务器接受，但最新事实尚未全部刷新。"))
-            acceptedRefreshMessage = "只会重试 GET；不会再次提交刚才的写入。"
+            mutationPhase = .failed(.init(kind: .transport, code: "accepted_refresh_failed", message: "更改已经保存，但最新数据还没有全部更新。"))
+            acceptedRefreshMessage = "接下来只会重新读取，不会重复保存。"
         }
     }
 
@@ -552,9 +552,9 @@ public final class V15ReconciliationModel {
     private func ignoreExpiry() -> Date? { Self.ignoreExpiry(ignoreUntilDateText, now: now()) }
     private func baseWriteReasons() -> [V15DisabledReason] {
         var reasons: [V15DisabledReason] = []
-        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线快照仅可查看，不能写入。", fieldPath: nil)) }
-        if unknownAttempt != nil { reasons.append(.init(code: "unknown_write_locked", message: "上一笔无键写入结果未知，请先核对并解除锁。", fieldPath: nil)) }
-        if acceptedRefreshGate != nil { reasons.append(.init(code: "accepted_refresh_pending", message: "上一笔写入已接受，最新事实尚未刷新完成。", fieldPath: nil)) }
+        if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时只可查看，不能保存。", fieldPath: nil)) }
+        if unknownAttempt != nil { reasons.append(.init(code: "unknown_write_locked", message: "上一笔保存结果暂时不明，请先检查最新状态。", fieldPath: nil)) }
+        if acceptedRefreshGate != nil { reasons.append(.init(code: "accepted_refresh_pending", message: "上一笔更改已经保存，最新数据还没有更新完成。", fieldPath: nil)) }
         if mutationPhase == .loading { reasons.append(.init(code: "write_in_progress", message: "操作正在进行。", fieldPath: nil)) }
         return Self.unique(reasons)
     }

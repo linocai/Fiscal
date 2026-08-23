@@ -109,10 +109,10 @@ import Testing
     @Test("mapping unknown reads facts; release retry preserves its idempotency key") @MainActor func mappingUnknownLifecycle() async {
         let transport = V15F1CFixtureTransport(unknownMapping: true); let model = V15MasterDataModel(services: V15Services(transport: transport))
         await model.load(); model.selectMerchant(model.merchants.first); model.mappingTransactionID = V15F1CFixtures.transactionID.uuidString; await model.loadMapping(); await model.confirmMapping()
-        #expect(model.receipt?.contains("读回确认") == true && model.mapping?.mappingVersion == 2)
+        #expect(model.receipt?.contains("已确认商户关联保存成功") == true && model.mapping?.mappingVersion == 2)
         await model.releaseMapping(); await model.releaseMapping()
         let keys = await transport.idempotencyKeys(path: "transactions/\(V15F1CFixtures.transactionID)/merchant-mapping")
-        #expect(keys.count == 3 && keys[1] == keys[2] && model.receipt?.contains("未重复提交") == true)
+        #expect(keys.count == 3 && keys[1] == keys[2] && model.receipt?.contains("没有重复操作") == true)
     }
     @Test("merchant next-page failure preserves first page and exposes local retry state") @MainActor func merchantPageFailurePreservesRows() async {
         let model = V15MasterDataModel(services: V15Services(transport: V15F1CFixtureTransport(merchantPageFailure: true)))
@@ -147,28 +147,28 @@ import Testing
         await model.load(); model.selectAccount(model.visibleAccounts.first); model.accountName = "改名"; await model.saveAccount()
         #expect((await transport.patchCount()) == 1)
         #expect((await transport.accountGetCount()) == 1)
-        #expect(model.receipt?.contains("未重发写入") == true)
+        #expect(model.receipt?.contains("没有重复保存") == true)
     }
     @Test("unknown merchant patch is confirmed only by matching GET facts") @MainActor func unknownMerchantPatchApplied() async {
         let transport = F1CUnknownMerchantTransport(); let model = V15MasterDataModel(services: V15Services(transport: transport))
         await model.load(); model.selectMerchant(model.merchants.first); await model.saveMerchant()
         #expect(await transport.patchCount() == 1)
         #expect(await transport.getCount() == 1)
-        #expect(model.receipt?.contains("读回确认商户") == true)
+        #expect(model.receipt?.contains("已确认商户") == true)
     }
     @Test("unknown category patch with failed readback remains unconfirmed and is not repeated") @MainActor func unknownCategoryReadbackFailed() async {
         let transport = F1CUnknownCategoryTransport(); let model = V15MasterDataModel(services: V15Services(transport: transport))
         await model.load(); model.selectCategory(model.visibleCategories.first); model.categoryName = "新版分类"; await model.saveCategory()
         #expect(await transport.patchCount() == 1)
         #expect(await transport.getCount() == 1)
-        #expect(model.receipt?.contains("响应未确认") == true)
+        #expect(model.receipt?.contains("暂时无法确认本次更改") == true)
     }
     @Test("unknown merchant creation refreshes but never guesses an ID or repeats POST") @MainActor func unknownMerchantCreateRefreshesWithoutRetry() async {
         let transport = F1CUnknownMerchantCreateTransport(); let model = V15MasterDataModel(services: V15Services(transport: transport))
         await model.load(); model.selectedMerchantID = nil; model.merchantName = "新商户"; await model.saveMerchant()
         #expect(await transport.createCount() == 1)
         #expect(await transport.listCount() >= 2)
-        #expect(model.receipt?.contains("新建响应未确认") == true)
+        #expect(model.receipt?.contains("新建结果暂时不明") == true)
     }
     @Test("offline guards every owned write entry before transport") @MainActor func offlineGuards() async {
         let transport = F1COfflineTransport(); let model = V15MasterDataModel(services: V15Services(transport: transport), offlineSnapshotAt: .now)

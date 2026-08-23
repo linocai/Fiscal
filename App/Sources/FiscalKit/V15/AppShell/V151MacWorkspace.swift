@@ -14,7 +14,7 @@ public struct V151MacWorkspace: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .ledger: "账簿脊柱"
+            case .ledger: "账目"
             case .record: "记一笔"
             case .future: "未来时间线"
             case .credit: "信用账期"
@@ -23,7 +23,7 @@ public struct V151MacWorkspace: View {
             case .cashFlow: "现金流"
             case .reconciliation: "核对"
             case .proposals: "AI 待确认"
-            case .statementImport: "账单导入工作台"
+            case .statementImport: "账单导入"
             case .reports: "报表与钻取"
             case .archive: "系统与数据"
             case .settings: "设置"
@@ -165,7 +165,7 @@ public struct V151MacWorkspace: View {
             .padding(.horizontal, 12).padding(.top, 14)
             ScrollView {
                 VStack(alignment: .leading, spacing: 17) {
-                    indexSection("镜头") {
+                    indexSection("筛选") {
                         ForEach(Lens.allCases) { value in lensRow(value) }
                     }
                     indexDivider
@@ -292,7 +292,7 @@ public struct V151MacWorkspace: View {
                 }
             }
             if services.pendingWrites.count > 0 {
-                Text("服务器确认值 · \(services.pendingWrites.count) 项待同步尚未计入汇总")
+                Text("\(services.pendingWrites.count) 项更改待同步，暂未计入汇总")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(V15Palette.ink.color.opacity(0.58))
             }
@@ -337,13 +337,13 @@ public struct V151MacWorkspace: View {
     @ViewBuilder private var transactionRows: some View {
         switch ledger.phase {
         case .idle, .loading: V15LoadingSkeleton(layout: .list(rows: 6)).padding(18)
-        case .empty: V15EmptyState(title: "这个镜头里没有账目", explanation: "更换镜头或时间后会重新读取服务器事实。").padding(20)
+        case .empty: V15EmptyState(title: "这里还没有账目", explanation: "可以更换筛选条件或时间范围。").padding(20)
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await ledger.load() } }.padding(20)
         case .loaded:
             if visibleTransactions.isEmpty {
                 V15EmptyState(
-                    title: lens == .archive ? "归档里没有账目" : "这个镜头里没有账目",
-                    explanation: lens == .archive ? "作废账目会保留在这里，并提供明确的恢复入口。" : "更换镜头或时间后会重新读取服务器事实。"
+                    title: lens == .archive ? "归档里没有账目" : "这里还没有账目",
+                    explanation: lens == .archive ? "作废账目会保留在这里，并提供明确的恢复入口。" : "可以更换筛选条件或时间范围。"
                 )
                 .padding(20)
             } else {
@@ -400,8 +400,8 @@ public struct V151MacWorkspace: View {
         } else {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("服务器确认值保持不变").font(.system(size: 12, weight: .semibold))
-                    Text("只有点击同步后，队列才会尝试写回服务器。").font(.system(size: 10)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                    Text("当前汇总暂不包含这些更改").font(.system(size: 12, weight: .semibold))
+                    Text("点击同步后再更新到账簿。").font(.system(size: 10)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
                 }
                 Spacer()
                 Button("同步全部") { Task { await services.pendingWrites.replay(using: services) } }
@@ -435,7 +435,7 @@ public struct V151MacWorkspace: View {
         case .idle, .loading: V15LoadingSkeleton().padding(18)
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await facts.refreshAttention() } }.padding(18)
         case .loaded:
-            if facts.attention.isEmpty { V15EmptyState(title: "目前没有需要决定的事项", explanation: "队列为空不代表没有账簿事实。").padding(20) }
+            if facts.attention.isEmpty { V15EmptyState(title: "目前没有需要处理的事项", explanation: "全部账目仍可在账目列表中查看。").padding(20) }
             else {
                 ForEach(facts.attention) { item in
                     Button {
@@ -468,7 +468,7 @@ public struct V151MacWorkspace: View {
             if let value = facts.facts?.credit.currentDebtMinor {
                 lensMetricRow(
                     title: "当前信用欠款",
-                    detail: "服务器确认的当前事实；进入工作台查看账期和还款链路。",
+                    detail: "查看当前账期和还款记录。",
                     amount: value,
                     direction: .outflow,
                     action: { destination = .credit }
@@ -493,7 +493,7 @@ public struct V151MacWorkspace: View {
             if let value = facts.facts?.reimbursements.outstandingMinor {
                 lensMetricRow(
                     title: "待收报销",
-                    detail: "服务器确认的未收金额；预计回款不会提前计入账户价值。",
+                    detail: "预计回款不会提前计入账户余额。",
                     amount: value,
                     direction: .neutral,
                     action: { destination = .reimbursements }
@@ -617,7 +617,7 @@ public struct V151MacWorkspace: View {
             Text("⇧ / 复选框 多选")
             Text("⌘↩ 提交")
             Spacer()
-            Text("\(spineItemCount) 项 · 服务器事实")
+            Text("\(spineItemCount) 项")
         }
         .font(.system(size: 10)).foregroundStyle(V15Palette.ink.color.opacity(0.54)).padding(.horizontal, 18).frame(height: 31)
     }
@@ -626,7 +626,7 @@ public struct V151MacWorkspace: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text("检查器").font(.system(size: 10, weight: .medium)).foregroundStyle(V15Palette.ink.color.opacity(0.52))
+                    Text("详情").font(.system(size: 10, weight: .medium)).foregroundStyle(V15Palette.ink.color.opacity(0.52))
                     if selectedIDs.isEmpty { inspectorContent }
                     else { batchInspector }
                 }
@@ -649,7 +649,7 @@ public struct V151MacWorkspace: View {
             .pickerStyle(.menu)
             .onChange(of: batchCategoryID) { _, _ in batchPreviewed = false; batchResult = nil }
             if batchPreviewed, let categoryID = batchCategoryID {
-                V15ServerFactState(title: "提交范围", detail: "已选择 \(selectedIDs.count) 笔账目，目标分类为“\(ledger.categoryName(categoryID))”。服务端未提供批量分类预览；确认会逐笔提交并逐笔返回结果。")
+                V15ServerFactState(title: "将要修改", detail: "已选择 \(selectedIDs.count) 笔账目，目标分类为“\(ledger.categoryName(categoryID))”。确认后会逐笔处理并显示结果。")
             }
             if let result = batchResult {
                 V15PartialProgressState(
@@ -681,7 +681,7 @@ public struct V151MacWorkspace: View {
                         Spacer(minLength: 100)
                         Image(systemName: "archivebox").font(.system(size: 30, weight: .light)).foregroundStyle(V15Palette.ink.color.opacity(0.50))
                         Text("选择一笔账目或账户").font(.system(size: 24, weight: .bold))
-                        Text("这里显示服务器确认的余额、分录、版本与历史。").font(.system(size: 14)).foregroundStyle(V15Palette.ink.color.opacity(0.58)).multilineTextAlignment(.center)
+                        Text("这里显示账户余额、账目和历史记录。").font(.system(size: 14)).foregroundStyle(V15Palette.ink.color.opacity(0.58)).multilineTextAlignment(.center)
                     }.frame(maxWidth: .infinity)
                 }
             }
@@ -700,7 +700,7 @@ public struct V151MacWorkspace: View {
             if let account = selectedAccount {
                 accountInspector(account)
             } else {
-                V15EmptyState(title: "账户不可用", explanation: "服务器没有返回该账户的确认事实。")
+                V15EmptyState(title: "无法显示账户", explanation: "暂时没有取得这个账户的数据。")
             }
         }
     }
@@ -716,7 +716,7 @@ public struct V151MacWorkspace: View {
                     }
                 }
                 V15MoneyText(minorUnits: account.currentBalanceMinor, direction: account.kind == .credit ? .outflow : .balance, font: .system(size: 26, weight: .bold, design: .monospaced))
-                Text("服务器确认余额 · v\(account.version)").font(.system(size: 11)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                Text("当前余额").font(.system(size: 11)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
             }
             VStack(spacing: 0) {
                 fieldRow("类型", value: accountKindLabel(account.kind), emphasized: false)
@@ -735,7 +735,7 @@ public struct V151MacWorkspace: View {
             .overlay { RoundedRectangle(cornerRadius: 7).stroke(V15Palette.hairline.color) }
             if account.archivedAt != nil {
                 V15ArchiveReadOnlyState {
-                    Text("该账户已归档；这里仅展示服务器确认事实。恢复或编辑请进入设置。")
+                    Text("该账户已归档，只能查看。恢复或编辑请进入设置。")
                         .font(V15Typography.secondary)
                 }
             }
@@ -774,7 +774,6 @@ public struct V151MacWorkspace: View {
             inspectorSection("来源链") {
                 HStack(spacing: 8) {
                     Text(sourceLabel(transaction.source)).font(.system(size: 11, weight: .semibold)).foregroundStyle(V15Palette.teal.color).padding(.horizontal, 9).padding(.vertical, 5).background(V15Palette.selected.color, in: RoundedRectangle(cornerRadius: 5))
-                    Text("source: \(transaction.source)").font(.system(size: 10, design: .monospaced)).foregroundStyle(V15Palette.ink.color.opacity(0.54))
                 }
             }
             inspectorSection("账本影响") {
@@ -786,9 +785,9 @@ public struct V151MacWorkspace: View {
                     }
                 }.background(V15Palette.paper.color, in: RoundedRectangle(cornerRadius: 7)).overlay { RoundedRectangle(cornerRadius: 7).stroke(V15Palette.hairline.color) }
             }
-            inspectorSection("修订历史") {
-                if ledger.revisions.isEmpty { Text("服务器没有返回可读版本历史。") }
-                else { ForEach(ledger.revisions.prefix(4)) { revision in Text("v\(revision.version) · \(revision.event) · \(timeLabel(revision.createdAt))").font(.system(size: 10, design: .monospaced)).foregroundStyle(V15Palette.ink.color.opacity(0.62)) } }
+            inspectorSection("修改历史") {
+                if ledger.revisions.isEmpty { Text("暂无可查看的修改历史。") }
+                else { ForEach(ledger.revisions.prefix(4)) { revision in Text("\(revision.displayEvent) · \(timeLabel(revision.createdAt))").font(.system(size: 10)).foregroundStyle(V15Palette.ink.color.opacity(0.62)) } }
             }
             mutationState
         }
@@ -871,14 +870,14 @@ public struct V151MacWorkspace: View {
                 ForEach(ledger.categories) { category in Text(category.name).tag(Optional(category.id)) }
             }.pickerStyle(.menu).onChange(of: categoryID) { _, _ in categoryPreviewed = false }
             if categoryPreviewed {
-                V15ServerFactState(detail: "已读取账目 \(selectedTransaction.map { "v\($0.version)" } ?? "当前版本") 的服务器当前事实。服务端未提供分类预览；确认会直接提交分类修改。")
+                V15ServerFactState(detail: "已取得这笔账目的最新内容。确认后会直接修改分类。")
             }
             HStack {
                 V15ActionButton("取消", kind: .secondary) { categoryPresented = false }
                 if categoryPreviewed {
                     V15ActionButton("确认分类   ⌘↩") { commitCategory() }
                 } else {
-                    V15ActionButton("读取服务器当前账目", disabledReason: ledger.isOffline ? .init(code: "category_read_requires_network", message: "需要联网读取服务器当前账目。", fieldPath: nil) : nil) { readCategoryCurrentFact() }
+                    V15ActionButton("取最新账目", disabledReason: ledger.isOffline ? .init(code: "category_read_requires_network", message: "需要联网取得最新账目。", fieldPath: nil) : nil) { readCategoryCurrentFact() }
                 }
             }
         }
@@ -888,7 +887,7 @@ public struct V151MacWorkspace: View {
     private var takeover: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Button { destination = .ledger } label: { Label("返回脊柱", systemImage: "chevron.left") }.buttonStyle(.plain)
+                Button { destination = .ledger } label: { Label("返回账目", systemImage: "chevron.left") }.buttonStyle(.plain)
                 Text("Fiscal / \(destination.title)").font(.system(size: 14, weight: .semibold))
                 Spacer()
             }
@@ -1064,7 +1063,7 @@ public struct V151MacWorkspace: View {
             accountDetailPhase = .idle
         } catch {
             guard current == accountGeneration, selectedAccountID == id else { return }
-            accountDetailPhase = .failed(.init(kind: .transport, message: "账户事实读取失败。"))
+            accountDetailPhase = .failed(.init(kind: .transport, message: "暂时无法取得账户信息。"))
         }
     }
 
@@ -1141,8 +1140,8 @@ public struct V151MacWorkspace: View {
         switch item.status {
         case .queued: status = "等待联网后同步"
         case .syncing: status = "正在同步"
-        case .requiresDecision: status = "服务器事实已变化，需要重新决定"
-        case .outcomeUnknown: status = "服务器结果不明，需要人工核对"
+        case .requiresDecision: status = "数据已变化，需要重新决定"
+        case .outcomeUnknown: status = "结果不明，需要核对"
         case .failed: status = "同步失败"
         }
         return item.message.map { "\(status) · \($0)" } ?? status
@@ -1194,7 +1193,7 @@ public struct V151MacWorkspace: View {
     private func timeLabel(_ value: Date) -> String { let formatter = DateFormatter(); formatter.locale = Locale(identifier: "zh_Hans_CN"); formatter.timeZone = TimeZone(identifier: "Asia/Shanghai"); formatter.dateFormat = "MM-dd HH:mm"; return formatter.string(from: value) }
     private func certainty(_ value: V15FutureEventCertainty) -> String { switch value { case .exactDue: "确切到期"; case .confirmed: "已确认"; case .expected: "预计"; case .scheduled: "已排期" } }
     private func sourceLabel(_ value: String) -> String { switch value { case "manual": "手工录入"; case "system": "系统生成"; case "ai_text": "AI 文本"; case "ocr": "OCR"; case "legacy_import": "历史导入"; case "cash_flow": "现金流"; case "statement_import": "账单导入"; default: "未知来源" } }
-    private func transactionKindLabel(_ value: String) -> String { V15LedgerReadKind(rawValue: value)?.displayName ?? value }
+    private func transactionKindLabel(_ value: String) -> String { V15LedgerReadKind(rawValue: value)?.displayName ?? "账目" }
     private func accountKindLabel(_ value: V15AccountKind) -> String { switch value { case .cash: "现金"; case .debit: "储蓄账户"; case .credit: "信用账户"; case .unknown: "未知类型" } }
     private func moneyDirection(_ transaction: V15Transaction) -> V15MoneyDirection { switch transaction.kind { case "income", "reimbursement_receipt": .inflow; case "transfer": .neutral; default: .outflow } }
 }

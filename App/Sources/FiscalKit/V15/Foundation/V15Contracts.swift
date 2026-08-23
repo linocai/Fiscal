@@ -562,6 +562,15 @@ public struct V15TransactionVersionRequest: Codable, Sendable, Equatable { publi
 
 public struct V15TransactionRevision: Codable, Sendable, Equatable, Identifiable {
     public let id: UUID; public let version: Int; public let event: String; public let snapshot: JSONValue; public let createdAt: Date
+    public var displayEvent: String {
+        switch event {
+        case "created": "已创建"
+        case "updated", "replaced": "已修改"
+        case "voided": "已作废"
+        case "restored": "已恢复"
+        default: "已更新"
+        }
+    }
     enum CodingKeys: String, CodingKey { case id, version, event, snapshot; case createdAt = "created_at" }
 }
 
@@ -583,6 +592,18 @@ public enum V15CreditCycleStatus: String, Codable, Sendable, Equatable { case op
 }
 
 public enum V15InstallmentPeriodStatus: String, Codable, Sendable, Equatable { case scheduled, billed, partial, cycleSettled = "cycle_settled", overdue, cancelled, settledEarly = "settled_early", unknown
+    public var displayName: String {
+        switch self {
+        case .scheduled: "待出账"
+        case .billed: "已出账"
+        case .partial: "部分结清"
+        case .cycleSettled: "账期已结清"
+        case .overdue: "已逾期"
+        case .cancelled: "已取消"
+        case .settledEarly: "已提前结清"
+        case .unknown: "暂时无法识别"
+        }
+    }
     public init(from decoder: Decoder) throws { self = Self(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown }
 }
 
@@ -640,7 +661,7 @@ public enum V15ReimbursementClaimStatus: Sendable, Equatable, Hashable, Codable 
     public init(from decoder: Decoder) throws { let value = try decoder.singleValueContainer().decode(String.self); switch value { case "draft": self = .draft; case "pending": self = .pending; case "partial_received": self = .partialReceived; case "received": self = .received; case "cancelled": self = .cancelled; case "partially_received_cancelled": self = .partiallyReceivedCancelled; default: self = .unknown(value) } }
     public func encode(to encoder: Encoder) throws { var container = encoder.singleValueContainer(); try container.encode(rawValue) }
     public var rawValue: String { switch self { case .draft: "draft"; case .pending: "pending"; case .partialReceived: "partial_received"; case .received: "received"; case .cancelled: "cancelled"; case .partiallyReceivedCancelled: "partially_received_cancelled"; case .unknown(let value): value } }
-    public var displayName: String { switch self { case .draft: "草稿"; case .pending: "待到账"; case .partialReceived: "部分到账"; case .received: "已到账"; case .cancelled: "已取消"; case .partiallyReceivedCancelled: "部分到账后取消"; case .unknown(let value): "未知状态（\(value)）" } }
+    public var displayName: String { switch self { case .draft: "草稿"; case .pending: "待到账"; case .partialReceived: "部分到账"; case .received: "已到账"; case .cancelled: "已取消"; case .partiallyReceivedCancelled: "部分到账后取消"; case .unknown: "暂时无法识别" } }
     public var isKnown: Bool { if case .unknown = self { false } else { true } }
 }
 public struct V15ReimbursementClaim: Codable, Sendable, Equatable { public let id: UUID; public let title: String; public let note: String?; public let status: V15ReimbursementClaimStatus; public let totalClaimedMinor: V15MinorUnits; public let receivedMinor: V15MinorUnits; public let outstandingMinor: V15MinorUnits; public let expenseCount: Int; public let partyCount: Int; public let receiptCount: Int; public let parties: [V15ReimbursementParty]; public let latestReceipt: V15ReimbursementReceipt?; public let version: Int; public let submittedAt: Date?; public let cancelledAt: Date?; public let voidedAt: Date?; public let archivedAt: Date?; public let createdAt: Date; public let updatedAt: Date; enum CodingKeys: String, CodingKey { case id, title, note, status, totalClaimedMinor = "total_claimed_minor", receivedMinor = "received_minor", outstandingMinor = "outstanding_minor", expenseCount = "expense_count", partyCount = "party_count", receiptCount = "receipt_count", parties, latestReceipt = "latest_receipt", version, submittedAt = "submitted_at", cancelledAt = "cancelled_at", voidedAt = "voided_at", archivedAt = "archived_at", createdAt = "created_at", updatedAt = "updated_at" } }

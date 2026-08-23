@@ -345,7 +345,7 @@ struct F3B1Tests {
         await model.load(); model.openScheduleSheet(); model.cycleMode = .statementDayCutoff; model.statementDayText = "25"; model.dueDayText = "10"
         await model.requestSchedulePreview(); await model.commitSchedule(); await model.resolveUnknownByReadback()
         guard case .unknown = model.schedulePhase, case .notConfirmed = model.unknownReadbackPhase else { Issue.record("offline fallback must retain the unknown attempt"); return }
-        #expect(model.unknownReadbackNotice == "离线快照不能核对当前服务器事实。")
+        #expect(model.unknownReadbackNotice == "离线时无法检查最新状态。")
         let wires = await transport.commitWires()
         #expect(wires.count == 1)
     }
@@ -372,7 +372,7 @@ struct F3B1Tests {
         marker.snapshotAt = Date(timeIntervalSince1970: 1_786_464_000)
         await model.retryUnknownCommit()
         guard case .unknown = model.schedulePhase else { Issue.record("offline replay must preserve the unknown gate"); return }
-        #expect(model.lastCommitKey == key && model.unknownRetryNotice == "离线快照仅可查看，无法使用同一请求键重试。")
+        #expect(model.lastCommitKey == key && model.unknownRetryNotice == "离线时无法检查保存结果。")
         #expect((await transport.commitWires()).count == 1)
         marker.snapshotAt = nil
         await model.retryUnknownCommit()
@@ -390,7 +390,7 @@ struct F3B1Tests {
         let key = model.lastCommitKey
         await model.retryUnknownCommit()
         guard case .unknown = model.schedulePhase else { Issue.record("offline transport race must retain unknown recovery"); return }
-        #expect(model.lastCommitKey == key && model.unknownRetryNotice == "离线快照仅可查看，无法使用同一请求键重试。")
+        #expect(model.lastCommitKey == key && model.unknownRetryNotice == "离线时无法检查保存结果。")
         await model.retryUnknownCommit()
         guard case .succeeded = model.schedulePhase else { Issue.record("same key must remain replayable after offline race"); return }
         let wires = await transport.commitWires()

@@ -43,7 +43,7 @@ public enum V15InstallmentPlanStatus: Sendable, Equatable, Hashable, Codable {
         case .settledEarly: "已提前结清"
         case .partiallyCancelled: "部分取消"
         case .cancelled: "已取消"
-        case .unknown(let value): "未知状态（\(value)）"
+        case .unknown: "暂时无法识别"
         }
     }
 

@@ -54,14 +54,14 @@ public final class V15ArchiveModel {
         return nil
     }
     public var exportDisabledReason: String? {
-        if isOffline { return "离线快照不能创建归档；请连接服务器。" }
+        if isOffline { return "离线时不能创建备份文件；请恢复连接。" }
         if let passwordIssue { return passwordIssue }
         if case .creating = phase { return "正在创建加密归档。" }
         if case .saving = phase { return "正在保存加密归档。" }
         return nil
     }
     public var canBeginExport: Bool { exportDisabledReason == nil && phase == .idle }
-    public var restoreDisabledReason: String { "恢复仅由受控操作员在 schema-compatible 的全新空目标执行；此设备不提供恢复入口。" }
+    public var restoreDisabledReason: String { "为保护现有数据，此设备不提供直接恢复入口。" }
 
     public func beginExport() {
         guard canBeginExport else { return }
@@ -214,9 +214,9 @@ public final class V15SystemFactsModel {
         }
     }
     public var passphraseDisabledReason: V15DisabledReason? {
-        if isOffline { return .init(code: "offline_read_only", message: "离线快照不能修改口令；请连接服务器。", fieldPath: nil) }
+        if isOffline { return .init(code: "offline_read_only", message: "离线时不能修改口令；请联网后重试。", fieldPath: nil) }
         if case .requiresReunlock = passphrasePhase {
-            return .init(code: "passphrase_reunlock_required", message: "口令已经修改，但本机无法保存新凭证；请使用新口令重新解锁。", fieldPath: nil)
+            return .init(code: "passphrase_reunlock_required", message: "口令已经修改，但本机无法保存新的解锁信息；请使用新口令重新解锁。", fieldPath: nil)
         }
         if case .responseUnknown = passphrasePhase {
             return .init(code: "passphrase_result_unknown", message: "修改结果未知；不要重复提交，请先尝试用新口令重新解锁。", fieldPath: nil)
@@ -252,7 +252,7 @@ public final class V15SystemFactsModel {
             if systemStatus != nil || operationsStatus != nil || dataRevision != nil || authStatus != nil {
                 phase = .loaded
             } else {
-                phase = .failed(systemFailure ?? operationsFailure ?? revisionFailure ?? authFailure ?? .init(kind: .transport, message: "无法读取系统事实。"))
+                phase = .failed(systemFailure ?? operationsFailure ?? revisionFailure ?? authFailure ?? .init(kind: .transport, message: "无法读取系统状态。"))
             }
             return
         }
@@ -316,9 +316,9 @@ public final class V15SystemFactsModel {
     }
     private nonisolated static func capture<Value: Sendable>(_ operation: @Sendable () async throws -> Value) async -> Result<Value, V15Failure> {
         do { return .success(try await operation()) }
-        catch is CancellationError { return .failure(.init(kind: .cancelled, message: "请求已取消。")) }
+        catch is CancellationError { return .failure(.init(kind: .cancelled, message: "操作已取消。")) }
         catch let failure as V15Failure { return .failure(failure) }
-        catch { return .failure(.init(kind: .transport, message: "无法读取系统事实。")) }
+        catch { return .failure(.init(kind: .transport, message: "无法读取系统状态。")) }
     }
 }
 

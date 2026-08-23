@@ -24,7 +24,7 @@ struct V15InstallmentPurchasePreviewDetails: View {
             Text("起始账单 \(preview.startStatementDate) · 消费 \(money(preview.purchaseAmountMinor, .outflow)) · 手续费 \(money(preview.totalFeeMinor, .outflow))")
                 .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
             V15MoneyText(minorUnits: preview.totalFinancedMinor, direction: .outflow)
-            periodSection("服务端拆分期次", periods: preview.periods, prefix: "\(prefix).period")
+            periodSection("分期期次", periods: preview.periods, prefix: "\(prefix).period")
         }
     }
 }
@@ -37,7 +37,7 @@ struct V15InstallmentPlanPreviewDetails: View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
             HStack(alignment: .top, spacing: V15Spacing.sm) {
                 planComparison(
-                    "现状 · v\(preview.currentPlan.version)",
+                    "当前计划",
                     count: preview.currentPlan.installmentCount,
                     start: preview.currentPlan.startStatementDate,
                     total: preview.currentPlan.totalFinancedMinor,
@@ -54,7 +54,7 @@ struct V15InstallmentPlanPreviewDetails: View {
                 )
             }
             .accessibilityIdentifier("\(prefix).comparison")
-            periodSection("锁定期（保持服务端事实）", periods: preview.lockedPeriods, prefix: "\(prefix).locked")
+            periodSection("锁定期（保持不变）", periods: preview.lockedPeriods, prefix: "\(prefix).locked")
             periodSection("未来期（拟更新）", periods: preview.futurePeriods, prefix: "\(prefix).future")
             cycleSection(preview.affectedCycles, prefix: "\(prefix).cycle")
             warningSection(preview.warnings, prefix: "\(prefix).warning")
@@ -71,22 +71,22 @@ struct V15InstallmentCommandPreviewDetails: View {
             switch preview {
             case .settlement(let value):
                 VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                    Text("提前结清事实").font(V15Typography.body.weight(.semibold))
+                    Text("提前结清预览").font(V15Typography.body.weight(.semibold))
                     V15MoneyText(minorUnits: value.amountMinor, direction: .outflow, font: V15Typography.moneyLarge)
                     HStack(alignment: .top, spacing: V15Spacing.sm) {
                         beforeAfter("付款账户余额", before: value.paymentBalanceBeforeMinor, after: value.paymentBalanceAfterMinor, direction: .balance)
                         beforeAfter("当前信用欠款", before: value.debtBeforeMinor, after: value.debtAfterMinor, direction: .outflow)
                     }
-                    Text("结清款、付款账户余额和当前信用欠款是不同事实；未来期终止以服务端拟议计划为准。")
+                    Text("请分别核对结清款、付款账户余额和当前信用欠款；确认后将按下方计划终止未来期次。")
                         .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityIdentifier("\(prefix).settlement.facts")
-                periodSection("结清后的服务端期次", periods: value.proposedPlan.periods, prefix: "\(prefix).settlement.period")
+                periodSection("结清后的期次", periods: value.proposedPlan.periods, prefix: "\(prefix).settlement.period")
                 cycleSection(value.affectedCycles, prefix: "\(prefix).settlement.cycle")
                 warningSection(value.warnings, prefix: "\(prefix).settlement.warning")
             case .reverse(let value):
                 VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                    Text("服务端允许撤销：\(value.eligible ? "是" : "否") · 原还款 \(value.repaymentTransaction.title)")
+                    Text("\(value.eligible ? "可以撤销" : "暂时不能撤销") · 原还款 \(value.repaymentTransaction.title)")
                         .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
                     HStack(alignment: .top, spacing: V15Spacing.sm) {
                         beforeAfter("付款账户余额", before: value.paymentBalanceBeforeMinor, after: value.paymentBalanceAfterMinor, direction: .balance)
@@ -101,11 +101,11 @@ struct V15InstallmentCommandPreviewDetails: View {
                     HStack { previewFact("本金退款", value.principalRefundMinor, .inflow); previewFact("手续费退款", value.feeRefundMinor, .inflow) }
                     HStack(alignment: .top, spacing: V15Spacing.sm) {
                         beforeAfter("当前信用欠款", before: value.debtBeforeMinor, after: value.debtAfterMinor, direction: .outflow)
-                        beforeAfter("费用事实", before: value.expenseBeforeMinor, after: value.expenseAfterMinor, direction: .outflow)
+                        beforeAfter("费用变化", before: value.expenseBeforeMinor, after: value.expenseAfterMinor, direction: .outflow)
                     }
                 }
                 periodSection("取消期次", periods: value.cancelledPeriods, prefix: "\(prefix).cancellation.period")
-                periodSection("取消后的服务端期次", periods: value.proposedPlan.periods, prefix: "\(prefix).cancellation.proposed-period")
+                periodSection("取消后的期次", periods: value.proposedPlan.periods, prefix: "\(prefix).cancellation.proposed-period")
                 cycleSection(value.affectedCycles, prefix: "\(prefix).cancellation.cycle")
                 warningSection(value.warnings, prefix: "\(prefix).cancellation.warning")
             }
@@ -150,13 +150,13 @@ private func previewFact(_ title: String, _ value: V15MinorUnits, _ direction: V
 private func periodSection<Period: V15InstallmentPeriodFact>(_ title: String, periods: [Period], prefix: String) -> some View {
     V15Section(title, detail: "\(periods.count) 期") {
         if periods.isEmpty {
-            Text("服务端未返回期次。")
+            Text("没有期次。")
                 .font(V15Typography.secondary)
         } else {
             ForEach(Array(periods.enumerated()), id: \.offset) { _, period in
                 VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("第 \(period.sequence) 期 · \(period.status.rawValue) · \(period.locked ? "已锁定" : "未来期")")
+                        Text("第 \(period.sequence) 期 · \(period.status.displayName) · \(period.locked ? "已锁定" : "未来期")")
                             .font(V15Typography.body.weight(.semibold))
                         Spacer()
                         V15MoneyText(minorUnits: period.amountDueMinor, direction: .outflow)
@@ -180,12 +180,12 @@ private func periodSection<Period: V15InstallmentPeriodFact>(_ title: String, pe
 private func cycleSection(_ cycles: [V15InstallmentAffectedCycle], prefix: String) -> some View {
     V15Section("受影响账期", detail: "\(cycles.count) 个") {
         if cycles.isEmpty {
-            Text("服务端未返回受影响账期。")
+            Text("没有受影响的账期。")
                 .font(V15Typography.secondary)
         } else {
             ForEach(cycles) { cycle in
                 VStack(alignment: .leading, spacing: V15Spacing.xxs) {
-                    Text("账单 \(cycle.statementDate) · cycle \(cycle.cycleID?.uuidString ?? "尚未生成")")
+                    Text("账单 \(cycle.statementDate)")
                         .font(V15Typography.body.weight(.semibold))
                     Text("到期额 \(money(cycle.beforeDueMinor, .outflow)) → \(money(cycle.afterDueMinor, .outflow)) · 变化 \(money(cycle.deltaMinor, .neutral))")
                         .font(V15Typography.secondary)
@@ -201,13 +201,13 @@ private func cycleSection(_ cycles: [V15InstallmentAffectedCycle], prefix: Strin
 @ViewBuilder
 @MainActor
 private func warningSection(_ warnings: [V15InstallmentWarning], prefix: String) -> some View {
-    V15Section("服务端警告与原因", detail: "\(warnings.count) 条") {
+    V15Section("提示与原因", detail: "\(warnings.count) 条") {
         if warnings.isEmpty {
-            Text("服务端未返回警告。")
+            Text("没有额外提示。")
                 .font(V15Typography.secondary)
         } else {
             ForEach(warnings) { warning in
-                Text("\(warning.code)：\(warning.message)")
+                Text(warning.message)
                     .font(V15Typography.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(V15Spacing.sm)

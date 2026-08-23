@@ -101,7 +101,7 @@ public final class V15FutureTimelineModel {
 
     public func openInspector(_ event: V15FutureEvent) {
         guard Self.isSafeLocator(event.deepLink, event: event) else {
-            inspectorPhase = .unavailable("链接不符合当前只读安全规则，未发起请求。")
+            inspectorPhase = .unavailable("此链接暂时无法打开。")
             return
         }
         inspectorPhase = .showing(event)
@@ -118,7 +118,7 @@ public final class V15FutureTimelineModel {
                 return
             }
             if let requiredRevision, page.meta.dataRevision < requiredRevision {
-                takeScopeConflict(.init(kind: .conflict, code: "future_events_scope_changed", message: "服务器尚未返回所需的新版本，请重新读取。"), generation: candidate)
+                takeScopeConflict(.init(kind: .conflict, code: "future_events_scope_changed", message: "未来事项已经更新，请重新读取。"), generation: candidate)
                 return
             }
             meta = page.meta; serverWindow = page.window; pageRevision = page.meta.dataRevision; requiredRevision = nil; requiresFreshReload = false
