@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 目标版本：v1.5.2（27）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**RELEASE · 签名发布进行中**
+> 目标版本：v1.5.2（27）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**RELEASE · Build 27 本地发布完成**
 
 ## 1. 当前目标与授权
 
@@ -104,7 +104,7 @@
 - 账单导入、报表、分期、报销、现金流、核对、设置与系统页面改用用户可理解的结果、下一步和恢复说明；内部 typed contract、版本校验、幂等、竞态与安全防护继续保留。
 - 完整问题与删改清单见 `archive/audits/v1.5.2-build27-user-language-quickfix-2026-08-23.md`。
 
-完成门：`FiscalKitTests` 393/393（40 suites）通过；iOS generic Simulator 与 macOS App target 无签名构建通过；用户可见敏感工程词扫描仅剩协议字段、内部状态映射、临时文件名和 accessibility identifier，未作为正文呈现；`git diff --check` 通过。
+完成门：`FiscalKitTests` 393/393（40 suites）通过；iOS/macOS App target 和最终签名 Release 均构建通过；用户可见敏感工程词扫描仅剩协议字段、内部状态映射、临时文件名和 accessibility identifier，未作为正文呈现；打包前后严格验签和 SHA-256 校验通过。
 
 ## 6. 验收矩阵
 
@@ -140,5 +140,6 @@
 - B5 已完成：账单导入、七类重型业务对象、系统与数据、设置和启动门均已按真实服务能力收口；能力缺口 CAP-152-09 已登记。
 - B6 的既有收口证据保留；B7 r7 已完成正式根壳正常态、F2-A 极值局部滚动与伪字段差异复验。剩余只是不扩展 Backend 的 CAP-152 能力边界。
 - v1.5.2（26）的源码、审计证据、签名 Release 产物和本地安装历史保持不变，见 `archive/releases/v1.5.2/RELEASE_STATE.md`。
-- 用户语言快修已在 v1.5.2（27）源码完成并通过双端构建与 393 项测试；本轮没有生成新的签名包，也没有 commit、tag、push 或安装换包。
-- Build 27 的源码提交、签名打包、macOS 换包、发布记录和标签正在按授权执行；iOS 安装继续由用户执行。
+- 用户语言快修已在 v1.5.2（27）源码完成并通过双端签名构建与 393 项测试；源码提交 `8a25baa` 已推送至 `origin/main`。
+- Build 27 的 macOS Developer ID 包与 iOS Development IPA 均已严格验签；macOS 已备份 Build 26、换包为 Build 27 并成功启动，iOS 安装继续由用户执行。
+- 产物、SHA-256、回滚备份、标签与最终 Git 状态见 `archive/releases/v1.5.2/RELEASE_STATE.md`。
