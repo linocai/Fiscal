@@ -1,19 +1,20 @@
-# Fiscal v1.5.2 source-closeout state
+# Fiscal v1.5.2 release state
 
 ## v1.5.2 (Build 26)
 
 | Field | Current state |
 | --- | --- |
 | Scope | Independent reference-led remediation of the macOS and iOS v1.5.1 frontend against `Fiscal 前端设计启动/` |
-| Source status | BUILD B1–B7 complete; version and generated Xcode project are `1.5.2 (26)` |
+| Source revision | `948b610894728de7407119bd4e66269d3dc819d1` (`feat(release): prepare v1.5.2 frontend restoration`) |
 | Audit | B7 r7 closes the root normal-state, F2-A boundary and pseudo-field-comparison re-review findings. Remaining limits are registered `CAP-152-*` Backend-contract gaps only. |
 | Backend | Unchanged; B7 does not alter schema, migration or service contracts |
-| App builds | iOS/macOS Debug and unsigned Release rebuilt after r7 |
+| App builds | iOS/macOS Debug and unsigned Release passed after r7; final macOS universal Release and iOS device Release were rebuilt with signing from the clean source revision |
 | Tests | `FiscalKitTests`: 393 passed / 40 suites / 0 failed; formal-root UI: 2 passed / 0 failed |
 | Visual QA | Three actual normal-state root PNGs plus one separately stored F2-A boundary root PNG were manually inspected |
-| Git | Working tree only; no commit, tag, or push was authorized or performed |
-| Signing/install | Not performed; installed signed macOS application remains v1.5.1 (25) |
-| iOS/TestFlight | Not performed; operator-managed |
+| Git | The final release-record commit is tagged with annotated `v1.5.2`; `main` and the tag are pushed to `origin` |
+| macOS signing | Complete with `Developer ID Application: ZheYuan Cai (HX73DFL88G)`; hardened runtime and secure timestamp enabled; no notarization |
+| macOS install | `/Applications/Fiscal.app` replaced with v1.5.2 (26), strictly verified and successfully launched |
+| iOS / TestFlight | Development-signed arm64 IPA produced for operator installation; no TestFlight upload |
 
 ## Authoritative records
 
@@ -21,6 +22,36 @@
 - Fix and capability register: `archive/audits/v1.5.2-build-gap-register.md`.
 - Active workflow and acceptance matrix: `PROJECT_PLAN.md`.
 - Reference authority: `Fiscal 前端设计启动/Design/00-HANDOFF.md`, the static `.dc.html` files, clickable prototypes, and the direction/inventory document in that reference directory.
+
+## Release method
+
+The signed applications were built from the clean source revision above in Release configuration.
+The macOS application is universal `arm64`/`x86_64`, Developer ID signed, hardened and timestamped.
+The iOS application is an `arm64` device build signed with the team's Apple Development identity
+and provisioning profile for direct operator installation. Both packaged applications passed
+strict signature verification after extraction. Apple notarization and TestFlight upload were
+deliberately not performed.
+
+## Artifacts
+
+Directory: `build/release-v1.5.2-26/artifacts/`
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `Fiscal-macOS-v1.5.2-build26.zip` | `71c7fd28c69ba2fc2e86b69d610fedea646c495a685287ebd5734d64ebe058cd` |
+| `Fiscal-macOS-v1.5.2-build26-dSYM.zip` | `9d7f707c535bf868ed2b890799b8a0119df669c2e52e4783b169ac33dcd0a8ea` |
+| `Fiscal-iOS-v1.5.2-build26-development.ipa` | `180226dc5350b7f3b307b303cfd0bd9f7d6a543d9b63ac0251c4e7b2cc4603a9` |
+| `Fiscal-iOS-v1.5.2-build26-dSYM.zip` | `b347bbc6070b55fb67bdd2094e6a3cf3764acb774b7a5543fb0f22aba1ffd0fb` |
+| `RELEASE.txt` | `cf4f6ff46d20fdf6cde82b9a1c95c117e7d756575c7a39ddd88d318e62a03936` |
+
+`SHA256SUMS` covers all five files above and passes full verification.
+
+## Local deployment and recovery
+
+- Installed application: `/Applications/Fiscal.app`, v1.5.2 (26).
+- Launch confirmation: process started from `/Applications/Fiscal.app/Contents/MacOS/Fiscal`.
+- Recoverable previous application: `/Applications/Fiscal-v1.5.1-build25-backup-20260823-125259.app`.
+- iOS installation is left to the operator using the development-signed IPA above.
 
 ## Closeout evidence
 
@@ -50,8 +81,6 @@ The prior r6 root images remain under `qa/v151-ios-root-390x844/` as superseded 
 ## Deliberately not performed
 
 - No Backend/schema/migration or production-service change.
-- No Apple Developer ID signing, notarization, packaging, or replacement of `/Applications/Fiscal.app`.
-- No iOS archive or TestFlight upload.
-- No commit, tag, push, merge, or branch operation.
-
-Moving from this source-closeout state to a distributed release requires separate authorization and a clean release operation.
+- No Apple notarization.
+- No iOS device installation or TestFlight upload; installation is operator-managed.
+- No merge or branch operation; release work was performed directly on `main` as authorized.
