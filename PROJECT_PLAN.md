@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 目标版本：v1.5.3（29）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**RELEASE · 一条龙发布施工中**
+> 目标版本：v1.5.3（29）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**RELEASE COMPLETE · 双端签名与 macOS 换包完成**
 
 ## 1. 当前目标与授权
 
@@ -8,7 +8,7 @@
 - v1.5.2 是一次以独立审计为输入的**双端前端设计验收修复**：macOS 与 iPhone 必须忠实落实 `Fiscal 前端设计启动/`，解决 `F151-01` 至 `F151-17`。
 - 用户已追加授权 v1.5.2（27）执行 commit、push、签名发布、macOS 换包安装与 Build 27 标签；iOS 安装由用户执行。
 - 用户已授权 v1.5.2（28）立即修复 macOS 月份流水范围、增加一个 Build，并执行 commit、tag、push、双端签名发布与 macOS 换包；iOS 安装由用户执行。
-- 用户已指定下一目标为 v1.5.3（29），修复 `NEXT-01` 至 `NEXT-04`，并已授权进入 BUILD；当前不包含提交、签名或换包。
+- 用户已指定 v1.5.3（29）修复 `NEXT-01` 至 `NEXT-04`，并授权完成 BUILD、提交、标签、推送、双端签名与 macOS 换包；iOS 安装由用户执行。
 - 当前授权不包含：Backend/schema/migration 变更、生产部署、Apple 公证或 TestFlight。
 
 ## 2. 权威与审计输入
@@ -251,4 +251,5 @@
 - v1.5.3（29）B10-A 至 B10-E 已完成：`NEXT-01` 至 `NEXT-04` 均已从 Backlog 收口到源码、测试和双端构建证据。
 - 双端完成范围：共享录入模型已防重复并在成功后清空；macOS 与 iOS 都接收服务器确认事件并刷新页面事实；共享 posting 策略修正两端账户流水；macOS 录入页已移除重复左栏，iOS 保持单一全屏流程。
 - 最终门禁为 401 tests / 41 suites 全绿、Mac/iOS 正式 App target 构建成功、双端版本 `1.5.3 (29)`、实机样例视觉检查通过、`git diff --check` 通过。
-- 用户已授权 v1.5.3（29）一条龙发布；当前进入源码提交、双端签名、标签、推送与 macOS 换包阶段，iOS 安装仍由用户执行。
+- v1.5.3（29）一条龙发布完成：源码提交 `78fd1c3`、双端签名包、严格验签、macOS 备份换包与启动均已完成；最终记录和不可变标签为 `archive/releases/v1.5.3/RELEASE_STATE.md` / `v1.5.3`。
+- 当前 macOS 为 `/Applications/Fiscal.app` v1.5.3（29）；原 v1.5.2（28）保留在 `/Applications/Fiscal-v1.5.2-build28-backup-20260823-1834.app`。iOS Development IPA 由用户安装。
