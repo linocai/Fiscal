@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 目标版本：v1.5.5（32）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**QUICKFIX BUILD COMPLETE · 等待发布授权**
+> 目标版本：v1.5.5（32）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**RELEASE COMPLETE**
 
 ## 1. 当前目标与授权
 
@@ -339,7 +339,7 @@
 - 验收：F3-F 定向与全量 `FiscalKitTests` 通过；iOS F3-F UI 覆盖 unknown 后普通刷新仍能恢复；macOS/iOS 正式 target 均构建为 `1.5.5 (32)`；复核无新 findings 后停在 commit/tag/push/签名包和部署换包之前。
 - 结果：普通刷新现在优先收敛未决 owner；404 确认删除并解锁、仍存在时恢复原 owner 的结果未知面、读回失败时保留原 owner 与重试入口，所有路径均未重发 DELETE。macOS 与 iOS 复用同一修复。
 - 门禁：F3-F 34/34、全量 `FiscalKitTests` 410/410（41 suites）、iOS 对应 UI 场景 1/1 全绿；`FiscaliOS` 与 `FiscalmacOS` Release 均成功，成品 Info.plist 均为 `1.5.5 (32)`，`git diff --check` 通过。
-- 停止点：Build 32 当前仅为已验证源码，不执行 commit/tag/push、签名打包、Backend 部署、macOS 换包或 iOS 安装；既有 `v1.5.5` 标签保持不可变，后续发布 Build 32 时使用独立 build 标签。
+- 发布结果：源码提交 `5bf7956` 已推送；生产 Backend 已从 revision `3a584da` / Alembic `0035` 切换到 `5bf7956` / `0036`，迁移前后备份、readiness 与公网 liveness 均通过；双端签名包已严格验签，macOS 已备份 v1.5.3（29）并换包启动为 v1.5.5（32），iOS Development IPA 交由用户安装。既有 `v1.5.5` 标签保持不可变，Build 32 使用独立 `v1.5.5-build32` 标签。
 
 ## 6. 验收矩阵
 
@@ -393,5 +393,7 @@
 - 当前发布门没有产品阻断项；唯一环境限制是 macOS UI 自动化宿主未能启用 automation mode，已用可测试编译、正式构建和静态视觉矩阵补证并如实登记。
 - v1.5.5 源码已独立提交为 `a21e17c`；签名 macOS universal 包、iOS arm64 Development IPA、双端 dSYM、`RELEASE.txt` 与 `SHA256SUMS` 已从该干净提交生成，打包前后严格验签和可执行文件同一性核对通过。
 - 发布交接记录见 `archive/releases/v1.5.5/RELEASE_STATE.md`；记录提交为 `56c8480`，不可变 `v1.5.5` 标签指向该提交，`main` 与 `v1.5.4`/`v1.5.5` 标签均已推送。当前无本地施工动作，等待用户授权生产部署与 `/Applications/Fiscal.app` 换包。
-- v1.5.5（32）B13 快修已完成并通过 34 项问题域测试、410 项全量测试、iOS 用户路径自动化和双端 Release 构建；当前差异未提交，Build 31 的签名包不再作为下一次换包候选。
-- 下一动作：收到一条龙授权后提交并推送 Build 32，保留既有 `v1.5.5` 标签并创建独立 build 标签，再从干净提交签名、验签、打包和换包；在此之前不触碰生产 Backend 与现有安装。
+- v1.5.5（32）一条龙发布完成：B13 通过 34 项问题域测试、410 项全量测试、iOS 用户路径自动化、双端签名 Release 和解包后二次验签；Build 31 包已被 Build 32 取代。
+- 生产 Backend 当前为 `/opt/fiscal/releases/5bf795625673` / Alembic `20260823_0036`；迁移前备份 `fiscal-20260823T143536Z.dump`、迁移后备份 `fiscal-20260823T143538Z.dump` 均已验证，服务 active、ready 且公网 liveness 200。
+- 当前 macOS 为 `/Applications/Fiscal.app` v1.5.5（32）；v1.5.3（29）回退包位于 `/Applications/Fiscal-v1.5.3-build29-backup-20260823-222919.app`。iOS Development IPA 位于 `build/release-v1.5.5-32/artifacts/`，由用户安装。
+- 最终发布记录、SHA-256、签名、生产部署和回滚边界见 `archive/releases/v1.5.5/RELEASE_STATE.md`；既有 `v1.5.5` 标签不移动，Build 32 使用不可变 `v1.5.5-build32`。

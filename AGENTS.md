@@ -26,3 +26,9 @@
 ## 时区
 
 - 业务日期用 `Asia/Shanghai`；CSV 导出文件名等对用户可见的日期也用东八区，别用默认 UTC 的 `ISO8601Format()`。
+
+## 发布与换包
+
+- “一条龙发布”按生产当前 revision 到目标 revision 的**累计差异**决定范围，不能只看最后一个快修提交是否改了 Backend。先读目标 `RELEASE_STATE.md` 的未执行项，并只读核对生产 revision、Alembic head、服务与备份状态。
+- 新前端依赖尚未上线的 API 或 migration 时，必须把后端 dry-run、迁移前备份、apply、迁移后备份、readiness/public smoke 与 App 换包作为同一发布链记录；不能把前端换包单独宣称为完整发布。
+- 既有版本标签不可移动；同营销版本追加构建号时使用独立不可变 build 标签（如 `v1.5.5-build32`）。

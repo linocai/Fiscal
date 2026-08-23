@@ -1,6 +1,58 @@
 # Fiscal v1.5.5 release state
 
-## v1.5.5 (Build 31)
+## v1.5.5 (Build 32) — current production release
+
+| Field | Released state |
+| --- | --- |
+| Scope | Repair ordinary-refresh recovery after an unknown AI-proposal deletion while retaining all Build 31 deletion and provider-failure capabilities |
+| Source revision | `5bf795625673209cfa3b5d7d1f35a7dd9ca8eb01` (`fix(ai): recover unknown deletion on refresh`) |
+| Backend | Production active at the source revision; Alembic upgraded `20260816_0035` → `20260823_0036` |
+| App tests | `FiscalKitTests`: 410 passed / 41 suites / 0 failed; focused F3-F: 34 passed; iOS unknown-delete refresh UI: 1 passed |
+| App builds | Signed macOS universal Release and iOS arm64 device Release built from the clean source revision |
+| Git | Source revision pushed to `origin/main`; existing `v1.5.5` remains immutable; Build 32 uses `v1.5.5-build32` |
+| macOS signing | Developer ID Application: ZheYuan Cai (HX73DFL88G); hardened runtime and secure timestamp enabled; no notarization |
+| macOS install | `/Applications/Fiscal.app` replaced, strictly verified and launched as `1.5.5 (32)` |
+| iOS delivery | Development-signed arm64 IPA prepared for operator installation; no TestFlight upload or installation |
+
+### Build 32 fix and invariants
+
+- Ordinary refresh captures an active direct-mutation owner before list loading and resolves the owner through a fresh GET instead of allowing a new list response to orphan its lock.
+- A fresh 404 confirms deletion and unlocks; an existing proposal restores that proposal and its recovery surface; a failed fresh read retains the owner, lock and retry entry.
+- All three paths issue exactly one DELETE. Refresh and recovery never replay the mutation.
+- macOS and iOS use the same corrected model. The existing selection-isolation and D3 safety gates remain covered and passing.
+
+### Verification and production deployment
+
+- Focused F3-F passed 34/34; full `FiscalKitTests` passed 410/410 in 41 suites; the iOS user path for delete → unknown → ordinary refresh passed 1/1.
+- Both signed source apps and their extracted delivery packages passed `codesign --verify --deep --strict`; source/extracted executable hashes match exactly.
+- Both apps report `1.5.5 (32)` and target `https://fiscal.linotsai.top`. macOS is universal `x86_64 arm64`; iOS is `arm64` with provisioning profile `c2ca777b-b04b-484e-826e-eef28085a121`, valid through 2027-07-21.
+- Production was re-anchored read-only at revision `3a584da74a41e0d0e05335f923bbb44021795918`, Alembic `20260816_0035`, active/ready, before apply.
+- The committed Build 32 source passed production Ruff format/check, Pyright (0 errors/warnings), and the database-independent release suite (149 passed, 244 PostgreSQL-gated skipped).
+- Deployment created and verified pre-migration backup `fiscal-20260823T143536Z.dump`, upgraded to `20260823_0036`, then created and verified current-head backup `fiscal-20260823T143538Z.dump`.
+- `/opt/fiscal/current` now resolves to `/opt/fiscal/releases/5bf795625673`; service is active, local readiness is ready/database ready, and public liveness returned HTTP 200. An unauthenticated DELETE probe returned 401, confirming the protected route without accessing or mutating production data.
+
+### Build 32 artifacts
+
+Directory: `build/release-v1.5.5-32/artifacts/`
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `Fiscal-macOS-v1.5.5-build32.zip` | `e4b1cd4904ae53218f84b118bd078ef2ae47d97b8e0670b7e9aa306421c16d37` |
+| `Fiscal-macOS-v1.5.5-build32-dSYM.zip` | `4211e9760b470eef9dec1f4955b9353383b4eb5d7f5e4b5101dfc050917bdc96` |
+| `Fiscal-iOS-v1.5.5-build32-development.ipa` | `508124b519a6a525d0392dd9eed522d04fc068f34223d664d3a4af1768ffb881` |
+| `Fiscal-iOS-v1.5.5-build32-dSYM.zip` | `adc17febf09c01900e8f9a8c56c1e925077b76d68ebcda318ed4b831d4d1cbbc` |
+| `RELEASE.txt` | `ea9a152737524276c460e65ad890ba7d732b7e6d4a6df544b35c11babdd1f6c5` |
+
+`SHA256SUMS` covers all five files and passed full verification. The macOS signed-source/extracted executable hash is `cc00009f04f64af644c5a7dd918a3dc16da6255ae4ba765ada953e601d9206bc`; the iOS hash is `2665ca9e4a7b2a4d99879afb7dc67af31e25ae9ae73d8e80a8363fd45dd8e0b7`.
+
+### Installation and rollback
+
+- Current macOS app: `/Applications/Fiscal.app`, `1.5.5 (32)`, running after strict signature and executable-identity checks.
+- Immediate macOS fallback: `/Applications/Fiscal-v1.5.3-build29-backup-20260823-222919.app`, verified as `1.5.3 (29)`.
+- Backend application rollback target is the prior release `3a584da74a41`; because Build 32 moved the schema to `0036`, do not use ordinary application-only rollback to the `0035` release. Follow the runbook and restore the verified pre-migration dump into a new database if a schema rollback is required; never run a blind Alembic downgrade.
+- iOS installation remains the operator's action. No App Store/TestFlight upload and no Apple notarization were performed.
+
+## Historical preparation: v1.5.5 (Build 31)
 
 | Field | Prepared state |
 | --- | --- |
