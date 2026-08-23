@@ -1,5 +1,47 @@
 # Fiscal v1.5.2 release state
 
+## v1.5.2 (Build 28)
+
+| Field | Current state |
+| --- | --- |
+| Scope | macOS monthly-ledger scope hotfix: the main ledger defaults to all transactions while uncategorized remains an independent filter |
+| Source revision | `bf12f8a5e1c32fc33e10a7940b5162ce5aaf0ae0` (`fix(frontend): restore macOS monthly ledger scope`) |
+| Audit | Month selection, Shanghai month bounds, account/lens reset and history segmentation are recorded in `archive/audits/v1.5.2-build28-macos-ledger-scope-quickfix-2026-08-23.md` |
+| Backend | Unchanged; no schema, migration, service or production deployment change |
+| Tests | `FiscalKitTests`: 396 passed / 41 suites / 0 failed; targeted monthly-ledger regression: 5 passed / 0 failed |
+| App builds | Final macOS universal Release and iOS arm64 device Release built with signing from the clean source revision |
+| Git | Source and release-record commits are pushed to `origin/main`; immutable annotated tag `v1.5.2-build28` identifies this build without moving the existing `v1.5.2` Build 26 tag |
+| macOS signing | Complete with `Developer ID Application: ZheYuan Cai (HX73DFL88G)`; hardened runtime and secure timestamp enabled; no notarization |
+| macOS install | `/Applications/Fiscal.app` replaced with v1.5.2 (28), strictly verified, byte-hash matched to the signed source app and successfully launched |
+| iOS / TestFlight | Development-signed arm64 IPA produced for operator installation; no TestFlight upload |
+
+### Build 28 artifacts
+
+Directory: `build/release-v1.5.2-28/artifacts/`
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `Fiscal-macOS-v1.5.2-build28.zip` | `f40bfff751d98f5e5e02b3a26fab89929de68e3991d43ab912074ab09ccb8336` |
+| `Fiscal-macOS-v1.5.2-build28-dSYM.zip` | `7ce4a53f2edd7d83571ec40f1fcf3f8a0bb0ef69335f1bc1d6584680396f2d50` |
+| `Fiscal-iOS-v1.5.2-build28-development.ipa` | `bf6f40dbd5c484f33be7ee9215e43bf6c61d40999cb9dfa68c2d541d9b953c01` |
+| `Fiscal-iOS-v1.5.2-build28-dSYM.zip` | `179f80941d6ffc71beb3878aa42d72bb4d2920f357c55da9cd6df6f6238f820e` |
+| `RELEASE.txt` | `92ea703ad944676ae208acdd4ae01fc6f752b18aa7cb8e0837e76d01c4ee1136` |
+
+`SHA256SUMS` covers all five files and passed full verification. Both packaged apps passed strict deep signature verification after extraction. The macOS executable in `/Applications/Fiscal.app` has SHA-256 `95c07f09ecdb8e0ce2f6efbfed0f3735202af9ca8efd76bc31b66dabab67c6c6`, identical to the signed build source and the extracted archive.
+
+### Build 28 deployment and recovery
+
+- Installed application: `/Applications/Fiscal.app`, v1.5.2 (28), launched as PID-confirmed `/Applications/Fiscal.app/Contents/MacOS/Fiscal`.
+- Recoverable previous application: `/Applications/Fiscal-v1.5.2-build27-backup-20260823-1446.app`.
+- iOS provisioning: `iOS Team Provisioning Profile: *`, UUID `c2ca777b-b04b-484e-826e-eef28085a121`, valid through 2027-07-21; device installation is left to the operator.
+- Both apps use `https://fiscal.linotsai.top` and report `1.5.2 (28)`.
+
+### Build 28 deliberately not performed
+
+- No Apple notarization, App Store upload or TestFlight upload.
+- No iOS device installation; installation is operator-managed.
+- No Backend/schema/migration or production-service change.
+
 ## v1.5.2 (Build 27)
 
 | Field | Current state |

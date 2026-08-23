@@ -1,13 +1,13 @@
 # Fiscal · PROJECT_PLAN
 
-> 目标版本：v1.5.2（28）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**HOTFIX · Build 28 源码与门禁完成，待发布授权**
+> 目标版本：v1.5.2（28）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**RELEASE · Build 28 已签名、换包并发布**
 
 ## 1. 当前目标与授权
 
 - 基线为 `main` / tag `v1.5.1` / commit `2f47d4e`，向前修复，不回退 v1.5.1 已完成的业务安全能力。
 - v1.5.2 是一次以独立审计为输入的**双端前端设计验收修复**：macOS 与 iPhone 必须忠实落实 `Fiscal 前端设计启动/`，解决 `F151-01` 至 `F151-17`。
 - 用户已追加授权 v1.5.2（27）执行 commit、push、签名发布、macOS 换包安装与 Build 27 标签；iOS 安装由用户执行。
-- 用户已授权 v1.5.2（28）立即修复 macOS 月份流水范围并增加一个 Build；本批尚未授权自动 commit、tag、push、签名、安装或发布。
+- 用户已授权 v1.5.2（28）立即修复 macOS 月份流水范围、增加一个 Build，并执行 commit、tag、push、双端签名发布与 macOS 换包；iOS 安装由用户执行。
 - 当前授权不包含：Backend/schema/migration 变更、生产部署、Apple 公证或 TestFlight。
 
 ## 2. 权威与审计输入
@@ -115,7 +115,7 @@
 - 增加“该月有分类流水、未分类为 0”的查询夹具回归，证明主流水不会被未分类计数错误清空。
 - 完整记录见 `archive/audits/v1.5.2-build28-macos-ledger-scope-quickfix-2026-08-23.md`。
 
-完成门：定向回归 5/5；`FiscalKitTests` 396/396（41 suites）；iOS/macOS App target 全部构建通过；双端产物均核验为 `1.5.2 (28)`；`git diff --check` 通过。
+完成门：定向回归 5/5；`FiscalKitTests` 396/396（41 suites）；iOS/macOS App target 与最终签名 Release 全部构建通过；双端成品均核验为 `1.5.2 (28)`，解包后严格验签及 SHA-256 校验通过；macOS 已备份 Build 27、换包并成功启动。
 
 ## 6. 验收矩阵
 
@@ -154,4 +154,6 @@
 - 用户语言快修已在 v1.5.2（27）源码完成并通过双端签名构建与 393 项测试；源码提交 `8a25baa` 已推送至 `origin/main`。
 - Build 27 的 macOS Developer ID 包与 iOS Development IPA 均已严格验签；macOS 已备份 Build 26、换包为 Build 27 并成功启动，iOS 安装继续由用户执行。
 - 产物、SHA-256、回滚备份、标签与最终 Git 状态见 `archive/releases/v1.5.2/RELEASE_STATE.md`。
-- Build 28 的月份流水范围快修源码与全部工程门禁已完成；当前停在待发布授权，不改写 Build 27 的既有发布记录。
+- Build 28 的月份流水范围快修源码已提交并推送；双端签名成品、哈希、回滚备份与本地安装证据已写入 `archive/releases/v1.5.2/RELEASE_STATE.md`。
+- macOS 已运行 v1.5.2（28），原 Build 27 保留在 `/Applications/Fiscal-v1.5.2-build27-backup-20260823-1446.app`；iOS Development IPA 由用户安装。
+- 不移动既有 `v1.5.2`（Build 26）标签；Build 28 使用独立不可变标签 `v1.5.2-build28`。
