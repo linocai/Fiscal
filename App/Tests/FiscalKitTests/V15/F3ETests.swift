@@ -347,6 +347,27 @@ struct F3ETests {
         #expect(model.diagnosis.map { ShanghaiBusinessDate.string(for: $0.asOf) } == "2026-08-15")
     }
 
+    @MainActor @Test("target changes clear target-owned draft and expose only provably related attention")
+    func targetOwnedDraftAndAttention() async throws {
+        let model = await loadedModel()
+        #expect(model.selectedTarget?.resourceID == V15F3EFixtures.accountA)
+        #expect(model.contextualAttention.map(\.sourceID) == [V15F3EFixtures.openCheckpoint])
+        #expect(!model.contextualAttention.contains { $0.sourceID == V15F3EFixtures.overdueID || $0.sourceID == V15F3EFixtures.statementID })
+
+        model.actualBalanceText = "123.45"
+        model.note = "只属于日常账户"
+        model.advanceEditor()
+        let accountB = try #require(model.accountTargets.first { $0.resourceID == V15F3EFixtures.accountB })
+        await model.selectTarget(accountB)
+
+        #expect(model.selectedTarget?.resourceID == V15F3EFixtures.accountB)
+        #expect(model.actualBalanceText.isEmpty)
+        #expect(model.note.isEmpty)
+        #expect(model.editorStep == 1)
+        #expect(model.contextualAttention.map(\.sourceID) == [V15F3EFixtures.accountB])
+        #expect(model.contextualAttention.allSatisfy { $0.sourceType == "reconciliation_missing" })
+    }
+
     @MainActor @Test("today diagnosis guard owns the date input instead of comparing two moving clock instants")
     func movingClockTodayDiagnosis() async {
         let clock = F3ETickingClock(base: fixedNow)

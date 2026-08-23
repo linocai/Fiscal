@@ -19,6 +19,13 @@ import XCTest
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
     }
 
+    @discardableResult private func revealLabel(containing text: String, swipes: Int = 6) -> XCUIElement {
+        let value = labelledElement(containing: text)
+        for _ in 0..<swipes where !value.exists { app.swipeUp() }
+        XCTAssertTrue(value.waitForExistence(timeout: 6), "missing label containing \(text)")
+        return value
+    }
+
     @discardableResult private func reveal(_ id: String, swipes: Int = 12, down: Bool = false) -> XCUIElement {
         let value = element(id)
         for _ in 0..<swipes {
@@ -83,10 +90,10 @@ import XCTest
         XCTAssertTrue(reveal("v15.f3e.checkpoint.00000000-0000-0000-0000-00000000E321").waitForExistence(timeout: 6))
         let disabled = revealButton("v15.f3e.attention.ignore.statement_import_failed:00000000-0000-0000-0000-00000000E342", enabled: false)
         XCTAssertFalse(disabled.isEnabled)
-        XCTAssertTrue(labelledElement(containing: "Statement import attention cannot be ignored").exists)
+        revealLabel(containing: "Statement import attention cannot be ignored")
         let unknown = revealButton("v15.f3e.attention.ignore.future_attention:00000000-0000-0000-0000-00000000E343", enabled: false)
         XCTAssertFalse(unknown.isEnabled)
-        XCTAssertTrue(labelledElement(containing: "服务端没有提供可安全忽略此事项的能力。").exists)
+        revealLabel(containing: "此事项目前不能安全忽略。")
         attach("f3e-ios-facts-and-backend-actions")
 
         revealButton("v15.f3e.kind.cycle", down: true).tap()
@@ -111,6 +118,19 @@ import XCTest
         revealButton("v15.f3e.editor.done").tap()
         XCTAssertTrue(element("v15.f3e.editor").waitForNonExistence(timeout: 8))
         XCTAssertTrue(reveal("v15.f3e.checkpoint.00000000-0000-0000-0000-00000000E323", down: true).waitForExistence(timeout: 8))
+    }
+
+    func testLongDiagnosisKeepsStepTwoInputAndNextActionReachable() {
+        launch("reconciliation-long")
+        revealButton("v15.f3e.editor.open").tap()
+        revealButton("v15.f3e.editor.next", enabled: true).tap()
+        XCTAssertTrue(element("v15.f3e.editor.step2").waitForExistence(timeout: 6))
+        let amount = app.textFields["v15.f3e.editor.amount"]
+        let next = app.buttons["v15.f3e.editor.next"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 6))
+        XCTAssertTrue(next.waitForExistence(timeout: 6))
+        XCTAssertTrue(amount.isHittable, "long diagnosis must not cover the actual-balance field")
+        XCTAssertTrue(next.isHittable, "long diagnosis must not push the next action below its evidence list")
     }
 
     func testFieldErrorsRemainInEditorAndKeylessUnknownOnlyReadsThenAbandons() {

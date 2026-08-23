@@ -134,6 +134,7 @@ public struct V15ReconciliationView: View {
                         if model.editorStep < 3 { V15ActionButton("下一步", kind: .primary, disabledReasons: model.advanceReasons) { model.advanceEditor() }.accessibilityIdentifier("v15.f3e.editor.next") }
                         else { V15ActionButton("保存核对记录", kind: .primary, disabledReasons: model.checkpointReasons) { Task { await model.createCheckpoint() } }.accessibilityIdentifier("v15.f3e.editor.submit") }
                     }
+                    if model.editorStep == 2 { diagnosisSurface }
                     if model.mutationPhase == .succeeded { V15ActionButton("完成", kind: .secondary) { showsEditor = false }.accessibilityIdentifier("v15.f3e.editor.done") }
                 }.padding(V15Spacing.md)
             }
@@ -156,7 +157,6 @@ public struct V15ReconciliationView: View {
                 V15Field("实际余额（元）", text: $model.actualBalanceText, prompt: "0.00", issues: model.checkpointIssues.filter { $0.fieldPath == "actual_balance_minor" }).accessibilityIdentifier("v15.f3e.editor.amount")
                 V15Field("核对日期", text: $model.asOfDateText, prompt: "YYYY-MM-DD", issues: model.checkpointIssues.filter { $0.fieldPath == "as_of" }).accessibilityIdentifier("v15.f3e.editor.as-of")
                 V15Field("备注", text: $model.note, prompt: "可选，最多500字", issues: model.checkpointIssues.filter { $0.fieldPath == "note" }, axis: .vertical).accessibilityIdentifier("v15.f3e.editor.note")
-                diagnosisSurface
             }.accessibilityIdentifier("v15.f3e.editor.step2")
         } else {
             V15Section("确认并保存") {

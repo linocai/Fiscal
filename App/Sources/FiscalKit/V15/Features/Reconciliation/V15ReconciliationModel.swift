@@ -103,6 +103,20 @@ public final class V15ReconciliationModel {
     public var offlineSnapshotAt: Date? { offlineSnapshotProvider?() }
     public var isOffline: Bool { offlineSnapshotAt != nil }
     public var visibleTargets: [V15ReconciliationTarget] { targetKind == .account ? accountTargets : cycleTargets }
+    public var contextualAttention: [V15AttentionItem] {
+        guard let target = selectedTarget else { return [] }
+        let checkpointIDs = Set(checkpoints.map(\.id))
+        return attention.filter { item in
+            switch item.sourceType {
+            case "reconciliation_missing":
+                return item.sourceID == target.resourceID
+            case "reconciliation_checkpoint":
+                return checkpointIDs.contains(item.sourceID)
+            default:
+                return false
+            }
+        }
+    }
     public var writeLocked: Bool { unknownAttempt != nil || acceptedRefreshGate != nil || mutationPhase == .loading }
     public var hasUnknownAttempt: Bool { activeUnknownAttempt != nil && mutationPhase == .unknown }
     public var hasFailedMutation: Bool { activeFailedIntent != nil && mutationPhase.isFailed }
@@ -229,7 +243,15 @@ public final class V15ReconciliationModel {
 
     public func selectTarget(_ target: V15ReconciliationTarget) async {
         guard targetChangeReasons.isEmpty, visibleTargets.contains(where: { $0.id == target.id }) else { return }
-        if selectedTarget?.id != target.id { invalidateFailedMutation(kind: .checkpoint) }
+        let targetChanged = selectedTarget?.id != target.id
+        if targetChanged {
+            invalidateFailedMutation(kind: .checkpoint)
+            applyingInput = true
+            actualBalanceText = ""
+            note = ""
+            asOfDateText = ShanghaiBusinessDate.string(for: now())
+            applyingInput = false
+        }
         selectionGeneration &+= 1; let owner = selectionGeneration
         selectedTarget = target; selectedCheckpoint = nil; diagnosis = nil; checkpoints = []
         detailPhase = .idle; checkpointPhase = .loading; diagnosisPhase = .loading
@@ -268,6 +290,13 @@ public final class V15ReconciliationModel {
         // Reopening the sheet for its owner must preserve unresolved recovery.
         if hasUnknownAttempt || hasFailedMutation { return }
         editorStep = 1; serverIssues = []; successMessage = nil; failedMutationIntent = nil
+        if case .conflict = mutationPhase {} else { mutationPhase = .idle }
+    }
+
+    public func beginInlineEditor() {
+        guard editorOpenReasons.isEmpty else { return }
+        if hasUnknownAttempt || hasFailedMutation { return }
+        editorStep = 2; serverIssues = []; successMessage = nil; failedMutationIntent = nil
         if case .conflict = mutationPhase {} else { mutationPhase = .idle }
     }
 

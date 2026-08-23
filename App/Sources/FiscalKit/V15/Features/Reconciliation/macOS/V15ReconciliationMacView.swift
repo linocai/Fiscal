@@ -14,18 +14,20 @@ public struct V15ReconciliationMacView: View {
             toolbar
             Divider()
             HStack(spacing: 0) {
-                targetSpine.frame(minWidth: 220, idealWidth: 250, maxWidth: 300)
+                checkpointWorkspace.frame(minWidth: 390, idealWidth: 440, maxWidth: 520)
                 Divider()
-                checkpointSpine.frame(minWidth: 300, idealWidth: 360, maxWidth: 440)
-                Divider()
-                inspector.frame(minWidth: 420, maxWidth: .infinity)
+                diagnosisWorkspace.frame(minWidth: 480, maxWidth: .infinity)
             }
         }
         .background(V15Palette.paper.color)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f3e.reconciliation.macos")
         .task {
-            if model.masterPhase == .idle { await model.load(); await prepareGalleryScenario() }
+            if model.masterPhase == .idle {
+                await model.load()
+                model.beginInlineEditor()
+                await prepareGalleryScenario()
+            }
         }
     }
 
@@ -41,96 +43,191 @@ public struct V15ReconciliationMacView: View {
         }.padding(.horizontal, V15Spacing.md).padding(.vertical, V15Spacing.sm)
     }
 
-    private var targetSpine: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                Text("核对目标").font(V15Typography.label)
-                Picker("范围", selection: Binding(get: { model.targetKind }, set: { value in Task { await model.setTargetKind(value) } })) {
-                    Text("账户").tag(V15ReconciliationTargetKind.account)
-                    Text("信用账期").tag(V15ReconciliationTargetKind.creditCycle)
-                }.pickerStyle(.segmented).disabled(!model.targetChangeReasons.isEmpty).accessibilityIdentifier("v15.f3e.mac.kind")
-                switch model.masterPhase {
-                case .idle, .loading: V15LoadingSkeleton()
-                case .empty: V15EmptyState(title: "暂无目标", explanation: "请先建立账户或信用账期。")
-                case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.refresh() } }
-                case .loaded:
-                    ForEach(model.visibleTargets) { target in
-                        Button { Task { await model.selectTarget(target) } } label: {
-                            HStack { Text(target.label).multilineTextAlignment(.leading); Spacer(); if model.selectedTarget?.id == target.id { Image(systemName: "checkmark") } }
-                                .padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading)
-                                .background(model.selectedTarget?.id == target.id ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
-                        }.buttonStyle(.plain).disabled(!model.targetChangeReasons.isEmpty).v15PlatformHitArea().accessibilityIdentifier("v15.f3e.mac.target.\(target.id)")
-                    }
+    private var checkpointWorkspace: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: V15Spacing.md) {
+                    targetSelector
+                    mutationSurface
+                    checkpointEditor
+                    if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot) }
                 }
-                if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot) }
-            }.padding(V15Spacing.md)
-        }.accessibilityElement(children: .contain).accessibilityIdentifier("v15.f3e.mac.target-spine")
+                .padding(V15Spacing.md)
+            }
+            .frame(maxHeight: .infinity)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: V15Spacing.md) {
+                    checkpointHistory
+                    contextualAttention
+                }
+                .padding(V15Spacing.md)
+            }
+            .frame(minHeight: 120, idealHeight: 150, maxHeight: 180)
+            .background(V15Palette.card.color.opacity(0.28))
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("v15.f3e.mac.checkpoint-workspace")
     }
 
-    private var checkpointSpine: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: V15Spacing.md) {
-                V15Section("核对记录", detail: model.selectedTarget?.label) {
-                    switch model.checkpointPhase {
-                    case .idle: V15EmptyState(title: "请选择目标", explanation: "查看对应的核对记录。")
-                    case .loading: V15LoadingSkeleton()
-                    case .empty: V15EmptyState(title: "暂无核对记录", explanation: "在右侧输入实际余额，保存第一条记录。").accessibilityIdentifier("v15.f3e.mac.checkpoints.empty")
-                    case .failed(let failure): V15ServiceErrorState(message: failure.message) { if let target = model.selectedTarget { Task { await model.selectTarget(target) } } }.accessibilityIdentifier("v15.f3e.mac.checkpoints.error")
-                    case .loaded:
-                        ForEach(model.checkpoints) { checkpoint in
-                            Button { Task { await model.selectCheckpoint(checkpoint) } } label: { checkpointRow(checkpoint) }
-                                .buttonStyle(.plain).v15PlatformHitArea().accessibilityIdentifier("v15.f3e.mac.checkpoint.\(checkpoint.id)")
-                        }
+    private var targetSelector: some View {
+        V15Section("核对目标") {
+            Picker("范围", selection: Binding(get: { model.targetKind }, set: { value in
+                Task { await model.setTargetKind(value); model.beginInlineEditor() }
+            })) {
+                Text("账户").tag(V15ReconciliationTargetKind.account)
+                Text("信用账期").tag(V15ReconciliationTargetKind.creditCycle)
+            }
+            .pickerStyle(.segmented)
+            .disabled(!model.targetChangeReasons.isEmpty)
+            .accessibilityIdentifier("v15.f3e.mac.kind")
+
+            switch model.masterPhase {
+            case .idle, .loading:
+                V15LoadingSkeleton()
+            case .empty:
+                V15EmptyState(title: "暂无目标", explanation: "请先建立账户或信用账期。")
+            case .failed(let failure):
+                V15ServiceErrorState(message: failure.message) { Task { await model.refresh() } }
+            case .loaded:
+                if model.visibleTargets.isEmpty {
+                    V15EmptyState(title: "此范围暂无目标", explanation: model.targetKind == .account ? "暂无有效账户。" : "暂无信用账期。")
+                } else {
+                    Picker("当前目标", selection: Binding(get: { model.selectedTarget?.id ?? "" }, set: { id in
+                        guard let target = model.visibleTargets.first(where: { $0.id == id }) else { return }
+                        Task { await model.selectTarget(target); model.beginInlineEditor() }
+                    })) {
+                        ForEach(model.visibleTargets) { target in Text(target.label).tag(target.id) }
                     }
+                    .pickerStyle(.menu)
+                    .disabled(!model.targetChangeReasons.isEmpty)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("v15.f3e.mac.target-picker")
                 }
-                V15Section("关注事项") {
+            }
+        }
+    }
+
+    private var checkpointEditor: some View {
+        V15Section("记录检查点", detail: model.asOfDateText) {
+            Text(model.selectedTarget?.label ?? "尚未选择目标").font(V15Typography.cardTitle)
+            checkpointComparison
+            HStack(alignment: .top, spacing: V15Spacing.sm) {
+                V15Field("实际余额（元）", text: $model.actualBalanceText, prompt: "0.00", issues: model.checkpointIssues.filter { $0.fieldPath == "actual_balance_minor" })
+                    .accessibilityIdentifier("v15.f3e.mac.amount")
+                V15Field("核对日期", text: $model.asOfDateText, prompt: "YYYY-MM-DD", issues: model.checkpointIssues.filter { $0.fieldPath == "as_of" })
+                    .frame(width: 150)
+                    .accessibilityIdentifier("v15.f3e.mac.as-of")
+            }
+            if model.editorStep == 1 {
+                V15ActionButton("开始核对", kind: .secondary, disabledReasons: model.editorOpenReasons, accessibilityIdentifier: "v15.f3e.mac.editor.next") { model.beginInlineEditor() }
+            } else if model.editorStep == 2 {
+                V15ActionButton("核对差异", kind: .secondary, disabledReasons: model.advanceReasons, accessibilityIdentifier: "v15.f3e.mac.editor.next") { model.advanceEditor() }
+            } else {
+                V15Field("备注", text: $model.note, prompt: "可选", issues: model.checkpointIssues.filter { $0.fieldPath == "note" }, axis: .vertical)
+                    .accessibilityIdentifier("v15.f3e.mac.note")
+                Text("确认后只保存这次观察，不会自动创建调整账目。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                V15ActionButton("保存核对记录", disabledReasons: model.checkpointReasons, accessibilityIdentifier: "v15.f3e.mac.submit") { Task { await model.createCheckpoint() } }
+            }
+            if !model.serverIssues.isEmpty { V15FieldIssues(issues: model.serverIssues).accessibilityIdentifier("v15.f3e.mac.remote-issues") }
+        }
+    }
+
+    @ViewBuilder private var checkpointComparison: some View {
+        HStack(alignment: .top, spacing: V15Spacing.xs) {
+            if let book = model.diagnosis?.bookBalanceMinor { reconciliationFact("账面", book) }
+            else { reconciliationUnavailableFact("账面", detail: model.diagnosisPhase == .loading ? "读取中" : "暂无") }
+            if let actual = CNYAmountParser.minorUnits(model.actualBalanceText) {
+                reconciliationFact("实际", actual)
+                if let book = model.diagnosis?.bookBalanceMinor { reconciliationFact("差异", actual - book, emphasized: actual != book) }
+                else { reconciliationUnavailableFact("差异", detail: "等待账面") }
+            } else {
+                reconciliationUnavailableFact("实际", detail: "等待输入")
+                reconciliationUnavailableFact("差异", detail: "等待输入")
+            }
+        }
+        .accessibilityIdentifier("v15.f3e.mac.editor.comparison")
+    }
+
+    private var checkpointHistory: some View {
+        V15Section("历史检查点", detail: model.selectedTarget?.label) {
+            switch model.checkpointPhase {
+            case .idle:
+                V15EmptyState(title: "请选择目标", explanation: "查看对应的核对记录。")
+            case .loading:
+                V15LoadingSkeleton()
+            case .empty:
+                V15EmptyState(title: "暂无核对记录", explanation: "输入实际余额后可保存第一条记录。")
+                    .accessibilityIdentifier("v15.f3e.mac.checkpoints.empty")
+            case .failed(let failure):
+                V15ServiceErrorState(message: failure.message) {
+                    if let target = model.selectedTarget { Task { await model.selectTarget(target); model.beginInlineEditor() } }
+                }
+                .accessibilityIdentifier("v15.f3e.mac.checkpoints.error")
+            case .loaded:
+                ForEach(model.checkpoints) { checkpoint in
+                    Button { Task { await model.selectCheckpoint(checkpoint) } } label: { checkpointRow(checkpoint) }
+                        .buttonStyle(.plain).v15PlatformHitArea().accessibilityIdentifier("v15.f3e.mac.checkpoint.\(checkpoint.id)")
+                }
+            }
+        }
+    }
+
+    private var contextualAttention: some View {
+        V15Section("当前目标提醒") {
+            switch model.attentionPhase {
+            case .idle, .loading:
+                V15LoadingSkeleton()
+            case .failed(let failure):
+                V15ServiceErrorState(message: failure.message) { Task { await model.refreshAttention() } }
+            case .empty:
+                contextualAttentionEmpty
+            case .loaded:
+                if model.contextualAttention.isEmpty {
+                    contextualAttentionEmpty
+                } else {
                     V15Field("忽略到（上海日期）", text: $model.ignoreUntilDateText, prompt: "YYYY-MM-DD")
-                    switch model.attentionPhase {
-                    case .idle, .loading: V15LoadingSkeleton()
-                    case .empty: V15EmptyState(title: "没有待处理事项", explanation: "当前没有需要你处理的核对问题。")
-                    case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.refreshAttention() } }
-                    case .loaded:
-                        ForEach(model.attention) { item in
-                            VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                                Text(item.explanation).font(V15Typography.body).fixedSize(horizontal: false, vertical: true)
-                                if let amount = item.amountMinor { V15MoneyText(minorUnits: amount, direction: .neutral) }
-                                V15ActionButton("暂时忽略", kind: .quiet, disabledReasons: model.ignoreReasons(for: item)) { Task { await model.ignore(item) } }
-                                    .accessibilityIdentifier("v15.f3e.mac.ignore.\(item.id)")
-                            }.padding(V15Spacing.sm).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                    ForEach(model.contextualAttention) { item in
+                        VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                            Text(item.explanation).font(V15Typography.body).fixedSize(horizontal: false, vertical: true)
+                            if let amount = item.amountMinor { V15MoneyText(minorUnits: amount, direction: .neutral) }
+                            V15ActionButton("暂时忽略", kind: .quiet, disabledReasons: model.ignoreReasons(for: item)) { Task { await model.ignore(item) } }
+                                .accessibilityIdentifier("v15.f3e.mac.ignore.\(item.id)")
                         }
+                        .padding(V15Spacing.sm)
+                        .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
                     }
                 }
-            }.padding(V15Spacing.md)
-        }.accessibilityElement(children: .contain).accessibilityIdentifier("v15.f3e.mac.checkpoint-spine")
+            }
+        }
     }
 
-    private var inspector: some View {
+    private var contextualAttentionEmpty: some View {
+        Text("当前目标没有需要处理的核对提醒。")
+            .font(V15Typography.secondary)
+            .foregroundStyle(V15Palette.ink.color.opacity(0.66))
+            .accessibilityIdentifier("v15.f3e.mac.attention.empty")
+    }
+
+    private var diagnosisWorkspace: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: V15Spacing.lg) {
-                mutationSurface
-                V15Section("核对结果", detail: model.asOfDateText) {
+                V15Section("诊断证据", detail: model.selectedTarget?.label) {
                     switch model.diagnosisPhase {
-                    case .idle: V15EmptyState(title: "等待目标", explanation: "选择目标后显示账面区间。")
-                    case .loading: V15LoadingSkeleton()
-                    case .empty: V15EmptyState(title: "日期无效", explanation: "请输入今天或更早日期。")
-                    case .failed(let failure): V15ServiceErrorState(message: failure.message) { if let target = model.selectedTarget { Task { await model.selectTarget(target) } } }.accessibilityIdentifier("v15.f3e.mac.diagnosis.error")
+                    case .idle:
+                        V15EmptyState(title: "等待目标", explanation: "选择目标后显示账面变化。")
+                    case .loading:
+                        V15LoadingSkeleton()
+                    case .empty:
+                        V15EmptyState(title: "日期无效", explanation: "请输入今天或更早日期。")
+                    case .failed(let failure):
+                        V15ServiceErrorState(message: failure.message) {
+                            if let target = model.selectedTarget { Task { await model.selectTarget(target); model.beginInlineEditor() } }
+                        }
+                        .accessibilityIdentifier("v15.f3e.mac.diagnosis.error")
                     case .loaded:
                         if let diagnosis = model.diagnosis { diagnosisView(diagnosis).accessibilityIdentifier("v15.f3e.mac.diagnosis") }
                     }
-                }
-                V15Section("保存核对记录") {
-                    Text(model.selectedTarget?.label ?? "尚未选择目标").font(V15Typography.cardTitle)
-                    V15Field("实际余额（元）", text: $model.actualBalanceText, prompt: "0.00", issues: model.checkpointIssues.filter { $0.fieldPath == "actual_balance_minor" }).accessibilityIdentifier("v15.f3e.mac.amount")
-                    V15Field("核对日期", text: $model.asOfDateText, prompt: "YYYY-MM-DD", issues: model.checkpointIssues.filter { $0.fieldPath == "as_of" }).accessibilityIdentifier("v15.f3e.mac.as-of")
-                    V15Field("备注", text: $model.note, prompt: "可选", issues: model.checkpointIssues.filter { $0.fieldPath == "note" }, axis: .vertical).accessibilityIdentifier("v15.f3e.mac.note")
-                    if model.editorStep < 3 {
-                        V15ActionButton(model.editorStep == 1 ? "确认目标" : "进入最终确认", kind: .secondary, disabledReasons: model.advanceReasons) { model.advanceEditor() }.accessibilityIdentifier("v15.f3e.mac.editor.next")
-                    } else {
-                        if let actual = CNYAmountParser.minorUnits(model.actualBalanceText) { reconciliationComparison(actual: actual) }
-                        Text("最终确认：保存核对记录，不会创建调整账目。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                        V15ActionButton("保存核对记录", disabledReasons: model.checkpointReasons) { Task { await model.createCheckpoint() } }.accessibilityIdentifier("v15.f3e.mac.submit")
-                    }
-                    if !model.serverIssues.isEmpty { V15FieldIssues(issues: model.serverIssues).accessibilityIdentifier("v15.f3e.mac.remote-issues") }
                 }
                 if let checkpoint = model.selectedCheckpoint {
                     V15Section("记录详情") {
@@ -138,10 +235,14 @@ public struct V15ReconciliationMacView: View {
                         HStack { Text("账面余额"); Spacer(); V15MoneyText(minorUnits: checkpoint.bookBalanceMinor, direction: .balance) }
                         HStack { Text("差额"); Spacer(); V15MoneyText(minorUnits: checkpoint.differenceMinor, direction: .neutral) }
                         Text(Self.timestamp(checkpoint.asOf)).font(V15Typography.secondary)
-                    }.accessibilityIdentifier("v15.f3e.mac.checkpoint-detail")
+                    }
+                    .accessibilityIdentifier("v15.f3e.mac.checkpoint-detail")
                 }
-            }.padding(V15Spacing.md)
-        }.accessibilityElement(children: .contain).accessibilityIdentifier("v15.f3e.mac.inspector")
+            }
+            .padding(V15Spacing.md)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("v15.f3e.mac.diagnosis-workspace")
     }
 
     @ViewBuilder private var mutationSurface: some View {
@@ -201,13 +302,6 @@ public struct V15ReconciliationMacView: View {
         }.padding(V15Spacing.md).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
     }
 
-    private func reconciliationComparison(actual: V15MinorUnits) -> some View {
-        HStack(alignment: .top, spacing: V15Spacing.sm) {
-            reconciliationFact("观察", actual)
-            if let book = model.diagnosis?.bookBalanceMinor { reconciliationFact("账面", book); reconciliationFact("差额", actual - book, emphasized: actual != book) }
-            else { reconciliationUnavailableFact("账面", detail: "读取中"); reconciliationUnavailableFact("差额", detail: "等待账面") }
-        }.accessibilityIdentifier("v15.f3e.mac.editor.comparison")
-    }
     private func reconciliationFact(_ title: String, _ value: V15MinorUnits, emphasized: Bool = false) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); V15MoneyText(minorUnits: value, direction: .neutral, font: V15Typography.body.weight(.semibold)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(emphasized ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
     private func reconciliationUnavailableFact(_ title: String, detail: String) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label); Text("—").font(V15Typography.body.weight(.semibold)); Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
     private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral).text }

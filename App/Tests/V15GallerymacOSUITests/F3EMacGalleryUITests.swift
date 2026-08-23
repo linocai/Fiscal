@@ -3,13 +3,18 @@ import XCTest
 @MainActor final class F3EMacGalleryUITests: XCTestCase {
     private func element(_ app: XCUIApplication, _ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
 
-    func testAccountCycleSpinesDifferenceInspectorAndEditorAreReachable() {
-        let app = launchGalleryMac(["--v15-f3e-route", "reconciliation"])
+    func testLongDiagnosisKeepsTargetAmountAndPrimaryActionReachable() {
+        let app = launchGalleryMac(["--v15-f3e-route", "reconciliation-long"])
         XCTAssertTrue(element(app, "v15.f3e.reconciliation.macos").waitForExistence(timeout: 10))
-        XCTAssertTrue(element(app, "v15.f3e.mac.target-spine").waitForExistence(timeout: 5))
-        XCTAssertTrue(element(app, "v15.f3e.mac.checkpoint-spine").waitForExistence(timeout: 5))
-        XCTAssertTrue(element(app, "v15.f3e.mac.inspector").waitForExistence(timeout: 5))
+        XCTAssertTrue(element(app, "v15.f3e.mac.checkpoint-workspace").waitForExistence(timeout: 5))
+        XCTAssertTrue(element(app, "v15.f3e.mac.diagnosis-workspace").waitForExistence(timeout: 5))
         XCTAssertTrue(element(app, "v15.f3e.mac.diagnosis").waitForExistence(timeout: 8))
+        let amount = app.textFields["实际余额（元）"]
+        let next = app.buttons["v15.f3e.mac.editor.next"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
+        XCTAssertTrue(amount.isHittable, "long diagnosis must not push the amount field out of the checkpoint workspace")
+        XCTAssertTrue(next.isHittable, "long diagnosis must not push the primary action out of the checkpoint workspace")
         app.terminate()
     }
 
@@ -19,7 +24,7 @@ import XCTest
             ("reconciliation-conflict", "v15.f3e.mac.conflict"),
             ("reconciliation-partial-refresh", "v15.f3e.mac.fact-refresh"),
             ("reconciliation-mutation-error", "v15.f3e.mac.mutation.error"),
-            ("reconciliation-attention-disabled", "v15.f3e.mac.ignore.statement_import_failed:00000000-0000-0000-0000-00000000E342")
+            ("reconciliation-attention-disabled", "v15.f3e.mac.attention.empty")
         ] {
             let app = launchGalleryMac(["--v15-f3e-route", route])
             XCTAssertTrue(element(app, "v15.f3e.reconciliation.macos").waitForExistence(timeout: 10))

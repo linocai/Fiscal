@@ -56,11 +56,16 @@ public enum V15F3EFixtures {
         return "[\(checkpoint(id: openCheckpoint, kind: "credit_cycle", account: nil, cycle: targetID, actual: 330000, book: 328800, state: "open"))]"
     }
 
-    static func diagnosis(kind: String, targetID: UUID, asOf: String) -> String {
+    static func diagnosis(kind: String, targetID: UUID, asOf: String, entryCount: Int = 1) -> String {
         let account = kind == "account" ? "\"\(targetID)\"" : "null"
         let cycle = kind == "credit_cycle" ? "\"\(targetID)\"" : "null"
         let book: Int64 = targetID == accountB ? 800000 : targetID == cycleA || targetID == cycleB ? 328800 : 98450
-        return "{\"target_kind\":\"\(kind)\",\"account_id\":\(account),\"credit_cycle_id\":\(cycle),\"as_of\":\"\(asOf)\",\"from_as_of\":\"2026-08-01T08:00:00Z\",\"opening_balance_minor\":100000,\"book_balance_minor\":\(book),\"actual_balance_minor\":100000,\"difference_minor\":\(100000 - book),\"entries\":[{\"transaction_id\":\"\(transactionID)\",\"occurred_at\":\"2026-08-12T04:00:00Z\",\"title\":\"离线合成账目\",\"amount_minor\":1550,\"account_impact_minor\":-1550}]}"
+        let entries = (1 ... max(1, entryCount)).map { index in
+            let id = String(format: "00000000-0000-0000-0000-00000000E3%02X", 0x30 + index)
+            let impact: Int64 = index == 1 ? -1_550 : -1_000 - Int64(index)
+            return "{\"transaction_id\":\"\(id)\",\"occurred_at\":\"2026-08-12T04:00:00Z\",\"title\":\"合成长列表账目 \(index)\",\"amount_minor\":\(-impact),\"account_impact_minor\":\(impact)}"
+        }.joined(separator: ",")
+        return "{\"target_kind\":\"\(kind)\",\"account_id\":\(account),\"credit_cycle_id\":\(cycle),\"as_of\":\"\(asOf)\",\"from_as_of\":\"2026-08-01T08:00:00Z\",\"opening_balance_minor\":100000,\"book_balance_minor\":\(book),\"actual_balance_minor\":100000,\"difference_minor\":\(100000 - book),\"entries\":[\(entries)]}"
     }
 
     static func attention(includeUnknown: Bool = true, ignored: Set<String> = [], disabledOnly: Bool = false) -> String {
@@ -151,7 +156,7 @@ actor F3ETransport: V15Transporting {
             if mode == .selectionRace && id == V15F3EFixtures.accountA { try await Task.sleep(for: .milliseconds(160)) }
             if mode == .conflict { throw V15Failure(kind: .conflict, code: "revision_conflict", message: "对账事实已变化。", conflict: .init(reloadPath: "/api/v1/reconciliation/diagnosis", latestRevision: 9, message: "对账事实已变化。")) }
             let asOf = request.query.first(where: { $0.name == "as_of" })?.value ?? "2026-08-16T08:00:00Z"
-            return try decode(V15F3EFixtures.diagnosis(kind: kind, targetID: id, asOf: asOf))
+            return try decode(V15F3EFixtures.diagnosis(kind: kind, targetID: id, asOf: asOf, entryCount: mode == .long ? 24 : 1))
         case ("reconciliation/attention", "GET"):
             return try decode(V15F3EFixtures.attention(includeUnknown: mode == .long || mode == .normal, ignored: ignored, disabledOnly: mode == .attentionDisabled))
         case ("reconciliation/checkpoints", "POST"):
