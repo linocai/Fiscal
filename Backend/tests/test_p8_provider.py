@@ -6,6 +6,7 @@ from uuid import UUID
 import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
+from structlog.testing import capture_logs
 
 from fiscal_api.api.p8_schemas import AICandidate, AIParseRequest
 from fiscal_api.core.config import Settings
@@ -127,24 +128,57 @@ async def test_bigmodel_payload_disables_default_thinking_for_json_extraction() 
     assert result.amount_minor == 2_000
 
 
-@pytest.mark.parametrize("status", [429, 500, 503])
-async def test_provider_maps_upstream_failure_without_leaking_body(status: int) -> None:
+@pytest.mark.parametrize(
+    ("status", "expected_code"),
+    [
+        (429, "ai_provider_rate_limited"),
+        (500, "ai_provider_upstream_failure"),
+        (503, "ai_provider_upstream_failure"),
+        (401, "ai_provider_configuration_rejected"),
+    ],
+)
+async def test_provider_classifies_upstream_failure_without_leaking_body(
+    status: int, expected_code: str
+) -> None:
     async def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(status, text=f"upstream body {SECRET}")
 
-    with pytest.raises(APIError) as caught:
-        await provider(httpx.MockTransport(handler)).parse(parse_request())
-    assert caught.value.code == "ai_provider_unavailable"
+    with capture_logs() as logs, pytest.raises(APIError) as caught:
+        await provider(httpx.MockTransport(handler)).parse(parse_request("private input"))
+    assert caught.value.code == expected_code
     assert SECRET not in caught.value.message
+    encoded_logs = json.dumps(logs, ensure_ascii=False)
+    assert logs[-1]["event"] == "ai_provider_request_failed"
+    assert logs[-1]["provider_host"] == "provider.example"
+    assert logs[-1]["upstream_status_code"] == status
+    assert logs[-1]["failure_kind"] == expected_code
+    assert SECRET not in encoded_logs
+    assert "upstream body" not in encoded_logs
+    assert "private input" not in encoded_logs
 
 
 async def test_provider_maps_timeout_and_preserves_task_cancellation() -> None:
     async def timeout(_request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("secret upstream timeout")
 
-    with pytest.raises(APIError) as caught:
-        await provider(httpx.MockTransport(timeout)).parse(parse_request())
-    assert caught.value.code == "ai_provider_unavailable"
+    with capture_logs() as timeout_logs, pytest.raises(APIError) as caught:
+        await provider(httpx.MockTransport(timeout)).parse(parse_request("timeout private input"))
+    assert caught.value.code == "ai_provider_timeout"
+    assert timeout_logs[-1]["failure_kind"] == "ai_provider_timeout"
+    assert "timeout private input" not in json.dumps(timeout_logs, ensure_ascii=False)
+
+    async def connection_failed(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("secret DNS or TLS detail")
+
+    with capture_logs() as connection_logs, pytest.raises(APIError) as connection:
+        await provider(httpx.MockTransport(connection_failed)).parse(
+            parse_request("connection private input")
+        )
+    assert connection.value.code == "ai_provider_connection_failed"
+    assert connection_logs[-1]["failure_kind"] == "ai_provider_connection_failed"
+    encoded_connection_logs = json.dumps(connection_logs, ensure_ascii=False)
+    assert "secret DNS or TLS detail" not in encoded_connection_logs
+    assert "connection private input" not in encoded_connection_logs
 
     async def cancelled(_request: httpx.Request) -> httpx.Response:
         raise asyncio.CancelledError

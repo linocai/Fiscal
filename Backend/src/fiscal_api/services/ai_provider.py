@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import json
-from typing import Protocol
+from time import perf_counter
+from typing import NoReturn, Protocol
 from urllib.parse import urlparse
 
 import httpx
+import structlog
 from pydantic import ValidationError
 
 from fiscal_api.api.p8_schemas import AIParseRequest, AIProviderResult
 from fiscal_api.core.config import Settings
 from fiscal_api.core.errors import APIError
+
+logger = structlog.get_logger()
 
 
 class AIProvider(Protocol):
@@ -66,6 +70,7 @@ class OpenAICompatibleProvider:
     async def parse(self, request: AIParseRequest) -> AIProviderResult:
         payload = self._payload(request)
         headers = {"Authorization": f"Bearer {self.api_key}"}
+        started = perf_counter()
         try:
             async with httpx.AsyncClient(
                 timeout=self.timeout_seconds,
@@ -82,34 +87,64 @@ class OpenAICompatibleProvider:
                     stream=True,
                 )
                 try:
-                    if upstream.status_code == 429 or upstream.status_code >= 500:
-                        raise provider_error(
-                            "ai_provider_unavailable", "AI 服务暂时不可用。请稍后重试", 503
+                    if upstream.status_code == 429:
+                        await self._raise_failure(
+                            code="ai_provider_rate_limited",
+                            message="AI 服务请求较多。请稍后重试。",
+                            started=started,
+                            upstream_status_code=upstream.status_code,
+                        )
+                    if upstream.status_code >= 500:
+                        await self._raise_failure(
+                            code="ai_provider_upstream_failure",
+                            message="AI 服务端暂时异常。请稍后重试。",
+                            started=started,
+                            upstream_status_code=upstream.status_code,
                         )
                     if upstream.status_code >= 400:
-                        raise provider_error(
-                            "ai_provider_unavailable", "AI 服务暂时不可用。请检查服务配置", 503
+                        await self._raise_failure(
+                            code="ai_provider_configuration_rejected",
+                            message="AI 服务拒绝了请求。请检查 AI 配置。",
+                            started=started,
+                            upstream_status_code=upstream.status_code,
                         )
                     content_length = upstream.headers.get("Content-Length")
                     if content_length is not None:
                         try:
                             if int(content_length) > self.max_response_bytes:
-                                raise self._invalid_response()
+                                await self._raise_invalid_response(
+                                    started=started,
+                                    upstream_status_code=upstream.status_code,
+                                )
                         except ValueError:
-                            raise self._invalid_response() from None
+                            await self._raise_invalid_response(
+                                started=started,
+                                upstream_status_code=upstream.status_code,
+                            )
                     body = bytearray()
                     async for chunk in upstream.aiter_bytes():
                         body.extend(chunk)
                         if len(body) > self.max_response_bytes:
-                            raise self._invalid_response()
+                            await self._raise_invalid_response(
+                                started=started,
+                                upstream_status_code=upstream.status_code,
+                            )
                 finally:
                     await upstream.aclose()
         except APIError:
             raise
+        except httpx.TimeoutException:
+            await self._raise_failure(
+                code="ai_provider_timeout",
+                message="AI 响应超时。请稍后重试。",
+                started=started,
+            )
         except httpx.RequestError:
-            raise provider_error(
-                "ai_provider_unavailable", "AI 服务暂时不可用。请稍后重试", 503
-            ) from None
+            await self._raise_failure(
+                code="ai_provider_connection_failed",
+                message="无法连接 AI 服务。请检查网络后重试。",
+                started=started,
+            )
         try:
             envelope = json.loads(body)
             raw = envelope["choices"][0]["message"]["content"]
@@ -125,11 +160,37 @@ class OpenAICompatibleProvider:
             json.JSONDecodeError,
             ValidationError,
         ):
-            raise self._invalid_response() from None
+            await self._raise_invalid_response(started=started, upstream_status_code=200)
 
-    @staticmethod
-    def _invalid_response() -> APIError:
-        return provider_error("ai_provider_invalid_response", "AI 返回了无法识别的结果", 422)
+    async def _raise_invalid_response(
+        self, *, started: float, upstream_status_code: int
+    ) -> NoReturn:
+        await self._raise_failure(
+            code="ai_provider_invalid_response",
+            message="AI 返回了无法识别的结果",
+            started=started,
+            upstream_status_code=upstream_status_code,
+            status_code=422,
+        )
+
+    async def _raise_failure(
+        self,
+        *,
+        code: str,
+        message: str,
+        started: float,
+        upstream_status_code: int | None = None,
+        status_code: int = 503,
+    ) -> NoReturn:
+        await logger.awarning(
+            "ai_provider_request_failed",
+            provider_host=(urlparse(self.base_url).hostname or "unknown").lower(),
+            provider_model=self.model_id,
+            failure_kind=code,
+            upstream_status_code=upstream_status_code,
+            duration_ms=round((perf_counter() - started) * 1_000, 2),
+        )
+        raise provider_error(code, message, status_code)
 
     def _payload(self, request: AIParseRequest) -> dict[str, object]:
         data = request.model_dump(mode="json")

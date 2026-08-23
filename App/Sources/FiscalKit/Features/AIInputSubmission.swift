@@ -96,6 +96,9 @@ public actor AIInputSubmissionService {
     case .domain(_, let detail):
       return [
         "ai_provider_not_configured", "ai_provider_unavailable",
+        "ai_provider_rate_limited", "ai_provider_upstream_failure",
+        "ai_provider_timeout", "ai_provider_connection_failed",
+        "ai_provider_configuration_rejected",
         "ai_provider_invalid_response", "ai_processing_cancelled",
       ].contains(detail.code)
     case .unauthorized: return false

@@ -205,6 +205,9 @@ class AIRepository:
     def add_quality_event(self, event: AIQualityEvent) -> None:
         self.session.add(event)
 
+    async def delete_proposal(self, proposal: AIProposal) -> None:
+        await self.session.delete(proposal)
+
     def add_policy(self, policy: AIExecutionPolicy) -> None:
         self.session.add(policy)
 

@@ -1,10 +1,12 @@
 # Fiscal · PROJECT_PLAN
 
-> 目标版本：v1.5.4（30）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**BUILD COMPLETE · 等待复审**
+> 目标版本：v1.5.5（31）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**BUILD COMPLETE · RELEASE PREP 进行中**
 
 ## 1. 当前目标与授权
 
-- 当前基线为 `main` / tag `v1.5.3` / commit `eef38ae`；v1.5.3（29）已完成双端签名发布与 macOS 换包，v1.5.4（30）BUILD 改动尚未提交。
+- 当前基线为 `main` / tag `v1.5.4` / commit `a80c5f7`；v1.5.4（30）核对可用性修复已独立保存，尚未推送、部署或换包。
+- 用户已授权 v1.5.5（31）进入 PLAN → BUILD 一条龙：修复未记账 AI 待处理内容不能删除，以及 AI 上游失败原因被压成模糊“暂时不可用”的问题；macOS、iOS 与 Backend 同步收口。
+- 本轮授权包含实现、测试、双端构建、复核、commit、tag、push 与签名发布包准备；明确停在生产 Backend 部署和 macOS 安装换包之前。Apple 公证、TestFlight 与 iOS 安装不在本轮执行范围。
 - 用户已指定 v1.5.4（30）只修复 `REC-154-01`：macOS 核对页在账户切换和诊断加载后把实际余额输入与保存入口挤出可视区域，造成界面看似失效。
 - 本轮 BUILD 已授权并完成；commit、tag、push、签名发布与安装换包须等待用户后续指令。版本配置与双端构建产物均已更新并核验为 `1.5.4 (30)`。
 - 基线为 `main` / tag `v1.5.1` / commit `2f47d4e`，向前修复，不回退 v1.5.1 已完成的业务安全能力。
@@ -12,7 +14,7 @@
 - 用户已追加授权 v1.5.2（27）执行 commit、push、签名发布、macOS 换包安装与 Build 27 标签；iOS 安装由用户执行。
 - 用户已授权 v1.5.2（28）立即修复 macOS 月份流水范围、增加一个 Build，并执行 commit、tag、push、双端签名发布与 macOS 换包；iOS 安装由用户执行。
 - 用户已指定 v1.5.3（29）修复 `NEXT-01` 至 `NEXT-04`，并授权完成 BUILD、提交、标签、推送、双端签名与 macOS 换包；iOS 安装由用户执行。
-- 当前授权不包含：Backend/schema/migration 变更、生产部署、Apple 公证或 TestFlight。
+- v1.5.2 审计修复当时不包含 Backend/schema/migration 变更；本轮 v1.5.5 已明确授权 Backend 契约与线性 migration，但仍不包含生产部署、Apple 公证或 TestFlight。
 
 ## 2. 权威与审计输入
 
@@ -266,6 +268,68 @@
 - 当前账户页面不再展示与其无关的 AI 失败、其他账户缺锚点或全局现金流提醒。
 - macOS 构图与权威参考的“核对操作 / 诊断证据”主次关系一致；iOS 同类可达性验证通过；版本、测试和双端构建门全部通过后方可宣布 v1.5.4（30）BUILD 完成。
 
+### B12 · v1.5.5 AI 待处理删除与故障可解释性（Build 31）— completed；release prep in progress
+
+#### AI-155-01 · P0 · 误录入的未记账内容无法删除
+
+- 用户事实：AI 待处理页能够查看、修改、确认、忽略或重试，但误录入内容没有删除入口；“忽略”仍保留原文和历史记录，不等于用户要求的删除。
+- 根因：Backend 只有 proposal create/get/list/replace/execute/ignore/retry/undo，没有 DELETE 契约；macOS 与 iOS 因而都不存在可绑定的真实删除能力。
+- 删除边界：只有从未生成账目或现金流的 `pending`、`failed`、`ignored` 可以真正删除；`processing` 必须等待解析收敛，`executed`/`undone` 必须保留来源链并使用撤销，不允许伪装成可删除。
+- 数据语义：删除 proposal 时在同一事务内删除其 AI 质量事件和原始输入，使误录内容不再出现在列表、质量指标或归档导出中；不得删除任何已生成的账目、现金流、账户、分类或学习规则。
+- 并发与未知结果：DELETE 使用 `expected_version` 锁定当前事实；状态或版本变化返回可恢复冲突。响应结果不明时客户端必须 fresh GET：404 才确认删除，仍存在则保留条目和重试入口，不得重复提交其他操作。
+
+#### AI-155-02 · P1 · AI 上游错误被压成统一“暂时不可用”
+
+- 已核实：当前安装版配置状态为“已配置”，正式 API 与提案读取可达；失败条目记录 `ai_provider_unavailable`。现有 provider 把 429、上游 5xx、超时、DNS/连接/TLS 错误合并成同一代码和文案，且未写安全的上游故障日志，因此无法从客户端判断真实原因。
+- Backend 分类：至少区分请求过多（429）、上游服务异常（5xx）、连接超时、连接/DNS/TLS 失败、配置或凭证被上游拒绝（其他 4xx）与响应格式异常；保留稳定、面向用户的恢复说明。
+- 安全日志：只记录 provider host、model、故障类别、HTTP status、耗时与 request id；禁止记录 API key、Authorization、用户原文、候选账户/分类、上游响应体或完整 URL 查询参数。
+- 前端呈现：macOS/iOS 显示可行动文案，例如稍后重试、检查网络或检查 AI 配置；不向用户展示内部代码、异常类或工程诊断字段。历史旧代码继续映射为兼容的通用提示。
+
+#### B12-A · Backend 权威契约
+
+所有权：AI routes/service/repository/provider、线性 migration 与 P8 schemas/tests。
+
+- 新增 `DELETE /api/v1/ai/proposals/{id}?expected_version=n`，成功返回 204，并继续经过正式 mutation revision/attention 失效链。
+- service 在行锁内校验版本、状态和关联对象均为空；0036 migration 为 proposal 增加数据库删除守卫，并只允许受守卫的父项删除级联清理其质量事件，独立改删质量事件仍被不可变触发器拒绝。
+- 删除不存在返回 404；处理中、已执行、已撤销或未知状态返回稳定的 `ai_proposal_delete_forbidden`；版本冲突返回现有统一冲突结构与 fresh reload path。
+- provider 细分错误代码和安全日志；P8 provider 单测覆盖 429、5xx、timeout、connect、4xx、invalid response，并证明日志不含密钥、原文或响应体。
+- PostgreSQL/API 回归覆盖允许状态、禁止状态、质量事件清除、账目不受影响、版本竞态、404 与 data revision 仅成功删除时递增。
+
+#### B12-B · 双端删除交互
+
+所有权：`V15AIContracts.swift`、`V15AIProposalModel.swift`、macOS/iOS AI proposal views/components 与 F3-F tests/fixtures。
+
+- typed service 增加 no-content DELETE；模型只为 pending/failed/ignored 暴露删除能力，并在 mutation gate 内阻止双击和与 retry/execute/ignore 并发。
+- macOS 在内容详情的“人工动作”区、iOS 在同一内容详情动作区提供红色“删除这项内容”；按钮不得藏在工程菜单或仅靠键盘操作。
+- 点击后使用系统确认面，明确“只删除这项未记账内容，不会影响账本；删除后无法恢复”。确认前零写入；取消保持选择和滚动位置。
+- 成功后从当前页移除条目、更新待确认计数并按相邻项收敛选择；空列表显示真实空态。失败/冲突/结果不明都在当前界面展示恢复入口。
+- 已执行/已撤销条目不显示或禁用删除，并保留“撤销这笔记账”的正确动作；processing 显示等待解析完成的原因。
+
+#### B12-C · 验收与停止点
+
+- Backend：格式、静态检查、数据库无关测试与可用的 PostgreSQL 定向测试通过；删除和 provider 分类均有单元/API 证据。
+- App：F3-F 模型/fixture 回归、全量 `FiscalKitTests`、macOS/iOS 正式 target 构建通过；删除确认、取消、成功、冲突、unknown、空态与已执行保护均覆盖。
+- 视觉：macOS 常用宽度和 1000pt、iPhone 13 普通字号与 AX5 检查危险按钮、确认文案、长原文及错误提示不溢出；沿用 Fiscal 现有语义和用户语言，不引入新组件库。
+- 版本：`MARKETING_VERSION=1.5.5`、`CURRENT_PROJECT_VERSION=31`，执行 xcodegen 并清理生成噪声；最终双端产物 Info.plist 必须一致。
+- 发布准备：复核通过后提交、创建不可变 `v1.5.5` 标签、推送 `main` 与标签，生成并严格验签 macOS/iOS 发布包及 SHA-256 记录。
+- 明确停止：不执行 HZ Backend deploy，不修改生产数据库/服务，不替换 `/Applications/Fiscal.app`，不安装 iOS 包；把部署命令、产物与回滚点准备好后等待用户下一条指令。
+
+#### B12-D · BUILD 验收结果
+
+- Backend 全门通过：Ruff 格式/静态检查、Pyright 0 error / 0 warning、一次性 PostgreSQL 数据库上的全量 393 tests 通过；删除 API、数据库守卫、质量事件级联、data revision 与六类 provider 故障均有回归证据。
+- App 模型与共享逻辑通过：F3-F 定向 31 tests；全量 `FiscalKitTests` 407 tests / 41 suites；删除只发一次、unknown fresh GET、冲突锁、404 收敛、离线零写入和用户文案映射均有覆盖。
+- iOS F3-F Gallery UI 11/11 通过，覆盖确认取消、真正删除、失败原因用户化、unknown/readback、空态、冲突与 AX5 长内容；提交 AI 文本后主动收起键盘，恢复入口不再被键盘遮挡。
+- macOS F3-F UI 在当前宿主连续三次被系统层 `Timed out while enabling automation mode` 阻断，0 个业务用例实际启动，不记为业务失败或通过。替代证据为 macOS UI `build-for-testing` 成功、正式 Release 成功，以及 15 张 F3-F 静态快照中的浅色、深色、错误态和 AX5 人工目检通过。
+- 最终正式构建通过：`FiscaliOS` generic iOS Simulator Release、`FiscalmacOS` Release、`V15GallerymacOS` build-for-testing 与 `V15GallerySnapshotTool` Release；双端 Info.plist 均为 `1.5.5 (31)`，`git diff --check` 通过。
+- 独立差异复审未发现需阻止发布的问题：已执行/已撤销/处理中条目受前后端双层保护，数据库直接删除也受守卫；日志不包含用户原文、Authorization、上游响应体或密钥；删除结果不明不会自动重发。
+
+#### B12 完成定义
+
+- 用户能在 macOS 与 iOS 对未记账 AI 内容执行一次有确认的真正删除；刷新、重启和归档导出后都不会重新出现。
+- 删除绝不触及已经生成的账目或现金流，且任何竞态/未知结果都不会被界面误报为成功。
+- 新失败能明确告诉用户是限流、上游异常、超时、连接失败、配置拒绝还是返回不可识别；生产日志足以定位但不泄露财务原文或凭证。
+- 全部工程门、复核、提交、标签、推送和签名包准备完成，状态停在“等待生产部署与换包”。
+
 ## 6. 验收矩阵
 
 | 门 | 必须满足 |
@@ -313,4 +377,7 @@
 - 当前 macOS 为 `/Applications/Fiscal.app` v1.5.3（29）；原 v1.5.2（28）保留在 `/Applications/Fiscal-v1.5.2-build28-backup-20260823-1834.app`。iOS Development IPA 由用户安装。
 - v1.5.4（30）BUILD 已完成，唯一施工项 `REC-154-01` 已收口：macOS 按权威参考重构为稳定的核对操作区与独立诊断区；iOS 审计发现并最小修复长诊断把步骤动作推离视口的同类问题。
 - 最终门禁为 402 tests / 41 suites、macOS F3-E UI 2/2、iOS F3-E UI 7/7、iPhone 13 AX5 定向 1/1、双端正式 App 与截图工具构建成功、双端版本 `1.5.4 (30)`、四组长诊断视觉检查和 `git diff --check` 通过。
-- 下一动作：进入独立复审；复审通过后再由用户决定是否授权 commit、tag、push、签名发布与安装换包。
+- v1.5.4 已独立提交为 `a80c5f7` 并创建本地不可变标签 `v1.5.4`；与 v1.5.5 一并在最终发布准备阶段推送，不部署该中间版本。
+- v1.5.5（31）B12-A 至 B12-D 已完成：未记账 AI 内容真正删除、双端确认与未知结果收敛、上游故障分类和安全日志均已进入源码并通过 Backend、共享模型、iOS UI、双端构建与 macOS 快照门禁。
+- 当前发布门没有产品阻断项；唯一环境限制是 macOS UI 自动化宿主未能启用 automation mode，已用可测试编译、正式构建和静态视觉矩阵补证并如实登记。
+- 下一动作：提交源码、创建不可变 `v1.5.5` 标签、推送 `main` 与 `v1.5.4`/`v1.5.5` 标签，生成并严格验签双端发布包与 SHA-256 记录；随后停在生产部署与 `/Applications/Fiscal.app` 换包之前。

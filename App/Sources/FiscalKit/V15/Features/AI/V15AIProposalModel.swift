@@ -6,7 +6,7 @@ public final class V15AIProposalModel {
     public enum Phase: Equatable { case idle, loading, loaded, empty, failed(V15Failure) }
     public enum MutationPhase: Equatable { case idle, loading, unknown, conflict(V15Conflict), failed(V15Failure), succeeded(String) }
     public enum EditorMode: Equatable { case closed, reviewing(UUID) }
-    public enum DirectAction: Sendable, Equatable { case replace, execute, ignore, retry, undo }
+    public enum DirectAction: Sendable, Equatable { case replace, execute, ignore, retry, delete, undo }
 
     public private(set) var phase: Phase = .idle
     public private(set) var detailPhase: Phase = .idle
@@ -67,6 +67,7 @@ public final class V15AIProposalModel {
             case execute(UUID, V15AIProposalVersionRequest)
             case ignore(UUID, V15AIProposalVersionRequest)
             case retry(UUID, V15AIProposalVersionRequest)
+            case delete(UUID, V15AIProposalVersionRequest)
             case undo(UUID, V15AIProposalUndoRequest)
         }
         let operationID: UUID
@@ -75,6 +76,10 @@ public final class V15AIProposalModel {
         let editorGeneration: UInt64
         let editorFingerprint: String?
         let mutationGeneration: UInt64
+
+        var isDelete: Bool {
+            if case .delete = intent { true } else { false }
+        }
     }
     private struct DirectState: Equatable {
         var phase: MutationPhase = .idle
@@ -180,6 +185,13 @@ public final class V15AIProposalModel {
             if proposal.status != .pending { reasons.append(.init(code: "ai_pending_required", message: "只有待确认内容可以忽略。", fieldPath: "status")) }
         case .retry:
             if proposal.status != .failed { reasons.append(.init(code: "ai_failed_required", message: "只有解析失败的内容可以重试。", fieldPath: "status")) }
+        case .delete:
+            if ![.pending, .failed, .ignored].contains(proposal.status) {
+                reasons.append(.init(code: "ai_unposted_required", message: "只有尚未记账的待确认、解析失败或已忽略内容可以删除。", fieldPath: "status"))
+            }
+            if proposal.transactionID != nil || proposal.cashFlowItemID != nil {
+                reasons.append(.init(code: "ai_posted_delete_forbidden", message: "已经生成账目或现金流的内容不能直接删除。", fieldPath: "status"))
+            }
         case .undo:
             if proposal.status != .executed { reasons.append(.init(code: "ai_executed_required", message: "只有已记账内容可以撤销。", fieldPath: "status")) }
             if proposal.transactionID != nil && proposal.transactionVersion == nil { reasons.append(.init(code: "ai_transaction_version_required", message: "交易数据不完整，暂时不能安全撤销。", fieldPath: "transaction_version")) }
@@ -327,6 +339,7 @@ public final class V15AIProposalModel {
     public func execute() async { guard let proposal = selectedProposal, actionReasons(.execute, proposal: proposal).isEmpty else { return }; await start(.execute(proposal.id, .init(expectedVersion: proposal.version)), proposalID: proposal.id) }
     public func ignore() async { guard let proposal = selectedProposal, actionReasons(.ignore, proposal: proposal).isEmpty else { return }; await start(.ignore(proposal.id, .init(expectedVersion: proposal.version)), proposalID: proposal.id) }
     public func retryParsing() async { guard let proposal = selectedProposal, actionReasons(.retry, proposal: proposal).isEmpty else { return }; await start(.retry(proposal.id, .init(expectedVersion: proposal.version)), proposalID: proposal.id) }
+    public func deleteSelected() async { guard let proposal = selectedProposal, actionReasons(.delete, proposal: proposal).isEmpty else { return }; await start(.delete(proposal.id, .init(expectedVersion: proposal.version)), proposalID: proposal.id) }
     public func undo() async {
         guard let proposal = selectedProposal, actionReasons(.undo, proposal: proposal).isEmpty else { return }
         await start(.undo(proposal.id, .init(expectedVersion: proposal.version, expectedTransactionVersion: proposal.transactionVersion)), proposalID: proposal.id)
@@ -334,14 +347,23 @@ public final class V15AIProposalModel {
 
     public func recoverUnknownDirect() async {
         guard let proposal = selectedProposal, let attempt = directAttempts[proposal.id], case .unknown = directStates[proposal.id]?.phase, directStates[proposal.id]?.isReadbackLoading != true else { return }
-        let generation = beginReadback(owner: proposal.id, phase: .unknown, message: "正在读取最新数据；不会重复保存。")
+        let deleting = attempt.isDelete
+        let generation = beginReadback(
+            owner: proposal.id,
+            phase: .unknown,
+            message: deleting ? "正在确认这项内容是否已经删除；不会重复操作。" : "正在读取最新数据；不会重复保存。"
+        )
         do {
             let fresh = try await services.ai.proposal(id: attempt.proposalID, readCachePolicy: .reloadIgnoringCache)
             guard ownsReadback(owner: attempt.proposalID, attempt: attempt, generation: generation) else { return }
             replaceListFact(fresh); updateSelectionIfOwned(fresh, owner: attempt.proposalID)
-            setDirectState(.init(phase: .unknown, readbackCompleted: true, message: "数据已经变化，但仍无法确认是否由本次操作造成。系统不会自动重复操作。"), for: attempt.proposalID)
+            setDirectState(.init(phase: .unknown, readbackCompleted: true, message: deleting ? "这项内容仍然存在。你可以结束本次检查后重新删除。" : "数据已经变化，但仍无法确认是否由本次操作造成。系统不会自动重复操作。"), for: attempt.proposalID)
         } catch let failure as V15Failure {
             guard ownsReadback(owner: attempt.proposalID, attempt: attempt, generation: generation) else { return }
+            if deleting, failure.code == "ai_proposal_not_found" {
+                await completeDeletion(owner: attempt.proposalID, message: "已确认这项内容删除成功。")
+                return
+            }
             let message = failure.kind == .cancelled ? "检查最新状态已取消，请重试读取。" : "检查最新状态失败：\(failure.message)。请重试读取。"
             setDirectState(.init(phase: .unknown, readbackCompleted: false, message: message, issues: failure.fieldIssues), for: attempt.proposalID)
         } catch {
@@ -367,6 +389,10 @@ public final class V15AIProposalModel {
             if selectedProposal?.id == attempt.proposalID { mutationPhase = .idle; reviewConfirmed = false; if case .reviewing(let owner) = editorMode, owner == attempt.proposalID { dismissEditor() } }
         } catch let failure as V15Failure {
             guard ownsReadback(owner: attempt.proposalID, attempt: attempt, generation: generation) else { return }
+            if attempt.isDelete, failure.code == "ai_proposal_not_found" {
+                await completeDeletion(owner: attempt.proposalID, message: "这项内容已经删除。")
+                return
+            }
             setDirectState(.init(phase: .conflict(failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: "数据已更新，需要重新读取。")), message: "读取最新数据失败：\(failure.message)。请重试读取。", issues: failure.fieldIssues), for: attempt.proposalID)
         } catch {
             guard ownsReadback(owner: attempt.proposalID, attempt: attempt, generation: generation) else { return }
@@ -407,6 +433,12 @@ public final class V15AIProposalModel {
 
     private func performDirect(_ attempt: DirectAttempt) async {
         do {
+            if case .delete(let id, let request) = attempt.intent {
+                try await services.ai.delete(id: id, expectedVersion: request.expectedVersion)
+                guard directAttempts[attempt.proposalID] == attempt, attempt.mutationGeneration == mutationGeneration else { return }
+                await completeDeletion(owner: attempt.proposalID, message: "这项未记账内容已删除。")
+                return
+            }
             let result: V15AIProposal
             let message: String
             switch attempt.intent {
@@ -414,6 +446,7 @@ public final class V15AIProposalModel {
             case .execute(let id, let request): result = try await services.ai.execute(id: id, expectedVersion: request.expectedVersion).proposal; message = "已按人工确认内容执行。"
             case .ignore(let id, let request): result = try await services.ai.ignore(id: id, expectedVersion: request.expectedVersion); message = "已忽略。"
             case .retry(let id, let request): result = try await services.ai.retry(id: id, expectedVersion: request.expectedVersion); message = "已重新解析并回到待确认列表。"
+            case .delete: preconditionFailure("Delete is handled before proposal-result mutations")
             case .undo(let id, let request): result = try await services.ai.undo(id: id, expectedVersion: request.expectedVersion, expectedTransactionVersion: request.expectedTransactionVersion).proposal; message = "已撤销对应账目。"
             }
             guard directAttempts[attempt.proposalID] == attempt, attempt.mutationGeneration == mutationGeneration else { return }
@@ -432,6 +465,10 @@ public final class V15AIProposalModel {
             if selectedProposal?.id == result.id, let freshEvents { qualityEvents = freshEvents }
         } catch let failure as V15Failure {
             guard directAttempts[attempt.proposalID] == attempt, attempt.mutationGeneration == mutationGeneration else { return }
+            if attempt.isDelete, failure.code == "ai_proposal_not_found" {
+                await completeDeletion(owner: attempt.proposalID, message: "这项内容已经删除。")
+                return
+            }
             if failure.kind == .conflict {
                 setDirectState(.init(phase: .conflict(failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: failure.message)), message: "数据已经更新；请读取最新内容后再决定。", issues: failure.fieldIssues), for: attempt.proposalID)
             } else if Self.outcomeMayBeUnknown(failure) {
@@ -454,6 +491,41 @@ public final class V15AIProposalModel {
         title = proposal.title ?? title; note = proposal.note ?? note; accountID = proposal.accountID; categoryID = proposal.categoryID; destinationAccountID = proposal.destinationAccountID; creditCycleID = proposal.creditCycleID
         if case .known(let value)? = proposal.kind { kind = value }
         applyingDraft = false
+    }
+
+    private func completeDeletion(owner: UUID, message: String) async {
+        listGeneration &+= 1
+        pageGeneration &+= 1
+        let removedIndex = proposals.firstIndex(where: { $0.id == owner })
+        let removed = removedIndex.map { proposals[$0] }
+        proposals.removeAll { $0.id == owner }
+        if removed?.status == .pending { pendingCount = max(0, pendingCount - 1) }
+        directAttempts[owner] = nil
+        directStates[owner] = nil
+        confirmedReviews.removeValue(forKey: owner)
+        recoveryGenerations[owner] = nil
+
+        guard selectedProposal?.id == owner else {
+            phase = proposals.isEmpty ? .empty : .loaded
+            return
+        }
+        selectionGeneration &+= 1
+        selectedProposal = nil
+        qualityEvents = []
+        detailPhase = .idle
+        editorGeneration &+= 1
+        editorMode = .closed
+        serverIssues = []
+        reviewConfirmed = false
+        readbackCompleted = false
+        recoveryMessage = nil
+        phase = proposals.isEmpty ? .empty : .loaded
+
+        if !proposals.isEmpty {
+            let nextIndex = min(removedIndex ?? 0, proposals.count - 1)
+            await select(proposals[nextIndex])
+        }
+        mutationPhase = .succeeded(message)
     }
 
     private func makeDraft() -> (value: V15AIProposalReviewDraft?, issues: [V15FieldIssue]) {

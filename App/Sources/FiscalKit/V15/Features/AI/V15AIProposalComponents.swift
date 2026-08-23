@@ -118,7 +118,7 @@ struct V15AIProposalDetail: View {
                         Circle().fill(V15Palette.teal.color).frame(width: 7, height: 7).padding(.top, 6)
                         VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                             Text(Self.eventLabel(event.eventType)).font(V15Typography.body.weight(.medium))
-                            if let reason = event.reason { Text(reason).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
+                            if let reason = Self.eventReason(event) { Text(reason).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
                         }
                     }
                 }
@@ -142,6 +142,21 @@ struct V15AIProposalDetail: View {
     private static func diffSummary(_ value: V15AIEventValue?) -> String { guard case .object(let object)? = value else { return "已修改" }; return "\(scalar(object["from"])) → \(scalar(object["to"]))" }
     private static func scalar(_ value: V15AIEventValue?) -> String { switch value { case .string(let value): value; case .integer(let value): String(value); case .decimal(let value): "\(value)"; case .bool(let value): value ? "true" : "false"; case .null: "空"; case .array, .object: "结构化内容"; case nil: "空" } }
     private static func eventLabel(_ value: V15AIQualityEventType) -> String { switch value { case .parsed: "已解析"; case .confirmUnchanged: "确认时未修改"; case .confirmEdited: "确认时已修改"; case .ignored: "已忽略"; case .executeFailed: "记账失败"; case .historicalAutomaticExecute: "历史自动处理（只读）"; case .manualExecute: "已记账"; case .undone: "已撤销"; case .providerRetry: "已重试解析"; case .finalFailure: "最终失败"; case .unknown: "其他事件" } }
+    private static func eventReason(_ event: V15AIQualityEvent) -> String? {
+        guard let reason = event.reason else { return nil }
+        return switch reason {
+        case "ai_provider_not_configured": "AI 服务尚未配置。"
+        case "ai_provider_unavailable", "ai_provider_upstream_failure": "AI 服务端当时暂时异常。"
+        case "ai_provider_rate_limited": "AI 服务当时请求较多。"
+        case "ai_provider_timeout": "AI 服务当时响应超时。"
+        case "ai_provider_connection_failed": "当时无法连接 AI 服务。"
+        case "ai_provider_configuration_rejected": "AI 服务当时拒绝了当前配置。"
+        case "ai_provider_invalid_response": "AI 服务当时返回了无法识别的内容。"
+        case "ai_processing_cancelled": "本次解析已取消。"
+        default:
+            event.eventType == .executeFailed ? "本次记账未能完成。" : "本次处理未能完成。"
+        }
+    }
 }
 
 struct V15AIMutationSurface: View {
@@ -253,6 +268,7 @@ struct V15AIProposalActions: View {
     @Bindable var model: V15AIProposalModel
     let proposal: V15AIProposal
     let openReview: () -> Void
+    @State private var showsDeleteConfirmation = false
     var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
             if proposal.status == .pending {
@@ -263,12 +279,30 @@ struct V15AIProposalActions: View {
                 V15ActionButton("重新解析", symbol: V15Symbol.retry, kind: .secondary, disabledReasons: model.actionReasons(.retry, proposal: proposal)) { Task { await model.retryParsing() } }.accessibilityIdentifier("v15.f3f.retry")
             } else if proposal.status == .executed {
                 V15ActionButton("撤销这笔记账", kind: .destructive, disabledReasons: model.actionReasons(.undo, proposal: proposal)) { Task { await model.undo() } }.accessibilityIdentifier("v15.f3f.undo")
+            } else if proposal.status == .processing {
+                Text("正在解析，完成后即可处理。")
+                    .font(V15Typography.secondary)
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                    .accessibilityIdentifier("v15.f3f.no-actions")
             } else {
                 Text(proposal.status.isDisplayOnly ? "未知未来状态只可查看。" : "此状态没有可用写操作。")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     .accessibilityIdentifier(proposal.status.isDisplayOnly ? "v15.f3f.unknown-readonly" : "v15.f3f.no-actions")
             }
+            if [.pending, .failed, .ignored].contains(proposal.status) {
+                V15ActionButton("删除这项内容", symbol: "trash", kind: .destructive, disabledReasons: model.actionReasons(.delete, proposal: proposal)) {
+                    showsDeleteConfirmation = true
+                }
+                .accessibilityIdentifier("v15.f3f.delete")
+            }
+        }
+        .alert("删除这项内容？", isPresented: $showsDeleteConfirmation) {
+            Button("取消", role: .cancel) {}
+            Button("删除", role: .destructive) { Task { await model.deleteSelected() } }
+                .accessibilityIdentifier("v15.f3f.delete.confirm")
+        } message: {
+            Text("只删除这项尚未记账的内容，不会影响账本。删除后无法恢复。")
         }
     }
 }

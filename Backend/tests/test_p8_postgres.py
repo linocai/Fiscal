@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 import pytest_asyncio
 from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from fiscal_api.api.p2_schemas import AccountDraft, CategoryDraft
@@ -705,6 +706,69 @@ async def test_ignore_and_failed_retry_state_machine(session: AsyncSession) -> N
         await service.execute(ignored.id, ignored.version)
     assert conflict.value.code == "ai_proposal_state_conflict"
     assert await service.get(ignored.id) == ignored
+
+
+async def test_unposted_proposals_delete_with_events_but_executed_history_is_protected(
+    session: AsyncSession,
+) -> None:
+    await seed(session)
+    service = AIService(session, FakeProvider())
+
+    pending, _ = await service.create(
+        AIProposalCreate(source="text", text="误录待确认内容"), uuid4()
+    )
+    events = await service.quality_events(pending.id)
+    assert events
+    with pytest.raises(DBAPIError, match="ai_quality_events are immutable"):
+        await session.execute(
+            text("DELETE FROM ai_quality_events WHERE id = :event_id"),
+            {"event_id": events[0].id},
+        )
+        await session.commit()
+    await session.rollback()
+    await service.delete(pending.id, pending.version)
+    assert (
+        await session.scalar(select(AIQualityEvent).where(AIQualityEvent.proposal_id == pending.id))
+        is None
+    )
+    with pytest.raises(APIError) as missing:
+        await service.get(pending.id)
+    assert missing.value.code == "ai_proposal_not_found"
+
+    stale, _ = await service.create(AIProposalCreate(source="text", text="版本冲突内容"), uuid4())
+    ignored = await service.ignore(stale.id, stale.version)
+    with pytest.raises(APIError) as stale_delete:
+        await service.delete(ignored.id, stale.version)
+    assert stale_delete.value.code == "resource_version_conflict"
+    await session.rollback()
+    current = await service.get(ignored.id)
+    await service.delete(current.id, current.version)
+
+    failed_service = AIService(session, FakeProvider(failures=1))
+    with pytest.raises(APIError):
+        await failed_service.create(AIProposalCreate(source="text", text="误录失败内容"), uuid4())
+    failed = await session.scalar(select(AIProposal).where(AIProposal.status == "failed"))
+    assert failed is not None
+    await failed_service.delete(failed.id, failed.version)
+
+    executed_candidate, _ = await service.create(
+        AIProposalCreate(source="text", text="已生成账目内容"), uuid4()
+    )
+    executed = await service.execute(executed_candidate.id, executed_candidate.version)
+    assert executed.transaction is not None
+    with pytest.raises(APIError) as protected:
+        await service.delete(executed.proposal.id, executed.proposal.version)
+    assert protected.value.code == "ai_proposal_delete_forbidden"
+    await session.rollback()
+    with pytest.raises(DBAPIError, match="only unposted AI proposals can be deleted"):
+        await session.execute(
+            text("DELETE FROM ai_proposals WHERE id = :proposal_id"),
+            {"proposal_id": executed.proposal.id},
+        )
+        await session.commit()
+    await session.rollback()
+    assert await service.get(executed.proposal.id) == executed.proposal
+    assert await TransactionService(session).get(executed.transaction.id) == executed.transaction
 
 
 @pytest.mark.parametrize(

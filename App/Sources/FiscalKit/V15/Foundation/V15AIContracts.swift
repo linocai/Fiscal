@@ -421,6 +421,18 @@ public struct V15AIService: Sendable {
         return try await transport.send(.init(path: "ai/proposals/\(id)/retry", method: "POST"), body: try V15BodyEncoder.encode(V15AIProposalVersionRequest(expectedVersion: expectedVersion)))
     }
 
+    public func delete(id: UUID, expectedVersion: Int) async throws {
+        try await writable()
+        try await transport.sendNoContent(
+            .init(
+                path: "ai/proposals/\(id)",
+                method: "DELETE",
+                query: [.init(name: "expected_version", value: String(expectedVersion))]
+            ),
+            body: nil
+        )
+    }
+
     public func undo(id: UUID, expectedVersion: Int, expectedTransactionVersion: Int?) async throws -> V15AIProposalMutation {
         try await writable()
         return try await transport.send(.init(path: "ai/proposals/\(id)/undo", method: "POST"), body: try V15BodyEncoder.encode(V15AIProposalUndoRequest(expectedVersion: expectedVersion, expectedTransactionVersion: expectedTransactionVersion)))

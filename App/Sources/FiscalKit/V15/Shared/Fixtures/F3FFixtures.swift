@@ -95,31 +95,36 @@ public enum V15F3FFixtures {
         return "{\"items\":[\(item)],\"next_cursor\":\"f3f-next\",\"pending_count\":1}"
     }
 
-    static func page(includeUnknown: Bool = true, empty: Bool = false, created: Bool = false, long: Bool = false) -> String {
+    static func page(includeUnknown: Bool = true, empty: Bool = false, created: Bool = false, long: Bool = false, excluding deleted: Set<UUID> = []) -> String {
         if empty { return "{\"items\":[],\"next_cursor\":null,\"pending_count\":0}" }
-        var rows = [
-            proposal(id: pendingID, status: "pending"),
-            proposal(id: failedID, status: "failed", errorCode: "provider_timeout", errorMessage: "解析服务暂时不可用。"),
-            proposal(id: executedID, status: "executed", version: 5, missing: [], transaction: true)
+        var rows: [(UUID, String)] = [
+            (pendingID, proposal(id: pendingID, status: "pending")),
+            (failedID, proposal(id: failedID, status: "failed", errorCode: "ai_provider_timeout", errorMessage: "AI 响应超时。请稍后重试。")),
+            (executedID, proposal(id: executedID, status: "executed", version: 5, missing: [], transaction: true))
         ]
         if long {
-            rows.append(proposal(id: processingID, status: "processing", title: "正在解析的离线合成提案", confidence: nil, missing: []))
-            rows.append(proposal(id: ignoredID, status: "ignored", version: 4, title: "已忽略的离线合成提案", missing: []))
-            rows.append(proposal(id: undoneID, status: "undone", version: 6, title: "已撤销的离线合成提案", missing: [], transaction: true))
+            rows.append((processingID, proposal(id: processingID, status: "processing", title: "正在解析的离线合成提案", confidence: nil, missing: [])))
+            rows.append((ignoredID, proposal(id: ignoredID, status: "ignored", version: 4, title: "已忽略的离线合成提案", missing: [])))
+            rows.append((undoneID, proposal(id: undoneID, status: "undone", version: 6, title: "已撤销的离线合成提案", missing: [], transaction: true)))
         }
-        if includeUnknown { rows.append(proposal(id: unknownID, status: "future_review", missing: [])) }
-        if created { rows.insert(proposal(id: createdID, status: "pending", version: 1, title: "新建合成提案", confidence: 9300, missing: []), at: 0) }
-        return "{\"items\":[\(rows.joined(separator: ","))],\"next_cursor\":\"f3f-next\",\"pending_count\":\(created ? 2 : 1)}"
+        if includeUnknown { rows.append((unknownID, proposal(id: unknownID, status: "future_review", missing: []))) }
+        if created { rows.insert((createdID, proposal(id: createdID, status: "pending", version: 1, title: "新建合成提案", confidence: 9300, missing: [])), at: 0) }
+        rows.removeAll { deleted.contains($0.0) }
+        let pending = (created && !deleted.contains(createdID) ? 1 : 0) + (deleted.contains(pendingID) ? 0 : 1)
+        return "{\"items\":[\(rows.map(\.1).joined(separator: ","))],\"next_cursor\":\"f3f-next\",\"pending_count\":\(pending)}"
     }
 
     static func events(_ id: UUID) -> String {
-        "[{\"id\":\"00000000-0000-0000-0000-00000000F351\",\"proposal_id\":\"\(id)\",\"event_type\":\"parsed\",\"reason\":null,\"details\":{\"prompt_version\":\"fixture-v1\"},\"occurred_at\":\"2026-08-16T04:32:00Z\"}]"
+        let failed = id == failedID
+        let eventType = failed ? "final_failure" : "parsed"
+        let reason = failed ? "\"ai_provider_timeout\"" : "null"
+        return "[{\"id\":\"00000000-0000-0000-0000-00000000F351\",\"proposal_id\":\"\(id)\",\"event_type\":\"\(eventType)\",\"reason\":\(reason),\"details\":{\"prompt_version\":\"fixture-v1\"},\"occurred_at\":\"2026-08-16T04:32:00Z\"}]"
     }
 }
 
 actor F3FTransport: V15Transporting {
     enum Mode: Equatable {
-        case normal, empty, initialError, fieldError, conflict, conflictReloadFailure, createUnknown, directUnknown, directUnknownReadFailure, directUnknownReadDelayed, settingsViolation, settingsViolationAfterSafe, settingsViolationAutoOnlyAfterSafe, settingsViolationEffectiveOnlyAfterSafe, settingsTransportAfterSafe, settingsViolationRace, createUnknownSettingsViolationAfterSafe, createUnknownSettingsTransportAfterSafe, directUnknownSettingsViolationAfterSafe, selectionRace, pageRace, pageError, cashFlow, cashFlowMissing, serverChanged, long
+        case normal, empty, initialError, fieldError, conflict, conflictReloadFailure, createUnknown, directUnknown, directUnknownReadFailure, directUnknownReadDelayed, deleteUnknown, deleteUnknownReadFailure, settingsViolation, settingsViolationAfterSafe, settingsViolationAutoOnlyAfterSafe, settingsViolationEffectiveOnlyAfterSafe, settingsTransportAfterSafe, settingsViolationRace, createUnknownSettingsViolationAfterSafe, createUnknownSettingsTransportAfterSafe, directUnknownSettingsViolationAfterSafe, selectionRace, pageRace, pageError, cashFlow, cashFlowMissing, serverChanged, long
         static func route(_ route: String) -> Mode {
             switch route {
             case "ai-empty": .empty
@@ -131,6 +136,8 @@ actor F3FTransport: V15Transporting {
             case "ai-response-unknown": .directUnknown
             case "ai-response-unknown-read-failure": .directUnknownReadFailure
             case "ai-response-unknown-read-delayed": .directUnknownReadDelayed
+            case "ai-delete-unknown": .deleteUnknown
+            case "ai-delete-unknown-read-failure": .deleteUnknownReadFailure
             case "ai-conflict-read-failure": .conflictReloadFailure
             case "ai-page-error": .pageError
             case "ai-cash-flow": .cashFlow
@@ -145,7 +152,7 @@ actor F3FTransport: V15Transporting {
             }
         }
     }
-    struct Wire: Sendable, Equatable { let method, path, body: String; let headers: [String: String] }
+    struct Wire: Sendable, Equatable { let method, path, body: String; let headers: [String: String]; let query: [String: String] }
     let mode: Mode
     private var requests: [V15Request] = []
     private var wires: [Wire] = []
@@ -155,6 +162,7 @@ actor F3FTransport: V15Transporting {
     private var settingsReads = 0
     private var recoveryReadFailures = 0
     private var current: [UUID: String] = [:]
+    private var deleted: Set<UUID> = []
     init(mode: Mode) { self.mode = mode }
     func allRequests() -> [V15Request] { requests }
     func mutationWires() -> [Wire] { wires }
@@ -170,7 +178,7 @@ actor F3FTransport: V15Transporting {
         } else {
             bodyText = ""
         }
-        if request.method != "GET" { wires.append(.init(method: request.method, path: request.path, body: bodyText, headers: request.headers)) }
+        if request.method != "GET" { wires.append(.init(method: request.method, path: request.path, body: bodyText, headers: request.headers, query: Dictionary(uniqueKeysWithValues: request.query.compactMap { item in item.value.map { (item.name, $0) } }))) }
         if mode == .initialError, request.path == "ai/proposals" { throw V15Failure(kind: .transport, message: "AI 队列读取失败。") }
         switch (request.path, request.method) {
         case ("ai/settings", "GET"):
@@ -203,7 +211,7 @@ actor F3FTransport: V15Transporting {
                 return try decode("{\"items\":[],\"next_cursor\":null,\"pending_count\":1}")
             }
             if mode == .cashFlow || mode == .cashFlowMissing { return try decode(V15F3FFixtures.cashFlowPage(missing: mode == .cashFlowMissing)) }
-            return try decode(V15F3FFixtures.page(includeUnknown: true, empty: mode == .empty, created: created, long: mode == .long))
+            return try decode(V15F3FFixtures.page(includeUnknown: true, empty: mode == .empty, created: created, long: mode == .long, excluding: deleted))
         case ("ai/proposals", "POST"):
             createCount += 1; created = true
             if (mode == .createUnknown || mode == .createUnknownSettingsViolationAfterSafe || mode == .createUnknownSettingsTransportAfterSafe) && createCount == 1 { throw V15Failure(kind: .responseUnknown, message: "新建响应未知。") }
@@ -218,15 +226,20 @@ actor F3FTransport: V15Transporting {
         let suffix = request.path.split(separator: "/").count > 3 ? String(request.path.split(separator: "/").last!) : nil
         if request.method == "GET", suffix == "quality-events" { return try decode(V15F3FFixtures.events(id)) }
         if request.method == "GET" {
+            if mode == .deleteUnknownReadFailure, directCount > 0, id == V15F3FFixtures.pendingID, recoveryReadFailures == 0 {
+                recoveryReadFailures += 1
+                throw V15Failure(kind: .transport, message: "网络暂时不可用。")
+            }
+            if deleted.contains(id) { throw V15Failure(kind: .transport, code: "ai_proposal_not_found", message: "这项内容不存在或已经删除。") }
             if mode == .directUnknownReadDelayed, directCount > 0, id == V15F3FFixtures.pendingID { try await Task.sleep(for: .seconds(5)) }
             if (mode == .directUnknownReadFailure || mode == .conflictReloadFailure), directCount > 0, id == V15F3FFixtures.pendingID, recoveryReadFailures == 0 {
                 recoveryReadFailures += 1
-                throw V15Failure(kind: .transport, message: "fresh GET 暂时失败。")
+                throw V15Failure(kind: .transport, message: "网络暂时不可用。")
             }
             if mode == .selectionRace, id == V15F3FFixtures.pendingID { try await Task.sleep(for: .milliseconds(180)) }
             if mode == .serverChanged, directCount > 0, id == V15F3FFixtures.pendingID { return try decode(V15F3FFixtures.proposal(id: id, status: "pending", version: 9, title: "第三方已更新审核草案", confidence: 9_800, missing: [], categoryID: V15F3FFixtures.expenseCategoryID)) }
             if let value = current[id] { return try decode(value) }
-            if id == V15F3FFixtures.failedID { return try decode(V15F3FFixtures.proposal(id: id, status: "failed", errorCode: "provider_timeout", errorMessage: "解析服务暂时不可用。")) }
+            if id == V15F3FFixtures.failedID { return try decode(V15F3FFixtures.proposal(id: id, status: "failed", errorCode: "ai_provider_timeout", errorMessage: "AI 响应超时。请稍后重试。")) }
             if id == V15F3FFixtures.executedID { return try decode(V15F3FFixtures.proposal(id: id, status: "executed", version: 5, missing: [], transaction: true)) }
             if id == V15F3FFixtures.cashFlowProposalID { return try decode(V15F3FFixtures.proposal(id: id, status: "pending", title: "下个月房租现金流提案", missing: [], target: "cash_flow")) }
             if id == V15F3FFixtures.unknownID { return try decode(V15F3FFixtures.proposal(id: id, status: "future_review", missing: [])) }
@@ -268,6 +281,24 @@ actor F3FTransport: V15Transporting {
         current[id] = value
         if suffix == "execute" || suffix == "undo" { return try decode("{\"proposal\":\(value),\"transaction\":null,\"cash_flow_item\":null}") }
         return try decode(value)
+    }
+
+    func sendNoContent(_ request: V15Request, body: JSONValue?) async throws {
+        requests.append(request)
+        let bodyText = body.flatMap { try? String(data: V15BodyEncoder.data($0), encoding: .utf8) } ?? ""
+        if request.method != "GET" { wires.append(.init(method: request.method, path: request.path, body: bodyText, headers: request.headers, query: Dictionary(uniqueKeysWithValues: request.query.compactMap { item in item.value.map { (item.name, $0) } }))) }
+        guard request.method == "DELETE",
+              request.path.hasPrefix("ai/proposals/"),
+              let id = request.path.split(separator: "/").last.flatMap({ UUID(uuidString: String($0)) })
+        else { throw V15Failure(kind: .transport, message: "F3-F fixture 不支持 \(request.method) \(request.path)。") }
+        directCount += 1
+        if mode == .conflict || mode == .conflictReloadFailure {
+            throw V15Failure(kind: .conflict, code: "resource_version_conflict", message: "内容版本已变化。", conflict: .init(reloadPath: "/api/v1/ai/proposals/\(id)", latestRevision: nil, currentVersion: 9, expectedVersion: 2, message: "内容版本已变化。"))
+        }
+        deleted.insert(id)
+        if (mode == .deleteUnknown || mode == .deleteUnknownReadFailure), directCount == 1 {
+            throw V15Failure(kind: .responseUnknown, message: "删除响应未知。")
+        }
     }
 
     func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data { throw V15Failure(kind: .transport, message: "F3-F 无文件读取。") }

@@ -151,6 +151,20 @@ async def get_ai_proposal(proposal_id: UUID, service: AIServiceDependency) -> AI
     return await service.get(proposal_id)
 
 
+@router.delete(
+    "/proposals/{proposal_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    dependencies=[formal_mutation("ai", "attention")],
+)
+async def delete_ai_proposal(
+    proposal_id: UUID,
+    service: AIServiceDependency,
+    expected_version: Annotated[int, Query(ge=1)],
+) -> Response:
+    await service.delete(proposal_id, expected_version)
+    return Response(status_code=http_status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/proposals/{proposal_id}/quality-events", response_model=list[AIQualityEventResponse])
 async def get_ai_quality_events(
     proposal_id: UUID, service: AIServiceDependency

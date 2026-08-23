@@ -37,4 +37,22 @@ import XCTest
         XCTAssertTrue(element(app, "v15.f3f.unknown.create-abandon").exists)
         app.terminate()
     }
+
+    func testUnpostedProposalDeletionRequiresConfirmationAndRemovesTheItem() {
+        let app = launchGalleryMac(["--v15-f3f-route", "ai-proposals"])
+        XCTAssertTrue(element(app, "v15.f3f.ai.macos").waitForExistence(timeout: 10))
+        let failed = element(app, "v15.f3f.proposal.00000000-0000-0000-0000-00000000F302")
+        XCTAssertTrue(failed.waitForExistence(timeout: 8))
+        failed.tap()
+        let delete = app.buttons["v15.f3f.delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 8))
+        delete.tap()
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 6))
+        XCTAssertTrue(alert.staticTexts["只删除这项尚未记账的内容，不会影响账本。删除后无法恢复。"].exists)
+        alert.buttons["删除"].tap()
+        XCTAssertTrue(failed.waitForNonExistence(timeout: 8))
+        XCTAssertTrue(element(app, "v15.f3f.success").waitForExistence(timeout: 8))
+        app.terminate()
+    }
 }

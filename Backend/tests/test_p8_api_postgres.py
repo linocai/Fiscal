@@ -149,6 +149,17 @@ def test_p8_real_api_nested_edit_idempotency_and_queue_count() -> None:
         assert queue.json()["pending_count"] >= 1
         assert any(item["id"] == body["id"] for item in queue.json()["items"])
 
+        revision = client.get("/api/v1/data-revision", headers=auth).json()["revision"]
+        deleted = client.delete(
+            f"/api/v1/ai/proposals/{body['id']}?expected_version={edited.json()['version']}",
+            headers=auth,
+        )
+        assert deleted.status_code == 204, deleted.text
+        assert int(deleted.headers["X-Fiscal-Data-Revision"]) == revision + 1
+        assert client.get(f"/api/v1/ai/proposals/{body['id']}", headers=auth).status_code == 404
+        refreshed_queue = client.get("/api/v1/ai/proposals?status=pending", headers=auth)
+        assert not any(item["id"] == body["id"] for item in refreshed_queue.json()["items"])
+
 
 def test_d3_settings_and_strategy_reject_retired_automatic_execution() -> None:
     assert TEST_DATABASE_URL is not None

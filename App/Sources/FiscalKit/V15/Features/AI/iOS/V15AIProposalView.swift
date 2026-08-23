@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 public struct V15AIProposalView: View {
     @State private var model: V15AIProposalModel
@@ -25,6 +28,7 @@ public struct V15AIProposalView: View {
                 .padding(V15Spacing.md)
                 .frame(maxWidth: 720, alignment: .leading)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(V15Palette.paper.color)
             .navigationTitle("AI 记账")
             .toolbar { Button("刷新") { Task { await model.load() } }.accessibilityIdentifier("v15.f3f.refresh") }
@@ -53,7 +57,10 @@ public struct V15AIProposalView: View {
         V15Section("新建待确认内容") {
             Picker("来源", selection: $model.source) { ForEach(V15AIProposalSource.allCases) { Text($0.displayName).tag($0) } }.pickerStyle(.segmented).accessibilityIdentifier("v15.f3f.create.source")
             V15Field("记账文字", text: $model.inputText, prompt: "例如：午餐 132 元，日常借记", issues: [], axis: .vertical).accessibilityIdentifier("v15.f3f.create.text")
-            V15ActionButton("生成待确认账目", kind: .primary, disabledReasons: model.createReasons) { Task { await model.create() } }.accessibilityIdentifier("v15.f3f.create.submit")
+            V15ActionButton("生成待确认账目", kind: .primary, disabledReasons: model.createReasons) {
+                dismissKeyboard()
+                Task { await model.create() }
+            }.accessibilityIdentifier("v15.f3f.create.submit")
             V15AIStableCreateRecoverySurface(model: model)
         }
     }
@@ -112,6 +119,7 @@ public struct V15AIProposalView: View {
                     }
                 }.padding(V15Spacing.md)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(V15Palette.paper.color)
             .navigationTitle("检查 AI 内容")
             .toolbar { Button("关闭") { showsReview = false }.disabled(model.mutationPhase == .loading).accessibilityIdentifier("v15.f3f.editor.close") }
@@ -119,5 +127,11 @@ public struct V15AIProposalView: View {
         .presentationDetents([.large])
         .interactiveDismissDisabled(model.mutationPhase == .loading || model.hasUnknownDirect)
         .accessibilityIdentifier("v15.f3f.editor.sheet")
+    }
+
+    private func dismissKeyboard() {
+        #if os(iOS)
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #endif
     }
 }

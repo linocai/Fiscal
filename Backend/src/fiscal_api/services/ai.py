@@ -407,6 +407,42 @@ class AIService:
     async def get(self, proposal_id: UUID) -> AIProposalResponse:
         return self._proposal_response(await self._required(proposal_id))
 
+    async def delete(self, proposal_id: UUID, expected_version: int) -> None:
+        await acquire_mutation_lock(self.session)
+        proposal = await self._required(proposal_id, for_update=True)
+        check_version(
+            proposal.version,
+            expected_version,
+            resource_type="ai_proposal",
+            resource_id=str(proposal.id),
+            reload_path=f"/api/v1/ai/proposals/{proposal.id}",
+        )
+        deletable = {
+            AIProposalStatus.PENDING.value,
+            AIProposalStatus.FAILED.value,
+            AIProposalStatus.IGNORED.value,
+        }
+        if (
+            proposal.status not in deletable
+            or proposal.transaction_id is not None
+            or proposal.cash_flow_item_id is not None
+        ):
+            conflict(
+                "ai_proposal_delete_forbidden",
+                "只有尚未记账的待确认、解析失败或已忽略内容可以删除",
+                details={
+                    "reason": "proposal_not_deletable",
+                    "safe_to_reload": True,
+                    "resource": {
+                        "resource_type": "ai_proposal",
+                        "resource_id": str(proposal.id),
+                        "reload_path": f"/api/v1/ai/proposals/{proposal.id}",
+                    },
+                },
+            )
+        await self.repository.delete_proposal(proposal)
+        await self.session.commit()
+
     async def list(
         self, *, status: ProposalStatus | None, cursor: str | None, limit: int
     ) -> AIProposalPage:

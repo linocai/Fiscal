@@ -236,7 +236,7 @@ class AIQualityEvent(Base):
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     proposal_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("ai_proposals.id", ondelete="RESTRICT"), nullable=False
+        Uuid, ForeignKey("ai_proposals.id", ondelete="CASCADE"), nullable=False
     )
     event_type: Mapped[str] = mapped_column(String(32), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(120), nullable=True)

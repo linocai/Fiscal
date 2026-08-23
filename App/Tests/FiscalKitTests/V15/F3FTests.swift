@@ -54,6 +54,7 @@ struct F3FTests {
         let draft = V15TransactionCreateRequest(kind: .expense, amountMinor: 13_200, occurredAt: Date(timeIntervalSince1970: 1_786_854_600), title: "人工确认", accountID: V15F3FFixtures.cashAccountID)
         _ = try await services.ai.replace(id: V15F3FFixtures.pendingID, request: .init(draft: draft, expectedVersion: 2))
         _ = try await services.ai.undo(id: V15F3FFixtures.executedID, expectedVersion: 5, expectedTransactionVersion: 3)
+        try await services.ai.delete(id: V15F3FFixtures.failedID, expectedVersion: 2)
         let requests = await transport.allRequests()
         let page = try #require(requests.first)
         #expect(page.query.contains(.init(name: "status", value: "pending")))
@@ -67,6 +68,10 @@ struct F3FTests {
         let undoBody = try #require(try JSONSerialization.jsonObject(with: Data(undo.body.utf8)) as? [String: Any])
         #expect(undoBody["expected_version"] as? Int == 5)
         #expect(undoBody["expected_transaction_version"] as? Int == 3)
+        let delete = try #require(wires.first { $0.method == "DELETE" })
+        #expect(delete.path == "ai/proposals/\(V15F3FFixtures.failedID)")
+        #expect(delete.query == ["expected_version": "2"])
+        #expect(delete.body.isEmpty)
     }
 
     @Test("Create installs one immutable key and unknown recovery reuses that exact key and body")
@@ -184,6 +189,81 @@ struct F3FTests {
         #expect(undoModel.selectedProposal?.status == .undone)
         let body = try #require(await undoTransport.mutationWires().last?.body)
         #expect(body.contains("expected_transaction_version"))
+    }
+
+    @Test("Only unposted pending, failed and ignored proposals allow permanent deletion")
+    @MainActor func deletionPolicy() async throws {
+        let model = await loaded()
+        for status in ["pending", "failed", "ignored"] {
+            let proposal = try V15FixtureCodec.decoder.decode(V15AIProposal.self, from: Data(V15F3FFixtures.proposal(id: UUID(), status: status, missing: []).utf8))
+            #expect(model.actionReasons(.delete, proposal: proposal).isEmpty)
+        }
+        for status in ["processing", "executed", "undone", "future_review"] {
+            let proposal = try V15FixtureCodec.decoder.decode(V15AIProposal.self, from: Data(V15F3FFixtures.proposal(id: UUID(), status: status, missing: [], transaction: status == "executed").utf8))
+            #expect(!model.actionReasons(.delete, proposal: proposal).isEmpty)
+        }
+    }
+
+    @Test("Confirmed deletion sends once, updates the queue and selects the adjacent item")
+    @MainActor func deleteUpdatesQueueExactlyOnce() async throws {
+        let transport = F3FTransport(mode: .normal)
+        let model = await loaded(transport)
+        let deletedID = try #require(model.selectedProposal?.id)
+        let initialCount = model.proposals.count
+        let initialPendingCount = model.pendingCount
+
+        async let first: Void = model.deleteSelected()
+        async let duplicate: Void = model.deleteSelected()
+        _ = await (first, duplicate)
+
+        #expect(!model.proposals.contains { $0.id == deletedID })
+        #expect(model.proposals.count == initialCount - 1)
+        #expect(model.pendingCount == initialPendingCount - 1)
+        #expect(model.selectedProposal?.id == V15F3FFixtures.failedID)
+        #expect(model.mutationPhase == .succeeded("这项未记账内容已删除。"))
+        #expect(await transport.mutationWires().filter { $0.method == "DELETE" }.count == 1)
+    }
+
+    @Test("Unknown delete outcome is confirmed by a fresh not-found read without resending")
+    @MainActor func unknownDeleteReadback() async throws {
+        let transport = F3FTransport(mode: .deleteUnknown)
+        let model = await loaded(transport)
+        let deletedID = try #require(model.selectedProposal?.id)
+        await model.deleteSelected()
+        #expect(model.hasUnknownDirect)
+        #expect(model.writeLocked)
+        await model.recoverUnknownDirect()
+        #expect(!model.proposals.contains { $0.id == deletedID })
+        #expect(!model.hasUnknownDirect)
+        #expect(await transport.mutationWires().filter { $0.method == "DELETE" }.count == 1)
+    }
+
+    @Test("Failed delete readback keeps the lock until a later fresh read confirms deletion")
+    @MainActor func unknownDeleteReadbackFailureRetainsLock() async throws {
+        let transport = F3FTransport(mode: .deleteUnknownReadFailure)
+        let model = await loaded(transport)
+        let deletedID = try #require(model.selectedProposal?.id)
+        await model.deleteSelected()
+        await model.recoverUnknownDirect()
+        #expect(model.hasUnknownDirect)
+        #expect(model.writeLocked)
+        #expect(!model.readbackCompleted)
+        await model.recoverUnknownDirect()
+        #expect(!model.proposals.contains { $0.id == deletedID })
+        #expect(!model.hasUnknownDirect)
+        #expect(await transport.mutationWires().filter { $0.method == "DELETE" }.count == 1)
+    }
+
+    @Test("Delete conflict requires a fresh read and never automatically retries the mutation")
+    @MainActor func deleteConflictReadback() async throws {
+        let transport = F3FTransport(mode: .conflict)
+        let model = await loaded(transport)
+        await model.deleteSelected()
+        guard case .conflict = model.mutationPhase else { Issue.record("Expected conflict"); return }
+        await model.reloadConflict()
+        #expect(model.mutationPhase == .idle)
+        #expect(model.selectedProposal?.id == V15F3FFixtures.pendingID)
+        #expect(await transport.mutationWires().filter { $0.method == "DELETE" }.count == 1)
     }
 
     @Test("No-key response unknown requires fresh GET and never resends or claims attribution")
@@ -412,7 +492,9 @@ struct F3FTests {
         await model.create()
         if let proposal = model.selectedProposal {
             #expect(model.actionReasons(.ignore, proposal: proposal).contains { $0.code == "offline_read_only" })
+            #expect(model.actionReasons(.delete, proposal: proposal).contains { $0.code == "offline_read_only" })
             await model.ignore()
+            await model.deleteSelected()
         }
         #expect(await transport.mutationWires().isEmpty)
     }
