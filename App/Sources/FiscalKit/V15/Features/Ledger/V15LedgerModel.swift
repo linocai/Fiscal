@@ -319,6 +319,9 @@ public final class V15LedgerModel {
     }
     public func accountName(_ id: UUID?) -> String { guard let id else { return "未提供账户" }; return accounts.first(where: { $0.id == id })?.name ?? "账户信息不可读取" }
     public func categoryName(_ id: UUID?) -> String { guard let id else { return "未分类" }; return categories.first(where: { $0.id == id })?.name ?? "分类信息不可读取" }
+    public func transactionPresentation(_ transaction: V15Transaction) -> V15AccountTransactionPresentation {
+        V15AccountTransactionPresenter.present(transaction, scopedAccountID: filter.accountID, accounts: accounts)
+    }
 
     private func mutate(_ action: MutationAction) async {
         guard let selected else { return }; lastAction = action

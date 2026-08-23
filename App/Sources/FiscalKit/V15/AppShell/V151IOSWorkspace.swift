@@ -36,6 +36,7 @@ public struct V151IOSWorkspace: View {
     @State private var destination: Destination?
     @State private var ledgerFocusID: UUID?
     @State private var todayDecisionCount = 0
+    @State private var recordFactsRevision: UInt64 = 0
 
     public init(services: V15Services) { self.services = services }
 
@@ -46,12 +47,13 @@ public struct V151IOSWorkspace: View {
                 case .today:
                     V151IOSTodayDashboard(
                         services: services,
+                        recordFactsRevision: recordFactsRevision,
                         openLedger: { id in ledgerFocusID = id; tab = .ledger },
                         openDestination: { destination = $0 },
                         decisionCountChanged: { todayDecisionCount = $0 }
                     )
                 case .ledger:
-                    V151IOSLedger(services: services, focusID: ledgerFocusID, openDestination: { destination = $0 })
+                    V151IOSLedger(services: services, focusID: ledgerFocusID, recordFactsRevision: recordFactsRevision, openDestination: { destination = $0 })
                 }
             }
             .padding(.bottom, 66)
@@ -69,11 +71,16 @@ public struct V151IOSWorkspace: View {
         .background(V15Palette.paper.color.ignoresSafeArea())
         .tint(V15Palette.teal.color)
         .fullScreenCover(isPresented: $recordPresented) {
-            V15RecordView(services: services, presentsEditorDirectly: true)
+            V15RecordView(services: services, presentsEditorDirectly: true, onCommitted: recordCommitted)
         }
         .fullScreenCover(item: $destination) { value in
             V151IOSDestinationHost(services: services, destination: value)
         }
+    }
+
+    private func recordCommitted(_ outcome: V15RecordModel.CommitOutcome) {
+        guard case .confirmed = outcome else { return }
+        recordFactsRevision &+= 1
     }
 
     private var bottomBar: some View {
@@ -136,6 +143,7 @@ public struct V151IOSWorkspace: View {
 private struct V151IOSTodayDashboard: View {
     private enum ReportPhase { case idle, loading, loaded, failed }
     let services: V15Services
+    let recordFactsRevision: UInt64
     let openLedger: (UUID?) -> Void
     let openDestination: (V151IOSWorkspace.Destination) -> Void
     let decisionCountChanged: (Int) -> Void
@@ -146,8 +154,9 @@ private struct V151IOSTodayDashboard: View {
     @State private var expandedDecisionID: String?
     @State private var creditDecisionExpanded = false
 
-    init(services: V15Services, openLedger: @escaping (UUID?) -> Void, openDestination: @escaping (V151IOSWorkspace.Destination) -> Void, decisionCountChanged: @escaping (Int) -> Void) {
+    init(services: V15Services, recordFactsRevision: UInt64, openLedger: @escaping (UUID?) -> Void, openDestination: @escaping (V151IOSWorkspace.Destination) -> Void, decisionCountChanged: @escaping (Int) -> Void) {
         self.services = services
+        self.recordFactsRevision = recordFactsRevision
         self.openLedger = openLedger
         self.openDestination = openDestination
         self.decisionCountChanged = decisionCountChanged
@@ -166,7 +175,7 @@ private struct V151IOSTodayDashboard: View {
         }
         .background(V15Palette.paper.color)
         .refreshable { await refresh() }
-        .task { await refresh() }
+        .task(id: recordFactsRevision) { await refresh() }
         .onChange(of: visibleAttention.count, initial: true) { _, value in decisionCountChanged(value) }
         .accessibilityIdentifier("v151.ios.today")
     }
@@ -932,6 +941,7 @@ private struct V151IOSCashFlowInlineDecision: View {
 private struct V151IOSLedger: View {
     let services: V15Services
     let focusID: UUID?
+    let recordFactsRevision: UInt64
     let openDestination: (V151IOSWorkspace.Destination) -> Void
     @State private var model: V15LedgerModel
     @State private var selectedID: UUID?
@@ -941,9 +951,10 @@ private struct V151IOSLedger: View {
     @State private var categoryEditing = false
     @State private var selectedAccountID: UUID?
 
-    init(services: V15Services, focusID: UUID?, openDestination: @escaping (V151IOSWorkspace.Destination) -> Void) {
+    init(services: V15Services, focusID: UUID?, recordFactsRevision: UInt64, openDestination: @escaping (V151IOSWorkspace.Destination) -> Void) {
         self.services = services
         self.focusID = focusID
+        self.recordFactsRevision = recordFactsRevision
         self.openDestination = openDestination
         _model = State(initialValue: V15LedgerModel(services: services))
     }
@@ -955,7 +966,7 @@ private struct V151IOSLedger: View {
             ledgerList
         }
         .background(V15Palette.paper.color)
-        .task(id: focusID) { await loadInitialContent() }
+        .task(id: LedgerRefreshOwner(focusID: focusID, revision: recordFactsRevision)) { await loadInitialContent() }
         .sheet(item: Binding(
             get: { selectedID.map(SelectedTransactionID.init) },
             set: { value in
@@ -968,7 +979,7 @@ private struct V151IOSLedger: View {
             get: { selectedAccountID.map(SelectedAccountID.init) },
             set: { selectedAccountID = $0?.id }
         )) { value in
-            V151IOSAccountDetail(services: services, accountID: value.id, openDestination: openDestination)
+            V151IOSAccountDetail(services: services, accountID: value.id, recordFactsRevision: recordFactsRevision, openDestination: openDestination)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -1061,7 +1072,8 @@ private struct V151IOSLedger: View {
     }
 
     private func row(_ transaction: V15Transaction) -> some View {
-        Button {
+        let presentation = model.transactionPresentation(transaction)
+        return Button {
             resetCategoryEditor()
             selectedID = transaction.id
             Task { await model.select(transaction) }
@@ -1070,10 +1082,10 @@ private struct V151IOSLedger: View {
                 Rectangle().fill(transaction.categoryID == nil ? V15Palette.teal.color : Color.clear).frame(width: 3, height: 36)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(transaction.title).font(V15Typography.body.weight(.medium)).strikethrough(transaction.voidedAt != nil).foregroundStyle(V15Palette.ink.color).lineLimit(1)
-                    Text("\(shortDate(transaction.businessDate)) · \(model.categoryName(transaction.categoryID)) · \(model.accountName(transaction.accountID))\(transaction.voidedAt == nil ? "" : " · 归档 · 只读")").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.58)).lineLimit(2)
+                    Text("\(shortDate(transaction.businessDate)) · \(model.categoryName(transaction.categoryID)) · \(presentation.accountPath)\(presentation.accountEffect.map { " · \($0)" } ?? "")\(transaction.voidedAt == nil ? "" : " · 归档 · 只读")").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.58)).lineLimit(2)
                 }
                 Spacer(minLength: 8)
-                V15MoneyText(minorUnits: transaction.amountMinor, direction: direction(transaction), includeCurrency: false, font: V15Typography.money)
+                V15MoneyText(minorUnits: presentation.amountMinor, direction: presentation.direction, includeCurrency: false, font: V15Typography.money)
             }
             .padding(.horizontal, 16).padding(.vertical, 13).contentShape(Rectangle())
             .background { if transaction.voidedAt != nil { V15ArchiveHatch() } }
@@ -1112,9 +1124,10 @@ private struct V151IOSLedger: View {
     }
 
     private func detail(_ transaction: V15Transaction) -> some View {
-        VStack(alignment: .leading, spacing: 17) {
+        let presentation = model.transactionPresentation(transaction)
+        return VStack(alignment: .leading, spacing: 17) {
             Text(transaction.title).font(V15Typography.cardTitle)
-            V15MoneyText(minorUnits: transaction.amountMinor, direction: direction(transaction), font: V15Typography.moneyLarge)
+            V15MoneyText(minorUnits: presentation.amountMinor, direction: presentation.direction, font: V15Typography.moneyLarge)
             if transaction.voidedAt != nil {
                 V15ArchiveReadOnlyState {
                     Text("归档 · 只读。可使用下方的恢复入口。").font(V15Typography.secondary)
@@ -1122,7 +1135,8 @@ private struct V151IOSLedger: View {
             }
             V15Section("账目详情") {
                 detailRow("类型", transactionKindLabel(transaction.kind))
-                detailRow("账户", model.accountName(transaction.accountID))
+                detailRow("账户", presentation.accountPath)
+                if let effect = presentation.accountEffect { detailRow("当前账户影响", effect) }
                 detailRow("分类", model.categoryName(transaction.categoryID))
                 detailRow("业务日期", transaction.businessDate)
                 detailRow("来源", sourceLabel(transaction.source))
@@ -1243,6 +1257,7 @@ private struct V151IOSLedger: View {
 
     private struct SelectedTransactionID: Identifiable { let id: UUID }
     private struct SelectedAccountID: Identifiable { let id: UUID }
+    private struct LedgerRefreshOwner: Hashable { let focusID: UUID?; let revision: UInt64 }
     private func shortDate(_ value: String) -> String { value.count >= 5 ? String(value.suffix(5)) : value }
     private func direction(_ transaction: V15Transaction) -> V15MoneyDirection { switch transaction.kind { case "income", "reimbursement_receipt": .inflow; case "transfer": .neutral; default: .outflow } }
     private func transactionKindLabel(_ value: String) -> String { V15LedgerReadKind(rawValue: value)?.displayName ?? "账目" }
@@ -1253,6 +1268,7 @@ private struct V151IOSAccountDetail: View {
     private enum Phase { case loading, loaded(V15AccountResponse), failed(V15Failure) }
     let services: V15Services
     let accountID: UUID
+    let recordFactsRevision: UInt64
     let openDestination: (V151IOSWorkspace.Destination) -> Void
     @State private var phase: Phase = .loading
     @Environment(\.dismiss) private var dismiss
@@ -1278,7 +1294,7 @@ private struct V151IOSAccountDetail: View {
             }
         }
         .background(V15Palette.card.color)
-        .task(id: accountID) { await load() }
+        .task(id: recordFactsRevision) { await load() }
     }
 
     private func accountContent(_ account: V15AccountResponse) -> some View {

@@ -142,6 +142,119 @@ struct F1BTests {
             else { guard case .failed = model.mutation else { Issue.record("deterministic failure must stay failed"); continue } }
         }
     }
+
+    @Test("account-scoped repayment uses the selected posting and explains both accounts")
+    func accountScopedRepaymentPresentation() {
+        let sourceID = UUID()
+        let creditID = UUID()
+        let accounts = [
+            presentationAccount(id: sourceID, name: "杭联0519", kind: .debit),
+            presentationAccount(id: creditID, name: "花呗", kind: .credit)
+        ]
+        let repayment = presentationTransaction(
+            kind: "repayment",
+            amountMinor: 159_882,
+            accountID: sourceID,
+            destinationAccountID: creditID,
+            postings: [
+                .init(id: UUID(), accountID: sourceID, role: "source", amountMinor: -159_882, position: 0),
+                .init(id: UUID(), accountID: creditID, role: "destination", amountMinor: 159_882, position: 1)
+            ]
+        )
+
+        let creditView = V15AccountTransactionPresenter.present(repayment, scopedAccountID: creditID, accounts: accounts)
+        #expect(creditView.accountPath == "杭联0519 → 花呗")
+        #expect(creditView.accountEffect == "欠款减少")
+        #expect(creditView.amountMinor == 159_882 && creditView.direction == .inflow)
+        #expect(creditView.hasAuthoritativePosting)
+
+        let sourceView = V15AccountTransactionPresenter.present(repayment, scopedAccountID: sourceID, accounts: accounts)
+        #expect(sourceView.accountPath == "杭联0519 → 花呗")
+        #expect(sourceView.accountEffect == "余额减少")
+        #expect(sourceView.amountMinor == -159_882 && sourceView.direction == .outflow)
+    }
+
+    @Test("credit expense is debt growth while an unscoped ledger keeps transaction direction")
+    func creditExpensePresentation() {
+        let creditID = UUID()
+        let account = presentationAccount(id: creditID, name: "花呗", kind: .credit)
+        let expense = presentationTransaction(
+            kind: "expense",
+            amountMinor: 2_800,
+            accountID: creditID,
+            postings: [.init(id: UUID(), accountID: creditID, role: "account", amountMinor: -2_800, position: 0)]
+        )
+
+        let scoped = V15AccountTransactionPresenter.present(expense, scopedAccountID: creditID, accounts: [account])
+        #expect(scoped.accountEffect == "欠款增加")
+        #expect(scoped.amountMinor == -2_800 && scoped.direction == .outflow)
+
+        let unscoped = V15AccountTransactionPresenter.present(expense, scopedAccountID: nil, accounts: [account])
+        #expect(unscoped.accountEffect == nil && unscoped.amountMinor == 2_800 && unscoped.direction == .outflow)
+        #expect(!unscoped.isAccountScoped && !unscoped.hasAuthoritativePosting)
+    }
+
+    @Test("income and transfers follow each selected account posting")
+    func incomeAndTransferPresentation() {
+        let sourceID = UUID()
+        let destinationID = UUID()
+        let accounts = [
+            presentationAccount(id: sourceID, name: "工资卡", kind: .debit),
+            presentationAccount(id: destinationID, name: "储蓄卡", kind: .debit)
+        ]
+        let income = presentationTransaction(
+            kind: "income",
+            amountMinor: 5_000,
+            accountID: sourceID,
+            postings: [.init(id: UUID(), accountID: sourceID, role: "account", amountMinor: 5_000, position: 0)]
+        )
+        let incomeView = V15AccountTransactionPresenter.present(income, scopedAccountID: sourceID, accounts: accounts)
+        #expect(incomeView.accountEffect == "余额增加" && incomeView.direction == .inflow)
+
+        let transfer = presentationTransaction(
+            kind: "transfer",
+            amountMinor: 1_000,
+            accountID: sourceID,
+            destinationAccountID: destinationID,
+            postings: [
+                .init(id: UUID(), accountID: sourceID, role: "source", amountMinor: -1_000, position: 0),
+                .init(id: UUID(), accountID: destinationID, role: "destination", amountMinor: 1_000, position: 1)
+            ]
+        )
+        let source = V15AccountTransactionPresenter.present(transfer, scopedAccountID: sourceID, accounts: accounts)
+        let destination = V15AccountTransactionPresenter.present(transfer, scopedAccountID: destinationID, accounts: accounts)
+        #expect(source.accountPath == "工资卡 → 储蓄卡" && source.accountEffect == "余额减少" && source.direction == .outflow)
+        #expect(destination.accountPath == "工资卡 → 储蓄卡" && destination.accountEffect == "余额增加" && destination.direction == .inflow)
+    }
+}
+
+private func presentationAccount(id: UUID, name: String, kind: V15AccountKind) -> V15AccountResponse {
+    let now = Date(timeIntervalSince1970: 0)
+    return .init(
+        id: id, name: name, kind: kind, institution: nil, lastFour: nil,
+        openingBalanceMinor: 0, currentBalanceMinor: 0, creditLimitMinor: nil,
+        statementDay: nil, dueDay: nil, cycleMode: nil, openingBalanceAsOfDate: nil,
+        openingDueDate: nil, sortOrder: 0, archivedAt: nil, usageCount: 0, version: 1,
+        createdAt: now, updatedAt: now
+    )
+}
+
+private func presentationTransaction(
+    kind: String,
+    amountMinor: V15MinorUnits,
+    accountID: UUID?,
+    destinationAccountID: UUID? = nil,
+    postings: [V15Posting]
+) -> V15Transaction {
+    let now = Date(timeIntervalSince1970: 0)
+    return .init(
+        id: UUID(), kind: kind, amountMinor: amountMinor, occurredAt: now,
+        businessDate: "2026-08-23", title: "测试账目", note: nil, categoryID: nil,
+        accountID: accountID, destinationAccountID: destinationAccountID, creditCycleID: nil,
+        source: "manual", postings: postings, version: 1, voidedAt: nil, createdAt: now,
+        updatedAt: now, installmentPlanID: nil, installmentRelation: nil,
+        reimbursementRelations: [], availableActions: []
+    )
 }
 
 actor F1BControlledTransport: V15Transporting {

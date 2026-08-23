@@ -145,27 +145,81 @@ struct F1ATests {
         await model.submit(); let retryKey = try #require(await transport.createKeys().last)
         #expect(unknownKey == retryKey)
 
-        model.title = "编辑后新请求"
+        configureValidExpense(model, title: "编辑后新请求")
         await model.submit(); let editedUnknownKey = try #require(await transport.createKeys().last)
         #expect(editedUnknownKey != unknownKey)
         await model.submit(); let editedRetryKey = try #require(await transport.createKeys().last)
         #expect(editedRetryKey == editedUnknownKey)
 
-        model.title = "422 后新请求"
+        configureValidExpense(model, title: "422 后新请求")
         await model.submit(); let validationKey = try #require(await transport.createKeys().last)
         await model.submit(); let validationRetryKey = try #require(await transport.createKeys().last)
         #expect(validationRetryKey != validationKey)
 
-        model.title = "409 后新请求"
+        configureValidExpense(model, title: "409 后新请求")
         await model.submit(); let conflictKey = try #require(await transport.createKeys().last)
+        await model.reloadAfterConflict()
         await model.submit(); let conflictRetryKey = try #require(await transport.createKeys().last)
         #expect(conflictRetryKey != conflictKey)
 
-        model.title = "成功后下一笔"
+        configureValidExpense(model, title: "成功后下一笔")
         await model.submit(); let successKey = try #require(await transport.createKeys().last)
-        model.newEntry(); configureValidExpense(model, title: "下一笔")
+        configureValidExpense(model, title: "下一笔")
         await model.submit(); let nextKey = try #require(await transport.createKeys().last)
         #expect(nextKey != successKey)
+    }
+
+    @Test("one confirmed save clears the draft and concurrent taps create only once")
+    @MainActor func confirmedSaveClearsAndDeduplicates() async throws {
+        let transport = F1AControlledTransport(createDelayMilliseconds: 80)
+        let model = V15RecordModel(services: V15Services(transport: transport))
+        await model.loadReferences()
+        configureValidExpense(model, title: "只应保存一次")
+
+        let first = Task { @MainActor in await model.submit() }
+        while await transport.createCount() == 0 { await Task.yield() }
+        let second = await model.submit()
+        let firstOutcome = await first.value
+
+        guard case .confirmed = firstOutcome else { Issue.record("first submit should be confirmed"); return }
+        #expect(second == nil)
+        #expect(await transport.createCount() == 1)
+        #expect(model.title.isEmpty && model.amountText.isEmpty && model.note.isEmpty)
+        #expect(model.accountID == nil && model.destinationAccountID == nil && model.categoryID == nil && model.creditCycleID == nil)
+        guard case .success = model.submission else { Issue.record("receipt should remain visible"); return }
+
+        let accidentalThirdTap = await model.submit()
+        #expect(accidentalThirdTap == nil)
+        #expect(await transport.createCount() == 1)
+    }
+
+    @Test("queued saves clear once while deterministic failures preserve the draft")
+    @MainActor func queuedAndFailedDraftLifecycle() async {
+        let offlineTransport = F1AControlledTransport()
+        let pendingWrites = V15PendingWriteStore()
+        let offlineServices = V15Services(
+            transport: offlineTransport,
+            offlineSnapshotProvider: { Date(timeIntervalSince1970: 1_700_000_000) },
+            pendingWrites: pendingWrites
+        )
+        let offlineModel = V15RecordModel(services: offlineServices)
+        await offlineModel.loadReferences()
+        configureValidExpense(offlineModel, title: "离线一笔")
+        let queued = await offlineModel.submit()
+        guard case .queued = queued else { Issue.record("offline save should queue"); return }
+        #expect(offlineModel.title.isEmpty && offlineModel.amountText.isEmpty)
+        #expect(pendingWrites.count == 1)
+        #expect(await offlineTransport.createCount() == 0)
+
+        let failureTransport = F1AControlledTransport(outcomes: [.validation])
+        let failureModel = V15RecordModel(services: V15Services(transport: failureTransport))
+        await failureModel.loadReferences()
+        configureValidExpense(failureModel, title: "失败后保留")
+        let failed = await failureModel.submit()
+        #expect(failed == nil)
+        #expect(failureModel.title == "失败后保留" && failureModel.amountText == "12.80")
+        #expect(failureModel.accountID == V15F1AFixtures.accountID)
+        guard case .failed = failureModel.submission else { Issue.record("deterministic failure should remain visible"); return }
     }
 }
 
@@ -179,14 +233,19 @@ actor F1AControlledTransport: V15Transporting {
     private var requests: [V15Request] = []
     private var bodies: [JSONValue?] = []
     private var transactionKeys: [String] = []
+    private let createDelayMilliseconds: Int
 
-    init(outcomes: [CreateOutcome] = []) { self.outcomes = outcomes }
+    init(outcomes: [CreateOutcome] = [], createDelayMilliseconds: Int = 0) {
+        self.outcomes = outcomes
+        self.createDelayMilliseconds = createDelayMilliseconds
+    }
 
     func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
         requests.append(request)
         bodies.append(body)
         if request.path == "transactions" {
             transactionKeys.append(request.headers["Idempotency-Key"] ?? "")
+            if createDelayMilliseconds > 0 { try await Task.sleep(for: .milliseconds(createDelayMilliseconds)) }
             switch outcomes.isEmpty ? .success : outcomes.removeFirst() {
             case .responseUnknown: throw V15Failure(kind: .responseUnknown, code: "response_unknown", message: "unknown")
             case .validation: throw V15Failure(kind: .transport, code: "validation_failed", message: "invalid", fieldIssues: [.init(code: "invalid", message: "invalid", fieldPath: "title")])
@@ -216,6 +275,7 @@ actor F1AControlledTransport: V15Transporting {
     func lastRequest() -> V15Request? { requests.last }
     func lastBody() -> JSONValue? { bodies.last ?? nil }
     func createKeys() -> [String] { transactionKeys }
+    func createCount() -> Int { transactionKeys.count }
     private func decode<Response: Decodable>(_ data: Data) throws -> Response { try V15FixtureCodec.decoder.decode(Response.self, from: data) }
 }
 

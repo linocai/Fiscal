@@ -4,8 +4,9 @@ public struct V15RecordView: View {
     @State private var editorPresented = false
     @State private var model: V15RecordModel
     private let presentsEditorDirectly: Bool
+    private let onCommitted: (V15RecordModel.CommitOutcome) -> Void
     @Environment(\.dismiss) private var dismiss
-    public init(services: V15Services, prefilled: Bool = false, repaymentPrefilled: Bool = false, occurredOn: Date = Date(), presentsEditorDirectly: Bool = false) {
+    public init(services: V15Services, prefilled: Bool = false, repaymentPrefilled: Bool = false, occurredOn: Date = Date(), presentsEditorDirectly: Bool = false, onCommitted: @escaping (V15RecordModel.CommitOutcome) -> Void = { _ in }) {
         let record = V15RecordModel(services: services, occurredOn: occurredOn)
         if prefilled { record.title = "午餐"; record.amountText = "12.80"; record.accountID = V15F1AFixtures.accountID; record.categoryID = V15F1AFixtures.categoryID }
         if repaymentPrefilled {
@@ -18,13 +19,14 @@ public struct V15RecordView: View {
         }
         _model = State(initialValue: record)
         self.presentsEditorDirectly = presentsEditorDirectly
+        self.onCommitted = onCommitted
     }
     public var body: some View {
 #if os(iOS)
         Group {
             if presentsEditorDirectly {
                 NavigationStack {
-                    V15RecordEditor(model: model)
+                    V15RecordEditor(model: model, onCommitted: onCommitted)
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } }
                         }
@@ -38,19 +40,14 @@ public struct V15RecordView: View {
                 }
             }
         }
-        .sheet(isPresented: $editorPresented, onDismiss: { model.dismiss() }) { V15RecordEditor(model: model).presentationDetents([.large]).accessibilityIdentifier("v15.f1a.record.sheet") }
+        .sheet(isPresented: $editorPresented, onDismiss: { model.dismiss() }) { V15RecordEditor(model: model, onCommitted: onCommitted).presentationDetents([.large]).accessibilityIdentifier("v15.f1a.record.sheet") }
         .accessibilityIdentifier("v15.f1a.record.ios")
 #else
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: V15Spacing.lg) {
-                Text("记一笔").font(V15Typography.surfaceTitle)
-                Text("在这里记录一笔新账目。保存后会显示最终结果。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                V15RecordHeader(open: {})
-                Spacer()
-            }.padding(V15Spacing.lg).frame(minWidth: 330, maxWidth: .infinity, alignment: .topLeading)
-            Divider()
-            V15RecordEditor(model: model).frame(width: 420)
-        }.background(V15Palette.paper.color).accessibilityIdentifier("v15.f1a.record.macos")
+        V15RecordEditor(model: model, onCommitted: onCommitted)
+            .frame(maxWidth: 820)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(V15Palette.paper.color)
+            .accessibilityIdentifier("v15.f1a.record.macos")
 #endif
     }
 }
@@ -66,6 +63,7 @@ private struct V15RecordHeader: View {
 
 private struct V15RecordEditor: View {
     @Bindable var model: V15RecordModel
+    let onCommitted: (V15RecordModel.CommitOutcome) -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
         ScrollView {
@@ -74,7 +72,7 @@ private struct V15RecordEditor: View {
                 form
                 references
                 submissionState
-                V15ActionButton("保存账目", symbol: V15Symbol.receipt, disabledReasons: disabledReasons, action: { Task { await model.submit() } })
+                V15ActionButton("保存账目", symbol: V15Symbol.receipt, disabledReasons: disabledReasons, action: submit)
                     .accessibilityIdentifier("v15.f1a.record.submit")
             }.padding(V15Spacing.lg)
         }
@@ -150,7 +148,7 @@ private struct V15RecordEditor: View {
             V15SuccessReceiptState(title: "账目已保存", detail: "已生成 \(transaction.postings.count) 条分录", actionTitle: "录入下一笔", action: { model.newEntry() })
                 .accessibilityIdentifier("v15.f1a.record.success")
         case .conflict(let conflict): V15ConflictState(conflict: conflict, reload: { Task { await model.reloadAfterConflict() } })
-        case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.submit() } })
+        case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: submit)
         default: EmptyView()
         }
     }
@@ -184,12 +182,32 @@ private struct V15RecordEditor: View {
         formatter.dateFormat = "yyyy年M月d日"
         return formatter.string(from: model.occurredOn)
     }
-    private func issues(_ path: String) -> [V15FieldIssue] { model.allIssues.filter { $0.fieldPath == path } }
+    private func issues(_ path: String) -> [V15FieldIssue] {
+        guard !isCompletedDraft else { return [] }
+        return model.allIssues.filter { $0.fieldPath == path }
+    }
     private var disabledReasons: [V15DisabledReason] {
-        var reasons = model.localIssues.map { V15DisabledReason(code: $0.code, message: $0.message, fieldPath: $0.fieldPath) }
+        var reasons = isCompletedDraft ? [] : model.localIssues.map { V15DisabledReason(code: $0.code, message: $0.message, fieldPath: $0.fieldPath) }
         if case .loading = model.accountPhase { reasons.append(.init(code: "accounts_loading", message: "账户仍在加载。", fieldPath: "account_id")) }
-        if case .submitting = model.submission { reasons.append(.init(code: "submitting", message: "正在提交账目。", fieldPath: nil)) }
+        switch model.submission {
+        case .submitting: reasons.append(.init(code: "submitting", message: "正在提交账目。", fieldPath: nil))
+        case .success: reasons.append(.init(code: "draft_completed", message: "上一笔已保存，请填写新的账目。", fieldPath: nil))
+        case .queued: reasons.append(.init(code: "draft_queued", message: "上一笔已加入待同步，请填写新的账目。", fieldPath: nil))
+        case .conflict: reasons.append(.init(code: "conflict_reload_required", message: "请先取得最新数据再决定。", fieldPath: nil))
+        case .idle, .failed: break
+        }
         return reasons
+    }
+    private var isCompletedDraft: Bool {
+        switch model.submission {
+        case .success, .queued: true
+        case .idle, .submitting, .conflict, .failed: false
+        }
+    }
+    private func submit() {
+        Task {
+            if let outcome = await model.submit() { onCommitted(outcome) }
+        }
     }
     private var shanghaiCalendar: Calendar { var calendar = Calendar(identifier: .gregorian); calendar.locale = Locale(identifier: "zh_CN"); calendar.timeZone = ShanghaiBusinessDate.timeZone; return calendar }
 }

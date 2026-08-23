@@ -92,7 +92,8 @@ private struct V15LedgerList: View {
                 case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.load() } }).padding(V15Spacing.md)
                 case .loaded:
                     ForEach(model.items, id: \.id) { transaction in
-                        V15LedgerRow(title: transaction.title, detail: transactionDetail(transaction), amountMinor: transaction.amountMinor, direction: direction(transaction), marker: transaction.voidedAt == nil ? .ordinary : .archive, action: { open(transaction) }).accessibilityIdentifier("v15.f1b.row.\(transaction.id.uuidString)")
+                        let presentation = model.transactionPresentation(transaction)
+                        V15LedgerRow(title: transaction.title, detail: transactionDetail(transaction, presentation: presentation), amountMinor: presentation.amountMinor, direction: presentation.direction, marker: transaction.voidedAt == nil ? .ordinary : .archive, action: { open(transaction) }).accessibilityIdentifier("v15.f1b.row.\(transaction.id.uuidString)")
                         Divider().padding(.leading, V15Spacing.md)
                     }
                     nextPage
@@ -120,13 +121,14 @@ private struct V15LedgerDetail: View {
         }.padding(V15Spacing.md) }.background(V15Palette.paper.color).accessibilityIdentifier("v15.f1b.detail")
     }
     @ViewBuilder private func detail(_ transaction: V15Transaction) -> some View {
+        let presentation = model.transactionPresentation(transaction)
         V15Section("可用操作") { actions(transaction) }
         V15Section("账目详情", detail: transactionKindLabel(transaction.kind)) {
             Text(transaction.title).font(V15Typography.surfaceTitle).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("v15.f1b.detail.title")
-            V15MoneyText(minorUnits: transaction.amountMinor, direction: direction(transaction), font: V15Typography.money)
+            V15MoneyText(minorUnits: presentation.amountMinor, direction: presentation.direction, font: V15Typography.money)
             Text("业务日（上海）：\(transaction.businessDate) · 来源：\(sourceLabel(transaction.source))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
-            Text("账户：\(model.accountName(transaction.accountID))").font(V15Typography.secondary)
-            if transaction.destinationAccountID != nil { Text("目标账户：\(model.accountName(transaction.destinationAccountID))").font(V15Typography.secondary) }
+            Text("账户：\(presentation.accountPath)").font(V15Typography.secondary)
+            if let effect = presentation.accountEffect { Text("当前账户影响：\(effect)").font(V15Typography.secondary) }
             Text("分类：\(model.categoryName(transaction.categoryID))").font(V15Typography.secondary)
             if let cycle = model.selectedCycle { Text("信用账期：\(cycle.periodStart) 至 \(cycle.periodEnd) · 还款日 \(cycle.dueDate)").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true) }
             if let cycleReadError = model.cycleReadError { Text(cycleReadError).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
@@ -152,5 +154,5 @@ private struct V15LedgerDetail: View {
 
 private func postingRole(_ role: String) -> String { switch role { case "debit": "借方"; case "credit": "贷方"; default: "分录" } }
 private func direction(_ transaction: V15Transaction) -> V15MoneyDirection { switch transaction.kind { case "income", "reimbursement_receipt": .inflow; case "transfer": .neutral; default: .outflow } }
-private func transactionDetail(_ transaction: V15Transaction) -> String { "\(transaction.businessDate) · \(transactionSourceLabel(transaction.source))\(transaction.voidedAt == nil ? "" : " · 已作废")" }
+private func transactionDetail(_ transaction: V15Transaction, presentation: V15AccountTransactionPresentation) -> String { "\(transaction.businessDate) · \(presentation.accountPath)\(presentation.accountEffect.map { " · \($0)" } ?? "") · \(transactionSourceLabel(transaction.source))\(transaction.voidedAt == nil ? "" : " · 已作废")" }
 private func transactionSourceLabel(_ source: String) -> String { switch source { case "manual": "手工录入"; case "statement_import": "账单导入"; case "reimbursement": "报销"; case "installment": "分期"; case "cash_flow": "现金流"; case "ai_text": "AI 文本"; case "ocr": "OCR"; default: "其他来源" } }

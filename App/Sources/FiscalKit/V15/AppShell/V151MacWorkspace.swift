@@ -409,6 +409,7 @@ public struct V151MacWorkspace: View {
     private func transactionRow(_ transaction: V15Transaction) -> some View {
         let selected = selectedID == transaction.id
         let batchSelected = selectedIDs.contains(transaction.id)
+        let presentation = ledger.transactionPresentation(transaction)
         return HStack(spacing: 0) {
             Button { toggleBatchSelection(transaction.id) } label: {
                 Image(systemName: transaction.voidedAt != nil ? "archivebox" : (batchSelected ? "checkmark.square.fill" : "square"))
@@ -427,10 +428,10 @@ public struct V151MacWorkspace: View {
                 Rectangle().fill(transaction.categoryID == nil ? V15Palette.teal.color : Color.clear).frame(width: 3, height: 24)
                 Text(shortDate(transaction.businessDate)).font(.system(size: 11, design: .monospaced)).foregroundStyle(V15Palette.ink.color.opacity(0.56)).frame(width: 46, alignment: .leading)
                 Text(transaction.title).font(.system(size: 13, weight: .medium)).strikethrough(transaction.voidedAt != nil).lineLimit(1)
-                Text("· \(ledger.categoryName(transaction.categoryID)) · \(ledger.accountName(transaction.accountID))\(transaction.voidedAt == nil ? "" : " · 归档 · 只读")")
+                Text("· \(ledger.categoryName(transaction.categoryID)) · \(presentation.accountPath)\(presentation.accountEffect.map { " · \($0)" } ?? "")\(transaction.voidedAt == nil ? "" : " · 归档 · 只读")")
                     .font(.system(size: 12)).foregroundStyle(V15Palette.ink.color.opacity(0.70)).lineLimit(1)
                 Spacer(minLength: 8)
-                V15MoneyText(minorUnits: transaction.amountMinor, direction: moneyDirection(transaction), includeCurrency: false, font: .system(size: 12, weight: .semibold, design: .monospaced))
+                V15MoneyText(minorUnits: presentation.amountMinor, direction: presentation.direction, includeCurrency: false, font: .system(size: 12, weight: .semibold, design: .monospaced))
             }
             .padding(.trailing, 18).frame(height: density.rowHeight).contentShape(Rectangle())
             .background((selected || batchSelected) ? V15Palette.selected.color : Color.clear)
@@ -806,10 +807,11 @@ public struct V151MacWorkspace: View {
     }
 
     private func inspector(_ transaction: V15Transaction) -> some View {
-        VStack(alignment: .leading, spacing: 17) {
+        let presentation = ledger.transactionPresentation(transaction)
+        return VStack(alignment: .leading, spacing: 17) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(transaction.title).font(.system(size: 18, weight: .semibold))
-                V15MoneyText(minorUnits: transaction.amountMinor, direction: moneyDirection(transaction), font: .system(size: 28, weight: .bold, design: .monospaced))
+                V15MoneyText(minorUnits: presentation.amountMinor, direction: presentation.direction, font: .system(size: 28, weight: .bold, design: .monospaced))
                 if transaction.categoryID == nil {
                     HStack(spacing: 7) { Rectangle().fill(V15Palette.teal.color).frame(width: 7, height: 7); Text("未分类 · 需要你决定") }
                         .font(.system(size: 11, weight: .semibold)).foregroundStyle(V15Palette.teal.color)
@@ -820,7 +822,7 @@ public struct V151MacWorkspace: View {
                         .foregroundStyle(V15Palette.ink.color.opacity(0.58))
                 }
             }
-            fieldCard(transaction)
+            fieldCard(transaction, presentation: presentation)
             inspectorSection("来源链") {
                 HStack(spacing: 8) {
                     Text(sourceLabel(transaction.source)).font(.system(size: 11, weight: .semibold)).foregroundStyle(V15Palette.teal.color).padding(.horizontal, 9).padding(.vertical, 5).background(V15Palette.selected.color, in: RoundedRectangle(cornerRadius: 5))
@@ -843,10 +845,11 @@ public struct V151MacWorkspace: View {
         }
     }
 
-    private func fieldCard(_ transaction: V15Transaction) -> some View {
+    private func fieldCard(_ transaction: V15Transaction, presentation: V15AccountTransactionPresentation) -> some View {
         VStack(spacing: 0) {
             fieldRow("类型", value: transactionKindLabel(transaction.kind), emphasized: false)
-            fieldRow("账户", value: ledger.accountName(transaction.accountID), emphasized: false)
+            fieldRow("账户", value: presentation.accountPath, emphasized: false)
+            if let effect = presentation.accountEffect { fieldRow("当前账户影响", value: effect, emphasized: true) }
             fieldRow("分类", value: ledger.categoryName(transaction.categoryID), emphasized: transaction.categoryID == nil)
             fieldRow("业务日期", value: transaction.businessDate, emphasized: false)
             fieldRow("发生时刻", value: timeLabel(transaction.occurredAt), emphasized: false, last: true)
@@ -950,7 +953,7 @@ public struct V151MacWorkspace: View {
     @ViewBuilder private var takeoverContent: some View {
         switch destination {
         case .ledger: EmptyView()
-        case .record: V15RecordView(services: services)
+        case .record: V15RecordView(services: services, onCommitted: recordCommitted)
         case .future: V15FutureTimelineMacView(services: services)
         case .credit: V15CreditMacView(services: services)
         case .installments: V15InstallmentMacView(services: services)
@@ -979,6 +982,25 @@ public struct V151MacWorkspace: View {
         async let current: Void = facts.refresh()
         async let report: Void = loadMonthReport()
         _ = await (references, list, current, report)
+    }
+
+    private func recordCommitted(_ outcome: V15RecordModel.CommitOutcome) {
+        guard case .confirmed = outcome else { return }
+        Task { await refreshAfterConfirmedRecord() }
+    }
+
+    @MainActor private func refreshAfterConfirmedRecord() async {
+        async let references: Void = ledger.loadReferences()
+        async let list: Void = ledger.load()
+        async let current: Void = facts.refresh()
+        async let report: Void = loadMonthReport()
+        async let account: Void = refreshSelectedAccountAfterConfirmedRecord()
+        _ = await (references, list, current, report, account)
+    }
+
+    @MainActor private func refreshSelectedAccountAfterConfirmedRecord() async {
+        guard let id = selectedAccountID else { return }
+        await loadAccount(id)
     }
 
     @MainActor private func loadMonthReport() async {

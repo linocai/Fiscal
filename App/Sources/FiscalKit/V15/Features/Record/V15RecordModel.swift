@@ -5,16 +5,17 @@ import Observation
 public final class V15RecordModel {
     public enum LoadPhase: Equatable { case idle, loading, loaded, empty, failed(String) }
     public enum Submission: Equatable { case idle, submitting, queued(UUID), success(V15Transaction), conflict(V15Conflict), failed(V15Failure) }
+    public enum CommitOutcome: Equatable, Sendable { case confirmed(V15Transaction), queued(UUID) }
 
-    public var kind: V15ManualTransactionKind = .expense { didSet { guard oldValue != kind else { return }; changeKind(from: oldValue) } }
+    public var kind: V15ManualTransactionKind = .expense { didSet { guard oldValue != kind, !isResettingDraft else { return }; changeKind(from: oldValue) } }
     public var amountText = "" { didSet { guard oldValue != amountText else { return }; inputChanged() } }
     public var title = "" { didSet { guard oldValue != title else { return }; inputChanged() } }
     public var note = "" { didSet { guard oldValue != note else { return }; inputChanged() } }
     public var occurredOn = Date() { didSet { guard oldValue != occurredOn else { return }; inputChanged() } }
-    public var accountID: UUID? { didSet { guard oldValue != accountID, !isReconcilingReferences else { return }; inputChanged() } }
-    public var destinationAccountID: UUID? { didSet { guard oldValue != destinationAccountID, !isReconcilingReferences else { return }; destinationChanged() } }
-    public var categoryID: UUID? { didSet { guard oldValue != categoryID, !isReconcilingReferences else { return }; inputChanged() } }
-    public var creditCycleID: UUID? { didSet { guard oldValue != creditCycleID, !isReconcilingReferences else { return }; inputChanged() } }
+    public var accountID: UUID? { didSet { guard oldValue != accountID, !isReconcilingReferences, !isResettingDraft else { return }; inputChanged() } }
+    public var destinationAccountID: UUID? { didSet { guard oldValue != destinationAccountID, !isReconcilingReferences, !isResettingDraft else { return }; destinationChanged() } }
+    public var categoryID: UUID? { didSet { guard oldValue != categoryID, !isReconcilingReferences, !isResettingDraft else { return }; inputChanged() } }
+    public var creditCycleID: UUID? { didSet { guard oldValue != creditCycleID, !isReconcilingReferences, !isResettingDraft else { return }; inputChanged() } }
     public private(set) var accounts: [V15AccountResponse] = []
     public private(set) var categories: [V15CategoryResponse] = []
     public private(set) var creditCycles: [V15CreditCycle] = []
@@ -32,6 +33,7 @@ public final class V15RecordModel {
     private var draftRevision: UInt64 = 0
     private var activePayloadIdentity: String?
     private var isReconcilingReferences = false
+    private var isResettingDraft = false
     private let idempotency = V15IdempotencyOwner()
     private let services: V15Services
     private let createScope = "transaction-create"
@@ -108,38 +110,47 @@ public final class V15RecordModel {
     public func retryReferences() async { await loadReferences() }
     public func retryCreditCycles() async { await loadCreditCycles() }
 
-    public func submit() async {
-        validate(); guard localIssues.isEmpty else { return }
-        guard let request = request(), let identity = payloadIdentity(for: request) else { validate(); return }
+    public func submit() async -> CommitOutcome? {
+        switch submission {
+        case .submitting, .queued, .success, .conflict: return nil
+        case .idle, .failed: break
+        }
+        validate(); guard localIssues.isEmpty else { return nil }
+        guard let request = request(), let identity = payloadIdentity(for: request) else { validate(); return nil }
         if isOffline {
             guard kind != .repayment else {
                 submission = .failed(.init(kind: .offlineReadOnly, code: "preview_requires_network", message: "需要联网：还款前必须先读取最新账期。"))
-                return
+                return nil
             }
             let id = services.pendingWrites.enqueueCreate(request)
             submission = .queued(id)
-            return
+            resetDraftForNextEntry()
+            return .queued(id)
         }
         submitGeneration &+= 1; let current = submitGeneration; submission = .submitting; fieldIssues = []
         activePayloadIdentity = identity
         let key = idempotency.key(for: createScope, payloadIdentity: identity)
         do {
             let created = try await services.ledger.create(request, idempotencyKey: key)
-            guard current == submitGeneration else { return }
-            releaseActiveKey(); submission = .success(created)
+            guard current == submitGeneration else { return nil }
+            releaseActiveKey()
+            submission = .success(created)
+            resetDraftForNextEntry()
+            return .confirmed(created)
         } catch is CancellationError {
-            guard current == submitGeneration else { return }; submission = .idle
+            guard current == submitGeneration else { return nil }; submission = .idle
         } catch let failure as V15Failure {
-            guard current == submitGeneration else { return }
+            guard current == submitGeneration else { return nil }
             if releasesKey(after: failure) { releaseActiveKey() }
             if failure.kind == .conflict, let conflict = failure.conflict { submission = .conflict(conflict) }
             else { fieldIssues = failure.fieldIssues; submission = .failed(failure) }
         } catch {
             // A non-classified transport exception has unknown server outcome.
             // Keep its payload-bound key so explicit retry cannot duplicate it.
-            guard current == submitGeneration else { return }
+            guard current == submitGeneration else { return nil }
             submission = .failed(.init(kind: .responseUnknown, code: "response_unknown", message: "连接中断，暂时无法确认是否保存成功。安全检查不会重复记账。"))
         }
+        return nil
     }
 
     /// A 409 never replays blindly. Reload the authoritative references, then
@@ -149,8 +160,7 @@ public final class V15RecordModel {
 
     public func newEntry() {
         dismiss()
-        amountText = ""; title = ""; note = ""; accountID = nil; destinationAccountID = nil; categoryID = nil; creditCycleID = nil
-        kind = .expense
+        resetDraftForNextEntry()
     }
 
     private var categoryDirection: V15CategoryDirection? {
@@ -158,8 +168,28 @@ public final class V15RecordModel {
     }
 
     private func inputChanged() {
+        guard !isResettingDraft else { return }
         draftRevision &+= 1; submitGeneration &+= 1; releaseActiveKey(); fieldIssues = []
         if case .idle = submission {} else { submission = .idle }
+        validate()
+    }
+
+    private func resetDraftForNextEntry() {
+        isResettingDraft = true
+        kind = .expense
+        amountText = ""
+        title = ""
+        note = ""
+        accountID = nil
+        destinationAccountID = nil
+        categoryID = nil
+        creditCycleID = nil
+        isResettingDraft = false
+        creditCyclesGeneration &+= 1
+        creditCycles = []
+        creditCyclePhase = .idle
+        draftRevision &+= 1
+        fieldIssues = []
         validate()
     }
 
