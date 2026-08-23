@@ -1,12 +1,13 @@
 # Fiscal · PROJECT_PLAN
 
-> 目标版本：v1.5.2（27）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**RELEASE · Build 27 本地发布完成**
+> 目标版本：v1.5.2（28）｜更新：2026-08-23（Asia/Shanghai）｜阶段：**HOTFIX · Build 28 源码与门禁完成，待发布授权**
 
 ## 1. 当前目标与授权
 
 - 基线为 `main` / tag `v1.5.1` / commit `2f47d4e`，向前修复，不回退 v1.5.1 已完成的业务安全能力。
 - v1.5.2 是一次以独立审计为输入的**双端前端设计验收修复**：macOS 与 iPhone 必须忠实落实 `Fiscal 前端设计启动/`，解决 `F151-01` 至 `F151-17`。
 - 用户已追加授权 v1.5.2（27）执行 commit、push、签名发布、macOS 换包安装与 Build 27 标签；iOS 安装由用户执行。
+- 用户已授权 v1.5.2（28）立即修复 macOS 月份流水范围并增加一个 Build；本批尚未授权自动 commit、tag、push、签名、安装或发布。
 - 当前授权不包含：Backend/schema/migration 变更、生产部署、Apple 公证或 TestFlight。
 
 ## 2. 权威与审计输入
@@ -106,12 +107,22 @@
 
 完成门：`FiscalKitTests` 393/393（40 suites）通过；iOS/macOS App target 和最终签名 Release 均构建通过；用户可见敏感工程词扫描仅剩协议字段、内部状态映射、临时文件名和 accessibility identifier，未作为正文呈现；打包前后严格验签和 SHA-256 校验通过。
 
+### B9 · macOS 月份流水范围快修（Build 28）— completed
+
+- 按可点击 macOS 原型恢复 `全部` 为流水页默认镜头；`未分类` 保持独立筛选，不再代替主流水。
+- 初次进入与月份切换都使用 Asia/Shanghai 月份边界；点击月份会清除旧账户、归档和镜头范围，显示该月全部流水。
+- 当前/未来段只在当前月份的 `全部` 镜头显示；历史月份与未分类镜头不再混入当前日期或未来事项。
+- 增加“该月有分类流水、未分类为 0”的查询夹具回归，证明主流水不会被未分类计数错误清空。
+- 完整记录见 `archive/audits/v1.5.2-build28-macos-ledger-scope-quickfix-2026-08-23.md`。
+
+完成门：定向回归 5/5；`FiscalKitTests` 396/396（41 suites）；iOS/macOS App target 全部构建通过；双端产物均核验为 `1.5.2 (28)`；`git diff --check` 通过。
+
 ## 6. 验收矩阵
 
 | 门 | 必须满足 |
 | --- | --- |
 | 语义 | preview、conflict、provisional、archive、partial success 五条规则逐屏成立 |
-| macOS 主壳 | 七镜头真实收敛脊柱；检查器不断链；1000pt 可用 |
+| macOS 主壳 | `全部` 主流水 + 七个专用镜头真实收敛账目区；右侧详情不断链；1000pt 可用 |
 | iPhone Today | 四类决定均可卡内完成；冲突和错误不离开当前卡 |
 | 页面覆盖 | i-01 至 i-17、m-01 至 m-10 均有正式入口和关键状态 |
 | 报表 | 四镜头、七 neutral 口径、专用构图和真实钻取 |
@@ -143,3 +154,4 @@
 - 用户语言快修已在 v1.5.2（27）源码完成并通过双端签名构建与 393 项测试；源码提交 `8a25baa` 已推送至 `origin/main`。
 - Build 27 的 macOS Developer ID 包与 iOS Development IPA 均已严格验签；macOS 已备份 Build 26、换包为 Build 27 并成功启动，iOS 安装继续由用户执行。
 - 产物、SHA-256、回滚备份、标签与最终 Git 状态见 `archive/releases/v1.5.2/RELEASE_STATE.md`。
+- Build 28 的月份流水范围快修源码与全部工程门禁已完成；当前停在待发布授权，不改写 Build 27 的既有发布记录。

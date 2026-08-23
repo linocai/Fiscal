@@ -4,10 +4,70 @@ import SwiftUI
 #if os(macOS)
 import AppKit
 
+enum V151MacLedgerLens: String, CaseIterable, Identifiable {
+    case all, uncategorized, decisions, pendingSync, credit, reimbursements, imports, archive
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: "全部"
+        case .uncategorized: "未分类"
+        case .decisions: "需要决定"
+        case .pendingSync: "待同步"
+        case .credit: "本月信用"
+        case .reimbursements: "待收报销"
+        case .imports: "导入批次"
+        case .archive: "归档"
+        }
+    }
+}
+
+enum V151MacLedgerScopePolicy {
+    struct MonthDateRange: Equatable {
+        let from: String
+        let to: String
+    }
+
+    static let defaultLens: V151MacLedgerLens = .all
+    static let monthSelectionLens: V151MacLedgerLens = .all
+
+    static func classification(for lens: V151MacLedgerLens) -> String {
+        lens == .uncategorized ? "uncategorized" : "all"
+    }
+
+    static func includesVoided(for lens: V151MacLedgerLens) -> Bool {
+        lens == .archive
+    }
+
+    static func loadsTransactions(for lens: V151MacLedgerLens) -> Bool {
+        lens == .all || lens == .uncategorized || lens == .archive
+    }
+
+    static func showsCurrentAndFuture(lens: V151MacLedgerLens, isCurrentMonth: Bool) -> Bool {
+        lens == .all && isCurrentMonth
+    }
+
+    static func monthDateRange(containing date: Date) -> MonthDateRange? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "zh_Hans_CN")
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        guard let interval = calendar.dateInterval(of: .month, for: date) else { return nil }
+        let lastDay = calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.end
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return .init(from: formatter.string(from: interval.start), to: formatter.string(from: lastDay))
+    }
+}
+
 /// v1.5.2 keeps the user-approved macOS prototype as the formal live root.
 /// It keeps the V15 services and models, but owns every visible navigation and
 /// layout decision instead of inheriting the system split-view appearance.
 public struct V151MacWorkspace: View {
+    private typealias Lens = V151MacLedgerLens
+
     private enum Destination: String, Identifiable {
         case ledger, record, future, credit, installments, reimbursements, cashFlow
         case reconciliation, proposals, statementImport, reports, archive, settings
@@ -31,22 +91,6 @@ public struct V151MacWorkspace: View {
         }
     }
 
-    private enum Lens: String, CaseIterable, Identifiable {
-        case uncategorized, decisions, pendingSync, credit, reimbursements, imports, archive
-        var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .uncategorized: "未分类"
-            case .decisions: "需要决定"
-            case .pendingSync: "待同步"
-            case .credit: "本月信用"
-            case .reimbursements: "待收报销"
-            case .imports: "导入批次"
-            case .archive: "归档"
-            }
-        }
-    }
-
     private enum AccountDetailPhase: Equatable {
         case idle, loading, loaded, failed(V15Failure)
     }
@@ -62,7 +106,7 @@ public struct V151MacWorkspace: View {
     @State private var ledger: V15LedgerModel
     @State private var facts: V15TodayReadModel
     @State private var destination: Destination = .ledger
-    @State private var lens: Lens = .uncategorized
+    @State private var lens: Lens = V151MacLedgerScopePolicy.defaultLens
     @State private var density: Density = .compact
     @State private var selectedID: UUID?
     @State private var selectedIDs: Set<UUID> = []
@@ -212,6 +256,7 @@ public struct V151MacWorkspace: View {
         indexRow(value.title, count: lensCount(value), selected: lens == value && destination == .ledger) {
             chooseLens(value)
         }
+        .accessibilityIdentifier("v151.mac.lens.\(value.rawValue)")
     }
 
     private func indexRow(_ title: String, count: Int?, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -260,11 +305,16 @@ public struct V151MacWorkspace: View {
                     case .credit: creditRows
                     case .reimbursements: reimbursementRows
                     case .imports: importRows
+                    case .all:
+                        if V151MacLedgerScopePolicy.showsCurrentAndFuture(lens: lens, isCurrentMonth: isCurrentMonth) {
+                            futureRows
+                            todayDivider
+                        }
+                        transactionRows
                     case .uncategorized, .archive:
-                        if lens == .uncategorized { futureRows; todayDivider }
                         transactionRows
                     }
-                    if ledger.nextCursor != nil, lens == .uncategorized || lens == .archive { loadMoreRow }
+                    if ledger.nextCursor != nil, V151MacLedgerScopePolicy.loadsTransactions(for: lens) { loadMoreRow }
                 }
             }
             Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
@@ -920,7 +970,10 @@ public struct V151MacWorkspace: View {
     }
 
     private func loadInitialFacts() async {
-        ledger.setClassification("uncategorized")
+        applyLedgerMonthRange(selectedMonth)
+        ledger.setAccount(nil)
+        ledger.setIncludeVoided(V151MacLedgerScopePolicy.includesVoided(for: lens))
+        ledger.setClassification(V151MacLedgerScopePolicy.classification(for: lens))
         async let references: Void = ledger.loadReferences()
         async let list: Void = ledger.load()
         async let current: Void = facts.refresh()
@@ -946,23 +999,16 @@ public struct V151MacWorkspace: View {
         clearAccountSelection()
         ledger.clearSelection()
         ledger.setAccount(nil)
-        switch value {
-        case .uncategorized:
-            ledger.setIncludeVoided(false)
-            ledger.setClassification("uncategorized")
+        ledger.setIncludeVoided(V151MacLedgerScopePolicy.includesVoided(for: value))
+        ledger.setClassification(V151MacLedgerScopePolicy.classification(for: value))
+        if V151MacLedgerScopePolicy.loadsTransactions(for: value) {
             Task { await ledger.load() }
-        case .archive:
-            ledger.setIncludeVoided(true)
-            ledger.setClassification("all")
-            Task { await ledger.load() }
-        case .decisions, .pendingSync, .credit, .reimbursements, .imports:
-            ledger.setIncludeVoided(false)
-            ledger.setClassification("all")
         }
     }
 
     private func lensCount(_ value: Lens) -> Int {
         switch value {
+        case .all: ledger.items.filter { $0.voidedAt == nil }.count
         case .uncategorized: facts.facts?.completeness.uncategorizedTransactionCount ?? ledger.items.filter { $0.categoryID == nil }.count
         case .decisions: facts.attention.count
         case .pendingSync: services.pendingWrites.count
@@ -979,12 +1025,19 @@ public struct V151MacWorkspace: View {
         selectedIDs.removeAll()
         clearAccountSelection()
         ledger.clearSelection()
+        lens = V151MacLedgerScopePolicy.monthSelectionLens
         selectedMonth = date
-        let calendar = shanghaiCalendar
-        guard let interval = calendar.dateInterval(of: .month, for: date) else { return }
-        ledger.setDateFrom(dayFormatter.string(from: interval.start))
-        ledger.setDateTo(dayFormatter.string(from: calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.end))
+        ledger.setAccount(nil)
+        ledger.setIncludeVoided(V151MacLedgerScopePolicy.includesVoided(for: lens))
+        ledger.setClassification(V151MacLedgerScopePolicy.classification(for: lens))
+        applyLedgerMonthRange(date)
         Task { async let list: Void = ledger.load(); async let report: Void = loadMonthReport(); _ = await (list, report) }
+    }
+
+    private func applyLedgerMonthRange(_ date: Date) {
+        guard let range = V151MacLedgerScopePolicy.monthDateRange(containing: date) else { return }
+        ledger.setDateFrom(range.from)
+        ledger.setDateTo(range.to)
     }
 
     private func openFuture(_ event: V15FutureEvent) {
@@ -1127,7 +1180,7 @@ public struct V151MacWorkspace: View {
 
     private var spineItemCount: Int {
         switch lens {
-        case .uncategorized: visibleTransactions.count
+        case .all, .uncategorized: visibleTransactions.count
         case .decisions: facts.attention.count
         case .pendingSync: services.pendingWrites.count
         case .credit, .reimbursements, .imports: lensCount(lens)
@@ -1181,13 +1234,13 @@ public struct V151MacWorkspace: View {
 
     private var currentMonthRaw: String { monthRawFormatter.string(from: selectedMonth) }
     private var periodLabel: String { monthParser.string(from: selectedMonth) }
+    private var isCurrentMonth: Bool { shanghaiCalendar.isDate(selectedMonth, equalTo: Date(), toGranularity: .month) }
     private var monthChoices: [String] { (0..<4).compactMap { offset in shanghaiCalendar.date(byAdding: .month, value: -offset, to: Date()).map { monthParser.string(from: $0) } } }
     private var todayLabel: String { weekdayFormatter.string(from: Date()) }
 
     private var shanghaiCalendar: Calendar { var value = Calendar(identifier: .gregorian); value.locale = Locale(identifier: "zh_Hans_CN"); value.timeZone = TimeZone(identifier: "Asia/Shanghai")!; return value }
     private var monthParser: DateFormatter { let value = DateFormatter(); value.locale = Locale(identifier: "zh_Hans_CN"); value.timeZone = TimeZone(identifier: "Asia/Shanghai"); value.dateFormat = "yyyy 年 M 月"; return value }
     private var monthRawFormatter: DateFormatter { let value = DateFormatter(); value.locale = Locale(identifier: "en_US_POSIX"); value.timeZone = TimeZone(identifier: "Asia/Shanghai"); value.dateFormat = "yyyy-MM"; return value }
-    private var dayFormatter: DateFormatter { let value = DateFormatter(); value.locale = Locale(identifier: "en_US_POSIX"); value.timeZone = TimeZone(identifier: "Asia/Shanghai"); value.dateFormat = "yyyy-MM-dd"; return value }
     private var weekdayFormatter: DateFormatter { let value = DateFormatter(); value.locale = Locale(identifier: "zh_Hans_CN"); value.timeZone = TimeZone(identifier: "Asia/Shanghai"); value.dateFormat = "M月d日 EEEE"; return value }
     private func shortDate(_ value: String) -> String { value.count >= 5 ? String(value.suffix(5)) : value }
     private func timeLabel(_ value: Date) -> String { let formatter = DateFormatter(); formatter.locale = Locale(identifier: "zh_Hans_CN"); formatter.timeZone = TimeZone(identifier: "Asia/Shanghai"); formatter.dateFormat = "MM-dd HH:mm"; return formatter.string(from: value) }
