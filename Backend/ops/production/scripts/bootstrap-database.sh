@@ -35,11 +35,13 @@ IFS= read -r -s app_password || die "unable to read the application database pas
 [[ "$app_password" != *$'\r'* && "$app_password" != *$'\n'* ]] || die "invalid password input"
 [[ -n "$app_password" ]] || die "application database password is required"
 [[ -t 0 ]] && printf '\n' >&2
+app_password_hex="$(printf '%s' "$app_password" | od -An -v -tx1 | tr -d ' \n')"
+[[ "$app_password_hex" =~ ^[0-9a-f]+$ ]] || die "unable to encode application database password"
 
-run_as_postgres psql --dbname=postgres --no-psqlrc --quiet <<SQL
+{
+  printf '\\set app_password_hex %s\n' "$app_password_hex"
+  cat <<'SQL'
 \set ON_ERROR_STOP on
-\prompt '' app_password
-$app_password
 SELECT 'CREATE ROLE fiscal_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION'
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'fiscal_owner') \gexec
 SELECT 'CREATE ROLE fiscal_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION'
@@ -48,11 +50,14 @@ SELECT 'CREATE ROLE fiscal_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLI
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'fiscal_app') \gexec
 ALTER ROLE fiscal_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
 ALTER ROLE fiscal_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
-ALTER ROLE fiscal_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION
-  PASSWORD :'app_password';
+SELECT format(
+  'ALTER ROLE fiscal_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L',
+  convert_from(decode(:'app_password_hex', 'hex'), 'UTF8')
+) \gexec
 GRANT fiscal_owner TO fiscal_migrator;
 SQL
-unset app_password
+} | run_as_postgres psql --dbname=postgres --no-psqlrc --quiet
+unset app_password app_password_hex
 
 if ! run_as_postgres psql --dbname=postgres --no-psqlrc --tuples-only --no-align \
   --command="SELECT 1 FROM pg_database WHERE datname = 'fiscal'" | grep -qx 1; then

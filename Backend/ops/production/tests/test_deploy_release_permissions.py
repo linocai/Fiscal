@@ -10,6 +10,7 @@ SCRIPTS = Path(__file__).parents[1] / "scripts"
 DEPLOY = (SCRIPTS / "deploy.sh").read_text(encoding="utf-8")
 BOOTSTRAP = (SCRIPTS / "bootstrap-host.sh").read_text(encoding="utf-8")
 BOOTSTRAP_PATH = SCRIPTS / "bootstrap-host.sh"
+DATABASE_BOOTSTRAP = (SCRIPTS / "bootstrap-database.sh").read_text(encoding="utf-8")
 RESTORE_VERIFY = (SCRIPTS / "restore-verify.sh").read_text(encoding="utf-8")
 SHADOW_WRAPPER = (SCRIPTS / "p22-shadow-wrapper.sh").read_text(encoding="utf-8")
 
@@ -68,6 +69,14 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertLess(create_users, create_environment_directory)
         self.assertLess(create_environment_directory, install_environment)
         self.assertLess(install_environment, ensure_release_access)
+
+    def test_database_bootstrap_password_path_is_noninteractive_and_off_argv(self) -> None:
+        self.assertNotIn("\\prompt", DATABASE_BOOTSTRAP)
+        self.assertIn("app_password_hex=", DATABASE_BOOTSTRAP)
+        self.assertIn("\\set app_password_hex %s", DATABASE_BOOTSTRAP)
+        self.assertIn("convert_from(decode(:'app_password_hex', 'hex'), 'UTF8')", DATABASE_BOOTSTRAP)
+        self.assertIn("| run_as_postgres psql", DATABASE_BOOTSTRAP)
+        self.assertNotIn("--set=app_password", DATABASE_BOOTSTRAP)
 
     def test_restore_verify_uses_migrator_for_release_alembic_only(self) -> None:
         expected_head = RESTORE_VERIFY.index('expected_head="$(')
