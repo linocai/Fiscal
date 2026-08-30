@@ -30,6 +30,13 @@ fi
 
 revision="$(git -C "$source_root" rev-parse --verify HEAD 2>/dev/null || true)"
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || die "source must be a Git repository with a committed HEAD"
+git -C "$source_root" diff --quiet --ignore-submodules "$revision" -- Backend || \
+  die "source Backend worktree differs from committed HEAD"
+git -C "$source_root" diff --cached --quiet --ignore-submodules "$revision" -- Backend || \
+  die "source Backend index differs from committed HEAD"
+[[ -z "$(git -C "$source_root" ls-files --others --exclude-standard -- Backend)" ]] || \
+  die "source Backend worktree contains untracked files"
+[[ -d "$source_root/Backend" ]] || die "source Backend worktree is missing"
 short_revision="${revision:0:12}"
 release="/opt/fiscal/releases/$short_revision"
 
@@ -92,7 +99,7 @@ cleanup() {
 trap cleanup EXIT
 
 log "materializing committed release $revision"
-git -C "$source_root" archive "$revision" Backend | tar -x -C "$temporary_release"
+tar -C "$source_root" -cf - Backend | tar -x -C "$temporary_release"
 
 log "running release verification gates without production database access"
 (

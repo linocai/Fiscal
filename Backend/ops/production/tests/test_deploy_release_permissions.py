@@ -19,8 +19,11 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertIn('source_root="$(cd -- "$SCRIPT_DIR/../../../.." && pwd)"', DEPLOY)
 
     def test_release_materialization_contains_only_backend_tree(self) -> None:
-        self.assertIn('git -C "$source_root" archive "$revision" Backend', DEPLOY)
-        self.assertNotIn('git -C "$source_root" archive "$revision" |', DEPLOY)
+        self.assertIn('diff --quiet --ignore-submodules "$revision" -- Backend', DEPLOY)
+        self.assertIn('diff --cached --quiet --ignore-submodules "$revision" -- Backend', DEPLOY)
+        self.assertIn("ls-files --others --exclude-standard -- Backend", DEPLOY)
+        self.assertIn('tar -C "$source_root" -cf - Backend', DEPLOY)
+        self.assertNotIn('tar -C "$source_root" -cf - .', DEPLOY)
 
     def test_deploy_rejects_legacy_lowercase_systemd_layout(self) -> None:
         self.assertIn("fiscal-notify@.service", DEPLOY)
