@@ -5,9 +5,7 @@ from pathlib import Path
 
 PRODUCTION = Path(__file__).parents[1]
 NB_README = (PRODUCTION / "nb" / "README.md").read_text(encoding="utf-8")
-NB_API = (PRODUCTION / "nb" / "systemd" / "fiscal-api.service").read_text(
-    encoding="utf-8"
-)
+NB_API = (PRODUCTION / "nb" / "systemd" / "fiscal-api.service").read_text(encoding="utf-8")
 
 
 class NBProductionTopologyTests(unittest.TestCase):

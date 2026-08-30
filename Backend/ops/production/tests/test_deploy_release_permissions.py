@@ -74,7 +74,9 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertNotIn("\\prompt", DATABASE_BOOTSTRAP)
         self.assertIn("app_password_hex=", DATABASE_BOOTSTRAP)
         self.assertIn("\\set app_password_hex %s", DATABASE_BOOTSTRAP)
-        self.assertIn("convert_from(decode(:'app_password_hex', 'hex'), 'UTF8')", DATABASE_BOOTSTRAP)
+        self.assertIn(
+            "convert_from(decode(:'app_password_hex', 'hex'), 'UTF8')", DATABASE_BOOTSTRAP
+        )
         self.assertIn("| run_as_postgres psql", DATABASE_BOOTSTRAP)
         self.assertNotIn("--set=app_password", DATABASE_BOOTSTRAP)
 
