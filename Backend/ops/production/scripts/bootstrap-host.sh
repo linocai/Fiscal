@@ -72,7 +72,7 @@ if [[ "$release_access" == true ]]; then
 fi
 
 [[ "$uv_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "invalid uv version"
-for command in groupadd useradd usermod id getent install runuser pg_dump pg_restore psql nginx python3; do
+for command in groupadd useradd usermod id getent install runuser pg_dump pg_restore psql nginx node python3; do
   command -v "$command" >/dev/null || die "required host command is missing: $command"
 done
 /usr/bin/python3 -m venv --help >/dev/null 2>&1 || die "python3-venv is required"

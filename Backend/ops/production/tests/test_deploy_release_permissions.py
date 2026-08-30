@@ -70,6 +70,9 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertLess(create_environment_directory, install_environment)
         self.assertLess(install_environment, ensure_release_access)
 
+    def test_host_bootstrap_requires_node_for_pyright_gate(self) -> None:
+        self.assertIn("pg_dump pg_restore psql nginx node python3", BOOTSTRAP)
+
     def test_database_bootstrap_password_path_is_noninteractive_and_off_argv(self) -> None:
         self.assertNotIn("\\prompt", DATABASE_BOOTSTRAP)
         self.assertIn("app_password_hex=", DATABASE_BOOTSTRAP)

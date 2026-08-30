@@ -14,7 +14,7 @@ Run each dry path first. The safe first-install sequence is host prerequisites, 
 
 ### 1. Bootstrap only the Fiscal host paths and toolchain
 
-`bootstrap-host.sh` verifies that Ubuntu's existing Python, PostgreSQL client and Nginx tools are present. It does not run `apt`, edit an existing Nginx site or change PostgreSQL configuration. Its apply path creates locked `fiscal` and `fiscal_migrator` OS identities, Fiscal-only directories, and an isolated uv environment:
+`bootstrap-host.sh` verifies that Ubuntu's existing Python, Node.js, PostgreSQL client and Nginx tools are present. Node.js is required only for the pinned Pyright deployment gate; the production API does not run on Node. The bootstrap does not run `apt`, edit an existing Nginx site or change PostgreSQL configuration. Its apply path creates locked `fiscal` and `fiscal_migrator` OS identities, Fiscal-only directories, and an isolated uv environment:
 
 ```sh
 sudo Backend/ops/production/scripts/bootstrap-host.sh
