@@ -139,7 +139,7 @@ If validation fails, point only `/etc/nginx/sites-enabled/fiscal.conf` back to t
 
 ## Release deployment
 
-`deploy.sh` accepts only a committed Git revision. With no `--apply` it prints a plan and changes nothing. Its apply path:
+`deploy.sh` accepts only a committed Git revision. With no `--apply` it prints a plan and changes nothing. Production releases materialize only the committed `Backend` tree; Apple app sources and historical QA artifacts never enter `/opt/fiscal/releases`. Its apply path:
 
 1. archives the committed revision into a new immutable release;
 2. runs Ruff, Pyright and the default backend tests without production DB access;

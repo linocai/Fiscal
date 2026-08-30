@@ -92,7 +92,7 @@ cleanup() {
 trap cleanup EXIT
 
 log "materializing committed release $revision"
-git -C "$source_root" archive "$revision" | tar -x -C "$temporary_release"
+git -C "$source_root" archive "$revision" Backend | tar -x -C "$temporary_release"
 
 log "running release verification gates without production database access"
 (

@@ -18,6 +18,10 @@ class DeployReleasePermissionsTests(unittest.TestCase):
     def test_default_source_resolves_to_repository_root_after_ops_move(self) -> None:
         self.assertIn('source_root="$(cd -- "$SCRIPT_DIR/../../../.." && pwd)"', DEPLOY)
 
+    def test_release_materialization_contains_only_backend_tree(self) -> None:
+        self.assertIn('git -C "$source_root" archive "$revision" Backend', DEPLOY)
+        self.assertNotIn('git -C "$source_root" archive "$revision" |', DEPLOY)
+
     def test_deploy_rejects_legacy_lowercase_systemd_layout(self) -> None:
         self.assertIn("fiscal-notify@.service", DEPLOY)
         self.assertIn("/opt/fiscal/current/Backend", DEPLOY)
