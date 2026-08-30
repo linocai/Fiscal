@@ -1,5 +1,9 @@
 # Fiscal native production operations
 
+> The files in this directory remain the HZ source/default loopback topology.
+> The authorized Fiscal-only move to the NB NPM edge uses the narrowly scoped
+> overlay and cutover contract in [`nb/README.md`](nb/README.md).
+
 These assets implement the frozen P11 topology for the dedicated Fiscal virtual host on Ubuntu 24.04, PostgreSQL 16, Nginx and systemd. They are installation inputs, not a remote installer: nothing in this directory connects to HZ or changes a server unless an operator deliberately copies the files there and invokes an `--apply` path locally.
 
 The existing HZ sites are out of scope. Do not edit their Nginx files, databases, users, document roots or services. Fiscal uses only `fiscal.linotsai.top`, loopback port `8010`, its own PostgreSQL database/roles and the paths below. Port `8000` belongs to LinoFinance and must remain untouched.

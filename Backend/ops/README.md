@@ -2,7 +2,7 @@
 
 This directory contains the local PostgreSQL service, the P1 Docker/Caddy staging stack, and the P11 native-production assets. The staging stack remains intentionally separate from production.
 
-For the HZ Ubuntu 24.04 / PostgreSQL 16 / Nginx topology, hardened systemd services, release deployment, backup/restore drills and monitoring timers, see [`production/README.md`](production/README.md). Those assets never connect to or mutate the server by themselves, and the old Docker/Caddy stack must not be presented as the production deployment.
+For the HZ Ubuntu 24.04 / PostgreSQL 16 / Nginx topology, hardened systemd services, release deployment, backup/restore drills and monitoring timers, see [`production/README.md`](production/README.md). The Fiscal-only NB migration target reuses those controls with the NPM edge overlay in [`production/nb/README.md`](production/nb/README.md). Those assets never connect to or mutate a server by themselves, and the old Docker/Caddy stack must not be presented as production deployment.
 
 ## Local database
 
