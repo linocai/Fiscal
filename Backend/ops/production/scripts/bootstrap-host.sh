@@ -83,7 +83,6 @@ fi
 if ! getent passwd fiscal_migrator >/dev/null; then
   useradd --system --user-group --home-dir /nonexistent --shell /usr/sbin/nologin fiscal_migrator
 fi
-ensure_release_access
 
 install -d -o root -g fiscal -m 0755 /opt/fiscal /opt/fiscal/releases /opt/fiscal/tools
 install -d -o root -g fiscal -m 0750 /etc/fiscal /var/lib/fiscal/operations
@@ -95,6 +94,7 @@ if [[ ! -e /etc/fiscal/fiscal.env ]]; then
 else
   log "preserving existing /etc/fiscal/fiscal.env"
 fi
+ensure_release_access
 
 if [[ ! -x "$uv_root/bin/python" ]]; then
   /usr/bin/python3 -m venv "$uv_root"

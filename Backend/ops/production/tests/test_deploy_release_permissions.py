@@ -48,6 +48,20 @@ class DeployReleasePermissionsTests(unittest.TestCase):
         self.assertLess(release_access_branch, full_bootstrap)
         self.assertIn('die "/etc/fiscal/fiscal.env metadata changed unexpectedly"', BOOTSTRAP)
 
+    def test_fresh_host_installs_environment_before_release_access_check(self) -> None:
+        create_users = BOOTSTRAP.index("useradd --system --user-group")
+        create_environment_directory = BOOTSTRAP.index(
+            "install -d -o root -g fiscal -m 0750 /etc/fiscal"
+        )
+        install_environment = BOOTSTRAP.index(
+            '"$SCRIPT_DIR/../production.env.example" /etc/fiscal/fiscal.env'
+        )
+        ensure_release_access = BOOTSTRAP.index("ensure_release_access\n", create_users)
+
+        self.assertLess(create_users, create_environment_directory)
+        self.assertLess(create_environment_directory, install_environment)
+        self.assertLess(install_environment, ensure_release_access)
+
     def test_restore_verify_uses_migrator_for_release_alembic_only(self) -> None:
         expected_head = RESTORE_VERIFY.index('expected_head="$(')
         expected_head_block = RESTORE_VERIFY[
