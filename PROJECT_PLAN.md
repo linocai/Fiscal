@@ -1,15 +1,15 @@
 # Fiscal · PROJECT_PLAN
 
-> 目标版本：v1.5.5（32，不改版本）｜更新：2026-08-30（Asia/Shanghai）｜阶段：**NB MIGRATION · NPM LOGIN HANDOFF**
+> 目标版本：v1.5.5（32，不改版本）｜更新：2026-08-30（Asia/Shanghai）｜阶段：**NB MIGRATION · COMPLETE**
 
 ## 1. 当前目标与授权
 
 - 用户已授权立即把 **Fiscal 自身全部生产组件**从杭州云 `118.178.122.194` 迁移到宁波云 `114.66.2.205`；本轮不修改 App 版本号或 Build。
 - 范围只包含 Fiscal API、生产 PostgreSQL 数据库、运行密钥、系统账户、发布与回滚包、备份/恢复状态、健康/磁盘/通知任务、`fiscal.linotsai.top` 的 NPM/TLS/DNS 入口及杭州端 Fiscal 专属清理。LinoFinance、YiCoffee、主页、小燃、Neckline、ICTW 和共享主机上的其他项目全部排除。
 - 用户明确取消 48–72 小时观察期：宁波切流后完成当场数据库、服务、公网和双端验收；全部通过即清理杭州 Fiscal 专属组件。仍必须保留最终可恢复备份和单写者边界，不能用“无观察期”省略验收或回滚材料。
-- 当前实测公网 DNS 与真实客户端流量仍指向杭州；宁波已完成 PostgreSQL 16、Fiscal 专属身份/目录/单元/桥接防火墙和冷态 release，但 API 未启动，NPM vhost/TLS 尚未配置。杭州在宁波完全就绪前不得停写或清理。
-- 宁波 `deploy` 的既有管理员路径已验证可用，全程未请求、输出或保存管理员密码；后续只有 NPM/DNS 管理面确实缺少登录会话时才交给用户操作。
-- 当前基线为 `main` / tag `v1.5.4` / commit `a80c5f7`；v1.5.4（30）核对可用性修复已独立保存，尚未推送、部署或换包。
+- Fiscal 生产已完整切换到宁波：公网 DNS、NPM/TLS、PostgreSQL、API、四个运维 timer 与双端真实客户端验收全部通过；杭州 Fiscal 专属服务、数据库、入口、证书、身份和活动目录已清除。
+- 宁波 `deploy` 的既有管理员路径已验证可用；迁移全程未把管理员密码、设备密钥、数据库秘密或财务原文写入仓库、日志摘要或验收记录。
+- 本次迁移的宁波生产 revision 为 `3eb49cbc4151aa06b0dacecc7025ad2ed7d85f42`；后续提交只补充迁移交接与验收记录，不改变 v1.5.5（32）运行代码或数据库 head。
 - 用户已授权 v1.5.5（31）进入 PLAN → BUILD 一条龙：修复未记账 AI 待处理内容不能删除，以及 AI 上游失败原因被压成模糊“暂时不可用”的问题；macOS、iOS 与 Backend 同步收口。
 - 本轮授权包含实现、测试、双端构建、复核、commit、tag、push 与签名发布包准备；明确停在生产 Backend 部署和 macOS 安装换包之前。Apple 公证、TestFlight 与 iOS 安装不在本轮执行范围。
 - 用户已指定 v1.5.4（30）只修复 `REC-154-01`：macOS 核对页在账户切换和诊断加载后把实际余额输入与保存入口挤出可视区域，造成界面看似失效。
@@ -346,7 +346,7 @@
 - 门禁：F3-F 34/34、全量 `FiscalKitTests` 410/410（41 suites）、iOS 对应 UI 场景 1/1 全绿；`FiscaliOS` 与 `FiscalmacOS` Release 均成功，成品 Info.plist 均为 `1.5.5 (32)`，`git diff --check` 通过。
 - 发布结果：源码提交 `5bf7956` 已推送；生产 Backend 已从 revision `3a584da` / Alembic `0035` 切换到 `5bf7956` / `0036`，迁移前后备份、readiness 与公网 liveness 均通过；双端签名包已严格验签，macOS 已备份 v1.5.3（29）并换包启动为 v1.5.5（32），iOS Development IPA 交由用户安装。既有 `v1.5.5` 标签保持不可变，Build 32 使用独立 `v1.5.5-build32` 标签。
 
-### B14 · Fiscal 杭州→宁波生产迁移（不改版本）— in progress
+### B14 · Fiscal 杭州→宁波生产迁移（不改版本）— complete
 
 #### MIG-155-01 · 权威现状与单项目边界
 
@@ -381,11 +381,13 @@
 - 杭州共享 `nginx.service`、`postgresql@16-main.service`、80/443/5432 配置及任何非 Fiscal vhost、数据库、用户、目录和进程不得停止或修改。
 - 完成后更新 `NB_info.md`、`hz_info.md`、本计划与新的迁移验收记录；记录宁波 revision/head、证书、备份/恢复证据、DNS、新服务状态和杭州 Fiscal 缺失证明。
 
-#### B14 当前停止点
+#### B14 完成结果
 
-- 宁波冷态预部署已完成：`main` / `3eb49cbc4151aa06b0dacecc7025ad2ed7d85f42` 已推送并部署到 `/opt/fiscal/releases/3eb49cbc4151`；PostgreSQL 16 只监听 loopback，空占位生产库已到 `20260823_0036`，API 未启动，8010 仅允许 `172.18.0.0/16`。
-- 远程门禁通过 Ruff、Pyright、149 passed / 244 PostgreSQL-dependent skipped；空库前后备份 `fiscal-20260830T083600Z.dump`、`fiscal-20260830T083602Z.dump` 已验证。杭州 `fiscal-20260829T192232Z.dump` 经 SHA-256 传入宁波，隔离 restore/head/canonical/orphan 通过，账户余额、流水和 posting 财务指纹与杭州在线库一致，演练库已删除。
-- NPM 仍为 80/443 唯一入口且既有配置自检通过；本机加密隧道 `127.0.0.1:9181 → NB 127.0.0.1:81` 已打开，但管理页没有现成登录会话。当前唯一人工动作是用户在已打开的 NPM 页面登录；登录完成后继续创建 Fiscal proxy host/TLS，DNS、杭州停写和最终生产数据均尚未修改。
+- 宁波生产运行于 `main` / `3eb49cbc4151aa06b0dacecc7025ad2ed7d85f42`、`/opt/fiscal/releases/3eb49cbc4151` 与 Alembic `20260823_0036`；PostgreSQL 16 只监听 loopback，API 的 `8010` 只允许 NPM Docker bridge，Fiscal API 与四个运维 timer 均 active + enabled。
+- 杭州停写后的最终生产 dump 已在宁波恢复；225 条交易、247 条分录、0 孤儿分录及三组去隐私化财务指纹与源端逐位一致。恢复后备份、当前备份、restore verify 与受保护读取均通过，未把真实余额或流水内容写入仓库。
+- NPM 官方管理面已建立 `fiscal.linotsai.top → 172.18.0.1:8010`；证书、HTTP/2、HSTS 与公网 readiness 403 边界均通过。阿里云权威记录已切到 `114.66.2.205`、TTL 10 分钟，AliDNS/Cloudflare DoH、外部主机和本机公网访问均确认新入口。
+- `/Applications/Fiscal.app` 已从现有域名读取宁波生产；iPhone 端也产生了宁波认证成功的真实请求。无需重建或更换 v1.5.5（32）客户端。
+- 杭州 1 个生产库和 49 个影子演练库已先全部导出校验，再随代码、配置、unit、Fiscal Nginx 与证书材料形成冷归档；宁波保存 `/var/lib/fiscal/backups/hz-retired-archive/fiscal-hz-retirement-20260830T115250Z.tar.gz`。归档双端 SHA-256 一致后，杭州 Fiscal unit、数据库/角色、入口、证书、系统身份和活动目录全部清除；共享 Nginx、PostgreSQL 与非 Fiscal 项目保持运行。
 
 ## 6. 验收矩阵
 
@@ -441,7 +443,7 @@
 - v1.5.5 源码已独立提交为 `a21e17c`；签名 macOS universal 包、iOS arm64 Development IPA、双端 dSYM、`RELEASE.txt` 与 `SHA256SUMS` 已从该干净提交生成，打包前后严格验签和可执行文件同一性核对通过。
 - 发布交接记录见 `archive/releases/v1.5.5/RELEASE_STATE.md`；记录提交为 `56c8480`，不可变 `v1.5.5` 标签指向该提交，`main` 与 `v1.5.4`/`v1.5.5` 标签均已推送。当前无本地施工动作，等待用户授权生产部署与 `/Applications/Fiscal.app` 换包。
 - v1.5.5（32）一条龙发布完成：B13 通过 34 项问题域测试、410 项全量测试、iOS 用户路径自动化、双端签名 Release 和解包后二次验签；Build 31 包已被 Build 32 取代。
-- 生产 Backend 当前为 `/opt/fiscal/releases/5bf795625673` / Alembic `20260823_0036`；迁移前备份 `fiscal-20260823T143536Z.dump`、迁移后备份 `fiscal-20260823T143538Z.dump` 均已验证，服务 active、ready 且公网 liveness 200。
+- 生产 Backend 当前位于宁波 `/opt/fiscal/releases/3eb49cbc4151` / Alembic `20260823_0036`；最终恢复、当前态备份与 restore verify 均已验证，服务 active + enabled，本机 readiness 200、公网 liveness 200。
 - 当前 macOS 为 `/Applications/Fiscal.app` v1.5.5（32）；v1.5.3（29）回退包位于 `/Applications/Fiscal-v1.5.3-build29-backup-20260823-222919.app`。iOS Development IPA 位于 `build/release-v1.5.5-32/artifacts/`，由用户安装。
 - 最终发布记录、SHA-256、签名、生产部署和回滚边界见 `archive/releases/v1.5.5/RELEASE_STATE.md`；既有 `v1.5.5` 标签不移动，Build 32 使用不可变 `v1.5.5-build32`。
-- B14 Fiscal-only 杭州→宁波迁移已获执行授权并取消观察期；宁波冷态 release `3eb49cb`、PG16/head、两份基线备份及杭州真实 dump 的隔离恢复/财务指纹均已验证。API 仍停、杭州仍为唯一写入端；当前等待用户只在 NPM 管理页完成登录，随后继续 TLS/代理、最终停写迁库、DNS、双端验收和杭州 Fiscal-only 即时清理。
+- B14 Fiscal-only 杭州→宁波迁移已完成：宁波 revision `3eb49cb` / Alembic `20260823_0036`、最终生产恢复、NPM/TLS/DNS、公网与鉴权、macOS/iOS 客户端、备份/恢复均已通过；杭州 Fiscal 证据完成冷归档后，其专属服务、数据库、入口、证书、身份和活动目录已清除，非 Fiscal 项目未纳入本次操作。详细证据见 `archive/releases/v1.5.5/NB_MIGRATION_ACCEPTANCE_20260830.md`。

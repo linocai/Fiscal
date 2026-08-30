@@ -6,7 +6,7 @@
 | --- | --- |
 | Scope | Repair ordinary-refresh recovery after an unknown AI-proposal deletion while retaining all Build 31 deletion and provider-failure capabilities |
 | Source revision | `5bf795625673209cfa3b5d7d1f35a7dd9ca8eb01` (`fix(ai): recover unknown deletion on refresh`) |
-| Backend | Production active at the source revision; Alembic upgraded `20260816_0035` → `20260823_0036` |
+| Backend | Production active in Ningbo at revision `3eb49cbc4151aa06b0dacecc7025ad2ed7d85f42`; Build 32 application delta is rooted at the source revision; Alembic is `20260823_0036` |
 | App tests | `FiscalKitTests`: 410 passed / 41 suites / 0 failed; focused F3-F: 34 passed; iOS unknown-delete refresh UI: 1 passed |
 | App builds | Signed macOS universal Release and iOS arm64 device Release built from the clean source revision |
 | Git | Source revision pushed to `origin/main`; existing `v1.5.5` remains immutable; Build 32 uses `v1.5.5-build32` |
@@ -29,7 +29,7 @@
 - Production was re-anchored read-only at revision `3a584da74a41e0d0e05335f923bbb44021795918`, Alembic `20260816_0035`, active/ready, before apply.
 - The committed Build 32 source passed production Ruff format/check, Pyright (0 errors/warnings), and the database-independent release suite (149 passed, 244 PostgreSQL-gated skipped).
 - Deployment created and verified pre-migration backup `fiscal-20260823T143536Z.dump`, upgraded to `20260823_0036`, then created and verified current-head backup `fiscal-20260823T143538Z.dump`.
-- `/opt/fiscal/current` now resolves to `/opt/fiscal/releases/5bf795625673`; service is active, local readiness is ready/database ready, and public liveness returned HTTP 200. An unauthenticated DELETE probe returned 401, confirming the protected route without accessing or mutating production data.
+- At the original Build 32 deployment, `/opt/fiscal/current` resolved to `/opt/fiscal/releases/5bf795625673`; service, local readiness and public liveness passed, and an unauthenticated DELETE probe returned 401. The later Ningbo migration and current production revision are recorded below.
 
 ### Build 32 artifacts
 
@@ -51,6 +51,21 @@ Directory: `build/release-v1.5.5-32/artifacts/`
 - Immediate macOS fallback: `/Applications/Fiscal-v1.5.3-build29-backup-20260823-222919.app`, verified as `1.5.3 (29)`.
 - Backend application rollback target is the prior release `3a584da74a41`; because Build 32 moved the schema to `0036`, do not use ordinary application-only rollback to the `0035` release. Follow the runbook and restore the verified pre-migration dump into a new database if a schema rollback is required; never run a blind Alembic downgrade.
 - iOS installation remains the operator's action. No App Store/TestFlight upload and no Apple notarization were performed.
+
+## 2026-08-30 Fiscal-only Hangzhou → Ningbo production migration
+
+- The app version remained `1.5.5 (32)`. Production moved from Hangzhou `118.178.122.194` to Ningbo `114.66.2.205` without rebuilding either client.
+- Ningbo runs revision `3eb49cbc4151aa06b0dacecc7025ad2ed7d85f42` from `/opt/fiscal/releases/3eb49cbc4151`, with PostgreSQL 16 and Alembic `20260823_0036`. The API and all four operational timers are active and enabled.
+- Hangzhou was frozen at `2026-08-30T11:13:32Z`. Its final dump and rollback package were transferred into `/var/lib/fiscal/backups/hz-cutover-20260830T111332Z/`; the restored production contains 225 transactions, 247 postings and zero orphan postings, with all three privacy-safe financial fingerprints matching the frozen source.
+- Verified Ningbo backups include `/var/lib/fiscal/backups/fiscal-20260830T112126Z.dump` and `/var/lib/fiscal/backups/fiscal-20260830T115115Z.dump`; the latter has SHA-256 `3015f0312f214433c1be4566e13a51faeb9aa10712ec913f9e1a495d355e0630`. Restore verification passed.
+- NPM `2.15.1` is the only public 80/443 ingress and proxies `fiscal.linotsai.top` to `172.18.0.1:8010`. The migrated certificate fingerprint is `81:45:DD:B1:43:1C:4D:CE:D5:B2:1B:0D:1C:59:17:21:79:8D:EC:03:48:25:1D:9C:8A:3D:DE:AF:69:32:35:23`, valid through 2026-10-14. Public readiness is deliberately blocked with 403 while local readiness is 200.
+- The authoritative Aliyun A record is enabled at `114.66.2.205` with a 10-minute TTL. AliDNS and Cloudflare DoH, an external Hangzhou probe, strict TLS, public liveness 200, protected-route 401 and authenticated reads all confirmed the Ningbo endpoint.
+- The installed macOS app loaded Ningbo production through the unchanged public domain. A real iPhone launch produced authenticated 200 responses for auth, system status, reconciliation, monthly reporting and facts endpoints on Ningbo.
+- All 50 Hangzhou `fiscal*` databases (one production and 49 historical drill shadows) were individually dumped and verified before retirement. The complete cold archive is `/var/lib/fiscal/backups/hz-retired-archive/fiscal-hz-retirement-20260830T115250Z.tar.gz`, 464,855,406 bytes, SHA-256 `d54b9d05a948874f76bbe1330686e5a02cbb465b665fc20fe5334e0930bfc086`.
+- After archive verification, Hangzhou Fiscal services/timers, Nginx vhost, Fiscal certificate, databases/roles, OS identity and active paths were removed. Final audit found zero Fiscal unit references, zero Fiscal databases, no Fiscal OS user/group, zero active Fiscal paths and no `8010` listener; shared Nginx/PostgreSQL and non-Fiscal projects remained active.
+- DNS-only rollback is forbidden. Any cross-host rollback must first stop Ningbo writes, create and verify a new current Ningbo dump, restore and validate the target, and only then change DNS.
+
+Detailed acceptance evidence: `NB_MIGRATION_ACCEPTANCE_20260830.md`.
 
 ## Historical preparation: v1.5.5 (Build 31)
 
