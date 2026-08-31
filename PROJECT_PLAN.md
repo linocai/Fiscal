@@ -1,13 +1,13 @@
 # Fiscal · PROJECT_PLAN
 
-> 目标：**v1.6.0（Build 33）** ｜更新：2026-08-31（Asia/Shanghai）｜阶段：**RELEASE · 一条龙发布已授权并执行中**
+> 目标：**v1.6.0（Build 33）** ｜更新：2026-08-31（Asia/Shanghai）｜阶段：**RELEASED · 一条龙发布完成**
 
 ## 1. 当前目标、基线与范围
 
 - 以“**事实完整性与操作闭环**”完成正式 v1.6.0：高风险操作先由服务端预览、同一事实版本的报表 v2、账户核对历史可见、已知未来事项可安全打开其所属对象，以及诚实的本机登录失效说明。
 - 目标版本已更新为 `1.6.0 (33)`；本轮含新正式 API、线性 migration、报表契约和双端流程，按 minor 升级实施。
-- 客户端/生产基线：`main` `d8e7fd0` 与 `origin/main` 同步；已发布客户端为 v1.5.5（32）；宁波生产为 revision `3eb49cb`、Alembic `20260823_0036`。发布前必须审计该实际生产 revision 到最终 release commit 的累计差异。
-- 用户已授权 Plan、Build、独立 Review、两轮快速修复、双端视觉审查与独立复审修复，并于 2026-08-31 明确授权执行完整“一条龙发布”。视觉/交互八项与最终独立复审两项均已实现并完成定向/全量测试与双端构建；当前按 §7 顺序执行提交、不可变标签、签名打包、宁波后端迁移、健康验收与 macOS 可恢复换包，iOS 交用户安装。当前六个 Xcode scheme 本地变更属于既有工作区；XcodeGen 后已恢复并逐一校验原始摘要，不纳入本版本。
+- 发布基线已从宁波实际生产 revision `3eb49cbc4151`、Alembic `20260823_0036` 审计至 release revision `dee89464c040`；生产现已运行该 release revision 与 Alembic `20260830_0037`，客户端发布为 v1.6.0（33）。
+- 用户已授权 Plan、Build、独立 Review、两轮快速修复、双端视觉审查、独立复审修复与完整“一条龙发布”。视觉/交互八项与最终独立复审两项均已实现并完成定向/全量测试、双端签名构建、宁波迁移与健康验收；macOS 已可恢复换包并启动，iOS IPA 已交用户安装。当前六个 Xcode scheme 本地变更属于既有工作区；XcodeGen 后已恢复并逐一校验原始摘要，不纳入本版本。
 
 ### Build 收口事实
 
@@ -20,7 +20,13 @@
 - Apple `FiscalKitTests`：`420 passed`（41 suites）；新增分类“提交成功、刷新失败”回归，并保留分类、主现金流确认和 iOS Today 内联确认的单飞/选择归属覆盖。iOS generic simulator 与 macOS App target 在最终修复后均重新编译成功。
 - 双端构建产物 `Info.plist` 已核对为 `1.6.0 (33)`；`git diff --check` 通过。
 - 六个受保护 Xcode scheme 摘要与 Build 前记录完全一致。
-- 人工视觉复验已完成 iPhone 13 浅色/深色/AX5，以及 macOS 当前正式组件；视觉八项与后续独立复审两项均已关闭，结果见 §8。尚未完成：真机流程验收、修复后独立复审（若用户要求）以及发布链路。
+- 人工视觉复验已完成 iPhone 13 浅色/深色/AX5，以及 macOS 当前正式组件；视觉八项与后续独立复审两项均已关闭，结果见 §8。发布链路已完成；iOS 真机安装与最终操作手感验收由用户执行。
+
+### 发布收口事实
+
+- 源码 revision `dee89464c0404dc31cc59b19ae57bf7d15e4716a` 已推送 `origin/main`，不可变标签 `v1.6.0` 已创建并推送；签名包从该干净标签构建。
+- 宁波生产迁移前后备份 `fiscal-20260831T022012Z.dump`、`fiscal-20260831T022014Z.dump` 均通过 SHA-256 与 `pg_restore --list` 校验；服务、本地 readiness、外网 liveness、鉴权边界、带鉴权 v2 报表和操作回执读取均通过。
+- `/Applications/Fiscal.app` 已严格验签并运行 v1.6.0（33）；旧版保留为 `/Applications/Fiscal-v1.5.5-build32-backup-20260831-102147.app`。iOS IPA 位于 `~/Downloads/Fiscal-iOS-v1.6.0-build33-development.ipa`，等待用户安装。
 
 ## 2. 权威与已校正的 Backlog
 
@@ -112,7 +118,7 @@
 - Backend：Ruff、Pyright、完整 PostgreSQL suite；0037 upgrade、preview session 生命周期、三类 commit、P34 v1 兼容、reports v2 同 revision/分页/导出、auth reason 非枚举泄露均通过。
 - App：新增定向共享 tests（token 失效、并发、unknown、offline、generation、账户历史、source-aware navigation、v2 revision conflict），然后 `FiscalKitTests` 全量；`FiscaliOS` generic simulator 与 `FiscalmacOS` target 必须编译。
 - 视觉/UI：macOS 1000pt 与常用宽度、iPhone 13 普通/AX5、浅深色；长影响清单、七口径趋势、长历史、失效导航、错误面均无截断、主操作始终可达。真机完成还款/分类/现金流确认、账户历史、未来导航与**既有**快捷指令最近 10 分钟截图流程回归。
-- 发布前：`git diff --check`、仅计划范围差异、双端 Info.plist 均为 1.6.0 (33)。一条龙发布时：先从宁波生产基线审计累计差异并完成最终验证；提交并推送 `main`，创建不可变 `v1.6.0` tag，从该已提交 revision 生成发布包并严格验签。随后才执行宁波 deploy dry-run、迁移前备份校验 → apply 0037 → 迁移后备份/restore verify → local readiness 200、public liveness 200、public readiness 保持预期阻断、受保护读取与 v2 smoke；最后 macOS 可恢复备份换包启动，iOS IPA 交用户安装。部署后若需记录事实，另以 docs 提交补充 release record，绝不移动既有 tag。
+- 发布前与一条龙发布门均已通过：`git diff --check`、范围差异、双端 1.6.0（33）、`main`/不可变 `v1.6.0` 标签、标签构建与严格验签、宁波 dry-run、迁移前后备份、0037 migration、restore-list、readiness/liveness/鉴权/v2 smoke、macOS 可恢复换包和 iOS IPA 交付全部完成；部署事实另以 docs 提交记录，标签未移动。
 - 回滚：禁止盲 Alembic downgrade；若 migration 后需退回，先停止写入、备份宁波当前库、恢复已验证 pre-0037 dump 到新目标再切换。客户端只在签名/健康均通过后替换。
 
 ## 8. 2026-08-30 双端视觉审查
@@ -142,5 +148,5 @@
 ## 9. Backlog、完成定义与下一步
 
 - 本版完成：CAP-152-01/02/04/05/06/07/08/09/10；CAP-152-04、09 按本计划的已校正含义关闭。后续保留 CAP-152-03、提醒、归档恢复、附件与设备管理。
-- 完成定义：双端只以同一服务端事实提交和展示，报表与 drill/export 绝不混 revision，账户详情能见真实检查点，未来事项只打开被证实所属的对象，登录失效不虚构原因；所有门禁、部署、签名、换包和记录完成后才发布 v1.6.0（33）。
-- 下一步：完整执行已授权的一条龙发布并把生产、签名、换包与交付事实写入 `archive/releases/v1.6.0/RELEASE_STATE.md`。真机 iOS 安装仍由用户完成；任何部署阻断按 §7 回滚边界处理，不移动既有标签。
+- 完成定义已满足：双端只以同一服务端事实提交和展示，报表与 drill/export 不混 revision，账户详情显示真实检查点，未来事项只打开已证实所属对象，登录失效不虚构原因；门禁、部署、签名、macOS 换包与发布记录均完成。
+- 下一步：用户安装 iOS IPA 并做真机最终手感验收；若跨 `0037` 回滚，严格按 §7 的停写、当前备份、恢复迁移前备份到新目标与验证流程执行，绝不移动既有标签或盲降 schema。
