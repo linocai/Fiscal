@@ -31,6 +31,9 @@ READ_ONLY_POSTS = {
     "/api/v1/statement-imports/{statement_import_id}/confirmation-preview",
     "/api/v1/categories/{source_id}/merge-preview",
     "/api/v1/categories/{root_id}/split-preview",
+    "/api/v1/transactions/repayment-preview",
+    "/api/v1/transactions/category-preview",
+    "/api/v1/cash-flow-items/{item_id}/confirm-preview",
 }
 
 

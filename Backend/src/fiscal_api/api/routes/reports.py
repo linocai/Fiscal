@@ -21,6 +21,8 @@ from fiscal_api.api.p34_schemas import (
     SUPPORTED_REPORT_YEAR_RANGE,
     PeriodReport,
     PeriodReportDrillDownPage,
+    PeriodReportDrillDownPageV2,
+    PeriodReportV2,
     ReportPeriodKind,
 )
 from fiscal_api.core.middleware import DATA_REVISION_HEADER
@@ -143,6 +145,104 @@ async def yearly_report(
     return await service.yearly_report(period=period)
 
 
+@router.get("/v2/monthly/{period}", response_model=PeriodReportV2)
+async def monthly_report_v2(
+    period: Annotated[
+        str,
+        Path(
+            pattern=r"^\d{4}-(0[1-9]|1[0-2])$",
+            description=f"Supported report years: {SUPPORTED_REPORT_YEAR_RANGE}",
+        ),
+    ],
+    service: ReportingServiceDependency,
+) -> PeriodReportV2:
+    return await service.monthly_report_v2(period=period)
+
+
+@router.get("/v2/yearly/{period}", response_model=PeriodReportV2)
+async def yearly_report_v2(
+    period: Annotated[
+        str,
+        Path(
+            pattern=r"^\d{4}$", description=f"Supported report years: {SUPPORTED_REPORT_YEAR_RANGE}"
+        ),
+    ],
+    service: ReportingServiceDependency,
+) -> PeriodReportV2:
+    return await service.yearly_report_v2(period=period)
+
+
+@router.get("/v2/monthly/{period}/export.csv", response_class=Response)
+async def export_monthly_report_v2_csv(
+    period: Annotated[
+        str,
+        Path(pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+    ],
+    service: ReportingServiceDependency,
+    expected_data_revision: Annotated[int, Query(ge=0)],
+) -> Response:
+    report = await service.monthly_report_v2(
+        period=period, expected_data_revision=expected_data_revision
+    )
+    return _report_file_response(
+        report_csv(report),
+        report_export_filename(report, "csv"),
+        "text/csv; charset=utf-8",
+        data_revision=report.meta.data_revision,
+    )
+
+
+@router.get("/v2/monthly/{period}/export.pdf", response_class=Response)
+async def export_monthly_report_v2_pdf(
+    period: Annotated[str, Path(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")],
+    service: ReportingServiceDependency,
+    expected_data_revision: Annotated[int, Query(ge=0)],
+) -> Response:
+    report = await service.monthly_report_v2(
+        period=period, expected_data_revision=expected_data_revision
+    )
+    return _report_file_response(
+        report_pdf(report),
+        report_export_filename(report, "pdf"),
+        "application/pdf",
+        data_revision=report.meta.data_revision,
+    )
+
+
+@router.get("/v2/yearly/{period}/export.csv", response_class=Response)
+async def export_yearly_report_v2_csv(
+    period: Annotated[str, Path(pattern=r"^\d{4}$")],
+    service: ReportingServiceDependency,
+    expected_data_revision: Annotated[int, Query(ge=0)],
+) -> Response:
+    report = await service.yearly_report_v2(
+        period=period, expected_data_revision=expected_data_revision
+    )
+    return _report_file_response(
+        report_csv(report),
+        report_export_filename(report, "csv"),
+        "text/csv; charset=utf-8",
+        data_revision=report.meta.data_revision,
+    )
+
+
+@router.get("/v2/yearly/{period}/export.pdf", response_class=Response)
+async def export_yearly_report_v2_pdf(
+    period: Annotated[str, Path(pattern=r"^\d{4}$")],
+    service: ReportingServiceDependency,
+    expected_data_revision: Annotated[int, Query(ge=0)],
+) -> Response:
+    report = await service.yearly_report_v2(
+        period=period, expected_data_revision=expected_data_revision
+    )
+    return _report_file_response(
+        report_pdf(report),
+        report_export_filename(report, "pdf"),
+        "application/pdf",
+        data_revision=report.meta.data_revision,
+    )
+
+
 @router.get("/monthly/{period}/export.csv", response_class=Response)
 async def export_monthly_report_csv(
     period: Annotated[
@@ -258,6 +358,35 @@ async def period_report_drill_down(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> PeriodReportDrillDownPage:
     return await service.period_report_drill_down(
+        period_kind=period_kind,
+        period=period,
+        expected_data_revision=expected_data_revision,
+        category_id=category_id,
+        account_id=account_id,
+        merchant_id=merchant_id,
+        source=source,
+        cursor=cursor,
+        limit=limit,
+    )
+
+
+@router.get("/v2/period-drill-down", response_model=PeriodReportDrillDownPageV2)
+async def period_report_drill_down_v2(
+    service: ReportingServiceDependency,
+    period_kind: Annotated[
+        ReportPeriodKind,
+        Query(description="Selects period format: month uses YYYY-MM; year uses YYYY."),
+    ],
+    period: Annotated[str, Query(description="month uses YYYY-MM; year uses YYYY")],
+    expected_data_revision: Annotated[int, Query(ge=0)],
+    category_id: UUID | None = None,
+    account_id: UUID | None = None,
+    merchant_id: UUID | None = None,
+    source: TransactionSource | None = None,
+    cursor: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> PeriodReportDrillDownPageV2:
+    return await service.period_report_drill_down_v2(
         period_kind=period_kind,
         period=period,
         expected_data_revision=expected_data_revision,

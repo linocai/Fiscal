@@ -41,24 +41,21 @@ public struct V151IOSWorkspace: View {
     public init(services: V15Services) { self.services = services }
 
     public var body: some View {
-        ZStack(alignment: .bottom) {
-            Group {
-                switch tab {
-                case .today:
-                    V151IOSTodayDashboard(
-                        services: services,
-                        recordFactsRevision: recordFactsRevision,
-                        openLedger: { id in ledgerFocusID = id; tab = .ledger },
-                        openDestination: { destination = $0 },
-                        decisionCountChanged: { todayDecisionCount = $0 }
-                    )
-                case .ledger:
-                    V151IOSLedger(services: services, focusID: ledgerFocusID, recordFactsRevision: recordFactsRevision, openDestination: { destination = $0 })
-                }
+        Group {
+            switch tab {
+            case .today:
+                V151IOSTodayDashboard(
+                    services: services,
+                    recordFactsRevision: recordFactsRevision,
+                    openLedger: { id in ledgerFocusID = id; tab = .ledger },
+                    openDestination: { destination = $0 },
+                    decisionCountChanged: { todayDecisionCount = $0 }
+                )
+            case .ledger:
+                V151IOSLedger(services: services, focusID: ledgerFocusID, recordFactsRevision: recordFactsRevision, openDestination: { destination = $0 })
             }
-            .padding(.bottom, 66)
-            bottomBar
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         .frame(maxWidth: .infinity)
         .overlay(alignment: .topLeading) {
             Text("V151 iOS workspace")
@@ -90,6 +87,7 @@ public struct V151IOSWorkspace: View {
             bottomButton("账目", kind: .ledger, selected: tab == .ledger, badge: 0) { tab = .ledger }
         }
         .padding(.horizontal, 28).frame(minHeight: 66)
+        .dynamicTypeSize(.large ... .accessibility1)
         .background(V15Palette.card.color)
         .overlay(alignment: .top) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
         .overlay {
@@ -329,8 +327,8 @@ private struct V151IOSTodayDashboard: View {
                 Spacer()
             }
             if let amount = item.amountMinor { V15MoneyText(minorUnits: amount, direction: attentionDirection(item), font: V15Typography.moneyLarge) }
-            Text(item.explanation).font(V15Typography.body).fixedSize(horizontal: false, vertical: true)
-            Text(item.suggestedAction).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58)).fixedSize(horizontal: false, vertical: true)
+            Text(V15AttentionUserCopy.explanation(for: item)).font(V15Typography.body).fixedSize(horizontal: false, vertical: true)
+            Text(V15AttentionUserCopy.suggestedAction(for: item)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58)).fixedSize(horizontal: false, vertical: true)
             V15AdaptiveStack(spacing: 8) {
                 V15ActionButton(primaryActionTitle(item)) {
                     if supportsInlineDecision(item) { expandedDecisionID = expandedDecisionID == item.id ? nil : item.id }
@@ -383,7 +381,8 @@ private struct V151IOSTodayDashboard: View {
     private func knownFuture(_ events: [V15FutureEvent]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("已知未来").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.58)).padding(.bottom, 8)
-            ForEach(events.prefix(3)) { event in
+            ForEach(Array(events.prefix(3).enumerated()), id: \.element.id) { indexed in
+                let event = indexed.element
                 Button { openDestination(event.sourceType == .creditCycle ? .credit : event.sourceType == .reimbursementParty ? .reimbursements : .cashFlow) } label: {
                     HStack(spacing: 10) {
                         Rectangle().fill(V15Palette.yellow.color).frame(width: 3, height: 28)
@@ -391,7 +390,9 @@ private struct V151IOSTodayDashboard: View {
                         Spacer()
                         V15MoneyText(minorUnits: event.amountMinor, direction: .neutral, includeCurrency: false, font: V15Typography.label.monospacedDigit())
                     }.padding(.vertical, 10)
-                }.buttonStyle(.plain)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("v151.ios.today.known-future.item.\(indexed.offset)")
                 Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
             }
         }
@@ -551,14 +552,21 @@ private struct V151IOSCategoryInlineDecision: View {
                         ForEach(model.categories) { Text($0.name).tag(Optional($0.id)) }
                     }
                     .pickerStyle(.menu)
-                    .onChange(of: categoryID) { _, _ in previewed = false }
-                    if previewed {
-                        V15ServerFactState(detail: "已取得这笔账目的最新内容。确认后会直接修改分类。")
-                        V15ActionButton("确认分类") { Task { await commit() } }
+                    .disabled(model.categoryChangeIsCommitting)
+                    .onChange(of: categoryID) { _, _ in previewed = false; model.clearCategoryPreview() }
+                    if previewed, let preview = model.categoryChangePreview {
+                        V15ServerFactState(detail: preview.items.map { "\($0.title)：\($0.previousCategoryName ?? "未分类") → \($0.proposedCategoryName)" }.joined(separator: "\n"))
+                        V15ActionButton(
+                            model.categoryChangeIsCommitting ? "正在提交" : "确认分类",
+                            disabledReason: model.categoryChangeIsCommitting
+                                ? .init(code: "category_commit_in_flight", message: "正在提交分类，请稍候。", fieldPath: nil)
+                                : nil
+                        ) { Task { await commit() } }
                     } else {
                         V15ActionButton("取最新账目", disabledReason: categoryID == nil ? .init(code: "category_required", message: "请先选择分类。", fieldPath: nil) : (model.isOffline ? .init(code: "category_read_requires_network", message: "需要联网取得最新账目。", fieldPath: nil) : nil)) { Task { await readCurrentFact() } }
                     }
                     mutationState
+                    if let failure = model.categoryChangeFailure { V15ServiceErrorState(message: failure.message) { Task { await readCurrentFact() } } }
                 }
             }
         }
@@ -586,18 +594,18 @@ private struct V151IOSCategoryInlineDecision: View {
     }
 
     @MainActor private func commit() async {
-        await model.replaceSelectedCategory(categoryID)
-        switch model.mutation {
-        case .idle:
-            receipt = "分类已保存；现在显示最新账目。"
-        case .reconciled(let message): receipt = message
-        default: break
+        let result = await model.commitPreviewedCategories()
+        if result.committedIDs.contains(transactionID) {
+            receipt = result.failures.first(where: { $0.id == transactionID })?.message
+                ?? "分类已保存；现在显示最新账目。"
         }
     }
     @MainActor private func readCurrentFact() async {
+        guard let categoryID else { return }
         await model.loadDetail(transactionID: transactionID)
         guard case .loaded = model.detailPhase else { return }
-        previewed = true
+        await model.previewCategories([transactionID], categoryID: categoryID)
+        previewed = model.categoryChangePreview != nil
     }
 }
 
@@ -653,8 +661,13 @@ private struct V151IOSRepaymentInlineDecision: View {
             }
             if previewed {
                 V15PreviewState {
-                    Text("请核对来源、目标、账期和金额；确认后将直接记录还款。")
-                        .font(V15Typography.secondary)
+                    if case .ready(let preview) = model.repaymentPreviewPhase {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(preview.paymentAccountName)：\(money(preview.paymentBalanceBeforeMinor)) → \(money(preview.paymentBalanceAfterMinor))")
+                            Text("\(preview.creditAccountName) 欠款：\(money(preview.creditDebtBeforeMinor)) → \(money(preview.creditDebtAfterMinor))")
+                            Text("所选账期待还：\(money(preview.cycleRemainingBeforeMinor)) → \(money(preview.cycleRemainingAfterMinor))")
+                        }.font(V15Typography.secondary)
+                    }
                 }
                 V15ActionButton("确认还款", disabledReasons: model.allIssues.map { .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath) }) { Task { await submit() } }
             } else {
@@ -697,12 +710,15 @@ private struct V151IOSRepaymentInlineDecision: View {
     @MainActor private func refreshPreview() async {
         await model.loadCreditCycles()
         if model.creditCycles.contains(where: { $0.id == cycleID }) { model.creditCycleID = cycleID }
-        previewed = model.creditCycleID != nil && model.allIssues.isEmpty
+        await model.previewRepayment()
+        if case .ready = model.repaymentPreviewPhase { previewed = true } else { previewed = false }
     }
+
+    private func money(_ value: Int64) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral).text }
 
     @MainActor private func submit() async {
         let before = model.creditCycles.first(where: { $0.id == model.creditCycleID })
-        await model.submit()
+        _ = await model.submit()
         guard case .conflict = model.submission else { return }
         await readConflictFacts(before: before)
     }
@@ -854,9 +870,11 @@ private struct V151IOSCashFlowInlineDecision: View {
     let itemID: UUID
     let onResolved: () -> Void
     @State private var item: V15CashFlowItem?
+    @State private var preview: V15CashFlowConfirmPreview?
     @State private var phase: Phase = .loading
     @State private var conflictChanges: [V15ConflictChange] = []
     @State private var conflictExplanation: String?
+    @State private var confirmGate = V15SingleFlightAttemptGate()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -878,7 +896,7 @@ private struct V151IOSCashFlowInlineDecision: View {
                     HStack { Text(item.title); Spacer(); V15MoneyText(minorUnits: item.plannedAmountMinor, direction: .neutral, font: V15Typography.money) }
                     Text("预期 \(item.expectedDate) · \(item.status.displayName)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
                     if case .previewed = phase {
-                        V15PreviewState { Text("已取得最新状态。确认只改变这一次事项，不会创建入账交易。").font(V15Typography.secondary) }
+                        V15PreviewState { Text("\(preview?.itemBefore.status.displayName ?? item.status.displayName) → 已确认。确认只改变这一次事项，不会创建入账交易。").font(V15Typography.secondary) }
                         V15ActionButton("确认本次", disabledReason: confirmReason(item)) { Task { await confirm(item) } }
                     } else {
                         V15ActionButton("读取影响", disabledReason: confirmReason(item)) { Task { await load(fresh: true, preview: true) } }
@@ -890,6 +908,7 @@ private struct V151IOSCashFlowInlineDecision: View {
     }
 
     private func confirmReason(_ item: V15CashFlowItem) -> V15DisabledReason? {
+        if confirmGate.isActive { return .init(code: "confirm_commit_in_flight", message: "正在确认这项现金流，请稍候。", fieldPath: nil) }
         if services.offlineSnapshotAt != nil { return .init(code: "offline_read_only", message: "离线时只可查看。", fieldPath: nil) }
         guard item.manualItemID != nil else { return .init(code: "system_projection", message: "系统投影必须在对应业务流程处理。", fieldPath: nil) }
         guard item.allows(.confirm) else { return .init(code: "confirm_unavailable", message: "当前状态不能确认这项现金流。", fieldPath: nil) }
@@ -897,20 +916,27 @@ private struct V151IOSCashFlowInlineDecision: View {
     }
 
     @MainActor private func load(fresh: Bool = false, preview: Bool = false) async {
+        guard !confirmGate.isActive else { return }
         phase = .loading
         do {
             let value = try await services.cashFlow.item(id: itemID, readCachePolicy: fresh ? .reloadIgnoringCache : .standard)
             item = value
-            phase = preview ? .previewed : .ready
+            if preview, let id = value.manualItemID {
+                self.preview = try await services.actions.cashFlowConfirmPreview(itemID: id, expectedVersion: value.version)
+                phase = .previewed
+            } else { self.preview = nil; phase = .ready }
         } catch let failure as V15Failure { phase = .failed(failure) }
         catch { phase = .failed(.init(kind: .transport, message: "暂时无法取得现金流信息。")) }
     }
 
     @MainActor private func confirm(_ value: V15CashFlowItem) async {
-        guard let id = value.manualItemID, confirmReason(value) == nil else { return }
+        guard let id = value.manualItemID, let preview, preview.itemBefore.id == value.id, confirmReason(value) == nil,
+              let key = confirmGate.begin() else { return }
+        defer { confirmGate.finish(key) }
         phase = .committing
         do {
-            let result = try await services.cashFlow.confirm(itemID: id, request: .init(expectedVersion: value.version))
+            _ = try await services.actions.commitCashFlow(itemID: id, previewToken: preview.meta.previewToken, idempotencyKey: key)
+            let result = try await services.cashFlow.item(id: id, readCachePolicy: .reloadIgnoringCache)
             item = result
             phase = .succeeded(result)
         } catch let failure as V15Failure {
@@ -918,8 +944,21 @@ private struct V151IOSCashFlowInlineDecision: View {
                 phase = .conflict(conflict)
                 await readConflictFacts(before: value)
             }
+            else if V15LedgerCreateService.outcomeMayBeUnknown(failure) { await reconcileReceipt(key: key, itemID: id) }
             else { phase = .failed(failure) }
-        } catch { phase = .failed(.init(kind: .responseUnknown, message: "确认结果不明，请打开现金流详情核对。")) }
+        } catch {
+            await reconcileReceipt(key: key, itemID: id)
+        }
+    }
+
+    @MainActor private func reconcileReceipt(key: UUID, itemID: UUID) async {
+        if let receipt = try? await services.actions.receipt(idempotencyKey: key), receipt.action == .cashFlowConfirm,
+           let result = try? await services.cashFlow.item(id: itemID, readCachePolicy: .reloadIgnoringCache) {
+            item = result; preview = nil; phase = .succeeded(result)
+        } else {
+            preview = nil
+            phase = .failed(.init(kind: .responseUnknown, message: "确认结果不明，请打开现金流详情核对；不会自动重复确认。"))
+        }
     }
 
     @MainActor private func readConflictFacts(before: V15CashFlowItem) async {
@@ -949,6 +988,7 @@ private struct V151IOSLedger: View {
     @State private var categoryID: UUID?
     @State private var categoryPreviewed = false
     @State private var categoryEditing = false
+    @State private var categoryCommitNotice: String?
     @State private var selectedAccountID: UUID?
 
     init(services: V15Services, focusID: UUID?, recordFactsRevision: UInt64, openDestination: @escaping (V151IOSWorkspace.Destination) -> Void) {
@@ -1097,12 +1137,13 @@ private struct V151IOSLedger: View {
         VStack(spacing: 0) {
             Capsule().fill(V15Palette.ink.color.opacity(0.20)).frame(width: 38, height: 5).padding(.top, 8)
             HStack {
-                Button(categoryEditing ? "返回" : "账目详情") { if categoryEditing { categoryEditing = false } }
+                Button(categoryEditing ? "返回" : "账目详情") { if categoryEditing { resetCategoryEditor() } }
                     .font(.headline)
                     .buttonStyle(.plain)
-                    .disabled(!categoryEditing)
+                    .disabled(!categoryEditing || model.categoryChangeIsCommitting)
                 Spacer()
                 Button("完成") { selectedID = nil }.font(.subheadline.weight(.semibold))
+                    .disabled(model.categoryChangeIsCommitting)
             }
             .padding(.horizontal, 20).frame(minHeight: 48)
             Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
@@ -1141,10 +1182,14 @@ private struct V151IOSLedger: View {
                 detailRow("业务日期", transaction.businessDate)
                 detailRow("来源", sourceLabel(transaction.source))
             }
+            if let categoryCommitNotice {
+                V15ServerFactState(title: "分类已保存", detail: categoryCommitNotice)
+            }
             if transaction.categoryID == nil {
                 V15ActionButton("设置分类") {
                     categoryID = transaction.categoryID
                     categoryPreviewed = false
+                    categoryCommitNotice = nil
                     categoryEditing = true
                 }
             }
@@ -1199,27 +1244,43 @@ private struct V151IOSLedger: View {
                     Text("未分类").tag(Optional<UUID>.none)
                     ForEach(model.categories) { Text($0.name).tag(Optional($0.id)) }
                 }
-                .onChange(of: categoryID) { _, _ in categoryPreviewed = false }
+                .disabled(model.categoryChangeIsCommitting)
+                .onChange(of: categoryID) { _, _ in categoryPreviewed = false; model.clearCategoryPreview() }
+            }
+            if categoryPreviewed, let preview = model.categoryChangePreview {
+                V15ServerFactState(detail: preview.items.map { "\($0.title)：\($0.previousCategoryName ?? "未分类") → \($0.proposedCategoryName)" }.joined(separator: "\n"))
             }
             if categoryPreviewed {
-                V15ServerFactState(detail: "已取得这笔账目的最新内容。确认后会直接修改分类。")
-            }
-            if categoryPreviewed {
-                V15ActionButton("确认分类") {
-                    categoryEditing = false
-                    Task { await model.replaceSelectedCategory(categoryID) }
-                }
+                V15ActionButton(
+                    model.categoryChangeIsCommitting ? "正在提交" : "确认分类",
+                    disabledReason: model.categoryChangeIsCommitting
+                        ? .init(code: "category_commit_in_flight", message: "正在提交分类，请稍候。", fieldPath: nil)
+                        : nil
+                ) { Task { await commitDetailCategory() } }
             } else {
-                V15ActionButton("取最新账目", disabledReason: model.isOffline ? .init(code: "category_read_requires_network", message: "需要联网取得最新账目。", fieldPath: nil) : nil) { Task { await readCategoryCurrentFact() } }
+                V15ActionButton("查看分类影响", disabledReason: categoryID == nil ? .init(code: "category_required", message: "请先选择分类。", fieldPath: nil) : (model.isOffline ? .init(code: "category_read_requires_network", message: "需要联网取得最新账目。", fieldPath: nil) : nil)) { Task { await readCategoryCurrentFact() } }
             }
+            if let failure = model.categoryChangeFailure { V15ServiceErrorState(message: failure.message) { Task { await readCategoryCurrentFact() } } }
         }
     }
 
     @MainActor private func readCategoryCurrentFact() async {
-        guard let id = model.selected?.id else { return }
+        guard let id = model.selected?.id, let categoryID else { return }
         await model.loadDetail(transactionID: id)
         guard case .loaded = model.detailPhase else { return }
-        categoryPreviewed = true
+        await model.previewCategories([id], categoryID: categoryID)
+        categoryPreviewed = model.categoryChangePreview != nil
+    }
+
+    @MainActor private func commitDetailCategory() async {
+        guard let id = model.selected?.id else { return }
+        let result = await model.commitPreviewedCategories()
+        if result.committedIDs.contains(id) {
+            categoryCommitNotice = result.failures.first(where: { $0.id == id })?.message
+                ?? "分类已保存；现在显示最新账目。"
+            categoryEditing = false
+            categoryPreviewed = false
+        }
     }
 
     private func loadInitialContent() async {
@@ -1236,8 +1297,10 @@ private struct V151IOSLedger: View {
     }
 
     private func resetCategoryEditor() {
+        model.clearCategoryPreview()
         categoryEditing = false
         categoryPreviewed = false
+        categoryCommitNotice = nil
         categoryID = nil
     }
 
@@ -1265,13 +1328,17 @@ private struct V151IOSLedger: View {
 }
 
 private struct V151IOSAccountDetail: View {
-    private enum Phase { case loading, loaded(V15AccountResponse), failed(V15Failure) }
     let services: V15Services
     let accountID: UUID
     let recordFactsRevision: UInt64
     let openDestination: (V151IOSWorkspace.Destination) -> Void
-    @State private var phase: Phase = .loading
+    @State private var model: V15AccountDetailModel
     @Environment(\.dismiss) private var dismiss
+
+    init(services: V15Services, accountID: UUID, recordFactsRevision: UInt64, openDestination: @escaping (V151IOSWorkspace.Destination) -> Void) {
+        self.services = services; self.accountID = accountID; self.recordFactsRevision = recordFactsRevision; self.openDestination = openDestination
+        _model = State(initialValue: V15AccountDetailModel(services: services))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1284,10 +1351,11 @@ private struct V151IOSAccountDetail: View {
             Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    switch phase {
-                    case .loading: V15LoadingSkeleton(layout: .inspector)
+                    switch model.phase {
+                    case .idle, .loading: V15LoadingSkeleton(layout: .inspector)
                     case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await load() } }
-                    case .loaded(let account): accountContent(account)
+                    case .loaded:
+                        if let account = model.account { accountContent(account) }
                     }
                 }
                 .padding(20)
@@ -1326,9 +1394,21 @@ private struct V151IOSAccountDetail: View {
                 }
                 V15ActionButton("查看信用账期", kind: .secondary) { dismiss(); openDestination(.credit) }
             }
+            V15Section("核对历史") {
+                if model.checkpoints.isEmpty {
+                    Text("还没有核对记录。完成一次余额核对后会显示在这里。")
+                        .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                } else {
+                    ForEach(model.checkpoints) { checkpoint in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack { Text(checkpointDate(checkpoint.asOf)); Spacer(); V15MoneyText(minorUnits: checkpoint.differenceMinor, direction: .neutral, includeCurrency: false, font: .subheadline.monospacedDigit()) }
+                            Text(checkpoint.state == .reconciled ? "已核对" : "有差额待处理").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                        }
+                    }
+                }
+                V15ActionButton("进入余额核对", kind: .secondary) { dismiss(); openDestination(.reconciliation) }
+            }
             V15ActionButton("账户与分类设置", kind: .secondary) { dismiss(); openDestination(.settings) }
-            Text("这个账户暂时没有可查看的核对记录。")
-                .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58)).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -1339,11 +1419,9 @@ private struct V151IOSAccountDetail: View {
     private func accountKind(_ value: V15AccountKind) -> String { switch value { case .cash: "现金"; case .debit: "储蓄账户"; case .credit: "信用账户"; case .unknown: "未知类型" } }
 
     @MainActor private func load() async {
-        phase = .loading
-        do { phase = .loaded(try await services.masterData.account(id: accountID)) }
-        catch let failure as V15Failure { phase = .failed(failure) }
-        catch { phase = .failed(.init(kind: .transport, message: "暂时无法取得账户信息。")) }
+        await model.load(accountID: accountID, fresh: true)
     }
+    private func checkpointDate(_ date: Date) -> String { let formatter = DateFormatter(); formatter.locale = Locale(identifier: "zh_CN"); formatter.timeZone = ShanghaiBusinessDate.timeZone; formatter.dateFormat = "yyyy年M月d日 HH:mm"; return formatter.string(from: date) }
 }
 
 private struct V151IOSPendingSyncQueue: View {
@@ -1418,17 +1496,25 @@ private struct V151IOSPendingSyncQueue: View {
 private struct V151IOSDestinationHost: View {
     let services: V15Services
     let destination: V151IOSWorkspace.Destination
+    @State private var futureTarget: V15FutureOpenTarget?
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
             content
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } } }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        if futureTarget != nil { Button("返回未来") { futureTarget = nil } }
+                        else { Button("关闭") { dismiss() } }
+                    }
+                }
         }
         .tint(V15Palette.teal.color)
     }
     @ViewBuilder private var content: some View {
         switch destination {
-        case .future: V15FutureTimelineView(services: services)
+        case .future:
+            if let futureTarget { futureTargetContent(futureTarget) }
+            else { V15FutureTimelineView(services: services, onOpen: { futureTarget = $0 }) }
         case .credit: V15CreditView(services: services)
         case .installments: V15InstallmentView(services: services)
         case .reimbursements: V15ReimbursementView(services: services)
@@ -1440,6 +1526,17 @@ private struct V151IOSDestinationHost: View {
         case .archive: V15DataSecurityView(services: services)
         case .settings: V15SettingsView(services: services)
         case .pendingSync: V151IOSPendingSyncQueue(services: services)
+        }
+    }
+
+    @ViewBuilder private func futureTargetContent(_ target: V15FutureOpenTarget) -> some View {
+        switch target {
+        case .creditCycle(let cycle):
+            V15CreditView(services: services, initialCycle: cycle)
+        case .reimbursementParty(let claim, let partyID):
+            V15ReimbursementView(services: services, initialClaim: claim, initialPartyID: partyID)
+        case .cashFlowItem(let item):
+            V15CashFlowView(services: services, initialItem: item)
         }
     }
 }

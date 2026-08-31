@@ -5,12 +5,16 @@ public struct V15ReimbursementMacView: View {
     @State private var model: V15ReimbursementModel
     @State private var inspectorMode: InspectorMode = .claim
     private let initialGalleryScenario: String?
+    private let initialClaim: V15ReimbursementClaim?
+    private let initialPartyID: UUID?
 
     private enum InspectorMode: Equatable { case claim, claimReplacement, receiptActions(UUID), receiptReplacement(UUID) }
 
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialGalleryScenario: String? = nil) {
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialGalleryScenario: String? = nil, initialClaim: V15ReimbursementClaim? = nil, initialPartyID: UUID? = nil) {
         _model = State(initialValue: V15ReimbursementModel(services: services, offlineSnapshotAt: offlineSnapshotAt))
         self.initialGalleryScenario = initialGalleryScenario
+        self.initialClaim = initialClaim
+        self.initialPartyID = initialPartyID
     }
 
     public var body: some View {
@@ -24,6 +28,7 @@ public struct V15ReimbursementMacView: View {
         .background(V15Palette.paper.color)
         .task {
             if model.phase == .idle { await model.load() }
+            if let initialClaim { await model.selectClaim(initialClaim, readCachePolicy: .reloadIgnoringCache) }
             if let initialGalleryScenario { await prepareGalleryScenario(initialGalleryScenario) }
         }
         .accessibilityElement(children: .contain)
@@ -81,7 +86,7 @@ public struct V15ReimbursementMacView: View {
                             VStack(alignment: .leading, spacing: V15Spacing.xs) {
                                 HStack { Text(party.name).font(V15Typography.body.weight(.semibold)); Spacer(); Text("未到账 \(money(party.outstandingMinor))").font(V15Typography.money).monospacedDigit() }
                                 ForEach(party.allocations, id: \.id) { allocation in Text("\(allocation.expenseTitle) · 分摊 \(money(allocation.amountMinor)) · 已到账 \(money(allocation.receivedMinor))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
-                            }.padding(V15Spacing.md).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                            }.padding(V15Spacing.md).background(initialPartyID == party.id ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
                         }
                     }
                     V15Section("到账历史", detail: "\(model.receipts.count) 笔") {

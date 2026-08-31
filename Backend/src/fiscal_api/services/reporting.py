@@ -72,10 +72,15 @@ from fiscal_api.api.p34_schemas import (
     SUPPORTED_REPORT_YEAR_RANGE,
     PeriodReport,
     PeriodReportDrillDownItem,
+    PeriodReportDrillDownItemV2,
     PeriodReportDrillDownPage,
+    PeriodReportDrillDownPageV2,
+    PeriodReportV2,
     ReportAccountBalance,
     ReportCategoryTotal,
+    ReportCategoryTotalV2,
     ReportCompleteness,
+    ReportDailyPointV2,
     ReportDrillDownDimension,
     ReportMerchantTotal,
     ReportPeriodKind,
@@ -84,6 +89,9 @@ from fiscal_api.api.p34_schemas import (
 )
 from fiscal_api.api.p34_schemas import (
     ReportMeta as PeriodReportMeta,
+)
+from fiscal_api.api.p34_schemas import (
+    ReportMetaV2 as PeriodReportMetaV2,
 )
 from fiscal_api.core.time import BUSINESS_TIMEZONE, UTC, utc_now
 from fiscal_api.db.models import (
@@ -100,6 +108,7 @@ from fiscal_api.db.models import (
     LedgerTransaction,
     Merchant,
     Posting,
+    PostingRole,
     ReconciliationCheckpoint,
     TransactionKind,
     TransactionMerchantMapping,
@@ -1317,6 +1326,30 @@ class ReportingService:
             expected_data_revision=expected_data_revision,
         )
 
+    async def monthly_report_v2(
+        self, *, period: str, expected_data_revision: int | None = None
+    ) -> PeriodReportV2:
+        start, end = self._month_range(period)
+        return await self._period_report_v2(
+            ReportPeriodKind.MONTH,
+            period,
+            start,
+            end,
+            expected_data_revision=expected_data_revision,
+        )
+
+    async def yearly_report_v2(
+        self, *, period: str, expected_data_revision: int | None = None
+    ) -> PeriodReportV2:
+        start, end = self._period_bounds(ReportPeriodKind.YEAR, period)
+        return await self._period_report_v2(
+            ReportPeriodKind.YEAR,
+            period,
+            start,
+            end,
+            expected_data_revision=expected_data_revision,
+        )
+
     async def period_report_drill_down(
         self,
         *,
@@ -1418,6 +1451,110 @@ class ReportingService:
             next_cursor=next_cursor,
         )
 
+    async def period_report_drill_down_v2(
+        self,
+        *,
+        period_kind: ReportPeriodKind,
+        period: str,
+        expected_data_revision: int,
+        category_id: UUID | None,
+        account_id: UUID | None,
+        merchant_id: UUID | None,
+        source: TransactionSource | None,
+        cursor: str | None,
+        limit: int,
+    ) -> PeriodReportDrillDownPageV2:
+        if not 1 <= limit <= 100:
+            invalid("invalid_period_report_limit", "limit must be between 1 and 100")
+        start, end = self._period_bounds(period_kind, period)
+        cursor_time, cursor_id = self._decode_period_report_cursor(
+            cursor,
+            period_kind=period_kind,
+            period=period,
+            expected_data_revision=expected_data_revision,
+            category_id=category_id,
+            account_id=account_id,
+            merchant_id=merchant_id,
+            source=source,
+        )
+        revision_before = await self._data_revision()
+        if revision_before != expected_data_revision:
+            self._period_report_changed(
+                expected_data_revision,
+                revision_before,
+                period_kind=period_kind,
+                period=period,
+                drill_down=True,
+                version=2,
+            )
+        occurred_from, occurred_to = self._bounds(start, end)
+        page = await self.repository.period_ledger_page(
+            occurred_from=occurred_from,
+            occurred_to_exclusive=occurred_to,
+            category_id=category_id,
+            account_id=account_id,
+            merchant_id=merchant_id,
+            source=source.value if source is not None else None,
+            cursor_time=cursor_time,
+            cursor_id=cursor_id,
+            limit=limit,
+        )
+        categories = await self.repository.categories()
+        accounts = await self.repository.accounts()
+        merchants = await self._merchant_by_transaction({item.id for item in page})
+        facts = await self._facts_for_transactions(
+            [item for item in page[:limit] if item.kind in SPENDING_KINDS]
+        )
+        spending_by_id = {item.transaction.id: item for item in facts}
+        items = [
+            self._period_drill_down_item_v2(
+                transaction,
+                categories=categories,
+                accounts=accounts,
+                merchant=merchants.get(transaction.id),
+                spending=spending_by_id.get(transaction.id),
+            )
+            for transaction in page[:limit]
+        ]
+        next_cursor = (
+            self._encode_period_report_cursor(
+                period_kind=period_kind,
+                period=period,
+                expected_data_revision=expected_data_revision,
+                category_id=category_id,
+                account_id=account_id,
+                merchant_id=merchant_id,
+                source=source,
+                occurred_at=page[limit - 1].occurred_at,
+                transaction_id=page[limit - 1].id,
+            )
+            if len(page) > limit
+            else None
+        )
+        await self._restart_facts_read_boundary()
+        revision_after = await self._data_revision()
+        if revision_after != expected_data_revision:
+            self._period_report_changed(
+                expected_data_revision,
+                revision_after,
+                period_kind=period_kind,
+                period=period,
+                drill_down=True,
+                version=2,
+            )
+        return PeriodReportDrillDownPageV2(
+            meta=self._period_report_meta_v2(
+                period_kind, period, start, end, data_revision=revision_after
+            ),
+            dimension=ReportDrillDownDimension.LEDGER,
+            category_id=category_id,
+            account_id=account_id,
+            merchant_id=merchant_id,
+            source=source,
+            items=items,
+            next_cursor=next_cursor,
+        )
+
     async def _period_report(
         self,
         period_kind: ReportPeriodKind,
@@ -1465,6 +1602,113 @@ class ReportingService:
                 period=period,
             )
         raise AssertionError("unreachable")
+
+    async def _period_report_v2(
+        self,
+        period_kind: ReportPeriodKind,
+        period: str,
+        start: date,
+        end: date,
+        *,
+        expected_data_revision: int | None = None,
+    ) -> PeriodReportV2:
+        for attempt in range(2):
+            revision_before = await self._data_revision()
+            if expected_data_revision is not None and revision_before != expected_data_revision:
+                self._period_report_changed(
+                    expected_data_revision,
+                    revision_before,
+                    period_kind=period_kind,
+                    period=period,
+                    version=2,
+                )
+            report = await self._build_period_report_v2(
+                period_kind, period, start, end, revision_before
+            )
+            await self._restart_facts_read_boundary()
+            revision_after = await self._data_revision()
+            if revision_after == revision_before:
+                return report
+            if expected_data_revision is not None:
+                self._period_report_changed(
+                    expected_data_revision,
+                    revision_after,
+                    period_kind=period_kind,
+                    period=period,
+                    version=2,
+                )
+            if attempt == 0:
+                continue
+            self._period_report_changed(
+                revision_before,
+                revision_after,
+                period_kind=period_kind,
+                period=period,
+                version=2,
+            )
+        raise AssertionError("unreachable")
+
+    async def _build_period_report_v2(
+        self,
+        period_kind: ReportPeriodKind,
+        period: str,
+        start: date,
+        end: date,
+        data_revision: int,
+    ) -> PeriodReportV2:
+        base = await self._build_period_report(period_kind, period, start, end, data_revision)
+        categories = await self.repository.categories()
+        spending = await self._spending_facts(
+            start,
+            end,
+            excluded_category_ids=self._excluded_category_ids(categories),
+        )
+        by_day: dict[date, list[_SpendingFact]] = defaultdict(list)
+        for fact in spending:
+            by_day[self._business_date(fact.transaction.occurred_at)].append(fact)
+        daily: list[ReportDailyPointV2] = []
+        cursor = start
+        while cursor <= end:
+            daily.append(
+                ReportDailyPointV2(
+                    date=cursor, **self._sum_spending(by_day.get(cursor, [])).model_dump()
+                )
+            )
+            if cursor == end:
+                break
+            cursor += timedelta(days=1)
+
+        debt = await self.debt(as_of=end)
+        debt_cycles = [
+            cycle
+            for cycle in debt.cycles
+            if start <= cycle.statement_date <= end or start <= cycle.due_date <= end
+        ]
+        known_future_events = await self._known_future_events(
+            debt=debt,
+            window_start=start,
+            window_end=end,
+        )
+        return PeriodReportV2(
+            meta=self._period_report_meta_v2(
+                period_kind, period, start, end, data_revision=data_revision
+            ),
+            summary=base.summary,
+            accounts=base.accounts,
+            categories=self._period_category_rows_v2(spending, categories),
+            merchants=base.merchants,
+            sources=base.sources,
+            completeness=base.completeness,
+            daily=daily,
+            known_future_events=known_future_events,
+            debt_cycles=debt_cycles,
+            installments=debt.installments,
+            drill_down_path=(
+                "/api/v1/reports/v2/period-drill-down?"
+                f"period_kind={period_kind.value}&period={period}"
+                f"&expected_data_revision={data_revision}"
+            ),
+        )
 
     async def _build_period_report(
         self,
@@ -1607,6 +1851,26 @@ class ReportingService:
     ) -> PeriodReportMeta:
         generated_at = utc_now()
         return PeriodReportMeta(
+            period_kind=period_kind,
+            period=period,
+            date_from=start,
+            date_to=end,
+            as_of=generated_at,
+            data_revision=data_revision,
+            generated_at=generated_at,
+        )
+
+    @staticmethod
+    def _period_report_meta_v2(
+        period_kind: ReportPeriodKind,
+        period: str,
+        start: date,
+        end: date,
+        *,
+        data_revision: int,
+    ) -> PeriodReportMetaV2:
+        generated_at = utc_now()
+        return PeriodReportMetaV2(
             period_kind=period_kind,
             period=period,
             date_from=start,
@@ -1879,6 +2143,34 @@ class ReportingService:
         )
 
     @staticmethod
+    def _period_category_rows_v2(
+        spending: list[_SpendingFact], categories: dict[UUID, Category]
+    ) -> list[ReportCategoryTotalV2]:
+        grouped: dict[UUID | None, list[_SpendingFact]] = defaultdict(list)
+        for fact in spending:
+            grouped[fact.transaction.category_id].append(fact)
+        return sorted(
+            [
+                ReportCategoryTotalV2(
+                    category_id=category_id,
+                    category_name=(
+                        categories[category_id].name
+                        if category_id is not None and category_id in categories
+                        else "未归类"
+                    ),
+                    transaction_count=len(facts),
+                    **ReportingService._sum_spending(facts).model_dump(),
+                )
+                for category_id, facts in grouped.items()
+            ],
+            key=lambda item: (
+                -item.net_consumption_minor,
+                item.category_name,
+                str(item.category_id),
+            ),
+        )
+
+    @staticmethod
     def _period_merchant_rows(
         spending: list[_SpendingFact], merchant_by_transaction: dict[UUID, Merchant]
     ) -> list[ReportMerchantTotal]:
@@ -1964,6 +2256,73 @@ class ReportingService:
             net_consumption_minor=spending.net if spending else 0,
         )
 
+    @classmethod
+    def _period_drill_down_item_v2(
+        cls,
+        transaction: LedgerTransaction,
+        *,
+        categories: dict[UUID, Category],
+        accounts: dict[UUID, Account],
+        merchant: Merchant | None,
+        spending: _SpendingFact | None,
+    ) -> PeriodReportDrillDownItemV2:
+        primary = next(
+            (
+                posting
+                for posting in transaction.postings
+                if posting.role in {PostingRole.ACCOUNT.value, PostingRole.SOURCE.value}
+            ),
+            transaction.postings[0] if transaction.postings else None,
+        )
+        destination = next(
+            (
+                posting
+                for posting in transaction.postings
+                if posting.role == PostingRole.DESTINATION.value
+            ),
+            None,
+        )
+        primary_account = accounts.get(primary.account_id) if primary is not None else None
+        destination_account = (
+            accounts.get(destination.account_id) if destination is not None else None
+        )
+        category = categories.get(transaction.category_id) if transaction.category_id else None
+        external_cash = 0
+        if transaction.kind != TransactionKind.TRANSFER.value:
+            external_cash = checked_int64(
+                sum(posting.amount_minor for posting in transaction.postings),
+                label="period drill-down transaction amount",
+            )
+        amounts = cls._sum_spending([spending] if spending is not None else [])
+        return PeriodReportDrillDownItemV2(
+            transaction_id=transaction.id,
+            occurred_at=transaction.occurred_at,
+            business_date=cls._business_date(transaction.occurred_at),
+            title=transaction.title,
+            kind=TransactionKind(transaction.kind),
+            source=TransactionSource(transaction.source),
+            category_id=transaction.category_id,
+            category_name=category.name if category is not None else None,
+            merchant_id=merchant.id if merchant else None,
+            merchant_name=merchant.name if merchant else None,
+            account_id=primary_account.id if primary_account is not None else None,
+            account_name=primary_account.name if primary_account is not None else None,
+            destination_account_id=(
+                destination_account.id if destination_account is not None else None
+            ),
+            destination_account_name=(
+                destination_account.name if destination_account is not None else None
+            ),
+            external_cash_amount_minor=external_cash,
+            **amounts.model_dump(),
+            status="voided" if transaction.voided_at is not None else "active",
+            voided_at=transaction.voided_at,
+            account_archived=(
+                primary_account.archived_at is not None if primary_account is not None else False
+            ),
+            category_archived=category.archived_at is not None if category is not None else False,
+        )
+
     @staticmethod
     def _period_report_changed(
         expected_data_revision: int,
@@ -1972,10 +2331,12 @@ class ReportingService:
         period_kind: ReportPeriodKind,
         period: str,
         drill_down: bool = False,
+        version: int = 1,
     ) -> None:
-        report_path = f"/api/v1/reports/{period_kind.value}ly/{period}"
+        prefix = "/api/v1/reports/v2" if version == 2 else "/api/v1/reports"
+        report_path = f"{prefix}/{period_kind.value}ly/{period}"
         reload_path = (
-            f"/api/v1/reports/period-drill-down?period_kind={period_kind.value}&period={period}"
+            f"{prefix}/period-drill-down?period_kind={period_kind.value}&period={period}"
             if drill_down
             else report_path
         )

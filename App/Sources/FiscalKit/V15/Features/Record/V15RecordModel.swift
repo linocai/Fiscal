@@ -4,6 +4,7 @@ import Observation
 @MainActor @Observable
 public final class V15RecordModel {
     public enum LoadPhase: Equatable { case idle, loading, loaded, empty, failed(String) }
+    public enum PreviewPhase: Equatable { case idle, loading, ready(V15RepaymentPreview), failed(V15Failure) }
     public enum Submission: Equatable { case idle, submitting, queued(UUID), success(V15Transaction), conflict(V15Conflict), failed(V15Failure) }
     public enum CommitOutcome: Equatable, Sendable { case confirmed(V15Transaction), queued(UUID) }
 
@@ -23,6 +24,7 @@ public final class V15RecordModel {
     public private(set) var categoryPhase: LoadPhase = .idle
     public private(set) var creditCyclePhase: LoadPhase = .idle
     public private(set) var submission: Submission = .idle
+    public private(set) var repaymentPreviewPhase: PreviewPhase = .idle
     public private(set) var fieldIssues: [V15FieldIssue] = []
     public private(set) var localIssues: [V15FieldIssue] = []
 
@@ -30,13 +32,16 @@ public final class V15RecordModel {
     private var categoriesGeneration: UInt64 = 0
     private var creditCyclesGeneration: UInt64 = 0
     private var submitGeneration: UInt64 = 0
+    private var previewGeneration: UInt64 = 0
     private var draftRevision: UInt64 = 0
     private var activePayloadIdentity: String?
+    private var previewPayloadIdentity: String?
     private var isReconcilingReferences = false
     private var isResettingDraft = false
     private let idempotency = V15IdempotencyOwner()
     private let services: V15Services
     private let createScope = "transaction-create"
+    private let repaymentScope = "repayment-commit"
 
     public init(services: V15Services, occurredOn: Date = Date()) {
         self.services = services
@@ -110,6 +115,25 @@ public final class V15RecordModel {
     public func retryReferences() async { await loadReferences() }
     public func retryCreditCycles() async { await loadCreditCycles() }
 
+    public func previewRepayment() async {
+        validate()
+        guard kind == .repayment, localIssues.isEmpty, let request = request(), let identity = payloadIdentity(for: request), !isOffline else { return }
+        previewGeneration &+= 1; let current = previewGeneration
+        repaymentPreviewPhase = .loading; fieldIssues = []
+        do {
+            let preview = try await services.actions.repaymentPreview(request)
+            guard current == previewGeneration, identity == payloadIdentity(for: request) else { return }
+            previewPayloadIdentity = identity
+            repaymentPreviewPhase = .ready(preview)
+        } catch let failure as V15Failure {
+            guard current == previewGeneration else { return }
+            repaymentPreviewPhase = failure.kind == .cancelled ? .idle : .failed(failure)
+        } catch {
+            guard current == previewGeneration else { return }
+            repaymentPreviewPhase = .failed(.init(kind: .transport, message: "暂时无法取得还款影响。"))
+        }
+    }
+
     public func submit() async -> CommitOutcome? {
         switch submission {
         case .submitting, .queued, .success, .conflict: return nil
@@ -126,6 +150,13 @@ public final class V15RecordModel {
             submission = .queued(id)
             resetDraftForNextEntry()
             return .queued(id)
+        }
+        if kind == .repayment {
+            guard case .ready(let preview) = repaymentPreviewPhase, previewPayloadIdentity == identity else {
+                repaymentPreviewPhase = .failed(.init(kind: .conflict, code: "repayment_preview_required", message: "输入已变化，请重新查看还款影响。"))
+                return nil
+            }
+            return await commitRepayment(preview: preview, identity: identity)
         }
         submitGeneration &+= 1; let current = submitGeneration; submission = .submitting; fieldIssues = []
         activePayloadIdentity = identity
@@ -153,10 +184,63 @@ public final class V15RecordModel {
         return nil
     }
 
+    private func commitRepayment(preview: V15RepaymentPreview, identity: String) async -> CommitOutcome? {
+        submitGeneration &+= 1; let current = submitGeneration
+        submission = .submitting; fieldIssues = []; activePayloadIdentity = identity
+        let key = idempotency.key(for: repaymentScope, payloadIdentity: identity)
+        do {
+            let receipt = try await services.actions.commitRepayment(previewToken: preview.meta.previewToken, idempotencyKey: key)
+            guard current == submitGeneration else { return nil }
+            let transaction = try decodeTransaction(from: receipt)
+            releaseActiveKey(scope: repaymentScope)
+            submission = .success(transaction)
+            resetDraftForNextEntry()
+            return .confirmed(transaction)
+        } catch let failure as V15Failure {
+            guard current == submitGeneration else { return nil }
+            if failure.kind == .conflict {
+                repaymentPreviewPhase = .idle; previewPayloadIdentity = nil
+                if let conflict = failure.conflict { submission = .conflict(conflict) }
+                else { submission = .failed(failure) }
+                releaseActiveKey(scope: repaymentScope)
+            } else if V15LedgerCreateService.outcomeMayBeUnknown(failure) {
+                return await reconcileRepaymentReceipt(key: key, generation: current)
+            } else {
+                releaseActiveKey(scope: repaymentScope)
+                submission = .failed(failure)
+            }
+        } catch {
+            guard current == submitGeneration else { return nil }
+            return await reconcileRepaymentReceipt(key: key, generation: current)
+        }
+        return nil
+    }
+
+    private func reconcileRepaymentReceipt(key: UUID, generation: UInt64) async -> CommitOutcome? {
+        do {
+            let receipt = try await services.actions.receipt(idempotencyKey: key)
+            guard generation == submitGeneration else { return nil }
+            let transaction = try decodeTransaction(from: receipt)
+            releaseActiveKey(scope: repaymentScope)
+            submission = .success(transaction)
+            resetDraftForNextEntry()
+            return .confirmed(transaction)
+        } catch {
+            guard generation == submitGeneration else { return nil }
+            submission = .failed(.init(kind: .responseUnknown, code: "response_unknown", message: "结果暂时不明，请稍后读取最新账目；不会自动重复还款。"))
+            return nil
+        }
+    }
+
+    private func decodeTransaction(from receipt: V15ActionCommitReceipt) throws -> V15Transaction {
+        guard receipt.action == .repayment else { throw V15Failure(kind: .decoding, code: "invalid_action_receipt", message: "还款结果无法识别。") }
+        return try V15BodyEncoder.decode(V15Transaction.self, from: receipt.result.values)
+    }
+
     /// A 409 never replays blindly. Reload the authoritative references, then
     /// puts the user back in the decision state with the same visible inputs.
     public func reloadAfterConflict() async { submission = .idle; await loadReferences(); if kind == .repayment { await loadCreditCycles() } }
-    public func dismiss() { submitGeneration &+= 1; releaseActiveKey(); submission = .idle; fieldIssues = [] }
+    public func dismiss() { submitGeneration &+= 1; previewGeneration &+= 1; releaseActiveKey(); releaseActiveKey(scope: repaymentScope); repaymentPreviewPhase = .idle; previewPayloadIdentity = nil; submission = .idle; fieldIssues = [] }
 
     public func newEntry() {
         dismiss()
@@ -170,6 +254,7 @@ public final class V15RecordModel {
     private func inputChanged() {
         guard !isResettingDraft else { return }
         draftRevision &+= 1; submitGeneration &+= 1; releaseActiveKey(); fieldIssues = []
+        previewGeneration &+= 1; repaymentPreviewPhase = .idle; previewPayloadIdentity = nil
         if case .idle = submission {} else { submission = .idle }
         validate()
     }
@@ -190,6 +275,9 @@ public final class V15RecordModel {
         creditCyclePhase = .idle
         draftRevision &+= 1
         fieldIssues = []
+        previewGeneration &+= 1
+        repaymentPreviewPhase = .idle
+        previewPayloadIdentity = nil
         validate()
     }
 
@@ -277,9 +365,13 @@ public final class V15RecordModel {
         return "\(draftRevision):\(data.base64EncodedString())"
     }
 
-    private func releaseActiveKey() {
+    private func releaseActiveKey(scope: String? = nil) {
         guard let activePayloadIdentity else { return }
-        idempotency.abandon(scope: createScope, payloadIdentity: activePayloadIdentity)
+        if let scope { idempotency.abandon(scope: scope, payloadIdentity: activePayloadIdentity) }
+        else {
+            idempotency.abandon(scope: createScope, payloadIdentity: activePayloadIdentity)
+            idempotency.abandon(scope: repaymentScope, payloadIdentity: activePayloadIdentity)
+        }
         self.activePayloadIdentity = nil
     }
 

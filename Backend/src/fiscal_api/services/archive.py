@@ -54,6 +54,8 @@ _EXCLUDED_TABLES = {
     "credit_schedule_change_previews",
     "credit_schedule_change_operations",
     "reimbursement_previews",
+    "action_preview_sessions",
+    "action_operations",
 }
 _EXCLUDED_FOREIGN_KEY_COLUMNS = {
     # Operations are permanent receipts, but the short-lived preview session

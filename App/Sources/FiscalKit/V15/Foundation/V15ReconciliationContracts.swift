@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 // MARK: - F3-E reconciliation facts
 
@@ -153,4 +154,41 @@ public struct V15ReconciliationService: Sendable {
         try await writable()
         try await transport.sendNoContent(.init(path: "reconciliation/attention/\(sourceType)/\(sourceID)/ignore", method: "POST"), body: try V15BodyEncoder.encode(request))
     }
+}
+
+@MainActor @Observable
+public final class V15AccountDetailModel {
+    public enum Phase: Equatable { case idle, loading, loaded, failed(V15Failure) }
+    public private(set) var phase: Phase = .idle
+    public private(set) var account: V15AccountResponse?
+    public private(set) var checkpoints: [V15ReconciliationCheckpoint] = []
+    private let services: V15Services
+    private var generation: UInt64 = 0
+    private var ownerID: UUID?
+
+    public init(services: V15Services) { self.services = services }
+
+    public func load(accountID: UUID, fresh: Bool = false) async {
+        generation &+= 1; let current = generation; ownerID = accountID
+        account = nil; checkpoints = []; phase = .loading
+        let policy: V15ReadCachePolicy = fresh ? .reloadIgnoringCache : .standard
+        let target = V15ReconciliationTarget(kind: .account, resourceID: accountID, label: "账户", accountID: accountID)
+        do {
+            async let accountValue = services.masterData.account(id: accountID, readCachePolicy: policy)
+            async let checkpointValues = services.reconciliation.checkpoints(target: target, readCachePolicy: policy)
+            let values = try await (accountValue, checkpointValues)
+            guard current == generation, ownerID == accountID else { return }
+            account = values.0
+            checkpoints = values.1.sorted { ($0.asOf, $0.id.uuidString) > ($1.asOf, $1.id.uuidString) }
+            phase = .loaded
+        } catch let failure as V15Failure {
+            guard current == generation, ownerID == accountID else { return }
+            phase = failure.kind == .cancelled ? .idle : .failed(failure)
+        } catch {
+            guard current == generation, ownerID == accountID else { return }
+            phase = .failed(.init(kind: .transport, message: "暂时无法取得账户与核对历史。"))
+        }
+    }
+
+    public func clear() { generation &+= 1; ownerID = nil; account = nil; checkpoints = []; phase = .idle }
 }

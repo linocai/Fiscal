@@ -1,6 +1,12 @@
 import Foundation
 import Observation
 
+public enum V15FutureOpenTarget: Sendable, Equatable {
+    case creditCycle(V15CreditCycle)
+    case reimbursementParty(claim: V15ReimbursementClaim, partyID: UUID)
+    case cashFlowItem(V15CashFlowItem)
+}
+
 /// The F3-A boundary: a server-owned, revision-bound list of known future
 /// events.  It intentionally has no write capability and never derives a
 /// forecast from the returned rows.
@@ -10,10 +16,12 @@ public final class V15FutureTimelineModel {
     public enum PagePhase { case idle, loading, failed(V15Failure) }
     public enum AccountOptionsPhase { case idle, loading, loaded, empty, failed(V15Failure) }
     public enum InspectorPhase { case idle, showing(V15FutureEvent), unavailable(String) }
+    public enum OpenPhase: Equatable { case idle, loading(String), failed(String) }
 
     public private(set) var phase: Phase = .idle
     public private(set) var pagePhase: PagePhase = .idle
     public private(set) var inspectorPhase: InspectorPhase = .idle
+    public private(set) var openPhase: OpenPhase = .idle
     public private(set) var events: [V15FutureEvent] = []
     public private(set) var meta: V15FactsMeta?
     public private(set) var serverWindow: V15BusinessDateRange?
@@ -31,6 +39,7 @@ public final class V15FutureTimelineModel {
     private var accountOptionsGeneration: UInt64 = 0
     private var nextCursor: String?
     private var pageRevision: Int64?
+    private var openGeneration: UInt64 = 0
 
     public init(services: V15Services, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil) {
         self.services = services
@@ -85,7 +94,8 @@ public final class V15FutureTimelineModel {
     public func reload() async {
         generation &+= 1
         let current = generation
-        events = []; meta = nil; serverWindow = nil; nextCursor = nil; pageFailure = nil; pagePhase = .idle; inspectorPhase = .idle
+        openGeneration &+= 1
+        events = []; meta = nil; serverWindow = nil; nextCursor = nil; pageFailure = nil; pagePhase = .idle; inspectorPhase = .idle; openPhase = .idle
         phase = .loading
         await read(cursor: nil, appending: false, generation: current, policy: requiresFreshReload ? .reloadIgnoringCache : .standard)
     }
@@ -105,9 +115,61 @@ public final class V15FutureTimelineModel {
             return
         }
         inspectorPhase = .showing(event)
+        openPhase = .idle
     }
 
-    public func closeInspector() { inspectorPhase = .idle }
+    public func closeInspector() { openGeneration &+= 1; inspectorPhase = .idle; openPhase = .idle }
+
+    /// The local locator is only an invitation to read. Navigation receives a
+    /// target built from a fresh server read after source ownership is checked.
+    public func resolveOpenTarget(_ event: V15FutureEvent) async -> V15FutureOpenTarget? {
+        guard !isOffline else { openPhase = .failed("离线时不能核验最新归属，请联网后再打开。"); return nil }
+        guard Self.isSafeLocator(event.deepLink, event: event) else { openPhase = .failed("此链接暂时无法安全打开。"); return nil }
+        openGeneration &+= 1; let current = openGeneration
+        openPhase = .loading(event.id)
+        do {
+            let target: V15FutureOpenTarget
+            switch event.sourceType {
+            case .creditCycle:
+                let cycle = try await services.credit.cycle(id: event.sourceID, readCachePolicy: .reloadIgnoringCache)
+                guard cycle.id == event.sourceID, cycle.id == event.cycleID,
+                      event.accountID == nil || cycle.accountID == event.accountID else {
+                    throw V15Failure(kind: .conflict, code: "future_owner_changed", message: "这项信用账期的归属已经变化，请刷新时间线。")
+                }
+                target = .creditCycle(cycle)
+            case .reimbursementParty:
+                guard let claimID = event.claimID, let partyID = event.partyID else {
+                    throw V15Failure(kind: .decoding, code: "future_owner_missing", message: "这项报销记录缺少归属信息。")
+                }
+                let claim = try await services.reimbursements.claim(id: claimID, readCachePolicy: .reloadIgnoringCache)
+                guard claim.id == claimID, partyID == event.sourceID,
+                      claim.parties.contains(where: { $0.id == partyID }) else {
+                    throw V15Failure(kind: .conflict, code: "future_owner_changed", message: "这项报销记录的归属已经变化，请刷新时间线。")
+                }
+                target = .reimbursementParty(claim: claim, partyID: partyID)
+            case .cashFlowItem:
+                let item = try await services.cashFlow.item(id: event.sourceID, readCachePolicy: .reloadIgnoringCache)
+                let accountMatches = event.accountID == nil || event.accountID == item.accountID || event.accountID == item.destinationAccountID
+                guard item.manualItemID == event.sourceID, accountMatches else {
+                    throw V15Failure(kind: .conflict, code: "future_owner_changed", message: "这项现金流记录的归属已经变化，请刷新时间线。")
+                }
+                target = .cashFlowItem(item)
+            }
+            guard current == openGeneration else { return nil }
+            openPhase = .idle
+            return target
+        } catch is CancellationError {
+            guard current == openGeneration else { return nil }
+            openPhase = .idle
+        } catch let failure as V15Failure {
+            guard current == openGeneration else { return nil }
+            openPhase = .failed(failure.message)
+        } catch {
+            guard current == openGeneration else { return nil }
+            openPhase = .failed("暂时无法核验这项记录，请稍后重试。")
+        }
+        return nil
+    }
 
     private func read(cursor: String?, appending: Bool, generation candidate: UInt64, policy: V15ReadCachePolicy) async {
         do {
@@ -144,7 +206,8 @@ public final class V15FutureTimelineModel {
         guard candidate == generation else { return }
         requiresFreshReload = true
         requiredRevision = [failure.conflict?.currentDataRevision, failure.conflict?.latestRevision].compactMap { $0 }.max()
-        events = []; meta = nil; serverWindow = nil; nextCursor = nil; pageFailure = nil; pagePhase = .idle; inspectorPhase = .idle
+        openGeneration &+= 1
+        events = []; meta = nil; serverWindow = nil; nextCursor = nil; pageFailure = nil; pagePhase = .idle; inspectorPhase = .idle; openPhase = .idle
         phase = .requiresReload(failure)
     }
 

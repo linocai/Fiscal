@@ -78,4 +78,56 @@ struct F3ATests {
         let cancellation = Task { await cancelled.loadAccountOptions() }; await Task.yield(); cancellation.cancel(); _ = await cancellation.result
         guard case .idle = cancelled.accountOptionsPhase else { Issue.record("cancelled account read must not overwrite a later state"); return }
     }
+
+    @Test("opening a future event requires a fresh owner read and rejects stale ownership")
+    @MainActor func freshOwnerReadBeforeNavigation() async throws {
+        let transport = F3ATransport(mode: .normal)
+        let model = V15FutureTimelineModel(services: V15Services(transport: transport))
+        await model.reload()
+        let credit = try #require(model.events.first(where: { $0.sourceType == .creditCycle }))
+        let party = try #require(model.events.first(where: { $0.sourceType == .reimbursementParty }))
+        let cash = try #require(model.events.first(where: { $0.sourceType == .cashFlowItem }))
+
+        guard case .creditCycle(let cycle) = await model.resolveOpenTarget(credit) else { Issue.record("credit owner read must produce a cycle"); return }
+        #expect(cycle.id == credit.sourceID && cycle.accountID == credit.accountID)
+        guard case .reimbursementParty(let claim, let partyID) = await model.resolveOpenTarget(party) else { Issue.record("reimbursement owner read must produce a claim party"); return }
+        #expect(claim.id == party.claimID && partyID == party.sourceID)
+        guard case .cashFlowItem(let item) = await model.resolveOpenTarget(cash) else { Issue.record("cash-flow owner read must produce a manual item"); return }
+        #expect(item.manualItemID == cash.sourceID)
+
+        let freshReads = await transport.allRequests().filter { request in
+            request.path.hasPrefix("credit-cycles/") || request.path.hasPrefix("reimbursement-claims/") || request.path.hasPrefix("cash-flow-items/")
+        }
+        #expect(freshReads.count == 3)
+        #expect(freshReads.allSatisfy { $0.readCachePolicy == .reloadIgnoringCache })
+
+        let mismatch = V15FutureTimelineModel(services: V15Services(transport: F3ATransport(mode: .ownerMismatch)))
+        await mismatch.reload()
+        let staleCredit = try #require(mismatch.events.first(where: { $0.sourceType == .creditCycle }))
+        #expect(await mismatch.resolveOpenTarget(staleCredit) == nil)
+        guard case .failed(let mismatchMessage) = mismatch.openPhase else { Issue.record("changed ownership must block navigation"); return }
+        #expect(mismatchMessage.contains("归属已经变化"))
+    }
+
+    @Test("offline and superseded owner reads cannot navigate")
+    @MainActor func offlineAndSupersededOwnerRead() async throws {
+        let offlineTransport = F3ATransport(mode: .normal)
+        let offline = V15FutureTimelineModel(services: V15Services(transport: offlineTransport), offlineSnapshotProvider: { Date() })
+        await offline.reload()
+        let offlineCredit = try #require(offline.events.first(where: { $0.sourceType == .creditCycle }))
+        let before = await offlineTransport.allRequests().count
+        #expect(await offline.resolveOpenTarget(offlineCredit) == nil)
+        #expect(await offlineTransport.allRequests().count == before)
+        guard case .failed(let offlineMessage) = offline.openPhase else { Issue.record("offline navigation must be blocked"); return }
+        #expect(offlineMessage.contains("离线"))
+
+        let race = V15FutureTimelineModel(services: V15Services(transport: F3ATransport(mode: .openRace)))
+        await race.reload()
+        let raceCredit = try #require(race.events.first(where: { $0.sourceType == .creditCycle }))
+        let oldRead = Task { await race.resolveOpenTarget(raceCredit) }
+        try await Task.sleep(for: .milliseconds(20))
+        race.closeInspector()
+        #expect(await oldRead.value == nil)
+        #expect(race.openPhase == .idle)
+    }
 }

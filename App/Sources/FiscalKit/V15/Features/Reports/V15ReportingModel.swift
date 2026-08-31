@@ -163,15 +163,15 @@ public final class V15ReportingModel {
         }
     }
 
-    /// The current report contract only carries category-level gross, refund
-    /// and net facts. Returning nil for the other four measures prevents a
-    /// view from silently relabelling net consumption as another measure.
     public func categoryAmount(_ category: V15PeriodReport.Category, for measure: SpendingMeasure) -> Int64? {
         switch measure {
         case .grossConsumption: category.grossConsumptionMinor
         case .merchantRefund: category.merchantRefundMinor
         case .netConsumption: category.netConsumptionMinor
-        case .expectedReimbursement, .receivedReimbursement, .personalExpected, .personalRealized: nil
+        case .expectedReimbursement: category.expectedReimbursementMinor
+        case .receivedReimbursement: category.receivedReimbursementMinor
+        case .personalExpected: category.personalExpectedMinor
+        case .personalRealized: category.personalRealizedMinor
         }
     }
 
@@ -287,7 +287,7 @@ public final class V15ReportingModel {
         needsFreshReload = true; report = nil; drillItems = []; nextCursor = nil; drillFailure = nil; drillPhase = .idle; pageFailure = nil; pagePhase = .idle; selectedDrillLabel = nil; drillCapability = nil
         owner = .init(period: selectedPeriod, revision: nil, filter: nil, generation: current); phase = .requiresReload(failure)
     }
-    private func valid(_ report: V15PeriodReport, for period: V15ReportPeriod) -> Bool { report.meta.periodKind == period.kind && report.meta.period == period.rawValue && report.meta.timezone == "Asia/Shanghai" && report.meta.currency == "CNY" && report.meta.dataRevision >= 0 }
+    private func valid(_ report: V15PeriodReport, for period: V15ReportPeriod) -> Bool { report.meta.periodKind == period.kind && report.meta.period == period.rawValue && report.meta.timezone == "Asia/Shanghai" && report.meta.currency == "CNY" && report.meta.reportSchemaVersion == "2" && report.meta.dataRevision >= 0 }
     private func invalidateDrillForPresentationChange() {
         invalidateExport(removeFile: true)
         generation &+= 1
@@ -320,7 +320,7 @@ public final class V15ReportingModel {
             summary.internalTransferInflowMinor, summary.internalTransferOutflowMinor,
             summary.creditDebtAtPeriodEndMinor, summary.reimbursementOutstandingAtPeriodEndMinor
         ].contains(where: { $0 != 0 })
-        return !hasSummaryFact && report.accounts.isEmpty && report.categories.isEmpty && report.merchants.isEmpty && report.sources.isEmpty
+        return !hasSummaryFact && report.accounts.isEmpty && report.categories.isEmpty && report.merchants.isEmpty && report.sources.isEmpty && (report.knownFutureEvents?.isEmpty ?? true) && (report.debtCycles?.isEmpty ?? true) && (report.installments?.isEmpty ?? true)
             && completeness.unresolvedImportCount == 0 && completeness.failedImportCount == 0
             && completeness.uncategorizedTransactionCount == 0 && completeness.openReconciliationDifferenceCount == 0
     }

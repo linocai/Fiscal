@@ -64,12 +64,14 @@ class TransactionService:
         self.installment_repository = InstallmentRepository(session)
         self.reimbursement_repository = ReimbursementRepository(session)
 
-    async def create(self, draft: TransactionDraft, idempotency_key: UUID) -> TransactionResponse:
+    async def create(
+        self, draft: TransactionDraft, idempotency_key: UUID, *, commit: bool = True
+    ) -> TransactionResponse:
         return await self._create(
             draft,
             idempotency_key,
             source=TransactionSource.MANUAL,
-            commit=True,
+            commit=commit,
         )
 
     async def create_credit_purchase(
@@ -302,10 +304,43 @@ class TransactionService:
             next_cursor=next_cursor,
         )
 
-    async def bulk_category(self, request: BatchCategoryRequest) -> BatchCategoryResponse:
+    async def bulk_category(
+        self, request: BatchCategoryRequest, *, commit: bool = True
+    ) -> BatchCategoryResponse:
         await acquire_mutation_lock(self.session)
+        category, transactions = await self.validated_bulk_category(request, for_update=True)
+
+        changed: list[LedgerTransaction] = []
+        for transaction in transactions:
+            if transaction.category_id == category.id:
+                continue
+            old_category_id = transaction.category_id
+            transaction.category_id = category.id
+            transaction.version += 1
+            transaction.updated_at = utc_now()
+            if old_category_id is not None:
+                await self.repository.adjust_category_usage(old_category_id, -1)
+            await self.repository.adjust_category_usage(category.id, 1)
+            response = self._response(transaction, list(transaction.postings))
+            self._add_revision(transaction, RevisionEvent.UPDATED, response)
+            changed.append(transaction)
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
+        return BatchCategoryResponse(
+            items=[
+                await self.response_with_relation(item, list(item.postings))
+                for item in transactions
+            ],
+            changed_count=len(changed),
+        )
+
+    async def validated_bulk_category(
+        self, request: BatchCategoryRequest, *, for_update: bool
+    ) -> tuple[Category, list[LedgerTransaction]]:
         category_repository = CategoryRepository(self.session)
-        category = await category_repository.get(request.category_id, for_update=True)
+        category = await category_repository.get(request.category_id, for_update=for_update)
         if category is None:
             not_found("category_not_found", "The category does not exist")
         if category.archived_at is not None:
@@ -315,7 +350,15 @@ class TransactionService:
 
         expected_by_id = {item.transaction_id: item.expected_version for item in request.items}
         ordered_ids = sorted(expected_by_id)
-        transactions = await self.repository.get_many_for_update(ordered_ids)
+        transactions = (
+            await self.repository.get_many_for_update(ordered_ids)
+            if for_update
+            else [
+                item
+                for transaction_id in ordered_ids
+                if (item := await self.repository.get(transaction_id)) is not None
+            ]
+        )
         found_ids = {item.id for item in transactions}
         missing = next((item for item in ordered_ids if item not in found_ids), None)
         if missing is not None:
@@ -347,28 +390,7 @@ class TransactionService:
                     "The category direction does not match every transaction",
                 )
 
-        changed: list[LedgerTransaction] = []
-        for transaction in transactions:
-            if transaction.category_id == category.id:
-                continue
-            old_category_id = transaction.category_id
-            transaction.category_id = category.id
-            transaction.version += 1
-            transaction.updated_at = utc_now()
-            if old_category_id is not None:
-                await self.repository.adjust_category_usage(old_category_id, -1)
-            await self.repository.adjust_category_usage(category.id, 1)
-            response = self._response(transaction, list(transaction.postings))
-            self._add_revision(transaction, RevisionEvent.UPDATED, response)
-            changed.append(transaction)
-        await self.session.commit()
-        return BatchCategoryResponse(
-            items=[
-                await self.response_with_relation(item, list(item.postings))
-                for item in transactions
-            ],
-            changed_count=len(changed),
-        )
+        return category, transactions
 
     async def export_csv(
         self,

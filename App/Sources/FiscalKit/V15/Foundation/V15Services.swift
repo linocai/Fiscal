@@ -80,6 +80,23 @@ enum V15BodyEncoder {
         catch let failure as V15Failure { throw failure }
         catch { throw V15Failure(kind: .decoding, code: "request_encode_failed", message: "暂时无法准备这次操作。") }
     }
+
+    static func decode<Value: Decodable>(_ type: Value.Type, from value: JSONValue) throws -> Value {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { dateDecoder in
+            let container = try dateDecoder.singleValueContainer()
+            let raw = try container.decode(String.self)
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let basic = ISO8601DateFormatter()
+            basic.formatOptions = [.withInternetDateTime]
+            guard let date = fractional.date(from: raw) ?? basic.date(from: raw) else {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Expected an ISO-8601 timestamp.")
+            }
+            return date
+        }
+        return try decoder.decode(type, from: data(value))
+    }
 }
 
 actor V15APITransportAdapter: V15Transporting {
@@ -232,6 +249,7 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
     public let reconciliation: V15ReconciliationService
     public let statementImports: V15StatementImportService
     public let deepLinks: V15DeepLinkReadService
+    public let actions: V15FormalActionService
     public let pendingWrites: V15PendingWriteStore
     private let revisionStore: DataRevisionStore?
     private let offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)?
@@ -282,6 +300,9 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
             guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         deepLinks = .init(transport: transport)
+        actions = .init(transport: transport, writable: { [weak revisionStore] in
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "需要联网取得最新影响后才能确认。") }
+        })
     }
 
     /// The production composition root. The only reused implementation details
@@ -438,6 +459,42 @@ public struct V15CreditCycleReadService: Sendable {
     }
 }
 
+public struct V15FormalActionService: Sendable {
+    private let transport: any V15Transporting
+    private let writable: @MainActor @Sendable () throws -> Void
+    init(transport: any V15Transporting, writable: @escaping @MainActor @Sendable () throws -> Void) { self.transport = transport; self.writable = writable }
+
+    public func repaymentPreview(_ draft: V15TransactionCreateRequest) async throws -> V15RepaymentPreview {
+        try await writable()
+        return try await transport.send(.init(path: "transactions/repayment-preview", method: "POST"), body: try V15BodyEncoder.encode(V15RepaymentPreviewRequest(draft: draft)))
+    }
+    public func categoryPreview(_ request: V15BatchCategoryRequest) async throws -> V15CategoryChangePreview {
+        try await writable()
+        return try await transport.send(.init(path: "transactions/category-preview", method: "POST"), body: try V15BodyEncoder.encode(request))
+    }
+    public func cashFlowConfirmPreview(itemID: UUID, expectedVersion: Int) async throws -> V15CashFlowConfirmPreview {
+        try await writable()
+        struct Request: Codable { let expectedVersion: Int; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version" } }
+        return try await transport.send(.init(path: "cash-flow-items/\(itemID)/confirm-preview", method: "POST"), body: try V15BodyEncoder.encode(Request(expectedVersion: expectedVersion)))
+    }
+    public func commitRepayment(previewToken: UUID, idempotencyKey: UUID) async throws -> V15ActionCommitReceipt {
+        try await commit(path: "transactions/repayment-commit", previewToken: previewToken, idempotencyKey: idempotencyKey)
+    }
+    public func commitCategory(previewToken: UUID, idempotencyKey: UUID) async throws -> V15ActionCommitReceipt {
+        try await commit(path: "transactions/category-commit", previewToken: previewToken, idempotencyKey: idempotencyKey)
+    }
+    public func commitCashFlow(itemID: UUID, previewToken: UUID, idempotencyKey: UUID) async throws -> V15ActionCommitReceipt {
+        try await commit(path: "cash-flow-items/\(itemID)/confirm-commit", previewToken: previewToken, idempotencyKey: idempotencyKey)
+    }
+    public func receipt(idempotencyKey: UUID) async throws -> V15ActionCommitReceipt {
+        try await transport.send(.init(path: "action-operations/\(idempotencyKey)", readCachePolicy: .reloadIgnoringCache), body: nil)
+    }
+    private func commit(path: String, previewToken: UUID, idempotencyKey: UUID) async throws -> V15ActionCommitReceipt {
+        try await writable()
+        return try await transport.send(.init(path: path, method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(V15ActionCommitRequest(previewToken: previewToken)))
+    }
+}
+
 public struct V15ReportsService: Sendable {
     private let transport: any V15Transporting
     init(transport: any V15Transporting) { self.transport = transport }
@@ -459,21 +516,21 @@ public struct V15ReportsService: Sendable {
         if let accountID { query.append(.init(name: "account_id", value: accountID.uuidString)) }; if let cursor { query.append(.init(name: "cursor", value: cursor)) }
         return try await transport.send(.init(path: "reports/future-events", query: query, readCachePolicy: readCachePolicy), body: nil)
     }
-    public func monthly(_ period: V15ReportMonth, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15PeriodReport { try await transport.send(.init(path: "reports/monthly/\(period.rawValue)", readCachePolicy: readCachePolicy), body: nil) }
-    public func yearly(_ period: V15ReportYear, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15PeriodReport { try await transport.send(.init(path: "reports/yearly/\(period.rawValue)", readCachePolicy: readCachePolicy), body: nil) }
+    public func monthly(_ period: V15ReportMonth, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15PeriodReport { try await transport.send(.init(path: "reports/v2/monthly/\(period.rawValue)", readCachePolicy: readCachePolicy), body: nil) }
+    public func yearly(_ period: V15ReportYear, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15PeriodReport { try await transport.send(.init(path: "reports/v2/yearly/\(period.rawValue)", readCachePolicy: readCachePolicy), body: nil) }
     public func periodDrillDown(period: V15ReportPeriod, expectedRevision: Int64, filter: V15ReportDrillFilter, cursor: String? = nil, limit: Int = 50, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15PeriodReportDrillDown {
         guard (1...100).contains(limit) else { throw V15Failure(kind: .decoding, code: "invalid_period_report_limit", message: "报告明细每页数量须在 1 到 100 之间。") }
         guard let filterItem = filter.queryItem else { throw V15Failure(kind: .decoding, code: "unsafe_period_report_filter", message: "此汇总没有可安全定位的明细筛选条件。") }
         var query = [URLQueryItem(name: "period_kind", value: period.kind.rawValue), .init(name: "period", value: period.rawValue), .init(name: "expected_data_revision", value: String(expectedRevision)), .init(name: "limit", value: String(limit))]
         query.append(filterItem)
         if let cursor { query.append(.init(name: "cursor", value: cursor)) }
-        return try await transport.send(.init(path: "reports/period-drill-down", query: query, readCachePolicy: readCachePolicy), body: nil)
+        return try await transport.send(.init(path: "reports/v2/period-drill-down", query: query, readCachePolicy: readCachePolicy), body: nil)
     }
     public func monthlyArtifact(_ period: V15ReportMonth, format: V15ReportArtifactFormat, expectedDataRevision: Int64) async throws -> V15ReportArtifact {
-        try await artifact(.init(path: "reports/monthly/\(period.rawValue)/export.\(format.rawValue)", query: [.init(name: "expected_data_revision", value: String(expectedDataRevision))]), format: format, expectedDataRevision: expectedDataRevision)
+        try await artifact(.init(path: "reports/v2/monthly/\(period.rawValue)/export.\(format.rawValue)", query: [.init(name: "expected_data_revision", value: String(expectedDataRevision))]), format: format, expectedDataRevision: expectedDataRevision)
     }
     public func yearlyArtifact(_ period: V15ReportYear, format: V15ReportArtifactFormat, expectedDataRevision: Int64) async throws -> V15ReportArtifact {
-        try await artifact(.init(path: "reports/yearly/\(period.rawValue)/export.\(format.rawValue)", query: [.init(name: "expected_data_revision", value: String(expectedDataRevision))]), format: format, expectedDataRevision: expectedDataRevision)
+        try await artifact(.init(path: "reports/v2/yearly/\(period.rawValue)/export.\(format.rawValue)", query: [.init(name: "expected_data_revision", value: String(expectedDataRevision))]), format: format, expectedDataRevision: expectedDataRevision)
     }
     private func artifact(_ request: V15Request, format: V15ReportArtifactFormat, expectedDataRevision: Int64) async throws -> V15ReportArtifact {
         let response = try await transport.fetchArtifactResponse(request, accept: format.accept)

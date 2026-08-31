@@ -21,6 +21,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from fiscal_api.cli import archive_export
+from fiscal_api.core.access_keys import generate_access_key
 from fiscal_api.core.config import Settings, get_settings
 from fiscal_api.db.base import Base
 from fiscal_api.db.models.ai import AIProposal, AISettings
@@ -112,6 +113,8 @@ def test_p22_archive_crypto_contract_runs_without_postgres() -> None:
             "credit_schedule_change_previews",
             "credit_schedule_change_operations",
             "reimbursement_previews",
+            "action_preview_sessions",
+            "action_operations",
         }
     }
     payload = {"entities": entities, "data_revision": 0}
@@ -445,7 +448,7 @@ def test_p22_revision_receipts_are_formal_once_and_concurrent() -> None:
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
-def test_p22_real_auth_dependency_sees_formal_scopes_at_commit() -> None:
+def test_p36_real_auth_reports_rotation_without_mislabeling_unknown_keys() -> None:
     assert TEST_DATABASE_URL is not None
     token_pepper = f"p22-real-auth-{uuid4().hex}"
     settings = Settings(
@@ -459,6 +462,8 @@ def test_p22_real_auth_dependency_sees_formal_scopes_at_commit() -> None:
         try:
             factory = create_session_factory(engine)
             async with factory() as session:
+                await session.execute(text("TRUNCATE access_keys, access_credential CASCADE"))
+                await session.commit()
                 return (
                     await AccessService(session, settings).initialize("p22-test-passphrase")
                 ).raw_key
@@ -494,6 +499,30 @@ def test_p22_real_auth_dependency_sees_formal_scopes_at_commit() -> None:
         assert deleted.status_code == 204, deleted.text
         assert deleted.headers["X-Fiscal-Data-Revision"] == "2"
         assert client.get("/api/v1/data-revision", headers=auth).json()["revision"] == 2
+
+        rotated = client.post(
+            "/api/v1/auth/passphrase/change",
+            headers=auth,
+            json={
+                "old_passphrase": "p22-test-passphrase",
+                "new_passphrase": "p36-new-test-passphrase",
+            },
+        )
+        assert rotated.status_code == 200, rotated.text
+        assert rotated.json()["credential_generation"] == 2
+        new_auth = {"Authorization": f"Bearer {rotated.json()['access_key']}"}
+
+        revoked = client.get("/api/v1/data-revision", headers=auth)
+        unknown = client.get(
+            "/api/v1/data-revision",
+            headers={"Authorization": f"Bearer {generate_access_key()}"},
+        )
+        active = client.get("/api/v1/data-revision", headers=new_auth)
+        assert revoked.status_code == unknown.status_code == 401
+        assert revoked.json()["error"]["code"] == "credential_generation_changed"
+        assert unknown.json()["error"]["code"] == "invalid_access_key"
+        assert active.status_code == 200, active.text
+        assert active.json()["revision"] == 2
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")

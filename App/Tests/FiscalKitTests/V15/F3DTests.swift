@@ -328,4 +328,60 @@ struct F3DTests {
         let credit = try #require(model.active?.items.first { $0.systemKind == .creditCycle })
         #expect(model.actionReasons(.confirm, for: credit).contains { $0.code == "manual_item_required" })
     }
+
+    @MainActor @Test("cash-flow confirmation accepts only one in-flight commit")
+    func confirmPreviewCommitIsSingleFlight() async throws {
+        let transport = F3DTransport(mode: .normal)
+        let model = await loadedModel(transport)
+        let item = try #require(model.active?.items.first { $0.id == V15F3DFixtures.itemID.uuidString })
+        await model.selectItem(item)
+        await model.previewConfirm(try #require(model.selectedItem))
+        #expect(model.confirmPreview != nil)
+
+        let first = Task { @MainActor in await model.commitConfirmPreview() }
+        while await transport.cashFlowConfirmCommitCount() == 0 { await Task.yield() }
+        #expect(model.confirmCommitIsInFlight)
+        #expect(model.actionReasons(.confirm, for: item).contains { $0.code == "confirm_commit_in_flight" })
+        let transfer = try #require(model.active?.items.first { $0.id == V15F3DFixtures.transferID.uuidString })
+        let originalMonth = model.historyMonth
+        await model.setVisibleList(.history)
+        await model.setAccountFilter(V15F3DFixtures.cashAccountID)
+        await model.setHistoryMonth("2026-07")
+        await model.selectItem(transfer)
+        #expect(model.visibleList == .active)
+        #expect(model.accountFilterID == nil)
+        #expect(model.historyMonth == originalMonth)
+        #expect(model.selectedItem?.id == item.id)
+        await model.commitConfirmPreview()
+        await first.value
+
+        let commits = await transport.mutationWires().filter { $0.path.hasSuffix("/confirm-commit") }
+        #expect(commits.count == 1)
+        #expect(commits.compactMap(\.key).count == 1)
+        #expect(!model.confirmCommitIsInFlight)
+        #expect(model.mutationPhase == .succeeded)
+    }
+
+    @MainActor @Test("single-flight UI gate returns one immutable attempt key")
+    func singleFlightAttemptGate() {
+        let gate = V15SingleFlightAttemptGate()
+        let first = gate.begin()
+        #expect(first != nil)
+        #expect(gate.isActive)
+        #expect(gate.begin() == nil)
+        gate.finish(UUID())
+        #expect(gate.isActive)
+        gate.finish(first!)
+        #expect(!gate.isActive)
+        #expect(gate.begin() != nil)
+    }
+
+    @MainActor @Test("blank cash-flow draft does not disable opening its editor")
+    func createEntryUsesOnlyOperationalReasons() async {
+        let model = await loadedModel()
+        #expect(!model.createReasons.isEmpty)
+        #expect(model.openCreateReasons.isEmpty)
+        model.openCreate()
+        #expect(model.editorMode == .create)
+    }
 }

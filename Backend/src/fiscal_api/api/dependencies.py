@@ -10,6 +10,7 @@ from fiscal_api.core.provider_credentials import ProviderCredentialCipher
 from fiscal_api.db.readiness import ReadinessCheck
 from fiscal_api.services.access import AccessService
 from fiscal_api.services.accounts import AccountService
+from fiscal_api.services.action_previews import ActionPreviewService
 from fiscal_api.services.ai import AIService
 from fiscal_api.services.ai_provider import AIProvider, build_ai_provider
 from fiscal_api.services.cash_flow import CashFlowService
@@ -163,6 +164,10 @@ def get_access_service(
     return AccessService(session, settings)
 
 
+def get_action_preview_service(session: SessionDependency) -> ActionPreviewService:
+    return ActionPreviewService(session)
+
+
 def get_statement_import_provider() -> StatementImportProvider:
     return SyntheticStatementImportProvider()
 
@@ -192,6 +197,9 @@ MigrationRunServiceDependency = Annotated[MigrationRunService, Depends(get_migra
 MerchantServiceDependency = Annotated[MerchantService, Depends(get_merchant_service)]
 AIServiceDependency = Annotated[AIService, Depends(get_ai_service)]
 AccessServiceDependency = Annotated[AccessService, Depends(get_access_service)]
+ActionPreviewServiceDependency = Annotated[
+    ActionPreviewService, Depends(get_action_preview_service)
+]
 StatementImportServiceDependency = Annotated[
     StatementImportService, Depends(get_statement_import_service)
 ]

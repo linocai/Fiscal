@@ -117,7 +117,7 @@ public struct V15TodayMacView: View {
             Group {
                 if dynamicTypeSize.isAccessibilitySize {
                     VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                        HStack(alignment: .top, spacing: V15Spacing.sm) { Image(systemName: presentation.symbol).foregroundStyle(presentation.color).frame(width: 22).accessibilityHidden(true); VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(presentation.label).font(V15Typography.label).foregroundStyle(presentation.color); Text(item.explanation).font(V15Typography.body).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true); Text(item.suggestedAction).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true) } }
+                        HStack(alignment: .top, spacing: V15Spacing.sm) { Image(systemName: presentation.symbol).foregroundStyle(presentation.color).frame(width: 22).accessibilityHidden(true); VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(presentation.label).font(V15Typography.label).foregroundStyle(presentation.color); Text(V15AttentionUserCopy.explanation(for: item)).font(V15Typography.body).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true); Text(V15AttentionUserCopy.suggestedAction(for: item)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true) } }
                         if let amount = item.amountMinor { HStack { Spacer(); V15MoneyText(minorUnits: amount, direction: .neutral, font: V15Typography.secondary) } }
                     }
                 } else {
@@ -126,15 +126,15 @@ public struct V15TodayMacView: View {
                             Image(systemName: presentation.symbol).foregroundStyle(presentation.color).frame(width: 22).accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                                 Text(presentation.label).font(V15Typography.label).foregroundStyle(presentation.color)
-                                Text(item.explanation).font(V15Typography.body).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
-                                Text(item.suggestedAction).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                                Text(V15AttentionUserCopy.explanation(for: item)).font(V15Typography.body).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
+                                Text(V15AttentionUserCopy.suggestedAction(for: item)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                             }
                         }
                         if let amount = item.amountMinor { HStack { Spacer(); V15MoneyText(minorUnits: amount, direction: .neutral, font: V15Typography.secondary) } }
                     }
                 }
             }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(selection == .attention(item.id) ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
-        }.buttonStyle(.plain).v15PlatformHitArea().accessibilityIdentifier("v15.f2c.attention.\(item.id)").accessibilityLabel("\(presentation.label)，\(item.explanation)，\(item.suggestedAction)")
+        }.buttonStyle(.plain).v15PlatformHitArea().accessibilityIdentifier("v15.f2c.attention.\(item.id)").accessibilityLabel("\(presentation.label)，\(V15AttentionUserCopy.explanation(for: item))，\(V15AttentionUserCopy.suggestedAction(for: item))")
     }
 
     private func futureRow(_ item: V15FutureEvent) -> some View {

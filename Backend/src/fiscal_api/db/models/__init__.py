@@ -1,5 +1,6 @@
 from fiscal_api.db.models.access import AccessCredential, AccessKey
 from fiscal_api.db.models.account import Account, AccountKind, CreditCycleMode
+from fiscal_api.db.models.action_preview import ActionOperation, ActionPreviewSession
 from fiscal_api.db.models.ai import (
     AIExecutionPolicy,
     AILearningRule,
@@ -126,6 +127,8 @@ __all__ = [
     "AccessKey",
     "Account",
     "AccountKind",
+    "ActionOperation",
+    "ActionPreviewSession",
     "AttentionDismissal",
     "CashFlowDirection",
     "CashFlowItem",

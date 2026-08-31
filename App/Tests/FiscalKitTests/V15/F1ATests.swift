@@ -60,6 +60,50 @@ struct F1ATests {
         #expect((await transport.lastRequest())?.path == "ai/quality/metrics")
     }
 
+    @Test("formal action previews and commits preserve tokens, keys, and fresh receipt reads")
+    @MainActor func formalActionRoutes() async throws {
+        let transport = F1AControlledTransport()
+        let actions = V15Services(transport: transport).actions
+        let repayment = V15TransactionCreateRequest(
+            kind: .repayment,
+            amountMinor: 1280,
+            occurredAt: Date(timeIntervalSince1970: 0),
+            title: "信用卡还款",
+            accountID: V15F1AFixtures.accountID,
+            destinationAccountID: V15F1AFixtures.creditID,
+            creditCycleID: V15F1AFixtures.creditCycleID
+        )
+        let repaymentPreview = try await actions.repaymentPreview(repayment)
+        #expect(repaymentPreview.meta.action == .repayment && repaymentPreview.amountMinor == 1280)
+        #expect((await transport.lastRequest())?.path == "transactions/repayment-preview")
+        #expect(await transport.lastBody() == .object(["draft": try V15BodyEncoder.encode(repayment)]))
+
+        let key = UUID(uuidString: "00000000-0000-0000-0000-00000000A099")!
+        _ = try await actions.commitRepayment(previewToken: repaymentPreview.meta.previewToken, idempotencyKey: key)
+        #expect((await transport.lastRequest())?.path == "transactions/repayment-commit")
+        #expect((await transport.lastRequest())?.headers["Idempotency-Key"] == key.uuidString)
+        #expect(await transport.lastBody() == .object(["preview_token": .string(repaymentPreview.meta.previewToken.uuidString)]))
+
+        let categoryRequest = V15BatchCategoryRequest(
+            items: [.init(transactionID: V15F1AFixtures.transactionID, expectedVersion: 1)],
+            categoryID: V15F1AFixtures.categoryID
+        )
+        let categoryPreview = try await actions.categoryPreview(categoryRequest)
+        #expect(categoryPreview.meta.action == .categoryChange && categoryPreview.changedCount == 1)
+        #expect((await transport.lastRequest())?.path == "transactions/category-preview")
+
+        let cashPreview = try await actions.cashFlowConfirmPreview(itemID: V15F3DFixtures.itemID, expectedVersion: 3)
+        #expect(cashPreview.meta.action == .cashFlowConfirm && cashPreview.itemBefore.version == 3)
+        #expect((await transport.lastRequest())?.path == "cash-flow-items/\(V15F3DFixtures.itemID)/confirm-preview")
+        #expect(await transport.lastBody() == .object(["expected_version": .integer(3)]))
+
+        _ = try await actions.commitCashFlow(itemID: V15F3DFixtures.itemID, previewToken: cashPreview.meta.previewToken, idempotencyKey: key)
+        #expect((await transport.lastRequest())?.path == "cash-flow-items/\(V15F3DFixtures.itemID)/confirm-commit")
+        _ = try await actions.receipt(idempotencyKey: key)
+        #expect((await transport.lastRequest())?.path == "action-operations/\(key)")
+        #expect((await transport.lastRequest())?.readCachePolicy == .reloadIgnoringCache)
+    }
+
     @Test("CNY conversion, overflow and Shanghai day instant are deterministic")
     @MainActor func moneyAndDate() async {
         #expect(CNYAmountParser.minorUnits("12.80") == 1280)
@@ -267,6 +311,27 @@ actor F1AControlledTransport: V15Transporting {
         case "accounts": return try decode(V15F1AFixtures.accounts)
         case "categories": return try decode(request.query.first(where: { $0.name == "direction" })?.value == "income" ? V15F1AFixtures.incomeCategories : V15F1AFixtures.categories)
         case "credit-accounts/\(V15F1AFixtures.creditID)/cycles": return try decode(V15F1AFixtures.creditCycles)
+        case "transactions/repayment-preview":
+            return try decode(Data("""
+            {"meta":{"preview_token":"00000000-0000-0000-0000-00000000A001","action":"repayment","data_revision":7,"expires_at":"2026-08-30T14:00:00Z"},"amount_minor":1280,"payment_account_id":"\(V15F1AFixtures.accountID)","payment_account_name":"日常现金","payment_balance_before_minor":100000,"payment_balance_after_minor":98720,"credit_account_id":"\(V15F1AFixtures.creditID)","credit_account_name":"信用账户","credit_debt_before_minor":3000,"credit_debt_after_minor":1720,"credit_cycle_id":"\(V15F1AFixtures.creditCycleID)","cycle_remaining_before_minor":3000,"cycle_remaining_after_minor":1720}
+            """.utf8))
+        case "transactions/category-preview":
+            return try decode(Data("""
+            {"meta":{"preview_token":"00000000-0000-0000-0000-00000000A002","action":"category_change","data_revision":7,"expires_at":"2026-08-30T14:00:00Z"},"items":[{"transaction_id":"\(V15F1AFixtures.transactionID)","title":"午餐","expected_version":1,"previous_category_id":null,"previous_category_name":null,"proposed_category_id":"\(V15F1AFixtures.categoryID)","proposed_category_name":"餐饮","changed":true}],"changed_count":1}
+            """.utf8))
+        case "cash-flow-items/\(V15F3DFixtures.itemID)/confirm-preview":
+            return try decode(Data("""
+            {"meta":{"preview_token":"00000000-0000-0000-0000-00000000A003","action":"cash_flow_confirm","data_revision":7,"expires_at":"2026-08-30T14:00:00Z"},"item_before":\(V15F3DFixtures.item()),"status_after":"confirmed"}
+            """.utf8))
+        case "transactions/repayment-commit", "transactions/category-commit", "cash-flow-items/\(V15F3DFixtures.itemID)/confirm-commit":
+            let action = request.path.contains("category") ? "category_change" : request.path.contains("cash-flow") ? "cash_flow_confirm" : "repayment"
+            return try decode(Data("""
+            {"operation_id":"00000000-0000-0000-0000-00000000A004","preview_token":"00000000-0000-0000-0000-00000000A001","action":"\(action)","data_revision":8,"result":{},"replay":false}
+            """.utf8))
+        case _ where request.path.hasPrefix("action-operations/"):
+            return try decode(Data("""
+            {"operation_id":"00000000-0000-0000-0000-00000000A004","preview_token":"00000000-0000-0000-0000-00000000A001","action":"repayment","data_revision":8,"result":{},"replay":true}
+            """.utf8))
         default: throw V15Failure(kind: .transport, message: "fixture")
         }
     }

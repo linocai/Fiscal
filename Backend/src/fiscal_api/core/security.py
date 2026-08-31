@@ -40,10 +40,17 @@ async def _authenticate_access_key(
     principal = await service.authenticate_access_key(credentials.credentials, credential)
     if principal is None:
         await rate_limiter(request).check_failed_auth(client_source(request))
+        generation_changed = await service.access_key_generation_changed(
+            credentials.credentials, credential
+        )
         raise APIError(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            code="invalid_access_key",
-            message="The access key is invalid or has been revoked",
+            code=("credential_generation_changed" if generation_changed else "invalid_access_key"),
+            message=(
+                "The access passphrase changed; unlock this client again"
+                if generation_changed
+                else "The access key is invalid"
+            ),
         )
     await rate_limiter(request).check_authenticated(
         str(principal.id), request.method, request.url.path

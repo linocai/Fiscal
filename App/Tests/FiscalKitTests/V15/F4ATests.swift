@@ -55,7 +55,7 @@ struct F4ATests {
         #expect(page.items.first?.transactionID == V15F4AFixtures.transactionID)
         #expect(page.items.first?.netConsumptionMinor == 28_000)
         let request = try #require(await transport.allRequests().last)
-        #expect(request.path == "reports/period-drill-down")
+        #expect(request.path == "reports/v2/period-drill-down")
         #expect(request.query == [
             .init(name: "period_kind", value: "month"), .init(name: "period", value: "2026-08"),
             .init(name: "expected_data_revision", value: "77"), .init(name: "limit", value: "50"),
@@ -65,7 +65,7 @@ struct F4ATests {
             _ = try await service.periodDrillDown(period: .month(month), expectedRevision: 77, filter: .source(.unknown("future")), limit: 50)
             Issue.record("unknown source must remain display-only")
         } catch let failure as V15Failure { #expect(failure.code == "unsafe_period_report_filter") }
-        #expect(await transport.allRequests().filter { $0.path == "reports/period-drill-down" }.count == 1)
+        #expect(await transport.allRequests().filter { $0.path == "reports/v2/period-drill-down" }.count == 1)
     }
 
     @MainActor @Test("disabled aggregate rows issue zero drill requests while enabled rows bind period revision filter and paging")
@@ -76,14 +76,14 @@ struct F4ATests {
         let report = try #require(model.report)
         await model.openDrill(capability: report.categories.last!.drillCapability, label: "未分类")
         #expect(model.disabledReason == "此汇总没有可安全定位的明细筛选条件")
-        #expect(await transport.allRequests().filter { $0.path == "reports/period-drill-down" }.isEmpty)
+        #expect(await transport.allRequests().filter { $0.path == "reports/v2/period-drill-down" }.isEmpty)
         let firstOwner = try #require(model.beginDrill(capability: report.categories.first!.drillCapability, label: "分类"))
         await model.loadDrill(owner: firstOwner)
         #expect(model.owner.revision == report.meta.dataRevision)
         #expect(model.drillItems.count == 1 && model.hasNextPage)
         await model.loadNextPage()
         #expect(model.drillItems.count == 2 && !model.hasNextPage)
-        let drills = await transport.allRequests().filter { $0.path == "reports/period-drill-down" }
+        let drills = await transport.allRequests().filter { $0.path == "reports/v2/period-drill-down" }
         #expect(drills.count == 2)
         #expect(drills.allSatisfy { $0.query.contains(.init(name: "expected_data_revision", value: "77")) && $0.query.contains(.init(name: "category_id", value: V15F4AFixtures.categoryID.uuidString)) })
 
@@ -105,7 +105,7 @@ struct F4ATests {
         guard case .requiresReload = model.phase else { Issue.record("409 must stop the current revision"); return }
         #expect(model.drillItems.isEmpty && model.owner.filter == nil)
         await model.reloadFresh()
-        #expect(await transport.allRequests().contains { $0.path == "reports/monthly/2026-08" && $0.readCachePolicy == .reloadIgnoringCache })
+        #expect(await transport.allRequests().contains { $0.path == "reports/v2/monthly/2026-08" && $0.readCachePolicy == .reloadIgnoringCache })
     }
 
     @MainActor @Test("completeness-only report remains loaded and lens changes invalidate every drill owner state")
@@ -143,7 +143,7 @@ struct F4ATests {
         #expect(model.pageFailure == nil && model.drillItems.isEmpty)
         await model.retryCurrentDrill()
         #expect(model.owner == owner && model.drillItems.count == 1)
-        let drills = await transport.allRequests().filter { $0.path == "reports/period-drill-down" }
+        let drills = await transport.allRequests().filter { $0.path == "reports/v2/period-drill-down" }
         #expect(drills.count == 2)
         #expect(drills.allSatisfy { $0.query.contains(.init(name: "expected_data_revision", value: "77")) && $0.query.contains(.init(name: "category_id", value: V15F4AFixtures.categoryID.uuidString)) && !$0.query.contains(where: { $0.name == "cursor" }) })
 
@@ -179,7 +179,7 @@ struct F4ATests {
         let account = try #require(model.report?.accounts.first)
         await model.openDrill(capability: account.drillCapability, label: account.accountName)
         #expect(model.disabledReason == "此汇总没有可安全定位的明细筛选条件")
-        #expect(await transport.allRequests().filter { $0.path == "reports/period-drill-down" }.isEmpty)
+        #expect(await transport.allRequests().filter { $0.path == "reports/v2/period-drill-down" }.isEmpty)
     }
 }
 
@@ -193,7 +193,7 @@ struct F4BTests {
         guard case .ready(let artifact) = model.exportPhase else { Issue.record("matching header should produce a local handoff"); return }
         #expect(artifact.dataRevision == 77 && artifact.filename.hasSuffix(".csv"))
         let request = try #require(await transport.allRequests().last)
-        #expect(request.path == "reports/monthly/2026-08/export.csv")
+        #expect(request.path == "reports/v2/monthly/2026-08/export.csv")
         #expect(request.query == [.init(name: "expected_data_revision", value: "77")])
         model.dismissExport()
         #expect(model.exportURL == nil)
@@ -247,7 +247,7 @@ struct F4BTests {
         let exports = await transport.allRequests().filter { $0.path.contains("export") }
         #expect(exports.count == 2)
         #expect(exports.last?.query == [.init(name: "expected_data_revision", value: "78")])
-        #expect(await transport.allRequests().contains { $0.path == "reports/monthly/2026-08" && $0.readCachePolicy == .reloadIgnoringCache })
+        #expect(await transport.allRequests().contains { $0.path == "reports/v2/monthly/2026-08" && $0.readCachePolicy == .reloadIgnoringCache })
     }
 
     @MainActor @Test("temporary artifacts preserve the server basename; cancel, retry, and overwrite never re-GET")

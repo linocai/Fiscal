@@ -1,6 +1,16 @@
 import Foundation
 import Observation
 
+enum V15AttentionUserCopy {
+    static func explanation(for item: V15AttentionItem) -> String {
+        item.sourceType == "operation_exception" ? "有一项数据维护没有完成。" : item.explanation
+    }
+
+    static func suggestedAction(for item: V15AttentionItem) -> String {
+        item.sourceType == "operation_exception" ? "请稍后重试；如果仍未恢复，请到“数据与安全”查看。" : item.suggestedAction
+    }
+}
+
 /// The F2-A state boundary for the current-facts home. It deliberately owns
 /// reads only: no attention action, future workflow, or legacy overview path
 /// can enter through this model.
@@ -201,7 +211,7 @@ public final class V15TodayReadModel {
         // honest, action-free explanation instead of guessed endpoints.
         guard item.sourceType == "uncategorized_transaction" else {
             retryableLinkedRead = nil
-            linkedReadPhase = .unavailable("该关注事项的处理页暂不可在当前阶段打开。")
+            linkedReadPhase = .unavailable("这项内容暂时不能在这里处理。")
             return
         }
         await openLinkedRead(item.deepLink)
@@ -263,12 +273,12 @@ public final class V15TodayReadModel {
     public func attentionActionReasons(for item: V15AttentionItem) -> [V15DisabledReason] {
         item.availableActions.map { action in
             if action.action == "ignore", action.enabled {
-                return .init(code: "f2_read_only", message: "当前阶段仅可查看该关注事项，不能忽略。", fieldPath: nil)
+                return .init(code: "f2_read_only", message: "这项内容目前只能查看，暂时不能忽略。", fieldPath: nil)
             }
             if action.action == "ignore" {
                 return .init(code: action.reasonCode ?? "attention_action_unavailable", message: action.reasonMessage ?? "该关注事项当前不可忽略。", fieldPath: nil)
             }
-            return .init(code: "unknown_attention_action", message: "当前阶段不执行未知关注事项操作。", fieldPath: nil)
+            return .init(code: "unknown_attention_action", message: "这项操作暂不可用。", fieldPath: nil)
         }
     }
 
@@ -351,7 +361,7 @@ public final class V15TodayReadModel {
         if host == "reports", pieces.count == 2, pieces[0] == "facts", ["cash_accounts", "credit_cycles", "reimbursement_outstanding", "completeness_issues"].contains(pieces[1]) { return .localFacts(scopeTitle(pieces[1])) }
         if host == "accounts", pieces.count == 1, let id = UUID(uuidString: pieces[0]) { return .account(id) }
         if host == "transactions", pieces.count == 1, let id = UUID(uuidString: pieces[0]) { return .transaction(id) }
-        if ["credit", "reimbursements", "cash-flow", "reconciliation", "statement-imports", "ai", "settings"].contains(host) { return .unavailable("该目标暂不可在当前阶段打开。") }
+        if ["credit", "reimbursements", "cash-flow", "reconciliation", "statement-imports", "ai", "settings"].contains(host) { return .unavailable("这项内容暂时不能在这里打开。") }
         return nil
     }
     private func scopeTitle(_ value: String) -> String {

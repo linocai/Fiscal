@@ -4,7 +4,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header
 from starlette import status as http_status
 
-from fiscal_api.api.dependencies import CashFlowServiceDependency, formal_mutation
+from fiscal_api.api.dependencies import (
+    ActionPreviewServiceDependency,
+    CashFlowServiceDependency,
+    formal_mutation,
+)
 from fiscal_api.api.p13_schemas import (
     CashFlowActiveResponse,
     CashFlowCreateResponse,
@@ -16,6 +20,12 @@ from fiscal_api.api.p13_schemas import (
     CashFlowSystemKind,
     CashFlowSystemReplace,
     CashFlowVersionRequest,
+)
+from fiscal_api.api.p36_schemas import (
+    ActionCommitReceipt,
+    ActionCommitRequest,
+    CashFlowConfirmPreview,
+    CashFlowConfirmPreviewRequest,
 )
 from fiscal_api.core.security import require_authenticated
 
@@ -97,6 +107,34 @@ async def confirm(
     item_id: UUID, request: CashFlowVersionRequest, service: CashFlowServiceDependency
 ) -> CashFlowItemResponse:
     return await service.confirm(item_id, request.expected_version)
+
+
+@router.post(
+    "/cash-flow-items/{item_id}/confirm-preview",
+    response_model=CashFlowConfirmPreview,
+)
+async def preview_confirm(
+    item_id: UUID,
+    request: CashFlowConfirmPreviewRequest,
+    service: ActionPreviewServiceDependency,
+) -> CashFlowConfirmPreview:
+    return await service.preview_cash_flow_confirm(item_id, request.expected_version)
+
+
+@router.post(
+    "/cash-flow-items/{item_id}/confirm-commit",
+    response_model=ActionCommitReceipt,
+    dependencies=[
+        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
+    ],
+)
+async def commit_confirm(
+    item_id: UUID,
+    request: ActionCommitRequest,
+    service: ActionPreviewServiceDependency,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+) -> ActionCommitReceipt:
+    return await service.commit_cash_flow_confirm(item_id, request.preview_token, idempotency_key)
 
 
 @router.post(

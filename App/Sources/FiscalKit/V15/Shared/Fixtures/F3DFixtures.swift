@@ -69,6 +69,7 @@ actor F3DTransport: V15Transporting {
     private var settledApplied = false
     private var updatedApplied = false
     private var confirmedApplied = false
+    private var confirmCommitCount = 0
     private var cancelledIDs = Set<UUID>()
     private var systemApplied = false
     init(mode: Mode) { self.mode = mode }
@@ -138,6 +139,13 @@ actor F3DTransport: V15Transporting {
             if mode == .directUnknown { throw V15Failure(kind: .responseUnknown, message: "确认结果未知。") }
             confirmedApplied = true
             return try decode(V15F3DFixtures.item(status: "confirmed", version: 4, actions: "[\"settle\",\"edit\",\"cancel\"]"))
+        case ("cash-flow-items/\(V15F3DFixtures.itemID)/confirm-preview", "POST"):
+            return try decode("{\"meta\":{\"preview_token\":\"00000000-0000-0000-0000-00000000D361\",\"action\":\"cash_flow_confirm\",\"data_revision\":33,\"expires_at\":\"2026-08-30T14:00:00Z\"},\"item_before\":\(currentItem()),\"status_after\":\"confirmed\"}")
+        case ("cash-flow-items/\(V15F3DFixtures.itemID)/confirm-commit", "POST"):
+            confirmCommitCount += 1
+            try await Task.sleep(for: .milliseconds(80))
+            confirmedApplied = true
+            return try decode("{\"operation_id\":\"00000000-0000-0000-0000-00000000D362\",\"preview_token\":\"00000000-0000-0000-0000-00000000D361\",\"action\":\"cash_flow_confirm\",\"data_revision\":34,\"result\":{\"item_id\":\"\(V15F3DFixtures.itemID)\"},\"replay\":false}")
         case ("cash-flow-items/\(V15F3DFixtures.itemID)/cancel", "POST"), ("cash-flow-items/\(V15F3DFixtures.transferID)/cancel", "POST"):
             directCount += 1
             if mode == .directUnknown { throw V15Failure(kind: .responseUnknown, message: "取消结果未知。") }
@@ -171,4 +179,5 @@ actor F3DTransport: V15Transporting {
     }
 
     func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data { throw V15Failure(kind: .transport, message: "F3-D has no artifact endpoint.") }
+    func cashFlowConfirmCommitCount() -> Int { confirmCommitCount }
 }

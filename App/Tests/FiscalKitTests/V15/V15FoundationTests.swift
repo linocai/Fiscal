@@ -270,11 +270,38 @@ struct V15FoundationTests {
         let month = try #require(V15ReportMonth("2026-08")); let year = try #require(V15ReportYear("2026"))
         #expect(V15ReportMonth("2026") == nil && V15ReportYear("2026-08") == nil)
         let categoryID = UUID(uuidString: "00000000-0000-0000-0000-000000000054")!
-        let fixture = V15FixtureTransport(responses: ["reports/monthly/2026-08": V15FixtureLibrary.report, "reports/yearly/2026": V15FixtureLibrary.report, "reports/period-drill-down": Data(#"{"meta":{"period_kind":"month","period":"2026-08","date_from":"2026-08-01","date_to":"2026-08-31","timezone":"Asia/Shanghai","currency":"CNY","as_of":"2026-08-15T16:01:02Z","data_revision":5,"report_schema_version":"1","generated_at":"2026-08-15T16:01:03Z"},"dimension":"ledger","category_id":"00000000-0000-0000-0000-000000000054","account_id":null,"merchant_id":null,"source":null,"items":[],"next_cursor":null}"#.utf8)])
+        let fixture = V15FixtureTransport(responses: ["reports/v2/monthly/2026-08": V15FixtureLibrary.reportV2, "reports/v2/yearly/2026": V15FixtureLibrary.reportV2, "reports/v2/period-drill-down": Data(#"{"meta":{"period_kind":"month","period":"2026-08","date_from":"2026-08-01","date_to":"2026-08-31","timezone":"Asia/Shanghai","currency":"CNY","as_of":"2026-08-15T16:01:02Z","data_revision":5,"report_schema_version":"2","generated_at":"2026-08-15T16:01:03Z"},"dimension":"ledger","category_id":"00000000-0000-0000-0000-000000000054","account_id":null,"merchant_id":null,"source":null,"items":[],"next_cursor":null}"#.utf8)])
         let reports = V15Services(transport: fixture).reports
-        _ = try await reports.monthly(month); #expect((await fixture.lastRequest())?.path == "reports/monthly/2026-08")
-        _ = try await reports.yearly(year); #expect((await fixture.lastRequest())?.path == "reports/yearly/2026")
+        _ = try await reports.monthly(month); #expect((await fixture.lastRequest())?.path == "reports/v2/monthly/2026-08")
+        _ = try await reports.yearly(year); #expect((await fixture.lastRequest())?.path == "reports/v2/yearly/2026")
         _ = try await reports.periodDrillDown(period: .month(month), expectedRevision: 5, filter: .category(categoryID))
         #expect((await fixture.lastRequest())?.query.prefix(2).map(\.value) == ["month", "2026-08"])
+    }
+
+    @Test("bootstrap distinguishes a rotated credential from an unknown access key")
+    @MainActor
+    func honestCredentialFailureStates() async {
+        let rotated = V15BootstrapModel(services: V15Services(transport: BootstrapFailureTransport(code: "credential_generation_changed")))
+        await rotated.connect()
+        #expect(rotated.phase == .credentialGenerationChanged)
+        #expect(rotated.error?.code == "credential_generation_changed")
+
+        let invalid = V15BootstrapModel(services: V15Services(transport: BootstrapFailureTransport(code: "invalid_access_key")))
+        await invalid.connect()
+        #expect(invalid.phase == .invalidAccessKey)
+        #expect(invalid.error?.code == "invalid_access_key")
+    }
+}
+
+private actor BootstrapFailureTransport: V15Transporting {
+    let code: String
+    init(code: String) { self.code = code }
+
+    func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
+        throw V15Failure(kind: .transport, code: code, message: code == "credential_generation_changed" ? "访问口令已更改。" : "访问密钥无效。")
+    }
+
+    func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data {
+        throw V15Failure(kind: .transport, code: code, message: "访问密钥无效。")
     }
 }

@@ -221,7 +221,10 @@ public struct V15PeriodReport: Codable, Sendable {
         enum CodingKeys: String, CodingKey { case incomeMinor = "income_minor", grossConsumptionMinor = "gross_consumption_minor", merchantRefundMinor = "merchant_refund_minor", netConsumptionMinor = "net_consumption_minor", expectedReimbursementMinor = "expected_reimbursement_minor", receivedReimbursementMinor = "received_reimbursement_minor", personalExpectedMinor = "personal_expected_minor", personalRealizedMinor = "personal_realized_minor", netIncomeExpenseMinor = "net_income_expense_minor", cashInflowMinor = "cash_inflow_minor", cashOutflowMinor = "cash_outflow_minor", cashNetMinor = "cash_net_minor", internalTransferInflowMinor = "internal_transfer_inflow_minor", internalTransferOutflowMinor = "internal_transfer_outflow_minor", creditDebtAtPeriodEndMinor = "credit_debt_at_period_end_minor", reimbursementOutstandingAtPeriodEndMinor = "reimbursement_outstanding_at_period_end_minor" }
     }
     public struct Account: Codable, Sendable { public let accountID: UUID; public let accountName: String; public let accountKind: V15ReportAccountKind; public let openingBalanceMinor: V15MinorUnits; public let closingBalanceMinor: V15MinorUnits; public let periodInflowMinor: V15MinorUnits; public let periodOutflowMinor: V15MinorUnits; public let internalTransferInflowMinor: V15MinorUnits; public let internalTransferOutflowMinor: V15MinorUnits; enum CodingKeys: String, CodingKey { case accountID = "account_id", accountName = "account_name", accountKind = "account_kind", openingBalanceMinor = "opening_balance_minor", closingBalanceMinor = "closing_balance_minor", periodInflowMinor = "period_inflow_minor", periodOutflowMinor = "period_outflow_minor", internalTransferInflowMinor = "internal_transfer_inflow_minor", internalTransferOutflowMinor = "internal_transfer_outflow_minor" } }
-    public struct Category: Codable, Sendable { public let categoryID: UUID?; public let categoryName: String; public let grossConsumptionMinor: V15MinorUnits; public let merchantRefundMinor: V15MinorUnits; public let netConsumptionMinor: V15MinorUnits; public let transactionCount: Int; enum CodingKeys: String, CodingKey { case categoryID = "category_id", categoryName = "category_name", grossConsumptionMinor = "gross_consumption_minor", merchantRefundMinor = "merchant_refund_minor", netConsumptionMinor = "net_consumption_minor", transactionCount = "transaction_count" } }
+    public struct Category: Codable, Sendable { public let categoryID: UUID?; public let categoryName: String; public let grossConsumptionMinor: V15MinorUnits; public let merchantRefundMinor: V15MinorUnits; public let netConsumptionMinor: V15MinorUnits; public let expectedReimbursementMinor: V15MinorUnits?; public let receivedReimbursementMinor: V15MinorUnits?; public let personalExpectedMinor: V15MinorUnits?; public let personalRealizedMinor: V15MinorUnits?; public let transactionCount: Int; enum CodingKeys: String, CodingKey { case categoryID = "category_id", categoryName = "category_name", grossConsumptionMinor = "gross_consumption_minor", merchantRefundMinor = "merchant_refund_minor", netConsumptionMinor = "net_consumption_minor", expectedReimbursementMinor = "expected_reimbursement_minor", receivedReimbursementMinor = "received_reimbursement_minor", personalExpectedMinor = "personal_expected_minor", personalRealizedMinor = "personal_realized_minor", transactionCount = "transaction_count" } }
+    public struct Daily: Codable, Sendable, Identifiable { public var id: String { date }; public let date: String; public let grossConsumptionMinor: V15MinorUnits; public let merchantRefundMinor: V15MinorUnits; public let netConsumptionMinor: V15MinorUnits; public let expectedReimbursementMinor: V15MinorUnits; public let receivedReimbursementMinor: V15MinorUnits; public let personalExpectedMinor: V15MinorUnits; public let personalRealizedMinor: V15MinorUnits; enum CodingKeys: String, CodingKey { case date, grossConsumptionMinor = "gross_consumption_minor", merchantRefundMinor = "merchant_refund_minor", netConsumptionMinor = "net_consumption_minor", expectedReimbursementMinor = "expected_reimbursement_minor", receivedReimbursementMinor = "received_reimbursement_minor", personalExpectedMinor = "personal_expected_minor", personalRealizedMinor = "personal_realized_minor" } }
+    public struct DebtCycle: Codable, Sendable, Identifiable { public var id: UUID { cycleID }; public let cycleID: UUID; public let accountID: UUID; public let accountName: String; public let periodStart: String; public let periodEnd: String; public let statementDate: String; public let dueDate: String; public let amountDueMinor: V15MinorUnits; public let repaidMinor: V15MinorUnits; public let remainingMinor: V15MinorUnits; public let status: String; public let isOverdue: Bool; enum CodingKeys: String, CodingKey { case cycleID = "cycle_id", accountID = "account_id", accountName = "account_name", periodStart = "period_start", periodEnd = "period_end", statementDate = "statement_date", dueDate = "due_date", amountDueMinor = "amount_due_minor", repaidMinor = "repaid_minor", remainingMinor = "remaining_minor", status, isOverdue = "is_overdue" } }
+    public struct InstallmentGroup: Codable, Sendable, Identifiable { public var id: String { month }; public let month: String; public let principalScheduledGrossMinor: V15MinorUnits; public let feeScheduledGrossMinor: V15MinorUnits; public let totalScheduledGrossMinor: V15MinorUnits; public let periodCount: Int; enum CodingKeys: String, CodingKey { case month, principalScheduledGrossMinor = "principal_scheduled_gross_minor", feeScheduledGrossMinor = "fee_scheduled_gross_minor", totalScheduledGrossMinor = "total_scheduled_gross_minor", periodCount = "period_count" } }
     public struct Merchant: Codable, Sendable { public let merchantID: UUID?; public let merchantName: String; public let netConsumptionMinor: V15MinorUnits; public let transactionCount: Int; enum CodingKeys: String, CodingKey { case merchantID = "merchant_id", merchantName = "merchant_name", netConsumptionMinor = "net_consumption_minor", transactionCount = "transaction_count" } }
     public struct Source: Codable, Sendable { public let source: V15ReportTransactionSource; public let transactionCount: Int; enum CodingKeys: String, CodingKey { case source; case transactionCount = "transaction_count" } }
     public struct Completeness: Codable, Sendable { public let unresolvedImportCount: Int; public let failedImportCount: Int; public let uncategorizedTransactionCount: Int; public let openReconciliationDifferenceCount: Int; enum CodingKeys: String, CodingKey { case unresolvedImportCount = "unresolved_import_count", failedImportCount = "failed_import_count", uncategorizedTransactionCount = "uncategorized_transaction_count", openReconciliationDifferenceCount = "open_reconciliation_difference_count" } }
@@ -232,8 +235,12 @@ public struct V15PeriodReport: Codable, Sendable {
     public let merchants: [Merchant]
     public let sources: [Source]
     public let completeness: Completeness
+    public let daily: [Daily]?
+    public let knownFutureEvents: [V15FutureEvent]?
+    public let debtCycles: [DebtCycle]?
+    public let installments: [InstallmentGroup]?
     public let drillDownPath: String
-    enum CodingKeys: String, CodingKey { case meta, summary, accounts, categories, merchants, sources, completeness; case drillDownPath = "drill_down_path" }
+    enum CodingKeys: String, CodingKey { case meta, summary, accounts, categories, merchants, sources, completeness, daily, installments; case knownFutureEvents = "known_future_events", debtCycles = "debt_cycles"; case drillDownPath = "drill_down_path" }
 }
 
 public enum V15ReportAccountKind: Sendable, Equatable, Codable { case cash, debit, credit, unknown(String)
@@ -272,7 +279,7 @@ public extension V15PeriodReport.Merchant { var drillCapability: V15ReportDrillC
 public extension V15PeriodReport.Source { var drillCapability: V15ReportDrillCapability { source.isKnown ? .enabled(.source(source)) : .disabled("此汇总没有可安全定位的明细筛选条件") } }
 
 public struct V15PeriodReportDrillDown: Codable, Sendable {
-    public struct Item: Codable, Sendable, Identifiable { public let transactionID: UUID; public let occurredAt: Date; public let businessDate: String; public let kind: V15ReportTransactionKind; public let source: V15ReportTransactionSource; public let categoryID: UUID?; public let categoryName: String?; public let merchantID: UUID?; public let merchantName: String?; public let externalCashAmountMinor: V15MinorUnits; public let grossConsumptionMinor: V15MinorUnits; public let merchantRefundMinor: V15MinorUnits; public let netConsumptionMinor: V15MinorUnits; public var id: UUID { transactionID }; enum CodingKeys: String, CodingKey { case transactionID = "transaction_id", occurredAt = "occurred_at", businessDate = "business_date", kind, source, categoryID = "category_id", categoryName = "category_name", merchantID = "merchant_id", merchantName = "merchant_name", externalCashAmountMinor = "external_cash_amount_minor", grossConsumptionMinor = "gross_consumption_minor", merchantRefundMinor = "merchant_refund_minor", netConsumptionMinor = "net_consumption_minor" } }
+    public struct Item: Codable, Sendable, Identifiable { public let transactionID: UUID; public let occurredAt: Date; public let businessDate: String; public let title: String?; public let kind: V15ReportTransactionKind; public let source: V15ReportTransactionSource; public let categoryID: UUID?; public let categoryName: String?; public let merchantID: UUID?; public let merchantName: String?; public let accountID: UUID?; public let accountName: String?; public let destinationAccountID: UUID?; public let destinationAccountName: String?; public let externalCashAmountMinor: V15MinorUnits; public let grossConsumptionMinor: V15MinorUnits; public let merchantRefundMinor: V15MinorUnits; public let netConsumptionMinor: V15MinorUnits; public let expectedReimbursementMinor: V15MinorUnits?; public let receivedReimbursementMinor: V15MinorUnits?; public let personalExpectedMinor: V15MinorUnits?; public let personalRealizedMinor: V15MinorUnits?; public let status: String?; public let voidedAt: Date?; public let accountArchived: Bool?; public let categoryArchived: Bool?; public var id: UUID { transactionID }; enum CodingKeys: String, CodingKey { case transactionID = "transaction_id", occurredAt = "occurred_at", businessDate = "business_date", title, kind, source, categoryID = "category_id", categoryName = "category_name", merchantID = "merchant_id", merchantName = "merchant_name", accountID = "account_id", accountName = "account_name", destinationAccountID = "destination_account_id", destinationAccountName = "destination_account_name", externalCashAmountMinor = "external_cash_amount_minor", grossConsumptionMinor = "gross_consumption_minor", merchantRefundMinor = "merchant_refund_minor", netConsumptionMinor = "net_consumption_minor", expectedReimbursementMinor = "expected_reimbursement_minor", receivedReimbursementMinor = "received_reimbursement_minor", personalExpectedMinor = "personal_expected_minor", personalRealizedMinor = "personal_realized_minor", status, voidedAt = "voided_at", accountArchived = "account_archived", categoryArchived = "category_archived" } }
     public let meta: V15ReportMeta
     public let dimension: V15ReportDrillDimension
     public let categoryID: UUID?
@@ -328,6 +335,107 @@ public struct V15Preview: Codable, Sendable, Equatable {
     public let expiresAt: Date?
     public let revision: Int64?
     enum CodingKeys: String, CodingKey { case previewToken = "preview_token"; case inputDigest = "input_digest"; case expiresAt = "preview_expires_at"; case revision = "data_revision" }
+}
+
+// MARK: - V1.6 formal action previews
+
+public enum V15FormalAction: String, Codable, Sendable, Equatable {
+    case repayment
+    case categoryChange = "category_change"
+    case cashFlowConfirm = "cash_flow_confirm"
+}
+
+public struct V15ActionPreviewMeta: Codable, Sendable, Equatable {
+    public let previewToken: UUID
+    public let action: V15FormalAction
+    public let dataRevision: Int64
+    public let expiresAt: Date
+    enum CodingKeys: String, CodingKey { case previewToken = "preview_token", action, dataRevision = "data_revision", expiresAt = "expires_at" }
+}
+
+public struct V15RepaymentPreviewRequest: Codable, Sendable {
+    public let draft: V15TransactionCreateRequest
+    public init(draft: V15TransactionCreateRequest) { self.draft = draft }
+}
+
+public struct V15RepaymentPreview: Codable, Sendable, Equatable {
+    public let meta: V15ActionPreviewMeta
+    public let amountMinor: V15MinorUnits
+    public let paymentAccountID: UUID
+    public let paymentAccountName: String
+    public let paymentBalanceBeforeMinor: V15MinorUnits
+    public let paymentBalanceAfterMinor: V15MinorUnits
+    public let creditAccountID: UUID
+    public let creditAccountName: String
+    public let creditDebtBeforeMinor: V15MinorUnits
+    public let creditDebtAfterMinor: V15MinorUnits
+    public let creditCycleID: UUID
+    public let cycleRemainingBeforeMinor: V15MinorUnits
+    public let cycleRemainingAfterMinor: V15MinorUnits
+    enum CodingKeys: String, CodingKey {
+        case meta
+        case amountMinor = "amount_minor", paymentAccountID = "payment_account_id", paymentAccountName = "payment_account_name"
+        case paymentBalanceBeforeMinor = "payment_balance_before_minor", paymentBalanceAfterMinor = "payment_balance_after_minor"
+        case creditAccountID = "credit_account_id", creditAccountName = "credit_account_name"
+        case creditDebtBeforeMinor = "credit_debt_before_minor", creditDebtAfterMinor = "credit_debt_after_minor"
+        case creditCycleID = "credit_cycle_id", cycleRemainingBeforeMinor = "cycle_remaining_before_minor", cycleRemainingAfterMinor = "cycle_remaining_after_minor"
+    }
+}
+
+public struct V15BatchCategoryItem: Codable, Sendable, Equatable {
+    public let transactionID: UUID
+    public let expectedVersion: Int
+    public init(transactionID: UUID, expectedVersion: Int) { self.transactionID = transactionID; self.expectedVersion = expectedVersion }
+    enum CodingKeys: String, CodingKey { case transactionID = "transaction_id", expectedVersion = "expected_version" }
+}
+
+public struct V15BatchCategoryRequest: Codable, Sendable, Equatable {
+    public let items: [V15BatchCategoryItem]
+    public let categoryID: UUID
+    public init(items: [V15BatchCategoryItem], categoryID: UUID) { self.items = items; self.categoryID = categoryID }
+    enum CodingKeys: String, CodingKey { case items; case categoryID = "category_id" }
+}
+
+public struct V15CategoryChangePreview: Codable, Sendable, Equatable {
+    public struct Item: Codable, Sendable, Equatable, Identifiable {
+        public var id: UUID { transactionID }
+        public let transactionID: UUID
+        public let title: String
+        public let expectedVersion: Int
+        public let previousCategoryID: UUID?
+        public let previousCategoryName: String?
+        public let proposedCategoryID: UUID
+        public let proposedCategoryName: String
+        public let changed: Bool
+        enum CodingKeys: String, CodingKey { case transactionID = "transaction_id", title, expectedVersion = "expected_version", previousCategoryID = "previous_category_id", previousCategoryName = "previous_category_name", proposedCategoryID = "proposed_category_id", proposedCategoryName = "proposed_category_name", changed }
+    }
+    public let meta: V15ActionPreviewMeta
+    public let items: [Item]
+    public let changedCount: Int
+    enum CodingKeys: String, CodingKey { case meta, items; case changedCount = "changed_count" }
+}
+
+public struct V15CashFlowConfirmPreview: Codable, Sendable, Equatable {
+    public let meta: V15ActionPreviewMeta
+    public let itemBefore: V15CashFlowItem
+    public let statusAfter: String
+    enum CodingKeys: String, CodingKey { case meta; case itemBefore = "item_before", statusAfter = "status_after" }
+}
+
+public struct V15ActionCommitRequest: Codable, Sendable, Equatable {
+    public let previewToken: UUID
+    public init(previewToken: UUID) { self.previewToken = previewToken }
+    enum CodingKeys: String, CodingKey { case previewToken = "preview_token" }
+}
+
+public struct V15ActionCommitReceipt: Codable, Sendable {
+    public let operationID: UUID
+    public let previewToken: UUID
+    public let action: V15FormalAction
+    public let dataRevision: Int64
+    public let result: V15JSONRecord
+    public let replay: Bool
+    enum CodingKeys: String, CodingKey { case operationID = "operation_id", previewToken = "preview_token", action, dataRevision = "data_revision", result, replay }
 }
 
 public enum V15CreditCycleMode: String, Codable, Sendable, Equatable, CaseIterable {

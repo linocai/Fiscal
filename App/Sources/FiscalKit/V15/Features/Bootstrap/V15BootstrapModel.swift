@@ -4,7 +4,7 @@ import Observation
 @MainActor @Observable
 public final class V15BootstrapModel {
     public enum Phase: Equatable {
-        case idle, loading, needsPassphrase, passphraseNotSet, wrongPassphrase, invalidAccessKey, systemNotReady, ready, offlineReadOnly(Date), failed(String)
+        case idle, loading, needsPassphrase, passphraseNotSet, wrongPassphrase, invalidAccessKey, credentialGenerationChanged, systemNotReady, ready, offlineReadOnly(Date), failed(String)
     }
 
     public private(set) var phase: Phase = .idle
@@ -66,6 +66,7 @@ public final class V15BootstrapModel {
         case "invalid_passphrase": phase = .wrongPassphrase
         case "authentication_required", "unauthorized": phase = .needsPassphrase
         case "invalid_access_key": phase = .invalidAccessKey
+        case "credential_generation_changed": phase = .credentialGenerationChanged
         case "database_unavailable", "schema_state_unavailable": phase = .systemNotReady
         default: phase = .failed(failure.message)
         }

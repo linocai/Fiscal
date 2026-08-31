@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Header, Query, Response
 from starlette import status
 
 from fiscal_api.api.dependencies import (
+    ActionPreviewServiceDependency,
     MerchantServiceDependency,
     TransactionHistoryServiceDependency,
     TransactionServiceDependency,
@@ -31,6 +32,14 @@ from fiscal_api.api.p31_schemas import (
     MerchantMappingResponse,
     TransactionProvenanceResponse,
     TransactionRevisionPage,
+)
+from fiscal_api.api.p36_schemas import (
+    ActionCommitReceipt,
+    ActionCommitRequest,
+    CategoryChangePreview,
+    CategoryChangePreviewRequest,
+    RepaymentPreview,
+    RepaymentPreviewRequest,
 )
 from fiscal_api.core.security import require_authenticated
 from fiscal_api.db.models import TransactionKind, TransactionSource
@@ -161,6 +170,48 @@ async def bulk_category_transactions(
     service: TransactionServiceDependency,
 ) -> BatchCategoryResponse:
     return await service.bulk_category(request)
+
+
+@router.post("/repayment-preview", response_model=RepaymentPreview)
+async def preview_repayment(
+    request: RepaymentPreviewRequest,
+    service: ActionPreviewServiceDependency,
+) -> RepaymentPreview:
+    return await service.preview_repayment(request.draft)
+
+
+@router.post(
+    "/repayment-commit",
+    response_model=ActionCommitReceipt,
+    dependencies=[formal_mutation("ledger", "accounts", "credit", "reports", "attention")],
+)
+async def commit_repayment(
+    request: ActionCommitRequest,
+    service: ActionPreviewServiceDependency,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+) -> ActionCommitReceipt:
+    return await service.commit_repayment(request.preview_token, idempotency_key)
+
+
+@router.post("/category-preview", response_model=CategoryChangePreview)
+async def preview_category_change(
+    request: CategoryChangePreviewRequest,
+    service: ActionPreviewServiceDependency,
+) -> CategoryChangePreview:
+    return await service.preview_category(request)
+
+
+@router.post(
+    "/category-commit",
+    response_model=ActionCommitReceipt,
+    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+)
+async def commit_category_change(
+    request: ActionCommitRequest,
+    service: ActionPreviewServiceDependency,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+) -> ActionCommitReceipt:
+    return await service.commit_category(request.preview_token, idempotency_key)
 
 
 @router.get("/{transaction_id}/merchant-mapping", response_model=MerchantMappingResponse | None)

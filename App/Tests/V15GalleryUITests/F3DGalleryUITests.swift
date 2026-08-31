@@ -81,17 +81,18 @@ import XCTest
         attach("f3d-ios-display-only-ax5")
     }
 
-    func testCreateShowsEveryReasonThenCompletesAndFieldIssuesStayInSheet() {
+    func testCreateStartsNeutralThenShowsOneRelevantFieldIssueAndCompletes() {
         launch()
         revealButton("v15.f3d.create.open").tap()
         XCTAssertTrue(element("v15.f3d.editor").waitForExistence(timeout: 6))
         XCTAssertFalse(revealButton("v15.f3d.create.submit", enabled: false).isEnabled)
-        XCTAssertTrue(app.staticTexts["请填写标题。"].exists)
-        XCTAssertTrue(app.staticTexts["计划金额须为正数，最多两位小数。"].exists)
+        XCTAssertFalse(app.staticTexts["请填写标题。"].exists)
+        XCTAssertFalse(app.staticTexts["计划金额须为正数，最多两位小数。"].exists)
         replace("新建现金流", in: "v15.f3d.editor.title")
         replace("12.345", in: "v15.f3d.editor.amount")
         XCTAssertFalse(revealButton("v15.f3d.create.submit", enabled: false).isEnabled)
         XCTAssertTrue(app.staticTexts["计划金额须为正数，最多两位小数。"].exists)
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", "计划金额须为正数，最多两位小数。")).count, 1)
         replace("123.45", in: "v15.f3d.editor.amount")
         XCTAssertTrue(revealButton("v15.f3d.create.submit", enabled: true).isEnabled)
         attach("f3d-ios-create-invalid-valid")

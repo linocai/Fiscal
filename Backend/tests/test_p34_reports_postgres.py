@@ -4,6 +4,7 @@ import asyncio
 import csv
 import re
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from io import StringIO
 from os import environ
 from pathlib import Path
@@ -360,15 +361,15 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
         assert csv_export.headers["content-type"].startswith("text/csv")
         assert csv_export.headers["cache-control"] == "no-store"
         assert csv_export.content.startswith(b"\xef\xbb\xbf")
-        assert b"net_consumption_minor,,1200" in csv_export.content
+        assert "分类,净消费".encode() in csv_export.content
         assert b"provider original" not in csv_export.content
         assert b"4111-1111" not in csv_export.content
         csv_rows = list(csv.DictReader(StringIO(csv_export.content.decode("utf-8-sig"))))
         assert (
             sum(
-                int(row["value_minor"])
+                int(Decimal(row["金额（元）"]) * 100)
                 for row in csv_rows
-                if row["section"] == "category" and row["key"] == "net_consumption_minor"
+                if row["分类"] == "分类" and row["项目"] == "净消费"
             )
             == report["summary"]["net_consumption_minor"]
         )
@@ -384,16 +385,16 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
             bytes.fromhex(chunk.decode("ascii")).decode("utf-16-be")
             for chunk in re.findall(rb"<([0-9A-F]+)> Tj", pdf_export.content)
         )
-        assert "net_consumption_minor: 1200" in pdf_text
+        assert "净消费：¥12.00" in pdf_text
 
         revision = report["meta"]["data_revision"]
         exports = (
-            ("/api/v1/reports/monthly/2024-02/export.csv", "text/csv", "csv"),
-            ("/api/v1/reports/monthly/2024-02/export.pdf", "application/pdf", "pdf"),
-            ("/api/v1/reports/yearly/2024/export.csv", "text/csv", "csv"),
-            ("/api/v1/reports/yearly/2024/export.pdf", "application/pdf", "pdf"),
+            ("/api/v1/reports/monthly/2024-02/export.csv", "text/csv", "csv", "2024-02"),
+            ("/api/v1/reports/monthly/2024-02/export.pdf", "application/pdf", "pdf", "2024-02"),
+            ("/api/v1/reports/yearly/2024/export.csv", "text/csv", "csv", "2024"),
+            ("/api/v1/reports/yearly/2024/export.pdf", "application/pdf", "pdf", "2024"),
         )
-        for path, content_type, extension in exports:
+        for path, content_type, extension, expected_period in exports:
             # Omission remains compatible for existing callers, but the server
             # still declares the revision of the one report it actually rendered.
             legacy = client.get(path, headers=auth)
@@ -406,14 +407,28 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
             assert bound.headers["cache-control"] == "no-store"
             assert bound.headers["x-content-type-options"] == "nosniff"
             assert bound.headers["x-fiscal-data-revision"] == str(revision)
-            assert f'-r{revision}.{extension}"' in bound.headers["content-disposition"]
+            assert (
+                f'Fiscal-report-{expected_period}.{extension}"'
+                in bound.headers["content-disposition"]
+            )
+            assert f"-r{revision}" not in bound.headers["content-disposition"]
             if extension == "csv":
-                assert f"meta,data_revision,,,,{revision}".encode() in bound.content
+                exported_text = bound.content.decode("utf-8-sig")
+                assert "分类,项目,对象,金额（元）,数量,说明" in exported_text
+                for internal in (
+                    "data_revision",
+                    "report_schema_version",
+                    "stable_id",
+                    "value_minor",
+                ):
+                    assert internal not in exported_text
             else:
-                assert (
-                    f"revision {revision}".encode("utf-16-be").hex().upper().encode()
-                    in bound.content
+                exported_pdf_text = "\n".join(
+                    bytes.fromhex(chunk.decode("ascii")).decode("utf-16-be")
+                    for chunk in re.findall(rb"<([0-9A-F]+)> Tj", bound.content)
                 )
+                assert "口径：上海时间 · 人民币" in exported_pdf_text
+                assert "revision" not in exported_pdf_text
 
         drill = client.get(
             "/api/v1/reports/period-drill-down?period_kind=month&period=2024-02"
@@ -465,7 +480,7 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
             stale.json()["error"]["details"]["reload_path"]
             == "/api/v1/reports/period-drill-down?period_kind=month&period=2024-02"
         )
-        for path, _, _ in exports:
+        for path, _, _, _ in exports:
             stale_export = client.get(f"{path}?expected_data_revision={revision}", headers=auth)
             assert stale_export.status_code == 409, stale_export.text
             error = stale_export.json()["error"]
@@ -849,3 +864,129 @@ def test_p34_reimbursement_cancellation_respects_the_year_boundary() -> None:
         january = client.get("/api/v1/reports/monthly/2024-01", headers=auth)
         assert january.status_code == 200, january.text
         assert january.json()["summary"]["reimbursement_outstanding_at_period_end_minor"] == 0
+
+
+def test_p36_report_v2_adds_auditable_dimensions_without_changing_v1() -> None:
+    app, auth = _app()
+    suffix = uuid4().hex[:8]
+    with TestClient(app) as client:
+        account = _account(client, auth, name=f"P36 报表账户 {suffix}")
+        category = client.post(
+            "/api/v1/categories",
+            headers=auth,
+            json={
+                "name": f"P36 报表分类 {suffix}",
+                "direction": "expense",
+                "icon": "chart.bar",
+                "color_hex": "#654321",
+            },
+        )
+        assert category.status_code == 201, category.text
+        category_body = category.json()
+        transaction = _transaction(
+            client,
+            auth,
+            {
+                "kind": "expense",
+                "amount_minor": 1_234,
+                "occurred_at": "2026-08-19T12:00:00+08:00",
+                "title": f"P36 审计消费 {suffix}",
+                "account_id": account["id"],
+                "category_id": category_body["id"],
+            },
+        )
+
+        legacy = client.get("/api/v1/reports/monthly/2026-08", headers=auth)
+        report = client.get("/api/v1/reports/v2/monthly/2026-08", headers=auth)
+        assert legacy.status_code == report.status_code == 200
+        legacy_body = legacy.json()
+        body = report.json()
+        assert legacy_body["meta"]["report_schema_version"] == "1"
+        assert "daily" not in legacy_body
+        assert body["meta"]["report_schema_version"] == "2"
+        revision = body["meta"]["data_revision"]
+        assert body["drill_down_path"] == (
+            "/api/v1/reports/v2/period-drill-down"
+            f"?period_kind=month&period=2026-08&expected_data_revision={revision}"
+        )
+
+        category_row = next(
+            row for row in body["categories"] if row["category_id"] == category_body["id"]
+        )
+        assert {
+            key: category_row[key]
+            for key in (
+                "gross_consumption_minor",
+                "merchant_refund_minor",
+                "net_consumption_minor",
+                "expected_reimbursement_minor",
+                "received_reimbursement_minor",
+                "personal_expected_minor",
+                "personal_realized_minor",
+            )
+        } == {
+            "gross_consumption_minor": 1_234,
+            "merchant_refund_minor": 0,
+            "net_consumption_minor": 1_234,
+            "expected_reimbursement_minor": 0,
+            "received_reimbursement_minor": 0,
+            "personal_expected_minor": 1_234,
+            "personal_realized_minor": 1_234,
+        }
+        daily_row = next(row for row in body["daily"] if row["date"] == "2026-08-19")
+        assert daily_row["gross_consumption_minor"] == 1_234
+        assert daily_row["personal_realized_minor"] == 1_234
+        assert isinstance(body["known_future_events"], list)
+        assert isinstance(body["debt_cycles"], list)
+        assert isinstance(body["installments"], list)
+
+        drill = client.get(
+            "/api/v1/reports/v2/period-drill-down"
+            f"?period_kind=month&period=2026-08&expected_data_revision={revision}"
+            f"&category_id={category_body['id']}",
+            headers=auth,
+        )
+        assert drill.status_code == 200, drill.text
+        item = next(
+            row for row in drill.json()["items"] if row["transaction_id"] == transaction["id"]
+        )
+        assert item["title"] == transaction["title"]
+        assert item["account_id"] == account["id"]
+        assert item["account_name"] == account["name"]
+        assert item["status"] == "active"
+        assert item["account_archived"] is False
+        assert item["category_archived"] is False
+
+        exported = client.get(
+            f"/api/v1/reports/v2/monthly/2026-08/export.csv?expected_data_revision={revision}",
+            headers=auth,
+        )
+        assert exported.status_code == 200, exported.text
+        assert exported.headers["x-fiscal-data-revision"] == str(revision)
+        assert ",个人实际承担," in exported.text
+        assert "personal_realized_minor" not in exported.text
+
+        _transaction(
+            client,
+            auth,
+            {
+                "kind": "expense",
+                "amount_minor": 1,
+                "occurred_at": "2026-08-20T12:00:00+08:00",
+                "title": f"P36 使报表失效 {suffix}",
+                "account_id": account["id"],
+                "category_id": category_body["id"],
+            },
+        )
+        stale_drill = client.get(
+            "/api/v1/reports/v2/period-drill-down"
+            f"?period_kind=month&period=2026-08&expected_data_revision={revision}",
+            headers=auth,
+        )
+        stale_export = client.get(
+            f"/api/v1/reports/v2/monthly/2026-08/export.csv?expected_data_revision={revision}",
+            headers=auth,
+        )
+        assert stale_drill.status_code == stale_export.status_code == 409
+        assert stale_drill.json()["error"]["code"] == "period_report_changed"
+        assert stale_export.json()["error"]["code"] == "period_report_changed"

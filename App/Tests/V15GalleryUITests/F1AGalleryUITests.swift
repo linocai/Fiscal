@@ -9,13 +9,13 @@ final class F1AGalleryUITests: XCTestCase {
         app.launch()
     }
 
-    func testRecordSheetShowsVisibleDisabledReasonsAtPointOfEntry() {
+    func testRecordSheetStartsNeutralWhileSaveRemainsSafelyDisabled() {
         launch("record")
         app.buttons["新建账目"].tap()
         XCTAssertTrue(app.buttons["保存账目"].waitForExistence(timeout: 4))
         XCTAssertFalse(app.buttons["保存账目"].isEnabled)
-        XCTAssertTrue(app.staticTexts["请填写账目名称。"].exists)
-        XCTAssertTrue(app.staticTexts["金额须为大于 0 的元金额，且最多两位小数。"].exists)
+        XCTAssertFalse(app.staticTexts["请填写账目名称。"].exists)
+        XCTAssertFalse(app.staticTexts["金额须为大于 0 的元金额，且最多两位小数。"].exists)
         let businessDate = app.datePickers["业务日期（上海）"]
         XCTAssertTrue(businessDate.waitForExistence(timeout: 2))
         XCTAssertEqual(businessDate.value as? String, "2026年8月15日")
@@ -25,14 +25,14 @@ final class F1AGalleryUITests: XCTestCase {
         add(attachment)
     }
 
-    func testRecordSheetAcceptsInputAndShowsActualSuccessCredential() {
+    func testRecordSheetAcceptsInputAndShowsUserFacingSuccess() {
         launch("record-valid")
         app.buttons["新建账目"].tap()
         XCTAssertTrue(app.buttons["保存账目"].waitForExistence(timeout: 4))
         app.buttons["保存账目"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["v15.f1a.record.success"].waitForExistence(timeout: 4))
-        XCTAssertTrue(app.staticTexts["已保存事实"].exists)
-        XCTAssertTrue(app.staticTexts["交易 00000000-0000-0000-0000-000000000105 · v1 · 1 条分录"].exists)
+        XCTAssertTrue(app.staticTexts["账目已保存"].exists)
+        XCTAssertTrue(app.staticTexts["已生成 1 条分录"].exists)
     }
 
     func testTypePickerReachesAllFiveKindsWithCompatibleFields() {
@@ -66,14 +66,14 @@ final class F1AGalleryUITests: XCTestCase {
         launch("record", extraArguments: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         app.buttons["新建账目"].tap()
         XCTAssertTrue(app.buttons["保存账目"].waitForExistence(timeout: 4))
-        XCTAssertTrue(app.staticTexts["请填写账目名称。"].exists)
+        XCTAssertFalse(app.staticTexts["请填写账目名称。"].exists)
         let ax5 = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         ax5.name = "f1a-ios-record-sheet-ax5"
         ax5.lifetime = .keepAlways
         add(ax5)
     }
 
-    func testRepaymentUsesHumanCyclePickerAndReturnsServerCredential() {
+    func testRepaymentUsesHumanCyclePickerPreviewAndUserFacingSuccess() {
         launch("record")
         app.buttons["新建账目"].tap()
         XCTAssertTrue(app.buttons["保存账目"].waitForExistence(timeout: 4))
@@ -91,17 +91,23 @@ final class F1AGalleryUITests: XCTestCase {
         choosePicker("v15.f1a.record.credit-cycle", option: "2026-07-21 至 2026-08-20 · 还款日 2026-09-05")
         XCTAssertEqual(cycle.value as? String, "2026-07-21 至 2026-08-20 · 还款日 2026-09-05")
 
-        let save = app.buttons["保存账目"]
-        scrollUntilHittable(save)
-        XCTAssertTrue(save.isEnabled)
+        let preview = app.buttons["查看还款影响"]
+        scrollUntilHittable(preview)
+        XCTAssertTrue(preview.isEnabled)
         XCTAssertFalse(app.staticTexts["请选择可用的信用账期。"].exists)
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = "f1a-ios-record-repayment-valid"
         attachment.lifetime = .keepAlways
         add(attachment)
-        save.tap()
+        preview.tap()
+        let confirm = app.buttons["确认还款"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 4))
+        scrollUntilHittable(confirm)
+        XCTAssertTrue(confirm.isEnabled)
+        confirm.tap()
         XCTAssertTrue(app.descendants(matching: .any)["v15.f1a.record.success"].waitForExistence(timeout: 4))
-        XCTAssertTrue(app.staticTexts["交易 00000000-0000-0000-0000-000000000109 · v1 · 2 条分录"].exists)
+        XCTAssertTrue(app.staticTexts["账目已保存"].exists)
+        XCTAssertTrue(app.staticTexts["已生成 2 条分录"].exists)
     }
 
     func testRepaymentPrefillKeepsCycleAndSaveReachableAtAX5() {
@@ -111,10 +117,16 @@ final class F1AGalleryUITests: XCTestCase {
         XCTAssertTrue(cycle.waitForExistence(timeout: 4))
         scrollUntilHittable(cycle)
         XCTAssertTrue(cycle.isHittable)
-        let save = app.buttons["保存账目"]
-        scrollUntilHittable(save)
-        XCTAssertTrue(save.isHittable)
-        XCTAssertTrue(save.isEnabled)
+        let preview = app.buttons["查看还款影响"]
+        scrollUntilHittable(preview)
+        XCTAssertTrue(preview.isHittable)
+        XCTAssertTrue(preview.isEnabled)
+        preview.tap()
+        let confirm = app.buttons["确认还款"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 4))
+        scrollUntilHittable(confirm)
+        XCTAssertTrue(confirm.isHittable)
+        XCTAssertTrue(confirm.isEnabled)
     }
 
     private func chooseKind(_ label: String, file: StaticString = #filePath, line: UInt = #line) {

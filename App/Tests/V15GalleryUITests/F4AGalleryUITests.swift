@@ -81,6 +81,20 @@ import XCTest
         XCTAssertTrue(element("v15.f4a.drill.empty").waitForExistence(timeout: 6))
     }
 
+    func testOverviewAndCashFlowMetricsStayInsidePhoneWidth() {
+        launch()
+        let overview = element("v15.f4a.metric.0")
+        XCTAssertTrue(overview.waitForExistence(timeout: 6))
+        XCTAssertGreaterThanOrEqual(overview.frame.minX, app.frame.minX)
+        XCTAssertLessThanOrEqual(overview.frame.maxX, app.frame.maxX)
+
+        app.buttons["v15.f4a.lens.cashFlow"].tap()
+        XCTAssertTrue(element("v15.f4a.surface.cashFlow").waitForExistence(timeout: 6))
+        let cashFlow = element("v15.f4a.metric.0")
+        XCTAssertGreaterThanOrEqual(cashFlow.frame.minX, app.frame.minX)
+        XCTAssertLessThanOrEqual(cashFlow.frame.maxX, app.frame.maxX)
+    }
+
     func testRevisionBoundExportReadyHandoffAndStaleResponse() {
         launch()
         revealButton("v15.f4b.export").tap()

@@ -223,6 +223,11 @@ public struct V15ReportingView: View {
             }
             sevenMeasures(report.summary)
             categoryDistribution(report)
+            if let daily = report.daily {
+                reportCard("每日 · \(spendingLabel(model.spendingMeasure))") {
+                    ForEach(daily) { point in valueRow(point.date, dailyAmount(point), .neutral) }
+                }
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f4a.surface.spending")
@@ -248,6 +253,7 @@ public struct V15ReportingView: View {
                     cashAccountRow(indexed.element, id: indexed.offset)
                 }
             }
+            knownFutureCard(report)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f4a.surface.cashFlow")
@@ -270,6 +276,18 @@ public struct V15ReportingView: View {
                     ForEach(Array(creditAccounts.enumerated()), id: \.offset) { indexed in
                         aggregateRow(title: indexed.element.accountName, detail: "信用账户 · 期末余额", amount: indexed.element.closingBalanceMinor, capability: indexed.element.drillCapability, id: "debt.account.\(indexed.offset)")
                     }
+                }
+            }
+            if let cycles = report.debtCycles {
+                reportCard("信用账期") {
+                    if cycles.isEmpty { Text("本期没有已知信用账期。") }
+                    ForEach(cycles) { cycle in valueRow("\(cycle.accountName) · \(cycle.dueDate)", cycle.remainingMinor, .neutral) }
+                }
+            }
+            if let installments = report.installments {
+                reportCard("分期安排") {
+                    if installments.isEmpty { Text("本期没有已排期的分期。") }
+                    ForEach(installments) { group in valueRow("\(group.month) · \(group.periodCount) 期（本金 \(money(group.principalScheduledGrossMinor))，手续费 \(money(group.feeScheduledGrossMinor))）", group.totalScheduledGrossMinor, .neutral) }
                 }
             }
         }
@@ -304,6 +322,21 @@ public struct V15ReportingView: View {
             }
         }
     }
+
+    @ViewBuilder private func knownFutureCard(_ report: V15PeriodReport) -> some View {
+        if let events = report.knownFutureEvents {
+            reportCard("已知未来事项") {
+                if events.isEmpty { Text("本期没有已知的未来事项。") }
+                ForEach(events) { event in valueRow("\(event.date) · \(event.title) · \(certaintyLabel(event.certainty))", event.amountMinor, .neutral) }
+            }
+        }
+    }
+
+    private func dailyAmount(_ point: V15PeriodReport.Daily) -> Int64 {
+        switch model.spendingMeasure { case .grossConsumption: point.grossConsumptionMinor; case .merchantRefund: point.merchantRefundMinor; case .netConsumption: point.netConsumptionMinor; case .expectedReimbursement: point.expectedReimbursementMinor; case .receivedReimbursement: point.receivedReimbursementMinor; case .personalExpected: point.personalExpectedMinor; case .personalRealized: point.personalRealizedMinor }
+    }
+    private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral).text }
+    private func certaintyLabel(_ value: V15FutureEventCertainty) -> String { switch value { case .exactDue: "确定应还"; case .confirmed: "已确认"; case .expected: "预计"; case .scheduled: "已排期" } }
 
     @ViewBuilder private func categoryDistribution(_ report: V15PeriodReport) -> some View {
         let available = report.categories.compactMap { category -> (V15PeriodReport.Category, Int64)? in
@@ -370,7 +403,7 @@ public struct V15ReportingView: View {
     }
 
     private func metricGrid(_ values: [(String, Int64, V15MoneyDirection)]) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: V15Spacing.xs)], spacing: V15Spacing.xs) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: V15Spacing.xs)], spacing: V15Spacing.xs) {
             ForEach(Array(values.enumerated()), id: \.offset) { indexed in
                 VStack(alignment: .leading, spacing: V15Spacing.xs) {
                     Text(indexed.element.0).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
@@ -380,6 +413,8 @@ public struct V15ReportingView: View {
                 .padding(V15Spacing.md)
                 .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card))
                 .overlay { RoundedRectangle(cornerRadius: V15Radius.card).stroke(V15Palette.hairline.color) }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("v15.f4a.metric.\(indexed.offset)")
             }
         }
     }

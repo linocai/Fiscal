@@ -12,6 +12,21 @@ import XCTest
         app.terminate()
     }
 
+    func testMacCreateEntryOpensBeforeBlankDraftValidation() {
+        let app = launchGalleryMac(["--v15-f3d-route", "cash-flow"])
+        let open = element(app, "v15.f3d.mac.create.open")
+        XCTAssertTrue(open.waitForExistence(timeout: 10))
+        XCTAssertTrue(open.isEnabled)
+        open.tap()
+        XCTAssertTrue(element(app, "v15.f3d.mac.editor").waitForExistence(timeout: 5))
+        let submit = element(app, "v15.f3d.mac.create.submit")
+        XCTAssertTrue(submit.waitForExistence(timeout: 5))
+        XCTAssertFalse(submit.isEnabled)
+        XCTAssertFalse(app.staticTexts["请填写标题。"].exists)
+        XCTAssertFalse(app.staticTexts["计划金额须为正数，最多两位小数。"].exists)
+        app.terminate()
+    }
+
     func testMacUnknownConflictAndPartialRefreshCompileIntoInspector() {
         for (route, identifier) in [("cash-flow-unknown", "v15.f3d.mac.unknown"), ("cash-flow-conflict", "v15.f3d.mac.conflict"), ("cash-flow-partial-refresh", "v15.f3d.mac.fact-refresh")] {
             let app = launchGalleryMac(["--v15-f3d-route", route])

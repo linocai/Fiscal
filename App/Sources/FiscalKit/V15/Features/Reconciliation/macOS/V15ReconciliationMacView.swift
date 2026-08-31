@@ -189,7 +189,7 @@ public struct V15ReconciliationMacView: View {
                     V15Field("忽略到（上海日期）", text: $model.ignoreUntilDateText, prompt: "YYYY-MM-DD")
                     ForEach(model.contextualAttention) { item in
                         VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                            Text(item.explanation).font(V15Typography.body).fixedSize(horizontal: false, vertical: true)
+                            Text(V15AttentionUserCopy.explanation(for: item)).font(V15Typography.body).fixedSize(horizontal: false, vertical: true)
                             if let amount = item.amountMinor { V15MoneyText(minorUnits: amount, direction: .neutral) }
                             V15ActionButton("暂时忽略", kind: .quiet, disabledReasons: model.ignoreReasons(for: item)) { Task { await model.ignore(item) } }
                                 .accessibilityIdentifier("v15.f3e.mac.ignore.\(item.id)")

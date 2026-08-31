@@ -2,43 +2,92 @@ from __future__ import annotations
 
 import csv
 from collections.abc import Iterable
+from datetime import datetime
 from io import StringIO
+from zoneinfo import ZoneInfo
 
-from fiscal_api.api.p34_schemas import PeriodReport
+from fiscal_api.api.p34_schemas import PeriodReport, PeriodReportV2
 from fiscal_api.services.common import conflict
 
 MAX_REPORT_EXPORT_BYTES = 5 * 1024 * 1024
+SHANGHAI = ZoneInfo("Asia/Shanghai")
+
+SUMMARY_LABELS = {
+    "income_minor": "收入",
+    "gross_consumption_minor": "消费总额",
+    "merchant_refund_minor": "商户退款",
+    "net_consumption_minor": "净消费",
+    "expected_reimbursement_minor": "预计报销",
+    "received_reimbursement_minor": "已收报销",
+    "personal_expected_minor": "个人预计承担",
+    "personal_realized_minor": "个人实际承担",
+    "net_income_expense_minor": "收支净额",
+    "cash_inflow_minor": "现金流入",
+    "cash_outflow_minor": "现金流出",
+    "cash_net_minor": "现金净流入",
+    "internal_transfer_inflow_minor": "内部转入",
+    "internal_transfer_outflow_minor": "内部转出",
+    "credit_debt_at_period_end_minor": "期末信用欠款",
+    "reimbursement_outstanding_at_period_end_minor": "期末待收报销",
+}
+
+CATEGORY_LABELS = {
+    "gross_consumption_minor": "消费总额",
+    "merchant_refund_minor": "商户退款",
+    "net_consumption_minor": "净消费",
+    "expected_reimbursement_minor": "预计报销",
+    "received_reimbursement_minor": "已收报销",
+    "personal_expected_minor": "个人预计承担",
+    "personal_realized_minor": "个人实际承担",
+}
+
+ACCOUNT_LABELS = {
+    "opening_balance_minor": "期初余额",
+    "closing_balance_minor": "期末余额",
+    "period_inflow_minor": "本期流入",
+    "period_outflow_minor": "本期流出",
+    "internal_transfer_inflow_minor": "内部转入",
+    "internal_transfer_outflow_minor": "内部转出",
+}
+
+COMPLETENESS_LABELS = {
+    "unresolved_import_count": "待核对导入",
+    "failed_import_count": "导入失败",
+    "uncategorized_transaction_count": "未分类账目",
+    "open_reconciliation_difference_count": "未解决核对差异",
+}
+
+SOURCE_LABELS = {
+    "manual": "手动记账",
+    "system": "系统生成",
+    "ai_text": "文字记账",
+    "ocr": "截图识别",
+    "legacy_import": "历史导入",
+    "cash_flow": "现金流计划",
+    "statement_import": "账单导入",
+}
 
 
-def report_csv(report: PeriodReport) -> bytes:
-    """Render the canonical report snapshot as a reviewable, safe CSV.
-
-    This is intentionally a report document, not the legacy transaction
-    ledger export.  It contains only report aggregation rows and stable IDs;
-    no account institution/last-four, notes, original bank text, or provider
-    material can enter this output.
-    """
+def report_csv(report: PeriodReport | PeriodReportV2) -> bytes:
+    """Render a user-facing report without exposing internal contract fields."""
     buffer = StringIO(newline="")
     writer = csv.writer(buffer, lineterminator="\r\n")
-    writer.writerow(["section", "key", "stable_id", "value_minor", "count", "value_text"])
+    writer.writerow(["分类", "项目", "对象", "金额（元）", "数量", "说明"])
     meta = report.meta
-    for key, value in (
-        ("period_kind", meta.period_kind.value),
-        ("period", meta.period),
-        ("date_from", meta.date_from.isoformat()),
-        ("date_to", meta.date_to.isoformat()),
-        ("timezone", meta.timezone),
-        ("currency", meta.currency),
-        ("as_of", meta.as_of.isoformat()),
-        ("data_revision", str(meta.data_revision)),
-        ("report_schema_version", meta.report_schema_version),
-        ("generated_at", meta.generated_at.isoformat()),
+    for label, value in (
+        ("报表类型", "月度报表" if meta.period_kind.value == "month" else "年度报表"),
+        ("报表期间", meta.period),
+        ("开始日期", meta.date_from.isoformat()),
+        ("结束日期", meta.date_to.isoformat()),
+        ("时间口径", "上海时间"),
+        ("币种", "人民币"),
+        ("数据截至", _visible_datetime(meta.as_of)),
+        ("生成时间", _visible_datetime(meta.generated_at)),
     ):
-        writer.writerow(["meta", key, "", "", "", _safe_csv_text(value)])
+        writer.writerow(["报表信息", label, "", "", "", _safe_csv_text(value)])
     for key, value in report.summary.model_dump().items():
-        writer.writerow(["summary", key, "", value, "", ""])
+        writer.writerow(["汇总", SUMMARY_LABELS[key], "", _yuan_number(value), "", ""])
     for account in report.accounts:
-        identifier = str(account.account_id)
         for key, value in (
             ("opening_balance_minor", account.opening_balance_minor),
             ("closing_balance_minor", account.closing_balance_minor),
@@ -48,40 +97,120 @@ def report_csv(report: PeriodReport) -> bytes:
             ("internal_transfer_outflow_minor", account.internal_transfer_outflow_minor),
         ):
             writer.writerow(
-                ["account", key, identifier, value, "", _safe_csv_text(account.account_name)]
+                [
+                    "账户",
+                    ACCOUNT_LABELS[key],
+                    _safe_csv_text(account.account_name),
+                    _yuan_number(value),
+                    "",
+                    "",
+                ]
             )
     for category in report.categories:
-        identifier = str(category.category_id) if category.category_id else ""
-        for key, value in (
+        category_values = [
             ("gross_consumption_minor", category.gross_consumption_minor),
             ("merchant_refund_minor", category.merchant_refund_minor),
             ("net_consumption_minor", category.net_consumption_minor),
+        ]
+        for key in (
+            "expected_reimbursement_minor",
+            "received_reimbursement_minor",
+            "personal_expected_minor",
+            "personal_realized_minor",
         ):
+            if hasattr(category, key):
+                category_values.append((key, getattr(category, key)))
+        for key, value in category_values:
             writer.writerow(
-                ["category", key, identifier, value, "", _safe_csv_text(category.category_name)]
+                [
+                    "分类",
+                    CATEGORY_LABELS[key],
+                    _safe_csv_text(category.category_name),
+                    _yuan_number(value),
+                    "",
+                    "",
+                ]
             )
         writer.writerow(
-            ["category", "transaction_count", identifier, "", category.transaction_count, ""]
+            [
+                "分类",
+                "账目数量",
+                _safe_csv_text(category.category_name),
+                "",
+                category.transaction_count,
+                "",
+            ]
         )
     for merchant in report.merchants:
         writer.writerow(
             [
-                "merchant",
-                "net_consumption_minor",
-                str(merchant.merchant_id) if merchant.merchant_id else "",
-                merchant.net_consumption_minor,
-                merchant.transaction_count,
+                "商户",
+                "净消费",
                 _safe_csv_text(merchant.merchant_name),
+                _yuan_number(merchant.net_consumption_minor),
+                merchant.transaction_count,
+                "",
             ]
         )
     for source in report.sources:
-        writer.writerow(["source", source.source.value, "", "", source.transaction_count, ""])
+        writer.writerow(
+            ["记账来源", _source_label(source.source.value), "", "", source.transaction_count, ""]
+        )
     for key, value in report.completeness.model_dump().items():
-        writer.writerow(["completeness", key, "", "", value, ""])
+        writer.writerow(["待处理", COMPLETENESS_LABELS[key], "", "", value, ""])
+    if isinstance(report, PeriodReportV2):
+        for point in report.daily:
+            for key, value in point.model_dump(exclude={"date"}).items():
+                writer.writerow(
+                    [
+                        "每日趋势",
+                        CATEGORY_LABELS[key],
+                        point.date.isoformat(),
+                        _yuan_number(value),
+                        "",
+                        "",
+                    ]
+                )
+        for event in report.known_future_events:
+            event_kind = (
+                f"{_direction_label(event.direction.value)} · "
+                f"{_certainty_label(event.certainty.value)}"
+            )
+            writer.writerow(
+                [
+                    "已知未来",
+                    event_kind,
+                    _safe_csv_text(event.title),
+                    _yuan_number(event.amount_minor),
+                    "",
+                    event.date.isoformat(),
+                ]
+            )
+        for cycle in report.debt_cycles:
+            writer.writerow(
+                [
+                    "债务账期",
+                    "待还金额",
+                    _safe_csv_text(cycle.account_name),
+                    _yuan_number(cycle.remaining_minor),
+                    "",
+                    f"还款日 {cycle.due_date.isoformat()}",
+                ]
+            )
+        for installment in report.installments:
+            for key, value in (
+                ("计划本金", installment.principal_scheduled_gross_minor),
+                ("计划费用", installment.fee_scheduled_gross_minor),
+                ("计划合计", installment.total_scheduled_gross_minor),
+            ):
+                writer.writerow(["分期计划", key, installment.month, _yuan_number(value), "", ""])
+            writer.writerow(
+                ["分期计划", "期数", installment.month, "", installment.period_count, ""]
+            )
     return _bounded(("\ufeff" + buffer.getvalue()).encode("utf-8"))
 
 
-def report_pdf(report: PeriodReport) -> bytes:
+def report_pdf(report: PeriodReport | PeriodReportV2) -> bytes:
     """Create a compact Unicode PDF from exactly the same canonical snapshot.
 
     The built-in Adobe GB CID font avoids system-font variability for Chinese
@@ -89,58 +218,124 @@ def report_pdf(report: PeriodReport) -> bytes:
     labels only; evidence titles, notes and provider/original-statement data
     do not cross the export boundary.
     """
-    lines = ["汇总 (分)"]
-    lines.extend(f"{key}: {value}" for key, value in report.summary.model_dump().items())
-    lines.append("")
-    lines.append("分类 (分)")
+    lines = ["汇总（元）"]
     lines.extend(
-        f"{row.category_name}: {row.net_consumption_minor} ({row.transaction_count} 笔)"
+        f"{SUMMARY_LABELS[key]}：{_yuan_text(value)}"
+        for key, value in report.summary.model_dump().items()
+    )
+    lines.append("")
+    lines.append("分类")
+    lines.extend(
+        (
+            f"{row.category_name}：净消费 {_yuan_text(row.net_consumption_minor)}"
+            f"（{row.transaction_count} 笔）"
+        )
         for row in report.categories
     )
     lines.append("")
-    lines.append("账户 (分)")
+    lines.append("账户")
     lines.extend(
         (
-            f"{row.account_name}: opening={row.opening_balance_minor}, "
-            f"closing={row.closing_balance_minor}, in={row.period_inflow_minor}, "
-            f"out={row.period_outflow_minor}"
+            f"{row.account_name}：期初 {_yuan_text(row.opening_balance_minor)}，"
+            f"期末 {_yuan_text(row.closing_balance_minor)}，"
+            f"流入 {_yuan_text(row.period_inflow_minor)}，"
+            f"流出 {_yuan_text(row.period_outflow_minor)}"
         )
         for row in report.accounts
     )
     lines.append("")
-    lines.append("商户 (分)")
+    lines.append("商户")
     lines.extend(
-        f"{row.merchant_name}: {row.net_consumption_minor} ({row.transaction_count} 笔)"
+        (
+            f"{row.merchant_name}：净消费 {_yuan_text(row.net_consumption_minor)}"
+            f"（{row.transaction_count} 笔）"
+        )
         for row in report.merchants
     )
     lines.append("")
-    lines.append("来源")
-    lines.extend(f"{row.source.value}: {row.transaction_count}" for row in report.sources)
+    lines.append("记账来源")
+    lines.extend(
+        f"{_source_label(row.source.value)}：{row.transaction_count} 笔" for row in report.sources
+    )
     lines.append("")
-    lines.append("完整性")
-    lines.extend(f"{key}: {value}" for key, value in report.completeness.model_dump().items())
+    lines.append("待处理")
+    lines.extend(
+        f"{COMPLETENESS_LABELS[key]}：{value} 项"
+        for key, value in report.completeness.model_dump().items()
+    )
+    if isinstance(report, PeriodReportV2):
+        lines.append("")
+        lines.append("已知未来事项")
+        lines.extend(
+            f"{row.date} {row.title}：{_yuan_text(row.amount_minor)}，"
+            f"{_direction_label(row.direction.value)} · {_certainty_label(row.certainty.value)}"
+            for row in report.known_future_events
+        )
+        lines.append("")
+        lines.append("债务账期")
+        lines.extend(
+            f"{row.account_name} {row.due_date}：待还 {_yuan_text(row.remaining_minor)}"
+            for row in report.debt_cycles
+        )
+        lines.append("")
+        lines.append("分期计划")
+        lines.extend(
+            (
+                f"{row.month}：本金 {_yuan_text(row.principal_scheduled_gross_minor)}，"
+                f"费用 {_yuan_text(row.fee_scheduled_gross_minor)}，"
+                f"合计 {_yuan_text(row.total_scheduled_gross_minor)}，共 {row.period_count} 期"
+            )
+            for row in report.installments
+        )
     return _bounded(
         _unicode_pdf(
             lines,
             title=f"Fiscal report {report.meta.period}",
             header=(
                 "Fiscal 报告",
-                f"期间: {report.meta.period} ({report.meta.date_from} 至 {report.meta.date_to})",
-                (
-                    f"口径: {report.meta.timezone} · {report.meta.currency}"
-                    f" · revision {report.meta.data_revision}"
-                ),
-                f"生成: {report.meta.generated_at.isoformat()}",
+                f"期间：{report.meta.period}（{report.meta.date_from} 至 {report.meta.date_to}）",
+                "口径：上海时间 · 人民币",
+                f"生成：{_visible_datetime(report.meta.generated_at)}",
             ),
         )
     )
 
 
-def report_export_filename(report: PeriodReport, extension: str) -> str:
-    return (
-        f"fiscal-report-{report.meta.period_kind.value}-{report.meta.period}"
-        f"-r{report.meta.data_revision}.{extension}"
-    )
+def report_export_filename(report: PeriodReport | PeriodReportV2, extension: str) -> str:
+    return f"Fiscal-report-{report.meta.period}.{extension}"
+
+
+def _yuan_number(value: int) -> str:
+    sign = "-" if value < 0 else ""
+    major, minor = divmod(abs(value), 100)
+    return f"{sign}{major}.{minor:02d}"
+
+
+def _yuan_text(value: int) -> str:
+    sign = "-" if value < 0 else ""
+    major, minor = divmod(abs(value), 100)
+    return f"{sign}¥{major:,}.{minor:02d}"
+
+
+def _visible_datetime(value: datetime) -> str:
+    return value.astimezone(SHANGHAI).strftime("%Y-%m-%d %H:%M")
+
+
+def _source_label(value: str) -> str:
+    return SOURCE_LABELS.get(value, "其他来源")
+
+
+def _direction_label(value: str) -> str:
+    return "流入" if value == "inflow" else "流出"
+
+
+def _certainty_label(value: str) -> str:
+    return {
+        "exact_due": "明确到期",
+        "confirmed": "已确认",
+        "expected": "预计",
+        "scheduled": "已排期",
+    }.get(value, "已知事项")
 
 
 def _safe_csv_text(value: str) -> str:

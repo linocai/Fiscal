@@ -14,9 +14,22 @@ public final class V15LedgerModel {
         public let message: String
     }
     public struct BatchCategoryResult: Sendable, Equatable {
+        public let committedIDs: [UUID]
         public let succeededIDs: [UUID]
         public let failures: [BatchCategoryFailure]
         public let queued: Bool
+
+        public init(
+            succeededIDs: [UUID],
+            committedIDs: [UUID]? = nil,
+            failures: [BatchCategoryFailure],
+            queued: Bool
+        ) {
+            self.committedIDs = committedIDs ?? succeededIDs
+            self.succeededIDs = succeededIDs
+            self.failures = failures
+            self.queued = queued
+        }
     }
 
     public var filter = V15LedgerFilter() { didSet { guard filter != oldValue else { return }; filterChanged() } }
@@ -35,6 +48,9 @@ public final class V15LedgerModel {
     public private(set) var accounts: [V15AccountResponse] = []
     public private(set) var categories: [V15CategoryResponse] = []
     public private(set) var mutation: MutationState = .idle
+    public private(set) var categoryChangePreview: V15CategoryChangePreview?
+    public private(set) var categoryChangeFailure: V15Failure?
+    public private(set) var categoryChangeIsCommitting = false
     public private(set) var mutationConflictChanges: [V15ConflictChange] = []
     public private(set) var lastAction: MutationAction?
     public private(set) var deepLinkError: String?
@@ -49,6 +65,7 @@ public final class V15LedgerModel {
     private var listGeneration: UInt64 = 0
     private var detailGeneration: UInt64 = 0
     private var mutationGeneration: UInt64 = 0
+    private var categoryChangeGeneration: UInt64 = 0
     private var referenceGeneration: UInt64 = 0
     private var lastReplacementCategoryID: UUID?
 
@@ -119,6 +136,7 @@ public final class V15LedgerModel {
 
     public func select(_ transaction: V15Transaction) async { await loadDetail(transactionID: transaction.id) }
     public func clearSelection() {
+        clearCategoryPreview()
         detailGeneration &+= 1
         mutationGeneration &+= 1
         requestedDetailID = nil
@@ -132,6 +150,7 @@ public final class V15LedgerModel {
     }
     public func retryDetail() async { guard let requestedDetailID else { return }; await loadDetail(transactionID: requestedDetailID) }
     public func loadDetail(transactionID: UUID) async {
+        if requestedDetailID != transactionID { clearCategoryPreview() }
         detailGeneration &+= 1; let current = detailGeneration
         requestedDetailID = transactionID; selected = nil; detailPhase = .loading; revisions = []; provenance = nil; selectedCycle = nil; cycleReadError = nil; mutation = .idle
         do {
@@ -236,7 +255,9 @@ public final class V15LedgerModel {
         else { await mutate(lastAction) }
     }
     public func replaceCategories(_ transactionIDs: Set<UUID>, categoryID: UUID) async -> BatchCategoryResult {
-        let targets = items.filter { transactionIDs.contains($0.id) }
+        var available = items
+        if let selected, !available.contains(where: { $0.id == selected.id }) { available.append(selected) }
+        let targets = available.filter { transactionIDs.contains($0.id) }
         var succeeded: [UUID] = []
         var failures: [BatchCategoryFailure] = []
         for transaction in targets {
@@ -288,6 +309,102 @@ public final class V15LedgerModel {
             }
         }
         return .init(succeededIDs: succeeded, failures: failures, queued: isOffline)
+    }
+
+    public func previewCategories(_ transactionIDs: Set<UUID>, categoryID: UUID) async {
+        guard !categoryChangeIsCommitting else { return }
+        categoryChangeGeneration &+= 1; let current = categoryChangeGeneration
+        categoryChangePreview = nil; categoryChangeFailure = nil
+        guard !isOffline else {
+            categoryChangeFailure = .init(kind: .offlineReadOnly, code: "preview_requires_network", message: "需要联网取得最新分类影响。")
+            return
+        }
+        var available = items
+        if let selected, !available.contains(where: { $0.id == selected.id }) { available.append(selected) }
+        let targets = available.filter { transactionIDs.contains($0.id) }
+        guard targets.count == transactionIDs.count, !targets.isEmpty else {
+            categoryChangeFailure = .init(kind: .conflict, code: "category_selection_changed", message: "所选账目已经变化，请重新选择。")
+            return
+        }
+        let request = V15BatchCategoryRequest(
+            items: targets.map { .init(transactionID: $0.id, expectedVersion: $0.version) },
+            categoryID: categoryID
+        )
+        do {
+            let value = try await services.actions.categoryPreview(request)
+            guard current == categoryChangeGeneration else { return }
+            categoryChangePreview = value
+        } catch let failure as V15Failure {
+            guard current == categoryChangeGeneration else { return }
+            categoryChangeFailure = failure.kind == .cancelled ? nil : failure
+        } catch {
+            guard current == categoryChangeGeneration else { return }
+            categoryChangeFailure = .init(kind: .transport, message: "暂时无法取得分类影响。")
+        }
+    }
+
+    public func commitPreviewedCategories() async -> BatchCategoryResult {
+        guard !categoryChangeIsCommitting, let preview = categoryChangePreview else {
+            return .init(succeededIDs: [], failures: [], queued: false)
+        }
+        categoryChangeGeneration &+= 1; let current = categoryChangeGeneration
+        let key = UUID()
+        categoryChangeIsCommitting = true
+        categoryChangeFailure = nil
+        defer {
+            if current == categoryChangeGeneration { categoryChangeIsCommitting = false }
+        }
+        do {
+            _ = try await services.actions.commitCategory(previewToken: preview.meta.previewToken, idempotencyKey: key)
+            guard current == categoryChangeGeneration else { return .init(succeededIDs: [], failures: [], queued: false) }
+            let committed = preview.items.map(\.transactionID)
+            var refreshed: [UUID] = []
+            var failures: [BatchCategoryFailure] = []
+            for item in preview.items {
+                do { let value = try await services.ledger.get(transactionID: item.transactionID, readCachePolicy: .reloadIgnoringCache); replaceInList(value); refreshed.append(value.id) }
+                catch { failures.append(.init(id: item.transactionID, title: item.title, message: "已提交，但最新账目暂时无法读取。")) }
+            }
+            categoryChangePreview = nil
+            return .init(succeededIDs: refreshed, committedIDs: committed, failures: failures, queued: false)
+        } catch let failure as V15Failure {
+            guard current == categoryChangeGeneration else { return .init(succeededIDs: [], failures: [], queued: false) }
+            if V15LedgerCreateService.outcomeMayBeUnknown(failure) {
+                return await reconcileCategoryReceipt(key: key, preview: preview, generation: current)
+            }
+            categoryChangeFailure = failure
+            if failure.kind == .conflict { categoryChangePreview = nil }
+            return .init(succeededIDs: [], failures: preview.items.map { .init(id: $0.transactionID, title: $0.title, message: failure.message) }, queued: false)
+        } catch {
+            guard current == categoryChangeGeneration else { return .init(succeededIDs: [], failures: [], queued: false) }
+            return await reconcileCategoryReceipt(key: key, preview: preview, generation: current)
+        }
+    }
+
+    private func reconcileCategoryReceipt(key: UUID, preview: V15CategoryChangePreview, generation: UInt64) async -> BatchCategoryResult {
+        do {
+            let receipt = try await services.actions.receipt(idempotencyKey: key)
+            guard generation == categoryChangeGeneration, receipt.action == .categoryChange else { return .init(succeededIDs: [], failures: [], queued: false) }
+            let committed = preview.items.map(\.transactionID)
+            var refreshed: [UUID] = []
+            var failures: [BatchCategoryFailure] = []
+            for item in preview.items {
+                if let value = try? await services.ledger.get(transactionID: item.transactionID, readCachePolicy: .reloadIgnoringCache) { replaceInList(value); refreshed.append(value.id) }
+                else { failures.append(.init(id: item.transactionID, title: item.title, message: "已提交，但最新账目暂时无法读取。")) }
+            }
+            categoryChangePreview = nil
+            return .init(succeededIDs: refreshed, committedIDs: committed, failures: failures, queued: false)
+        } catch {
+            guard generation == categoryChangeGeneration else { return .init(succeededIDs: [], failures: [], queued: false) }
+            categoryChangePreview = nil
+            let message = "结果暂时不明，请重新读取账目；不会自动重复提交。"
+            categoryChangeFailure = .init(kind: .responseUnknown, code: "response_unknown", message: message)
+            return .init(succeededIDs: [], failures: preview.items.map { .init(id: $0.transactionID, title: $0.title, message: message) }, queued: false)
+        }
+    }
+
+    public func clearCategoryPreview() {
+        guard !categoryChangeIsCommitting else { return }
+        categoryChangeGeneration &+= 1; categoryChangePreview = nil; categoryChangeFailure = nil
     }
     public func disabledReason(for action: MutationAction, transaction: V15Transaction? = nil) -> V15DisabledReason? {
         guard let transaction = transaction ?? selected else {

@@ -314,7 +314,9 @@ class CashFlowService:
             ),
         )
 
-    async def confirm(self, item_id: UUID, expected_version: int) -> CashFlowItemResponse:
+    async def confirm(
+        self, item_id: UUID, expected_version: int, *, commit: bool = True
+    ) -> CashFlowItemResponse:
         await acquire_mutation_lock(self.session)
         item = await self._required(item_id, for_update=True)
         check_version(item.version, expected_version)
@@ -324,7 +326,10 @@ class CashFlowService:
             conflict("cash_flow_cannot_confirm", "Only expected cash flow items can be confirmed")
         item.status = CashFlowStatus.CONFIRMED.value
         self._touch(item, CashFlowRevisionEvent.CONFIRMED)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
         return await self._manual_response(item, self._today())
 
     async def cancel(

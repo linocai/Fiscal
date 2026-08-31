@@ -102,11 +102,11 @@ actor V15F2BFixtureTransport: V15Transporting {
                 throw V15Failure(kind: .transport, message: "账目只读信息暂时无法读取。")
             }
             data = V15F2AFixtures.transaction
-        case let path where path.hasPrefix("reports/monthly/"):
+        case let path where path.hasPrefix("reports/v2/monthly/"):
             guard route == .rootWorkspace || route == .rootWorkspaceBoundary else {
                 throw V15Failure(kind: .transport, code: "unexpected_path", message: "F2-B fixture 不应请求：\(request.path)")
             }
-            let period = String(path.dropFirst("reports/monthly/".count))
+            let period = String(path.dropFirst("reports/v2/monthly/".count))
             guard period.range(of: "^[0-9]{4}-(0[1-9]|1[0-2])$", options: .regularExpression) != nil else {
                 throw V15Failure(kind: .decoding, code: "invalid_month_period", message: "根壳 fixture 收到无效月报 period：\(period)")
             }

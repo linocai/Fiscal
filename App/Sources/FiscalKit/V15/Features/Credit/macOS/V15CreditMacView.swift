@@ -5,7 +5,8 @@ import SwiftUI
 public struct V15CreditMacView: View {
     @State private var model: V15CreditModel
     private let initialGalleryScenario: String?
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, initialGalleryScenario: String? = nil) { _model = State(initialValue: .init(services: services, offlineSnapshotAt: offlineSnapshotAt, offlineSnapshotProvider: offlineSnapshotProvider)); self.initialGalleryScenario = initialGalleryScenario }
+    private let initialCycle: V15CreditCycle?
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, initialGalleryScenario: String? = nil, initialCycle: V15CreditCycle? = nil) { _model = State(initialValue: .init(services: services, offlineSnapshotAt: offlineSnapshotAt, offlineSnapshotProvider: offlineSnapshotProvider)); self.initialGalleryScenario = initialGalleryScenario; self.initialCycle = initialCycle }
     public var body: some View {
         HSplitView {
             accounts.frame(minWidth: 205, idealWidth: 240)
@@ -20,6 +21,10 @@ public struct V15CreditMacView: View {
     }
     private func loadInitialState() async {
         await model.load()
+        if let initialCycle, let account = model.accounts.first(where: { $0.id == initialCycle.accountID }) {
+            await model.selectAccount(account)
+            await model.selectCycle(initialCycle)
+        }
         guard let scenario = initialGalleryScenario else { return }
         if scenario == "credit-page-error" { await model.loadNextCycles(); return }
         guard ["credit-expired", "credit-disabled", "credit-conflict", "credit-field-error"].contains(scenario) else { return }

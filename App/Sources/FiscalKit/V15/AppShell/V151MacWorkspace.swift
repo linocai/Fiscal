@@ -114,6 +114,7 @@ public struct V151MacWorkspace: View {
     @State private var categoryPresented = false
     @State private var categoryID: UUID?
     @State private var categoryPreviewed = false
+    @State private var categoryCommitNotice: String?
     @State private var batchCategoryID: UUID?
     @State private var batchPreviewed = false
     @State private var batchWorking = false
@@ -125,11 +126,14 @@ public struct V151MacWorkspace: View {
     @State private var selectedAccount: V15AccountResponse?
     @State private var accountDetailPhase: AccountDetailPhase = .idle
     @State private var accountGeneration: UInt64 = 0
+    @State private var accountDetail: V15AccountDetailModel
+    @State private var futureTarget: V15FutureOpenTarget?
     @Environment(\.colorScheme) private var colorScheme
 
     public init(services: V15Services) {
         self.services = services
         _ledger = State(initialValue: V15LedgerModel(services: services))
+        _accountDetail = State(initialValue: V15AccountDetailModel(services: services))
         _facts = State(initialValue: V15TodayReadModel(services: services, offlineSnapshotProvider: { services.offlineSnapshotAt }))
     }
 
@@ -495,8 +499,8 @@ public struct V151MacWorkspace: View {
                         HStack(spacing: 12) {
                             Rectangle().fill(V15Palette.teal.color).frame(width: 3, height: 24)
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(item.explanation).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                                Text(item.suggestedAction).font(.system(size: 11)).foregroundStyle(V15Palette.ink.color.opacity(0.58)).lineLimit(1)
+                                Text(V15AttentionUserCopy.explanation(for: item)).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                                Text(V15AttentionUserCopy.suggestedAction(for: item)).font(.system(size: 11)).foregroundStyle(V15Palette.ink.color.opacity(0.58)).lineLimit(1)
                             }
                             Spacer()
                             if let amount = item.amountMinor { V15MoneyText(minorUnits: amount, direction: .neutral, includeCurrency: false, font: .system(size: 12, weight: .semibold, design: .monospaced)) }
@@ -627,8 +631,8 @@ public struct V151MacWorkspace: View {
             HStack(spacing: 12) {
                 Rectangle().fill(V15Palette.yellow.color).frame(width: 3, height: 25)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.explanation).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                    Text(item.suggestedAction).font(.system(size: 10)).foregroundStyle(V15Palette.ink.color.opacity(0.56)).lineLimit(1)
+                    Text(V15AttentionUserCopy.explanation(for: item)).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                    Text(V15AttentionUserCopy.suggestedAction(for: item)).font(.system(size: 10)).foregroundStyle(V15Palette.ink.color.opacity(0.56)).lineLimit(1)
                 }
                 Spacer()
                 if let amount = item.amountMinor { V15MoneyText(minorUnits: amount, direction: .neutral, includeCurrency: false, font: .system(size: 11, weight: .semibold, design: .monospaced)) }
@@ -678,8 +682,10 @@ public struct V151MacWorkspace: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("详情").font(.system(size: 10, weight: .medium)).foregroundStyle(V15Palette.ink.color.opacity(0.52))
-                    if selectedIDs.isEmpty { inspectorContent }
-                    else { batchInspector }
+                    if selectedIDs.isEmpty {
+                        if let batchResult { batchOutcomeInspector(batchResult) }
+                        else { inspectorContent }
+                    } else { batchInspector }
                 }
                 .padding(18)
             }
@@ -698,24 +704,38 @@ public struct V151MacWorkspace: View {
                 ForEach(ledger.categories) { category in Text(category.name).tag(Optional(category.id)) }
             }
             .pickerStyle(.menu)
-            .onChange(of: batchCategoryID) { _, _ in batchPreviewed = false; batchResult = nil }
-            if batchPreviewed, let categoryID = batchCategoryID {
-                V15ServerFactState(title: "将要修改", detail: "已选择 \(selectedIDs.count) 笔账目，目标分类为“\(ledger.categoryName(categoryID))”。确认后会逐笔处理并显示结果。")
+            .onChange(of: batchCategoryID) { _, _ in batchPreviewed = false; batchResult = nil; ledger.clearCategoryPreview() }
+            if batchPreviewed, let preview = ledger.categoryChangePreview {
+                V15ServerFactState(title: "将要修改", detail: preview.items.map { "\($0.title)：\($0.previousCategoryName ?? "未分类") → \($0.proposedCategoryName)" }.joined(separator: "\n"))
             }
             if let result = batchResult {
-                V15PartialProgressState(
-                    succeeded: result.queued ? "\(result.succeededIDs.count) 笔已加入待同步" : "\(result.succeededIDs.count) 笔已完成",
-                    currentState: result.failures.isEmpty ? "没有失败项" : result.failures.map { "\($0.title)：\($0.message)" }.joined(separator: "\n"),
-                    remaining: result.failures.isEmpty ? "无" : "\(result.failures.count) 笔仍保留选中，可修正后重试"
-                )
+                batchResultState(result)
             }
             if batchPreviewed {
                 V15ActionButton(batchWorking ? "正在提交" : "确认批量设置   ⌘↩", disabledReason: batchWorking ? .init(code: "batch_working", message: "正在提交，请稍候。", fieldPath: nil) : nil) { submitBatchCategory() }
             } else {
-                V15ActionButton("查看提交范围", disabledReason: batchCategoryID == nil ? .init(code: "category_required", message: "请先选择目标分类。", fieldPath: nil) : nil) { batchPreviewed = true }
+                V15ActionButton("查看提交范围", disabledReason: batchCategoryID == nil ? .init(code: "category_required", message: "请先选择目标分类。", fieldPath: nil) : nil) { previewBatchCategory() }
             }
+            if let failure = ledger.categoryChangeFailure { V15ServiceErrorState(message: failure.message) { previewBatchCategory() } }
             V15ActionButton("清除选择", kind: .secondary) { selectedIDs.removeAll(); batchResult = nil; batchPreviewed = false }
         }
+    }
+
+    private func batchOutcomeInspector(_ result: V15LedgerModel.BatchCategoryResult) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("批量设置分类").font(.system(size: 20, weight: .bold))
+            batchResultState(result)
+            V15ActionButton("完成", kind: .secondary) { batchResult = nil }
+        }
+    }
+
+    private func batchResultState(_ result: V15LedgerModel.BatchCategoryResult) -> some View {
+        let retryable = result.failures.filter { !result.committedIDs.contains($0.id) }
+        return V15PartialProgressState(
+            succeeded: result.queued ? "\(result.committedIDs.count) 笔已加入待同步" : "\(result.committedIDs.count) 笔已完成",
+            currentState: result.failures.isEmpty ? "最新账目已刷新" : result.failures.map { "\($0.title)：\($0.message)" }.joined(separator: "\n"),
+            remaining: retryable.isEmpty ? "无需重复提交" : "\(retryable.count) 笔尚未提交，可修正后重试"
+        )
     }
 
     @ViewBuilder private var inspectorContent: some View {
@@ -740,7 +760,7 @@ public struct V151MacWorkspace: View {
     }
 
     @ViewBuilder private var accountInspectorContent: some View {
-        switch accountDetailPhase {
+        switch accountDetail.phase {
         case .idle, .loading:
             V15LoadingSkeleton(layout: .inspector)
         case .failed(let failure):
@@ -748,7 +768,7 @@ public struct V151MacWorkspace: View {
                 if let id = selectedAccountID { Task { await loadAccount(id) } }
             }
         case .loaded:
-            if let account = selectedAccount {
+            if let account = accountDetail.account {
                 accountInspector(account)
             } else {
                 V15EmptyState(title: "无法显示账户", explanation: "暂时没有取得这个账户的数据。")
@@ -788,6 +808,22 @@ public struct V151MacWorkspace: View {
                 V15ArchiveReadOnlyState {
                     Text("该账户已归档，只能查看。恢复或编辑请进入设置。")
                         .font(V15Typography.secondary)
+                }
+            }
+            inspectorSection("核对历史") {
+                VStack(alignment: .leading, spacing: 8) {
+                    if accountDetail.checkpoints.isEmpty {
+                        Text("还没有核对记录。完成一次余额核对后会显示在这里。")
+                            .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                    } else {
+                        ForEach(accountDetail.checkpoints) { checkpoint in
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack { Text(Self.accountCheckpointDate(checkpoint.asOf)); Spacer(); V15MoneyText(minorUnits: checkpoint.differenceMinor, direction: .neutral, includeCurrency: false, font: V15Typography.secondary.monospacedDigit()) }
+                                Text(checkpoint.state == .reconciled ? "已核对" : "有差额待处理").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.60))
+                            }
+                        }
+                    }
+                    V15ActionButton("进入余额核对", kind: .secondary) { destination = .reconciliation }
                 }
             }
             inspectorSection("快捷入口") {
@@ -918,20 +954,37 @@ public struct V151MacWorkspace: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("设置分类").font(.system(size: 22, weight: .bold))
             Text(selectedTransaction?.title ?? "账目").font(.system(size: 13)).foregroundStyle(V15Palette.ink.color.opacity(0.60))
-            Picker("分类", selection: $categoryID) {
-                Text("未分类").tag(Optional<UUID>.none)
-                ForEach(ledger.categories) { category in Text(category.name).tag(Optional(category.id)) }
-            }.pickerStyle(.menu).onChange(of: categoryID) { _, _ in categoryPreviewed = false }
-            if categoryPreviewed {
-                V15ServerFactState(detail: "已取得这笔账目的最新内容。确认后会直接修改分类。")
-            }
-            HStack {
-                V15ActionButton("取消", kind: .secondary) { categoryPresented = false }
-                if categoryPreviewed {
-                    V15ActionButton("确认分类   ⌘↩") { commitCategory() }
-                } else {
-                    V15ActionButton("取最新账目", disabledReason: ledger.isOffline ? .init(code: "category_read_requires_network", message: "需要联网取得最新账目。", fieldPath: nil) : nil) { readCategoryCurrentFact() }
+            if let categoryCommitNotice {
+                V15ServerFactState(title: "分类已保存", detail: categoryCommitNotice)
+                V15ActionButton("完成", kind: .secondary) { categoryPresented = false; self.categoryCommitNotice = nil }
+            } else {
+                Picker("分类", selection: $categoryID) {
+                    Text("未分类").tag(Optional<UUID>.none)
+                    ForEach(ledger.categories) { category in Text(category.name).tag(Optional(category.id)) }
+                }.pickerStyle(.menu).disabled(ledger.categoryChangeIsCommitting).onChange(of: categoryID) { _, _ in categoryPreviewed = false; ledger.clearCategoryPreview() }
+                if categoryPreviewed, let preview = ledger.categoryChangePreview {
+                    V15ServerFactState(detail: preview.items.map { "\($0.previousCategoryName ?? "未分类") → \($0.proposedCategoryName)" }.joined(separator: "\n"))
                 }
+                HStack {
+                    V15ActionButton(
+                        "取消",
+                        kind: .secondary,
+                        disabledReason: ledger.categoryChangeIsCommitting
+                            ? .init(code: "category_commit_in_flight", message: "正在提交分类，请稍候。", fieldPath: nil)
+                            : nil
+                    ) { categoryPresented = false }
+                    if categoryPreviewed {
+                        V15ActionButton(
+                            ledger.categoryChangeIsCommitting ? "正在提交" : "确认分类   ⌘↩",
+                            disabledReason: ledger.categoryChangeIsCommitting
+                                ? .init(code: "category_commit_in_flight", message: "正在提交分类，请稍候。", fieldPath: nil)
+                                : nil
+                        ) { commitCategory() }
+                    } else {
+                        V15ActionButton("查看分类影响", disabledReason: categoryID == nil ? .init(code: "category_required", message: "请先选择分类。", fieldPath: nil) : (ledger.isOffline ? .init(code: "category_read_requires_network", message: "需要联网取得最新账目。", fieldPath: nil) : nil)) { readCategoryCurrentFact() }
+                    }
+                }
+                if let failure = ledger.categoryChangeFailure { V15ServiceErrorState(message: failure.message) { readCategoryCurrentFact() } }
             }
         }
         .padding(24).frame(width: 420)
@@ -940,7 +993,7 @@ public struct V151MacWorkspace: View {
     private var takeover: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Button { destination = .ledger } label: { Label("返回账目", systemImage: "chevron.left") }.buttonStyle(.plain)
+                Button { futureTarget = nil; destination = .ledger } label: { Label("返回账目", systemImage: "chevron.left") }.buttonStyle(.plain)
                 Text("Fiscal / \(destination.title)").font(.system(size: 14, weight: .semibold))
                 Spacer()
             }
@@ -954,17 +1007,32 @@ public struct V151MacWorkspace: View {
         switch destination {
         case .ledger: EmptyView()
         case .record: V15RecordView(services: services, onCommitted: recordCommitted)
-        case .future: V15FutureTimelineMacView(services: services)
-        case .credit: V15CreditMacView(services: services)
+        case .future: V15FutureTimelineMacView(services: services, onOpen: openVerifiedFutureTarget)
+        case .credit:
+            if case .creditCycle(let cycle) = futureTarget { V15CreditMacView(services: services, initialCycle: cycle) }
+            else { V15CreditMacView(services: services) }
         case .installments: V15InstallmentMacView(services: services)
-        case .reimbursements: V15ReimbursementMacView(services: services)
-        case .cashFlow: V15CashFlowMacView(services: services)
+        case .reimbursements:
+            if case .reimbursementParty(let claim, let partyID) = futureTarget { V15ReimbursementMacView(services: services, initialClaim: claim, initialPartyID: partyID) }
+            else { V15ReimbursementMacView(services: services) }
+        case .cashFlow:
+            if case .cashFlowItem(let item) = futureTarget { V15CashFlowMacView(services: services, initialItem: item) }
+            else { V15CashFlowMacView(services: services) }
         case .reconciliation: V15ReconciliationMacView(services: services)
         case .proposals: V15AIProposalMacView(services: services)
         case .statementImport: V15StatementImportMacView(services: services)
         case .reports: V15ReportingMacView(services: services)
         case .archive: V15DataSecurityMacView(services: services)
         case .settings: V15SettingsView(services: services)
+        }
+    }
+
+    private func openVerifiedFutureTarget(_ target: V15FutureOpenTarget) {
+        futureTarget = target
+        switch target {
+        case .creditCycle: destination = .credit
+        case .reimbursementParty: destination = .reimbursements
+        case .cashFlowItem: destination = .cashFlow
         }
     }
 
@@ -1120,26 +1188,10 @@ public struct V151MacWorkspace: View {
     }
 
     @MainActor private func loadAccount(_ id: UUID) async {
-        accountGeneration &+= 1
-        let current = accountGeneration
         selectedAccountID = id
-        selectedAccount = nil
-        accountDetailPhase = .loading
-        do {
-            let account = try await services.masterData.account(id: id)
-            guard current == accountGeneration, selectedAccountID == id else { return }
-            selectedAccount = account
-            accountDetailPhase = .loaded
-        } catch let failure as V15Failure {
-            guard current == accountGeneration, selectedAccountID == id else { return }
-            accountDetailPhase = failure.kind == .cancelled ? .idle : .failed(failure)
-        } catch is CancellationError {
-            guard current == accountGeneration, selectedAccountID == id else { return }
-            accountDetailPhase = .idle
-        } catch {
-            guard current == accountGeneration, selectedAccountID == id else { return }
-            accountDetailPhase = .failed(.init(kind: .transport, message: "暂时无法取得账户信息。"))
-        }
+        await accountDetail.load(accountID: id, fresh: true)
+        selectedAccount = accountDetail.account
+        switch accountDetail.phase { case .idle: accountDetailPhase = .idle; case .loading: accountDetailPhase = .loading; case .loaded: accountDetailPhase = .loaded; case .failed(let failure): accountDetailPhase = .failed(failure) }
     }
 
     private func clearAccountSelection() {
@@ -1147,6 +1199,11 @@ public struct V151MacWorkspace: View {
         selectedAccountID = nil
         selectedAccount = nil
         accountDetailPhase = .idle
+        accountDetail.clear()
+    }
+
+    private static func accountCheckpointDate(_ date: Date) -> String {
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "zh_CN"); formatter.timeZone = ShanghaiBusinessDate.timeZone; formatter.dateFormat = "yyyy年M月d日 HH:mm"; return formatter.string(from: date)
     }
 
     private func toggleBatchSelection(_ id: UUID) {
@@ -1166,33 +1223,51 @@ public struct V151MacWorkspace: View {
         guard let transaction = selectedTransaction else { return }
         categoryID = transaction.categoryID
         categoryPreviewed = false
+        categoryCommitNotice = nil
         categoryPresented = true
     }
 
     private func commitCategory() {
-        categoryPresented = false
-        categoryPreviewed = false
-        Task { await ledger.replaceSelectedCategory(categoryID) }
+        Task {
+            let result = await ledger.commitPreviewedCategories()
+            if let id = selectedTransaction?.id, result.committedIDs.contains(id) {
+                categoryPreviewed = false
+                if let warning = result.failures.first(where: { $0.id == id }) {
+                    categoryCommitNotice = warning.message
+                } else {
+                    categoryPresented = false
+                }
+            }
+        }
     }
 
     private func readCategoryCurrentFact() {
-        guard let id = selectedTransaction?.id else { return }
+        guard let id = selectedTransaction?.id, let categoryID else { return }
         Task {
             await ledger.loadDetail(transactionID: id)
             guard case .loaded = ledger.detailPhase else { return }
-            categoryPreviewed = true
+            await ledger.previewCategories([id], categoryID: categoryID)
+            categoryPreviewed = ledger.categoryChangePreview != nil
+        }
+    }
+
+    private func previewBatchCategory() {
+        guard let categoryID = batchCategoryID else { return }
+        Task {
+            await ledger.previewCategories(selectedIDs, categoryID: categoryID)
+            batchPreviewed = ledger.categoryChangePreview != nil
         }
     }
 
     private func submitBatchCategory() {
-        guard let categoryID = batchCategoryID, !batchWorking else { return }
+        guard batchCategoryID != nil, !batchWorking else { return }
         batchWorking = true
         Task {
-            let result = await ledger.replaceCategories(selectedIDs, categoryID: categoryID)
+            let result = await ledger.commitPreviewedCategories()
             batchResult = result
-            selectedIDs.subtract(result.succeededIDs)
+            selectedIDs.subtract(result.committedIDs)
             batchWorking = false
-            batchPreviewed = !selectedIDs.isEmpty
+            batchPreviewed = !selectedIDs.isEmpty && ledger.categoryChangePreview != nil
         }
     }
 

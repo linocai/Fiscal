@@ -4,8 +4,9 @@ import SwiftUI
 public struct V15CashFlowView: View {
     @State private var model: V15CashFlowModel
     @State private var showsHistory = false
+    private let initialItem: V15CashFlowItem?
 
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil) { _model = State(initialValue: V15CashFlowModel(services: services, offlineSnapshotAt: offlineSnapshotAt)) }
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialItem: V15CashFlowItem? = nil) { _model = State(initialValue: V15CashFlowModel(services: services, offlineSnapshotAt: offlineSnapshotAt)); self.initialItem = initialItem }
 
     public var body: some View {
         NavigationStack {
@@ -13,7 +14,10 @@ public struct V15CashFlowView: View {
                 VStack(alignment: .leading, spacing: V15Spacing.lg) {
                     header
                     if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot).accessibilityIdentifier("v15.f3d.offline") }
-                    Picker("现金流视图", selection: Binding(get: { showsHistory }, set: { value in showsHistory = value; Task { await model.setVisibleList(value ? .history : .active) } })) { Text("未来事项").tag(false); Text("历史").tag(true) }.pickerStyle(.segmented).accessibilityIdentifier("v15.f3d.scope")
+                    Picker("现金流视图", selection: Binding(get: { showsHistory }, set: { value in showsHistory = value; Task { await model.setVisibleList(value ? .history : .active) } })) { Text("未来事项").tag(false); Text("历史").tag(true) }
+                        .pickerStyle(.segmented)
+                        .disabled(model.selectionLocked)
+                        .accessibilityIdentifier("v15.f3d.scope")
                     if showsHistory { historySurface } else { activeSurface }
                     if let item = model.selectedItem { detail(item) }
                     mutationBanner
@@ -25,14 +29,15 @@ public struct V15CashFlowView: View {
             .navigationTitle("现金流")
             .toolbar { ToolbarItem(placement: .primaryAction) { Button { Task { await model.refresh() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityLabel("刷新现金流数据").accessibilityIdentifier("v15.f3d.refresh") } }
         }
-        .task { if model.phase == .idle { await model.load() } }
+        .task { if model.phase == .idle { await model.load() }; if let initialItem { model.showVerifiedItem(initialItem) } }
         .sheet(isPresented: Binding(get: { model.editorMode != .none }, set: { if !$0 { model.dismissEditor() } })) { editorSheet }
         .accessibilityIdentifier("v15.f3d.cash-flow.ios")
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
-            Text("计划、确认、兑现，逐笔看清").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
+            Text("逐笔看清计划与实际").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
+                .fixedSize(horizontal: false, vertical: true)
             Text("集中查看未来收支、已完成记录，以及报销和信用账单安排。")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
             if let summary = model.active?.summary {
@@ -47,7 +52,8 @@ public struct V15CashFlowView: View {
                 Text("全部账户").tag(UUID?.none)
                 ForEach(model.accounts) { account in Text(account.name).tag(UUID?.some(account.id)) }
             }
-            V15ActionButton("新建现金流", symbol: "plus", disabledReasons: model.writeLocked || model.isOffline ? model.createReasons : []) { model.openCreate() }.accessibilityIdentifier("v15.f3d.create.open")
+            .disabled(model.selectionLocked)
+            V15ActionButton("新建现金流", symbol: "plus", disabledReasons: model.openCreateReasons) { model.openCreate() }.accessibilityIdentifier("v15.f3d.create.open")
         }
     }
 
@@ -71,7 +77,9 @@ public struct V15CashFlowView: View {
 
     @ViewBuilder private var historySurface: some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
-            V15Field("历史月份", text: Binding(get: { model.historyMonth }, set: { value in Task { await model.setHistoryMonth(value) } }), prompt: "YYYY-MM").accessibilityIdentifier("v15.f3d.history.month")
+            V15Field("历史月份", text: Binding(get: { model.historyMonth }, set: { value in Task { await model.setHistoryMonth(value) } }), prompt: "YYYY-MM")
+                .disabled(model.selectionLocked)
+                .accessibilityIdentifier("v15.f3d.history.month")
             switch model.historyPhase {
             case .idle, .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3d.history.loading")
             case .empty: V15EmptyState(title: "本月没有现金流历史", explanation: "已入账、取消或完成的事项会显示在这里。", actionTitle: "重试") { Task { await model.setHistoryMonth(model.historyMonth) } }.accessibilityIdentifier("v15.f3d.history.empty")
@@ -86,6 +94,7 @@ public struct V15CashFlowView: View {
             VStack(spacing: 0) {
                 ForEach(items) { item in
                     V15LedgerRow(title: item.title, detail: "\(item.expectedDate) · \(item.status.displayName) · \(sourceLabel(item))", amountMinor: item.plannedAmountMinor, direction: moneyDirection(item), marker: item.isDisplayOnly ? .provisional : item.status == .expected ? .provisional : .decision) { Task { await model.selectItem(item, from: list) } }
+                        .disabled(model.selectionLocked)
                         .accessibilityIdentifier("v15.f3d.item.\(item.id)")
                     Divider()
                 }
@@ -118,13 +127,20 @@ public struct V15CashFlowView: View {
                 V15ActionButton("修改显示信息", kind: .secondary, disabledReasons: systemOpenReasons(item)) { model.openEdit(item) }.accessibilityIdentifier("v15.f3d.system.edit.open")
             } else {
                 HStack(alignment: .top, spacing: V15Spacing.sm) {
-                    V15ActionButton("确认", kind: .secondary, disabledReasons: model.actionReasons(.confirm, for: item)) { Task { await model.perform(.confirm, on: item) } }.accessibilityIdentifier("v15.f3d.confirm")
+                    if let preview = model.confirmPreview, preview.itemBefore.id == item.id {
+                        V15ActionButton(model.confirmCommitIsInFlight ? "正在提交" : "确认本次", kind: .secondary, disabledReasons: model.actionReasons(.confirm, for: item)) { Task { await model.commitConfirmPreview() } }.accessibilityIdentifier("v15.f3d.confirm.commit")
+                    } else {
+                        V15ActionButton("查看确认影响", kind: .secondary, disabledReasons: model.actionReasons(.confirm, for: item)) { Task { await model.previewConfirm(item) } }.accessibilityIdentifier("v15.f3d.confirm.preview")
+                    }
                     V15ActionButton("入账", disabledReasons: settleOpenReasons(item)) { model.openSettle(item) }.accessibilityIdentifier("v15.f3d.settle.open")
                 }
                 HStack(alignment: .top, spacing: V15Spacing.sm) {
                     V15ActionButton("修改", kind: .quiet, disabledReasons: editOpenReasons(item)) { model.openEdit(item) }.accessibilityIdentifier("v15.f3d.edit.open")
                     V15ActionButton("取消", kind: .destructive, disabledReasons: model.actionReasons(.cancel, for: item)) { Task { await model.perform(.cancel, on: item) } }.accessibilityIdentifier("v15.f3d.cancel")
                 }
+            }
+            if let preview = model.confirmPreview, preview.itemBefore.id == item.id {
+                V15ServerFactState(title: "确认影响", detail: "\(preview.itemBefore.title)：\(preview.itemBefore.status.displayName) → 已确认。不会创建入账交易。")
             }
             ForEach(item.creditCycleParts) { part in Text("账期 \(part.periodStart)–\(part.periodEnd) · \(money(part.remainingMinor))").font(V15Typography.secondary) }
         }
@@ -174,13 +190,8 @@ public struct V15CashFlowView: View {
 
     private var manualEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            if case .create = model.editorMode {
-                V15FieldIssues(issues: model.createReasons.map { .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath) })
-            } else {
-                V15FieldIssues(issues: model.updateReasons.map { .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath) })
-            }
-            V15Field("标题", text: $model.title, issues: issues(model.editorIssues, "title")).accessibilityIdentifier("v15.f3d.editor.title")
-            V15Field("计划金额（元）", text: $model.amountText, prompt: "0.00", issues: issues(model.editorIssues, "planned_amount_minor")).accessibilityIdentifier("v15.f3d.editor.amount")
+            V15Field("标题", text: $model.title, issues: visibleEditorIssues("title")).accessibilityIdentifier("v15.f3d.editor.title")
+            V15Field("计划金额（元）", text: $model.amountText, prompt: "0.00", issues: visibleEditorIssues("planned_amount_minor")).accessibilityIdentifier("v15.f3d.editor.amount")
             Picker("方向", selection: $model.direction) { ForEach([V15CashFlowDirection.inflow, .outflow, .transfer]) { Text($0.displayName).tag($0) } }.pickerStyle(.segmented).accessibilityIdentifier("v15.f3d.editor.direction")
             V15Field("预计日期", text: $model.expectedDateText, prompt: "YYYY-MM-DD", issues: issues(model.editorIssues, "expected_date")).accessibilityIdentifier("v15.f3d.editor.date")
             accountPickers(source: $model.selectedAccountID, destination: $model.selectedDestinationAccountID, transfer: model.direction == .transfer)
@@ -264,6 +275,11 @@ public struct V15CashFlowView: View {
     }
     private func categoryPicker(selection: Binding<UUID?>, categories: [V15CategoryResponse]) -> some View { V15PickerRow("分类", selection: selection) { Text("未分类").tag(UUID?.none); ForEach(categories) { Text($0.name).tag(UUID?.some($0.id)) } } }
     private func issues(_ values: [V15FieldIssue], _ path: String) -> [V15FieldIssue] { values.filter { $0.fieldPath == path || $0.fieldPath?.hasPrefix(path + ".") == true } }
+    private func visibleEditorIssues(_ path: String) -> [V15FieldIssue] {
+        if path == "title", model.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return [] }
+        if path == "planned_amount_minor", model.amountText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return [] }
+        return issues(model.editorIssues, path)
+    }
     private func sourceLabel(_ item: V15CashFlowItem) -> String { item.isSystem ? "自动生成" : item.source == "manual" ? "手工" : "其他" }
     private func moneyDirection(_ item: V15CashFlowItem) -> V15MoneyDirection { item.direction == .inflow ? .inflow : item.direction == .outflow ? .outflow : .neutral }
     private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral, includeCurrency: true).text }

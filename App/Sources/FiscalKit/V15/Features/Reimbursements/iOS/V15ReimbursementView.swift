@@ -4,6 +4,8 @@ import SwiftUI
 public struct V15ReimbursementView: View {
     @State private var model: V15ReimbursementModel
     @State private var operationSheet: OperationSheet?
+    private let initialClaim: V15ReimbursementClaim?
+    private let initialPartyID: UUID?
 
     private enum OperationSheet: Identifiable {
         case claimReplacement, cancellation, claimActions, receiptReplacement(UUID), receiptActions(UUID)
@@ -18,8 +20,10 @@ public struct V15ReimbursementView: View {
         }
     }
 
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil) {
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialClaim: V15ReimbursementClaim? = nil, initialPartyID: UUID? = nil) {
         _model = State(initialValue: V15ReimbursementModel(services: services, offlineSnapshotAt: offlineSnapshotAt))
+        self.initialClaim = initialClaim
+        self.initialPartyID = initialPartyID
     }
 
     public var body: some View {
@@ -38,7 +42,10 @@ public struct V15ReimbursementView: View {
             .navigationTitle("报销")
             .toolbar { ToolbarItem(placement: .primaryAction) { Button { Task { await model.refresh() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityLabel("刷新报销数据").accessibilityIdentifier("v15.f3c.refresh") } }
         }
-        .task { if model.phase == .idle { await model.load() } }
+        .task {
+            if model.phase == .idle { await model.load() }
+            if let initialClaim { await model.selectClaim(initialClaim, readCachePolicy: .reloadIgnoringCache) }
+        }
         .sheet(isPresented: Binding(get: { model.newClaimSheetVisible }, set: { if !$0 { model.dismissNewClaim() } })) { newClaimSheet }
         .sheet(isPresented: Binding(get: { model.receiptSheetVisible }, set: { if !$0 { model.dismissReceipt() } })) { receiptSheet }
         .sheet(item: $operationSheet) { sheet in operationSheetView(sheet) }
@@ -64,6 +71,7 @@ public struct V15ReimbursementView: View {
                 VStack(spacing: 0) {
                     ForEach(model.claims, id: \.id) { claim in
                         V15LedgerRow(title: claim.title, detail: "\(claim.status.displayName) · \(claim.partyCount) 位当事人", amountMinor: claim.outstandingMinor, direction: .inflow, marker: claim.status.isKnown ? .decision : .provisional) { Task { await model.selectClaim(claim) } }
+                            .background(model.selectedClaim?.id == claim.id ? V15Palette.selected.color : .clear)
                             .accessibilityIdentifier("v15.f3c.claim.\(claim.id)")
                         Divider()
                     }
@@ -100,6 +108,8 @@ public struct V15ReimbursementView: View {
                 if claim.archivedAt != nil { V15ArchiveReadOnlyState { Text("历史与到账记录已保留；恢复后才可继续操作。").font(V15Typography.secondary) } }
                 ForEach(claim.parties, id: \.id) { party in
                     V15PartialProgressState(succeeded: "\(party.name) 已到账 \(money(party.receivedMinor))", currentState: party.status, remaining: money(party.outstandingMinor))
+                        .padding(initialPartyID == party.id ? V15Spacing.xxs : 0)
+                        .background(initialPartyID == party.id ? V15Palette.selected.color : .clear, in: RoundedRectangle(cornerRadius: V15Radius.control))
                         .accessibilityIdentifier("v15.f3c.party.\(party.id)")
                 }
                 V15ActionButton("登记到账", symbol: "arrow.down.circle", disabledReasons: model.receiptOpenReasons(for: claim)) { Task { await model.openReceipt() } }

@@ -175,7 +175,7 @@ private struct V15TodayAttentionRow: View {
         }
         .buttonStyle(.plain)
         .v15PlatformHitArea()
-        .v15ActionAccessibility(label: "\(presentation.label)：\(item.explanation)", hint: "打开只读说明。\(item.suggestedAction)")
+        .v15ActionAccessibility(label: "\(presentation.label)：\(V15AttentionUserCopy.explanation(for: item))", hint: "打开只读说明。\(V15AttentionUserCopy.suggestedAction(for: item))")
     }
 
     /// The visual glyph is intentionally fixed-size inside a 44pt badge. It
@@ -202,8 +202,8 @@ private struct V15TodayAttentionRow: View {
             if !dynamicTypeSize.isAccessibilitySize {
                 Text(presentation.label).font(V15Typography.label).foregroundStyle(presentation.color)
             }
-            Text(item.explanation).font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.ink.color).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-            Text(item.suggestedAction).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+            Text(V15AttentionUserCopy.explanation(for: item)).font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.ink.color).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+            Text(V15AttentionUserCopy.suggestedAction(for: item)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
             if let date = item.occurredAt { Text("发生于 \(V15TodayReadModel.shanghaiDateLabel(date))").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.60)) }
         }
         .layoutPriority(1)

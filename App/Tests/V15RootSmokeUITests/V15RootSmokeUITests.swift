@@ -116,6 +116,14 @@ final class V15RootSmokeUITests: XCTestCase {
             XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.today").firstMatch.isHittable, testCase.name)
             XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.ledger").firstMatch.isHittable, testCase.name)
             XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.record").firstMatch.isHittable, testCase.name)
+            if testCase.name.hasSuffix("ax5") {
+                let future = app.buttons["v151.ios.today.known-future.item.0"]
+                XCTAssertTrue(future.waitForExistence(timeout: 6), testCase.name)
+                let today = app.descendants(matching: .any)["v151.ios.today"]
+                for _ in 0..<12 where !future.isHittable { today.swipeUp() }
+                XCTAssertTrue(future.isHittable, "AX5 content below the first screen must remain reachable")
+                XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.today").firstMatch.isHittable, testCase.name)
+            }
             let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
             attachment.name = testCase.name
             attachment.lifetime = .keepAlways

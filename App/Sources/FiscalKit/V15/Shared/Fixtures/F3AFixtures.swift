@@ -27,6 +27,17 @@ public enum V15F3AFixtures {
     [{"source_type":"cash_flow_item","source_id":"00000000-0000-0000-0000-00000000F306","date":"2026-08-30","direction":"outflow","amount_minor":1200,"certainty":"scheduled","title":"第二页事项","deep_link":"fiscal://cash-flow/items/00000000-0000-0000-0000-00000000F306","account_id":null,"claim_id":null,"party_id":null,"cycle_id":null}]
     """
     static let emptyItemsJSON = "[]"
+    static func creditCycle(accountID: UUID = accountID) -> Data {
+        Data("""
+        {"id":"\(creditID)","account_id":"\(accountID)","period_start":"2026-07-21","period_end":"2026-08-20","statement_date":"2026-08-20","due_date":"2026-09-05","is_opening_cycle":false,"purchase_minor":3000,"opening_minor":0,"amount_due_minor":3000,"repaid_minor":0,"remaining_minor":3000,"status":"unpaid","is_overdue":false,"version":2,"created_at":"2026-08-01T00:00:00Z","updated_at":"2026-08-15T00:00:00Z","installment_principal_minor":0,"installment_fee_minor":0,"installment_periods":[]}
+        """.utf8)
+    }
+    static let claim = Data("""
+    {"id":"\(claimID)","title":"未来报销","note":null,"status":"pending","total_claimed_minor":123456,"received_minor":0,"outstanding_minor":123456,"expense_count":0,"party_count":1,"receipt_count":0,"parties":[{"id":"\(partyID)","name":"示例公司","expected_date":"2026-08-22","note":null,"claimed_minor":123456,"received_minor":0,"outstanding_minor":123456,"status":"pending","position":0,"allocations":[]}],"latest_receipt":null,"version":2,"submitted_at":"2026-08-10T00:00:00Z","cancelled_at":null,"voided_at":null,"archived_at":null,"created_at":"2026-08-01T00:00:00Z","updated_at":"2026-08-15T00:00:00Z"}
+    """.utf8)
+    static let cashFlowItem = Data("""
+    {"id":"\(cashID)","manual_item_id":"\(cashID)","system_kind":null,"system_reference_id":null,"series_id":null,"title":"预计订阅扣款","note":null,"direction":"outflow","planned_amount_minor":4500,"expected_date":"2026-08-25","account_id":null,"destination_account_id":null,"category_id":null,"status":"expected","source":"manual","version":1,"linked_transaction_id":null,"actual_amount_minor":null,"actual_date":null,"is_overdue":false,"actions":["confirm"],"credit_cycle_parts":[],"created_at":"2026-08-01T00:00:00Z","updated_at":"2026-08-15T00:00:00Z"}
+    """.utf8)
     static let accountsJSON = """
     [
       {"id":"\(accountID.uuidString)","name":"日常现金","kind":"cash","institution":null,"last_four":null,"opening_balance_minor":0,"current_balance_minor":100000,"credit_limit_minor":null,"statement_day":null,"due_day":null,"cycle_mode":null,"opening_balance_as_of_date":null,"opening_due_date":null,"sort_order":1,"archived_at":null,"usage_count":3,"version":2,"created_at":"2026-08-01T00:00:00Z","updated_at":"2026-08-15T00:00:00Z"},
@@ -36,7 +47,7 @@ public enum V15F3AFixtures {
 }
 
 actor F3ATransport: V15Transporting {
-    enum Mode: Equatable { case normal, empty, pageFailure, conflictThenFresh, refreshRace, firstFailure, accountFailure, accountRace
+    enum Mode: Equatable { case normal, empty, pageFailure, conflictThenFresh, refreshRace, firstFailure, accountFailure, accountRace, ownerMismatch, openRace
         static func route(_ value: String) -> Mode { switch value { case "timeline-empty": .empty; case "timeline-page-error": .pageFailure; case "timeline-conflict": .conflictThenFresh; case "timeline-race": .refreshRace; case "timeline-error": .firstFailure; case "timeline-account-error": .accountFailure; case "timeline-account-race": .accountRace; default: .normal } }
     }
     let mode: Mode; private var requests: [V15Request] = []; private var futureEventReads = 0; private var accountReads = 0
@@ -49,6 +60,17 @@ actor F3ATransport: V15Transporting {
             if mode == .accountFailure { throw V15Failure(kind: .transport, message: "可筛选账户读取失败。") }
             if mode == .accountRace, accountReads == 1 { try await Task.sleep(for: .milliseconds(120)) }
             return try V15FixtureCodec.decoder.decode(Response.self, from: Data(V15F3AFixtures.accountsJSON.utf8))
+        }
+        if request.path == "credit-cycles/\(V15F3AFixtures.creditID)", request.method == "GET" {
+            if mode == .openRace { try await Task.sleep(for: .milliseconds(120)) }
+            let accountID = mode == .ownerMismatch ? V15F3AFixtures.emptyAccountID : V15F3AFixtures.accountID
+            return try V15FixtureCodec.decoder.decode(Response.self, from: V15F3AFixtures.creditCycle(accountID: accountID))
+        }
+        if request.path == "reimbursement-claims/\(V15F3AFixtures.claimID)", request.method == "GET" {
+            return try V15FixtureCodec.decoder.decode(Response.self, from: V15F3AFixtures.claim)
+        }
+        if request.path == "cash-flow-items/\(V15F3AFixtures.cashID)", request.method == "GET" {
+            return try V15FixtureCodec.decoder.decode(Response.self, from: V15F3AFixtures.cashFlowItem)
         }
         guard request.path == "reports/future-events", request.method == "GET" else { throw V15Failure(kind: .transport, message: "F3-A fixture only supports future-events and active-account reads.") }
         futureEventReads += 1

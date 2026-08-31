@@ -143,6 +143,53 @@ struct F1BTests {
         }
     }
 
+    @Test("category confirmation accepts only one in-flight commit")
+    @MainActor func categoryConfirmationIsSingleFlight() async throws {
+        let transport = F1BCategoryCommitTransport()
+        let model = V15LedgerModel(services: V15Services(transport: transport))
+        await model.loadDetail(transactionID: V15F1BFixtures.transactionID)
+
+        let targetCategoryID = UUID(uuidString: "00000000-0000-0000-0000-00000000B501")!
+        await model.previewCategories([V15F1BFixtures.transactionID], categoryID: targetCategoryID)
+        #expect(model.categoryChangePreview?.changedCount == 1)
+
+        let first = Task { @MainActor in await model.commitPreviewedCategories() }
+        while await transport.commitCount() == 0 { await Task.yield() }
+        #expect(model.categoryChangeIsCommitting)
+        let duplicate = await model.commitPreviewedCategories()
+        let accepted = await first.value
+
+        #expect(duplicate.succeededIDs.isEmpty && duplicate.failures.isEmpty)
+        #expect(accepted.succeededIDs == [V15F1BFixtures.transactionID])
+        #expect(accepted.committedIDs == [V15F1BFixtures.transactionID])
+        #expect(await transport.commitCount() == 1)
+        #expect((await transport.idempotencyKeys()).count == 1)
+        #expect(!model.categoryChangeIsCommitting)
+    }
+
+    @Test("category commit remains successful when post-commit refresh fails")
+    @MainActor func categoryCommitSeparatesWriteFromRefresh() async throws {
+        let transport = F1BCategoryCommitTransport(failRefreshAfterCommit: true)
+        let model = V15LedgerModel(services: V15Services(transport: transport))
+        await model.loadDetail(transactionID: V15F1BFixtures.transactionID)
+
+        let targetCategoryID = UUID(uuidString: "00000000-0000-0000-0000-00000000B501")!
+        await model.previewCategories([V15F1BFixtures.transactionID], categoryID: targetCategoryID)
+        let result = await model.commitPreviewedCategories()
+
+        #expect(result.committedIDs == [V15F1BFixtures.transactionID])
+        #expect(result.succeededIDs.isEmpty)
+        #expect(result.failures == [
+            .init(
+                id: V15F1BFixtures.transactionID,
+                title: "待修改分类",
+                message: "已提交，但最新账目暂时无法读取。"
+            )
+        ])
+        #expect(model.categoryChangePreview == nil)
+        #expect(await transport.commitCount() == 1)
+    }
+
     @Test("account-scoped repayment uses the selected posting and explains both accounts")
     func accountScopedRepaymentPresentation() {
         let sourceID = UUID()
@@ -305,6 +352,50 @@ actor F1BMutationTransport: V15Transporting {
     func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data { Data() }
     func reset() { seen = [] }
     func paths() -> [String] { seen }
+}
+
+actor F1BCategoryCommitTransport: V15Transporting {
+    private let previewID = UUID(uuidString: "00000000-0000-0000-0000-00000000B502")!
+    private let failRefreshAfterCommit: Bool
+    private var commitRequests = 0
+    private var keys: [String] = []
+
+    init(failRefreshAfterCommit: Bool = false) {
+        self.failRefreshAfterCommit = failRefreshAfterCommit
+    }
+
+    func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
+        let data: Data
+        switch (request.path, request.method) {
+        case ("transactions/\(V15F1BFixtures.transactionID)", "GET"):
+            if failRefreshAfterCommit, commitRequests > 0 {
+                throw V15Failure(kind: .transport, code: "refresh_failed", message: "暂时无法读取最新账目。")
+            }
+            data = V15F1BFixtures.detail
+        case ("transactions/\(V15F1BFixtures.transactionID)/revisions", "GET"):
+            data = V15F1BFixtures.revisions
+        case ("transactions/\(V15F1BFixtures.transactionID)/provenance", "GET"):
+            data = V15F1BFixtures.provenance
+        case ("transactions/category-preview", "POST"):
+            data = Data("""
+            {"meta":{"preview_token":"\(previewID)","action":"category_change","data_revision":33,"expires_at":"2026-08-30T14:00:00Z"},"items":[{"transaction_id":"\(V15F1BFixtures.transactionID)","title":"待修改分类","expected_version":2,"previous_category_id":"\(V15F1BFixtures.categoryID)","previous_category_name":"餐饮","proposed_category_id":"00000000-0000-0000-0000-00000000B501","proposed_category_name":"日用","changed":true}],"changed_count":1}
+            """.utf8)
+        case ("transactions/category-commit", "POST"):
+            commitRequests += 1
+            if let key = request.headers["Idempotency-Key"] { keys.append(key) }
+            try await Task.sleep(for: .milliseconds(80))
+            data = Data("""
+            {"operation_id":"00000000-0000-0000-0000-00000000B503","preview_token":"\(previewID)","action":"category_change","data_revision":34,"result":{"changed_count":1},"replay":false}
+            """.utf8)
+        default:
+            throw V15Failure(kind: .transport, code: "fixture_missing", message: "缺少分类提交夹具。")
+        }
+        return try V15FixtureCodec.decoder.decode(Response.self, from: data)
+    }
+
+    func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data { Data() }
+    func commitCount() -> Int { commitRequests }
+    func idempotencyKeys() -> [String] { keys }
 }
 
 private func integer(_ key: String, in value: JSONValue) -> Int64? { guard case .object(let object) = value, case .integer(let integer)? = object[key] else { return nil }; return integer }

@@ -1,6 +1,26 @@
 import Foundation
 import Observation
 
+/// A synchronous MainActor gate for UI actions that must never start twice
+/// before SwiftUI has had a chance to redraw the disabled state.
+@MainActor @Observable
+final class V15SingleFlightAttemptGate {
+    private(set) var key: UUID?
+    var isActive: Bool { key != nil }
+
+    func begin() -> UUID? {
+        guard key == nil else { return nil }
+        let value = UUID()
+        key = value
+        return value
+    }
+
+    func finish(_ value: UUID) {
+        guard key == value else { return }
+        key = nil
+    }
+}
+
 /// F3-D presents the server's cash-flow facts without deriving rows from the
 /// future timeline. Every mutation is owner-scoped; only create and settle may
 /// be replayed, and then only with their immutable body and original key.
@@ -29,6 +49,9 @@ public final class V15CashFlowModel {
     public private(set) var directReadbackCompleted = false
     public private(set) var factRefreshMessage: String?
     public private(set) var visibleList: ListKind = .active
+    public private(set) var confirmPreview: V15CashFlowConfirmPreview?
+    public private(set) var confirmPreviewFailure: V15Failure?
+    public private(set) var confirmCommitIsInFlight = false
 
     public var accountFilterID: UUID?
     public var historyMonth: String
@@ -58,6 +81,7 @@ public final class V15CashFlowModel {
     private var historyGeneration: UInt64 = 0
     private var detailGeneration: UInt64 = 0
     private var masterGeneration: UInt64 = 0
+    private var confirmGeneration: UInt64 = 0
     private var editorSession = UUID()
     private var applyingDraft = false
 
@@ -97,10 +121,12 @@ public final class V15CashFlowModel {
     public var hasUnknownDirectAttempt: Bool { directAttempt != nil && mutationPhase == .unknown }
     public var hasFactRefreshGate: Bool { factRefreshGate != nil }
     public var canAbandonUnknownDirect: Bool { hasUnknownDirectAttempt && directReadbackCompleted }
-    public var writeLocked: Bool { stableAttempt != nil || directAttempt != nil || factRefreshGate != nil || mutationPhase == .loading }
+    public var writeLocked: Bool { stableAttempt != nil || directAttempt != nil || factRefreshGate != nil || confirmCommitIsInFlight || mutationPhase == .loading }
+    public var selectionLocked: Bool { confirmCommitIsInFlight }
 
     public var editorIssues: [V15FieldIssue] { makeDraft(recording: false).issues }
     public var settleIssues: [V15FieldIssue] { makeSettlement(recording: false).issues }
+    public var openCreateReasons: [V15DisabledReason] { baseWriteReasons() }
     public var createReasons: [V15DisabledReason] { baseWriteReasons() + editorIssues.map(Self.reason) }
     public var updateReasons: [V15DisabledReason] {
         var reasons = baseWriteReasons() + editorIssues.map(Self.reason)
@@ -153,6 +179,7 @@ public final class V15CashFlowModel {
     public func refresh() async { await load() }
 
     public func setAccountFilter(_ id: UUID?) async {
+        guard !selectionLocked else { return }
         accountFilterID = id
         clearSelectionSurface(for: .active)
         await loadActive(policy: .standard)
@@ -160,6 +187,7 @@ public final class V15CashFlowModel {
     }
 
     public func setHistoryMonth(_ value: String) async {
+        guard !selectionLocked else { return }
         historyMonth = value
         clearSelectionSurface(for: .history)
         await loadHistory(policy: .standard)
@@ -167,14 +195,15 @@ public final class V15CashFlowModel {
     }
 
     public func setVisibleList(_ value: ListKind) async {
-        guard visibleList != value else { return }
+        guard !selectionLocked, visibleList != value else { return }
         visibleList = value
         clearSelectionSurface()
         await selectFirstIfNeeded(in: value)
     }
 
     public func selectItem(_ item: V15CashFlowItem, from list: ListKind = .active) async {
-        guard let owner = makeSelectionOwner(for: item, in: list) else { return }
+        guard !selectionLocked, let owner = makeSelectionOwner(for: item, in: list) else { return }
+        clearConfirmPreview()
         detailGeneration &+= 1; let token = detailGeneration
         selectionOwner = owner
         selectedItem = item; editorMode = .none; resultItems = []; serverIssues = []
@@ -185,8 +214,14 @@ public final class V15CashFlowModel {
         catch { guard token == detailGeneration, selectionOwner == owner, selectionOwnerIsCurrent(owner) else { return }; detailPhase = .failed(.init(kind: .transport, message: "现金流详情读取失败。")) }
     }
 
+    public func showVerifiedItem(_ item: V15CashFlowItem) {
+        selectionOwner = nil
+        selectedItem = item
+        detailPhase = .loaded
+    }
+
     public func openCreate() {
-        guard stableAttempt == nil, directAttempt == nil, factRefreshGate == nil else { return }
+        guard openCreateReasons.isEmpty else { return }
         editorSession = UUID(); applyingDraft = true
         title = ""; note = ""; direction = .outflow; amountText = ""; expectedDateText = ShanghaiBusinessDate.string(for: now()); recurrenceEnabled = false; recurrenceEndDateText = ""; selectedAccountID = cashAccounts.first?.id; selectedDestinationAccountID = nil; selectedCategoryID = nil; mutationScope = .occurrence
         applyingDraft = false; editorMode = .create; mutationPhase = .idle; serverIssues = []; resultItems = []
@@ -252,6 +287,69 @@ public final class V15CashFlowModel {
         let attempt = DirectAttempt(operationID: UUID(), owner: item.id, intent: intent)
         directAttempt = attempt; beginDirect(); await performDirect(attempt)
     }
+
+    public func previewConfirm(_ item: V15CashFlowItem) async {
+        guard actionReasons(.confirm, for: item).isEmpty, let id = item.manualItemID else { return }
+        adoptSelection(item)
+        confirmGeneration &+= 1; let current = confirmGeneration
+        confirmPreview = nil; confirmPreviewFailure = nil; mutationPhase = .loading
+        do {
+            let preview = try await services.actions.cashFlowConfirmPreview(itemID: id, expectedVersion: item.version)
+            guard current == confirmGeneration, selectedItem?.id == item.id else { return }
+            confirmPreview = preview; mutationPhase = .idle
+        } catch let failure as V15Failure {
+            guard current == confirmGeneration else { return }
+            mutationPhase = failure.kind == .cancelled ? .idle : .failed(failure)
+            confirmPreviewFailure = failure.kind == .cancelled ? nil : failure
+        } catch {
+            guard current == confirmGeneration else { return }
+            let failure = V15Failure(kind: .transport, message: "暂时无法取得确认影响。")
+            mutationPhase = .failed(failure); confirmPreviewFailure = failure
+        }
+    }
+
+    public func commitConfirmPreview() async {
+        guard !confirmCommitIsInFlight, let preview = confirmPreview, let item = selectedItem, let id = item.manualItemID,
+              preview.itemBefore.id == item.id, preview.itemBefore.version == item.version else { return }
+        confirmGeneration &+= 1; let current = confirmGeneration
+        let key = UUID(); confirmCommitIsInFlight = true; mutationPhase = .loading; confirmPreviewFailure = nil
+        defer { confirmCommitIsInFlight = false }
+        do {
+            _ = try await services.actions.commitCashFlow(itemID: id, previewToken: preview.meta.previewToken, idempotencyKey: key)
+            guard current == confirmGeneration else { return }
+            let refreshed = try await services.cashFlow.item(id: id, readCachePolicy: .reloadIgnoringCache)
+            guard current == confirmGeneration else { return }
+            confirmPreview = nil; selectedItem = refreshed; replaceVisible(refreshed); resultItems = [refreshed]
+            let gate = FactRefreshGate(operationID: UUID(), owner: item.id, manualItemID: id, filterID: accountFilterID, month: historyMonth)
+            factRefreshGate = gate; factRefreshMessage = "确认已完成，正在更新现金流与历史。"
+            await convergeFacts(gate)
+        } catch let failure as V15Failure {
+            guard current == confirmGeneration else { return }
+            if failure.kind == .conflict { confirmPreview = nil; mutationPhase = failure.conflict.map(MutationPhase.conflict) ?? .failed(failure) }
+            else if V15LedgerCreateService.outcomeMayBeUnknown(failure) { await reconcileConfirmReceipt(key: key, itemID: id, generation: current) }
+            else { mutationPhase = .failed(failure); confirmPreviewFailure = failure }
+        } catch {
+            guard current == confirmGeneration else { return }
+            await reconcileConfirmReceipt(key: key, itemID: id, generation: current)
+        }
+    }
+
+    private func reconcileConfirmReceipt(key: UUID, itemID: UUID, generation: UInt64) async {
+        do {
+            let receipt = try await services.actions.receipt(idempotencyKey: key)
+            guard generation == confirmGeneration, receipt.action == .cashFlowConfirm else { return }
+            let refreshed = try await services.cashFlow.item(id: itemID, readCachePolicy: .reloadIgnoringCache)
+            guard generation == confirmGeneration else { return }
+            confirmPreview = nil; selectedItem = refreshed; replaceVisible(refreshed); mutationPhase = .succeeded
+        } catch {
+            guard generation == confirmGeneration else { return }
+            confirmPreview = nil
+            let failure = V15Failure(kind: .responseUnknown, code: "response_unknown", message: "确认结果暂时不明，请读取最新状态；不会自动重复确认。")
+            mutationPhase = .failed(failure); confirmPreviewFailure = failure
+        }
+    }
+
+    public func clearConfirmPreview() { confirmGeneration &+= 1; confirmPreview = nil; confirmPreviewFailure = nil }
 
     public func readBackUnknownDirect() async {
         guard let attempt = directAttempt, mutationPhase == .unknown else { return }
@@ -450,6 +548,7 @@ public final class V15CashFlowModel {
     private func clearSelectionSurface(for list: ListKind? = nil) {
         if let list, selectionOwner?.list != list { return }
         detailGeneration &+= 1
+        clearConfirmPreview()
         selectionOwner = nil
         selectedItem = nil
         detailPhase = .idle
@@ -467,6 +566,7 @@ public final class V15CashFlowModel {
     }
 
     private func adoptSelection(_ item: V15CashFlowItem) {
+        if selectedItem?.id != item.id { clearConfirmPreview() }
         selectedItem = item
         if let owner = makeSelectionOwner(for: item, in: visibleList) { selectionOwner = owner }
     }
@@ -550,6 +650,7 @@ public final class V15CashFlowModel {
     private func baseWriteReasons() -> [V15DisabledReason] {
         var reasons: [V15DisabledReason] = []
         if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时只可查看，不能保存现金流。", fieldPath: nil)) }
+        if confirmCommitIsInFlight { reasons.append(.init(code: "confirm_commit_in_flight", message: "正在确认这项现金流，请稍候。", fieldPath: nil)) }
         if stableAttempt != nil { reasons.append(.init(code: "stable_attempt_pending", message: "上一笔操作仍在处理中，或结果暂时不明。请先安全检查保存结果。", fieldPath: nil)) }
         if directAttempt != nil { reasons.append(.init(code: "direct_attempt_pending", message: "上一笔操作结果暂时不明。请先检查最新状态。", fieldPath: nil)) }
         if factRefreshGate != nil { reasons.append(.init(code: "fact_refresh_required", message: "更改已经保存，最新数据还没有更新完成；请重新读取。", fieldPath: nil)) }

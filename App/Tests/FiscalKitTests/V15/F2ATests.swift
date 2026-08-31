@@ -295,4 +295,19 @@ struct F2ATests {
         guard case .account(let account) = slow.linkedReadPhase else { Issue.record("new linked read must own the final inspector state"); return }
         #expect(account.id == V15F2AFixtures.accountID)
     }
+
+    @Test("operation exceptions are presented with user-facing copy")
+    @MainActor func operationExceptionUserCopy() async throws {
+        let model = V15TodayReadModel(services: V15Services(transport: V15F2ATransport()))
+        await model.refresh()
+        let item = try #require(model.attention.first { $0.sourceType == "operation_exception" })
+        let explanation = V15AttentionUserCopy.explanation(for: item)
+        let action = V15AttentionUserCopy.suggestedAction(for: item)
+        #expect(explanation == "有一项数据维护没有完成。")
+        #expect(action.contains("数据与安全"))
+        for engineeringTerm in ["legacy", "迁移运行失败", "隔离环境", "当前阶段"] {
+            #expect(!explanation.contains(engineeringTerm))
+            #expect(!action.contains(engineeringTerm))
+        }
+    }
 }

@@ -71,9 +71,17 @@ private struct V15RecordEditor: View {
                 HStack { Text("新建账目").font(V15Typography.surfaceTitle); Spacer() }
                 form
                 references
+                repaymentPreviewState
                 submissionState
-                V15ActionButton("保存账目", symbol: V15Symbol.receipt, disabledReasons: disabledReasons, action: submit)
-                    .accessibilityIdentifier("v15.f1a.record.submit")
+                if model.kind == .repayment, !repaymentPreviewIsReady {
+                    V15ActionButton("查看还款影响", symbol: "eye", disabledReasons: displayedDisabledReasons) { Task { await model.previewRepayment() } }
+                        .disabled(!disabledReasons.isEmpty)
+                        .accessibilityIdentifier("v15.f1a.record.preview")
+                } else {
+                    V15ActionButton(model.kind == .repayment ? "确认还款" : "保存账目", symbol: V15Symbol.receipt, disabledReasons: displayedDisabledReasons, action: submit)
+                        .disabled(!disabledReasons.isEmpty)
+                        .accessibilityIdentifier("v15.f1a.record.submit")
+                }
             }.padding(V15Spacing.lg)
         }
         .background(V15Palette.paper.color)
@@ -152,6 +160,26 @@ private struct V15RecordEditor: View {
         default: EmptyView()
         }
     }
+    @ViewBuilder private var repaymentPreviewState: some View {
+        if model.kind == .repayment {
+            switch model.repaymentPreviewPhase {
+            case .idle: EmptyView()
+            case .loading: V15LoadingSkeleton(layout: .decisionCard)
+            case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.previewRepayment() } }
+            case .ready(let preview):
+                V15PreviewState {
+                    VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                        Text("请确认这次还款的实际影响").font(V15Typography.body.weight(.semibold))
+                        Text("付款账户：\(preview.paymentAccountName) · \(money(preview.paymentBalanceBeforeMinor)) → \(money(preview.paymentBalanceAfterMinor))")
+                        Text("信用账户：\(preview.creditAccountName) · 欠款 \(money(preview.creditDebtBeforeMinor)) → \(money(preview.creditDebtAfterMinor))")
+                        Text("所选账期待还：\(money(preview.cycleRemainingBeforeMinor)) → \(money(preview.cycleRemainingAfterMinor))")
+                    }.font(V15Typography.secondary)
+                }
+            }
+        }
+    }
+    private var repaymentPreviewIsReady: Bool { if case .ready = model.repaymentPreviewPhase { true } else { false } }
+    private func money(_ value: Int64) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral).text }
     private func accounts(for kind: V15ManualTransactionKind) -> [V15AccountResponse] {
         switch kind { case .creditPurchase: model.accounts.filter { $0.kind == .credit }; case .transfer, .repayment: model.accounts.filter { $0.kind == .cash || $0.kind == .debit }; case .expense, .income: model.accounts.filter { $0.kind == .cash || $0.kind == .debit } }
     }
@@ -184,7 +212,11 @@ private struct V15RecordEditor: View {
     }
     private func issues(_ path: String) -> [V15FieldIssue] {
         guard !isCompletedDraft else { return [] }
-        return model.allIssues.filter { $0.fieldPath == path }
+        let remote = model.fieldIssues.filter { $0.fieldPath == path }
+        let local = model.localIssues.filter { $0.fieldPath == path }
+        if path == "title", model.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return remote }
+        if path == "amount_minor", model.amountText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return remote }
+        return local + remote
     }
     private var disabledReasons: [V15DisabledReason] {
         var reasons = isCompletedDraft ? [] : model.localIssues.map { V15DisabledReason(code: $0.code, message: $0.message, fieldPath: $0.fieldPath) }
@@ -198,6 +230,7 @@ private struct V15RecordEditor: View {
         }
         return reasons
     }
+    private var displayedDisabledReasons: [V15DisabledReason] { disabledReasons.filter { $0.fieldPath == nil } }
     private var isCompletedDraft: Bool {
         switch model.submission {
         case .success, .queued: true

@@ -19,7 +19,7 @@ public enum V15F4AFixtures {
         let summary = empty
             ? "\"income_minor\":0,\"gross_consumption_minor\":0,\"merchant_refund_minor\":0,\"net_consumption_minor\":0,\"expected_reimbursement_minor\":0,\"received_reimbursement_minor\":0,\"personal_expected_minor\":0,\"personal_realized_minor\":0,\"net_income_expense_minor\":0,\"cash_inflow_minor\":0,\"cash_outflow_minor\":0,\"cash_net_minor\":0,\"internal_transfer_inflow_minor\":0,\"internal_transfer_outflow_minor\":0,\"credit_debt_at_period_end_minor\":0,\"reimbursement_outstanding_at_period_end_minor\":0"
             : "\"income_minor\":100000,\"gross_consumption_minor\":31000,\"merchant_refund_minor\":2000,\"net_consumption_minor\":29000,\"expected_reimbursement_minor\":3000,\"received_reimbursement_minor\":1000,\"personal_expected_minor\":26000,\"personal_realized_minor\":28000,\"net_income_expense_minor\":71000,\"cash_inflow_minor\":101000,\"cash_outflow_minor\":31000,\"cash_net_minor\":70000,\"internal_transfer_inflow_minor\":5000,\"internal_transfer_outflow_minor\":5000,\"credit_debt_at_period_end_minor\":8000,\"reimbursement_outstanding_at_period_end_minor\":2000"
-        return "{\"meta\":{\"period_kind\":\"\(actualKind)\",\"period\":\"\(period)\",\"date_from\":\"\(period)-01\",\"date_to\":\"\(period)-31\",\"timezone\":\"Asia/Shanghai\",\"currency\":\"CNY\",\"as_of\":\"2026-08-20T00:00:00Z\",\"data_revision\":\(revision),\"report_schema_version\":\"1\",\"generated_at\":\"2026-08-20T00:00:01Z\"},\"summary\":{\(summary)},\(rows),\"completeness\":{\"unresolved_import_count\":\(completeness)},\"drill_down_path\":\"/api/v1/reports/period-drill-down\"}"
+        return "{\"meta\":{\"period_kind\":\"\(actualKind)\",\"period\":\"\(period)\",\"date_from\":\"\(period)-01\",\"date_to\":\"\(period)-31\",\"timezone\":\"Asia/Shanghai\",\"currency\":\"CNY\",\"as_of\":\"2026-08-20T00:00:00Z\",\"data_revision\":\(revision),\"report_schema_version\":\"2\",\"generated_at\":\"2026-08-20T00:00:01Z\"},\"summary\":{\(summary)},\(rows),\"completeness\":{\"unresolved_import_count\":\(completeness)},\"daily\":[],\"known_future_events\":[],\"debt_cycles\":[],\"installments\":[],\"drill_down_path\":\"/api/v1/reports/v2/period-drill-down\"}"
     }
 
     static func drill(period: String = "2026-08", kind: String = "month", filter: String = "category_id", revision: Int64 = 77, next: String? = "next", emptyItems: Bool = false) -> String {
@@ -28,7 +28,7 @@ public enum V15F4AFixtures {
         let merchant = filter == "merchant_id" ? "\"\(merchantID)\"" : "null"
         let source = filter == "source" ? "\"manual\"" : "null"
         let items = emptyItems ? "[]" : "[{\"transaction_id\":\"\(transactionID)\",\"occurred_at\":\"2026-08-19T00:00:00Z\",\"business_date\":\"2026-08-19\",\"kind\":\"expense\",\"source\":\"manual\",\"category_id\":\"\(categoryID)\",\"category_name\":\"合成分类\",\"merchant_id\":\"\(merchantID)\",\"merchant_name\":\"合成商户\",\"external_cash_amount_minor\":28000,\"gross_consumption_minor\":30000,\"merchant_refund_minor\":2000,\"net_consumption_minor\":28000}]"
-        let response = "{\"meta\":{\"period_kind\":\"\(kind)\",\"period\":\"\(period)\",\"date_from\":\"\(period)-01\",\"date_to\":\"\(period)-31\",\"timezone\":\"Asia/Shanghai\",\"currency\":\"CNY\",\"as_of\":\"2026-08-20T00:00:00Z\",\"data_revision\":\(revision),\"report_schema_version\":\"1\",\"generated_at\":\"2026-08-20T00:00:01Z\"},\"dimension\":\"ledger\",\"category_id\":\(category),\"account_id\":\(account),\"merchant_id\":\(merchant),\"source\":\(source),\"items\":\(items),\"next_cursor\":\(next.map { "\"\($0)\"" } ?? "null")}"
+        let response = "{\"meta\":{\"period_kind\":\"\(kind)\",\"period\":\"\(period)\",\"date_from\":\"\(period)-01\",\"date_to\":\"\(period)-31\",\"timezone\":\"Asia/Shanghai\",\"currency\":\"CNY\",\"as_of\":\"2026-08-20T00:00:00Z\",\"data_revision\":\(revision),\"report_schema_version\":\"2\",\"generated_at\":\"2026-08-20T00:00:01Z\"},\"dimension\":\"ledger\",\"category_id\":\(category),\"account_id\":\(account),\"merchant_id\":\(merchant),\"source\":\(source),\"items\":\(items),\"next_cursor\":\(next.map { "\"\($0)\"" } ?? "null")}"
         return response
     }
 }
@@ -63,7 +63,7 @@ actor F4ATransport: V15Transporting {
         if mode == .offline { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线快照仅可查看。") }
         if mode == .loading { try await Task.sleep(for: .seconds(3)) }
         if mode == .error { throw V15Failure(kind: .transport, message: "报告读取失败。") }
-        if request.path == "reports/period-drill-down" {
+        if request.path == "reports/v2/period-drill-down" {
             pageRequests += 1
             if mode == .drillLoading { try await Task.sleep(for: .seconds(1)) }
             if mode == .conflict { throw V15Failure(kind: .conflict, code: "period_report_changed", message: "报告版本已变化。") }

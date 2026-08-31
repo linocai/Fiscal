@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from fiscal_api.api.routes import (
     accounts,
+    action_previews,
     ai,
     archive,
     auth,
@@ -27,6 +28,7 @@ api_router.include_router(system.router)
 api_router.include_router(auth.router)
 api_router.include_router(archive.router)
 api_router.include_router(accounts.router)
+api_router.include_router(action_previews.router)
 api_router.include_router(ai.router)
 api_router.include_router(categories.router)
 api_router.include_router(cash_flow.router)

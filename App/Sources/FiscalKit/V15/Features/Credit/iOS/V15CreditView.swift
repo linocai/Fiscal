@@ -4,10 +4,12 @@ public struct V15CreditView: View {
     @State private var model: V15CreditModel
     private let initialGalleryScenario: String?
     private let fixtureReconnectAction: (() -> Void)?
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, initialGalleryScenario: String? = nil, fixtureReconnectAction: (() -> Void)? = nil) {
+    private let initialCycle: V15CreditCycle?
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, initialGalleryScenario: String? = nil, fixtureReconnectAction: (() -> Void)? = nil, initialCycle: V15CreditCycle? = nil) {
         _model = State(initialValue: .init(services: services, offlineSnapshotAt: offlineSnapshotAt, offlineSnapshotProvider: offlineSnapshotProvider))
         self.initialGalleryScenario = initialGalleryScenario
         self.fixtureReconnectAction = fixtureReconnectAction
+        self.initialCycle = initialCycle
     }
 
     public var body: some View {
@@ -35,6 +37,10 @@ public struct V15CreditView: View {
 
     private func loadInitialState() async {
         await model.load()
+        if let initialCycle, let account = model.accounts.first(where: { $0.id == initialCycle.accountID }) {
+            await model.selectAccount(account)
+            await model.selectCycle(initialCycle)
+        }
         guard let scenario = initialGalleryScenario else { return }
         if scenario == "credit-page-error" { await model.loadNextCycles(); return }
         guard ["credit-expired", "credit-disabled", "credit-conflict", "credit-field-error"].contains(scenario) else { return }

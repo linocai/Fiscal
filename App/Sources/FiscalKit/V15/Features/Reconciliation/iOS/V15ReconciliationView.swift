@@ -110,8 +110,8 @@ public struct V15ReconciliationView: View {
                 ForEach(model.attention) { item in
                     VStack(alignment: .leading, spacing: V15Spacing.xs) {
                         HStack { Text(severityLabel(item.severity)).font(V15Typography.label); Spacer(); if let amount = item.amountMinor { V15MoneyText(minorUnits: amount, direction: .neutral) } }
-                        Text(item.explanation).font(V15Typography.body).fixedSize(horizontal: false, vertical: true)
-                        Text(item.suggestedAction).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                        Text(V15AttentionUserCopy.explanation(for: item)).font(V15Typography.body).fixedSize(horizontal: false, vertical: true)
+                        Text(V15AttentionUserCopy.suggestedAction(for: item)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                         V15ActionButton("暂时忽略", kind: .secondary, disabledReasons: model.ignoreReasons(for: item)) { Task { await model.ignore(item) } }
                             .accessibilityIdentifier("v15.f3e.attention.ignore.\(item.id)")
                     }

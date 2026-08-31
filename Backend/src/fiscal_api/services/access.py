@@ -69,6 +69,17 @@ class AccessService:
             credential_generation=credential.credential_generation,
         )
 
+    async def access_key_generation_changed(
+        self, raw_key: str, credential: AccessCredential
+    ) -> bool:
+        """Return true only when the caller presented a known key from an old generation."""
+        if not is_well_formed_access_key(raw_key):
+            return False
+        row = await self.repository.get_access_key_by_digest(
+            access_key_digest(raw_key, self._pepper())
+        )
+        return row is not None and row.credential_generation != credential.credential_generation
+
     async def active_access_key_count(self, generation: int) -> int:
         return await self.repository.active_access_key_count(generation)
 

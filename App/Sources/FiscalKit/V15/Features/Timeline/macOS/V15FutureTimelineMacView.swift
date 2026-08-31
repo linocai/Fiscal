@@ -5,7 +5,8 @@ public struct V15FutureTimelineMacView: View {
     @State private var model: V15FutureTimelineModel
     @State private var selectedID: String?
     private let initialAutoLoadNext: Bool
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialAutoLoadNext: Bool = false) { _model = State(initialValue: .init(services: services, offlineSnapshotProvider: { offlineSnapshotAt })); self.initialAutoLoadNext = initialAutoLoadNext }
+    private let onOpen: @MainActor (V15FutureOpenTarget) -> Void
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialAutoLoadNext: Bool = false, onOpen: @escaping @MainActor (V15FutureOpenTarget) -> Void = { _ in }) { _model = State(initialValue: .init(services: services, offlineSnapshotProvider: { offlineSnapshotAt })); self.initialAutoLoadNext = initialAutoLoadNext; self.onOpen = onOpen }
     public var body: some View {
         HSplitView {
             sidebar.frame(minWidth: 190, idealWidth: 220, maxWidth: 280)
@@ -49,7 +50,18 @@ public struct V15FutureTimelineMacView: View {
     @ViewBuilder private var inspector: some View { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { HStack { Text("详情").font(V15Typography.cardTitle); Spacer(); Button("关闭") { selectedID = nil; model.closeInspector() }.buttonStyle(.borderless).accessibilityIdentifier("v15.f3a.inspector.close") }
         switch model.inspectorPhase { case .idle: V15EmptyState(title: "选择一个未来事项", explanation: "此处只显示本地只读事件说明。")
         case .unavailable(let message): V15EmptyState(title: "暂不可打开", explanation: message).accessibilityIdentifier("v15.f3a.inspector.unavailable")
-        case .showing(let event): V15Section("未来事项") { V15FutureEventRow(event: event); Text("当前阶段不会打开其他领域页面，也不会提交任何变更。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true) }.accessibilityIdentifier("v15.f3a.inspector") }
+        case .showing(let event): V15Section("未来事项") {
+            V15FutureEventRow(event: event)
+            Text("打开前会重新核验这项记录的最新归属，不会提交任何更改。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+            switch model.openPhase {
+            case .idle:
+                V15ActionButton("打开所属记录", symbol: "arrow.up.right.square") { Task { if let target = await model.resolveOpenTarget(event) { onOpen(target) } } }.accessibilityIdentifier("v15.f3a.inspector.open")
+            case .loading:
+                V15LoadingSkeleton(layout: .compact)
+            case .failed(let message):
+                V15ServiceErrorState(message: message) { Task { if let target = await model.resolveOpenTarget(event) { onOpen(target) } } }
+            }
+        }.accessibilityIdentifier("v15.f3a.inspector") }
     }.padding(V15Spacing.md) } }
 }
 

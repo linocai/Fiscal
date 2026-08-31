@@ -46,12 +46,18 @@ public struct V15BootstrapView: View {
         switch model.phase {
         case .idle, .loading:
             V15LoadingSkeleton(layout: .compact).padding(.top, 18).accessibilityIdentifier("v15.f1a.connecting")
-        case .needsPassphrase, .wrongPassphrase, .invalidAccessKey:
+        case .needsPassphrase, .wrongPassphrase, .invalidAccessKey, .credentialGenerationChanged:
             VStack(alignment: .leading, spacing: 12) {
                 if case .invalidAccessKey = model.phase {
-                    Label("访问密钥已过期或被撤销", systemImage: "key.slash")
+                    Label("本机登录信息无效", systemImage: "key.slash")
                         .font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.teal.color)
-                    Text("登录已失效，请重新输入访问口令。")
+                    Text("请重新输入个人访问口令解锁本机。")
+                        .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                }
+                if case .credentialGenerationChanged = model.phase {
+                    Label("口令修改后需要重新解锁", systemImage: "key.slash")
+                        .font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.teal.color)
+                    Text("个人访问口令已经修改，请用新口令重新解锁本机。")
                         .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                 }
                 HStack(spacing: 8) {
@@ -108,10 +114,10 @@ public struct V15BootstrapView: View {
     }
 
     private var footnoteColor: Color {
-        switch model.phase { case .failed(_), .systemNotReady, .invalidAccessKey: V15Palette.yellow.color; default: V15Palette.teal.color }
+        switch model.phase { case .failed(_), .systemNotReady, .invalidAccessKey, .credentialGenerationChanged: V15Palette.yellow.color; default: V15Palette.teal.color }
     }
     private var footnoteTitle: String {
-        switch model.phase { case .failed(_): "暂时无法连接"; case .systemNotReady: "系统正在启动"; case .invalidAccessKey: "连接密钥已失效"; case .offlineReadOnly(_): "可查看上次数据"; default: "连接正常" }
+        switch model.phase { case .failed(_): "暂时无法连接"; case .systemNotReady: "系统正在启动"; case .invalidAccessKey: "本机登录信息无效"; case .credentialGenerationChanged: "需要重新解锁"; case .offlineReadOnly(_): "可查看上次数据"; default: "连接正常" }
     }
     private var serviceVersionLine: String { "人民币 · 上海时区" }
 
