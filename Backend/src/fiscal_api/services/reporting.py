@@ -109,7 +109,6 @@ from fiscal_api.db.models import (
     Merchant,
     Posting,
     PostingRole,
-    ReconciliationCheckpoint,
     TransactionKind,
     TransactionMerchantMapping,
     TransactionSource,
@@ -553,17 +552,6 @@ class ReportingService:
         )
         page = rows[:limit]
         impacts = await self.repository.account_impacts([item.id for item in page])
-        checkpoint_rows = await self.session.execute(
-            select(ReconciliationCheckpoint.account_id, ReconciliationCheckpoint.as_of)
-            .where(ReconciliationCheckpoint.account_id.in_([item.id for item in page]))
-            .distinct(ReconciliationCheckpoint.account_id)
-            .order_by(
-                ReconciliationCheckpoint.account_id,
-                ReconciliationCheckpoint.as_of.desc(),
-                ReconciliationCheckpoint.id.desc(),
-            )
-        )
-        latest = {account_id: as_of for account_id, as_of in checkpoint_rows.all()}
         items: list[FactsDrillDownItem] = [
             CashAccountFact(
                 account_id=account.id,
@@ -572,7 +560,6 @@ class ReportingService:
                     account.opening_balance_minor + impacts.get(account.id, 0),
                     label="cash account balance",
                 ),
-                last_reconciled_at=latest.get(account.id),
                 read_path=f"/api/v1/accounts/{account.id}",
                 deep_link=f"fiscal://accounts/{account.id}",
             )
@@ -940,15 +927,11 @@ class ReportingService:
             failed_import_count,
             uncategorized_transaction_count,
             uncategorized_amount_minor,
-            last_reconciled_at,
-            open_reconciliation_difference_count,
         ) = await self.repository.facts_completeness_counts()
         facts = CompletenessFacts(
             unresolved_import_count=unresolved_import_count,
             failed_import_count=failed_import_count,
             uncategorized_transaction_count=uncategorized_transaction_count,
-            open_reconciliation_difference_count=open_reconciliation_difference_count,
-            last_reconciled_at=last_reconciled_at,
             uncategorized_transaction_amount_minor=uncategorized_amount_minor,
         )
         items: list[CompletenessIssueFact] = []
@@ -978,15 +961,6 @@ class ReportingService:
                     amount_minor=facts.uncategorized_transaction_amount_minor,
                     read_path="/api/v1/transactions?classification=uncategorized",
                     deep_link="fiscal://transactions?classification=uncategorized",
-                )
-            )
-        if facts.open_reconciliation_difference_count:
-            items.append(
-                CompletenessIssueFact(
-                    issue_type=CompletenessIssueType.OPEN_RECONCILIATION_DIFFERENCES,
-                    count=facts.open_reconciliation_difference_count,
-                    read_path="/api/v1/reconciliation/attention",
-                    deep_link="fiscal://reconciliation/attention",
                 )
             )
         return facts, items
@@ -1787,7 +1761,6 @@ class ReportingService:
                 unresolved_import_count=counts[0],
                 failed_import_count=counts[1],
                 uncategorized_transaction_count=counts[2],
-                open_reconciliation_difference_count=counts[3],
             ),
             drill_down_path=(
                 "/api/v1/reports/period-drill-down?"

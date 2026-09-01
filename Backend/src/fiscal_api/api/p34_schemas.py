@@ -96,7 +96,6 @@ class ReportCompleteness(APIModel):
     unresolved_import_count: int = Field(ge=0)
     failed_import_count: int = Field(ge=0)
     uncategorized_transaction_count: int = Field(ge=0)
-    open_reconciliation_difference_count: int = Field(ge=0)
 
 
 class PeriodReport(APIModel):

@@ -69,11 +69,11 @@ def test_p20_auth_cleanup_requires_credential_and_blocks_downgrade() -> None:
     with pytest.raises(
         DBAPIError, match="P20 authentication cleanup requires exactly one access credential"
     ):
-        command.upgrade(_config(), "head")
+        command.upgrade(_config(), "20260830_0037")
     assert asyncio.run(_device_tokens_table()) == "device_tokens"
 
     asyncio.run(_clear_legacy_device_marker())
-    command.upgrade(_config(), "head")
+    command.upgrade(_config(), "20260830_0037")
     assert asyncio.run(_device_tokens_table()) is None
     with pytest.raises(DBAPIError, match="P20 downgrade blocked"):
         command.downgrade(_config(), "20260811_0019")

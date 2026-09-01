@@ -424,7 +424,6 @@ public struct V15ReportingView: View {
             countCell("未处理导入", value.unresolvedImportCount)
             countCell("失败导入", value.failedImportCount)
             countCell("未分类", value.uncategorizedTransactionCount)
-            countCell("对账差异", value.openReconciliationDifferenceCount)
         }
     }
 

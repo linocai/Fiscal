@@ -47,7 +47,7 @@ async def list_categories(
     "",
     response_model=CategoryResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+    dependencies=[formal_mutation("ledger", "reports", "ai")],
 )
 async def create_category(
     draft: CategoryDraft,
@@ -59,7 +59,7 @@ async def create_category(
 @router.put(
     "/order",
     response_model=list[CategoryResponse],
-    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+    dependencies=[formal_mutation("ledger", "reports", "ai")],
 )
 async def order_categories(
     request: CategoryOrderRequest,
@@ -92,7 +92,7 @@ async def get_category(
 @router.patch(
     "/{category_id}",
     response_model=CategoryResponse,
-    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+    dependencies=[formal_mutation("ledger", "reports", "ai")],
 )
 async def update_category(
     category_id: UUID,
@@ -105,7 +105,7 @@ async def update_category(
 @router.delete(
     "/{category_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+    dependencies=[formal_mutation("ledger", "reports", "ai")],
 )
 async def delete_category(
     category_id: UUID,
@@ -119,7 +119,7 @@ async def delete_category(
 @router.post(
     "/{category_id}/archive",
     response_model=CategoryResponse,
-    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+    dependencies=[formal_mutation("ledger", "reports", "ai")],
 )
 async def archive_category(
     category_id: UUID,
@@ -132,7 +132,7 @@ async def archive_category(
 @router.post(
     "/{category_id}/restore",
     response_model=CategoryResponse,
-    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+    dependencies=[formal_mutation("ledger", "reports", "ai")],
 )
 async def restore_category(
     category_id: UUID,
@@ -145,7 +145,7 @@ async def restore_category(
 @router.post(
     "/{source_id}/merge",
     response_model=CategoryResponse,
-    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+    dependencies=[formal_mutation("ledger", "reports", "ai")],
 )
 async def merge_category(
     source_id: UUID,
@@ -163,7 +163,7 @@ async def merge_category(
 @router.post(
     "/{root_id}/split",
     response_model=list[CategoryResponse],
-    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+    dependencies=[formal_mutation("ledger", "reports", "ai")],
 )
 async def split_category(
     root_id: UUID,
@@ -189,7 +189,7 @@ async def preview_category_merge(
 @router.post(
     "/{source_id}/merge-commit",
     response_model=CategoryTransformReceipt,
-    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+    dependencies=[formal_mutation("ledger", "reports", "ai")],
 )
 async def commit_category_merge(
     source_id: UUID,
@@ -212,7 +212,7 @@ async def preview_category_split(
 @router.post(
     "/{root_id}/split-commit",
     response_model=CategoryTransformReceipt,
-    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+    dependencies=[formal_mutation("ledger", "reports", "ai")],
 )
 async def commit_category_split(
     root_id: UUID,

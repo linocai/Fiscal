@@ -238,7 +238,6 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
     public let creditCycles: V15CreditCycleReadService
     public let reports: V15ReportsService
     public let archives: V15ArchiveService
-    public let attention: V15AttentionReadService
     public let merchants: V15MerchantService
     public let categories: V15CategoryTransformService
     public let credit: V15CreditService
@@ -246,7 +245,6 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
     public let installments: V15InstallmentService
     public let cashFlow: V15CashFlowService
     public let ai: V15AIService
-    public let reconciliation: V15ReconciliationService
     public let statementImports: V15StatementImportService
     public let deepLinks: V15DeepLinkReadService
     public let actions: V15FormalActionService
@@ -271,7 +269,6 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
         creditCycles = .init(transport: transport)
         reports = .init(transport: transport)
         archives = .init(transport: transport)
-        attention = .init(transport: transport)
         merchants = .init(transport: transport, writable: { [weak revisionStore] in
             guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
@@ -291,9 +288,6 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
             guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         ai = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
-        })
-        reconciliation = .init(transport: transport, writable: { [weak revisionStore] in
             guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         statementImports = .init(transport: transport, writable: { [weak revisionStore] in
@@ -588,12 +582,6 @@ public struct V15ArchiveService: Sendable {
     }
 }
 
-public struct V15AttentionReadService: Sendable {
-    private let transport: any V15Transporting
-    init(transport: any V15Transporting) { self.transport = transport }
-    public func list() async throws -> V15AttentionPage { try await transport.send(.init(path: "reconciliation/attention"), body: nil) }
-}
-
 public struct V15MerchantService: Sendable {
     private let transport: any V15Transporting; private let writable: @MainActor @Sendable () throws -> Void
     init(transport: any V15Transporting, writable: @escaping @MainActor @Sendable () throws -> Void) { self.transport = transport; self.writable = writable }
@@ -776,7 +764,6 @@ public struct V15StatementImportService: Sendable {
 public struct V15DeepLinkReadService: Sendable {
     private let transport: any V15Transporting
     init(transport: any V15Transporting) { self.transport = transport }
-    public func checkpoint(_ id: UUID) async throws -> V15JSONRecord { try await transport.send(.init(path: "reconciliation/checkpoints/\(id)"), body: nil) }
     public func migrationRun(_ id: UUID) async throws -> V15JSONRecord { try await transport.send(.init(path: "migrations/runs/\(id)"), body: nil) }
     public func transactionCapabilities(_ id: UUID) async throws -> V15VersionedCapabilityResource { try await transport.send(.init(path: "transactions/\(id)"), body: nil) }
 }

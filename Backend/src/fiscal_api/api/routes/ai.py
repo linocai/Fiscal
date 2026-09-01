@@ -44,7 +44,7 @@ async def get_ai_settings(service: AIServiceDependency) -> AISettingsResponse:
 @router.put(
     "/settings",
     response_model=AISettingsResponse,
-    dependencies=[formal_mutation("ai", "attention")],
+    dependencies=[formal_mutation("ai")],
 )
 async def update_ai_settings(
     replacement: AISettingsReplace, service: AIServiceDependency
@@ -65,7 +65,7 @@ async def list_ai_strategy(service: AIServiceDependency) -> list[AIExecutionPoli
 @router.post(
     "/strategy",
     response_model=AIExecutionPolicyResponse,
-    dependencies=[formal_mutation("ai", "attention")],
+    dependencies=[formal_mutation("ai")],
 )
 async def replace_ai_strategy(
     replacement: AIExecutionPolicyReplace, service: AIServiceDependency
@@ -76,7 +76,7 @@ async def replace_ai_strategy(
 @router.post(
     "/shadow-evaluations",
     response_model=AIShadowEvaluationResponse,
-    dependencies=[formal_mutation("ai", "attention")],
+    dependencies=[formal_mutation("ai")],
 )
 async def record_ai_shadow_evaluation(
     record: AIShadowEvaluationCreate, service: AIServiceDependency
@@ -92,7 +92,7 @@ async def list_ai_learning_rules(service: AIServiceDependency) -> list[AILearnin
 @router.post(
     "/learning-rules/{rule_id}/revoke",
     response_model=AILearningRuleResponse,
-    dependencies=[formal_mutation("ai", "attention")],
+    dependencies=[formal_mutation("ai")],
 )
 async def revoke_ai_learning_rule(
     rule_id: UUID, service: AIServiceDependency
@@ -108,7 +108,7 @@ async def get_ai_provider_settings(service: AIServiceDependency) -> AIProviderSe
 @router.put(
     "/provider-settings",
     response_model=AIProviderSettingsResponse,
-    dependencies=[formal_mutation("ai", "attention")],
+    dependencies=[formal_mutation("ai")],
 )
 async def update_ai_provider_settings(
     replacement: AIProviderSettingsReplace,
@@ -122,7 +122,7 @@ async def update_ai_provider_settings(
     "/proposals",
     response_model=AIProposalResponse,
     status_code=http_status.HTTP_201_CREATED,
-    dependencies=[formal_mutation("ai", "ledger", "accounts", "cash_flow", "reports", "attention")],
+    dependencies=[formal_mutation("ai", "ledger", "accounts", "cash_flow", "reports")],
 )
 async def create_ai_proposal(
     request: AIProposalCreate,
@@ -154,7 +154,7 @@ async def get_ai_proposal(proposal_id: UUID, service: AIServiceDependency) -> AI
 @router.delete(
     "/proposals/{proposal_id}",
     status_code=http_status.HTTP_204_NO_CONTENT,
-    dependencies=[formal_mutation("ai", "attention")],
+    dependencies=[formal_mutation("ai")],
 )
 async def delete_ai_proposal(
     proposal_id: UUID,
@@ -175,7 +175,7 @@ async def get_ai_quality_events(
 @router.put(
     "/proposals/{proposal_id}",
     response_model=AIProposalResponse,
-    dependencies=[formal_mutation("ai", "ledger", "accounts", "cash_flow", "reports", "attention")],
+    dependencies=[formal_mutation("ai", "ledger", "accounts", "cash_flow", "reports")],
 )
 async def update_ai_proposal(
     proposal_id: UUID,
@@ -188,7 +188,7 @@ async def update_ai_proposal(
 @router.post(
     "/proposals/{proposal_id}/execute",
     response_model=AIProposalMutationResponse,
-    dependencies=[formal_mutation("ai", "ledger", "accounts", "cash_flow", "reports", "attention")],
+    dependencies=[formal_mutation("ai", "ledger", "accounts", "cash_flow", "reports")],
 )
 async def execute_ai_proposal(
     proposal_id: UUID,
@@ -201,7 +201,7 @@ async def execute_ai_proposal(
 @router.post(
     "/proposals/{proposal_id}/ignore",
     response_model=AIProposalResponse,
-    dependencies=[formal_mutation("ai", "attention")],
+    dependencies=[formal_mutation("ai")],
 )
 async def ignore_ai_proposal(
     proposal_id: UUID,
@@ -214,7 +214,7 @@ async def ignore_ai_proposal(
 @router.post(
     "/proposals/{proposal_id}/retry",
     response_model=AIProposalResponse,
-    dependencies=[formal_mutation("ai", "attention")],
+    dependencies=[formal_mutation("ai")],
 )
 async def retry_ai_proposal(
     proposal_id: UUID,
@@ -227,7 +227,7 @@ async def retry_ai_proposal(
 @router.post(
     "/proposals/{proposal_id}/undo",
     response_model=AIProposalMutationResponse,
-    dependencies=[formal_mutation("ai", "ledger", "accounts", "cash_flow", "reports", "attention")],
+    dependencies=[formal_mutation("ai", "ledger", "accounts", "cash_flow", "reports")],
 )
 async def undo_ai_proposal(
     proposal_id: UUID,

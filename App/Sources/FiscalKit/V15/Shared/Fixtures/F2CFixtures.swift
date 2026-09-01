@@ -13,8 +13,6 @@ enum V15F2CFixtures {
         case "today-refresh-lens-race": f2BRoute = "today-refresh-lens-race"
         case "today-offline": f2BRoute = "today-offline"
         case "today-unknown": f2BRoute = "today-unknown-scope"
-        case "today-unknown-attention": f2BRoute = "today-unknown-attention"
-        case "today-calm": f2BRoute = "today-calm"
         case "today-long": f2BRoute = "today-long"
         case "today-zero-future": f2BRoute = "today-zero-future"
         default: f2BRoute = "today"

@@ -29,9 +29,7 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         if let accessKey {
             app.launchEnvironment["FISCAL_ACCESS_KEY"] = accessKey
         }
-        if cleanupOnly {
-            app.launchEnvironment["FISCAL_ROOT_SMOKE_CLEANUP_ONLY"] = "1"
-        }
+        app.launchEnvironment["FISCAL_ROOT_SMOKE_CLEANUP_ONLY"] = cleanupOnly ? "1" : "0"
         if forceTransportError {
             app.launchEnvironment["FISCAL_ROOT_SMOKE_FORCE_TRANSPORT_ERROR"] = "1"
         }
@@ -89,5 +87,64 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         XCTAssertFalse(offlineApp.descendants(matching: .any)["v15.gallery.macos"].exists)
         offlineApp.terminate()
         assertAppCleanup(service: offlineService)
+    }
+
+    func testWorkspaceKeepsFiveModuleNavigationAndSystemDataEntrypointsReachable() async throws {
+        let service = uniqueKeychainService()
+        let app = launchApp(service: service, accessKey: try await mintQAAccessKey())
+        XCTAssertTrue(app.descendants(matching: .any)["v151.mac.workspace"].waitForExistence(timeout: 12))
+        func element(_ identifier: String) -> XCUIElement {
+            app.descendants(matching: .any)[identifier]
+        }
+
+        let navigation = ["ledger", "future", "reports", "archive", "settings"]
+        func assertNavigationRemainsVisible() {
+            for item in navigation {
+                XCTAssertTrue(element("v151.mac.module.\(item)").exists, item)
+            }
+        }
+        func assertHiddenKeyboardCommandsStayOutOfAccessibilityTree() {
+            for label in ["下一笔", "上一笔", "预览", "提交"] {
+                XCTAssertFalse(app.buttons[label].exists, label)
+            }
+        }
+
+        assertNavigationRemainsVisible()
+        assertHiddenKeyboardCommandsStayOutOfAccessibilityTree()
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "v151.mac.ledger.title").count, 1)
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Fiscal /")).count, 0)
+
+        element("v151.mac.module.future").click()
+        XCTAssertTrue(element("v151.mac.module.title").waitForExistence(timeout: 5))
+        assertHiddenKeyboardCommandsStayOutOfAccessibilityTree()
+        XCTAssertTrue(element("v151.mac.future.installments").exists)
+        element("v151.mac.future.installments").click()
+        XCTAssertTrue(element("v151.mac.module.title").exists)
+        XCTAssertTrue(element("v151.mac.module.back").exists)
+        element("v151.mac.module.back").click()
+        assertNavigationRemainsVisible()
+
+        element("v151.mac.module.ledger").click()
+        XCTAssertTrue(element("v151.mac.ledger.search").exists)
+
+        element("v151.mac.module.archive").click()
+        XCTAssertTrue(element("v151.mac.module.title").exists)
+        assertHiddenKeyboardCommandsStayOutOfAccessibilityTree()
+        XCTAssertTrue(element("v151.mac.system.ai-proposals").exists)
+        XCTAssertTrue(element("v151.mac.system.statement-import").exists)
+        assertNavigationRemainsVisible()
+
+        element("v151.mac.system.ai-proposals").click()
+        XCTAssertTrue(element("v151.mac.module.title").exists)
+        XCTAssertTrue(element("v151.mac.module.back").exists)
+        assertNavigationRemainsVisible()
+        element("v151.mac.module.back").click()
+
+        element("v151.mac.system.statement-import").click()
+        XCTAssertTrue(element("v151.mac.module.title").exists)
+        XCTAssertTrue(element("v151.mac.module.back").exists)
+        assertNavigationRemainsVisible()
+        app.terminate()
+        assertAppCleanup(service: service)
     }
 }

@@ -34,7 +34,7 @@ async def list_accounts(
     "",
     response_model=AccountResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[formal_mutation("accounts", "credit", "reconciliation", "attention", "reports")],
+    dependencies=[formal_mutation("accounts", "credit", "reports")],
 )
 async def create_account(
     draft: AccountDraft,
@@ -69,7 +69,7 @@ async def get_account(
 @router.patch(
     "/{account_id}",
     response_model=AccountResponse,
-    dependencies=[formal_mutation("accounts", "credit", "reconciliation", "attention", "reports")],
+    dependencies=[formal_mutation("accounts", "credit", "reports")],
 )
 async def update_account(
     account_id: UUID,
@@ -82,7 +82,7 @@ async def update_account(
 @router.delete(
     "/{account_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[formal_mutation("accounts", "credit", "reconciliation", "attention", "reports")],
+    dependencies=[formal_mutation("accounts", "credit", "reports")],
 )
 async def delete_account(
     account_id: UUID,
@@ -96,7 +96,7 @@ async def delete_account(
 @router.post(
     "/{account_id}/archive",
     response_model=AccountResponse,
-    dependencies=[formal_mutation("accounts", "credit", "reconciliation", "attention", "reports")],
+    dependencies=[formal_mutation("accounts", "credit", "reports")],
 )
 async def archive_account(
     account_id: UUID,
@@ -109,7 +109,7 @@ async def archive_account(
 @router.post(
     "/{account_id}/restore",
     response_model=AccountResponse,
-    dependencies=[formal_mutation("accounts", "credit", "reconciliation", "attention", "reports")],
+    dependencies=[formal_mutation("accounts", "credit", "reports")],
 )
 async def restore_account(
     account_id: UUID,

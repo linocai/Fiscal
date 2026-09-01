@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from os import environ
 from uuid import uuid4
 
@@ -79,23 +78,6 @@ def test_p30b_order_revisions_conflicts_checkpoint_and_attention_actions() -> No
             "reload_path": f"/api/v1/accounts/{accounts[0]['id']}",
         }
 
-        checkpoint = client.post(
-            "/api/v1/reconciliation/checkpoints",
-            headers=auth,
-            json={
-                "target_kind": "account",
-                "account_id": accounts[0]["id"],
-                "as_of": "2026-08-13T12:00:00+08:00",
-                "actual_balance_minor": 0,
-            },
-        )
-        assert checkpoint.status_code == 201, checkpoint.text
-        checkpoint_read = client.get(
-            f"/api/v1/reconciliation/checkpoints/{checkpoint.json()['id']}", headers=auth
-        )
-        assert checkpoint_read.status_code == 200, checkpoint_read.text
-        assert checkpoint_read.json()["id"] == checkpoint.json()["id"]
-
         transaction = client.post(
             "/api/v1/transactions",
             headers={**auth, "Idempotency-Key": str(uuid4())},
@@ -125,14 +107,6 @@ def test_p30b_order_revisions_conflicts_checkpoint_and_attention_actions() -> No
                 "reason_message": "The transaction is already voided",
             }
         ]
-
-        unknown_action = client.post(
-            f"/api/v1/reconciliation/attention/unknown/{uuid4()}/ignore",
-            headers=auth,
-            json={"expires_at": datetime(2026, 12, 1, tzinfo=UTC).isoformat()},
-        )
-        assert unknown_action.status_code == 422
-        assert unknown_action.json()["error"]["code"] == "attention_action_unknown"
 
 
 def test_p30b_category_order_conflicts_expose_reloadable_root_and_child_scopes() -> None:

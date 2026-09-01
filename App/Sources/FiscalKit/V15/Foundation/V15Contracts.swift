@@ -47,8 +47,8 @@ public struct V15Facts: Codable, Sendable {
     public struct Credit: Codable, Sendable { public let currentDebtMinor: V15MinorUnits; public let scope: V15DrillDownScope?; enum CodingKeys: String, CodingKey { case currentDebtMinor = "current_debt_minor", scope } }
     public struct Reimbursements: Codable, Sendable { public let outstandingMinor: V15MinorUnits; public let scope: V15DrillDownScope?; enum CodingKeys: String, CodingKey { case outstandingMinor = "outstanding_minor", scope } }
     public struct Completeness: Codable, Sendable {
-        public let unresolvedImportCount: Int; public let failedImportCount: Int; public let uncategorizedTransactionCount: Int; public let openReconciliationDifferenceCount: Int; public let lastReconciledAt: Date?; public let uncategorizedTransactionAmountMinor: V15MinorUnits; public let scope: V15DrillDownScope?
-        enum CodingKeys: String, CodingKey { case unresolvedImportCount = "unresolved_import_count", failedImportCount = "failed_import_count", uncategorizedTransactionCount = "uncategorized_transaction_count", openReconciliationDifferenceCount = "open_reconciliation_difference_count", lastReconciledAt = "last_reconciled_at", uncategorizedTransactionAmountMinor = "uncategorized_transaction_amount_minor", scope }
+        public let unresolvedImportCount: Int; public let failedImportCount: Int; public let uncategorizedTransactionCount: Int; public let uncategorizedTransactionAmountMinor: V15MinorUnits; public let scope: V15DrillDownScope?
+        enum CodingKeys: String, CodingKey { case unresolvedImportCount = "unresolved_import_count", failedImportCount = "failed_import_count", uncategorizedTransactionCount = "uncategorized_transaction_count", uncategorizedTransactionAmountMinor = "uncategorized_transaction_amount_minor", scope }
     }
     public struct FutureTotals: Codable, Sendable, Equatable {
         public let exactDueOutflowMinor: V15MinorUnits; public let confirmedOutflowMinor: V15MinorUnits; public let expectedOutflowMinor: V15MinorUnits; public let scheduledOutflowMinor: V15MinorUnits; public let confirmedInflowMinor: V15MinorUnits; public let expectedInflowMinor: V15MinorUnits; public let scheduledInflowMinor: V15MinorUnits; public let afterConfirmedOutflowMinor: V15MinorUnits
@@ -67,21 +67,20 @@ public struct V15Facts: Codable, Sendable {
 
 public enum V15FactDrillDownItem: Decodable, Sendable, Equatable {
     public enum CompletenessIssueType: Sendable, Equatable, Decodable {
-        case unresolvedImports, failedImports, uncategorizedTransactions, openReconciliationDifferences, unknown(String)
+        case unresolvedImports, failedImports, uncategorizedTransactions, unknown(String)
         public init(from decoder: Decoder) throws {
             switch try decoder.singleValueContainer().decode(String.self) {
             case "unresolved_imports": self = .unresolvedImports
             case "failed_imports": self = .failedImports
             case "uncategorized_transactions": self = .uncategorizedTransactions
-            case "open_reconciliation_differences": self = .openReconciliationDifferences
             case let value: self = .unknown(value)
             }
         }
     }
     public struct CashAccount: Decodable, Sendable, Equatable, Identifiable {
-        public let itemType: String; public let accountID: UUID; public let name: String; public let currentBalanceMinor: V15MinorUnits; public let lastReconciledAt: Date?; public let readPath: String; public let deepLink: String
+        public let itemType: String; public let accountID: UUID; public let name: String; public let currentBalanceMinor: V15MinorUnits; public let readPath: String; public let deepLink: String
         public var id: UUID { accountID }
-        enum CodingKeys: String, CodingKey { case itemType = "item_type", accountID = "account_id", name, currentBalanceMinor = "current_balance_minor", lastReconciledAt = "last_reconciled_at", readPath = "read_path", deepLink = "deep_link" }
+        enum CodingKeys: String, CodingKey { case itemType = "item_type", accountID = "account_id", name, currentBalanceMinor = "current_balance_minor", readPath = "read_path", deepLink = "deep_link" }
     }
     public struct CreditCycle: Decodable, Sendable, Equatable, Identifiable {
         public let itemType: String; public let cycleID: UUID; public let accountID: UUID; public let accountName: String; public let dueDate: String; public let amountDueMinor: V15MinorUnits; public let repaidMinor: V15MinorUnits; public let remainingMinor: V15MinorUnits; public let readPath: String; public let deepLink: String
@@ -127,16 +126,6 @@ public struct V15FactDrillDown: Decodable, Sendable {
     public let nextCursor: String?
     enum CodingKeys: String, CodingKey { case meta, scope, items; case nextCursor = "next_cursor" }
 }
-
-public enum V15AttentionSeverity: String, Decodable, Sendable, Equatable { case info, warning, critical }
-
-public struct V15AttentionItem: Decodable, Sendable, Equatable, Identifiable {
-    public let sourceType: String; public let sourceID: UUID; public let severity: V15AttentionSeverity; public let amountMinor: V15MinorUnits?; public let occurredAt: Date?; public let explanation: String; public let suggestedAction: String; public let deepLink: String; public let availableActions: [V15AvailableAction]
-    public var id: String { "\(sourceType):\(sourceID.uuidString)" }
-    enum CodingKeys: String, CodingKey { case sourceType = "source_type", sourceID = "source_id", severity, amountMinor = "amount_minor", occurredAt = "occurred_at", explanation, suggestedAction = "suggested_action", deepLink = "deep_link", availableActions = "available_actions" }
-}
-
-public struct V15AttentionPage: Decodable, Sendable, Equatable { public let items: [V15AttentionItem] }
 
 public enum V15FutureEventSource: String, Codable, Sendable, Equatable, CaseIterable { case creditCycle = "credit_cycle", reimbursementParty = "reimbursement_party", cashFlowItem = "cash_flow_item" }
 public enum V15FutureEventDirection: String, Codable, Sendable, Equatable { case inflow, outflow }
@@ -227,7 +216,7 @@ public struct V15PeriodReport: Codable, Sendable {
     public struct InstallmentGroup: Codable, Sendable, Identifiable { public var id: String { month }; public let month: String; public let principalScheduledGrossMinor: V15MinorUnits; public let feeScheduledGrossMinor: V15MinorUnits; public let totalScheduledGrossMinor: V15MinorUnits; public let periodCount: Int; enum CodingKeys: String, CodingKey { case month, principalScheduledGrossMinor = "principal_scheduled_gross_minor", feeScheduledGrossMinor = "fee_scheduled_gross_minor", totalScheduledGrossMinor = "total_scheduled_gross_minor", periodCount = "period_count" } }
     public struct Merchant: Codable, Sendable { public let merchantID: UUID?; public let merchantName: String; public let netConsumptionMinor: V15MinorUnits; public let transactionCount: Int; enum CodingKeys: String, CodingKey { case merchantID = "merchant_id", merchantName = "merchant_name", netConsumptionMinor = "net_consumption_minor", transactionCount = "transaction_count" } }
     public struct Source: Codable, Sendable { public let source: V15ReportTransactionSource; public let transactionCount: Int; enum CodingKeys: String, CodingKey { case source; case transactionCount = "transaction_count" } }
-    public struct Completeness: Codable, Sendable { public let unresolvedImportCount: Int; public let failedImportCount: Int; public let uncategorizedTransactionCount: Int; public let openReconciliationDifferenceCount: Int; enum CodingKeys: String, CodingKey { case unresolvedImportCount = "unresolved_import_count", failedImportCount = "failed_import_count", uncategorizedTransactionCount = "uncategorized_transaction_count", openReconciliationDifferenceCount = "open_reconciliation_difference_count" } }
+    public struct Completeness: Codable, Sendable { public let unresolvedImportCount: Int; public let failedImportCount: Int; public let uncategorizedTransactionCount: Int; enum CodingKeys: String, CodingKey { case unresolvedImportCount = "unresolved_import_count", failedImportCount = "failed_import_count", uncategorizedTransactionCount = "uncategorized_transaction_count" } }
     public let meta: V15ReportMeta
     public let summary: Summary
     public let accounts: [Account]
@@ -450,7 +439,7 @@ public enum V15CreditCycleMode: String, Codable, Sendable, Equatable, CaseIterab
 /// explicit rather than inventing `enabled` or a server reason that was never
 /// sent.
 public struct V15CreditSchedulePreview: Codable, Sendable, Equatable {
-    public struct AffectedCycle: Codable, Sendable, Equatable { public let cycleID: UUID; public let currentVersion: Int; public let expectedVersion: Int; public let oldStatementDate: String; public let oldDueDate: String; public let newStatementDate: String; public let newDueDate: String; public let remainingMinor: V15MinorUnits; public let oldIsOverdue: Bool; public let newIsOverdue: Bool; public let preservedCheckpointCount: Int; enum CodingKeys: String, CodingKey { case cycleID = "cycle_id", currentVersion = "current_version", expectedVersion = "expected_version", oldStatementDate = "old_statement_date", oldDueDate = "old_due_date", newStatementDate = "new_statement_date", newDueDate = "new_due_date", remainingMinor = "remaining_minor", oldIsOverdue = "old_is_overdue", newIsOverdue = "new_is_overdue", preservedCheckpointCount = "preserved_checkpoint_count" } }
+    public struct AffectedCycle: Codable, Sendable, Equatable { public let cycleID: UUID; public let currentVersion: Int; public let expectedVersion: Int; public let oldStatementDate: String; public let oldDueDate: String; public let newStatementDate: String; public let newDueDate: String; public let remainingMinor: V15MinorUnits; public let oldIsOverdue: Bool; public let newIsOverdue: Bool; enum CodingKeys: String, CodingKey { case cycleID = "cycle_id", currentVersion = "current_version", expectedVersion = "expected_version", oldStatementDate = "old_statement_date", oldDueDate = "old_due_date", newStatementDate = "new_statement_date", newDueDate = "new_due_date", remainingMinor = "remaining_minor", oldIsOverdue = "old_is_overdue", newIsOverdue = "new_is_overdue" } }
     public let accountID: UUID; public let cycleMode: String; public let statementDay: Int; public let dueDay: Int; public let oldCycleMode: String?; public let oldStatementDay: Int?; public let oldDueDay: Int?; public let affectedCycleCount: Int; public let purchaseCount: Int; public let repaymentCount: Int; public let installmentPeriodCount: Int; public let affectedCycles: [AffectedCycle]; public let oldOverdueCycleCount: Int; public let newOverdueCycleCount: Int; public let conflicts: [String]; public let previewToken: UUID?; public let previewExpiresAt: Date?; public let currentAccountVersion: Int?; public let expectedAccountVersion: Int?; public let warnings: [String]; public let availableActions: [String]; public let dataRevision: Int64?
     enum CodingKeys: String, CodingKey { case accountID = "account_id", cycleMode = "cycle_mode", statementDay = "statement_day", dueDay = "due_day", oldCycleMode = "old_cycle_mode", oldStatementDay = "old_statement_day", oldDueDay = "old_due_day", affectedCycleCount = "affected_cycle_count", purchaseCount = "purchase_count", repaymentCount = "repayment_count", installmentPeriodCount = "installment_period_count", affectedCycles = "affected_cycles", oldOverdueCycleCount = "old_overdue_cycle_count", newOverdueCycleCount = "new_overdue_cycle_count", conflicts, previewToken = "preview_token", previewExpiresAt = "preview_expires_at", currentAccountVersion = "current_account_version", expectedAccountVersion = "expected_account_version", warnings, availableActions = "available_actions", dataRevision = "data_revision" }
 }

@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, date, datetime
 from uuid import uuid4
 
@@ -81,6 +82,14 @@ def test_p34_openapi_distinguishes_report_exports_from_ledger_export(client: Tes
         ]
 
 
+def test_p34_openapi_hides_retired_reconciliation_contract(client: TestClient) -> None:
+    document = client.get("/openapi.json").json()
+    public_contract = json.dumps(document, sort_keys=True)
+    assert "open_reconciliation_difference_count" not in public_contract
+    assert "last_reconciled_at" not in public_contract
+    assert "reconciliation" not in public_contract
+
+
 def test_p34_pdf_paginates_every_canonical_category_row() -> None:
     now = datetime(2026, 8, 14, tzinfo=UTC)
     report = PeriodReport(
@@ -129,7 +138,6 @@ def test_p34_pdf_paginates_every_canonical_category_row() -> None:
             unresolved_import_count=0,
             failed_import_count=0,
             uncategorized_transaction_count=0,
-            open_reconciliation_difference_count=0,
         ),
         drill_down_path="/api/v1/reports/period-drill-down",
     )
@@ -178,7 +186,6 @@ def test_p34_v2_exports_include_every_installment_aggregate() -> None:
             unresolved_import_count=0,
             failed_import_count=0,
             uncategorized_transaction_count=0,
-            open_reconciliation_difference_count=0,
         ),
         daily=[],
         known_future_events=[],

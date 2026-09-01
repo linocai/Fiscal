@@ -19,7 +19,6 @@ from fiscal_api.services.credit import CreditService
 from fiscal_api.services.installments import InstallmentService
 from fiscal_api.services.merchants import MerchantService
 from fiscal_api.services.migrations import MigrationRunService
-from fiscal_api.services.reconciliation import ReconciliationService
 from fiscal_api.services.reimbursements import ReimbursementService
 from fiscal_api.services.reporting import ReportingService
 from fiscal_api.services.statement_import_confirmation import StatementImportConfirmationService
@@ -67,8 +66,6 @@ LEDGER_DERIVED_SCOPES = (
     "credit",
     "reimbursements",
     "cash_flow",
-    "reconciliation",
-    "attention",
     "reports",
     "ai",
 )
@@ -124,10 +121,6 @@ def get_reimbursement_service(session: SessionDependency) -> ReimbursementServic
 
 def get_reporting_service(session: SessionDependency) -> ReportingService:
     return ReportingService(session)
-
-
-def get_reconciliation_service(session: SessionDependency) -> ReconciliationService:
-    return ReconciliationService(session)
 
 
 def get_migration_run_service(session: SessionDependency) -> MigrationRunService:
@@ -190,9 +183,6 @@ CreditServiceDependency = Annotated[CreditService, Depends(get_credit_service)]
 InstallmentServiceDependency = Annotated[InstallmentService, Depends(get_installment_service)]
 ReimbursementServiceDependency = Annotated[ReimbursementService, Depends(get_reimbursement_service)]
 ReportingServiceDependency = Annotated[ReportingService, Depends(get_reporting_service)]
-ReconciliationServiceDependency = Annotated[
-    ReconciliationService, Depends(get_reconciliation_service)
-]
 MigrationRunServiceDependency = Annotated[MigrationRunService, Depends(get_migration_run_service)]
 MerchantServiceDependency = Annotated[MerchantService, Depends(get_merchant_service)]
 AIServiceDependency = Annotated[AIService, Depends(get_ai_service)]

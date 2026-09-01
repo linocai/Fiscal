@@ -35,7 +35,7 @@ async def list_merchants(
     "",
     response_model=MerchantResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[formal_mutation("reports", "attention")],
+    dependencies=[formal_mutation("reports")],
 )
 async def create_merchant(
     draft: MerchantDraft, service: MerchantServiceDependency
@@ -51,7 +51,7 @@ async def get_merchant(merchant_id: UUID, service: MerchantServiceDependency) ->
 @router.patch(
     "/{merchant_id}",
     response_model=MerchantResponse,
-    dependencies=[formal_mutation("reports", "attention")],
+    dependencies=[formal_mutation("reports")],
 )
 async def update_merchant(
     merchant_id: UUID,

@@ -6,7 +6,6 @@ enum V15F2AFixtures {
     static let cycleID = UUID(uuidString: "00000000-0000-0000-0000-00000000F203")!
     static let claimID = UUID(uuidString: "00000000-0000-0000-0000-00000000F204")!
     static let partyID = UUID(uuidString: "00000000-0000-0000-0000-00000000F205")!
-    static let checkpointID = UUID(uuidString: "00000000-0000-0000-0000-00000000F207")!
     static let proposalID = UUID(uuidString: "00000000-0000-0000-0000-00000000F208")!
     static let migrationID = UUID(uuidString: "00000000-0000-0000-0000-00000000F209")!
     static let cashFlowID = UUID(uuidString: "00000000-0000-0000-0000-00000000F210")!
@@ -14,7 +13,7 @@ enum V15F2AFixtures {
 
     static func facts(revision: Int64 = 42) -> Data {
         Data("""
-        {"meta":{"timezone":"Asia/Shanghai","currency":"CNY","as_of":"2026-08-15T16:01:02Z","data_revision":\(revision),"schema_version":"1"},"window":{"date_from":"2026-08-16","date_to":"2026-09-14"},"cash":{"current_balance_minor":9223372036854775807,"scope":\(scope("cash_accounts", revision))},"credit":{"current_debt_minor":-4567,"scope":\(scope("credit_cycles", revision))},"reimbursements":{"outstanding_minor":900,"scope":\(scope("reimbursement_outstanding", revision))},"completeness":{"unresolved_import_count":1,"failed_import_count":2,"uncategorized_transaction_count":3,"open_reconciliation_difference_count":4,"last_reconciled_at":"2026-08-15T02:03:04Z","uncategorized_transaction_amount_minor":500,"scope":\(scope("completeness_issues", revision))},"future":{"exact_due_outflow_minor":200,"confirmed_outflow_minor":100,"expected_outflow_minor":300,"scheduled_outflow_minor":400,"confirmed_inflow_minor":50,"expected_inflow_minor":500,"scheduled_inflow_minor":0,"after_confirmed_outflow_minor":9223372036854775707},"known_future_events":[{"source_type":"credit_cycle","source_id":"\(cycleID)","date":"2026-08-20","direction":"outflow","amount_minor":200,"certainty":"exact_due","title":"信用卡还款","deep_link":"fiscal://credit/cycles/\(cycleID)","account_id":"\(accountID)","claim_id":null,"party_id":null,"cycle_id":"\(cycleID)"}]}
+        {"meta":{"timezone":"Asia/Shanghai","currency":"CNY","as_of":"2026-08-15T16:01:02Z","data_revision":\(revision),"schema_version":"1"},"window":{"date_from":"2026-08-16","date_to":"2026-09-14"},"cash":{"current_balance_minor":9223372036854775807,"scope":\(scope("cash_accounts", revision))},"credit":{"current_debt_minor":-4567,"scope":\(scope("credit_cycles", revision))},"reimbursements":{"outstanding_minor":900,"scope":\(scope("reimbursement_outstanding", revision))},"completeness":{"unresolved_import_count":1,"failed_import_count":2,"uncategorized_transaction_count":3,"uncategorized_transaction_amount_minor":500,"scope":\(scope("completeness_issues", revision))},"future":{"exact_due_outflow_minor":200,"confirmed_outflow_minor":100,"expected_outflow_minor":300,"scheduled_outflow_minor":400,"confirmed_inflow_minor":50,"expected_inflow_minor":500,"scheduled_inflow_minor":0,"after_confirmed_outflow_minor":9223372036854775707},"known_future_events":[{"source_type":"credit_cycle","source_id":"\(cycleID)","date":"2026-08-20","direction":"outflow","amount_minor":200,"certainty":"exact_due","title":"信用卡还款","deep_link":"fiscal://credit/cycles/\(cycleID)","account_id":"\(accountID)","claim_id":null,"party_id":null,"cycle_id":"\(cycleID)"}]}
         """.utf8)
     }
     static func invalidFacts(revision: Int64 = 42) -> Data {
@@ -28,7 +27,7 @@ enum V15F2AFixtures {
     static func page(scope type: String, revision: Int64 = 42, nextCursor: String? = nil) -> Data {
         let item: String
         switch type {
-        case "cash_accounts": item = "{\"item_type\":\"cash_account\",\"account_id\":\"\(accountID)\",\"name\":\"日常现金\",\"current_balance_minor\":9223372036854775807,\"last_reconciled_at\":\"2026-08-15T02:03:04Z\",\"read_path\":\"/api/v1/accounts/\(accountID)\",\"deep_link\":\"fiscal://accounts/\(accountID)\"}"
+        case "cash_accounts": item = "{\"item_type\":\"cash_account\",\"account_id\":\"\(accountID)\",\"name\":\"日常现金\",\"current_balance_minor\":9223372036854775807,\"read_path\":\"/api/v1/accounts/\(accountID)\",\"deep_link\":\"fiscal://accounts/\(accountID)\"}"
         case "credit_cycles": item = "{\"item_type\":\"credit_cycle\",\"cycle_id\":\"\(cycleID)\",\"account_id\":\"\(accountID)\",\"account_name\":\"信用账户\",\"due_date\":\"2026-08-20\",\"amount_due_minor\":1000,\"repaid_minor\":200,\"remaining_minor\":800,\"read_path\":\"/api/v1/credit-cycles/\(cycleID)\",\"deep_link\":\"fiscal://credit/cycles/\(cycleID)\"}"
         case "reimbursement_outstanding": item = "{\"item_type\":\"reimbursement_outstanding\",\"claim_id\":\"\(claimID)\",\"party_id\":\"\(partyID)\",\"party_name\":\"同事\",\"expected_date\":\"2026-08-25\",\"expected_minor\":1200,\"received_minor\":200,\"outstanding_minor\":1000,\"read_path\":\"/api/v1/reimbursement-claims/\(claimID)\",\"deep_link\":\"fiscal://reimbursements/\(claimID)\"}"
         default: item = "{\"item_type\":\"completeness_issue\",\"issue_type\":\"uncategorized_transactions\",\"count\":3,\"amount_minor\":500,\"read_path\":\"/api/v1/transactions?classification=uncategorized\",\"deep_link\":\"fiscal://transactions?classification=uncategorized\"}"
@@ -38,33 +37,16 @@ enum V15F2AFixtures {
     }
 
     static let emptyPage = Data("{\"meta\":{\"timezone\":\"Asia/Shanghai\",\"currency\":\"CNY\",\"as_of\":\"2026-08-15T16:01:02Z\",\"data_revision\":42,\"schema_version\":\"1\"},\"scope\":\(scope("completeness_issues", 42)),\"items\":[],\"next_cursor\":null}".utf8)
-    static let attention = Data("""
-    {"items":[
-      {"source_type":"operation_exception","source_id":"\(migrationID)","severity":"critical","amount_minor":null,"occurred_at":"2026-08-15T02:03:06Z","explanation":"legacy 数据迁移运行失败。","suggested_action":"检查运行记录后在隔离环境重新验证。","deep_link":"fiscal://settings/migrations/\(migrationID)","available_actions":[{"action":"ignore","enabled":true,"reason_code":null,"reason_message":null}]},
-      {"source_type":"credit_cycle_overdue","source_id":"\(cycleID)","severity":"critical","amount_minor":9223372036854775807,"occurred_at":null,"explanation":"信用账期仍有未还余额且已逾期。","suggested_action":"查看账期并安排还款。","deep_link":"fiscal://credit-cycles/\(cycleID)","available_actions":[{"action":"ignore","enabled":true,"reason_code":null,"reason_message":null}]},
-      {"source_type":"reconciliation_checkpoint","source_id":"\(checkpointID)","severity":"warning","amount_minor":-50,"occurred_at":"2026-08-15T02:03:04Z","explanation":"实际余额与按该时点重算的账面余额不一致。","suggested_action":"查看差额区间并在必要时通过正式余额调整流水修正。","deep_link":"fiscal://reconciliation/checkpoints/\(checkpointID)","available_actions":[{"action":"ignore","enabled":true,"reason_code":null,"reason_message":null}]},
-      {"source_type":"statement_import_failed","source_id":"\(importID)","severity":"warning","amount_minor":null,"occurred_at":"2026-08-15T02:03:08Z","explanation":"账单导入处理失败。","suggested_action":"查看账单导入。","deep_link":"fiscal://statement-imports/\(importID)","available_actions":[{"action":"ignore","enabled":false,"reason_code":"statement_import_attention_not_dismissible","reason_message":"Statement import attention cannot be ignored"}]},
-      {"source_type":"cash_flow_overdue","source_id":"\(cashFlowID)","severity":"warning","amount_minor":800,"occurred_at":null,"explanation":"现金流项目“租金”已逾期。","suggested_action":"确认、结算或取消该现金流项目。","deep_link":"fiscal://cash-flow/\(cashFlowID)","available_actions":[{"action":"ignore","enabled":true,"reason_code":null,"reason_message":null}]},
-      {"source_type":"reimbursement_overdue","source_id":"\(partyID)","severity":"warning","amount_minor":null,"occurred_at":null,"explanation":"报销“差旅”的同事已超过预计回款日。","suggested_action":"记录回款或更新报销进度。","deep_link":"fiscal://reimbursements/\(claimID)","available_actions":[{"action":"ignore","enabled":true,"reason_code":null,"reason_message":null}]},
-      {"source_type":"reconciliation_missing","source_id":"\(accountID)","severity":"info","amount_minor":null,"occurred_at":null,"explanation":"日常现金 尚无余额核对锚点。","suggested_action":"输入实际余额进行首次核对。","deep_link":"fiscal://reconciliation/accounts/\(accountID)","available_actions":[{"action":"ignore","enabled":true,"reason_code":null,"reason_message":null}]},
-      {"source_type":"uncategorized_transaction","source_id":"\(transactionID)","severity":"info","amount_minor":null,"occurred_at":"2026-08-15T02:03:04Z","explanation":"该正式流水尚未归类。","suggested_action":"补充分类。","deep_link":"fiscal://transactions/\(transactionID)","available_actions":[{"action":"ignore","enabled":true,"reason_code":null,"reason_message":null}]},
-      {"source_type":"ai_proposal","source_id":"\(proposalID)","severity":"info","amount_minor":null,"occurred_at":"2026-08-15T02:03:05Z","explanation":"AI 提案需要确认。","suggested_action":"查看并确认、修改或重试。","deep_link":"fiscal://ai/proposals/\(proposalID)","available_actions":[{"action":"ignore","enabled":true,"reason_code":null,"reason_message":null}]},
-      {"source_type":"statement_import_review","source_id":"\(importID)","severity":"info","amount_minor":null,"occurred_at":"2026-08-15T02:03:07Z","explanation":"账单导入需要审核。","suggested_action":"查看账单导入。","deep_link":"fiscal://statement-imports/\(importID)","available_actions":[{"action":"ignore","enabled":false,"reason_code":"statement_import_attention_not_dismissible","reason_message":"Statement import attention cannot be ignored"}]}
-    ]}
-    """.utf8)
-    static let emptyAttention = Data("{\"items\":[]}".utf8)
-    static let unknownAttention = Data("{\"source_type\":\"future_source\",\"source_id\":\"\(cycleID)\",\"severity\":\"critical\",\"amount_minor\":9223372036854775807,\"occurred_at\":null,\"explanation\":\"未知来源。\",\"suggested_action\":\"仅说明。\",\"deep_link\":\"fiscal://transactions/\(transactionID)\",\"available_actions\":[{\"action\":\"ignore\",\"enabled\":false,\"reason_code\":\"attention_action_unknown\",\"reason_message\":\"This attention type has no known safe action\"}]}".utf8)
     static let account = Data("{\"id\":\"\(accountID)\",\"name\":\"日常现金\",\"kind\":\"cash\",\"institution\":null,\"last_four\":null,\"opening_balance_minor\":0,\"current_balance_minor\":100000,\"credit_limit_minor\":null,\"statement_day\":null,\"due_day\":null,\"cycle_mode\":null,\"opening_balance_as_of_date\":null,\"opening_due_date\":null,\"sort_order\":1,\"archived_at\":null,\"usage_count\":3,\"version\":2,\"created_at\":\"2026-08-01T00:00:00Z\",\"updated_at\":\"2026-08-15T00:00:00Z\"}".utf8)
     static let transaction = Data("{\"id\":\"\(transactionID)\",\"kind\":\"expense\",\"amount_minor\":1280,\"occurred_at\":\"2026-08-15T04:00:00Z\",\"business_date\":\"2026-08-15\",\"title\":\"午餐\",\"note\":null,\"category_id\":null,\"account_id\":\"\(accountID)\",\"destination_account_id\":null,\"credit_cycle_id\":null,\"source\":\"manual\",\"postings\":[{\"id\":\"00000000-0000-0000-0000-00000000F206\",\"account_id\":\"\(accountID)\",\"role\":\"account\",\"amount_minor\":-1280,\"position\":0}],\"version\":1,\"voided_at\":null,\"created_at\":\"2026-08-15T04:00:00Z\",\"updated_at\":\"2026-08-15T04:00:00Z\",\"installment_plan_id\":null,\"installment_relation\":null,\"reimbursement_relations\":[],\"available_actions\":[]}".utf8)
     static let unknownItem = Data("{\"item_type\":\"new_server_type\",\"deep_link\":\"fiscal://transactions/\(transactionID)\"}".utf8)
 }
 
 actor V15F2ATransport: V15Transporting {
-    enum Mode { case normal, scopeConflict, scopeConflictThenRefreshFailure, scopeConflictThenNewRevision, scopeConflictForceRefreshSequence, scopeConflictForceRefreshInvalidFacts, scopeConflictForceRefreshAttentionFailure, scopeConflictForceRefreshAttentionCancelled, pageFailure, refreshRace, attentionRefreshRace, emptyScope, factsFailure, slowScope, linkedReadFailsThenSucceeds, slowLinkedRead }
+    enum Mode { case normal, scopeConflict, scopeConflictThenRefreshFailure, scopeConflictThenNewRevision, scopeConflictForceRefreshSequence, scopeConflictForceRefreshInvalidFacts, pageFailure, refreshRace, emptyScope, factsFailure, slowScope, linkedReadFailsThenSucceeds, slowLinkedRead }
     private let mode: Mode
     private var requests: [V15Request] = []
     private var factsReads = 0
-    private var attentionReads = 0
     init(mode: Mode = .normal) { self.mode = mode }
 
     func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
@@ -86,16 +68,6 @@ actor V15F2ATransport: V15Transporting {
                 try await Task.sleep(for: .milliseconds(80)); data = V15F2AFixtures.facts(revision: 41)
             } else {
                 data = V15F2AFixtures.facts()
-            }
-        case "reconciliation/attention":
-            attentionReads += 1
-            if attentionReads == 2, mode == .scopeConflictForceRefreshAttentionFailure { throw V15Failure(kind: .transport, message: "关注事项读取失败。") }
-            if attentionReads == 2, mode == .scopeConflictForceRefreshAttentionCancelled { throw V15Failure(kind: .cancelled, message: "关注事项读取已取消。") }
-            if attentionReads == 1, mode == .attentionRefreshRace {
-                try await Task.sleep(for: .milliseconds(80))
-                data = V15F2AFixtures.emptyAttention
-            } else {
-                data = V15F2AFixtures.attention
             }
         case "reports/facts/drill-down":
             let scope = request.query.first(where: { $0.name == "scope" })?.value ?? ""
@@ -120,7 +92,7 @@ actor V15F2ATransport: V15Transporting {
     func allRequests() -> [V15Request] { requests }
     private var usesForcedRecoverySequence: Bool {
         switch mode {
-        case .scopeConflictForceRefreshSequence, .scopeConflictForceRefreshInvalidFacts, .scopeConflictForceRefreshAttentionFailure, .scopeConflictForceRefreshAttentionCancelled: true
+        case .scopeConflictForceRefreshSequence, .scopeConflictForceRefreshInvalidFacts: true
         default: false
         }
     }
@@ -143,7 +115,6 @@ actor V15F2AOfflineSnapshotTransport: V15Transporting {
             await Task.yield()
             await revisionStore.markOfflineSnapshot(at: snapshotAt)
             data = V15F2AFixtures.facts()
-        case "reconciliation/attention": data = V15F2AFixtures.attention
         default: throw V15Failure(kind: .transport, code: "unexpected_path", message: "不应请求：\(request.path)")
         }
         return try V15FixtureCodec.decoder.decode(Response.self, from: data)

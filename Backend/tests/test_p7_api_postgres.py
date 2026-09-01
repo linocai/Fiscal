@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from os import environ
 from uuid import uuid4
 
@@ -14,10 +13,6 @@ pytestmark = pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires Post
 
 def test_real_report_api_smoke(monkeypatch: pytest.MonkeyPatch) -> None:
     assert TEST_DATABASE_URL is not None
-    monkeypatch.setattr(
-        "fiscal_api.services.reconciliation.utc_now",
-        lambda: datetime(2026, 7, 15, 12, tzinfo=UTC),
-    )
 
     async def ready() -> None:
         return None
@@ -94,6 +89,8 @@ def test_real_report_api_smoke(monkeypatch: pytest.MonkeyPatch) -> None:
         assert facts.json()["meta"]["data_revision"] >= 1
         assert facts.json()["window"] == {"date_from": "2026-07-15", "date_to": "2026-08-13"}
         assert facts.json()["cash"]["current_balance_minor"] == 8_766
+        assert facts.json()["completeness"]["open_reconciliation_difference_count"] == 0
+        assert facts.json()["completeness"]["last_reconciled_at"] is None
         assert facts.json()["future"]["after_confirmed_outflow_minor"] == 8_766
         assert facts.json()["known_future_events"] == []
         future = client.get(
@@ -115,6 +112,7 @@ def test_real_report_api_smoke(monkeypatch: pytest.MonkeyPatch) -> None:
             == facts.json()["cash"]["current_balance_minor"]
         )
         assert all("last_four" not in item for item in cash_details.json()["items"])
+        assert all(item["last_reconciled_at"] is None for item in cash_details.json()["items"])
         stale_scope = client.get(
             "/api/v1/reports/facts/drill-down?scope=cash_accounts"
             f"&expected_data_revision={cash_scope['expected_data_revision'] + 1}",
@@ -122,52 +120,6 @@ def test_real_report_api_smoke(monkeypatch: pytest.MonkeyPatch) -> None:
         )
         assert stale_scope.status_code == 409, stale_scope.text
         assert stale_scope.json()["error"]["code"] == "report_facts_scope_changed"
-
-        checkpoint = client.post(
-            "/api/v1/reconciliation/checkpoints",
-            headers=auth,
-            json={
-                "target_kind": "account",
-                "account_id": account.json()["id"],
-                "as_of": "2026-07-15T12:00:00+08:00",
-                "actual_balance_minor": 8_766,
-            },
-        )
-        assert checkpoint.status_code == 201, checkpoint.text
-        stale_after_checkpoint = client.get(cash_scope["read_path"], headers=auth)
-        assert stale_after_checkpoint.status_code == 409, stale_after_checkpoint.text
-        assert stale_after_checkpoint.json()["error"]["code"] == "report_facts_scope_changed"
-        backfill = client.post(
-            "/api/v1/transactions",
-            headers={**auth, "Idempotency-Key": str(uuid4())},
-            json={
-                "kind": "expense",
-                "amount_minor": 100,
-                "occurred_at": "2026-07-15T11:00:00+08:00",
-                "title": "P30-A 对账回填",
-                "account_id": account.json()["id"],
-                "category_id": category.json()["id"],
-            },
-        )
-        assert backfill.status_code == 201, backfill.text
-        attention = client.get("/api/v1/reconciliation/attention", headers=auth)
-        checkpoint_attention = next(
-            item
-            for item in attention.json()["items"]
-            if item["source_type"] == "reconciliation_checkpoint"
-        )
-        ignored = client.post(
-            "/api/v1/reconciliation/attention/"
-            f"{checkpoint_attention['source_type']}/{checkpoint_attention['source_id']}/ignore",
-            headers=auth,
-            json={"expires_at": "2026-07-16T12:00:00+08:00"},
-        )
-        assert ignored.status_code == 204, ignored.text
-        facts_after_ignore = client.get("/api/v1/reports/facts?window_days=30", headers=auth)
-        assert facts_after_ignore.status_code == 200, facts_after_ignore.text
-        assert (
-            facts_after_ignore.json()["completeness"]["open_reconciliation_difference_count"] == 1
-        )
 
         drill = client.get(
             "/api/v1/reports/drill-down?lens=spending&date_from=2020-01-15"

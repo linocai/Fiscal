@@ -440,7 +440,6 @@ public struct V15ReportingMacView: View {
             countRow("未处理导入", value.unresolvedImportCount)
             countRow("失败导入", value.failedImportCount)
             countRow("未分类", value.uncategorizedTransactionCount)
-            countRow("对账差异", value.openReconciliationDifferenceCount)
         }
     }
 

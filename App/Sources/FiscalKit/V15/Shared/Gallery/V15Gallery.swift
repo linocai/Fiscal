@@ -328,7 +328,7 @@ private struct V15GalleryMacSpine: View {
                     Spacer(minLength: V15Spacing.sm)
                     Text(density == .compact ? "紧凑" : "舒适").font(V15Typography.label).padding(.horizontal, V15Spacing.xs).padding(.vertical, V15Spacing.xxs).background(V15Palette.selected.color, in: Capsule())
                 }
-                V15GallerySpineRow(title: "需要决定", detail: selection.title, amount: -3_280_40, selected: true)
+                V15GallerySpineRow(title: "本月流水", detail: selection.title, amount: -3_280_40, selected: true)
                 V15GallerySpineRow(title: "已确认", detail: "午餐 · 已记账", amount: -4_500, selected: false)
                 V15GalleryStateSurface(fixture: selection, retryCount: retryCount, retry: retry, showEditor: showEditor)
                 V15GallerySpineRow(title: "下一页", detail: "分页边界 · 没有更多隐藏结果", amount: 0, selected: false)

@@ -9,7 +9,7 @@ import SwiftUI
 public struct V151IOSWorkspace: View {
     fileprivate enum Destination: String, Identifiable {
         case future, credit, installments, reimbursements, cashFlow
-        case reconciliation, proposals, statementImport, reports, archive, settings, pendingSync
+        case proposals, statementImport, reports, archive, settings, pendingSync
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -18,7 +18,6 @@ public struct V151IOSWorkspace: View {
             case .installments: "分期"
             case .reimbursements: "报销"
             case .cashFlow: "现金流"
-            case .reconciliation: "核对"
             case .proposals: "AI 待确认"
             case .statementImport: "账单导入"
             case .reports: "报表"
@@ -148,8 +147,6 @@ private struct V151IOSTodayDashboard: View {
     @State private var model: V15TodayReadModel
     @State private var monthReport: V15PeriodReport?
     @State private var reportPhase: ReportPhase = .idle
-    @AppStorage("fiscal.v151.today.postponed") private var postponedRaw = ""
-    @State private var expandedDecisionID: String?
     @State private var creditDecisionExpanded = false
 
     init(services: V15Services, recordFactsRevision: UInt64, openLedger: @escaping (UUID?) -> Void, openDestination: @escaping (V151IOSWorkspace.Destination) -> Void, decisionCountChanged: @escaping (Int) -> Void) {
@@ -174,7 +171,7 @@ private struct V151IOSTodayDashboard: View {
         .background(V15Palette.paper.color)
         .refreshable { await refresh() }
         .task(id: recordFactsRevision) { await refresh() }
-        .onChange(of: visibleAttention.count, initial: true) { _, value in decisionCountChanged(value) }
+        .onAppear { decisionCountChanged(0) }
         .accessibilityIdentifier("v151.ios.today")
     }
 
@@ -189,7 +186,6 @@ private struct V151IOSTodayDashboard: View {
                 Menu {
                     Button("报表") { openDestination(.reports) }
                     Button("账单导入") { openDestination(.statementImport) }
-                    Button("核对") { openDestination(.reconciliation) }
                     Button("现金流") { openDestination(.cashFlow) }
                     Button("设置") { openDestination(.settings) }
                     Button("数据与安全") { openDestination(.archive) }
@@ -270,31 +266,16 @@ private struct V151IOSTodayDashboard: View {
         case .loaded:
             VStack(alignment: .leading, spacing: 14) {
                 pendingSyncGroup
-                HStack {
-                    Text("需要你决定 · \(visibleAttention.count)").font(V15Typography.label).foregroundStyle(V15Palette.teal.color)
-                    Spacer()
-                }
-                attentionContent
                 if let debt = model.facts?.credit.currentDebtMinor,
-                   debt != 0,
-                   !visibleAttention.contains(where: { $0.sourceType.contains("credit_cycle") }) {
+                   debt != 0 {
                     creditDecision(debt)
                 }
-                if visibleAttention.isEmpty && (model.facts?.credit.currentDebtMinor ?? 0) == 0 {
+                if (model.facts?.credit.currentDebtMinor ?? 0) == 0 {
                     calmState
                 }
                 if let events = model.facts?.knownFutureEvents, !events.isEmpty { knownFuture(events) }
             }
             .padding(.horizontal, 16).padding(.vertical, 18)
-        }
-    }
-
-    @ViewBuilder private var attentionContent: some View {
-        switch model.attentionPhase {
-        case .idle, .loading: V15LoadingSkeleton()
-        case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.refreshAttention() } }
-        case .loaded:
-            ForEach(visibleAttention) { item in attentionCard(item) }
         }
     }
 
@@ -317,32 +298,6 @@ private struct V151IOSTodayDashboard: View {
             .padding(14)
             .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: 14))
         }
-    }
-
-    private func attentionCard(_ item: V15AttentionItem) -> some View {
-        VStack(alignment: .leading, spacing: 11) {
-            HStack(spacing: 8) {
-                Rectangle().fill(V15Palette.teal.color).frame(width: 8, height: 8)
-                Text(attentionTitle(item)).font(V15Typography.secondary.weight(.semibold)).foregroundStyle(V15Palette.teal.color)
-                Spacer()
-            }
-            if let amount = item.amountMinor { V15MoneyText(minorUnits: amount, direction: attentionDirection(item), font: V15Typography.moneyLarge) }
-            Text(V15AttentionUserCopy.explanation(for: item)).font(V15Typography.body).fixedSize(horizontal: false, vertical: true)
-            Text(V15AttentionUserCopy.suggestedAction(for: item)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58)).fixedSize(horizontal: false, vertical: true)
-            V15AdaptiveStack(spacing: 8) {
-                V15ActionButton(primaryActionTitle(item)) {
-                    if supportsInlineDecision(item) { expandedDecisionID = expandedDecisionID == item.id ? nil : item.id }
-                    else { openDestination(destination(for: item)) }
-                }
-                V15ActionButton(isPostponed(item) ? "移回顶部" : "稍后", kind: .secondary) { togglePostponed(item) }
-            }
-            if expandedDecisionID == item.id {
-                inlineDecision(item)
-            }
-        }
-        .padding(16)
-        .background(V15Palette.paper.color, in: RoundedRectangle(cornerRadius: 15))
-        .overlay { RoundedRectangle(cornerRadius: 15).stroke(V15Palette.hairline.color) }
     }
 
     private func creditDecision(_ amount: Int64) -> some View {
@@ -426,91 +381,9 @@ private struct V151IOSTodayDashboard: View {
     }
 
     private var expectedDifference: Int64? { monthReport.map { $0.summary.personalRealizedMinor - $0.summary.personalExpectedMinor } }
-    private var visibleAttention: [V15AttentionItem] {
-        let deferred = postponedIDs
-        return model.attention.sorted { left, right in
-            let lhs = deferred.contains(left.id)
-            let rhs = deferred.contains(right.id)
-            if lhs != rhs { return !lhs }
-            return left.id < right.id
-        }
-    }
-    private var postponedIDs: Set<String> { Set(postponedRaw.split(separator: "\n").map(String.init)) }
     private var todayLabel: String { let f = DateFormatter(); f.locale = Locale(identifier: "zh_Hans_CN"); f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateFormat = "M月d日 EEEE"; return f.string(from: Date()) }
     private var updateTime: String { guard let value = model.facts?.meta.asOf else { return "读取中" }; let f = DateFormatter(); f.locale = Locale(identifier: "zh_Hans_CN"); f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateFormat = "HH:mm"; return f.string(from: value) }
     private var monthRaw: String { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateFormat = "yyyy-MM"; return f.string(from: Date()) }
-    private func supportsInlineDecision(_ item: V15AttentionItem) -> Bool {
-        item.sourceType == "uncategorized_transaction" ||
-        item.sourceType.contains("credit_cycle") ||
-        item.sourceType.contains("reimbursement") ||
-        item.sourceType.contains("cash_flow")
-    }
-    private func primaryActionTitle(_ item: V15AttentionItem) -> String {
-        switch item.sourceType {
-        case "uncategorized_transaction": "选择分类"
-        case let value where value.contains("credit_cycle"): "记录还款"
-        case let value where value.contains("reimbursement"): "登记收款"
-        case let value where value.contains("cash_flow"): "确认现金流"
-        default: "查看"
-        }
-    }
-    @ViewBuilder private func inlineDecision(_ item: V15AttentionItem) -> some View {
-        if item.sourceType == "uncategorized_transaction" {
-            V151IOSCategoryInlineDecision(services: services, transactionID: item.sourceID) {
-                expandedDecisionID = nil
-                Task { await refresh() }
-            }
-        } else if item.sourceType.contains("credit_cycle") {
-            let accountID = model.facts?.knownFutureEvents.first(where: { $0.cycleID == item.sourceID })?.accountID
-            V151IOSRepaymentInlineDecision(services: services, cycleID: item.sourceID, destinationAccountID: accountID, amountMinor: item.amountMinor) {
-                expandedDecisionID = nil
-                Task { await refresh() }
-            }
-        } else if item.sourceType.contains("reimbursement") {
-            V151IOSReimbursementInlineDecision(services: services, claimID: item.sourceID) {
-                expandedDecisionID = nil
-                Task { await refresh() }
-            }
-        } else if item.sourceType.contains("cash_flow") {
-            V151IOSCashFlowInlineDecision(services: services, itemID: item.sourceID) {
-                expandedDecisionID = nil
-                Task { await refresh() }
-            }
-        }
-    }
-    private func isPostponed(_ item: V15AttentionItem) -> Bool { postponedIDs.contains(item.id) }
-    private func togglePostponed(_ item: V15AttentionItem) {
-        var values = postponedIDs
-        if values.contains(item.id) { values.remove(item.id) } else { values.insert(item.id) }
-        postponedRaw = values.sorted().joined(separator: "\n")
-    }
-    private func attentionTitle(_ item: V15AttentionItem) -> String {
-        switch item.sourceType {
-        case "uncategorized_transaction": "未分类支出"
-        case "credit_cycle_overdue": "信用账期逾期"
-        case "reimbursement_overdue": "报销回款逾期"
-        case "reconciliation_checkpoint", "reconciliation_missing", "reconciliation_difference": "核对待处理"
-        case "statement_import_failed", "statement_import_review": "账单导入待处理"
-        case "cash_flow_overdue": "现金流逾期"
-        case "ai_proposal": "AI 提议待确认"
-        case "operation_exception": "系统运行异常"
-        default: "无法定位的待处理事项"
-        }
-    }
-
-    private func destination(for item: V15AttentionItem) -> V151IOSWorkspace.Destination {
-        switch item.sourceType {
-        case "credit_cycle_overdue": .credit
-        case "reimbursement_overdue", "reimbursement": .reimbursements
-        case "reconciliation_checkpoint", "reconciliation_missing", "reconciliation_difference": .reconciliation
-        case "statement_import_failed", "statement_import_review": .statementImport
-        case "cash_flow_overdue": .cashFlow
-        case "ai_proposal": .proposals
-        case "operation_exception": .archive
-        default: .archive
-        }
-    }
-    private func attentionDirection(_ item: V15AttentionItem) -> V15MoneyDirection { if item.sourceType.contains("uncategorized") || item.sourceType.contains("credit") { return .outflow }; return .neutral }
     private func pendingStatus(_ item: V15PendingWriteStore.Item) -> String {
         let status: String
         switch item.status { case .queued: status = "等待联网后同步"; case .syncing: status = "正在同步"; case .requiresDecision: status = "数据已变化，需要重新决定"; case .outcomeUnknown: status = "结果不明，需要核对"; case .failed: status = "同步失败" }
@@ -1044,7 +917,6 @@ private struct V151IOSLedger: View {
                 workspaceEntry("报表", detail: "收支、资产、信用与分类", symbol: "chart.bar") { openDestination(.reports) }
                 workspaceEntry("账单导入", detail: "逐行处置", symbol: "doc.text.viewfinder") { openDestination(.statementImport) }
                 workspaceEntry("报销", detail: "记录收款", symbol: "person.2") { openDestination(.reimbursements) }
-                workspaceEntry("对账", detail: "账户核对记录", symbol: "checkmark.seal") { openDestination(.reconciliation) }
             }
             if !model.accounts.isEmpty {
                 VStack(alignment: .leading, spacing: 7) {
@@ -1394,20 +1266,6 @@ private struct V151IOSAccountDetail: View {
                 }
                 V15ActionButton("查看信用账期", kind: .secondary) { dismiss(); openDestination(.credit) }
             }
-            V15Section("核对历史") {
-                if model.checkpoints.isEmpty {
-                    Text("还没有核对记录。完成一次余额核对后会显示在这里。")
-                        .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
-                } else {
-                    ForEach(model.checkpoints) { checkpoint in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack { Text(checkpointDate(checkpoint.asOf)); Spacer(); V15MoneyText(minorUnits: checkpoint.differenceMinor, direction: .neutral, includeCurrency: false, font: .subheadline.monospacedDigit()) }
-                            Text(checkpoint.state == .reconciled ? "已核对" : "有差额待处理").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
-                        }
-                    }
-                }
-                V15ActionButton("进入余额核对", kind: .secondary) { dismiss(); openDestination(.reconciliation) }
-            }
             V15ActionButton("账户与分类设置", kind: .secondary) { dismiss(); openDestination(.settings) }
         }
     }
@@ -1421,7 +1279,6 @@ private struct V151IOSAccountDetail: View {
     @MainActor private func load() async {
         await model.load(accountID: accountID, fresh: true)
     }
-    private func checkpointDate(_ date: Date) -> String { let formatter = DateFormatter(); formatter.locale = Locale(identifier: "zh_CN"); formatter.timeZone = ShanghaiBusinessDate.timeZone; formatter.dateFormat = "yyyy年M月d日 HH:mm"; return formatter.string(from: date) }
 }
 
 private struct V151IOSPendingSyncQueue: View {
@@ -1519,7 +1376,6 @@ private struct V151IOSDestinationHost: View {
         case .installments: V15InstallmentView(services: services)
         case .reimbursements: V15ReimbursementView(services: services)
         case .cashFlow: V15CashFlowView(services: services)
-        case .reconciliation: V15ReconciliationView(services: services)
         case .proposals: V15AIProposalView(services: services)
         case .statementImport: V15StatementImportView(services: services)
         case .reports: V15ReportingView(services: services)

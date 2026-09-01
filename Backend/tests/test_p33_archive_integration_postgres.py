@@ -171,8 +171,6 @@ async def _source_fingerprint() -> dict[str, object]:
                         " WHERE credit_cycle_id IS NOT NULL"
                         " UNION ALL SELECT 'import', credit_cycle_id_candidate::text "
                         " FROM statement_import_rows WHERE credit_cycle_id_candidate IS NOT NULL"
-                        " UNION ALL SELECT 'checkpoint', credit_cycle_id::text "
-                        " FROM reconciliation_checkpoints WHERE credit_cycle_id IS NOT NULL"
                         ") refs"
                     )
                 ),
@@ -363,18 +361,6 @@ def test_p33_archive_round_trip_preserves_formal_facts_and_excludes_operational_
         assert receipt.status_code == 201, receipt.text
 
         cycle_id = installment["periods"][0]["effective_cycle_id"]
-        checkpoint = client.post(
-            "/api/v1/reconciliation/checkpoints",
-            headers=auth,
-            json={
-                "target_kind": "credit_cycle",
-                "credit_cycle_id": cycle_id,
-                "as_of": "2026-08-13T12:00:00+08:00",
-                "actual_balance_minor": 0,
-                "note": "P33 archive reference",
-            },
-        )
-        assert checkpoint.status_code == 201, checkpoint.text
         asyncio.run(_add_ai_and_import_references(str(cycle_id)))
 
         password = uuid4().hex + uuid4().hex
@@ -495,8 +481,6 @@ def test_p33_archive_round_trip_preserves_formal_facts_and_excludes_operational_
                                 " UNION ALL SELECT 'import', credit_cycle_id_candidate::text "
                                 " FROM statement_import_rows "
                                 " WHERE credit_cycle_id_candidate IS NOT NULL"
-                                " UNION ALL SELECT 'checkpoint', credit_cycle_id::text "
-                                " FROM reconciliation_checkpoints WHERE credit_cycle_id IS NOT NULL"
                                 ") refs"
                             )
                         )

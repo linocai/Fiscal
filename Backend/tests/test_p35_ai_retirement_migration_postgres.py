@@ -92,17 +92,17 @@ def test_d3_migration_cleans_legacy_true_adds_guards_and_downgrade_stays_false(
     assert TEST_DATABASE_URL is not None
     monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
     get_settings.cache_clear()
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260830_0037")
     command.downgrade(config(), "20260816_0034")
     asyncio.run(seed_legacy_true_rows())
 
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260830_0037")
     assert asyncio.run(retired_rows_and_guards()) == (False, [False], 2)
     asyncio.run(direct_true_is_rejected())
 
     command.downgrade(config(), "20260816_0034")
     assert asyncio.run(retired_rows_and_guards()) == (False, [False], 0)
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260830_0037")
     get_settings.cache_clear()
 
 
@@ -198,6 +198,6 @@ def test_d3_restore_of_legacy_enabled_archive_cannot_resurrect_auto_execute(
     assert TEST_DATABASE_URL is not None
     monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
     get_settings.cache_clear()
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260830_0037")
     assert asyncio.run(restore_legacy_enabled_archive()) == (False, [False])
     get_settings.cache_clear()

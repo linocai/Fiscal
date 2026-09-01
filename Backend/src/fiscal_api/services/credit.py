@@ -71,7 +71,6 @@ class ScheduleChangePlan:
     transactions: list[LedgerTransaction]
     periods: list[Any]
     plans: list[Any]
-    checkpoints: list[Any]
     ai_proposals: list[Any]
     statement_rows: list[Any]
     purchase_schedules: dict[UUID, CreditSchedule]
@@ -480,15 +479,8 @@ class CreditService:
                 affected.append(item)
         today = self._today()
         affected_ids = [item.id for item in affected]
-        checkpoints = await self.repository.checkpoints_for_cycles(affected_ids)
         ai_proposals = await self.repository.ai_proposals_for_cycles(affected_ids)
         statement_rows = await self.repository.statement_rows_for_cycles(affected_ids)
-        checkpoint_counts: dict[UUID, int] = {}
-        for checkpoint in checkpoints:
-            assert checkpoint.credit_cycle_id is not None
-            checkpoint_counts[checkpoint.credit_cycle_id] = (
-                checkpoint_counts.get(checkpoint.credit_cycle_id, 0) + 1
-            )
         transactions = await self.repository.transactions_for_cycles(affected_ids)
         periods = await self.repository.periods_for_cycles(affected_ids)
         plans = await self.repository.plans_for_start_cycles(affected_ids)
@@ -551,7 +543,7 @@ class CreditService:
                 or cycle.id in periods_by_cycle
                 or cycle.id in plans_by_cycle
             )
-            if len(groups) > 1 and (non_purchase or checkpoint_counts.get(cycle.id, 0) > 0):
+            if len(groups) > 1 and non_purchase:
                 warnings.append("credit_schedule_ambiguous_remap")
             if len(groups) == 1:
                 reference_schedules[cycle.id] = next(iter(groups))
@@ -576,7 +568,6 @@ class CreditService:
                         remaining_minor=grouped_remaining,
                         old_is_overdue=cycle.due_date < today,
                         new_is_overdue=target.due_date < today,
-                        preserved_checkpoint_count=checkpoint_counts.get(cycle.id, 0),
                     )
                 )
         if any(item.old_is_overdue for item in previews):
@@ -597,7 +588,6 @@ class CreditService:
             transactions=transactions,
             periods=periods,
             plans=plans,
-            checkpoints=checkpoints,
             ai_proposals=ai_proposals,
             statement_rows=statement_rows,
             purchase_schedules=purchase_schedules,
@@ -778,7 +768,6 @@ class CreditService:
             "transactions": [self._transaction_dependency(item) for item in plan.transactions],
             "periods": [self._period_dependency(item) for item in plan.periods],
             "plans": [self._plan_dependency(item) for item in plan.plans],
-            "checkpoints": [self._checkpoint_dependency(item) for item in plan.checkpoints],
             "ai_proposals": [self._proposal_dependency(item) for item in plan.ai_proposals],
             "statement_import_rows": [
                 self._statement_row_dependency(item) for item in plan.statement_rows
@@ -821,17 +810,6 @@ class CreditService:
             "version": plan.version,
             "start_cycle_id": str(plan.start_cycle_id),
             "lifecycle": plan.lifecycle,
-        }
-
-    @staticmethod
-    def _checkpoint_dependency(checkpoint: Any) -> dict[str, object]:
-        return {
-            "id": str(checkpoint.id),
-            "credit_cycle_id": str(checkpoint.credit_cycle_id),
-            "as_of": checkpoint.as_of.isoformat(),
-            "actual_balance_minor": checkpoint.actual_balance_minor,
-            "note": checkpoint.note,
-            "created_at": checkpoint.created_at.isoformat(),
         }
 
     @staticmethod

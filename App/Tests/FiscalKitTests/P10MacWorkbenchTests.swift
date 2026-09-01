@@ -34,49 +34,67 @@ struct P10MacWorkbenchTests {
   }
 }
 
-@Suite("v1.5.2 macOS main-ledger scope")
+@Suite("v1.7 macOS ledger context")
 struct V151MacLedgerScopeTests {
-  @Test("The formal workspace opens on all transactions, not uncategorized")
-  @MainActor func defaultScopeIsAllTransactions() async throws {
-    #expect(V151MacLedgerScopePolicy.defaultLens == .all)
-    #expect(V151MacLedgerScopePolicy.classification(for: .all) == "all")
-    #expect(V151MacLedgerScopePolicy.loadsTransactions(for: .all))
-
-    let transport = V151MacLedgerScopeTransport()
-    let model = V15LedgerModel(services: V15Services(transport: transport))
-    let july = try #require(Calendar(identifier: .gregorian).date(from: .init(year: 2026, month: 7, day: 15)))
-    let range = try #require(V151MacLedgerScopePolicy.monthDateRange(containing: july))
-    model.setDateFrom(range.from)
-    model.setDateTo(range.to)
-    model.setClassification(V151MacLedgerScopePolicy.classification(for: .all))
-    await model.load()
-
+  @Test("Month context uses the Shanghai business-month range")
+  func monthContextUsesShanghaiRange() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+    let july = try #require(calendar.date(from: .init(year: 2026, month: 7, day: 15)))
+    let range = try #require(V151MacBusinessDateRange.monthDateRange(containing: july))
     #expect(range == .init(from: "2026-07-01", to: "2026-07-31"))
-    #expect(model.items.map(\.id) == [V15F1BFixtures.transactionID])
-    let allRequest = try #require(await transport.lastRequest())
-    #expect(allRequest.query.contains(.init(name: "classification", value: "all")))
-    #expect(allRequest.query.contains(.init(name: "date_from", value: "2026-07-01")))
-    #expect(allRequest.query.contains(.init(name: "date_to", value: "2026-07-31")))
-
-    model.setClassification(V151MacLedgerScopePolicy.classification(for: .uncategorized))
-    await model.load()
-    #expect(model.items.isEmpty)
   }
 
-  @Test("Choosing a month returns to the all-transactions scope")
-  func monthSelectionResetsIndependentFilters() {
-    #expect(V151MacLedgerScopePolicy.monthSelectionLens == .all)
-    #expect(V151MacLedgerScopePolicy.classification(for: .uncategorized) == "uncategorized")
-    #expect(!V151MacLedgerScopePolicy.includesVoided(for: .all))
-    #expect(V151MacLedgerScopePolicy.includesVoided(for: .archive))
+  @Test("Ledger account filter survives detail changes and clears only after references remove it")
+  func accountFilterAndDetailOwnershipStaySeparate() {
+    let retained = V15F1BFixtures.accountID
+    let other = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+    let accounts = [
+      V15AccountResponse(
+        id: retained,
+        name: "保留账户",
+        kind: .cash,
+        institution: nil,
+        lastFour: nil,
+        openingBalanceMinor: 0,
+        currentBalanceMinor: 100,
+        creditLimitMinor: nil,
+        statementDay: nil,
+        dueDay: nil,
+        cycleMode: nil,
+        openingBalanceAsOfDate: nil,
+        openingDueDate: nil,
+        sortOrder: 0,
+        archivedAt: nil,
+        usageCount: 0,
+        version: 1,
+        createdAt: Date(timeIntervalSince1970: 0),
+        updatedAt: Date(timeIntervalSince1970: 0)
+      )
+    ]
+
+    var context = V151MacLedgerAccountContext(filterID: nil, detailID: nil)
+    context.selectAccount(retained)
+    context.selectTransaction()
+    #expect(context.filterID == retained)
+    #expect(context.detailID == nil)
+    context.selectDetailAccount(retained)
+    context.showFilteredLedger()
+    #expect(context.filterID == retained)
+    #expect(context.detailID == nil)
+    #expect(context.clearMissingFilter(availableAccounts: accounts) == nil)
+    #expect(context.filterID == retained)
+    context.selectDetailAccount(retained)
+    #expect(context.clearMissingFilter(availableAccounts: []) == retained)
+    #expect(context.filterID == nil)
+    #expect(context.detailID == nil)
+    #expect(V151MacLedgerAccountFilter.retainedAccountID(other, availableAccounts: accounts) == nil)
   }
 
-  @Test("Today and future events appear only in the current all-transactions view")
-  func currentAndFutureVisibilityMatchesPrototype() {
-    #expect(V151MacLedgerScopePolicy.showsCurrentAndFuture(lens: .all, isCurrentMonth: true))
-    #expect(!V151MacLedgerScopePolicy.showsCurrentAndFuture(lens: .all, isCurrentMonth: false))
-    #expect(!V151MacLedgerScopePolicy.showsCurrentAndFuture(lens: .uncategorized, isCurrentMonth: true))
-    #expect(!V151MacLedgerScopePolicy.showsCurrentAndFuture(lens: .archive, isCurrentMonth: true))
+  @Test("Ledger search draft changes only on explicit confirmation")
+  func searchDraftRequiresConfirmation() {
+    #expect(V151MacLedgerSearch.committedQuery(from: "午餐") == "午餐")
+    #expect(V151MacLedgerSearch.committedQuery(from: "") == nil)
   }
 }
 

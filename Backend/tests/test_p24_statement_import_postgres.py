@@ -400,9 +400,9 @@ def test_p24_fresh_upgrade_downgrade_reupgrade(monkeypatch: pytest.MonkeyPatch) 
         monkeypatch.setenv("FISCAL_DATABASE_URL", fresh_url)
         get_settings.cache_clear()
         config = _alembic_config()
-        command.upgrade(config, "head")
+        command.upgrade(config, "20260830_0037")
         command.downgrade(config, "20260811_0023")
-        command.upgrade(config, "head")
+        command.upgrade(config, "20260830_0037")
         engine = create_engine(fresh_url)
         try:
 
@@ -445,7 +445,7 @@ def test_p24_fresh_upgrade_downgrade_reupgrade(monkeypatch: pytest.MonkeyPatch) 
             asyncio.run(insert_legacy_filename())
         finally:
             asyncio.run(legacy_engine.dispose())
-        command.upgrade(config, "head")
+        command.upgrade(config, "20260830_0037")
         sanitized_engine = create_engine(fresh_url)
         try:
 

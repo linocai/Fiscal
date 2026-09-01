@@ -66,7 +66,6 @@ public struct V15TodayView: View {
                 .accessibilityIdentifier("v15.f2b.facts.conflict")
         case .loaded:
             if let facts = model.facts {
-                V15TodayAttentionQueue(model: model, open: openAttention)
                 V15TodayFutureTotals(future: facts.future)
                 V15TodayKnownFuture(events: facts.knownFutureEvents)
                 V15TodayFactsCards(facts: facts, open: openScope)
@@ -80,10 +79,6 @@ public struct V15TodayView: View {
         Task { await model.openScope(scope) }
     }
 
-    private func openAttention(_ item: V15AttentionItem) {
-        detailPresented = true
-        Task { await model.openAttention(item) }
-    }
 }
 
 private struct V15TodayHeader: View {
@@ -114,99 +109,6 @@ private struct V15TodayHeader: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(model.facts.map { "今日概览，截至 \(V15TodayReadModel.shanghaiDateLabel($0.meta.asOf))，人民币" } ?? "正在更新今日概览")
         .accessibilityIdentifier("v15.f2b.snapshot")
-    }
-}
-
-private struct V15TodayAttentionQueue: View {
-    let model: V15TodayReadModel
-    let open: (V15AttentionItem) -> Void
-    var body: some View {
-        V15Section("需要你决定", detail: "按严重程度与日期排序") {
-            switch model.attentionPhase {
-            case .idle, .loading: V15LoadingSkeleton()
-            case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.refreshAttention() } }).accessibilityIdentifier("v15.f2b.attention.error")
-            case .loaded:
-                let items = model.attention.sorted(by: V15TodayPresentation.attentionOrder)
-                if items.isEmpty {
-                    V15EmptyState(title: "目前没有需要你决定的事项", explanation: "这只表示待办列表为空，不代表没有财务数据。")
-                        .accessibilityIdentifier("v15.f2b.attention.calm")
-                } else {
-                    ForEach(items) { item in
-                        V15TodayAttentionRow(item: item, open: { open(item) })
-                            .accessibilityIdentifier("v15.f2b.attention.\(item.id)")
-                    }
-                }
-            }
-        }
-    }
-}
-
-private struct V15TodayAttentionRow: View {
-    let item: V15AttentionItem
-    let open: () -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    private var presentation: V15TodayPresentation.AttentionPresentation { .init(item: item) }
-    var body: some View {
-        Button(action: open) {
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                        HStack(alignment: .center, spacing: V15Spacing.sm) {
-                            badge
-                            Text(presentation.label).font(V15Typography.label).foregroundStyle(presentation.color)
-                            Spacer(minLength: V15Spacing.xs)
-                            chevron
-                        }
-                        copy
-                    }
-                } else {
-                    HStack(alignment: .top, spacing: V15Spacing.sm) {
-                        badge
-                        copy
-                        Spacer(minLength: V15Spacing.xs)
-                        chevron
-                    }
-                }
-            }
-            .padding(V15Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card))
-            .overlay { RoundedRectangle(cornerRadius: V15Radius.card).stroke(V15Palette.hairline.color, lineWidth: 1) }
-        }
-        .buttonStyle(.plain)
-        .v15PlatformHitArea()
-        .v15ActionAccessibility(label: "\(presentation.label)：\(V15AttentionUserCopy.explanation(for: item))", hint: "打开只读说明。\(V15AttentionUserCopy.suggestedAction(for: item))")
-    }
-
-    /// The visual glyph is intentionally fixed-size inside a 44pt badge. It
-    /// must not inherit AX text scaling and overlap the decision copy.
-    private var badge: some View {
-        Image(systemName: presentation.symbol)
-            .font(.system(size: 18, weight: .semibold))
-            .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(presentation.color)
-            .frame(width: 44, height: 44, alignment: .center)
-            .accessibilityHidden(true)
-    }
-
-    private var chevron: some View {
-        Image(systemName: "chevron.right")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(V15Palette.ink.color.opacity(0.5))
-            .frame(width: 24, height: 44, alignment: .trailing)
-            .accessibilityHidden(true)
-    }
-
-    private var copy: some View {
-        VStack(alignment: .leading, spacing: V15Spacing.xxs) {
-            if !dynamicTypeSize.isAccessibilitySize {
-                Text(presentation.label).font(V15Typography.label).foregroundStyle(presentation.color)
-            }
-            Text(V15AttentionUserCopy.explanation(for: item)).font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.ink.color).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-            Text(V15AttentionUserCopy.suggestedAction(for: item)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-            if let date = item.occurredAt { Text("发生于 \(V15TodayReadModel.shanghaiDateLabel(date))").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.60)) }
-        }
-        .layoutPriority(1)
     }
 }
 
@@ -441,7 +343,7 @@ private struct V15TodayScopeRow: View {
     }
     private var isUnknown: Bool { if case .unknown = item { true } else { false } }
     private var title: String { switch item { case .cashAccount(let v): v.name; case .creditCycle(let v): v.accountName; case .reimbursementOutstanding(let v): v.partyName; case .completenessIssue(let v): "记录待完善 · \(String(describing: v.issueType))"; case .unknown: "暂时无法识别的明细" } }
-    private var detail: String { switch item { case .cashAccount(let v): v.lastReconciledAt.map { "最近核对 \(V15TodayReadModel.shanghaiDateLabel($0))" } ?? "暂无核对时间"; case .creditCycle(let v): "还款日 \(v.dueDate)"; case .reimbursementOutstanding(let v): v.expectedDate.map { "预计 \($0)" } ?? "暂无预计日"; case .completenessIssue(let v): "共 \(v.count) 项"; case .unknown: "当前只能查看，不能操作。" } }
+    private var detail: String { switch item { case .cashAccount: "当前余额"; case .creditCycle(let v): "还款日 \(v.dueDate)"; case .reimbursementOutstanding(let v): v.expectedDate.map { "预计 \($0)" } ?? "暂无预计日"; case .completenessIssue(let v): "共 \(v.count) 项"; case .unknown: "当前只能查看，不能操作。" } }
     private var money: (V15MinorUnits, V15MoneyDirection)? { switch item { case .cashAccount(let v): (v.currentBalanceMinor, .balance); case .creditCycle(let v): (v.remainingMinor, .outflow); case .reimbursementOutstanding(let v): (v.outstandingMinor, .inflow); case .completenessIssue(let v): v.amountMinor.map { ($0, .neutral) }; case .unknown: nil } }
     private var safeID: String { switch item { case .cashAccount(let v): v.accountID.uuidString; case .creditCycle(let v): v.cycleID.uuidString; case .reimbursementOutstanding(let v): v.claimID.uuidString; case .completenessIssue(let v): "issue-\(v.count)"; case .unknown: "unknown" } }
 }
@@ -517,26 +419,6 @@ private struct V15TodayReloadRequired: View {
 }
 
 enum V15TodayPresentation {
-    struct AttentionPresentation {
-        let label: String; let symbol: String; let color: Color
-        init(item: V15AttentionItem) {
-            switch item.severity {
-            case .critical: label = "紧急"; symbol = "exclamationmark.octagon.fill"; color = V15Palette.gold.color
-            case .warning: label = "需要留意"; symbol = "exclamationmark.triangle.fill"; color = V15Palette.gold.color
-            case .info: label = "提示"; symbol = "info.circle"; color = V15Palette.teal.color
-            }
-        }
-    }
-    static func attentionOrder(_ lhs: V15AttentionItem, _ rhs: V15AttentionItem) -> Bool {
-        let rank: (V15AttentionSeverity) -> Int = { switch $0 { case .critical: 0; case .warning: 1; case .info: 2 } }
-        if rank(lhs.severity) != rank(rhs.severity) { return rank(lhs.severity) < rank(rhs.severity) }
-        switch (lhs.occurredAt, rhs.occurredAt) {
-        case let (left?, right?) where left != right: return left < right
-        case (_?, nil): return true
-        case (nil, _?): return false
-        default: return lhs.id < rhs.id
-        }
-    }
     static func certaintyLabel(_ certainty: String) -> String {
         switch certainty { case "exact_due": "确切到期"; case "confirmed": "已确认"; case "expected": "预计"; case "scheduled": "已安排"; default: "状态待确认" }
     }

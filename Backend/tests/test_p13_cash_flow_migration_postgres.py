@@ -66,9 +66,9 @@ def test_d5_upgrade_clears_frozen_amount_and_makes_override_column_nullable(
     assert TEST_DATABASE_URL is not None
     monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
     get_settings.cache_clear()
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260830_0037")
     command.downgrade(config(), "20260814_0033")
     asyncio.run(seed_frozen_reimbursement_override())
-    command.upgrade(config(), "head")
+    command.upgrade(config(), "20260830_0037")
     assert asyncio.run(migrated_amount_and_nullable()) == (None, "YES")
     get_settings.cache_clear()

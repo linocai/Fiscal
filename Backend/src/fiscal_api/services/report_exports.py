@@ -54,7 +54,6 @@ COMPLETENESS_LABELS = {
     "unresolved_import_count": "待核对导入",
     "failed_import_count": "导入失败",
     "uncategorized_transaction_count": "未分类账目",
-    "open_reconciliation_difference_count": "未解决核对差异",
 }
 
 SOURCE_LABELS = {

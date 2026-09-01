@@ -63,7 +63,6 @@ class CompletenessIssueType(StrEnum):
     UNRESOLVED_IMPORTS = "unresolved_imports"
     FAILED_IMPORTS = "failed_imports"
     UNCATEGORIZED_TRANSACTIONS = "uncategorized_transactions"
-    OPEN_RECONCILIATION_DIFFERENCES = "open_reconciliation_differences"
 
 
 class ReportMeta(APIModel):
@@ -332,8 +331,6 @@ class CompletenessFacts(APIModel):
         description="Statement imports whose processing failed and require attention.",
     )
     uncategorized_transaction_count: int = Field(ge=0)
-    open_reconciliation_difference_count: int = Field(ge=0)
-    last_reconciled_at: datetime | None = None
     uncategorized_transaction_amount_minor: int = Field(ge=0, default=0)
     scope: FactsDrillDownScope | None = None
 
@@ -343,7 +340,6 @@ class CashAccountFact(APIModel):
     account_id: UUID
     name: str
     current_balance_minor: int
-    last_reconciled_at: datetime | None
     read_path: str
     deep_link: str
 

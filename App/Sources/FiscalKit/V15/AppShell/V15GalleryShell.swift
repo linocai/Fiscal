@@ -20,7 +20,6 @@ public struct V15GalleryShell: View {
     private let f3B2Route: String?
     private let f3CRoute: String?
     private let f3DRoute: String?
-    private let f3ERoute: String?
     private let f3FRoute: String?
     private let f3GRoute: String?
     private let f4ARoute: String?
@@ -44,7 +43,6 @@ public struct V15GalleryShell: View {
         f3B2Route = V15GalleryShell.value(after: "--v15-f3b2-route", in: arguments)
         f3CRoute = V15GalleryShell.value(after: "--v15-f3c-route", in: arguments)
         f3DRoute = V15GalleryShell.value(after: "--v15-f3d-route", in: arguments)
-        f3ERoute = V15GalleryShell.value(after: "--v15-f3e-route", in: arguments)
         f3FRoute = V15GalleryShell.value(after: "--v15-f3f-route", in: arguments)
         f3GRoute = V15GalleryShell.value(after: "--v15-f3g-route", in: arguments)
         f4ARoute = V15GalleryShell.value(after: "--v15-f4a-route", in: arguments)
@@ -75,7 +73,6 @@ public struct V15GalleryShell: View {
         f3B2Route = nil
         f3CRoute = nil
         f3DRoute = nil
-        f3ERoute = nil
         f3FRoute = nil
         f3GRoute = nil
         f4ARoute = nil
@@ -95,8 +92,6 @@ public struct V15GalleryShell: View {
             V15F3GGalleryRoute(route: f3GRoute).preferredColorScheme(f1AAppearance)
         } else if let f3FRoute {
             V15F3FGalleryRoute(route: f3FRoute).preferredColorScheme(f1AAppearance)
-        } else if let f3ERoute {
-            V15F3EGalleryRoute(route: f3ERoute).preferredColorScheme(f1AAppearance)
         } else if let f3DRoute {
             V15F3DGalleryRoute(route: f3DRoute).preferredColorScheme(f1AAppearance)
         } else if let f3CRoute {
@@ -206,18 +201,6 @@ private struct V15F3FGalleryRoute: View {
         V15AIProposalMacView(services: services, offlineSnapshotAt: route == "ai-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil, initialGalleryScenario: route)
 #else
         V15AIProposalView(services: services, offlineSnapshotAt: route == "ai-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil)
-#endif
-    }
-}
-
-private struct V15F3EGalleryRoute: View {
-    let route: String
-    @MainActor private var services: V15Services { V15F3EFixtures.services(route: route) }
-    var body: some View {
-#if os(macOS)
-        V15ReconciliationMacView(services: services, offlineSnapshotAt: route == "reconciliation-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil, initialGalleryScenario: route)
-#else
-        V15ReconciliationView(services: services, offlineSnapshotAt: route == "reconciliation-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil)
 #endif
     }
 }

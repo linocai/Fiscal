@@ -487,8 +487,6 @@ def test_p36_real_auth_reports_rotation_without_mislabeling_unknown_keys() -> No
             "credit",
             "reimbursements",
             "cash_flow",
-            "reconciliation",
-            "attention",
             "reports",
             "ai",
         }

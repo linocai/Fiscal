@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from os import environ
-from threading import Barrier
 from uuid import UUID, uuid4
 
 import pytest
@@ -370,7 +368,6 @@ def test_p33_due_day_only_updates_existing_cycle_and_future_event() -> None:
                 "remaining_minor": 12_345,
                 "old_is_overdue": False,
                 "new_is_overdue": False,
-                "preserved_checkpoint_count": 0,
             }
         ]
         receipt = client.post(
@@ -463,96 +460,6 @@ def test_p33_stable_dependency_order_allows_reloaded_multisource_commit() -> Non
         )
         assert committed.status_code == 200, committed.text
         assert committed.json()["affected_cycles"] == preview.json()["affected_cycles"]
-
-
-def test_p33_checkpointed_old_cycle_is_preserved_without_future_ghost() -> None:
-    app, auth = _app()
-    with TestClient(app) as client:
-        account = _credit_account(client, auth)
-        category = _category(client, auth)
-        purchase = _purchase(client, auth, str(account["id"]), str(category["id"]))
-        checkpoint = client.post(
-            "/api/v1/reconciliation/checkpoints",
-            headers=auth,
-            json={
-                "target_kind": "credit_cycle",
-                "credit_cycle_id": purchase["credit_cycle_id"],
-                "as_of": "2026-08-11T10:00:00+08:00",
-                "actual_balance_minor": 12_345,
-            },
-        )
-        assert checkpoint.status_code == 201, checkpoint.text
-        preview = client.post(
-            f"/api/v1/credit-accounts/{account['id']}/schedule-change-preview",
-            headers=auth,
-            json=_preview_payload(account),
-        )
-        assert preview.status_code == 200, preview.text
-        assert preview.json()["affected_cycles"][0]["preserved_checkpoint_count"] == 1
-        committed = client.post(
-            f"/api/v1/credit-accounts/{account['id']}/schedule-change",
-            headers={**auth, "Idempotency-Key": str(uuid4())},
-            json={**_preview_payload(account), "preview_token": preview.json()["preview_token"]},
-        )
-        assert committed.status_code == 200, committed.text
-        moved = client.get(f"/api/v1/transactions/{purchase['id']}", headers=auth)
-        assert moved.status_code == 200
-        assert moved.json()["credit_cycle_id"] != purchase["credit_cycle_id"]
-        old_cycle = client.get(f"/api/v1/credit-cycles/{purchase['credit_cycle_id']}", headers=auth)
-        assert old_cycle.status_code == 200
-        checkpoints = client.get(
-            "/api/v1/reconciliation/checkpoints",
-            headers=auth,
-            params={"credit_cycle_id": purchase["credit_cycle_id"]},
-        )
-        assert checkpoints.status_code == 200
-        assert [item["id"] for item in checkpoints.json()] == [checkpoint.json()["id"]]
-        future = client.get(
-            "/api/v1/reports/future-events",
-            headers=auth,
-            params={"window_days": 90, "account_id": account["id"]},
-        )
-        assert future.status_code == 200, future.text
-        credit_events = [
-            item for item in future.json()["items"] if item["source_type"] == "credit_cycle"
-        ]
-        assert [item["source_id"] for item in credit_events] == [moved.json()["credit_cycle_id"]]
-
-
-def test_p33_checkpoint_created_after_preview_makes_commit_stale_without_write() -> None:
-    app, auth = _app()
-    with TestClient(app) as client:
-        account = _credit_account(client, auth)
-        category = _category(client, auth)
-        purchase = _purchase(client, auth, str(account["id"]), str(category["id"]))
-        preview = client.post(
-            f"/api/v1/credit-accounts/{account['id']}/schedule-change-preview",
-            headers=auth,
-            json=_preview_payload(account),
-        )
-        assert preview.status_code == 200, preview.text
-        checkpoint = client.post(
-            "/api/v1/reconciliation/checkpoints",
-            headers=auth,
-            json={
-                "target_kind": "credit_cycle",
-                "credit_cycle_id": purchase["credit_cycle_id"],
-                "as_of": "2026-08-11T10:00:00+08:00",
-                "actual_balance_minor": 12_345,
-            },
-        )
-        assert checkpoint.status_code == 201, checkpoint.text
-        before_commit = _revision()
-        stale = client.post(
-            f"/api/v1/credit-accounts/{account['id']}/schedule-change",
-            headers={**auth, "Idempotency-Key": str(uuid4())},
-            json={**_preview_payload(account), "preview_token": preview.json()["preview_token"]},
-        )
-        assert stale.status_code == 409, stale.text
-        assert stale.json()["error"]["code"] == "credit_schedule_preview_stale"
-        assert _revision() == before_commit
-        unchanged = client.get(f"/api/v1/accounts/{account['id']}", headers=auth)
-        assert (unchanged.json()["statement_day"], unchanged.json()["due_day"]) == (1, 20)
 
 
 def test_p33_cutoff_remap_uses_purchase_business_date_in_preview_commit_and_future_events() -> None:
@@ -740,66 +647,6 @@ def test_p33_split_purchase_remap_blocks_repayment_without_partial_write() -> No
         assert unchanged.json()["credit_cycle_id"] == first["credit_cycle_id"]
 
 
-def test_p33_split_purchase_remap_blocks_existing_checkpoint_without_write() -> None:
-    app, auth = _app()
-    with TestClient(app) as client:
-        account = _credit_account(client, auth, statement_day=28, due_day=10)
-        category = _category(client, auth)
-        first = _purchase(
-            client,
-            auth,
-            str(account["id"]),
-            str(category["id"]),
-            occurred_at="2026-08-29T10:00:00+08:00",
-        )
-        _purchase(
-            client,
-            auth,
-            str(account["id"]),
-            str(category["id"]),
-            occurred_at="2026-09-27T10:00:00+08:00",
-        )
-        checkpoint = client.post(
-            "/api/v1/reconciliation/checkpoints",
-            headers=auth,
-            json={
-                "target_kind": "credit_cycle",
-                "credit_cycle_id": first["credit_cycle_id"],
-                "as_of": "2026-08-13T10:00:00+08:00",
-                "actual_balance_minor": 12_345,
-            },
-        )
-        assert checkpoint.status_code == 201, checkpoint.text
-        payload = {
-            "expected_version": account["version"],
-            "cycle_mode": "statement_day_cutoff",
-            "statement_day": 1,
-            "due_day": 10,
-        }
-        preview = client.post(
-            f"/api/v1/credit-accounts/{account['id']}/schedule-change-preview",
-            headers=auth,
-            json=payload,
-        )
-        assert preview.status_code == 200, preview.text
-        assert preview.json()["warnings"] == ["credit_schedule_ambiguous_remap"]
-        before_commit = _revision()
-        blocked = client.post(
-            f"/api/v1/credit-accounts/{account['id']}/schedule-change",
-            headers={**auth, "Idempotency-Key": str(uuid4())},
-            json={**payload, "preview_token": preview.json()["preview_token"]},
-        )
-        assert blocked.status_code == 409, blocked.text
-        assert blocked.json()["error"]["code"] == "credit_schedule_ambiguous_remap"
-        assert _revision() == before_commit
-        assert (
-            client.get(f"/api/v1/transactions/{first['id']}", headers=auth).json()[
-                "credit_cycle_id"
-            ]
-            == first["credit_cycle_id"]
-        )
-
-
 def test_p33_ai_cycle_reference_preserves_old_cycle_and_new_reference_stales_preview() -> None:
     app, auth = _app()
     with TestClient(app) as client:
@@ -919,80 +766,6 @@ def test_p33_statement_cycle_candidate_preserves_old_cycle_and_stales_preview() 
         assert stale.status_code == 409, stale.text
         assert stale.json()["error"]["code"] == "credit_schedule_preview_stale"
         assert _revision() == before_commit
-
-
-def test_p33_schedule_commit_and_checkpoint_create_serialize_without_fk_failure() -> None:
-    app, auth = _app()
-    with TestClient(app) as client:
-        account = _credit_account(client, auth)
-        category = _category(client, auth)
-        purchase = _purchase(client, auth, str(account["id"]), str(category["id"]))
-        preview = client.post(
-            f"/api/v1/credit-accounts/{account['id']}/schedule-change-preview",
-            headers=auth,
-            json=_preview_payload(account),
-        )
-        assert preview.status_code == 200, preview.text
-        schedule_payload = {
-            **_preview_payload(account),
-            "preview_token": preview.json()["preview_token"],
-        }
-        start = Barrier(2)
-
-        def commit() -> tuple[int, dict[str, object]]:
-            isolated_app, _ = _app()
-            with TestClient(isolated_app) as isolated:
-                start.wait(timeout=5)
-                response = isolated.post(
-                    f"/api/v1/credit-accounts/{account['id']}/schedule-change",
-                    headers={**auth, "Idempotency-Key": str(uuid4())},
-                    json=schedule_payload,
-                )
-                return response.status_code, response.json()
-
-        def checkpoint() -> tuple[int, dict[str, object]]:
-            isolated_app, _ = _app()
-            with TestClient(isolated_app) as isolated:
-                start.wait(timeout=5)
-                response = isolated.post(
-                    "/api/v1/reconciliation/checkpoints",
-                    headers=auth,
-                    json={
-                        "target_kind": "credit_cycle",
-                        "credit_cycle_id": purchase["credit_cycle_id"],
-                        "as_of": "2026-08-11T10:00:00+08:00",
-                        "actual_balance_minor": 12_345,
-                    },
-                )
-                return response.status_code, response.json()
-
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            committed_future = executor.submit(commit)
-            checkpointed_future = executor.submit(checkpoint)
-            committed = committed_future.result()
-            checkpointed = checkpointed_future.result()
-        statuses = {committed[0], checkpointed[0]}
-        assert statuses in ({200, 404}, {409, 201})
-        for status, body in (committed, checkpointed):
-            if status >= 400:
-                assert body["error"]["code"] in {
-                    "credit_schedule_preview_stale",
-                    "credit_cycle_not_found",
-                }
-        if committed[0] == 200:
-            moved = client.get(f"/api/v1/transactions/{purchase['id']}", headers=auth)
-            assert moved.status_code == 200
-            current_checkpoint = client.post(
-                "/api/v1/reconciliation/checkpoints",
-                headers=auth,
-                json={
-                    "target_kind": "credit_cycle",
-                    "credit_cycle_id": moved.json()["credit_cycle_id"],
-                    "as_of": "2026-08-11T10:00:00+08:00",
-                    "actual_balance_minor": 12_345,
-                },
-            )
-            assert current_checkpoint.status_code == 201, current_checkpoint.text
 
 
 def test_p33_schedule_commit_stale_is_zero_write_and_patch_cannot_bypass() -> None:

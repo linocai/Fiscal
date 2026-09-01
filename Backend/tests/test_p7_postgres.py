@@ -28,7 +28,6 @@ from fiscal_api.api.p7_schemas import (
     ReportLens,
 )
 from fiscal_api.api.p13_schemas import CashFlowDraft
-from fiscal_api.api.p21_schemas import AttentionIgnore, CheckpointCreate
 from fiscal_api.core.config import Settings
 from fiscal_api.core.errors import APIError
 from fiscal_api.db.models import (
@@ -54,7 +53,6 @@ from fiscal_api.services.cash_flow import CashFlowService
 from fiscal_api.services.categories import CategoryService
 from fiscal_api.services.common import INT64_MAX
 from fiscal_api.services.installments import InstallmentService
-from fiscal_api.services.reconciliation import ReconciliationService
 from fiscal_api.services.reimbursements import ReimbursementService
 from fiscal_api.services.reporting import ReportingService
 from fiscal_api.services.transactions import TransactionService
@@ -367,9 +365,13 @@ async def test_facts_are_recomputable_and_project_each_credit_cycle_once(
     assert facts.completeness.failed_import_count == 0
     assert facts.completeness.uncategorized_transaction_count == 0
     assert facts.completeness.uncategorized_transaction_amount_minor == 0
-    assert facts.completeness.open_reconciliation_difference_count == 0
-    assert facts.completeness.last_reconciled_at is None
+    assert "open_reconciliation_difference_count" not in facts.completeness.model_dump()
+    assert "last_reconciled_at" not in facts.completeness.model_dump()
     assert facts.completeness.scope is not None
+    # The service exposes the current public schema.  Legacy route serialization
+    # adds its transition-only keys after this model boundary.
+    period_report = await reports.monthly_report(period="2026-07")
+    assert "open_reconciliation_difference_count" not in period_report.completeness.model_dump()
     assert facts.future.model_dump() == {
         "exact_due_outflow_minor": 1_500,
         "confirmed_outflow_minor": 700,
@@ -1195,54 +1197,6 @@ async def test_facts_retry_reloads_domain_rows_after_a_concurrent_formal_write(
     assert calls == 4
     assert facts.meta.data_revision == 1
     assert facts.cash.current_balance_minor == 400
-
-
-async def test_open_checkpoint_count_uses_only_latest_target_and_ignores_dismissal(
-    session: AsyncSession,
-) -> None:
-    account = await AccountService(session).create(
-        AccountDraft(name="核对账户", kind=AccountKind.DEBIT, opening_balance_minor=100)
-    )
-    reconciliation = ReconciliationService(session)
-    old = await reconciliation.create(
-        CheckpointCreate(
-            target_kind="account",
-            account_id=account.id,
-            as_of=datetime(2026, 7, 1, tzinfo=UTC),
-            actual_balance_minor=0,
-        )
-    )
-    latest = await reconciliation.create(
-        CheckpointCreate(
-            target_kind="account",
-            account_id=account.id,
-            as_of=datetime(2026, 7, 2, tzinfo=UTC),
-            actual_balance_minor=100,
-        )
-    )
-    assert old.state.value == "open"
-    assert latest.state.value == "reconciled"
-    assert [item.id for item in await reconciliation.repository.latest_by_target()] == [latest.id]
-    assert await reconciliation.open_checkpoint_difference_count() == 0
-
-    newest_open = await reconciliation.create(
-        CheckpointCreate(
-            target_kind="account",
-            account_id=account.id,
-            as_of=datetime(2026, 7, 3, tzinfo=UTC),
-            actual_balance_minor=0,
-        )
-    )
-    assert newest_open.state.value == "open"
-    assert [item.id for item in await reconciliation.repository.latest_by_target()] == [
-        newest_open.id
-    ]
-    await reconciliation.ignore_attention(
-        "reconciliation_checkpoint",
-        newest_open.id,
-        AttentionIgnore(expires_at=datetime(2026, 12, 1, tzinfo=UTC)),
-    )
-    assert await reconciliation.open_checkpoint_difference_count() == 1
 
 
 async def test_balancing_category_is_excluded_from_every_report_caliber(

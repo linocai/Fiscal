@@ -62,7 +62,7 @@ async def list_claims(
     "/reimbursement-claims",
     response_model=ReimbursementClaimResponse,
     status_code=http_status.HTTP_201_CREATED,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def create_claim(
     request: ReimbursementClaimDraft,
@@ -89,7 +89,7 @@ async def preview_claim(
 @router.put(
     "/reimbursement-claims/{claim_id}",
     response_model=ReimbursementClaimResponse,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def replace_claim(
     claim_id: UUID,
@@ -114,7 +114,7 @@ async def _claim_action(
 @router.post(
     "/reimbursement-claims/{claim_id}/submit",
     response_model=ReimbursementClaimResponse,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def submit(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
@@ -125,7 +125,7 @@ async def submit(
 @router.post(
     "/reimbursement-claims/{claim_id}/retract-submission",
     response_model=ReimbursementClaimResponse,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def retract(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
@@ -145,7 +145,7 @@ async def cancel_preview(
 @router.post(
     "/reimbursement-claims/{claim_id}/cancel-outstanding",
     response_model=ReimbursementClaimResponse,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def cancel(
     claim_id: UUID,
@@ -165,7 +165,7 @@ async def cancel(
 @router.post(
     "/reimbursement-claims/{claim_id}/reopen",
     response_model=ReimbursementClaimResponse,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def reopen(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
@@ -176,7 +176,7 @@ async def reopen(
 @router.post(
     "/reimbursement-claims/{claim_id}/void",
     response_model=ReimbursementClaimResponse,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def void(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
@@ -187,7 +187,7 @@ async def void(
 @router.post(
     "/reimbursement-claims/{claim_id}/restore",
     response_model=ReimbursementClaimResponse,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def restore(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
@@ -198,7 +198,7 @@ async def restore(
 @router.post(
     "/reimbursement-claims/{claim_id}/archive",
     response_model=ReimbursementClaimResponse,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def archive(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
@@ -209,7 +209,7 @@ async def archive(
 @router.post(
     "/reimbursement-claims/{claim_id}/unarchive",
     response_model=ReimbursementClaimResponse,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def unarchive(
     claim_id: UUID, request: ReimbursementVersionRequest, service: ReimbursementServiceDependency
@@ -231,7 +231,7 @@ async def list_receipts(
     "/reimbursement-claims/{claim_id}/receipts",
     response_model=ReimbursementReceiptResponse,
     status_code=http_status.HTTP_201_CREATED,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def create_receipt(
     claim_id: UUID,
@@ -273,7 +273,7 @@ async def replace_receipt_preview(
 @router.put(
     "/reimbursement-receipts/{receipt_id}",
     response_model=ReimbursementReceiptResponse,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def replace_receipt(
     receipt_id: UUID,
@@ -289,7 +289,7 @@ async def replace_receipt(
 @router.post(
     "/reimbursement-receipts/{receipt_id}/void",
     response_model=ReimbursementReceiptResponse,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def void_receipt(
     receipt_id: UUID,
@@ -304,7 +304,7 @@ async def void_receipt(
 @router.post(
     "/reimbursement-receipts/{receipt_id}/restore",
     response_model=ReimbursementReceiptResponse,
-    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports", "attention")],
+    dependencies=[formal_mutation("reimbursements", "ledger", "accounts", "reports")],
 )
 async def restore_receipt(
     receipt_id: UUID,

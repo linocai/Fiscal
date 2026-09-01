@@ -1,23 +1,12 @@
 import Foundation
 import Observation
 
-enum V15AttentionUserCopy {
-    static func explanation(for item: V15AttentionItem) -> String {
-        item.sourceType == "operation_exception" ? "有一项数据维护没有完成。" : item.explanation
-    }
-
-    static func suggestedAction(for item: V15AttentionItem) -> String {
-        item.sourceType == "operation_exception" ? "请稍后重试；如果仍未恢复，请到“数据与安全”查看。" : item.suggestedAction
-    }
-}
-
 /// The F2-A state boundary for the current-facts home. It deliberately owns
-/// reads only: no attention action, future workflow, or legacy overview path
-/// can enter through this model.
+/// reads only: no generic decision queue, future workflow, or legacy overview
+/// path can enter through this model.
 @MainActor @Observable
 public final class V15TodayReadModel {
     public enum FactsPhase { case idle, loading, loaded, failed(V15Failure), requiresReload(V15Failure) }
-    public enum AttentionPhase { case idle, loading, loaded, failed(V15Failure) }
     public enum ScopePhase { case idle, loading, loaded, empty, failed(V15Failure), requiresFactsReload(V15Failure) }
     public enum NextPagePhase { case idle, loading, failed(V15Failure) }
     public enum LinkedReadPhase {
@@ -32,8 +21,6 @@ public final class V15TodayReadModel {
 
     public private(set) var facts: V15Facts?
     public private(set) var factsPhase: FactsPhase = .idle
-    public private(set) var attention: [V15AttentionItem] = []
-    public private(set) var attentionPhase: AttentionPhase = .idle
     public private(set) var selectedScope: V15DrillDownScope?
     public private(set) var scopeItems: [V15FactDrillDownItem] = []
     public private(set) var scopePhase: ScopePhase = .idle
@@ -49,7 +36,6 @@ public final class V15TodayReadModel {
     private let services: V15Services
     private let offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)?
     private var factsGeneration: UInt64 = 0
-    private var attentionGeneration: UInt64 = 0
     private var scopeGeneration: UInt64 = 0
     private var linkGeneration: UInt64 = 0
     private var nextCursor: String?
@@ -84,11 +70,7 @@ public final class V15TodayReadModel {
         let requiresFreshFacts = requiresFactsReload
         invalidateScopeForFactsChange()
         factsPhase = .loading
-        attentionGeneration &+= 1
-        let currentAttention = attentionGeneration
-        attentionPhase = .loading
         async let factResult = services.reports.facts(windowDays: windowDays, readCachePolicy: requiresFreshFacts ? .reloadIgnoringCache : .standard)
-        async let attentionResult = services.attention.list()
 
         do {
             let result = try await factResult
@@ -125,35 +107,6 @@ public final class V15TodayReadModel {
             }
         }
 
-        do {
-            let result = try await attentionResult
-            guard currentAttention == attentionGeneration else { return }
-            attention = result.items
-            attentionPhase = .loaded
-        } catch let failure as V15Failure {
-            guard currentAttention == attentionGeneration else { return }
-            attentionPhase = failure.kind == .cancelled ? .idle : .failed(failure)
-        } catch {
-            guard currentAttention == attentionGeneration else { return }
-            attentionPhase = .failed(.init(kind: .transport, message: "关注事项读取失败。"))
-        }
-    }
-
-    public func refreshAttention() async {
-        attentionGeneration &+= 1
-        let current = attentionGeneration
-        attentionPhase = .loading
-        do {
-            let result = try await services.attention.list()
-            guard current == attentionGeneration else { return }
-            attention = result.items; attentionPhase = .loaded
-        } catch let failure as V15Failure {
-            guard current == attentionGeneration else { return }
-            attentionPhase = failure.kind == .cancelled ? .idle : .failed(failure)
-        } catch {
-            guard current == attentionGeneration else { return }
-            attentionPhase = .failed(.init(kind: .transport, message: "关注事项读取失败。"))
-        }
     }
 
     public func openScope(_ scope: V15DrillDownScope) async {
@@ -204,19 +157,6 @@ public final class V15TodayReadModel {
         }
     }
 
-    public func openAttention(_ item: V15AttentionItem) async {
-        guard !holdFactsReloadGate() else { return }
-        // Only uncategorized transactions resolve to an implemented read
-        // destination. All other current and future source types stay as an
-        // honest, action-free explanation instead of guessed endpoints.
-        guard item.sourceType == "uncategorized_transaction" else {
-            retryableLinkedRead = nil
-            linkedReadPhase = .unavailable("这项内容暂时不能在这里处理。")
-            return
-        }
-        await openLinkedRead(item.deepLink)
-    }
-
     public func openLinkedRead(_ raw: String) async {
         guard !holdFactsReloadGate() else { return }
         linkGeneration &+= 1
@@ -265,21 +205,6 @@ public final class V15TodayReadModel {
     public func closeLinkedRead() {
         retryableLinkedRead = nil
         invalidateLinkedRead()
-    }
-
-    /// F2 reads and renders server capabilities, but never turns attention
-    /// actions into controls. In particular, a server-authorised `ignore`
-    /// remains visibly explained and unavailable until its owning workflow.
-    public func attentionActionReasons(for item: V15AttentionItem) -> [V15DisabledReason] {
-        item.availableActions.map { action in
-            if action.action == "ignore", action.enabled {
-                return .init(code: "f2_read_only", message: "这项内容目前只能查看，暂时不能忽略。", fieldPath: nil)
-            }
-            if action.action == "ignore" {
-                return .init(code: action.reasonCode ?? "attention_action_unavailable", message: action.reasonMessage ?? "该关注事项当前不可忽略。", fieldPath: nil)
-            }
-            return .init(code: "unknown_attention_action", message: "这项操作暂不可用。", fieldPath: nil)
-        }
     }
 
     public static func shanghaiDateLabel(_ value: Date) -> String {
@@ -361,7 +286,7 @@ public final class V15TodayReadModel {
         if host == "reports", pieces.count == 2, pieces[0] == "facts", ["cash_accounts", "credit_cycles", "reimbursement_outstanding", "completeness_issues"].contains(pieces[1]) { return .localFacts(scopeTitle(pieces[1])) }
         if host == "accounts", pieces.count == 1, let id = UUID(uuidString: pieces[0]) { return .account(id) }
         if host == "transactions", pieces.count == 1, let id = UUID(uuidString: pieces[0]) { return .transaction(id) }
-        if ["credit", "reimbursements", "cash-flow", "reconciliation", "statement-imports", "ai", "settings"].contains(host) { return .unavailable("这项内容暂时不能在这里打开。") }
+        if ["credit", "reimbursements", "cash-flow", "statement-imports", "ai", "settings"].contains(host) { return .unavailable("这项内容暂时不能在这里打开。") }
         return nil
     }
     private func scopeTitle(_ value: String) -> String {

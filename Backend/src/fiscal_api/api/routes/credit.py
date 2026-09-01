@@ -52,9 +52,7 @@ async def preview_credit_schedule_change(
 @router.post(
     "/credit-accounts/{account_id}/schedule-change",
     response_model=CreditScheduleChangeResult,
-    dependencies=[
-        formal_mutation("accounts", "credit", "cash_flow", "reconciliation", "attention", "reports")
-    ],
+    dependencies=[formal_mutation("accounts", "credit", "cash_flow", "reports")],
 )
 async def apply_credit_schedule_change(
     account_id: UUID,

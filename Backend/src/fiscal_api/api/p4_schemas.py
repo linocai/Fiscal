@@ -84,9 +84,6 @@ class CreditScheduleAffectedCycle(APIModel):
     remaining_minor: int
     old_is_overdue: bool
     new_is_overdue: bool
-    # Checkpoints remain attached to their historical cycle when a reschedule
-    # creates a replacement cycle; they are never silently moved or deleted.
-    preserved_checkpoint_count: int = 0
 
 
 class CreditScheduleChangeResult(APIModel):

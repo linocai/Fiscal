@@ -235,7 +235,7 @@ public struct V15CreditView: View {
                 V15Section("第 3 步 · 确认影响", detail: "受影响账期 \(preview.affectedCycleCount) 个") {
                     Text("消费 \(preview.purchaseCount) 笔 · 还款 \(preview.repaymentCount) 笔 · 分期 \(preview.installmentPeriodCount) 期").font(V15Typography.secondary)
                     if preview.expectedAccountVersion != nil { Text("预览基于当前账户数据").font(V15Typography.secondary).accessibilityIdentifier("v15.f3b1.schedule.preview.account-version") }
-                    ForEach(preview.affectedCycles, id: \.cycleID) { item in Text("\(item.oldStatementDate) / \(item.oldDueDate) → \(item.newStatementDate) / \(item.newDueDate)，保留 \(item.preservedCheckpointCount) 个检查点").font(V15Typography.secondary) }
+                    ForEach(preview.affectedCycles, id: \.cycleID) { item in Text("\(item.oldStatementDate) / \(item.oldDueDate) → \(item.newStatementDate) / \(item.newDueDate)").font(V15Typography.secondary) }
                     Button("提交账期变更") { Task { await model.commitSchedule() } }
                         .disabled(!model.canCommitSchedule)
                         .accessibilityIdentifier("v15.f3b1.schedule.commit")

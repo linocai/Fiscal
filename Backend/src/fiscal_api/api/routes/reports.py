@@ -3,23 +3,26 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Path, Query, Response
+from fastapi.responses import JSONResponse
 
 from fiscal_api.api.dependencies import ReportingServiceDependency
+from fiscal_api.api.legacy_report_serialization import (
+    facts_drill_down_response,
+    facts_response,
+    period_report_response,
+)
 from fiscal_api.api.p7_schemas import (
     CashFlowReport,
     DebtReport,
-    FactsDrillDownPage,
     FactsDrillDownScopeType,
     KnownFutureEventPage,
     OverviewReport,
     ReportDrillDownPage,
-    ReportFacts,
     ReportLens,
     SpendingReport,
 )
 from fiscal_api.api.p34_schemas import (
     SUPPORTED_REPORT_YEAR_RANGE,
-    PeriodReport,
     PeriodReportDrillDownPage,
     PeriodReportDrillDownPageV2,
     PeriodReportV2,
@@ -78,27 +81,29 @@ async def debt(
     return await service.debt(as_of=as_of)
 
 
-@router.get("/facts", response_model=ReportFacts)
+@router.get("/facts", response_class=JSONResponse)
 async def facts(
     service: ReportingServiceDependency,
     window_days: Annotated[int, Query(ge=1, le=90)] = 30,
-) -> ReportFacts:
-    return await service.facts(window_days=window_days)
+) -> JSONResponse:
+    return facts_response(await service.facts(window_days=window_days))
 
 
-@router.get("/facts/drill-down", response_model=FactsDrillDownPage)
+@router.get("/facts/drill-down", response_class=JSONResponse)
 async def facts_drill_down(
     service: ReportingServiceDependency,
     scope: FactsDrillDownScopeType,
     expected_data_revision: Annotated[int, Query(ge=0)],
     cursor: str | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-) -> FactsDrillDownPage:
-    return await service.facts_drill_down(
-        scope_type=scope,
-        expected_data_revision=expected_data_revision,
-        cursor=cursor,
-        limit=limit,
+) -> JSONResponse:
+    return facts_drill_down_response(
+        await service.facts_drill_down(
+            scope_type=scope,
+            expected_data_revision=expected_data_revision,
+            cursor=cursor,
+            limit=limit,
+        )
     )
 
 
@@ -118,7 +123,7 @@ async def future_events(
     )
 
 
-@router.get("/monthly/{period}", response_model=PeriodReport)
+@router.get("/monthly/{period}", response_class=JSONResponse)
 async def monthly_report(
     period: Annotated[
         str,
@@ -128,11 +133,11 @@ async def monthly_report(
         ),
     ],
     service: ReportingServiceDependency,
-) -> PeriodReport:
-    return await service.monthly_report(period=period)
+) -> JSONResponse:
+    return period_report_response(await service.monthly_report(period=period))
 
 
-@router.get("/yearly/{period}", response_model=PeriodReport)
+@router.get("/yearly/{period}", response_class=JSONResponse)
 async def yearly_report(
     period: Annotated[
         str,
@@ -141,8 +146,8 @@ async def yearly_report(
         ),
     ],
     service: ReportingServiceDependency,
-) -> PeriodReport:
-    return await service.yearly_report(period=period)
+) -> JSONResponse:
+    return period_report_response(await service.yearly_report(period=period))
 
 
 @router.get("/v2/monthly/{period}", response_model=PeriodReportV2)

@@ -117,7 +117,7 @@ struct F4ATests {
         #expect(completenessOnly.report?.completeness.unresolvedImportCount == 1)
         #expect(completenessOnly.report?.completeness.failedImportCount == 2)
         #expect(completenessOnly.report?.completeness.uncategorizedTransactionCount == 3)
-        #expect(completenessOnly.report?.completeness.openReconciliationDifferenceCount == 4)
+        #expect(completenessOnly.report?.completeness.uncategorizedTransactionCount == 3)
 
         let model = V15ReportingModel(services: V15Services(transport: F4ATransport(mode: .normal)))
         await model.load()

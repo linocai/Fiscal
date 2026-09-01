@@ -66,11 +66,6 @@ from fiscal_api.db.models.migration import (
     MigrationRunMode,
     MigrationRunStatus,
 )
-from fiscal_api.db.models.reconciliation import (
-    AttentionDismissal,
-    ReconciliationCheckpoint,
-    ReconciliationTargetKind,
-)
 from fiscal_api.db.models.reimbursement import (
     ReimbursementAllocation,
     ReimbursementClaim,
@@ -129,7 +124,6 @@ __all__ = [
     "AccountKind",
     "ActionOperation",
     "ActionPreviewSession",
-    "AttentionDismissal",
     "CashFlowDirection",
     "CashFlowItem",
     "CashFlowItemRevision",
@@ -167,8 +161,6 @@ __all__ = [
     "MigrationRunStatus",
     "Posting",
     "PostingRole",
-    "ReconciliationCheckpoint",
-    "ReconciliationTargetKind",
     "ReimbursementAllocation",
     "ReimbursementClaim",
     "ReimbursementClaimRevision",

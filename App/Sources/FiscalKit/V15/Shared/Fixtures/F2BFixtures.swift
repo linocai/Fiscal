@@ -6,7 +6,6 @@ import Foundation
 public enum V15F2BFixtures {
     enum Route: String {
         case normal = "today"
-        case calm = "today-calm"
         case emptyScopes = "today-empty-scopes"
         case factsError = "today-facts-error"
         case scopeError = "today-scope-error"
@@ -16,10 +15,8 @@ public enum V15F2BFixtures {
         /// until the test has observed the real loading pane and changed lens.
         case refreshLensRace = "today-refresh-lens-race"
         case offline = "today-offline"
-        case unknownAttention = "today-unknown-attention"
         case long = "today-long"
         case zeroFuture = "today-zero-future"
-        case linkedRetry = "today-linked-retry"
         case unknownScope = "today-unknown-scope"
         /// Formal-root normal-state QA uses ordinary business values.
         case rootWorkspace = "today-root-workspace"
@@ -35,10 +32,6 @@ public enum V15F2BFixtures {
 
     static let offlineSnapshotAt = Date(timeIntervalSince1970: 1_786_464_000)
 
-    static var unknownAttentionPage: Data {
-        let item = String(decoding: V15F2AFixtures.unknownAttention, as: UTF8.self)
-        return Data("{\"items\":[\(item)]}".utf8)
-    }
 }
 
 actor V15F2BFixtureTransport: V15Transporting {
@@ -73,15 +66,6 @@ actor V15F2BFixtureTransport: V15Transporting {
             } else {
                 data = V15F2AFixtures.facts()
             }
-        case "reconciliation/attention":
-            switch route {
-            // The zero-future gallery state is deliberately calm as well: it
-            // isolates the facts.future zero presentation instead of hiding it
-            // below unrelated attention rows in a compact window.
-            case .calm, .zeroFuture, .rootWorkspace, .rootWorkspaceBoundary: data = V15F2AFixtures.emptyAttention
-            case .unknownAttention: data = V15F2BFixtures.unknownAttentionPage
-            default: data = V15F2AFixtures.attention
-            }
         case "reports/facts/drill-down":
             let scope = request.query.first(where: { $0.name == "scope" })?.value ?? ""
             let hasCursor = request.query.contains(where: { $0.name == "cursor" })
@@ -97,11 +81,7 @@ actor V15F2BFixtureTransport: V15Transporting {
                 data = route == .emptyScopes ? V15F2AFixtures.emptyPage : V15F2AFixtures.page(scope: scope, revision: revision, nextCursor: scope == "cash_accounts" && !hasCursor ? "f2b-opaque-cash" : nil)
             }
         case "accounts/\(V15F2AFixtures.accountID)": data = V15F2AFixtures.account
-        case "transactions/\(V15F2AFixtures.transactionID)":
-            if route == .linkedRetry, requests.filter({ $0.path == request.path }).count == 1 {
-                throw V15Failure(kind: .transport, message: "账目只读信息暂时无法读取。")
-            }
-            data = V15F2AFixtures.transaction
+        case "transactions/\(V15F2AFixtures.transactionID)": data = V15F2AFixtures.transaction
         case let path where path.hasPrefix("reports/v2/monthly/"):
             guard route == .rootWorkspace || route == .rootWorkspaceBoundary else {
                 throw V15Failure(kind: .transport, code: "unexpected_path", message: "F2-B fixture 不应请求：\(request.path)")

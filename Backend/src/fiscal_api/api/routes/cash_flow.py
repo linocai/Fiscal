@@ -50,9 +50,7 @@ async def history(
     "/cash-flow-items",
     response_model=CashFlowCreateResponse,
     status_code=http_status.HTTP_201_CREATED,
-    dependencies=[
-        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports")],
 )
 async def create(
     request: CashFlowDraft,
@@ -70,9 +68,7 @@ async def get(item_id: UUID, service: CashFlowServiceDependency) -> CashFlowItem
 @router.put(
     "/cash-flow-items/{item_id}",
     response_model=CashFlowCreateResponse,
-    dependencies=[
-        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports")],
 )
 async def update(
     item_id: UUID, request: CashFlowReplace, service: CashFlowServiceDependency
@@ -83,9 +79,7 @@ async def update(
 @router.put(
     "/cash-flow-system-items/{system_kind}/{reference_id}",
     response_model=CashFlowItemResponse,
-    dependencies=[
-        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports")],
 )
 async def update_system(
     system_kind: CashFlowSystemKind,
@@ -99,9 +93,7 @@ async def update_system(
 @router.post(
     "/cash-flow-items/{item_id}/confirm",
     response_model=CashFlowItemResponse,
-    dependencies=[
-        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports")],
 )
 async def confirm(
     item_id: UUID, request: CashFlowVersionRequest, service: CashFlowServiceDependency
@@ -124,9 +116,7 @@ async def preview_confirm(
 @router.post(
     "/cash-flow-items/{item_id}/confirm-commit",
     response_model=ActionCommitReceipt,
-    dependencies=[
-        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports")],
 )
 async def commit_confirm(
     item_id: UUID,
@@ -140,9 +130,7 @@ async def commit_confirm(
 @router.post(
     "/cash-flow-items/{item_id}/cancel",
     response_model=CashFlowCreateResponse,
-    dependencies=[
-        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports")],
 )
 async def cancel(
     item_id: UUID, request: CashFlowVersionRequest, service: CashFlowServiceDependency
@@ -153,9 +141,7 @@ async def cancel(
 @router.post(
     "/cash-flow-items/{item_id}/settle",
     response_model=CashFlowItemResponse,
-    dependencies=[
-        formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports")],
 )
 async def settle(
     item_id: UUID,

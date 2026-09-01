@@ -190,7 +190,10 @@ async def test_monthly_bulk_edit_preserves_each_occurrence_date_and_series_end(
 
 async def test_reimbursement_override_never_freezes_current_fact_amount(
     session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    fixed_now = datetime(2026, 8, 15, 15, tzinfo=UTC)
+    monkeypatch.setattr("fiscal_api.services.cash_flow.utc_now", lambda: fixed_now)
     account, _income_category = await seed(session)
     expense_category = await CategoryService(session).create(
         CategoryDraft(
@@ -294,7 +297,7 @@ async def test_reimbursement_override_never_freezes_current_fact_amount(
     assert completed.planned_amount_minor == 20_000
     history_item = next(
         item
-        for item in (await cash_flow.history(None)).items
+        for item in (await cash_flow.history("2026-08")).items
         if item.system_reference_id == party.id
     )
     assert history_item.planned_amount_minor == 20_000

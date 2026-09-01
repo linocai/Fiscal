@@ -389,7 +389,7 @@ def test_p31_archive_restores_merchant_facts_into_independent_empty_database(
         factory: async_sessionmaker[AsyncSession], action: Callable[[AsyncSession], Awaitable[T]]
     ) -> T:
         async with factory() as session:
-            session.info["data_revision_scopes"] = ("ledger", "reports", "attention")
+            session.info["data_revision_scopes"] = ("ledger", "reports")
             return await action(session)
 
     async def source_fixture() -> tuple[dict[str, tuple[object, ...]], dict[str, object]]:

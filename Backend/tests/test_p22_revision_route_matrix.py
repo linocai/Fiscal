@@ -8,8 +8,6 @@ ALLOWED_SCOPES = {
     "credit",
     "reimbursements",
     "cash_flow",
-    "reconciliation",
-    "attention",
     "reports",
     "ai",
     "statement_imports",

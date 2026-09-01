@@ -96,8 +96,6 @@ async def list_transactions(
             "credit",
             "reimbursements",
             "cash_flow",
-            "reconciliation",
-            "attention",
             "reports",
             "ai",
         )
@@ -163,7 +161,7 @@ async def export_transactions_csv(
 @router.post(
     "/bulk-category",
     response_model=BatchCategoryResponse,
-    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+    dependencies=[formal_mutation("ledger", "reports", "ai")],
 )
 async def bulk_category_transactions(
     request: BatchCategoryRequest,
@@ -183,7 +181,7 @@ async def preview_repayment(
 @router.post(
     "/repayment-commit",
     response_model=ActionCommitReceipt,
-    dependencies=[formal_mutation("ledger", "accounts", "credit", "reports", "attention")],
+    dependencies=[formal_mutation("ledger", "accounts", "credit", "reports")],
 )
 async def commit_repayment(
     request: ActionCommitRequest,
@@ -204,7 +202,7 @@ async def preview_category_change(
 @router.post(
     "/category-commit",
     response_model=ActionCommitReceipt,
-    dependencies=[formal_mutation("ledger", "reports", "attention", "ai")],
+    dependencies=[formal_mutation("ledger", "reports", "ai")],
 )
 async def commit_category_change(
     request: ActionCommitRequest,
@@ -225,7 +223,7 @@ async def transaction_merchant_mapping(
 @router.put(
     "/{transaction_id}/merchant-mapping",
     response_model=MerchantMappingReceipt,
-    dependencies=[formal_mutation("reports", "attention")],
+    dependencies=[formal_mutation("reports")],
 )
 async def confirm_transaction_merchant_mapping(
     transaction_id: UUID,
@@ -239,7 +237,7 @@ async def confirm_transaction_merchant_mapping(
 @router.delete(
     "/{transaction_id}/merchant-mapping",
     response_model=MerchantMappingReceipt,
-    dependencies=[formal_mutation("reports", "attention")],
+    dependencies=[formal_mutation("reports")],
 )
 async def release_transaction_merchant_mapping(
     transaction_id: UUID,
@@ -290,8 +288,6 @@ async def get_transaction(
             "credit",
             "reimbursements",
             "cash_flow",
-            "reconciliation",
-            "attention",
             "reports",
             "ai",
         )
@@ -320,8 +316,6 @@ async def update_transaction(
             "credit",
             "reimbursements",
             "cash_flow",
-            "reconciliation",
-            "attention",
             "reports",
             "ai",
         )
@@ -345,8 +339,6 @@ async def void_transaction(
             "credit",
             "reimbursements",
             "cash_flow",
-            "reconciliation",
-            "attention",
             "reports",
             "ai",
         )

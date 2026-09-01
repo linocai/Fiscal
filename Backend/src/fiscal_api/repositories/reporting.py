@@ -21,7 +21,6 @@ from fiscal_api.db.models import (
     InstallmentPlan,
     LedgerTransaction,
     Posting,
-    ReconciliationCheckpoint,
     ReimbursementAllocation,
     ReimbursementClaim,
     ReimbursementClaimRevision,
@@ -883,7 +882,7 @@ class ReportingRepository:
         )
         return checked_int64(int(value or 0), label="facts reimbursement total")
 
-    async def facts_completeness_counts(self) -> tuple[int, int, int, int, datetime | None, int]:
+    async def facts_completeness_counts(self) -> tuple[int, int, int, int]:
         unresolved_import_count = await self.session.scalar(
             select(func.count(StatementImport.id)).where(
                 StatementImport.status.in_(
@@ -918,9 +917,6 @@ class ReportingRepository:
                 Posting.role.in_(("account", "source")),
             )
         )
-        last_reconciled_at = await self.session.scalar(
-            select(func.max(ReconciliationCheckpoint.as_of))
-        )
         return (
             checked_int64(int(unresolved_import_count or 0), label="facts unresolved import count"),
             checked_int64(int(failed_import_count or 0), label="facts failed import count"),
@@ -930,146 +926,7 @@ class ReportingRepository:
             checked_int64(
                 int(uncategorized_amount or 0), label="facts uncategorized transaction amount"
             ),
-            last_reconciled_at,
-            await self.facts_open_reconciliation_difference_count(),
         )
-
-    async def facts_open_reconciliation_difference_count(self) -> int:
-        """Count latest checkpoint differences in SQL without materializing targets."""
-        ranked = select(
-            ReconciliationCheckpoint.id.label("id"),
-            ReconciliationCheckpoint.account_id.label("account_id"),
-            ReconciliationCheckpoint.credit_cycle_id.label("credit_cycle_id"),
-            ReconciliationCheckpoint.actual_balance_minor.label("actual_balance_minor"),
-            ReconciliationCheckpoint.as_of.label("as_of"),
-            func.row_number()
-            .over(
-                partition_by=(
-                    ReconciliationCheckpoint.target_kind,
-                    ReconciliationCheckpoint.account_id,
-                    ReconciliationCheckpoint.credit_cycle_id,
-                ),
-                order_by=(
-                    ReconciliationCheckpoint.as_of.desc(),
-                    ReconciliationCheckpoint.created_at.desc(),
-                    ReconciliationCheckpoint.id.desc(),
-                ),
-            )
-            .label("rank"),
-        ).subquery()
-        account_book = (
-            select(
-                Account.opening_balance_minor
-                + func.coalesce(
-                    func.sum(
-                        case((LedgerTransaction.id.is_not(None), Posting.amount_minor), else_=0)
-                    ),
-                    0,
-                )
-            )
-            .outerjoin(Posting, Posting.account_id == Account.id)
-            .outerjoin(
-                LedgerTransaction,
-                (LedgerTransaction.id == Posting.transaction_id)
-                & (LedgerTransaction.voided_at.is_(None))
-                & (LedgerTransaction.occurred_at <= ranked.c.as_of),
-            )
-            .where(
-                Account.id == ranked.c.account_id,
-            )
-            .group_by(Account.id)
-            .correlate(ranked)
-            .scalar_subquery()
-        )
-        direct_cycle_book = (
-            select(func.coalesce(func.sum(-Posting.amount_minor), 0))
-            .join(LedgerTransaction, LedgerTransaction.id == Posting.transaction_id)
-            .where(
-                LedgerTransaction.credit_cycle_id == ranked.c.credit_cycle_id,
-                LedgerTransaction.kind.in_(("credit_purchase", "repayment")),
-                LedgerTransaction.voided_at.is_(None),
-                LedgerTransaction.occurred_at <= ranked.c.as_of,
-                Posting.role.in_(("account", "destination")),
-                or_(
-                    LedgerTransaction.kind == "repayment",
-                    ~select(InstallmentLedgerLink.id)
-                    .where(InstallmentLedgerLink.transaction_id == LedgerTransaction.id)
-                    .exists(),
-                ),
-            )
-            .correlate(ranked)
-            .scalar_subquery()
-        )
-        installment_book = (
-            select(
-                func.coalesce(
-                    func.sum(InstallmentPeriod.principal_minor + InstallmentPeriod.fee_minor), 0
-                )
-            )
-            .join(InstallmentPlan, InstallmentPlan.id == InstallmentPeriod.plan_id)
-            .join(
-                LedgerTransaction,
-                LedgerTransaction.id == InstallmentPlan.purchase_transaction_id,
-            )
-            .where(
-                InstallmentPeriod.effective_cycle_id == ranked.c.credit_cycle_id,
-                InstallmentPeriod.cancelled_at.is_(None),
-                LedgerTransaction.voided_at.is_(None),
-                LedgerTransaction.occurred_at <= ranked.c.as_of,
-            )
-            .correlate(ranked)
-            .scalar_subquery()
-        )
-        cycle_book = direct_cycle_book + installment_book
-        credit_account_book = (
-            select(
-                Account.opening_balance_minor
-                - func.coalesce(
-                    func.sum(
-                        case((LedgerTransaction.id.is_not(None), Posting.amount_minor), else_=0)
-                    ),
-                    0,
-                )
-            )
-            .outerjoin(Posting, Posting.account_id == Account.id)
-            .outerjoin(
-                LedgerTransaction,
-                (LedgerTransaction.id == Posting.transaction_id)
-                & (LedgerTransaction.voided_at.is_(None))
-                & (LedgerTransaction.occurred_at <= ranked.c.as_of),
-            )
-            .where(
-                Account.id == ranked.c.account_id,
-            )
-            .group_by(Account.id)
-            .correlate(ranked)
-            .scalar_subquery()
-        )
-        # Credit account checkpoints reverse posting polarity.
-        book_balance = case(
-            (
-                ranked.c.credit_cycle_id.is_not(None),
-                cycle_book,
-            ),
-            (
-                select(Account.kind)
-                .where(Account.id == ranked.c.account_id)
-                .correlate(ranked)
-                .scalar_subquery()
-                == "credit",
-                credit_account_book,
-            ),
-            else_=account_book,
-        )
-        value = await self.session.scalar(
-            select(func.count())
-            .select_from(ranked)
-            .where(
-                ranked.c.rank == 1,
-                ranked.c.actual_balance_minor != func.coalesce(book_balance, 0),
-            )
-        )
-        return checked_int64(int(value or 0), label="facts open reconciliation difference count")
 
     async def credit_cycles(self) -> list[CreditCycle]:
         return list(

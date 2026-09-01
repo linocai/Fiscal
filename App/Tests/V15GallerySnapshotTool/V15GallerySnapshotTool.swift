@@ -26,10 +26,6 @@ private struct V15GallerySnapshotTool {
             try renderF3G(to: output)
             return
         }
-        if environment["FISCAL_V15_SNAPSHOT_SCOPE"] == "f3e" {
-            try renderF3E(to: output)
-            return
-        }
 
         for fixture in V15GalleryFixture.allCases {
             try render(V15GalleryShell(fixture: fixture, density: .comfortable), to: output.appendingPathComponent("macos-\(fixture.id)-light.png"), colorScheme: .light, size: CGSize(width: 1240, height: 760))
@@ -147,7 +143,6 @@ private struct V15GallerySnapshotTool {
             let cashFlow = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f3d-route", route])
             try render(cashFlow, to: output.appendingPathComponent("f3d-mac-\(style).png"), colorScheme: scheme, size: size, dynamicTypeSize: type)
         }
-        try renderF3E(to: output)
         let f3FRoutes: [(String, String, ColorScheme, CGSize, DynamicTypeSize)] = [
             ("ai-proposals", "light-spine", .light, CGSize(width: 1440, height: 900), .large),
             ("ai-proposals", "dark-compact", .dark, CGSize(width: 1120, height: 760), .large),
@@ -208,20 +203,6 @@ private struct V15GallerySnapshotTool {
         for (route, style, scheme, size, type) in routes {
             let workbench = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f3g-route", route])
             try render(workbench, to: output.appendingPathComponent("f3g-mac-\(style).png"), colorScheme: scheme, size: size, dynamicTypeSize: type, settlingDelay: 1.2)
-        }
-    }
-
-    @MainActor
-    private static func renderF3E(to output: URL) throws {
-        let routes: [(String, String, ColorScheme, CGSize, DynamicTypeSize)] = [
-            ("reconciliation-long", "long-minimum", .light, CGSize(width: 1000, height: 700), .large),
-            ("reconciliation-long", "long-dark", .dark, CGSize(width: 1180, height: 820), .large),
-            ("reconciliation-long", "long-wide", .light, CGSize(width: 1440, height: 900), .large),
-            ("reconciliation-long", "long-ax5", .light, CGSize(width: 1440, height: 1080), .accessibility5)
-        ]
-        for (route, style, scheme, size, type) in routes {
-            let reconciliation = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f3e-route", route])
-            try render(reconciliation, to: output.appendingPathComponent("f3e-mac-\(style).png"), colorScheme: scheme, size: size, dynamicTypeSize: type, settlingDelay: 0.8)
         }
     }
 

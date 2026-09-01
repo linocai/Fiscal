@@ -322,7 +322,7 @@ public final class V15ReportingModel {
         ].contains(where: { $0 != 0 })
         return !hasSummaryFact && report.accounts.isEmpty && report.categories.isEmpty && report.merchants.isEmpty && report.sources.isEmpty && (report.knownFutureEvents?.isEmpty ?? true) && (report.debtCycles?.isEmpty ?? true) && (report.installments?.isEmpty ?? true)
             && completeness.unresolvedImportCount == 0 && completeness.failedImportCount == 0
-            && completeness.uncategorizedTransactionCount == 0 && completeness.openReconciliationDifferenceCount == 0
+            && completeness.uncategorizedTransactionCount == 0
     }
     private func pageMatches(_ page: V15PeriodReportDrillDown, filter: V15ReportDrillFilter) -> Bool { switch filter { case .category(let id): page.categoryID == id && page.accountID == nil && page.merchantID == nil && page.source == nil; case .account(let id): page.accountID == id && page.categoryID == nil && page.merchantID == nil && page.source == nil; case .merchant(let id): page.merchantID == id && page.categoryID == nil && page.accountID == nil && page.source == nil; case .source(let source): page.source == source && page.categoryID == nil && page.accountID == nil && page.merchantID == nil } }
 }

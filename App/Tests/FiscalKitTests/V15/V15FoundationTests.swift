@@ -32,6 +32,7 @@ struct V15FoundationTests {
     @Test("P33 credit schedule preview retains the full atomic effect")
     func creditScheduleFullContract() throws {
         let preview = try V15FixtureCodec.decoder.decode(V15CreditSchedulePreview.self, from: V15FixtureLibrary.creditSchedulePreview)
+        #expect(!String(decoding: V15FixtureLibrary.creditSchedulePreview, as: UTF8.self).contains("preserved_checkpoint_count"))
         #expect(preview.cycleMode == "statement_day_cutoff")
         #expect(preview.oldCycleMode == "previous_calendar_month")
         #expect(preview.affectedCycles.first?.oldDueDate == "2026-09-05")

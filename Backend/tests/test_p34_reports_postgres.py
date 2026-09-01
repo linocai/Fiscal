@@ -902,8 +902,10 @@ def test_p36_report_v2_adds_auditable_dimensions_without_changing_v1() -> None:
         legacy_body = legacy.json()
         body = report.json()
         assert legacy_body["meta"]["report_schema_version"] == "1"
+        assert legacy_body["completeness"]["open_reconciliation_difference_count"] == 0
         assert "daily" not in legacy_body
         assert body["meta"]["report_schema_version"] == "2"
+        assert "open_reconciliation_difference_count" not in body["completeness"]
         revision = body["meta"]["data_revision"]
         assert body["drill_down_path"] == (
             "/api/v1/reports/v2/period-drill-down"

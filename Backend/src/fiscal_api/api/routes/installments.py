@@ -44,9 +44,7 @@ async def preview_installment_purchase(
     "/installment-purchases",
     response_model=InstallmentPurchaseCreateResponse,
     status_code=http_status.HTTP_201_CREATED,
-    dependencies=[
-        formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports")],
 )
 async def create_installment_purchase(
     request: InstallmentPurchaseCreate,
@@ -71,9 +69,7 @@ async def list_installment_plans(
     "/installment-plans",
     response_model=InstallmentPlanResponse,
     status_code=http_status.HTTP_201_CREATED,
-    dependencies=[
-        formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports")],
 )
 async def create_installment_plan(
     request: InstallmentCreate,
@@ -105,9 +101,7 @@ async def preview_installment_plan(
 @router.put(
     "/installment-plans/{plan_id}",
     response_model=InstallmentPlanResponse,
-    dependencies=[
-        formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports")],
 )
 async def update_installment_plan(
     plan_id: UUID,
@@ -156,9 +150,7 @@ async def preview_cancel_installment_future(
 @router.post(
     "/installment-plans/{plan_id}/settle-early",
     response_model=InstallmentSettlementResult,
-    dependencies=[
-        formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports")],
 )
 async def settle_installment_plan(
     plan_id: UUID,
@@ -172,9 +164,7 @@ async def settle_installment_plan(
 @router.post(
     "/installment-plans/{plan_id}/cancel-future",
     response_model=InstallmentCancellationResult,
-    dependencies=[
-        formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports")],
 )
 async def cancel_installment_future(
     plan_id: UUID,
@@ -188,9 +178,7 @@ async def cancel_installment_future(
 @router.post(
     "/installment-plans/{plan_id}/reverse-settlement",
     response_model=InstallmentReverseSettlementResult,
-    dependencies=[
-        formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports", "attention")
-    ],
+    dependencies=[formal_mutation("ledger", "accounts", "credit", "cash_flow", "reports")],
 )
 async def reverse_installment_settlement(
     plan_id: UUID,

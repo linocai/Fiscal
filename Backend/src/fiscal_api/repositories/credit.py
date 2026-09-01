@@ -17,7 +17,6 @@ from fiscal_api.db.models import (
     InstallmentPlan,
     LedgerTransaction,
     Posting,
-    ReconciliationCheckpoint,
     StatementImportRow,
 )
 
@@ -364,24 +363,6 @@ class CreditRepository:
             ).all()
         )
 
-    async def checkpoints_for_cycles(self, cycle_ids: list[UUID]) -> list[ReconciliationCheckpoint]:
-        if not cycle_ids:
-            return []
-        return list(
-            (
-                await self.session.scalars(
-                    select(ReconciliationCheckpoint)
-                    .where(ReconciliationCheckpoint.credit_cycle_id.in_(cycle_ids))
-                    .order_by(
-                        ReconciliationCheckpoint.credit_cycle_id,
-                        ReconciliationCheckpoint.as_of,
-                        ReconciliationCheckpoint.created_at,
-                        ReconciliationCheckpoint.id,
-                    )
-                )
-            ).all()
-        )
-
     async def ai_proposals_for_cycles(self, cycle_ids: list[UUID]) -> list[AIProposal]:
         if not cycle_ids:
             return []
@@ -431,13 +412,6 @@ class CreditRepository:
             .limit(1)
         )
         if period is not None:
-            return True
-        checkpoint = await self.session.scalar(
-            select(ReconciliationCheckpoint.id)
-            .where(ReconciliationCheckpoint.credit_cycle_id == cycle_id)
-            .limit(1)
-        )
-        if checkpoint is not None:
             return True
         proposal = await self.session.scalar(
             select(AIProposal.id).where(AIProposal.credit_cycle_id == cycle_id).limit(1)
