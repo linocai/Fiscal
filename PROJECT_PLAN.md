@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 当前目标：**v1.7.0（Build 34）** ｜更新：2026-09-01（Asia/Shanghai）｜阶段：**RELEASE · 一条龙发布已授权并执行中**
+> 当前目标：**v1.7.0（Build 34）** ｜更新：2026-09-01（Asia/Shanghai）｜阶段：**RELEASED · 一条龙发布完成**
 
 ## 1. 现在要解决什么
 
@@ -8,7 +8,7 @@
 - 用户认可现有配色、字体和基础视觉语言；**不换肤，不重新发明一套视觉风格**。
 - 这次要解决的是 macOS 首页“东西都塞在左边、真正要看的账户和流水反而被挤走”的问题，并删除没有帮助的余额核对链路。
 - 版本为 **v1.7.0（Build 34）**：这是功能删除、主导航重排和接口收口，不是补丁级小修。
-- 完整施工说明见 [v1.7.0 macOS 工作台重整](archive/plans/v1.7.0-macos-workspace-reset.md)。本文件是唯一入口；发布事实继续以 [v1.6.0 发布记录](archive/releases/v1.6.0/RELEASE_STATE.md) 为准。
+- 完整施工说明见 [v1.7.0 macOS 工作台重整](archive/plans/v1.7.0-macos-workspace-reset.md)。本文件是唯一入口；本版生产、签名、交付与回滚事实以 [v1.7.0 发布记录](archive/releases/v1.7.0/RELEASE_STATE.md) 为准。
 
 ## 2. 用户已经定下来的样子
 
@@ -59,22 +59,22 @@
 
 ### B17-D · 先验证，再谈发布
 
-状态：**自动验证与独立视觉复审完成，发布链执行中**。完整 PostgreSQL pytest（394 passed）、Ruff、Pyright、FiscalKitTests（391 passed）、iOS Simulator/macOS App 编译均通过；`0037 → 0038` 有数据迁移已独立回归。2026-09-01 的契约、账户筛选/搜索、分期入口与 mutation scope 修复已定向回归；本机临时 API RootSmoke 实测五模块常驻及低频入口可达后已停止。
+状态：**自动验证、独立视觉复审与完整发布链均已完成**。完整 PostgreSQL pytest（394 passed）、Ruff、Pyright、FiscalKitTests（391 passed）、iOS Simulator/macOS App 编译均通过；`0037 → 0038` 有数据迁移已独立回归。2026-09-01 的契约、账户筛选/搜索、分期入口与 mutation scope 修复已定向回归；本机临时 API RootSmoke 实测五模块常驻及低频入口可达后已停止。
 
 - 后端要验证 `0037 → 0038` 的有数据升级、核对路由消失、信用账期改期仍安全、报表与导出不再出现核对词、其余账目/报表/未来现金流不变。
 - Apple 要跑共享 `FiscalKitTests`，并编译 iOS Simulator 与 macOS target；macOS 必须实际检查常用窗口宽度、浅深色、长账户名/长金额、空态和错误态。iOS 只回归删除核对后主流程无坏口。
 - 独立视觉复审已检查约 1004pt 窗口、长账户、空错态、五模块与主要深色内容；发现的隐藏快捷键无障碍污染已修复为仅在流水模块挂载并从 AX／鼠标命中移除。相关单测、双端 App 编译与修后本机 RootSmoke 实跑均通过；RootSmoke 明确验证四个隐藏命令在流水、未来和系统上下文都不再出现在 AX 树，并在结束后完成测试 App/keychain 清理。
-- 用户已于 2026-09-01 明确授权“一条龙发布”；当前按源码提交与不可变标签、干净标签签名构建、宁波备份/迁移/部署、健康验收、macOS 可恢复换包和 iOS IPA 交付的既定顺序执行。
+- 用户已于 2026-09-01 明确授权并完成“一条龙发布”：源码 `64cb1aee` 与不可变标签 `v1.7.0` 已推送；签名包从干净标签构建并二次验签；宁波已备份、迁移至 `0038`、部署并通过内外网与鉴权验收；macOS 已可恢复换包并启动，iOS IPA 已交付用户安装。
 
 ## 5. 不可越过的边界
 
 - 不触碰现有六个本地 Xcode scheme 变更：`FiscaliOS.xcscheme`、`FiscalmacOS.xcscheme`、`V15GalleryiOS.xcscheme`、`V15GallerymacOS.xcscheme`、`V15RootSmokeiOS.xcscheme`、`V15RootSmokemacOS.xcscheme`；不还原、不提交。
 - 本轮为保护上述 scheme，禁止再次运行会改写 scheme 的生成器；`project.pbxproj` 已作最小人工同步。
 - 金额仍用 `CNYAmountParser`，业务日期和用户可见日期仍用 `Asia/Shanghai`；异步读取继续使用 owner/generation，写入继续使用现有 preview/commit 与幂等规则。
-- 宁波是唯一现役 Fiscal 环境。跨 `0037` 或未来 `0038` 的回滚禁止盲目 Alembic downgrade：停写、备份并验证当前库、恢复到新目标、验证后才切换。
+- 宁波是唯一现役 Fiscal 环境。跨 `0038` 回滚禁止盲目 Alembic downgrade：停写、备份并验证当前库、把迁移前备份恢复到新目标、验证后才切换。
 
 ## 6. 当前状态与后续 Backlog
 
-- v1.7.0（Build 34）实现、自动验证与独立视觉复审已完成；发布链已获授权并执行中。当前仍未宣称已发布，只有源码、签名包、宁波部署、健康验收、macOS 换包与 iOS 交付全部完成后才改为已发布。
+- v1.7.0（Build 34）已经正式发布。宁波运行源码 `64cb1aee` / Alembic `20260831_0038`；`/Applications/Fiscal.app` 已验签并运行 `1.7.0 (34)`；iOS IPA 位于 `~/Downloads/Fiscal-iOS-v1.7.0-build34-development.ipa`，等待用户本人安装。
 - 本轮之后再决定的候选仍是：待同步原地编辑、提醒、归档恢复、附件、设备管理。它们不自动并入 v1.7.0。
-- 发布操作员的下一步：保护六个本地 scheme 不进入提交，创建并推送 v1.7.0 源码提交与不可变标签，然后只从干净标签完成签名、部署、换包和发布记录。
+- 下一步只收集用户安装 iOS 后的真机手感与新问题；不自动开始下一版本，也不移动既有标签。若准备下一版，再从上述 Backlog 选择范围。
