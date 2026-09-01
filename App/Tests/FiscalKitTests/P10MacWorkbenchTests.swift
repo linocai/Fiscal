@@ -36,6 +36,19 @@ struct P10MacWorkbenchTests {
 
 @Suite("v1.7 macOS ledger context")
 struct V151MacLedgerScopeTests {
+  @Test("Account balance cards distinguish assets from credit debt")
+  func accountBalanceCardSemantics() {
+    #expect(V151MacAccountBalanceSemantics.kindLabel(.cash) == "现金")
+    #expect(V151MacAccountBalanceSemantics.kindLabel(.debit) == "借记")
+    #expect(V151MacAccountBalanceSemantics.kindLabel(.credit) == "信用")
+    #expect(V151MacAccountBalanceSemantics.amountLabel(.cash) == "余额")
+    #expect(V151MacAccountBalanceSemantics.amountLabel(.debit) == "余额")
+    #expect(V151MacAccountBalanceSemantics.amountLabel(.credit) == "欠款")
+    #expect(V151MacAccountBalanceSemantics.direction(.debit, minorUnits: 100) == .balance)
+    #expect(V151MacAccountBalanceSemantics.direction(.credit, minorUnits: 100) == .outflow)
+    #expect(V151MacAccountBalanceSemantics.direction(.credit, minorUnits: 0) == .balance)
+  }
+
   @Test("Month context uses the Shanghai business-month range")
   func monthContextUsesShanghaiRange() throws {
     var calendar = Calendar(identifier: .gregorian)
@@ -89,6 +102,10 @@ struct V151MacLedgerScopeTests {
     #expect(context.filterID == nil)
     #expect(context.detailID == nil)
     #expect(V151MacLedgerAccountFilter.retainedAccountID(other, availableAccounts: accounts) == nil)
+    context.selectAccount(retained)
+    context.clearAllAccounts()
+    #expect(context.filterID == nil)
+    #expect(context.detailID == nil)
   }
 
   @Test("Ledger search draft changes only on explicit confirmation")

@@ -121,7 +121,7 @@ public struct V15SettingsView: View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
                 Text("设置").font(V15Typography.surfaceTitle).padding(.horizontal, V15Spacing.md).padding(.vertical, V15Spacing.sm)
-                ForEach(Pane.allCases) { pane in
+                ForEach(macPanes) { pane in
                     Button { selectedPane = pane } label: {
                         HStack(spacing: V15Spacing.sm) {
                             Image(systemName: pane.symbol).frame(width: 18)
@@ -133,6 +133,7 @@ public struct V15SettingsView: View {
                         .background(selectedPane == pane ? V15Palette.selected.color : .clear, in: RoundedRectangle(cornerRadius: V15Radius.control))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("v15.settings.pane.\(pane.rawValue)")
                 }
                 Spacer()
             }
@@ -237,6 +238,8 @@ public struct V15SettingsView: View {
     }
 
 #if os(macOS)
+    private var macPanes: [Pane] { [.masterData, .archive, .ai] }
+
     @ViewBuilder private var macDetail: some View {
         switch selectedPane {
         case .masterData:

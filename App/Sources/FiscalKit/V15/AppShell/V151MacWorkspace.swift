@@ -60,6 +60,26 @@ struct V151MacLedgerAccountContext: Equatable {
     }
 }
 
+enum V151MacAccountBalanceSemantics {
+    static func kindLabel(_ kind: V15AccountKind) -> String {
+        switch kind {
+        case .cash: "现金"
+        case .debit: "借记"
+        case .credit: "信用"
+        case .unknown: "其他"
+        }
+    }
+
+    static func amountLabel(_ kind: V15AccountKind) -> String {
+        kind == .credit ? "欠款" : "余额"
+    }
+
+    static func direction(_ kind: V15AccountKind, minorUnits: Int64) -> V15MoneyDirection {
+        guard minorUnits != 0 else { return .balance }
+        return kind == .credit ? .outflow : .balance
+    }
+}
+
 enum V151MacLedgerSearch {
     static func committedQuery(from draft: String) -> String? {
         draft.isEmpty ? nil : draft
@@ -76,7 +96,7 @@ public struct V151MacWorkspace: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .ledger: "账目"
+            case .ledger: "流水"
             case .record: "记一笔"
             case .future: "未来现金流"
             case .credit: "信用账期"
@@ -195,7 +215,7 @@ public struct V151MacWorkspace: View {
 
     private var spinePane: some View {
         VStack(spacing: 0) {
-            spineSummary
+            ledgerHeader
             Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
             ScrollView {
                 LazyVStack(spacing: 0, pinnedViews: []) {
@@ -210,31 +230,22 @@ public struct V151MacWorkspace: View {
         .background(V15Palette.paper.color)
     }
 
-    private var spineSummary: some View {
+    private var ledgerHeader: some View {
+        VStack(spacing: 0) {
+            spineToolbar
+            Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
+            accountBalanceBoard
+        }
+        .background(V15Palette.card.color)
+    }
+
+    private var spineToolbar: some View {
         HStack(spacing: 10) {
             Text("流水").font(.system(size: 15, weight: .semibold))
                 .accessibilityIdentifier("v151.mac.ledger.title")
             Menu(periodLabel) {
                 ForEach(monthChoices, id: \.self) { month in
                     Button(month) { applyMonth(month) }
-                }
-            }
-            .font(.system(size: 12, weight: .semibold))
-            .menuStyle(.borderlessButton)
-            Menu {
-                Button("全部账户") { selectAllAccounts() }
-                Divider()
-                ForEach(ledger.accounts) { account in
-                    Button(account.name) { selectAccount(account.id) }
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    Text(filteredAccount?.name ?? "全部账户").lineLimit(1)
-                    if let account = filteredAccount {
-                        V15MoneyText(minorUnits: account.currentBalanceMinor, direction: account.kind == .credit ? .outflow : .balance, includeCurrency: false, font: .system(size: 11, weight: .semibold, design: .monospaced))
-                    } else if let value = facts.facts?.cash.currentBalanceMinor {
-                        V15MoneyText(minorUnits: value, direction: .balance, includeCurrency: false, font: .system(size: 11, weight: .semibold, design: .monospaced))
-                    }
                 }
             }
             .font(.system(size: 12, weight: .semibold))
@@ -261,6 +272,138 @@ public struct V151MacWorkspace: View {
                 .keyboardShortcut("n", modifiers: .command)
         }
         .padding(.horizontal, 18).frame(minHeight: 48)
+    }
+
+    @ViewBuilder private var accountBalanceBoard: some View {
+        switch ledger.referencePhase {
+        case .idle, .loading:
+            LazyVGrid(columns: accountBalanceColumns, spacing: 8) {
+                ForEach(0..<3, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(V15Palette.paper.color.opacity(0.72))
+                        .frame(height: 78)
+                        .overlay { V15LoadingSkeleton(layout: .compact).padding(10) }
+                }
+            }
+            .padding(12)
+            .accessibilityIdentifier("v151.mac.account.board.loading")
+        case .failed(let failure):
+            V15ServiceErrorState(message: failure.message) {
+                Task { await refreshLedgerReferencesAndReconcileSelectedAccount() }
+            }
+            .padding(12)
+            .accessibilityIdentifier("v151.mac.account.board.error")
+        case .empty:
+            V15EmptyState(title: "还没有可用账户", explanation: "请先在设置中建立账户。")
+                .padding(12)
+                .accessibilityIdentifier("v151.mac.account.board.empty")
+        case .loaded:
+            LazyVGrid(columns: accountBalanceColumns, spacing: 8) {
+                allAccountsBalanceCard
+                ForEach(ledger.accounts) { account in
+                    accountBalanceCard(account)
+                }
+            }
+            .padding(12)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("v151.mac.account.board")
+        }
+    }
+
+    private var accountBalanceColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 154, maximum: 220), spacing: 8, alignment: .top)]
+    }
+
+    private var allAccountsBalanceCard: some View {
+        Button(action: selectAllAccounts) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text("全部账户").font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text("总览").font(.system(size: 10, weight: .medium)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                }
+                if let value = facts.facts {
+                    accountSummaryRow("资产余额", minorUnits: value.cash.currentBalanceMinor, direction: .balance)
+                    accountSummaryRow("信用欠款", minorUnits: value.credit.currentDebtMinor, direction: .outflow)
+                } else {
+                    Text(factsSummaryPlaceholder)
+                        .font(.system(size: 10))
+                        .foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, minHeight: 78, maxHeight: 78, alignment: .topLeading)
+            .background(accountFilterID == nil ? V15Palette.selected.color : V15Palette.paper.color, in: RoundedRectangle(cornerRadius: 7))
+            .overlay { RoundedRectangle(cornerRadius: 7).stroke(accountFilterID == nil ? V15Palette.teal.color : V15Palette.hairline.color, lineWidth: accountFilterID == nil ? 1.5 : 1) }
+            .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(allAccountsAccessibilityLabel)
+        .accessibilityAddTraits(accountFilterID == nil ? .isSelected : [])
+        .accessibilityIdentifier("v151.mac.account.summary")
+    }
+
+    private func accountBalanceCard(_ account: V15AccountResponse) -> some View {
+        let selected = accountFilterID == account.id
+        let kind = V151MacAccountBalanceSemantics.kindLabel(account.kind)
+        let amountLabel = V151MacAccountBalanceSemantics.amountLabel(account.kind)
+        let direction = V151MacAccountBalanceSemantics.direction(account.kind, minorUnits: account.currentBalanceMinor)
+        return Button { selectAccount(account.id) } label: {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 6) {
+                    Text(account.name).font(.system(size: 12, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 4)
+                    Text(kind).font(.system(size: 10, weight: .medium)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(amountLabel).font(.system(size: 10)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                    Spacer(minLength: 4)
+                    V15MoneyText(minorUnits: account.currentBalanceMinor, direction: direction, font: .system(size: 12, weight: .semibold, design: .monospaced))
+                        .minimumScaleFactor(0.72)
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, minHeight: 78, maxHeight: 78, alignment: .topLeading)
+            .background(selected ? V15Palette.selected.color : V15Palette.paper.color, in: RoundedRectangle(cornerRadius: 7))
+            .overlay { RoundedRectangle(cornerRadius: 7).stroke(selected ? V15Palette.teal.color : V15Palette.hairline.color, lineWidth: selected ? 1.5 : 1) }
+            .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(account.name)，\(kind)账户，\(amountLabel) \(V15MoneyPresentation(minorUnits: account.currentBalanceMinor, direction: direction).text)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("v151.mac.account.card.\(account.id)")
+    }
+
+    private func accountSummaryRow(_ label: String, minorUnits: Int64, direction: V15MoneyDirection) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(label).font(.system(size: 9)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+            Spacer(minLength: 3)
+            V15MoneyText(
+                minorUnits: minorUnits,
+                direction: minorUnits == 0 ? .balance : direction,
+                font: .system(size: 10, weight: .semibold, design: .monospaced)
+            )
+                .minimumScaleFactor(0.68)
+        }
+    }
+
+    private var factsSummaryPlaceholder: String {
+        switch facts.factsPhase {
+        case .idle, .loading: "正在读取资产与信用欠款…"
+        case .loaded: "资产与信用欠款暂不可用"
+        case .failed, .requiresReload: "资产与信用欠款读取失败"
+        }
+    }
+
+    private var allAccountsAccessibilityLabel: String {
+        guard let value = facts.facts else { return "全部账户，总览暂不可用" }
+        let assets = V15MoneyPresentation(minorUnits: value.cash.currentBalanceMinor, direction: .balance).text
+        let debt = V15MoneyPresentation(
+            minorUnits: value.credit.currentDebtMinor,
+            direction: value.credit.currentDebtMinor == 0 ? .balance : .outflow
+        ).text
+        return "全部账户，资产余额 \(assets)，信用欠款 \(debt)"
     }
 
     @ViewBuilder private var transactionRows: some View {
@@ -317,6 +460,7 @@ public struct V151MacWorkspace: View {
             .opacity(transaction.voidedAt == nil ? 1 : 0.72)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("v151.mac.transaction.\(transaction.id)")
         }
         .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
     }
@@ -448,8 +592,12 @@ public struct V151MacWorkspace: View {
                         Text("归档 · 只读").font(.system(size: 10, weight: .semibold)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
                     }
                 }
-                V15MoneyText(minorUnits: account.currentBalanceMinor, direction: account.kind == .credit ? .outflow : .balance, font: .system(size: 26, weight: .bold, design: .monospaced))
-                Text("当前余额").font(.system(size: 11)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                V15MoneyText(
+                    minorUnits: account.currentBalanceMinor,
+                    direction: V151MacAccountBalanceSemantics.direction(account.kind, minorUnits: account.currentBalanceMinor),
+                    font: .system(size: 26, weight: .bold, design: .monospaced)
+                )
+                Text(V151MacAccountBalanceSemantics.amountLabel(account.kind)).font(.system(size: 11)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
             }
             VStack(spacing: 0) {
                 fieldRow("类型", value: accountKindLabel(account.kind), emphasized: false)
@@ -484,6 +632,7 @@ public struct V151MacWorkspace: View {
                 }
             }
         }
+        .accessibilityIdentifier("v151.mac.account.inspector")
     }
 
     private func inspector(_ transaction: V15Transaction) -> some View {
@@ -642,9 +791,18 @@ public struct V151MacWorkspace: View {
 
     private var modulePane: some View {
         VStack(spacing: 0) {
-            moduleHeader
-            Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
+            if showsModuleHeader {
+                moduleHeader
+                Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
+            }
             moduleContent
+        }
+    }
+
+    private var showsModuleHeader: Bool {
+        switch destination {
+        case .reports, .settings: false
+        default: true
         }
     }
 
@@ -659,15 +817,15 @@ public struct V151MacWorkspace: View {
                     .accessibilityIdentifier("v151.mac.future.installments")
                 V15ActionButton("报销", kind: .secondary) { destination = .reimbursements }
             }
-        case .reports: primaryModuleHeader("报表") { EmptyView() }
+        case .reports: EmptyView()
         case .archive:
-            primaryModuleHeader("系统与数据") {
+            actionModuleHeader {
                 V15ActionButton("AI 待确认", kind: .secondary) { destination = .proposals }
                     .accessibilityIdentifier("v151.mac.system.ai-proposals")
                 V15ActionButton("账单导入", kind: .secondary) { destination = .statementImport }
                     .accessibilityIdentifier("v151.mac.system.statement-import")
             }
-        case .settings: primaryModuleHeader("设置") { EmptyView() }
+        case .settings: EmptyView()
         case .record: secondaryModuleHeader("记一笔", parent: .ledger)
         case .credit: secondaryModuleHeader("信用账期", parent: .future)
         case .installments: secondaryModuleHeader("分期", parent: .future)
@@ -676,6 +834,14 @@ public struct V151MacWorkspace: View {
         case .proposals: secondaryModuleHeader("AI 待确认", parent: .archive)
         case .statementImport: secondaryModuleHeader("账单导入", parent: .archive)
         }
+    }
+
+    private func actionModuleHeader<Actions: View>(@ViewBuilder actions: () -> Actions) -> some View {
+        HStack(spacing: 8) {
+            Spacer()
+            actions()
+        }
+        .padding(.horizontal, 18).frame(height: 48).background(V15Palette.card.color)
     }
 
     private func primaryModuleHeader<Actions: View>(_ title: String, @ViewBuilder actions: () -> Actions) -> some View {

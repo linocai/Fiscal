@@ -113,6 +113,31 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         assertHiddenKeyboardCommandsStayOutOfAccessibilityTree()
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "v151.mac.ledger.title").count, 1)
         XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Fiscal /")).count, 0)
+        XCTAssertTrue(element("v151.mac.account.board").waitForExistence(timeout: 8))
+        XCTAssertTrue(element("v151.mac.account.summary").exists)
+        let accountCards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "v151.mac.account.card."))
+        XCTAssertGreaterThan(accountCards.count, 0)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "信用账户", "欠款")).firstMatch.exists)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "借记账户", "余额")).firstMatch.exists)
+
+        var selectedCardIdentifier: String?
+        for index in 0..<accountCards.count {
+            let card = accountCards.element(boundBy: index)
+            let identifier = card.identifier
+            card.click()
+            XCTAssertTrue(element("v151.mac.account.inspector").waitForExistence(timeout: 5))
+            let transactionRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "v151.mac.transaction."))
+            if transactionRows.count > 0 {
+                selectedCardIdentifier = identifier
+                transactionRows.firstMatch.click()
+                XCTAssertTrue(element(identifier).isSelected)
+                break
+            }
+            element("v151.mac.account.summary").click()
+        }
+        XCTAssertNotNil(selectedCardIdentifier, "At least one visible account card must own a ledger row in the QA fixture.")
+        element("v151.mac.account.summary").click()
+        XCTAssertTrue(element("v151.mac.account.summary").isSelected)
 
         element("v151.mac.module.future").click()
         XCTAssertTrue(element("v151.mac.module.title").waitForExistence(timeout: 5))
@@ -126,11 +151,15 @@ final class V15RootSmokemacOSUITests: XCTestCase {
 
         element("v151.mac.module.ledger").click()
         XCTAssertTrue(element("v151.mac.ledger.search").exists)
+        app.buttons["记一笔"].click()
+        XCTAssertEqual(element("v151.mac.module.back").label, "返回流水")
+        element("v151.mac.module.back").click()
 
         element("v151.mac.module.archive").click()
-        XCTAssertTrue(element("v151.mac.module.title").exists)
+        XCTAssertFalse(element("v151.mac.module.title").exists)
+        XCTAssertTrue(element("v15.f4c.security.macos").exists)
         assertHiddenKeyboardCommandsStayOutOfAccessibilityTree()
-        XCTAssertTrue(element("v151.mac.system.ai-proposals").exists)
+        XCTAssertTrue(element("v151.mac.system.ai-proposals").waitForExistence(timeout: 5))
         XCTAssertTrue(element("v151.mac.system.statement-import").exists)
         assertNavigationRemainsVisible()
 
@@ -139,6 +168,17 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         XCTAssertTrue(element("v151.mac.module.back").exists)
         assertNavigationRemainsVisible()
         element("v151.mac.module.back").click()
+
+        element("v151.mac.module.reports").click()
+        XCTAssertTrue(element("v15.f4a.reports.macos").exists)
+        XCTAssertFalse(element("v151.mac.module.title").exists)
+
+        element("v151.mac.module.settings").click()
+        XCTAssertTrue(element("v15.settings").exists)
+        XCTAssertFalse(element("v151.mac.module.title").exists)
+        XCTAssertFalse(element("v15.settings.pane.security").exists)
+
+        element("v151.mac.module.archive").click()
 
         element("v151.mac.system.statement-import").click()
         XCTAssertTrue(element("v151.mac.module.title").exists)

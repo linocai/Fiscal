@@ -5,6 +5,7 @@ import Observation
 public final class V15LedgerModel {
     public enum Phase: Equatable { case idle, loading, loaded, empty, failed(V15Failure) }
     public enum DetailPhase: Equatable { case idle, loading, loaded, failed(V15Failure) }
+    public enum ReferencePhase: Equatable { case idle, loading, loaded, empty, failed(V15Failure) }
     public enum NextPagePhase: Equatable { case idle, loading, failed(V15Failure) }
     public enum MutationState: Equatable { case idle, working, reconciled(String), conflict(V15Conflict), failed(V15Failure) }
     public enum MutationAction: String, Equatable, Sendable { case void, restore, replace }
@@ -47,6 +48,7 @@ public final class V15LedgerModel {
     public private(set) var cycleReadError: String?
     public private(set) var accounts: [V15AccountResponse] = []
     public private(set) var categories: [V15CategoryResponse] = []
+    public private(set) var referencePhase: ReferencePhase = .idle
     public private(set) var mutation: MutationState = .idle
     public private(set) var categoryChangePreview: V15CategoryChangePreview?
     public private(set) var categoryChangeFailure: V15Failure?
@@ -93,13 +95,21 @@ public final class V15LedgerModel {
 
     public func loadReferences() async {
         referenceGeneration &+= 1; let current = referenceGeneration
+        referencePhase = .loading
         do {
             async let accountValues = services.masterData.activeAccounts()
             async let categoryValues = services.masterData.activeCategories()
             let result = try await (accountValues, categoryValues)
             guard current == referenceGeneration else { return }
             accounts = result.0; categories = flatten(result.1)
-        } catch { /* Labels fall back to non-identifying read-only text. */ }
+            referencePhase = accounts.isEmpty ? .empty : .loaded
+        } catch let failure as V15Failure {
+            guard current == referenceGeneration else { return }
+            referencePhase = failure.kind == .cancelled ? .idle : .failed(failure)
+        } catch {
+            guard current == referenceGeneration else { return }
+            referencePhase = .failed(.init(kind: .transport, message: "账户与分类读取失败。"))
+        }
     }
 
     public func load() async {
