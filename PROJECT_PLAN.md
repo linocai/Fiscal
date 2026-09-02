@@ -1,11 +1,11 @@
 # Fiscal · PROJECT_PLAN
 
-> 当前目标：**v1.8.0（Build 36）macOS 全页面前端升级** ｜更新：2026-09-02（Asia/Shanghai）｜阶段：**RELEASING · 用户已授权一条龙发布**
+> 当前目标：**v1.8.0（Build 36）macOS 全页面前端升级** ｜更新：2026-09-02（Asia/Shanghai）｜阶段：**RELEASED · 一条龙发布完成**
 
 ## 1. 权威范围与当前事实
 
 - 用户已通过 [macOS 前端升级合同](MACOS_FRONTEND_UPGRADE_CONTRACT.md)。该合同定义全部验收范围；本计划定义唯一的施工顺序、边界与当前状态。任何冲突以本计划的现行结论为准。
-- v1.7.1（Build 35）已发布，源码标签 `v1.7.1` 不移动；本轮**不发布、不换包、不部署**，直到全部 P 完成、复审通过并由用户另行授权。
+- v1.8.0（Build 36）已完成一条龙发布，源码标签 `v1.8.0` 固定指向 `da8cecafe8ccef12961ec57d65ed1972f0576fd0`，不得移动；完整发布证据见 `archive/releases/v1.8.0/RELEASE_STATE.md`。
 - 当前仅升级 macOS；保留米白、深绿、金色的品牌方向、现有业务能力与数据语义，不新增业务模块。
 - 不改 Backend API、数据库或 migration；若实施证明某个既有 macOS 能力确实缺少后端契约，停止该项并另报用户决定，不能顺带扩展后端。
 - 共享 SwiftUI 的修改须限于 macOS 分支或证明 iOS 行为、布局未变；每一批都要编译 iOS Simulator。截图记账、快捷指令和所有 iOS 信息架构不改。
@@ -87,7 +87,7 @@
 - Build 完成后进入独立 **Review 工作流**：Reviewer 依据合同 §16 和本计划阻断项执行代码审查、全页面视觉审查、操作路径审查、窗口尺寸与浅/深色矩阵审查，并输出按严重度排序、可定位的 findings。
 - Review 发现问题后进入单独的修复回合；修复完成后重新执行独立复审。Review 与复审结果只更新当前状态和验收证据，不新增 P 编号。
 - 独立 Review 和修复闭环完成、用户确认视觉后，才允许用户另行决定是否进入发布工作流；Review 不包含提交、打标签、部署、换包或发布授权。
-- 本轮明确不做：iOS 视觉重做、Backend/migration、发布链，以及待同步原地编辑、提醒、归档恢复新能力、附件、设备管理等后续 Backlog。
+- 本轮明确不做：iOS 视觉重做、Backend/migration，以及待同步原地编辑、提醒、归档恢复新能力、附件、设备管理等后续 Backlog。
 - 当前状态：P1–P6 已完成；工作台底座、流水/账户、未来事项家族、报表、AI/PDF 导入及系统/主数据均已按合同完成 macOS 升级。工作区的六个受保护 scheme 变更与用户创建的合同文档仍保留且未触碰。
 - 独立 Review 的 6 项 findings 已全部修复：AI 切换待确认/历史时只允许操作当前可见提案；报表年报可切回月报；Today 刷新不再擅自打开账户范围且详情关闭保留当前范围；macOS Gallery 的窗口、sheet 与安全输入自动化恢复稳定；年报 fixture 改为完整自然年；支出趋势统一使用金色支出语义。
 - 修复验收：`FiscalKitTests` 394 tests / 39 suites 通过；`V15GallerymacOSUITests` 30/30 通过；`FiscalmacOS` 与 `FiscaliOS` generic Simulator 构建通过；`git diff --check` 通过。另以真实 macOS 交互核对 Today、报表期间切换及归档确认弹层。
@@ -112,3 +112,4 @@
 - 真实视觉走查使用当前 Debug Gallery 核对报销到账、现金流入账和账单导入行处理三组未知结果：黄色状态、恢复动作、原操作禁用和中文可访问说明均正确，未再出现红色确定失败表达；未操作 `/Applications/Fiscal.app`。
 - 按用户要求先后两次清理本轮与历史验证副产物：移除 Fiscal 的 Xcode 派生缓存、展开的发布校验目录和临时日志/压缩包；项目目录当前约 889 MiB，磁盘可用空间约 26 GiB。11 组既有签名发布 `artifacts/` 均保留，源码、发布记录和六个受保护 scheme 未因清理受损。
 - 用户已明确取消再次独立复审并授权“一条龙发布”。v1.8.0（Build 36）按已通过的完整测试、双端 Release 编译和真实视觉走查进入发布链：版本同步、提交推送、不可变标签、干净标签签名打包、生产只读验收、macOS 可恢复换包和 iOS IPA 交付；本轮累计差异无 Backend 或 migration，不部署后端、不创建无意义数据库备份。
+- v1.8.0（Build 36）一条龙发布已完成：源码提交 `da8cecafe8ccef12961ec57d65ed1972f0576fd0` 与不可变标签 `v1.8.0` 已推送；macOS/iOS 签名包均从干净标签构建、解包复验且可执行文件哈希一致；宁波生产只读验收通过并按无 Backend 差异保持 `64cb1aee0190eeba81f1a38cf6b322d4d1ee33e4` / `20260831_0038` 不变；`/Applications/Fiscal.app` 已换装并运行 `1.8.0 (36)`，旧版备份为 `/Applications/Fiscal-v1.7.1-build35-backup-20260902-190831.app`；iOS IPA 已交付到 `/Users/linotsai/Downloads/Fiscal-iOS-v1.8.0-build36-development.ipa`，真机安装仍由用户本人完成。
