@@ -14,6 +14,8 @@ struct V15DesignSystemTests {
         #expect(V15Palette.yellow == .init(lightHex: 0xFCD668, darkHex: 0xB99333))
         #expect(V15Palette.gold == .init(lightHex: 0x8A6A12, darkHex: 0xD9A93C))
         #expect(V15Palette.provisional == .init(lightHex: 0xFFF8E4, darkHex: 0x241F12))
+        #expect(V15Palette.danger == .init(lightHex: 0xB4232C, darkHex: 0xFF7A82))
+        #expect(V15Palette.dangerSurface == .init(lightHex: 0xFFF0F1, darkHex: 0x2B1618))
         #expect(V15Palette.receipt == .init(lightHex: 0xE9F2F0, darkHex: 0x122A29))
     }
 
@@ -42,6 +44,14 @@ struct V15DesignSystemTests {
         #expect(V15Accessibility.largeTextYieldOrder.last == "金额不缩小、不换行、不截断")
     }
 
+#if os(macOS)
+    @Test("minimum macOS window keeps the widest compact workbench visible")
+    func compactMacWorkspaceFitsMinimumWindow() {
+        #expect(V15MacLayout.compactSidebarWidth <= 80)
+        #expect(V15MacLayout.compactModuleAvailableWidth >= V15MacLayout.widestCompactModuleMinimumWidth)
+    }
+#endif
+
     @Test("unknown and missing disabled reasons always have an explanation")
     func disabledReasons() {
         #expect(V15Accessibility.safeReason(.unknownCapability) == "当前版本不支持此操作。")
@@ -52,6 +62,9 @@ struct V15DesignSystemTests {
         #expect(disabled.foregroundOpacity == 0.35 && disabled.backgroundOpacity == 0.08)
         #expect(disabled.foreground == V15Palette.ink && disabled.background == V15Palette.ink)
         #expect(enabled.background == V15Palette.teal && enabled.foreground == V15Palette.primaryButtonText)
+        let destructive = V15ButtonVisualSpec.resolve(kind: .destructive, isEnabled: true)
+        #expect(destructive.foreground == V15Palette.danger)
+        #expect(destructive.background == V15Palette.dangerSurface && destructive.border == V15Palette.danger)
     }
 
     @Test("state vocabulary preserves preview, conflict, archive and display-only honesty")
@@ -66,5 +79,20 @@ struct V15DesignSystemTests {
         #expect(V15AccessibilityCopy.reload == "取最新数据重新决定")
         #expect(V15StateAccessibilityPolicy.behavior(hasAction: false) == .combinesStaticText)
         #expect(V15StateAccessibilityPolicy.behavior(hasAction: true) == .containsInteractiveChildren)
+    }
+
+    @Test("response-unknown uses warning semantics instead of deterministic failure")
+    func outcomeUnknownVisualContract() {
+        let unknown = V15StateVisualSpec.resolve(.init(kind: .responseUnknown, message: "结果未知"))
+        let failure = V15StateVisualSpec.resolve(.init(kind: .transport, message: "读取失败"))
+        #expect(unknown.semantic == .outcomeUnknown)
+        #expect(unknown.marker == V15Palette.yellow)
+        #expect(unknown.background == V15Palette.provisional)
+        #expect(unknown.dashed)
+        #expect(failure.semantic == .deterministicFailure)
+#if os(macOS)
+        #expect(failure.marker == V15Palette.danger)
+        #expect(failure.background == V15Palette.dangerSurface)
+#endif
     }
 }

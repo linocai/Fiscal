@@ -16,7 +16,12 @@ public struct V15ButtonVisualSpec: Sendable, Equatable {
         switch kind {
         case .primary: return .init(foreground: V15Palette.primaryButtonText, background: V15Palette.teal, border: nil, foregroundOpacity: 1, backgroundOpacity: 1)
         case .secondary: return .init(foreground: V15Palette.teal, background: V15Palette.selected, border: V15Palette.teal, foregroundOpacity: 1, backgroundOpacity: 1)
-        case .destructive: return .init(foreground: V15Palette.ink, background: V15Palette.provisional, border: V15Palette.gold, foregroundOpacity: 1, backgroundOpacity: 1)
+        case .destructive:
+#if os(macOS)
+            return .init(foreground: V15Palette.danger, background: V15Palette.dangerSurface, border: V15Palette.danger, foregroundOpacity: 1, backgroundOpacity: 1)
+#else
+            return .init(foreground: V15Palette.ink, background: V15Palette.provisional, border: V15Palette.gold, foregroundOpacity: 1, backgroundOpacity: 1)
+#endif
         case .quiet: return .init(foreground: V15Palette.teal, background: nil, border: nil, foregroundOpacity: 1, backgroundOpacity: 1)
         }
     }
@@ -27,17 +32,19 @@ public struct V15ActionButton: View {
     private let symbol: String?
     private let kind: V15ButtonKind
     private let disabledReasons: [V15DisabledReason]
+    private let showsDisabledReasons: Bool
+    private let disabledReasonAccessibilityIdentifier: String?
     private let controlAccessibilityIdentifier: String?
     private let action: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(_ title: String, symbol: String? = nil, kind: V15ButtonKind = .primary, disabledReason: V15DisabledReason? = nil, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
-        self.init(title, symbol: symbol, kind: kind, disabledReasons: disabledReason.map { [$0] } ?? [], accessibilityIdentifier: accessibilityIdentifier, action: action)
+    public init(_ title: String, symbol: String? = nil, kind: V15ButtonKind = .primary, disabledReason: V15DisabledReason? = nil, showsDisabledReasons: Bool = true, disabledReasonAccessibilityIdentifier: String? = nil, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
+        self.init(title, symbol: symbol, kind: kind, disabledReasons: disabledReason.map { [$0] } ?? [], showsDisabledReasons: showsDisabledReasons, disabledReasonAccessibilityIdentifier: disabledReasonAccessibilityIdentifier, accessibilityIdentifier: accessibilityIdentifier, action: action)
     }
 
-    public init(_ title: String, symbol: String? = nil, kind: V15ButtonKind = .primary, disabledReasons: [V15DisabledReason], accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
-        self.title = title; self.symbol = symbol; self.kind = kind; self.disabledReasons = disabledReasons; self.controlAccessibilityIdentifier = accessibilityIdentifier; self.action = action
+    public init(_ title: String, symbol: String? = nil, kind: V15ButtonKind = .primary, disabledReasons: [V15DisabledReason], showsDisabledReasons: Bool = true, disabledReasonAccessibilityIdentifier: String? = nil, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
+        self.title = title; self.symbol = symbol; self.kind = kind; self.disabledReasons = disabledReasons; self.showsDisabledReasons = showsDisabledReasons; self.disabledReasonAccessibilityIdentifier = disabledReasonAccessibilityIdentifier; self.controlAccessibilityIdentifier = accessibilityIdentifier; self.action = action
     }
 
     public var body: some View {
@@ -49,7 +56,14 @@ public struct V15ActionButton: View {
                     actionControl
                 }
             }
-            V15DisabledReasonList(reasons: disabledReasons)
+            if showsDisabledReasons {
+                if let disabledReasonAccessibilityIdentifier {
+                    V15DisabledReasonList(reasons: disabledReasons)
+                        .accessibilityIdentifier(disabledReasonAccessibilityIdentifier)
+                } else {
+                    V15DisabledReasonList(reasons: disabledReasons)
+                }
+            }
         }
     }
 
@@ -58,12 +72,22 @@ public struct V15ActionButton: View {
             Label { Text(title).multilineTextAlignment(.center) } icon: {
                 if let symbol { Image(systemName: symbol) }
             }
-            .frame(maxWidth: kind == .quiet ? nil : .infinity)
+            // A desktop action is an action, not a full-width row. iOS keeps
+            // its larger target and full-width affordance where appropriate.
+            .frame(maxWidth: buttonExpands ? .infinity : nil)
         }
         .buttonStyle(V15ButtonStyle(kind: kind, reduceMotion: reduceMotion, dark: colorScheme == .dark))
         .disabled(!disabledReasons.isEmpty)
         .v15KeyboardFocusable()
         .v15ActionAccessibility(label: title, hint: disabledReasons.isEmpty ? nil : disabledReasons.map(V15Accessibility.safeReason).joined(separator: "；"))
+    }
+
+    private var buttonExpands: Bool {
+#if os(macOS)
+        false
+#else
+        kind != .quiet
+#endif
     }
 }
 
@@ -145,12 +169,20 @@ public struct V15Field: View {
                 .textFieldStyle(.plain)
                 .padding(V15Spacing.sm)
                 .background(V15Palette.paper.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
-                .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(issues.isEmpty ? V15Palette.hairline.color : V15Palette.teal.color, lineWidth: issues.isEmpty ? 1 : 1.5) }
+                .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(issues.isEmpty ? V15Palette.hairline.color : issueColor, lineWidth: issues.isEmpty ? 1 : 1.5) }
                 .accessibilityLabel(title)
                 .accessibilityValue(text)
                 .accessibilityHint(issues.isEmpty ? "" : issues.map(\.message).joined(separator: "；"))
             V15FieldIssues(issues: issues)
         }
+    }
+
+    private var issueColor: Color {
+#if os(macOS)
+        V15Palette.danger.color
+#else
+        V15Palette.teal.color
+#endif
     }
 }
 
@@ -163,13 +195,21 @@ public struct V15FieldIssues: View {
                 ForEach(Array(issues.enumerated()), id: \.offset) { _, issue in
                     Label(issue.message, systemImage: V15Symbol.warning)
                         .font(V15Typography.secondary.weight(.medium))
-                        .foregroundStyle(V15Palette.teal.color)
+                        .foregroundStyle(issueColor)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("需要修改：\(issues.map(\.message).joined(separator: "；"))")
         }
+    }
+
+    private var issueColor: Color {
+#if os(macOS)
+        V15Palette.danger.color
+#else
+        V15Palette.teal.color
+#endif
     }
 }
 
@@ -282,12 +322,13 @@ public struct V15Section<Content: View>: View {
 public struct V15InspectorAction: View {
     private let title: String
     private let detail: String?
+    private let kind: V15ButtonKind
     private let disabledReason: V15DisabledReason?
     private let action: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
-    public init(_ title: String, detail: String? = nil, disabledReason: V15DisabledReason? = nil, action: @escaping () -> Void) {
-        self.title = title; self.detail = detail; self.disabledReason = disabledReason; self.action = action
+    public init(_ title: String, detail: String? = nil, kind: V15ButtonKind = .quiet, disabledReason: V15DisabledReason? = nil, action: @escaping () -> Void) {
+        self.title = title; self.detail = detail; self.kind = kind; self.disabledReason = disabledReason; self.action = action
     }
     public var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.xxs) {
@@ -303,7 +344,7 @@ public struct V15InspectorAction: View {
                     Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).accessibilityHidden(true)
                 }
             }
-            .buttonStyle(V15ButtonStyle(kind: .quiet, reduceMotion: reduceMotion, dark: colorScheme == .dark))
+            .buttonStyle(V15ButtonStyle(kind: kind, reduceMotion: reduceMotion, dark: colorScheme == .dark))
             .disabled(disabledReason != nil)
             .v15KeyboardFocusable()
             .v15ActionAccessibility(label: title, hint: disabledReason.map(V15Accessibility.safeReason) ?? detail)

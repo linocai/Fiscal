@@ -12,12 +12,18 @@ public struct V15FutureTimelineMacView: View {
             sidebar.frame(minWidth: 190, idealWidth: 220, maxWidth: 280)
             spine.frame(minWidth: 390, idealWidth: 520)
             inspector.frame(minWidth: 280, idealWidth: 350)
-        }.background(V15Palette.paper.color).task { async let timeline: Void = model.reload(); async let accounts: Void = model.loadAccountOptions(); _ = await (timeline, accounts); if initialAutoLoadNext { await model.loadNextPage() } }.accessibilityElement(children: .contain).accessibilityIdentifier("v15.f3a.timeline.macos")
+        }
+        .v15MacWorkspaceCanvas()
+        .task { async let timeline: Void = model.reload(); async let accounts: Void = model.loadAccountOptions(); _ = await (timeline, accounts); if initialAutoLoadNext { await model.loadNextPage() } }.accessibilityElement(children: .contain).accessibilityIdentifier("v15.f3a.timeline.macos")
     }
     private var sidebar: some View { VStack(alignment: .leading, spacing: V15Spacing.md) {
         Text("已知未来").font(V15Typography.surfaceTitle)
         Text("只读时间线").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-        ForEach([7, 30, 60, 90], id: \.self) { days in Button("未来 \(days) 天") { Task { await model.setWindowDays(days) } }.buttonStyle(.plain).padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(model.selectedWindowDays == days ? V15Palette.selected.color : .clear, in: RoundedRectangle(cornerRadius: V15Radius.control)).accessibilityIdentifier("v15.f3a.window.\(days)") }
+        Picker("时间范围", selection: Binding(get: { model.selectedWindowDays }, set: { days in Task { await model.setWindowDays(days) } })) {
+            Text("7 天").tag(7); Text("30 天").tag(30); Text("60 天").tag(60); Text("90 天").tag(90)
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("v15.f3a.window.range")
         Divider(); Menu { Button("全部账户") { Task { await model.setAccount(nil) } }.accessibilityIdentifier("v15.f3a.account.all"); ForEach(model.accountOptions) { account in Button(accountLabel(account)) { Task { await model.setAccount(account.id) } }.accessibilityIdentifier("v15.f3a.account.\(account.id)") } } label: { Label(model.selectedAccountDisplayName ?? (model.selectedAccountID == nil ? "全部账户" : "已筛选账户"), systemImage: "line.3.horizontal.decrease.circle") }.disabled(model.isLoadingAccountOptions).accessibilityIdentifier("v15.f3a.account-filter")
         Text(model.selectedAccountDisplayName ?? (model.selectedAccountID == nil ? "全部账户" : "已保留筛选账户")).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).accessibilityIdentifier("v15.f3a.account.selection")
         accountOptionsNotice

@@ -11,6 +11,7 @@ enum V15F2CFixtures {
         case "today-page-error": f2BRoute = "today-page-error"
         case "today-conflict": f2BRoute = "today-conflict"
         case "today-refresh-lens-race": f2BRoute = "today-refresh-lens-race"
+        case "today-refresh-delay": f2BRoute = "today-refresh-delay"
         case "today-offline": f2BRoute = "today-offline"
         case "today-unknown": f2BRoute = "today-unknown-scope"
         case "today-long": f2BRoute = "today-long"

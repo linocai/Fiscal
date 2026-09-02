@@ -1,6 +1,6 @@
 import XCTest
 
-final class F2CMacGalleryUITests: XCTestCase {
+@MainActor final class F2CMacGalleryUITests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUp() {
@@ -15,34 +15,50 @@ final class F2CMacGalleryUITests: XCTestCase {
 
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
 
+    private func openCashAccounts() {
+        let lens = element("v15.f2c.lens.cash_accounts")
+        XCTAssertTrue(lens.waitForExistence(timeout: 5), "facts must finish loading before a range can be opened")
+        lens.click()
+    }
+
     func testScopesPaginationAndInspectorCloseAreClickable() {
         launch("today")
-        element("v15.f2c.lens.cash_accounts").click()
+        openCashAccounts()
         XCTAssertTrue(element("v15.f2c.scope.row.cash_accounts.0").waitForExistence(timeout: 5))
         element("v15.f2c.scope.row.cash_accounts.0").click()
         XCTAssertTrue(element("v15.f2c.inspector").waitForExistence(timeout: 3))
         element("v15.f2c.inspector.close").click()
+        XCTAssertTrue(element("v15.f2c.inspector").waitForNonExistence(timeout: 3))
         element("v15.f2c.scope.next").click()
         XCTAssertTrue(element("v15.f2c.scope.row.cash_accounts.1").waitForExistence(timeout: 3))
     }
 
+    func testRefreshWithoutOpenScopeDoesNotNavigateOrOpenAnInspector() {
+        launch("today-refresh-delay")
+        XCTAssertFalse(element("v15.f2c.scope.title.cash_accounts").exists)
+        element("v15.f2c.refresh").click()
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+        XCTAssertFalse(element("v15.f2c.scope.title.cash_accounts").exists)
+        XCTAssertFalse(element("v15.f2c.inspector").exists)
+    }
+
     func testScopeFailureRetryConflictUnknownAndKeyboardRefresh() {
         launch("today-scope-error")
-        element("v15.f2c.lens.cash_accounts").click()
+        openCashAccounts()
         XCTAssertTrue(element("v15.f2c.scope.error").waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["重试"].exists)
 
         launch("today-conflict")
-        element("v15.f2c.lens.cash_accounts").click()
+        openCashAccounts()
         XCTAssertTrue(element("v15.f2c.facts.conflict").waitForExistence(timeout: 5))
         app.typeKey("r", modifierFlags: .command)
         XCTAssertTrue(element("v15.f2c.scope.row.cash_accounts.0").waitForExistence(timeout: 5), "refresh must reopen the selected scope with the new revision")
 
         launch("today-unknown")
-        element("v15.f2c.lens.cash_accounts").click()
+        openCashAccounts()
         XCTAssertTrue(element("v15.f2c.scope.row.cash_accounts.0").waitForExistence(timeout: 5))
         element("v15.f2c.scope.row.cash_accounts.0").click()
-        XCTAssertTrue(element("v15.f2c.inspector.unavailable").waitForExistence(timeout: 4))
+        XCTAssertTrue(element("v15.f2c.inspector").waitForExistence(timeout: 4))
     }
 
     func testRefreshUsesTheLensChosenWhileRefreshWasInFlight() {

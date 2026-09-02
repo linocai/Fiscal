@@ -25,6 +25,7 @@ public struct V15GalleryShell: View {
     private let f4ARoute: String?
     private let f4BRoute: String?
     private let f4CRoute: String?
+    private let seedsF4CCredentials: Bool
     private let f1AAppearance: ColorScheme?
 
     public init(arguments: [String] = ProcessInfo.processInfo.arguments) {
@@ -48,6 +49,7 @@ public struct V15GalleryShell: View {
         f4ARoute = V15GalleryShell.value(after: "--v15-f4a-route", in: arguments)
         f4BRoute = V15GalleryShell.value(after: "--v15-f4b-route", in: arguments)
         f4CRoute = V15GalleryShell.value(after: "--v15-f4c-route", in: arguments)
+        seedsF4CCredentials = arguments.contains("--v15-f4c-seed-credentials")
         f1AAppearance = V15GalleryShell.value(after: "--v15-f1a-appearance", in: arguments).flatMap { $0 == "dark" ? .dark : $0 == "light" ? .light : nil }
     }
 
@@ -78,12 +80,13 @@ public struct V15GalleryShell: View {
         f4ARoute = nil
         f4BRoute = nil
         f4CRoute = nil
+        seedsF4CCredentials = false
         f1AAppearance = nil
     }
 
     public var body: some View {
         if let f4CRoute {
-            V15F4CGalleryRoute(route: f4CRoute).preferredColorScheme(f1AAppearance)
+            V15F4CGalleryRoute(route: f4CRoute, seedsCredentials: seedsF4CCredentials).preferredColorScheme(f1AAppearance)
         } else if let f4BRoute {
             V15F4AGalleryRoute(route: f4BRoute).preferredColorScheme(f1AAppearance)
         } else if let f4ARoute {
@@ -135,11 +138,16 @@ public struct V15GalleryShell: View {
     let route: String
     private let services: V15Services
     @State private var model: V15ArchiveModel
-    init(route: String) {
+    init(route: String, seedsCredentials: Bool = false) {
         self.route = route
         let services = V15F4CFixtures.services(route: route)
         self.services = services
-        _model = State(initialValue: .init(services: services, offlineSnapshotAt: route == "archive-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil))
+        let model = V15ArchiveModel(services: services, offlineSnapshotAt: route == "archive-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil)
+        if seedsCredentials {
+            model.password = "synthetic-password-123"
+            model.passwordConfirmation = "synthetic-password-123"
+        }
+        _model = State(initialValue: model)
     }
     var body: some View {
 #if os(macOS)
@@ -276,7 +284,7 @@ private struct V15F2CGalleryRoute: View {
     @MainActor private var services: V15Services { V15F2CFixtures.services(route: route) }
     var body: some View {
 #if os(macOS)
-        if route.hasPrefix("today") { V15TodayMacView(services: services, offlineSnapshotAt: route == "today-offline" ? V15F2CFixtures.offlineSnapshotAt : nil, initialScopeType: ["today-conflict", "today-scope-error", "today-unknown"].contains(route) ? "cash_accounts" : nil) }
+        if route.hasPrefix("today") { V15TodayMacView(services: services, offlineSnapshotAt: route == "today-offline" ? V15F2CFixtures.offlineSnapshotAt : nil) }
         else { V15EmptyState(title: "无法识别 Today 路由", explanation: "该链接只可用于并行 Today 检查。") }
 #else
         V15EmptyState(title: "此路由仅用于 macOS", explanation: "iOS Today 由 F2-B 路由提供。")

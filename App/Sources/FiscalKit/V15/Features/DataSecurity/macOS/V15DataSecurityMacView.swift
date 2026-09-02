@@ -6,6 +6,8 @@ import AppKit
 public struct V15DataSecurityMacView: View {
     @State private var model: V15ArchiveModel
     @State private var facts: V15SystemFactsModel
+    @State private var archiveCredentialsTouched = false
+    @State private var passphraseFieldsTouched = false
     private let saver: any V15ArchiveArtifactSaving
 
     public init(services: V15Services, offlineSnapshotAt: Date? = nil) {
@@ -33,18 +35,24 @@ public struct V15DataSecurityMacView: View {
                     message("离线时无法取得备份、恢复检查或存储空间的最新状态。")
                 }
                 operations
-                archiveExport
-                restoreBoundary
-                passphrase
+                LazyVGrid(columns: [GridItem(.flexible(minimum: 360), spacing: V15Spacing.lg), GridItem(.flexible(minimum: 360), spacing: V15Spacing.lg)], alignment: .leading, spacing: V15Spacing.lg) {
+                    archiveExport
+                    restoreBoundary
+                    passphrase
+                }
             }
-            .padding(V15Spacing.xl)
-            .frame(maxWidth: 980, alignment: .leading)
+            .padding(V15MacLayout.contentPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(V15Palette.paper.color)
+        .v15MacWorkspaceCanvas()
         .sheet(isPresented: confirmationPresented) { confirmation }
         .task { await facts.load() }
-        .onDisappear { model.dismiss(); facts.invalidate() }
+        .onChange(of: facts.passphrasePhase) { _, phase in
+            if case .succeeded = phase { passphraseFieldsTouched = false }
+            if case .requiresReunlock = phase { passphraseFieldsTouched = false }
+        }
+        .onDisappear { resetArchiveForm(); facts.invalidate() }
         .accessibilityIdentifier("v15.f4c.security.macos")
     }
 
@@ -79,11 +87,11 @@ public struct V15DataSecurityMacView: View {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 Text("归档经过加密，不包含登录信息和 AI 原始内容。创建后请妥善保管文件和密码。")
                     .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
-                SecureField("归档密码（12–128 个字符）", text: $model.password).accessibilityIdentifier("v15.f4c.password")
-                SecureField("再次输入归档密码", text: $model.passwordConfirmation).accessibilityIdentifier("v15.f4c.password-confirmation")
-                if let issue = model.passwordIssue { message(issue) }
+                SecureField("归档密码（12–128 个字符）", text: archivePassword).accessibilityIdentifier("v15.f4c.password")
+                SecureField("再次输入归档密码", text: archivePasswordConfirmation).accessibilityIdentifier("v15.f4c.password-confirmation")
+                if archiveCredentialsTouched, let issue = model.passwordIssue { fieldIssue(issue) }
                 phase
-                V15ActionButton("创建加密归档", disabledReason: model.canBeginExport ? nil : .init(code: "archive_unavailable", message: model.exportDisabledReason ?? "请先完成当前归档流程。", fieldPath: nil), accessibilityIdentifier: "v15.f4c.export") { model.beginExport() }
+                V15ActionButton("创建加密归档", disabledReason: model.canBeginExport ? nil : .init(code: "archive_unavailable", message: model.exportDisabledReason ?? "请先完成当前归档流程。", fieldPath: nil), showsDisabledReasons: false, accessibilityIdentifier: "v15.f4c.export") { model.beginExport() }
             }
         }
     }
@@ -93,7 +101,10 @@ public struct V15DataSecurityMacView: View {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 Text("归档只能恢复到全新的空账本，不能覆盖当前账本。当前应用暂不提供恢复操作。")
                     .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("恢复归档") {}.disabled(true).accessibilityHint(model.restoreDisabledReason).accessibilityIdentifier("v15.f4c.restore-disabled")
+                Label("恢复功能当前不可用", systemImage: "lock.fill")
+                    .font(V15Typography.body.weight(.semibold))
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.72))
+                    .accessibilityIdentifier("v15.f4c.restore-disabled")
                 Text(model.restoreDisabledReason).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
         }
@@ -104,11 +115,12 @@ public struct V15DataSecurityMacView: View {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 Text("修改后，本机继续使用新口令；其他设备需要用新口令重新解锁。账本数据不受影响。")
                     .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
-                SecureField("当前口令", text: $facts.oldPassphrase).disabled(facts.passphraseEntryDisabled).accessibilityIdentifier("v15.system.passphrase.old")
-                SecureField("新口令（8–128 个字符）", text: $facts.newPassphrase).disabled(facts.passphraseEntryDisabled).accessibilityIdentifier("v15.system.passphrase.new")
-                SecureField("再次输入新口令", text: $facts.newPassphraseConfirmation).disabled(facts.passphraseEntryDisabled).accessibilityIdentifier("v15.system.passphrase.confirmation")
+                SecureField("当前口令", text: oldPassphrase).disabled(facts.passphraseEntryDisabled).accessibilityIdentifier("v15.system.passphrase.old")
+                SecureField("新口令（8–128 个字符）", text: newPassphrase).disabled(facts.passphraseEntryDisabled).accessibilityIdentifier("v15.system.passphrase.new")
+                SecureField("再次输入新口令", text: newPassphraseConfirmation).disabled(facts.passphraseEntryDisabled).accessibilityIdentifier("v15.system.passphrase.confirmation")
+                if passphraseFieldsTouched, let issue = facts.passphraseDisabledReason, issue.fieldPath != nil { fieldIssue(issue.message) }
                 passphraseResult
-                V15ActionButton("修改口令", disabledReason: facts.passphraseDisabledReason, accessibilityIdentifier: "v15.system.passphrase.change") { Task { await facts.changePassphrase() } }
+                V15ActionButton("修改口令", disabledReason: facts.passphraseDisabledReason, showsDisabledReasons: false, accessibilityIdentifier: "v15.system.passphrase.change") { Task { await facts.changePassphrase() } }
                 Text("口令不会显示或记录。忘记口令后无法找回。")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
@@ -122,15 +134,18 @@ public struct V15DataSecurityMacView: View {
         case .ready:
             V15ActionButton("存入文件…", accessibilityIdentifier: "v15.f4c.handoff") { Task { await model.saveReadyArtifact(using: saver) } }
         case .completed:
-            message("已在此设备导出加密归档。").accessibilityIdentifier("v15.f4c.success")
+            V15SuccessReceiptState(title: "归档已导出", detail: "已在此设备导出加密归档。")
+                .accessibilityIdentifier("v15.f4c.success")
         case .failed(let failure):
-            message(failure.message).accessibilityIdentifier("v15.f4c.error"); retryControls
+            V15ErrorMessageState(title: "归档创建失败", message: failure.message)
+                .accessibilityIdentifier("v15.f4c.error")
+            retryControls
         case .unknown:
             message("文件结果未知，未保留本地副本。请重新创建归档。").accessibilityIdentifier("v15.f4c.unknown"); retryControls
         case .saveFailed(_, let failure):
-            message(failure.message)
+            V15ErrorMessageState(title: "文件保存失败", message: failure.message)
             V15ActionButton("重试存入文件", accessibilityIdentifier: "v15.f4c.save-retry") { Task { await model.retrySave(using: saver) } }
-            V15ActionButton("关闭", kind: .secondary, accessibilityIdentifier: "v15.f4c.close") { model.dismiss() }
+            V15ActionButton("关闭", kind: .secondary, accessibilityIdentifier: "v15.f4c.close") { resetArchiveForm() }
         default: EmptyView()
         }
     }
@@ -139,8 +154,12 @@ public struct V15DataSecurityMacView: View {
         switch facts.passphrasePhase {
         case .idle: EmptyView()
         case .changing: V15LoadingSkeleton(); Text("正在修改口令…").font(V15Typography.secondary)
-        case .succeeded: message("口令已修改。其他设备需要使用新口令重新解锁。").accessibilityIdentifier("v15.system.passphrase.success")
-        case .failed(let failure): message(failure.message).accessibilityIdentifier("v15.system.passphrase.error")
+        case .succeeded:
+            V15SuccessReceiptState(title: "口令已修改", detail: "其他设备需要使用新口令重新解锁。")
+                .accessibilityIdentifier("v15.system.passphrase.success")
+        case .failed(let failure):
+            V15ErrorMessageState(title: "口令修改失败", message: failure.message)
+                .accessibilityIdentifier("v15.system.passphrase.error")
         case .responseUnknown: message("修改结果未知。不要重复提交；请先尝试使用新口令重新解锁，失败后再尝试原口令。").accessibilityIdentifier("v15.system.passphrase.unknown")
         case .requiresReunlock:
             V15ServerFactState(title: "口令已修改", detail: "本机未能保存新的登录信息。输入已清空，请使用新口令重新解锁。")
@@ -149,22 +168,55 @@ public struct V15DataSecurityMacView: View {
     }
 
     private var retryControls: some View {
-        HStack { V15ActionButton("重新输入并创建", accessibilityIdentifier: "v15.f4c.retry") { model.resetForNewExport() }; V15ActionButton("关闭", kind: .secondary, accessibilityIdentifier: "v15.f4c.close") { model.dismiss() } }
+        HStack { V15ActionButton("重新输入并创建", accessibilityIdentifier: "v15.f4c.retry") { resetArchiveForm() }; V15ActionButton("关闭", kind: .secondary, accessibilityIdentifier: "v15.f4c.close") { resetArchiveForm() } }
     }
     private func message(_ value: String) -> some View {
         Text(value).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true).padding(V15Spacing.sm).background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.tag))
     }
+    private func fieldIssue(_ value: String) -> some View {
+        Label(value, systemImage: "exclamationmark.circle.fill")
+            .font(V15Typography.secondary)
+            .foregroundStyle(V15Palette.danger.color)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(V15Spacing.sm)
+            .background(V15Palette.dangerSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.tag))
+    }
     private var confirmationPresented: Binding<Bool> {
-        .init(get: { if case .confirming = model.phase { true } else { false } }, set: { presented in guard !presented, case .confirming = model.phase else { return }; model.cancel() })
+        .init(get: { if case .confirming = model.phase { true } else { false } }, set: { presented in guard !presented, case .confirming = model.phase else { return }; resetArchiveForm() })
     }
     private var confirmation: some View {
         VStack(alignment: .leading, spacing: V15Spacing.lg) {
             Text("确认创建加密归档").font(V15Typography.surfaceTitle)
             Text("不包含 AI 原始内容或登录信息；不能恢复到当前账本。")
                 .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
-            HStack { V15ActionButton("取消", kind: .secondary) { model.cancel() }; Spacer(); V15ActionButton("开始创建", accessibilityIdentifier: "v15.f4c.confirm") { model.confirmExport() } }
+            HStack { V15ActionButton("取消", kind: .secondary) { resetArchiveForm() }; Spacer(); V15ActionButton("开始创建", accessibilityIdentifier: "v15.f4c.confirm") { model.confirmExport() } }
         }
         .padding(V15Spacing.lg).frame(width: 440)
+    }
+
+    private var archivePassword: Binding<String> {
+        .init(get: { model.password }, set: { value in guard value != model.password else { return }; archiveCredentialsTouched = true; model.password = value })
+    }
+
+    private var archivePasswordConfirmation: Binding<String> {
+        .init(get: { model.passwordConfirmation }, set: { value in guard value != model.passwordConfirmation else { return }; archiveCredentialsTouched = true; model.passwordConfirmation = value })
+    }
+
+    private var oldPassphrase: Binding<String> {
+        .init(get: { facts.oldPassphrase }, set: { value in guard value != facts.oldPassphrase else { return }; passphraseFieldsTouched = true; facts.oldPassphrase = value })
+    }
+
+    private var newPassphrase: Binding<String> {
+        .init(get: { facts.newPassphrase }, set: { value in guard value != facts.newPassphrase else { return }; passphraseFieldsTouched = true; facts.newPassphrase = value })
+    }
+
+    private var newPassphraseConfirmation: Binding<String> {
+        .init(get: { facts.newPassphraseConfirmation }, set: { value in guard value != facts.newPassphraseConfirmation else { return }; passphraseFieldsTouched = true; facts.newPassphraseConfirmation = value })
+    }
+
+    private func resetArchiveForm() {
+        model.dismiss()
+        archiveCredentialsTouched = false
     }
 
     private func operationCard(_ title: String, state: String, detail: String) -> some View {

@@ -15,10 +15,33 @@ public struct V15MasterDataView: View {
             .sheet(isPresented: $splitSheet, onDismiss: { model.invalidatePreview() }) { splitContent }
         }.accessibilityIdentifier("v15.f1c.master.ios").task { await model.load() }
 #else
-        HStack(spacing: 0) { list.frame(minWidth: 320, idealWidth: 420); Divider(); inspector.frame(width: 390) }.background(V15Palette.paper.color).accessibilityIdentifier("v15.f1c.master.macos").task { await model.load() }.sheet(isPresented: $mergeSheet, onDismiss: { model.invalidatePreview() }) { mergeContent }.sheet(isPresented: $splitSheet, onDismiss: { model.invalidatePreview() }) { splitContent }
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                masterDataSwitcher
+                Divider()
+                list
+            }
+            .frame(minWidth: 340, idealWidth: 440, maxWidth: 520)
+            Divider()
+            inspector.frame(minWidth: 400, idealWidth: 470, maxWidth: 560)
+        }
+        .v15MacWorkspaceCanvas()
+        .accessibilityIdentifier("v15.f1c.master.macos").task { await model.load() }.sheet(isPresented: $mergeSheet, onDismiss: { model.invalidatePreview() }) { mergeContent }.sheet(isPresented: $splitSheet, onDismiss: { model.invalidatePreview() }) { splitContent }
 #endif
     }
     @ViewBuilder private var content: some View { VStack(spacing: 0) { Picker("主数据", selection: $model.selectedSection) { ForEach(V15MasterDataModel.Section.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).padding(V15Spacing.md); list } }
+    private var masterDataSwitcher: some View {
+        VStack(alignment: .leading, spacing: V15Spacing.sm) {
+            Text("主数据").font(V15Typography.cardTitle)
+            Picker("主数据类型", selection: $model.selectedSection) {
+                ForEach(V15MasterDataModel.Section.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("v15.f1c.section.switcher")
+        }
+        .padding(V15Spacing.md)
+        .background(V15Palette.card.color)
+    }
     @ViewBuilder private var list: some View {
         ScrollView { VStack(alignment: .leading, spacing: 0) {
             if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot).padding(V15Spacing.md).accessibilityIdentifier("v15.f1c.offline") }
@@ -36,23 +59,196 @@ public struct V15MasterDataView: View {
         }
     }
     private func row(title: String, detail: String, selected: Bool, action: @escaping () -> Void) -> some View { Button(action: action) { HStack { VStack(alignment: .leading, spacing: 3) { Text(title).font(V15Typography.body.weight(.medium)).fixedSize(horizontal: false, vertical: true); Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.65)) }; Spacer(); Image(systemName: "chevron.right").foregroundStyle(V15Palette.ink.color.opacity(0.45)) }.padding(V15Spacing.md).background(selected ? V15Palette.teal.color.opacity(0.10) : .clear) }.buttonStyle(.plain).v15PlatformHitArea() }
-    @ViewBuilder private var inspector: some View { VStack(alignment: .leading, spacing: V15Spacing.md) { HStack { Text("详情").font(V15Typography.surfaceTitle); Spacer(); Button { prepareNew() } label: { Image(systemName: "plus") }.disabled(model.writeDisabledReason != nil).accessibilityHint(model.writeDisabledReason?.message ?? "").v15PlatformHitArea() }; editorContent; V15ActionButton("保存", symbol: "checkmark", disabledReason: model.saveDisabledReason, action: { Task { await save() } }).accessibilityIdentifier("v15.f1c.save.macos"); Spacer() }.padding(V15Spacing.md) }
+    @ViewBuilder private var inspector: some View { VStack(alignment: .leading, spacing: V15Spacing.md) { HStack { VStack(alignment: .leading, spacing: 2) { Text(model.selectedSection.rawValue).font(V15Typography.surfaceTitle); Text("选择一项查看详情，或新建一项。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }; Spacer(); Button { prepareNew() } label: { Label("新建", systemImage: "plus") }.disabled(model.writeDisabledReason != nil).accessibilityHint(model.writeDisabledReason?.message ?? "").v15PlatformHitArea() }; editorContent; V15ActionButton("保存", symbol: "checkmark", disabledReason: model.saveDisabledReason, action: { Task { await save() } }).accessibilityIdentifier("v15.f1c.save.macos"); Spacer() }.padding(V15Spacing.lg).background(V15Palette.card.color.opacity(0.38)) }
     @ViewBuilder private var editorContent: some View { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { if let text = model.receipt { V15SuccessReceiptState(title: "已保存", detail: text) }; if let reason = model.unknownCreateReloadReason { V15ActionButton("重新读取后再确认", symbol: "arrow.clockwise", kind: .quiet, disabledReason: model.isOffline ? model.writeDisabledReason : nil, action: { Task { await model.reloadAfterUnknownCreate() } }).accessibilityIdentifier("v15.f1c.create-unknown.reload"); Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; if let conflict = model.conflict { V15ConflictState(conflict: conflict, changes: model.conflictChanges, reload: { Task { await model.resolveConflictByReload() } }) }
         switch model.selectedSection { case .accounts: accountEditor; case .categories: categoryEditor; case .merchants: merchantEditor }
     }.padding(V15Spacing.md) } }
-    private var accountEditor: some View { Group { let archived = model.selectedAccount?.archivedAt != nil; let existing = model.selectedAccount != nil; V15Section("账户") { V15Field("账户昵称", text: $model.accountName, prompt: "例如 日常现金", issues: model.fieldIssues).disabled(archived).accessibilityIdentifier("v15.f1c.account.name"); Picker("账户类型", selection: $model.accountKind) { Text("现金").tag(V15AccountKind.cash); Text("借记").tag(V15AccountKind.debit); Text("信用").tag(V15AccountKind.credit) }.pickerStyle(.menu).disabled(archived || existing).onChange(of: model.accountKind) { _, _ in model.clearCreditFieldsIfNeeded() }; if existing { Text("账户类型创建后不可在此修改。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.65)) }; V15Field("期初余额（元）", text: $model.openingBalance, prompt: "0.00", issues: model.fieldIssues).disabled(archived); if model.accountKind == .credit { V15Field("信用额度（元）", text: $model.creditLimit, prompt: "10000.00", issues: model.fieldIssues).disabled(archived); V15Field("账单日", text: $model.statementDay, prompt: "1–28", issues: model.fieldIssues).disabled(archived); V15Field("还款日", text: $model.dueDay, prompt: "1–28", issues: model.fieldIssues).disabled(archived); Picker("账期方式", selection: $model.cycleMode) { Text("账单日截点").tag("statement_day_cutoff"); Text("上个自然月").tag("previous_calendar_month") }.pickerStyle(.menu).disabled(archived); if CNYAmountParser.minorUnits(model.openingBalance) ?? 0 > 0 { V15Field("期初余额日期", text: $model.openingBalanceAsOfDate, prompt: "YYYY-MM-DD", issues: model.fieldIssues).disabled(archived); V15Field("期初到期日期", text: $model.openingDueDate, prompt: "YYYY-MM-DD", issues: model.fieldIssues).disabled(archived) } } }; archiveAction(title: archived ? "恢复账户" : "归档账户", action: { Task { await model.archiveOrRestoreAccount() } }); if !archived, model.selectedAccount != nil { HStack { Button("上移") { Task { await model.reorderAccounts(moving: model.selectedAccountID!, after: accountAfter(model.selectedAccountID!, down: false)) } }.disabled(!accountCanMove(model.selectedAccountID!, down: false)).accessibilityHint(V15MasterDataModel.reorderHint(canMove: accountCanMove(model.selectedAccountID!, down: false), down: false)).keyboardShortcut(.upArrow, modifiers: [.command, .option]); Button("下移") { Task { await model.reorderAccounts(moving: model.selectedAccountID!, after: accountAfter(model.selectedAccountID!, down: true)) } }.disabled(!accountCanMove(model.selectedAccountID!, down: true)).accessibilityHint(V15MasterDataModel.reorderHint(canMove: accountCanMove(model.selectedAccountID!, down: true), down: true)).keyboardShortcut(.downArrow, modifiers: [.command, .option]) }.accessibilityIdentifier("v15.f1c.account.reorder") } } }
-    private var categoryEditor: some View { Group { let archived = model.selectedCategory?.archivedAt != nil; V15Section("分类") { V15Field("分类名称", text: $model.categoryName, prompt: "例如 餐饮", issues: model.fieldIssues).disabled(archived).onChange(of: model.categoryName) { _, _ in model.invalidatePreview() }.accessibilityIdentifier("v15.f1c.category.name"); Picker("方向", selection: $model.categoryDirection) { Text("支出").tag(V15CategoryDirection.expense); Text("收入").tag(V15CategoryDirection.income) }.pickerStyle(.menu).disabled(archived).onChange(of: model.categoryDirection) { _, _ in model.invalidatePreview() }; V15Field("图标", text: $model.categoryIcon, prompt: "tag", issues: []).disabled(archived); V15Field("颜色", text: $model.categoryColor, prompt: "#008C8A", issues: model.fieldIssues).disabled(archived) }; archiveAction(title: archived ? "恢复分类" : "归档分类", action: { Task { await model.archiveOrRestoreCategory() } }); if !archived, let source = model.selectedCategory { Menu("合并到…") { ForEach(model.visibleCategories.filter { $0.id != source.id && $0.direction == source.direction && $0.archivedAt == nil }) { target in Button(target.name) { Task { await model.previewMerge(targetID: target.id); if model.transformPreview != nil || model.transformFailure != nil { mergeSheet = true } } } } }.accessibilityIdentifier("v15.f1c.category.merge"); Button("拆分分类…") { model.beginTransformFlow(); splitSheet = true }.accessibilityIdentifier("v15.f1c.category.split"); HStack { Button("上移") { Task { await model.reorderCategories(moving: source.id, after: categoryAfter(source.id, down: false)) } }.disabled(!categoryCanMove(source.id, down: false)).accessibilityHint(V15MasterDataModel.reorderHint(canMove: categoryCanMove(source.id, down: false), down: false)).keyboardShortcut(.upArrow, modifiers: [.command, .option]); Button("下移") { Task { await model.reorderCategories(moving: source.id, after: categoryAfter(source.id, down: true)) } }.disabled(!categoryCanMove(source.id, down: true)).accessibilityHint(V15MasterDataModel.reorderHint(canMove: categoryCanMove(source.id, down: true), down: true)).keyboardShortcut(.downArrow, modifiers: [.command, .option]) }.accessibilityIdentifier("v15.f1c.category.reorder") } } }
-    private var merchantEditor: some View { Group { V15Section("商户") { V15Field("商户名称", text: $model.merchantName, prompt: "例如 咖啡店", issues: model.fieldIssues).accessibilityIdentifier("v15.f1c.merchant.name"); V15Field("别名（用、分隔）", text: $model.merchantAliases, prompt: "Coffee", issues: []) } } }
-    private func archiveAction(title: String, action: @escaping () -> Void) -> some View { V15InspectorAction(title, detail: "归档不会删除历史记录。", disabledReason: model.writeDisabledReason, action: action) }
-    private var mergeContent: some View { NavigationStack { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { Text("合并预览").font(V15Typography.surfaceTitle); transformStatus; if let preview = model.transformPreview { Text("将重新归类 \(preview.source.transactionCount) 笔账目。") .font(V15Typography.secondary); ForEach(preview.childMappingRequirements, id: \.sourceChildID) { item in VStack(alignment: .leading) { Text("子分类：\(item.sourceChildName)").font(V15Typography.secondary); if let selected = model.childMappings[item.sourceChildID] { Picker("归位到", selection: Binding(get: { model.childMappings[item.sourceChildID] ?? selected }, set: { model.childMappings[item.sourceChildID] = $0 })) { ForEach(item.targetChildIDs, id: \.self) { id in Text(model.visibleCategories.first(where: { $0.id == id })?.name ?? "可用分类").tag(id) } }.pickerStyle(.menu) } else { Text("这个子分类没有可用的归位目标。") .font(V15Typography.secondary).foregroundStyle(.red) } } }; let noTarget = preview.childMappingRequirements.contains { $0.targetChildIDs.isEmpty }; V15ActionButton("确认合并", symbol: "arrow.triangle.merge", disabledReasons: (model.writeDisabledReason.map { [$0] } ?? []) + (noTarget ? [.init(code: "merge_target_missing", message: "请先为所有子分类选择归位目标。", fieldPath: nil)] : []), action: { Task { if await model.commitMerge() { mergeSheet = false; model.invalidatePreview() } } }).accessibilityIdentifier("v15.f1c.merge.commit") } else { V15ServiceErrorState(message: model.transformMessage ?? "无法读取合并预览。", retry: { Task { await model.retryTransformPreview() } }) } }.padding(V15Spacing.md) }.toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { mergeSheet = false; model.invalidatePreview() } } } } }
-    @ViewBuilder private var transformStatus: some View { if let text = model.transformMessage { Text(text).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.72)) }; if let conflict = model.transformFailure?.conflict { V15ConflictState(conflict: conflict, reload: { Task { await model.reloadAfterTransformConflict() } }) }; ForEach(model.transformFieldIssues, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(.red) } }
+    private var accountEditor: some View {
+        Group {
+            let archived = model.selectedAccount?.archivedAt != nil
+            let existing = model.selectedAccount != nil
+            V15Section("账户") {
+                V15FieldIssues(issues: formIssues(excluding: visibleAccountFieldPaths))
+                V15Field("账户昵称", text: $model.accountName, prompt: "例如 日常现金", issues: issues(matching: FieldPaths.accountName))
+                    .disabled(archived)
+                    .accessibilityIdentifier("v15.f1c.account.name")
+                Picker("账户类型", selection: $model.accountKind) {
+                    Text("现金").tag(V15AccountKind.cash)
+                    Text("借记").tag(V15AccountKind.debit)
+                    Text("信用").tag(V15AccountKind.credit)
+                }
+                .pickerStyle(.menu)
+                .disabled(archived || existing)
+                .onChange(of: model.accountKind) { _, _ in model.clearCreditFieldsIfNeeded() }
+                V15FieldIssues(issues: issues(matching: FieldPaths.accountKind))
+                if existing {
+                    Text("账户类型创建后不可在此修改。")
+                        .font(V15Typography.secondary)
+                        .foregroundStyle(V15Palette.ink.color.opacity(0.65))
+                }
+                V15Field("期初余额（元）", text: $model.openingBalance, prompt: "0.00", issues: issues(matching: FieldPaths.openingBalance))
+                    .disabled(archived)
+                if model.accountKind == .credit {
+                    V15Field("信用额度（元）", text: $model.creditLimit, prompt: "10000.00", issues: issues(matching: FieldPaths.creditLimit))
+                        .disabled(archived)
+                    V15Field("账单日", text: $model.statementDay, prompt: "1–28", issues: issues(matching: FieldPaths.statementDay))
+                        .disabled(archived)
+                    V15Field("还款日", text: $model.dueDay, prompt: "1–28", issues: issues(matching: FieldPaths.dueDay))
+                        .disabled(archived)
+                    Picker("账期方式", selection: $model.cycleMode) {
+                        Text("账单日截点").tag("statement_day_cutoff")
+                        Text("上个自然月").tag("previous_calendar_month")
+                    }
+                    .pickerStyle(.menu)
+                    .disabled(archived)
+                    V15FieldIssues(issues: issues(matching: FieldPaths.cycleMode))
+                    if CNYAmountParser.minorUnits(model.openingBalance) ?? 0 > 0 {
+                        V15Field("期初余额日期", text: $model.openingBalanceAsOfDate, prompt: "YYYY-MM-DD", issues: issues(matching: FieldPaths.openingBalanceAsOfDate))
+                            .disabled(archived)
+                        V15Field("期初到期日期", text: $model.openingDueDate, prompt: "YYYY-MM-DD", issues: issues(matching: FieldPaths.openingDueDate))
+                            .disabled(archived)
+                    }
+                }
+            }
+            archiveAction(title: archived ? "恢复账户" : "归档账户", action: { Task { await model.archiveOrRestoreAccount() } })
+            if !archived, model.selectedAccount != nil {
+                HStack {
+                    Button("上移") { Task { await model.reorderAccounts(moving: model.selectedAccountID!, after: accountAfter(model.selectedAccountID!, down: false)) } }
+                        .disabled(!accountCanMove(model.selectedAccountID!, down: false))
+                        .accessibilityHint(V15MasterDataModel.reorderHint(canMove: accountCanMove(model.selectedAccountID!, down: false), down: false))
+                        .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                    Button("下移") { Task { await model.reorderAccounts(moving: model.selectedAccountID!, after: accountAfter(model.selectedAccountID!, down: true)) } }
+                        .disabled(!accountCanMove(model.selectedAccountID!, down: true))
+                        .accessibilityHint(V15MasterDataModel.reorderHint(canMove: accountCanMove(model.selectedAccountID!, down: true), down: true))
+                        .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                }
+                .accessibilityIdentifier("v15.f1c.account.reorder")
+            }
+        }
+    }
+
+    private var categoryEditor: some View {
+        Group {
+            let archived = model.selectedCategory?.archivedAt != nil
+            V15Section("分类") {
+                V15FieldIssues(issues: formIssues(excluding: FieldPaths.categoryVisible))
+                V15Field("分类名称", text: $model.categoryName, prompt: "例如 餐饮", issues: issues(matching: FieldPaths.categoryName))
+                    .disabled(archived)
+                    .onChange(of: model.categoryName) { _, _ in model.invalidatePreview() }
+                    .accessibilityIdentifier("v15.f1c.category.name")
+                Picker("方向", selection: $model.categoryDirection) {
+                    Text("支出").tag(V15CategoryDirection.expense)
+                    Text("收入").tag(V15CategoryDirection.income)
+                }
+                .pickerStyle(.menu)
+                .disabled(archived)
+                .onChange(of: model.categoryDirection) { _, _ in model.invalidatePreview() }
+                V15FieldIssues(issues: issues(matching: FieldPaths.categoryDirection))
+                V15Field("图标", text: $model.categoryIcon, prompt: "tag", issues: issues(matching: FieldPaths.categoryIcon))
+                    .disabled(archived)
+                V15Field("颜色", text: $model.categoryColor, prompt: "#008C8A", issues: issues(matching: FieldPaths.categoryColor))
+                    .disabled(archived)
+            }
+            archiveAction(title: archived ? "恢复分类" : "归档分类", action: { Task { await model.archiveOrRestoreCategory() } })
+            if !archived, let source = model.selectedCategory {
+                Menu("合并到…") {
+                    ForEach(model.visibleCategories.filter { $0.id != source.id && $0.direction == source.direction && $0.archivedAt == nil }) { target in
+                        Button(target.name) { Task { await model.previewMerge(targetID: target.id); if model.transformPreview != nil || model.transformFailure != nil { mergeSheet = true } } }
+                    }
+                }
+                .accessibilityIdentifier("v15.f1c.category.merge")
+                Button("拆分分类…") { model.beginTransformFlow(); splitSheet = true }
+                    .accessibilityIdentifier("v15.f1c.category.split")
+                HStack {
+                    Button("上移") { Task { await model.reorderCategories(moving: source.id, after: categoryAfter(source.id, down: false)) } }
+                        .disabled(!categoryCanMove(source.id, down: false))
+                        .accessibilityHint(V15MasterDataModel.reorderHint(canMove: categoryCanMove(source.id, down: false), down: false))
+                        .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                    Button("下移") { Task { await model.reorderCategories(moving: source.id, after: categoryAfter(source.id, down: true)) } }
+                        .disabled(!categoryCanMove(source.id, down: true))
+                        .accessibilityHint(V15MasterDataModel.reorderHint(canMove: categoryCanMove(source.id, down: true), down: true))
+                        .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                }
+                .accessibilityIdentifier("v15.f1c.category.reorder")
+            }
+        }
+    }
+
+    private var merchantEditor: some View {
+        Group {
+            V15Section("商户") {
+                V15FieldIssues(issues: formIssues(excluding: FieldPaths.merchantVisible))
+                V15Field("商户名称", text: $model.merchantName, prompt: "例如 咖啡店", issues: issues(matching: FieldPaths.merchantName))
+                    .accessibilityIdentifier("v15.f1c.merchant.name")
+                V15Field("别名（用、分隔）", text: $model.merchantAliases, prompt: "Coffee", issues: issues(matching: FieldPaths.merchantAliases))
+            }
+        }
+    }
+
+    private enum FieldPaths {
+        static let accountName = ["name", "account.name"]
+        static let accountKind = ["kind", "account.kind"]
+        static let openingBalance = ["opening_balance", "opening_balance_minor", "account.opening_balance", "account.opening_balance_minor"]
+        static let creditLimit = ["credit_limit", "credit_limit_minor", "account.credit_limit", "account.credit_limit_minor"]
+        static let statementDay = ["statement_day", "account.statement_day"]
+        static let dueDay = ["due_day", "account.due_day"]
+        static let cycleMode = ["cycle_mode", "account.cycle_mode"]
+        static let openingBalanceAsOfDate = ["opening_balance_as_of_date", "account.opening_balance_as_of_date"]
+        static let openingDueDate = ["opening_due_date", "account.opening_due_date"]
+        static let categoryName = ["name", "category.name"]
+        static let categoryDirection = ["direction", "category.direction"]
+        static let categoryIcon = ["icon", "category.icon"]
+        static let categoryColor = ["color", "color_hex", "category.color", "category.color_hex"]
+        static let merchantName = ["name", "merchant.name"]
+        static let merchantAliases = ["aliases", "merchant.aliases"]
+        static let categoryVisible = categoryName + categoryDirection + categoryIcon + categoryColor
+        static let merchantVisible = merchantName + merchantAliases
+    }
+
+    private var visibleAccountFieldPaths: [String] {
+        var paths = FieldPaths.accountName + FieldPaths.accountKind + FieldPaths.openingBalance
+        if model.accountKind == .credit {
+            paths += FieldPaths.creditLimit + FieldPaths.statementDay + FieldPaths.dueDay + FieldPaths.cycleMode
+            if CNYAmountParser.minorUnits(model.openingBalance) ?? 0 > 0 {
+                paths += FieldPaths.openingBalanceAsOfDate + FieldPaths.openingDueDate
+            }
+        }
+        return paths
+    }
+
+    private func issues(matching paths: [String]) -> [V15FieldIssue] {
+        V15MasterDataModel.fieldIssues(model.fieldIssues, matchingAny: paths)
+    }
+
+    private func formIssues(excluding paths: [String]) -> [V15FieldIssue] {
+        V15MasterDataModel.formIssues(model.fieldIssues, excluding: paths)
+    }
+    private func archiveAction(title: String, action: @escaping () -> Void) -> some View {
+        let kind: V15ButtonKind = {
+#if os(macOS)
+            title.hasPrefix("归档") ? .destructive : .secondary
+#else
+            .quiet
+#endif
+        }()
+        return V15InspectorAction(title, detail: "归档不会删除历史记录。", kind: kind, disabledReason: model.archiveDisabledReason, action: action)
+    }
+    private var mergeContent: some View { NavigationStack { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { Text("合并预览").font(V15Typography.surfaceTitle); transformStatus; if let preview = model.transformPreview { Text("将重新归类 \(preview.source.transactionCount) 笔账目。") .font(V15Typography.secondary); ForEach(preview.childMappingRequirements, id: \.sourceChildID) { item in VStack(alignment: .leading) { Text("子分类：\(item.sourceChildName)").font(V15Typography.secondary); if let selected = model.childMappings[item.sourceChildID] { Picker("归位到", selection: Binding(get: { model.childMappings[item.sourceChildID] ?? selected }, set: { model.childMappings[item.sourceChildID] = $0 })) { ForEach(item.targetChildIDs, id: \.self) { id in Text(model.visibleCategories.first(where: { $0.id == id })?.name ?? "可用分类").tag(id) } }.pickerStyle(.menu) } else { Text("这个子分类没有可用的归位目标。") .font(V15Typography.secondary).foregroundStyle(transformErrorColor) } } }; let noTarget = preview.childMappingRequirements.contains { $0.targetChildIDs.isEmpty }; V15ActionButton("确认合并", symbol: "arrow.triangle.merge", disabledReasons: (model.writeDisabledReason.map { [$0] } ?? []) + (noTarget ? [.init(code: "merge_target_missing", message: "请先为所有子分类选择归位目标。", fieldPath: nil)] : []), action: { Task { if await model.commitMerge() { mergeSheet = false; model.invalidatePreview() } } }).accessibilityIdentifier("v15.f1c.merge.commit") } else { V15ServiceErrorState(message: model.transformMessage ?? "无法读取合并预览。", retry: { Task { await model.retryTransformPreview() } }) } }.padding(V15Spacing.md) }.toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { mergeSheet = false; model.invalidatePreview() } } } } }
+    @ViewBuilder private var transformStatus: some View { if let text = model.transformMessage { Text(text).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.72)) }; if let conflict = model.transformFailure?.conflict { V15ConflictState(conflict: conflict, reload: { Task { await model.reloadAfterTransformConflict() } }) }; ForEach(model.transformFieldIssues, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(transformErrorColor) } }
+    private var transformErrorColor: Color {
+#if os(macOS)
+        V15Palette.danger.color
+#else
+        .red
+#endif
+    }
     private var splitContent: some View { NavigationStack { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { Text("拆分预览").font(V15Typography.surfaceTitle); transformStatus; V15Field("新子分类一", text: Binding(get: { model.splitChildNames[0] }, set: { model.splitChildNames[0] = $0; model.invalidatePreview() }), issues: model.transformFieldIssues); V15Field("新子分类二", text: Binding(get: { model.splitChildNames[1] }, set: { model.splitChildNames[1] = $0; model.invalidatePreview() }), issues: model.transformFieldIssues); if let preview = model.splitPreview { Text("将重新归类 \(preview.root.transactionCount) 笔账目。") .font(V15Typography.secondary); ForEach(preview.requiredTransactionIDs, id: \.self) { id in Picker("账目归位", selection: Binding(get: { model.splitAssignments[id] ?? preview.childNames[0] }, set: { model.splitAssignments[id] = $0 })) { ForEach(preview.childNames, id: \.self) { Text($0).tag($0) } }.pickerStyle(.menu) }; V15ActionButton("确认拆分", symbol: "arrow.triangle.branch", disabledReason: model.writeDisabledReason, action: { Task { if await model.commitSplit() { splitSheet = false; model.invalidatePreview() } } }).accessibilityIdentifier("v15.f1c.split.commit") } else { V15ActionButton("取预览", symbol: "eye", disabledReason: model.writeDisabledReason, action: { Task { await model.previewSplit() } }).accessibilityIdentifier("v15.f1c.split.preview") } }.padding(V15Spacing.md) }.toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { splitSheet = false; model.invalidatePreview() } } } } }
     private func accountCanMove(_ id: UUID, down: Bool) -> Bool { let ids = model.visibleAccounts.filter { $0.archivedAt == nil }.map(\.id); guard let index = ids.firstIndex(of: id) else { return false }; return down ? index + 1 < ids.count : index > 0 }
     private func accountAfter(_ id: UUID, down: Bool) -> UUID? { let ids = model.visibleAccounts.filter { $0.archivedAt == nil }.map(\.id); guard let index = ids.firstIndex(of: id) else { return nil }; return down ? ids[index + 1] : (index > 1 ? ids[index - 2] : nil) }
     private func categoryCanMove(_ id: UUID, down: Bool) -> Bool { let ids = categorySiblingIDs(id); guard let index = ids.firstIndex(of: id) else { return false }; return down ? index + 1 < ids.count : index > 0 }
     private func categoryAfter(_ id: UUID, down: Bool) -> UUID? { let ids = categorySiblingIDs(id); guard let index = ids.firstIndex(of: id) else { return nil }; return down ? ids[index + 1] : (index > 1 ? ids[index - 2] : nil) }
     private func categorySiblingIDs(_ id: UUID) -> [UUID] { guard let source = model.visibleCategories.first(where: { $0.id == id }) else { return [] }; return model.visibleCategories.filter { $0.archivedAt == nil && $0.direction == source.direction && $0.parentID == source.parentID }.map(\.id) }
-    private func prepareNew() { switch model.selectedSection { case .accounts: model.selectedAccountID = nil; model.accountName = ""; model.accountKind = .cash; model.openingBalance = "0"; model.creditLimit = ""; model.statementDay = ""; model.dueDay = ""; model.cycleMode = "statement_day_cutoff"; model.openingBalanceAsOfDate = ""; model.openingDueDate = ""; case .categories: model.selectedCategoryID = nil; model.categoryName = ""; model.categoryDirection = .expense; case .merchants: model.selectedMerchantID = nil; model.merchantName = ""; model.merchantAliases = "" } }
+    private func prepareNew() { model.beginNewDraft() }
     private func save() async { switch model.selectedSection { case .accounts: await model.saveAccount(); case .categories: await model.saveCategory(); case .merchants: await model.saveMerchant() } }
     private func accountKindLabel(_ value: V15AccountKind) -> String { switch value { case .cash: "现金"; case .debit: "借记"; case .credit: "信用"; case .unknown: "其他类型" } }
     private func categoryDirectionLabel(_ value: String) -> String { value == "income" ? "收入" : value == "expense" ? "支出" : "其他" }

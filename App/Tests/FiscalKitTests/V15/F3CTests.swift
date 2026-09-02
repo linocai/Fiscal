@@ -104,6 +104,10 @@ struct F3CTests {
         let model = await loadedModel(transport)
         await model.openNewClaim()
         #expect(Set(model.createClaimDisabledReasons.compactMap(\.fieldPath)).isSuperset(of: ["title", "parties[0].name", "parties[0].allocations[0].transaction_id"]))
+        #expect(model.visibleNewClaimIssues.isEmpty)
+        model.claimTitle = "临时标题"; model.claimTitle = ""
+        #expect(model.visibleNewClaimIssues.contains { $0.fieldPath == "title" })
+        #expect(!model.visibleNewClaimIssues.contains { $0.fieldPath == "parties[0].name" })
         fillClaim(model)
         #expect(model.selectedCandidate?.categoryID == nil)
         #expect(model.allocationAmountText == "300.00")

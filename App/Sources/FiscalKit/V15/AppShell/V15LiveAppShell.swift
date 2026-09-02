@@ -61,7 +61,7 @@ public struct V15MacLiveAppShell: View {
                 V151MacWorkspace(services: services)
             }
         }
-        .frame(minWidth: 1_000, minHeight: 680)
+        .frame(minWidth: V15MacLayout.minimumWindowWidth, minHeight: V15MacLayout.minimumWindowHeight)
         .background(V15Palette.paper.color)
         .accessibilityElement(children: .contain)
         .task {

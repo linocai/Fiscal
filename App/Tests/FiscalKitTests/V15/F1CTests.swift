@@ -119,6 +119,92 @@ import Testing
         await model.load(); let first = model.merchants.map(\.id); await model.loadNextMerchants()
         #expect(model.merchants.map(\.id) == first && model.merchantPageError != nil && !model.isLoadingMerchants)
     }
+    @Test("master-data save is enabled only for a valid changed draft") @MainActor func saveDraftGate() async {
+        let model = V15MasterDataModel(services: V15F1CFixtures.services())
+        await model.load()
+
+        model.selectedSection = .accounts
+        model.selectedAccountID = nil
+        model.accountName = ""
+        model.openingBalance = "0"
+        #expect(model.saveDisabledReason?.code == "account_name_required")
+        #expect(model.archiveDisabledReason?.code == "account_selection_required")
+        model.accountName = "新账户"
+        #expect(model.saveDisabledReason == nil)
+        model.selectAccount(model.visibleAccounts.first)
+        #expect(model.saveDisabledReason?.code == "no_changes")
+        #expect(model.archiveDisabledReason == nil)
+        model.accountName += " 新"
+        #expect(model.saveDisabledReason == nil)
+
+        model.selectedSection = .categories
+        model.selectedCategoryID = nil
+        model.categoryName = ""
+        #expect(model.saveDisabledReason?.code == "category_name_required")
+        #expect(model.archiveDisabledReason?.code == "category_selection_required")
+        model.categoryName = "新分类"
+        #expect(model.saveDisabledReason == nil)
+        model.selectCategory(model.visibleCategories.first)
+        #expect(model.saveDisabledReason?.code == "no_changes")
+        #expect(model.archiveDisabledReason == nil)
+        model.categoryColor = "not-a-color"
+        #expect(model.saveDisabledReason?.code == "category_color_invalid")
+
+        model.selectedSection = .merchants
+        model.selectedMerchantID = nil
+        model.merchantName = "   "
+        model.merchantAliases = ""
+        #expect(model.saveDisabledReason?.code == "merchant_name_required")
+        model.merchantName = "新商户"
+        #expect(model.saveDisabledReason == nil)
+        model.selectMerchant(model.merchants.first)
+        #expect(model.saveDisabledReason?.code == "no_changes")
+        model.merchantAliases += "、新别名"
+        #expect(model.saveDisabledReason == nil)
+    }
+    @Test("master-data field issues are routed only to their matching field") func fieldIssueRouting() {
+        let issues: [V15FieldIssue] = [
+            .init(code: "name", message: "请填写名称。", fieldPath: "name"),
+            .init(code: "opening", message: "期初余额无效。", fieldPath: " account.opening_balance_minor "),
+            .init(code: "color", message: "颜色无效。", fieldPath: "category.color"),
+            .init(code: "aggregate", message: "信用账户资料不完整。", fieldPath: "account.credit"),
+            .init(code: "unscoped", message: "请求内容无效。"),
+            .init(code: "future", message: "暂不认识的新字段。", fieldPath: "account.future_field")
+        ]
+
+        let namePaths = ["name", "account.name"]
+        let openingPaths = ["opening_balance", "opening_balance_minor", "account.opening_balance", "account.opening_balance_minor"]
+        let colorPaths = ["color", "color_hex", "category.color", "category.color_hex"]
+        let visiblePaths = namePaths + openingPaths + colorPaths
+
+        #expect(V15MasterDataModel.fieldIssues(issues, matchingAny: namePaths).map(\.code) == ["name"])
+        #expect(V15MasterDataModel.fieldIssues(issues, matchingAny: openingPaths).map(\.code) == ["opening"])
+        #expect(V15MasterDataModel.fieldIssues(issues, matchingAny: colorPaths).map(\.code) == ["color"])
+        #expect(V15MasterDataModel.formIssues(issues, excluding: visiblePaths).map(\.code) == ["aggregate", "unscoped", "future"])
+    }
+    @Test("master-data editor feedback never leaks across records, new drafts, or successful saves") @MainActor func editorFeedbackLifecycle() async {
+        let model = V15MasterDataModel(services: V15F1CFixtures.services())
+        await model.load()
+        model.selectedSection = .categories
+        model.selectCategory(model.visibleCategories.first)
+        model.categoryName = ""
+        await model.saveCategory()
+        #expect(!model.fieldIssues.isEmpty)
+
+        model.selectCategory(model.visibleCategories.dropFirst().first)
+        #expect(model.fieldIssues.isEmpty && model.receipt == nil)
+
+        model.categoryName = ""
+        await model.saveCategory()
+        #expect(!model.fieldIssues.isEmpty)
+        model.beginNewDraft()
+        #expect(model.fieldIssues.isEmpty && model.receipt == nil && model.selectedCategory == nil)
+
+        model.categoryName = "新分类"
+        await model.saveCategory()
+        #expect(model.fieldIssues.isEmpty)
+        #expect(model.receipt?.contains("已保存") == true)
+    }
     @Test("offline snapshot copy is deterministic Chinese Shanghai time") func offlineSnapshotCopy() {
         #expect(V15OfflineReadOnlyBanner.snapshotLabel(for: Date(timeIntervalSince1970: 1_786_464_000)) == "2026年8月12日 00:00")
     }

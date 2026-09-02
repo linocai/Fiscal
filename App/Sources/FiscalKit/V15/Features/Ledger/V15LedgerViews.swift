@@ -142,8 +142,15 @@ private struct V15LedgerDetail: View {
         let void = transaction.availableActions.first(where: { $0.action == "void" })
         if let void {
             let capability = model.isOffline ? V15Capability.disabled(action: "void", reason: .init(code: "offline_read_only", message: "离线时只可查看，无法提交更改。", fieldPath: nil)) : void.capability(knownActions: ["void"])
-            switch capability { case .enabled: V15InspectorAction("作废账目", detail: "作废后会保留历史记录。", action: { Task { await model.voidSelected() } }).accessibilityIdentifier("v15.f1b.void"); case .disabled(_, let reason): V15InspectorAction("作废账目", detail: "当前状态不能作废。", disabledReason: reason, action: {}).accessibilityIdentifier("v15.f1b.void.disabled") }
+            switch capability { case .enabled: V15InspectorAction("作废账目", detail: "作废后会保留历史记录。", kind: voidInspectorKind, action: { Task { await model.voidSelected() } }).accessibilityIdentifier("v15.f1b.void"); case .disabled(_, let reason): V15InspectorAction("作废账目", detail: "当前状态不能作废。", kind: voidInspectorKind, disabledReason: reason, action: {}).accessibilityIdentifier("v15.f1b.void.disabled") }
         } else { Text(V15DisabledReason.unknownCapability.message).font(V15Typography.secondary).accessibilityIdentifier("v15.f1b.no-action") }
+    }
+    private var voidInspectorKind: V15ButtonKind {
+#if os(macOS)
+        .destructive
+#else
+        .quiet
+#endif
     }
     @ViewBuilder private var provenance: some View { if let provenance = model.provenance { Text("来源：\(sourceLabel(provenance.source))").font(V15Typography.secondary); if !provenance.links.isEmpty { Text("已关联 \(provenance.links.count) 条相关记录").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) } } else { Text("正在读取来源信息。").font(V15Typography.secondary) } }
     @ViewBuilder private var mutationState: some View { switch model.mutation { case .idle: EmptyView(); case .working: V15LoadingSkeleton(); case .reconciled(let message): V15ServerFactState(title: "数据已更新", detail: message); case .conflict(let conflict): V15ConflictState(conflict: conflict, changes: model.mutationConflictChanges, reload: { Task { await model.retryDetail() } }); case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.retryLastMutation() } }) } }

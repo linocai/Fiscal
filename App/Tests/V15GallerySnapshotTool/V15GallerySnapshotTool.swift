@@ -121,7 +121,8 @@ private struct V15GallerySnapshotTool {
             ("reimbursements-long", "ax5", .dark, CGSize(width: 1440, height: 1080), .accessibility5),
             ("reimbursements-actions-draft", "action-matrix", .light, CGSize(width: 1440, height: 900), .large),
             ("reimbursements-receipt-replace", "receipt-replace", .dark, CGSize(width: 1180, height: 820), .large),
-            ("reimbursements-receipt-refresh-failure", "partial-success", .light, CGSize(width: 1440, height: 900), .large)
+            ("reimbursements-receipt-refresh-failure", "partial-success", .light, CGSize(width: 1440, height: 900), .large),
+            ("reimbursements-receipt-unknown", "receipt-unknown", .light, CGSize(width: 1440, height: 900), .large)
         ]
         for (route, style, scheme, size, type) in f3CRoutes {
             let reimbursements = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f3c-route", route])

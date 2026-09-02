@@ -46,6 +46,22 @@ struct F4ATests {
         #expect(unknownAccount.accounts.first?.drillCapability == .disabled("此汇总没有可安全定位的明细筛选条件"))
     }
 
+    @Test("year fixtures expose a complete calendar-year range")
+    func yearFixtureRange() throws {
+        let report = try V15FixtureCodec.decoder.decode(V15PeriodReport.self, from: Data(V15F4AFixtures.report(period: "2026", kind: "year").utf8))
+        #expect(report.meta.dateFrom == "2026-01-01")
+        #expect(report.meta.dateTo == "2026-12-31")
+    }
+
+    @Test("macOS spending trends use business semantics instead of numeric sign")
+    func macTrendSemantics() {
+        #expect(V15ReportingMacVisualSemantics.dailyTrendTone(for: .grossConsumption) == .spending)
+        #expect(V15ReportingMacVisualSemantics.dailyTrendTone(for: .netConsumption) == .spending)
+        #expect(V15ReportingMacVisualSemantics.dailyTrendTone(for: .personalRealized) == .spending)
+        #expect(V15ReportingMacVisualSemantics.dailyTrendTone(for: .merchantRefund) == .positive)
+        #expect(V15ReportingMacVisualSemantics.dailyTrendTone(for: .receivedReimbursement) == .positive)
+    }
+
     @MainActor @Test("typed drill item retains Int64 facts and service never forms an unfiltered period query")
     func typedDrillAndWire() async throws {
         let transport = F4ATransport(mode: .normal)

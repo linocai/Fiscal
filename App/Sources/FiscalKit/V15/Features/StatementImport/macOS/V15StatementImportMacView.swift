@@ -22,14 +22,14 @@ public struct V15StatementImportMacView: View {
             toolbar
             Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
             HStack(spacing: 0) {
-                evidencePane.frame(minWidth: 230, idealWidth: 260, maxWidth: 300)
+                evidencePane.frame(minWidth: V15MacLayout.compactStatementImportWidths.evidence, idealWidth: 260, maxWidth: 300)
                 Divider()
-                rowPane.frame(minWidth: 440, maxWidth: .infinity)
+                rowPane.frame(minWidth: V15MacLayout.compactStatementImportWidths.rows, maxWidth: .infinity)
                 Divider()
-                inspector.frame(minWidth: 300, idealWidth: 340, maxWidth: 390)
+                inspector.frame(minWidth: V15MacLayout.compactStatementImportWidths.inspector, idealWidth: 340, maxWidth: 390)
             }
         }
-        .background(V15Palette.paper.color)
+        .v15MacWorkspaceCanvas()
         .accessibilityElement(children: .contain)
         .fileImporter(isPresented: $importer, allowedContentTypes: [.pdf], allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first { model.selectFile(url: url) }
@@ -62,7 +62,6 @@ public struct V15StatementImportMacView: View {
                     .font(V15Typography.label)
                     .padding(.horizontal, 8).frame(height: 24)
                     .background(V15Palette.card.color, in: Capsule())
-                Text(batch.status.displayName).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
             }
             Spacer(minLength: 12)
             Button("选择 PDF") { importer = true }
@@ -71,7 +70,7 @@ public struct V15StatementImportMacView: View {
             Button("刷新") { model.requestReloadWorkbench() }
                 .disabled(model.workbench == nil)
                 .accessibilityIdentifier("v15.f3g.mac.reload")
-            V15ActionButton(model.preview.map { "确认已选 \($0.counts.selected) 行" } ?? "确认已选行", disabledReasons: model.previewReasons, accessibilityIdentifier: "v15.f3g.mac.preview") { model.requestPreview(); confirmation = true }
+            V15ActionButton(model.preview.map { "确认已选 \($0.counts.selected) 行" } ?? "确认已选行", disabledReasons: model.previewReasons, showsDisabledReasons: false, accessibilityIdentifier: "v15.f3g.mac.preview") { model.requestPreview(); confirmation = true }
         }
         .padding(.horizontal, 18)
         .frame(height: 50)
@@ -335,12 +334,52 @@ public struct V15StatementImportMacView: View {
 
     @ViewBuilder private var phaseFallback: some View {
         if case .failed(let failure) = model.phase {
-            V15ServiceErrorState(message: failure.message, retry: { model.retryFromFailure() })
+            if V15StateVisualSpec.resolve(failure).semantic == .outcomeUnknown {
+                V15OutcomeUnknownState(
+                    message: failure.message,
+                    actionTitle: "检查最新状态",
+                    action: { model.retryFromFailure() }
+                )
+            } else {
+                V15ServiceErrorState(message: failure.message, retry: { model.retryFromFailure() })
+            }
         } else if model.batch == nil {
-            V15EmptyState(title: "选择一份 PDF 开始", explanation: "提取、解析、逐行处置和确认是四个分开的阶段。")
+            emptyIntake
         } else {
             V15LoadingSkeleton()
         }
+    }
+
+    private var emptyIntake: some View {
+        VStack(spacing: V15Spacing.lg) {
+            Image(systemName: "doc.badge.plus")
+                .font(.system(size: 34, weight: .light))
+                .foregroundStyle(V15Palette.teal.color)
+            VStack(spacing: V15Spacing.xs) {
+                Text("选择一份 PDF 开始").font(V15Typography.cardTitle)
+                Text("原始文件仅在本机提取；确认前不会创建或关联账目。")
+                    .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                    .multilineTextAlignment(.center)
+            }
+            Button { importer = true } label: {
+                Label("选择 PDF 文件", systemImage: "plus")
+                    .frame(minWidth: 176, minHeight: 42)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(V15Palette.teal.color)
+            .accessibilityIdentifier("v15.f3g.mac.empty.pick-file")
+            HStack(spacing: 5) {
+                ForEach(["选择文件", "本机提取", "解析", "逐行处置", "预览", "确认"], id: \.self) { phase in
+                    Text(phase).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                    if phase != "确认" { Image(systemName: "chevron.right").font(.system(size: 8)).foregroundStyle(V15Palette.ink.color.opacity(0.36)) }
+                }
+            }
+            .accessibilityLabel("导入阶段：选择文件、本机提取、解析、逐行处置、预览、确认")
+        }
+        .padding(36)
+        .frame(maxWidth: 580)
+        .v15MacPanel()
+        .accessibilityIdentifier("v15.f3g.mac.empty-intake")
     }
 
     private var footerHints: some View {
@@ -368,14 +407,19 @@ public struct V15StatementImportMacView: View {
                         V15LoadingSkeleton(layout: .decisionCard).accessibilityIdentifier("v15.f3g.mac.resolution-readback-loading")
                     }
                     if case .failed(let failure) = model.phase, failure.code == "resolution_response_unknown" {
-                        V15ServiceErrorState(message: failure.message, retryIdentifier: "v15.f3g.mac.resolution-readback-retry", retry: { model.retryFromFailure() })
-                            .accessibilityIdentifier("v15.f3g.mac.resolution-readback-error")
+                        V15OutcomeUnknownState(
+                            title: "行处理结果暂时不明",
+                            message: failure.message,
+                            actionTitle: "读取完整复核行",
+                            actionIdentifier: "v15.f3g.mac.resolution-readback-retry",
+                            action: { model.retryFromFailure() }
+                        )
+                        .accessibilityIdentifier("v15.f3g.mac.resolution-readback-unknown")
                     }
                     if let row = selectedRow { inspectorRow(row) }
                     else { Text("选择一行以查看脱敏信息、匹配候选和可用操作。").font(V15Typography.secondary) }
                     Divider()
-                    V15ActionButton("确认预览", disabledReasons: model.previewReasons, accessibilityIdentifier: "v15.f3g.mac.preview-inspector") { model.requestPreview(); confirmation = true }
-                    ForEach(model.previewReasons, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
+                    V15ActionButton("确认预览", disabledReasons: model.previewReasons, disabledReasonAccessibilityIdentifier: "v15.f3g.mac.preview-inspector.reason", accessibilityIdentifier: "v15.f3g.mac.preview-inspector") { model.requestPreview(); confirmation = true }
                     receiptSurface
                 }
                 .padding(V15Spacing.md)

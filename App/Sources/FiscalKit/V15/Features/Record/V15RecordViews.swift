@@ -44,7 +44,7 @@ public struct V15RecordView: View {
         .accessibilityIdentifier("v15.f1a.record.ios")
 #else
         V15RecordEditor(model: model, onCommitted: onCommitted)
-            .frame(maxWidth: 820)
+            .frame(maxWidth: 1_080)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(V15Palette.paper.color)
             .accessibilityIdentifier("v15.f1a.record.macos")
@@ -156,7 +156,16 @@ private struct V15RecordEditor: View {
             V15SuccessReceiptState(title: "账目已保存", detail: "已生成 \(transaction.postings.count) 条分录", actionTitle: "录入下一笔", action: { model.newEntry() })
                 .accessibilityIdentifier("v15.f1a.record.success")
         case .conflict(let conflict): V15ConflictState(conflict: conflict, reload: { Task { await model.reloadAfterConflict() } })
-        case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: submit)
+        case .failed(let failure):
+#if os(macOS)
+            if V15StateVisualSpec.resolve(failure).semantic == .outcomeUnknown {
+                V15OutcomeUnknownState(message: failure.message, actionTitle: "安全检查保存结果", action: submit)
+            } else {
+                V15ServiceErrorState(message: failure.message, retry: submit)
+            }
+#else
+            V15ServiceErrorState(message: failure.message, retry: submit)
+#endif
         default: EmptyView()
         }
     }

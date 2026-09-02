@@ -17,7 +17,7 @@ import Foundation
     public private(set) var conflictChanges: [V15ConflictChange] = []
     public private(set) var writesRequireExplicitReload = false
     public private(set) var offlineSnapshotAt: Date?
-    public var selectedSection: Section = .accounts
+    public var selectedSection: Section = .accounts { didSet { if selectedSection != oldValue { editorContextChanged() } } }
     public var selectedAccountID: UUID?
     public var selectedCategoryID: UUID?
     public var selectedMerchantID: UUID?
@@ -55,9 +55,21 @@ import Foundation
     }
     public var saveDisabledReason: V15DisabledReason? {
         if let reason = writeDisabledReason { return reason }
+        if let reason = draftSaveDisabledReason { return reason }
         guard let lock = unknownCreateLock, lock.section == selectedSection, !lock.explicitlyReloaded,
               currentCreatePayloadIdentity == lock.payloadIdentity else { return nil }
         return .init(code: "create_response_unknown", message: "上次新建结果尚未确认。为避免重复保存，请先刷新列表确认；也可以修改内容后重新提交。", fieldPath: nil)
+    }
+    public var archiveDisabledReason: V15DisabledReason? {
+        if let reason = writeDisabledReason { return reason }
+        switch selectedSection {
+        case .accounts where selectedAccount == nil:
+            return .init(code: "account_selection_required", message: "请先选择一个现有账户。", fieldPath: nil)
+        case .categories where selectedCategory == nil:
+            return .init(code: "category_selection_required", message: "请先选择一个现有分类。", fieldPath: nil)
+        default:
+            return nil
+        }
     }
     public var unknownCreateReloadReason: V15DisabledReason? {
         guard let lock = unknownCreateLock, !lock.explicitlyReloaded else { return nil }
@@ -69,6 +81,95 @@ import Foundation
     public var selectedMerchant: V15Merchant? { merchants.first { $0.id == selectedMerchantID } }
     public var visibleAccounts: [V15AccountResponse] { accounts.sorted { $0.sortOrder < $1.sortOrder } }
     public var visibleCategories: [V15CategoryResponse] { flatten(categories).sorted { $0.sortOrder < $1.sortOrder } }
+
+    private var draftSaveDisabledReason: V15DisabledReason? {
+        switch selectedSection {
+        case .accounts: accountDraftDisabledReason
+        case .categories: categoryDraftDisabledReason
+        case .merchants: merchantDraftDisabledReason
+        }
+    }
+
+    private var accountDraftDisabledReason: V15DisabledReason? {
+        if selectedAccount?.archivedAt != nil {
+            return .init(code: "archived_read_only", message: "归档账户只能恢复，不能编辑。", fieldPath: nil)
+        }
+        guard !accountName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .init(code: "account_name_required", message: "请先填写账户昵称。", fieldPath: "account.name")
+        }
+        guard let opening = CNYAmountParser.minorUnits(openingBalance) else {
+            return .init(code: "opening_balance_invalid", message: "请填写有效的期初余额。", fieldPath: "account.opening_balance")
+        }
+
+        let isCredit = accountKind == .credit
+        let credit = isCredit ? CNYAmountParser.minorUnits(creditLimit) : nil
+        let statement = isCredit ? Int(statementDay) : nil
+        let due = isCredit ? Int(dueDay) : nil
+        let allowedModes = ["statement_day_cutoff", "previous_calendar_month"]
+        if isCredit && (credit == nil || !(1...28).contains(statement ?? 0) || !(1...28).contains(due ?? 0) || !allowedModes.contains(cycleMode)) {
+            return .init(code: "credit_fields_required", message: "请填写有效的信用额度、账单日和还款日（1–28）。", fieldPath: "account.credit")
+        }
+        if isCredit && opening > 0 && (!Self.isBusinessDate(openingBalanceAsOfDate) || !Self.isBusinessDate(openingDueDate)) {
+            return .init(code: "credit_opening_dates_required", message: "正期初余额需要两项 YYYY-MM-DD 日期。", fieldPath: "account.opening_dates")
+        }
+
+        guard let account = selectedAccount else { return nil }
+        let mode = isCredit ? cycleMode : nil
+        let asOf = isCredit && opening > 0 ? openingBalanceAsOfDate : nil
+        let dueDate = isCredit && opening > 0 ? openingDueDate : nil
+        let unchanged = account.name == accountName
+            && account.kind == accountKind
+            && account.openingBalanceMinor == opening
+            && account.creditLimitMinor == credit
+            && account.statementDay == statement
+            && account.dueDay == due
+            && account.cycleMode == mode
+            && account.openingBalanceAsOfDate == asOf
+            && account.openingDueDate == dueDate
+        return unchanged ? .init(code: "no_changes", message: "内容没有变化，无需保存。", fieldPath: nil) : nil
+    }
+
+    private var categoryDraftDisabledReason: V15DisabledReason? {
+        if selectedCategory?.archivedAt != nil {
+            return .init(code: "archived_read_only", message: "归档分类只能恢复，不能编辑。", fieldPath: nil)
+        }
+        guard !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .init(code: "category_name_required", message: "请先填写分类名称。", fieldPath: "category.name")
+        }
+        guard categoryColor.range(of: "^#[0-9A-Fa-f]{6}$", options: .regularExpression) != nil else {
+            return .init(code: "category_color_invalid", message: "颜色需要填写为六位十六进制值。", fieldPath: "category.color")
+        }
+        guard !categoryIcon.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, categoryDirection != .unknown else {
+            return .init(code: "category_fields_required", message: "请填写有效的分类图标和方向。", fieldPath: "category")
+        }
+        guard let category = selectedCategory else { return nil }
+        let unchanged = category.name == categoryName
+            && category.direction == categoryDirection.rawValue
+            && category.icon == categoryIcon
+            && category.colorHex.caseInsensitiveCompare(categoryColor) == .orderedSame
+        return unchanged ? .init(code: "no_changes", message: "内容没有变化，无需保存。", fieldPath: nil) : nil
+    }
+
+    private var merchantDraftDisabledReason: V15DisabledReason? {
+        if selectedMerchant?.archivedAt != nil {
+            return .init(code: "archived_read_only", message: "归档商户不可编辑。", fieldPath: nil)
+        }
+        let name = merchantName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            return .init(code: "merchant_name_required", message: "请先填写商户名称。", fieldPath: "merchant.name")
+        }
+        guard let merchant = selectedMerchant else { return nil }
+        let unchanged = merchant.name == name && merchant.aliases == merchantDraftAliases
+        return unchanged ? .init(code: "no_changes", message: "内容没有变化，无需保存。", fieldPath: nil) : nil
+    }
+
+    private var merchantDraftAliases: [String] {
+        merchantAliases.split(separator: "、").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    private static func isBusinessDate(_ value: String) -> Bool {
+        value.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil
+    }
     public func accountLabel(_ account: V15AccountResponse) -> String {
         let count = accounts.filter { $0.name.caseInsensitiveCompare(account.name) == .orderedSame }.count
         return count > 1 && account.lastFour != nil ? "\(account.name) · 尾号 \(account.lastFour!)" : account.name
@@ -85,21 +186,33 @@ import Foundation
             guard current == generation else { return false }
             accounts = accountResult; accountRevision = state.listRevision; categories = categoryResult; merchants = page.items; merchantCursor = page.nextCursor; merchantPageError = nil; isLoadingMerchants = false
             phase = .loaded
-            if !preservingConflict { conflict = nil; conflictChanges = []; writesRequireExplicitReload = false }
+            if !preservingConflict { fieldIssues = []; conflict = nil; conflictChanges = []; writesRequireExplicitReload = false }
             return true
         } catch is CancellationError { guard current == generation else { return false }; phase = .idle; return false
         } catch let failure as V15Failure { guard current == generation else { return false }; phase = .failed(failure); return false
         } catch { guard current == generation else { return false }; phase = .failed(.init(kind: .transport, message: "主数据读取失败。")); return false }
     }
-    public func selectAccount(_ value: V15AccountResponse?) { selectedAccountID = value?.id; if let value { accountName = value.name; accountKind = value.kind; openingBalance = String(format: "%.2f", Double(value.openingBalanceMinor) / 100); creditLimit = value.creditLimitMinor.map { String(format: "%.2f", Double($0) / 100) } ?? ""; statementDay = value.statementDay.map(String.init) ?? ""; dueDay = value.dueDay.map(String.init) ?? ""; cycleMode = value.cycleMode ?? "statement_day_cutoff"; openingBalanceAsOfDate = value.openingBalanceAsOfDate ?? ""; openingDueDate = value.openingDueDate ?? "" } }
-    public func selectCategory(_ value: V15CategoryResponse?) { selectedCategoryID = value?.id; if let value { categoryName = value.name; categoryDirection = V15CategoryDirection(rawValue: value.direction) ?? .unknown; categoryIcon = value.icon; categoryColor = value.colorHex } }
-    public func selectMerchant(_ value: V15Merchant?) { selectedMerchantID = value?.id; if let value { merchantName = value.name; merchantAliases = value.aliases.joined(separator: "、") } }
-    public func saveAccount() async { guard canWrite("无法保存") else { return }; guard selectedAccount?.archivedAt == nil else { receipt = "归档账户只能恢复，不能编辑。"; return }; guard let minor = CNYAmountParser.minorUnits(openingBalance), !accountName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { fieldIssues = [.init(code: "account_required", message: "请填写账户昵称和有效的期初余额。", fieldPath: "account")]; return }; let kind = accountKind; let isCredit = kind == .credit; let credit = isCredit && !creditLimit.isEmpty ? CNYAmountParser.minorUnits(creditLimit) : nil; let statement = isCredit ? Int(statementDay) : nil; let due = isCredit ? Int(dueDay) : nil; let mode = isCredit ? cycleMode : nil; let name = accountName; let allowedModes = ["statement_day_cutoff", "previous_calendar_month"]; let datesValid = openingBalanceAsOfDate.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil && openingDueDate.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil; if isCredit && (credit == nil || statement == nil || due == nil || mode.map(allowedModes.contains) != true || (minor > 0 && !datesValid)) { fieldIssues = [.init(code: "credit_required", message: "信用账户需填写额度、账单日、还款日；正期初还需填写两项上海业务日期。", fieldPath: "credit")]; return }; let asOf = isCredit && minor > 0 ? openingBalanceAsOfDate : nil; let dueDate = isCredit && minor > 0 ? openingDueDate : nil; let account = selectedAccount; let createIdentity = account == nil ? accountCreateIdentity(name: name, kind: kind, opening: minor, credit: credit, statement: statement, due: due, mode: mode, asOf: asOf, dueDate: dueDate) : nil; guard canSubmitCreate(section: .accounts, identity: createIdentity) else { return }; let clearOpeningDates = account?.openingBalanceMinor ?? 0 > 0 && minor == 0; await mutate(id: account?.id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == name && $0.kind == kind && $0.openingBalanceMinor == minor && $0.creditLimitMinor == credit && $0.statementDay == statement && $0.dueDay == due && $0.cycleMode == mode && $0.openingBalanceAsOfDate == asOf && $0.openingDueDate == dueDate }) { [self] in if let account { return try await services.masterData.patchAccount(id: account.id, patch: .init(expectedVersion: account.version, name: name, openingBalanceMinor: minor, creditLimitMinor: credit, statementDay: statement, dueDay: due, cycleMode: mode, openingBalanceAsOfDate: clearOpeningDates ? .null : (asOf.map(V15NullablePatchValue.value) ?? .omitted), openingDueDate: clearOpeningDates ? .null : (dueDate.map(V15NullablePatchValue.value) ?? .omitted))) } else { return try await services.masterData.createAccount(.init(name: name, kind: kind, openingBalanceMinor: minor, creditLimitMinor: credit, statementDay: statement, dueDay: due, cycleMode: mode, openingBalanceAsOfDate: asOf, openingDueDate: dueDate)) } } }
-    public func archiveOrRestoreAccount() async { guard canWrite("无法更改") else { return }; guard let account = selectedAccount else { return }; let archiving = account.archivedAt == nil; await mutate(id: account.id, confirmed: { archiving ? $0.archivedAt != nil : $0.archivedAt == nil }) { [self] in archiving ? try await services.masterData.archiveAccount(id: account.id, expectedVersion: account.version) : try await services.masterData.restoreAccount(id: account.id, expectedVersion: account.version) } }
-    public func saveCategory() async { guard canWrite("无法保存") else { return }; guard selectedCategory?.archivedAt == nil else { receipt = "归档分类只能恢复，不能编辑。"; return }; guard !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, categoryColor.range(of: "^#[0-9A-Fa-f]{6}$", options: .regularExpression) != nil else { fieldIssues = [.init(code: "category_required", message: "请填写分类名称和六位颜色值。", fieldPath: "category")]; return }; let category = selectedCategory; let name = categoryName; let direction = categoryDirection.rawValue; let icon = categoryIcon; let color = categoryColor; let createIdentity = category == nil ? identity(["category", name, direction, icon, color]) : nil; guard canSubmitCreate(section: .categories, identity: createIdentity) else { return }; await mutateCategory(id: category?.id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == name && $0.direction == direction && $0.icon == icon && $0.colorHex.uppercased() == color.uppercased() }) { [self] in if let category { return try await services.masterData.patchCategory(id: category.id, patch: .init(expectedVersion: category.version, name: name, direction: direction, icon: icon, colorHex: color)) } else { return try await services.masterData.createCategory(.init(name: name, direction: direction, icon: icon, colorHex: color)) } } }
-    public func archiveOrRestoreCategory() async { guard canWrite("无法更改") else { return }; guard let category = selectedCategory else { return }; let archiving = category.archivedAt == nil; await mutateCategory(id: category.id, confirmed: { archiving ? $0.archivedAt != nil : $0.archivedAt == nil }) { [self] in archiving ? try await services.masterData.archiveCategory(id: category.id, expectedVersion: category.version) : try await services.masterData.restoreCategory(id: category.id, expectedVersion: category.version) } }
+    public func selectAccount(_ value: V15AccountResponse?) { editorContextChanged(); invalidatePreview(); selectedAccountID = value?.id; if let value { accountName = value.name; accountKind = value.kind; openingBalance = String(format: "%.2f", Double(value.openingBalanceMinor) / 100); creditLimit = value.creditLimitMinor.map { String(format: "%.2f", Double($0) / 100) } ?? ""; statementDay = value.statementDay.map(String.init) ?? ""; dueDay = value.dueDay.map(String.init) ?? ""; cycleMode = value.cycleMode ?? "statement_day_cutoff"; openingBalanceAsOfDate = value.openingBalanceAsOfDate ?? ""; openingDueDate = value.openingDueDate ?? "" } }
+    public func selectCategory(_ value: V15CategoryResponse?) { editorContextChanged(); invalidatePreview(); selectedCategoryID = value?.id; if let value { categoryName = value.name; categoryDirection = V15CategoryDirection(rawValue: value.direction) ?? .unknown; categoryIcon = value.icon; categoryColor = value.colorHex } }
+    public func selectMerchant(_ value: V15Merchant?) { editorContextChanged(); invalidatePreview(); selectedMerchantID = value?.id; if let value { merchantName = value.name; merchantAliases = value.aliases.joined(separator: "、") } }
+    public func beginNewDraft() {
+        editorContextChanged(); invalidatePreview()
+        switch selectedSection {
+        case .accounts:
+            selectedAccountID = nil; accountName = ""; accountKind = .cash; openingBalance = "0"; creditLimit = ""; statementDay = ""; dueDay = ""; cycleMode = "statement_day_cutoff"; openingBalanceAsOfDate = ""; openingDueDate = ""
+        case .categories:
+            selectedCategoryID = nil; categoryName = ""; categoryDirection = .expense; categoryIcon = "tag"; categoryColor = "#008C8A"
+        case .merchants:
+            selectedMerchantID = nil; merchantName = ""; merchantAliases = ""
+        }
+    }
+    public func saveAccount() async { guard canWrite("无法保存") else { return }; beginEditorMutation(); guard selectedAccount?.archivedAt == nil else { receipt = "归档账户只能恢复，不能编辑。"; return }; guard let minor = CNYAmountParser.minorUnits(openingBalance), !accountName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { fieldIssues = [.init(code: "account_required", message: "请填写账户昵称和有效的期初余额。", fieldPath: "account")]; return }; let kind = accountKind; let isCredit = kind == .credit; let credit = isCredit && !creditLimit.isEmpty ? CNYAmountParser.minorUnits(creditLimit) : nil; let statement = isCredit ? Int(statementDay) : nil; let due = isCredit ? Int(dueDay) : nil; let mode = isCredit ? cycleMode : nil; let name = accountName; let allowedModes = ["statement_day_cutoff", "previous_calendar_month"]; let datesValid = openingBalanceAsOfDate.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil && openingDueDate.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil; if isCredit && (credit == nil || statement == nil || due == nil || mode.map(allowedModes.contains) != true || (minor > 0 && !datesValid)) { fieldIssues = [.init(code: "credit_required", message: "信用账户需填写额度、账单日、还款日；正期初还需填写两项上海业务日期。", fieldPath: "credit")]; return }; let asOf = isCredit && minor > 0 ? openingBalanceAsOfDate : nil; let dueDate = isCredit && minor > 0 ? openingDueDate : nil; let account = selectedAccount; let createIdentity = account == nil ? accountCreateIdentity(name: name, kind: kind, opening: minor, credit: credit, statement: statement, due: due, mode: mode, asOf: asOf, dueDate: dueDate) : nil; guard canSubmitCreate(section: .accounts, identity: createIdentity) else { return }; let clearOpeningDates = account?.openingBalanceMinor ?? 0 > 0 && minor == 0; await mutate(id: account?.id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == name && $0.kind == kind && $0.openingBalanceMinor == minor && $0.creditLimitMinor == credit && $0.statementDay == statement && $0.dueDay == due && $0.cycleMode == mode && $0.openingBalanceAsOfDate == asOf && $0.openingDueDate == dueDate }) { [self] in if let account { return try await services.masterData.patchAccount(id: account.id, patch: .init(expectedVersion: account.version, name: name, openingBalanceMinor: minor, creditLimitMinor: credit, statementDay: statement, dueDay: due, cycleMode: mode, openingBalanceAsOfDate: clearOpeningDates ? .null : (asOf.map(V15NullablePatchValue.value) ?? .omitted), openingDueDate: clearOpeningDates ? .null : (dueDate.map(V15NullablePatchValue.value) ?? .omitted))) } else { return try await services.masterData.createAccount(.init(name: name, kind: kind, openingBalanceMinor: minor, creditLimitMinor: credit, statementDay: statement, dueDay: due, cycleMode: mode, openingBalanceAsOfDate: asOf, openingDueDate: dueDate)) } } }
+    public func archiveOrRestoreAccount() async { guard canWrite("无法更改") else { return }; beginEditorMutation(); guard let account = selectedAccount else { return }; let archiving = account.archivedAt == nil; await mutate(id: account.id, confirmed: { archiving ? $0.archivedAt != nil : $0.archivedAt == nil }) { [self] in archiving ? try await services.masterData.archiveAccount(id: account.id, expectedVersion: account.version) : try await services.masterData.restoreAccount(id: account.id, expectedVersion: account.version) } }
+    public func saveCategory() async { guard canWrite("无法保存") else { return }; beginEditorMutation(); guard selectedCategory?.archivedAt == nil else { receipt = "归档分类只能恢复，不能编辑。"; return }; guard !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, categoryColor.range(of: "^#[0-9A-Fa-f]{6}$", options: .regularExpression) != nil else { fieldIssues = [.init(code: "category_required", message: "请填写分类名称和六位颜色值。", fieldPath: "category")]; return }; let category = selectedCategory; let name = categoryName; let direction = categoryDirection.rawValue; let icon = categoryIcon; let color = categoryColor; let createIdentity = category == nil ? identity(["category", name, direction, icon, color]) : nil; guard canSubmitCreate(section: .categories, identity: createIdentity) else { return }; await mutateCategory(id: category?.id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == name && $0.direction == direction && $0.icon == icon && $0.colorHex.uppercased() == color.uppercased() }) { [self] in if let category { return try await services.masterData.patchCategory(id: category.id, patch: .init(expectedVersion: category.version, name: name, direction: direction, icon: icon, colorHex: color)) } else { return try await services.masterData.createCategory(.init(name: name, direction: direction, icon: icon, colorHex: color)) } } }
+    public func archiveOrRestoreCategory() async { guard canWrite("无法更改") else { return }; beginEditorMutation(); guard let category = selectedCategory else { return }; let archiving = category.archivedAt == nil; await mutateCategory(id: category.id, confirmed: { archiving ? $0.archivedAt != nil : $0.archivedAt == nil }) { [self] in archiving ? try await services.masterData.archiveCategory(id: category.id, expectedVersion: category.version) : try await services.masterData.restoreCategory(id: category.id, expectedVersion: category.version) } }
     public func saveMerchant() async {
         guard canWrite("无法保存") else { return }
+        beginEditorMutation()
         let aliases = merchantAliases.split(separator: "、").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         let expectedName = merchantName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !expectedName.isEmpty else { fieldIssues = [.init(code: "merchant_required", message: "请填写商户名称。", fieldPath: "merchant")]; return }
@@ -286,6 +399,31 @@ import Foundation
     private func accountCreateIdentity(name: String, kind: V15AccountKind, opening: Int64, credit: Int64?, statement: Int?, due: Int?, mode: String?, asOf: String?, dueDate: String?) -> String { identity(["account", name, kind.rawValue, String(opening), credit.map(String.init) ?? "∅", statement.map(String.init) ?? "∅", due.map(String.init) ?? "∅", mode ?? "∅", asOf ?? "∅", dueDate ?? "∅"]) }
     private func identity(_ fields: [String]) -> String { fields.map { "\($0.utf8.count):\($0)" }.joined(separator: "|") }
     private func canWrite(_ action: String) -> Bool { if isOffline { receipt = "离线时只可查看，\(action)。"; return false }; if writesRequireExplicitReload { receipt = unknownCreateLock == nil ? "数据更新后刷新未完成，\(action)；请先刷新再决定。" : "新建结果尚未确认且刷新失败，\(action)；请先刷新再决定。"; return false }; return true }
+    private func editorContextChanged() { fieldIssues = []; receipt = nil; if !writesRequireExplicitReload { conflict = nil; conflictChanges = [] } }
+    private func beginEditorMutation() { fieldIssues = []; receipt = nil; if !writesRequireExplicitReload { conflict = nil; conflictChanges = [] } }
+
+    nonisolated static func fieldIssues(_ issues: [V15FieldIssue], matchingAny paths: [String]) -> [V15FieldIssue] {
+        let normalizedPaths = paths.map(normalizedFieldPath)
+        return issues.filter { issue in
+            guard let rawPath = issue.fieldPath else { return false }
+            let issuePath = normalizedFieldPath(rawPath)
+            guard !issuePath.isEmpty else { return false }
+            return normalizedPaths.contains { fieldPath in
+                issuePath == fieldPath || issuePath.hasPrefix(fieldPath + ".")
+            }
+        }
+    }
+
+    nonisolated static func formIssues(_ issues: [V15FieldIssue], excluding paths: [String]) -> [V15FieldIssue] {
+        issues.filter { issue in
+            fieldIssues([issue], matchingAny: paths).isEmpty
+        }
+    }
+
+    nonisolated private static func normalizedFieldPath(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     public static func reorderHint(canMove: Bool, down: Bool) -> String { if canMove { return down ? "⌘⌥↓ 下移一位" : "⌘⌥↑ 上移一位" }; return down ? "已到末位，不能下移。" : "已到首位，不能上移。" }
     private func apply(_ error: Error) { if let failure = error as? V15Failure { fieldIssues = failure.fieldIssues; conflict = failure.conflict; receipt = failure.kind == .conflict ? "数据已经更新；请重新读取后再决定。" : failure.message } else { receipt = "操作未完成，请重新读取后再决定。" } }
     private func flatten(_ items: [V15CategoryResponse]) -> [V15CategoryResponse] { items + items.flatMap { flatten($0.children) } }

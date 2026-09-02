@@ -30,6 +30,18 @@ import XCTest
         app.terminate()
     }
 
+    func testHistoryScopeNeverLeavesHiddenPendingActionsOperable() {
+        let app = launchGalleryMac(["--v15-f3f-route", "ai-long"])
+        XCTAssertTrue(element(app, "v15.f3f.review.open").waitForExistence(timeout: 10))
+        let history = element(app, "v15.f3f.scope.history")
+        XCTAssertTrue(history.waitForExistence(timeout: 5))
+        history.tap()
+        XCTAssertTrue(element(app, "v15.f3f.review.open").waitForNonExistence(timeout: 5))
+        XCTAssertTrue(element(app, "v15.f3f.execute").waitForNonExistence(timeout: 2))
+        XCTAssertTrue(element(app, "v15.f3f.ignore").waitForNonExistence(timeout: 2))
+        app.terminate()
+    }
+
     func testStableCreateRecoveryPanelAndAccessibilityActionsAreRepresentable() {
         let app = launchGalleryMac(["--v15-f3f-route", "ai-create-unknown-settings-transport-after-safe"])
         XCTAssertTrue(element(app, "v15.f3f.unknown.create-recovery").waitForExistence(timeout: 10))
@@ -47,10 +59,10 @@ import XCTest
         let delete = app.buttons["v15.f3f.delete"]
         XCTAssertTrue(delete.waitForExistence(timeout: 8))
         delete.tap()
-        let alert = app.alerts.firstMatch
-        XCTAssertTrue(alert.waitForExistence(timeout: 6))
-        XCTAssertTrue(alert.staticTexts["只删除这项尚未记账的内容，不会影响账本。删除后无法恢复。"].exists)
-        alert.buttons["删除"].tap()
+        let confirm = element(app, "v15.f3f.delete.confirm")
+        XCTAssertTrue(confirm.waitForExistence(timeout: 6))
+        XCTAssertTrue(app.staticTexts["只删除这项尚未记账的内容，不会影响账本。删除后无法恢复。"].waitForExistence(timeout: 3))
+        confirm.tap()
         XCTAssertTrue(failed.waitForNonExistence(timeout: 8))
         XCTAssertTrue(element(app, "v15.f3f.success").waitForExistence(timeout: 8))
         app.terminate()

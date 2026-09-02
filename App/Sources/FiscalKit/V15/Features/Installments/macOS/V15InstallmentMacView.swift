@@ -17,9 +17,9 @@ public struct V15InstallmentMacView: View {
         Group {
             #if os(macOS)
             HSplitView {
-                spine.frame(minWidth: 240, idealWidth: 300, maxWidth: 380)
-                schedule.frame(minWidth: 380, idealWidth: 560, maxWidth: .infinity)
-                inspector.frame(minWidth: 330, idealWidth: 410, maxWidth: 520)
+                spine.frame(minWidth: V15MacLayout.compactInstallmentWidths.spine, idealWidth: 300, maxWidth: 380)
+                schedule.frame(minWidth: V15MacLayout.compactInstallmentWidths.schedule, idealWidth: 560, maxWidth: .infinity)
+                inspector.frame(minWidth: V15MacLayout.compactInstallmentWidths.inspector, idealWidth: 410, maxWidth: 520)
             }
             #else
             HStack(spacing: 0) {

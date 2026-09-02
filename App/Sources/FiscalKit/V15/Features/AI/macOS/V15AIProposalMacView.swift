@@ -1,8 +1,10 @@
 import SwiftUI
 
 public struct V15AIProposalMacView: View {
+    private enum ListScope: String, CaseIterable, Identifiable { case pending, history; var id: String { rawValue } }
     @State private var model: V15AIProposalModel
     @State private var showsReview = false
+    @State private var listScope: ListScope = .pending
     private let initialGalleryScenario: String?
 
     @MainActor public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialGalleryScenario: String? = nil) {
@@ -12,16 +14,18 @@ public struct V15AIProposalMacView: View {
 
     public var body: some View {
         HStack(spacing: 0) {
-            spine.frame(minWidth: 250, idealWidth: 290, maxWidth: 340)
+            spine.frame(minWidth: V15MacLayout.compactAIWidths.spine, idealWidth: 290, maxWidth: 340)
             Divider()
-            detail.frame(minWidth: 420, maxWidth: .infinity)
+            detail.frame(minWidth: V15MacLayout.compactAIWidths.detail, maxWidth: .infinity)
             Divider()
-            inspector.frame(width: 330)
+            inspector.frame(minWidth: V15MacLayout.compactAIWidths.inspector, idealWidth: 330, maxWidth: 330)
         }
-        .background(V15Palette.paper.color)
+        .v15MacWorkspaceCanvas()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f3f.ai.macos")
         .task { if model.phase == .idle { await model.load(); await applyInitialScenario() } }
+        .onChange(of: listScope) { _, _ in reconcileVisibleSelection() }
+        .onChange(of: proposalScopeSignature) { _, _ in reconcileVisibleSelection() }
         .sheet(isPresented: $showsReview, onDismiss: { model.dismissEditor() }) { reviewSheet.frame(minWidth: 620, minHeight: 720) }
     }
 
@@ -29,17 +33,28 @@ public struct V15AIProposalMacView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
                 Text("AI 记账").font(V15Typography.cardTitle)
-                Text("\(model.pendingCount) 笔待确认").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                Text(model.pendingCount == 0 ? "当前没有待确认内容" : "\(model.pendingCount) 笔需要你确认")
+                    .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                Picker("内容范围", selection: $listScope) {
+                    Text("待确认").tag(ListScope.pending).accessibilityIdentifier("v15.f3f.scope.pending")
+                    Text("历史").tag(ListScope.history).accessibilityIdentifier("v15.f3f.scope.history")
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("v15.f3f.list.scope")
             }.padding(V15Spacing.md)
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                     switch model.phase {
                     case .idle, .loading: V15LoadingSkeleton()
-                    case .empty: V15EmptyState(title: "没有待确认内容", explanation: "在右侧输入记账文字。")
+                    case .empty: V15EmptyState(title: listScope == .pending ? "没有待确认内容" : "还没有历史记录", explanation: listScope == .pending ? "在右侧输入记账文字，或查看历史。" : "切换到待确认可处理新内容。")
                     case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.load() } }
                     case .loaded:
-                        ForEach(model.proposals) { proposal in V15AIProposalRow(proposal: proposal, selected: model.selectedProposal?.id == proposal.id) { Task { await model.select(proposal) } } }
+                        if displayedProposals.isEmpty {
+                            V15EmptyState(title: listScope == .pending ? "没有待确认内容" : "当前没有历史记录", explanation: listScope == .pending ? "所有项目都已处理；可在历史中查看记录。" : "处理完成的内容会显示在这里。")
+                        } else {
+                            ForEach(displayedProposals) { proposal in V15AIProposalRow(proposal: proposal, selected: model.selectedProposal?.id == proposal.id) { Task { await model.select(proposal) } } }
+                        }
                         if model.nextCursor != nil {
                             switch model.pagePhase {
                             case .loading:
@@ -58,6 +73,21 @@ public struct V15AIProposalMacView: View {
         .accessibilityIdentifier("v15.f3f.spine")
     }
 
+    private var displayedProposals: [V15AIProposal] {
+        model.proposals.filter { proposal in
+            listScope == .pending ? proposal.status == .pending || proposal.status == .processing || proposal.status == .failed : ![.pending, .processing, .failed].contains(proposal.status)
+        }
+    }
+
+    private var visibleSelectedProposal: V15AIProposal? {
+        guard let selected = model.selectedProposal else { return nil }
+        return displayedProposals.first(where: { $0.id == selected.id })
+    }
+
+    private var proposalScopeSignature: [String] {
+        model.proposals.map { "\($0.id.uuidString):\($0.status)" }
+    }
+
     private var detail: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: V15Spacing.section) {
@@ -67,8 +97,10 @@ public struct V15AIProposalMacView: View {
                 case .idle: V15EmptyState(title: "选择一项内容", explanation: "这里显示识别结果和待补充内容。")
                 case .loading: V15LoadingSkeleton()
                 case .empty: V15EmptyState(title: "没有详情", explanation: "暂时没有取得这项内容。")
-                case .failed(let failure): V15ServiceErrorState(message: failure.message) { if let proposal = model.selectedProposal { Task { await model.select(proposal) } } }
-                case .loaded: if let proposal = model.selectedProposal { V15AIProposalDetail(proposal: proposal, events: model.qualityEvents) }
+                case .failed(let failure): V15ServiceErrorState(message: failure.message) { if let proposal = visibleSelectedProposal { Task { await model.select(proposal) } } }
+                case .loaded:
+                    if let proposal = visibleSelectedProposal { V15AIProposalDetail(proposal: proposal, events: model.qualityEvents) }
+                    else { V15EmptyState(title: "选择一项内容", explanation: "这里显示当前范围内的识别结果和处理状态。") }
                 }
             }.padding(V15Spacing.lg)
         }
@@ -94,7 +126,7 @@ public struct V15AIProposalMacView: View {
                     V15ActionButton("生成待确认账目", kind: .primary, disabledReasons: model.createReasons) { Task { await model.create() } }.accessibilityIdentifier("v15.f3f.create.submit")
                     V15AIStableCreateRecoverySurface(model: model)
                 }
-                if let proposal = model.selectedProposal {
+                if let proposal = visibleSelectedProposal {
                     V15Section("人工动作") { V15AIProposalActions(model: model, proposal: proposal) { model.openReview(proposal); showsReview = true } }
                 }
             }.padding(V15Spacing.md)
@@ -160,5 +192,15 @@ public struct V15AIProposalMacView: View {
         default:
             break
         }
+    }
+
+
+    private func reconcileVisibleSelection() {
+        guard !model.writeLocked else { return }
+        if case .succeeded = model.mutationPhase { return }
+        let visible = displayedProposals
+        guard !visible.contains(where: { $0.id == model.selectedProposal?.id }) else { return }
+        guard let first = visible.first else { model.clearSelection(); return }
+        Task { await model.select(first) }
     }
 }

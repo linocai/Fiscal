@@ -14,6 +14,7 @@ public enum V15F2BFixtures {
         /// F2-C UI-only race fixture: the conflict refresh remains in flight
         /// until the test has observed the real loading pane and changed lens.
         case refreshLensRace = "today-refresh-lens-race"
+        case refreshDelay = "today-refresh-delay"
         case offline = "today-offline"
         case long = "today-long"
         case zeroFuture = "today-zero-future"
@@ -57,6 +58,9 @@ actor V15F2BFixtureTransport: V15Transporting {
                 }
                 if route == .refreshLensRace { try await Task.sleep(for: .seconds(2)) }
                 data = V15F2AFixtures.facts(revision: 43)
+            } else if route == .refreshDelay, factsReads > 1 {
+                try await Task.sleep(for: .seconds(1))
+                data = V15F2AFixtures.facts()
             } else if route == .rootWorkspace {
                 data = V15F2BFixtures.rootWorkspaceFacts
             } else if route == .rootWorkspaceBoundary {

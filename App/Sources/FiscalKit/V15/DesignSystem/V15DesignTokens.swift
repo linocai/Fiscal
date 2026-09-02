@@ -20,8 +20,8 @@ public struct V15ColorToken: Sendable, Equatable {
     public var color: Color { Color(v15Light: lightHex, dark: darkHex) }
 }
 
-/// Fiscal v1.5 has three visual signals only: confirmed facts, a required
-/// decision, and a provisional result. Do not add feature-specific colors.
+/// Fiscal keeps one restrained brand palette and a separate safety semantic.
+/// Errors and destructive actions must never borrow the brand or warning hue.
 public enum V15Palette {
     public static let paper = V15ColorToken(lightHex: 0xFFFFFF, darkHex: 0x0F1615)
     public static let card = V15ColorToken(lightHex: 0xF8F7F3, darkHex: 0x1A2423)
@@ -33,8 +33,15 @@ public enum V15Palette {
     public static let hairline = V15ColorToken(lightHex: 0xE8E6E1, darkHex: 0x2A3534)
     public static let selected = V15ColorToken(lightHex: 0xE9F2F0, darkHex: 0x122A29)
     public static let provisional = V15ColorToken(lightHex: 0xFFF8E4, darkHex: 0x241F12)
+    public static let danger = V15ColorToken(lightHex: 0xB4232C, darkHex: 0xFF7A82)
+    public static let dangerSurface = V15ColorToken(lightHex: 0xFFF0F1, darkHex: 0x2B1618)
     public static let receipt = selected
     public static let primaryButtonText = V15ColorToken(lightHex: 0xFFFFFF, darkHex: 0x08201F)
+    /// A quiet desktop sidebar is intentionally distinct from content paper.
+    /// It lets selection carry the navigation signal instead of turning every
+    /// module into a large coloured button.
+    public static let sidebar = V15ColorToken(lightHex: 0xEFEEE8, darkHex: 0x111A19)
+    public static let surfaceRaised = V15ColorToken(lightHex: 0xFCFBF8, darkHex: 0x202B2A)
 }
 
 public enum V15Spacing {
@@ -88,11 +95,11 @@ public enum V15Motion {
 
 public enum V15Typography {
 #if os(macOS)
-    public static let surfaceTitle = Font.system(.title, design: .default, weight: .bold)
+    public static let surfaceTitle = Font.system(size: 26, weight: .bold, design: .rounded)
     public static let cardTitle = Font.system(.title3, design: .default, weight: .semibold)
     public static let body = Font.system(.body, design: .default, weight: .regular)
     public static let secondary = Font.system(.callout, design: .default, weight: .regular)
-    public static let label = Font.system(.caption2, design: .default, weight: .semibold)
+    public static let label = Font.system(size: 11, weight: .semibold, design: .default)
     public static let money = Font.system(.body, design: .monospaced, weight: .semibold)
     public static let moneyLarge = Font.system(.title, design: .monospaced, weight: .semibold)
 #else
@@ -105,6 +112,64 @@ public enum V15Typography {
     public static let moneyLarge = Font.system(.title, design: .monospaced, weight: .semibold)
 #endif
 }
+
+/// Shared desktop sizing contracts. Feature pages use these values rather
+/// than independently pinning a narrow column in a wide application window.
+public enum V15MacLayout {
+    public static let minimumWindowWidth: CGFloat = 1_000
+    public static let minimumWindowHeight: CGFloat = 680
+    public static let sidebarWidth: CGFloat = 224
+    /// At the supported minimum window width navigation becomes an icon rail,
+    /// leaving enough room for a complete three-pane workbench.
+    public static let compactSidebarWidth: CGFloat = 76
+    public static let inspectorWidth: CGFloat = 344
+    public static let compactInspectorWidth: CGFloat = 292
+    public static let contentPadding: CGFloat = 24
+    public static let toolbarHeight: CGFloat = 56
+
+    public static let compactAIWidths: (spine: CGFloat, detail: CGFloat, inspector: CGFloat) = (210, 390, 290)
+    public static let compactStatementImportWidths: (evidence: CGFloat, rows: CGFloat, inspector: CGFloat) = (190, 400, 290)
+    public static let compactReimbursementWidths: (spine: CGFloat, detail: CGFloat, inspector: CGFloat) = (220, 390, 300)
+    public static let compactInstallmentWidths: (spine: CGFloat, schedule: CGFloat, inspector: CGFloat) = (210, 380, 300)
+
+    public static var compactModuleAvailableWidth: CGFloat {
+        minimumWindowWidth - compactSidebarWidth - 1
+    }
+    public static var widestCompactModuleMinimumWidth: CGFloat {
+        let reimbursement = compactReimbursementWidths.spine + compactReimbursementWidths.detail + compactReimbursementWidths.inspector + 2
+        let ai = compactAIWidths.spine + compactAIWidths.detail + compactAIWidths.inspector + 2
+        let statement = compactStatementImportWidths.evidence + compactStatementImportWidths.rows + compactStatementImportWidths.inspector + 2
+        let installment = compactInstallmentWidths.spine + compactInstallmentWidths.schedule + compactInstallmentWidths.inspector + 2
+        return max(reimbursement, ai, statement, installment)
+    }
+}
+
+#if os(macOS)
+public extension View {
+    /// Gives standalone macOS pages a stable desktop canvas without affecting
+    /// their iOS counterpart. The page itself remains responsible for its
+    /// columns; it no longer needs a hard coded centred max width.
+    func v15MacWorkspaceCanvas() -> some View {
+        self
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(V15Palette.paper.color)
+    }
+
+    func v15MacPanel() -> some View {
+        self
+            .background(V15Palette.surfaceRaised.color, in: RoundedRectangle(cornerRadius: V15Radius.card))
+            .overlay { RoundedRectangle(cornerRadius: V15Radius.card).stroke(V15Palette.hairline.color.opacity(0.9), lineWidth: 1) }
+    }
+}
+#else
+// Several feature files are compiled into both platform frameworks even when
+// their live route is macOS-only. Keep the desktop visual modifiers as no-ops
+// on iOS so this upgrade cannot alter its existing information architecture.
+public extension View {
+    func v15MacWorkspaceCanvas() -> some View { self }
+    func v15MacPanel() -> some View { self }
+}
+#endif
 
 public enum V15Symbol {
     /// SF Symbols only. A symbol describes the action/object, while the nearby

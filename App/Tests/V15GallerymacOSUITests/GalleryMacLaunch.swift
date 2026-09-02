@@ -14,5 +14,9 @@ func launchGalleryMac(_ arguments: [String], file: StaticString = #filePath, lin
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
     }
     XCTAssertEqual(app.state, .runningForeground, "Gallery must be foreground before UI assertions", file: file, line: line)
+    if !app.windows.firstMatch.waitForExistence(timeout: 2) {
+        app.typeKey("n", modifierFlags: .command)
+        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 4), "Gallery must expose a window before UI assertions", file: file, line: line)
+    }
     return app
 }

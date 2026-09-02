@@ -30,10 +30,10 @@ public final class V15ReimbursementModel {
     public private(set) var newClaimIssues: [V15FieldIssue] = []
     public private(set) var newClaimServerIssues: [V15FieldIssue] = []
     public private(set) var newClaimResult: V15ReimbursementClaim?
-    public var claimTitle = "" { didSet { newClaimInputChanged() } }
-    public var partyName = "" { didSet { newClaimInputChanged() } }
-    public var allocationAmountText = "" { didSet { newClaimInputChanged() } }
-    public var expectedDateText = "" { didSet { newClaimInputChanged() } }
+    public var claimTitle = "" { didSet { newClaimInputChanged(fieldPath: "title") } }
+    public var partyName = "" { didSet { newClaimInputChanged(fieldPath: "parties[0].name") } }
+    public var allocationAmountText = "" { didSet { newClaimInputChanged(fieldPath: "parties[0].allocations[0].amount_minor") } }
+    public var expectedDateText = "" { didSet { newClaimInputChanged(fieldPath: "parties[0].expected_date") } }
     public var candidateQuery = "" { didSet { candidateFilterChanged() } }
     public var candidateDateFrom = "" { didSet { candidateFilterChanged() } }
     public var candidateDateTo = "" { didSet { candidateFilterChanged() } }
@@ -108,6 +108,8 @@ public final class V15ReimbursementModel {
     private var directReadbackGenerations: [UUID: UInt64] = [:]
     private var isApplyingNewClaim = false
     private var isApplyingReceipt = false
+    private var newClaimTouchedFields = Set<String>()
+    private var newClaimSubmissionAttempted = false
     private var newClaimSessionID = UUID()
     private var receiptSessionID = UUID()
 
@@ -178,6 +180,13 @@ public final class V15ReimbursementModel {
     public var offlineSnapshotAt: Date? { offlineSnapshotProvider?() }
     public var isOffline: Bool { offlineSnapshotAt != nil }
     public var canCreateClaim: Bool { createClaimDisabledReasons.isEmpty }
+    public var visibleNewClaimIssues: [V15FieldIssue] {
+        guard !newClaimSubmissionAttempted else { return newClaimIssues }
+        return newClaimIssues.filter { issue in
+            guard let fieldPath = issue.fieldPath else { return false }
+            return newClaimTouchedFields.contains(fieldPath)
+        }
+    }
     public var canPreviewReceipt: Bool { receiptPreviewDisabledReasons.isEmpty }
     public var canCommitReceipt: Bool { receiptCommitDisabledReasons.isEmpty }
     public var hasRecoverableCreateAttempt: Bool { createAttempt?.editorID == newClaimSessionID }
@@ -376,6 +385,7 @@ public final class V15ReimbursementModel {
         guard !isOffline else { newClaimPhase = .failed(.init(kind: .offlineReadOnly, message: "离线时只可查看，无法新建报销单。")); return }
         if let attempt = createAttempt {
             newClaimSessionID = attempt.editorID; newClaimSheetVisible = true
+            newClaimTouchedFields = []; newClaimSubmissionAttempted = false
             isApplyingNewClaim = true
             claimTitle = attempt.request.title
             partyName = attempt.request.parties.first?.name ?? ""
@@ -386,22 +396,25 @@ public final class V15ReimbursementModel {
             validateNewClaim()
             return
         }
-        newClaimSessionID = UUID(); newClaimSheetVisible = true; newClaimPhase = .loading; newClaimServerIssues = []; newClaimResult = nil
+        newClaimSessionID = UUID(); newClaimSheetVisible = true; newClaimPhase = .loading; newClaimIssues = []; newClaimServerIssues = []; newClaimResult = nil
+        newClaimTouchedFields = []; newClaimSubmissionAttempted = false
         isApplyingNewClaim = true; claimTitle = ""; partyName = ""; allocationAmountText = ""; expectedDateText = ""; selectedCandidate = nil; isApplyingNewClaim = false
         await loadCandidates(reset: true)
         validateNewClaim()
     }
 
-    public func dismissNewClaim() { newClaimSheetVisible = false; candidateGeneration &+= 1; candidatePageGeneration &+= 1; if createAttempt == nil { newClaimPhase = .idle } }
+    public func dismissNewClaim() { newClaimSheetVisible = false; candidateGeneration &+= 1; candidatePageGeneration &+= 1; if createAttempt == nil { newClaimPhase = .idle; newClaimIssues = []; newClaimServerIssues = []; newClaimTouchedFields = []; newClaimSubmissionAttempted = false } }
     public func retryCandidates() async { await loadCandidates(reset: true) }
     public func loadNextCandidates() async { await loadCandidates(reset: false) }
     public func chooseCandidate(_ candidate: V15ReimbursementCandidate) {
         guard candidate.eligibility.eligible else { newClaimServerIssues = candidate.eligibility.reasonDetails.map { .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath) }; validateNewClaim(); return }
+        newClaimTouchedFields.insert("parties[0].allocations[0].transaction_id")
         selectedCandidate = candidate
-        if allocationAmountText.isEmpty { allocationAmountText = formatMinor(candidate.availableMinor) } else { newClaimInputChanged() }
+        if allocationAmountText.isEmpty { allocationAmountText = formatMinor(candidate.availableMinor) } else { newClaimInputChanged(fieldPath: "parties[0].allocations[0].transaction_id") }
     }
 
     public func createClaim() async {
+        newClaimSubmissionAttempted = true
         validateNewClaim(); guard createClaimDisabledReasons.isEmpty, let request = makeNewClaimDraft(recordIssues: true), let candidate = selectedCandidate else { return }
         let identity = claimIdentity(request); let attempt = CreateClaimAttempt(operationID: UUID(), editorID: newClaimSessionID, request: request, candidate: candidate, identity: identity, key: UUID())
         createAttempt = attempt; newClaimGeneration &+= 1; newClaimPhase = .committing
@@ -729,8 +742,8 @@ public final class V15ReimbursementModel {
         switch action { case .void: return try await services.reimbursements.voidReceipt(receiptID: id, request: request); case .restore: return try await services.reimbursements.restoreReceipt(receiptID: id, request: request) }
     }
 
-    private func newClaimInputChanged() { guard !isApplyingNewClaim else { return }; newClaimServerIssues = []; if createAttempt == nil, newClaimSheetVisible { newClaimPhase = .ready }; validateNewClaim() }
-    private func candidateFilterChanged() { guard newClaimSheetVisible else { return }; candidateGeneration &+= 1; candidatePageGeneration &+= 1; selectedCandidate = nil; validateNewClaim() }
+    private func newClaimInputChanged(fieldPath: String) { guard !isApplyingNewClaim else { return }; newClaimTouchedFields.insert(fieldPath); newClaimServerIssues = []; if createAttempt == nil, newClaimSheetVisible { newClaimPhase = .ready }; validateNewClaim() }
+    private func candidateFilterChanged() { guard newClaimSheetVisible else { return }; newClaimTouchedFields.insert("parties[0].allocations[0].transaction_id"); candidateGeneration &+= 1; candidatePageGeneration &+= 1; selectedCandidate = nil; validateNewClaim() }
     private func receiptInputChanged() { guard !isApplyingReceipt, let owner = selectedClaim?.id else { return }; receiptPreviewGenerations[owner, default: 0] &+= 1; withReceiptState(owner) { state in state.preparedDraft = nil; state.preview = nil; state.serverIssues = []; if receiptAttempts[owner] == nil, receiptSheetVisible { state.phase = .ready } }; validateReceipt() }
     private func secondaryInputChanged(owner: UUID) {
         secondaryGenerations[owner, default: 0] &+= 1

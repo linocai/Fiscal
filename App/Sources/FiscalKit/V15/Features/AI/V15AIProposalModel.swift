@@ -291,6 +291,16 @@ public final class V15AIProposalModel {
         }
     }
 
+    public func clearSelection() {
+        guard !writeLocked else { return }
+        selectionGeneration &+= 1
+        dismissEditor()
+        selectedProposal = nil
+        qualityEvents = []
+        detailPhase = .idle
+        mutationPhase = .idle
+    }
+
     public func create() async {
         guard createReasons.isEmpty else { return }
         let request = V15AIProposalCreate(source: source, text: inputText)
@@ -506,12 +516,12 @@ public final class V15AIProposalModel {
         let removed = removedIndex.map { proposals[$0] }
         proposals.removeAll { $0.id == owner }
         if removed?.status == .pending { pendingCount = max(0, pendingCount - 1) }
-        directAttempts[owner] = nil
-        directStates[owner] = nil
         confirmedReviews.removeValue(forKey: owner)
         recoveryGenerations[owner] = nil
 
         guard selectedProposal?.id == owner else {
+            directAttempts[owner] = nil
+            directStates[owner] = nil
             phase = proposals.isEmpty ? .empty : .loaded
             mutationPhase = .succeeded(message)
             readbackCompleted = false
@@ -534,6 +544,8 @@ public final class V15AIProposalModel {
             let nextIndex = min(removedIndex ?? 0, proposals.count - 1)
             await select(proposals[nextIndex])
         }
+        directAttempts[owner] = nil
+        directStates[owner] = nil
         mutationPhase = .succeeded(message)
     }
 

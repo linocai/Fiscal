@@ -19,13 +19,13 @@ public struct V15ReimbursementMacView: View {
 
     public var body: some View {
         HStack(spacing: 0) {
-            spine.frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
+            spine.frame(minWidth: V15MacLayout.compactReimbursementWidths.spine, idealWidth: 300, maxWidth: 340)
             Divider()
-            detail.frame(minWidth: 420, maxWidth: .infinity)
+            detail.frame(minWidth: V15MacLayout.compactReimbursementWidths.detail, maxWidth: .infinity)
             Divider()
-            inspector.frame(minWidth: 330, idealWidth: 370, maxWidth: 420)
+            inspector.frame(minWidth: V15MacLayout.compactReimbursementWidths.inspector, idealWidth: 370, maxWidth: 420)
         }
-        .background(V15Palette.paper.color)
+        .v15MacWorkspaceCanvas()
         .task {
             if model.phase == .idle { await model.load() }
             if let initialClaim { await model.selectClaim(initialClaim, readCachePolicy: .reloadIgnoringCache) }
@@ -48,7 +48,7 @@ public struct V15ReimbursementMacView: View {
                     case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.load() } }
                     case .loaded:
                         ForEach(model.claims, id: \.id) { claim in
-                            V15LedgerRow(title: claim.title, detail: claim.status.displayName, amountMinor: claim.outstandingMinor, direction: .inflow, marker: claim.status.isKnown ? .decision : .provisional) { Task { await model.selectClaim(claim) } }
+                            V15LedgerRow(title: claim.title, detail: "\(claim.status.displayName) · 未到账", amountMinor: claim.outstandingMinor, direction: .inflow, marker: claim.status.isKnown ? .decision : .provisional) { Task { await model.selectClaim(claim) } }
                                 .background(model.selectedClaim?.id == claim.id ? V15Palette.selected.color : .clear)
                                 .accessibilityIdentifier("v15.f3c.mac.claim.\(claim.id)")
                             Divider()
@@ -69,7 +69,7 @@ public struct V15ReimbursementMacView: View {
                 VStack(alignment: .leading, spacing: V15Spacing.lg) {
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(claim.title).font(V15Typography.surfaceTitle); Text("\(claim.status.displayName) · \(claim.partyCount) 位当事人").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
-                        Spacer(); Text(money(claim.outstandingMinor)).font(V15Typography.moneyLarge).foregroundStyle(V15Palette.teal.color).monospacedDigit()
+                        Spacer(); VStack(alignment: .trailing, spacing: 2) { Text("未到账").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)); Text(money(claim.outstandingMinor)).font(V15Typography.moneyLarge).foregroundStyle(V15Palette.teal.color).monospacedDigit() }
                     }
                     V15Section("报销金额矩阵") {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 135), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
@@ -236,7 +236,11 @@ public struct V15ReimbursementMacView: View {
             }
         case .unknown:
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                V15ServiceErrorState(message: "暂时无法确认是否保存成功。安全检查不会重复操作。") { Task { await model.retryUnknownSecondary() } }
+                V15OutcomeUnknownState(
+                    message: "暂时无法确认是否保存成功。安全检查不会重复操作。",
+                    actionTitle: "安全检查保存结果",
+                    action: { Task { await model.retryUnknownSecondary() } }
+                )
                 V15ActionButton("放弃本次恢复", kind: .quiet) { model.abandonUnknownSecondary() }.accessibilityIdentifier("v15.f3c.mac.secondary.abandon")
             }.accessibilityIdentifier("v15.f3c.mac.secondary.unknown")
         case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.refresh() } }.accessibilityIdentifier("v15.f3c.mac.conflict")
@@ -245,7 +249,11 @@ public struct V15ReimbursementMacView: View {
         default: EmptyView()
         }
         if model.directMutationPhase == .unknown || model.directMutationPhase == .loading {
-            V15ServiceErrorState(message: model.directReadbackMessage ?? "暂时无法确认操作结果。检查最新状态不会重复操作。") { Task { await model.readBackUnknownDirect() } }.accessibilityIdentifier("v15.f3c.mac.direct.unknown")
+            V15OutcomeUnknownState(
+                message: model.directReadbackMessage ?? "暂时无法确认操作结果。检查最新状态不会重复操作。",
+                actionTitle: "检查最新状态",
+                action: { Task { await model.readBackUnknownDirect() } }
+            ).accessibilityIdentifier("v15.f3c.mac.direct.unknown")
             V15ActionButton("核对后继续", kind: .quiet, disabledReason: model.canAbandonUnknownDirect ? nil : .init(code: "fresh_readback_required", message: "请先检查最新状态。", fieldPath: nil)) { model.abandonUnknownDirect() }.accessibilityIdentifier("v15.f3c.mac.direct.abandon")
         }
     }
@@ -254,14 +262,14 @@ public struct V15ReimbursementMacView: View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
             HStack { Text("新建报销单").font(V15Typography.cardTitle); Spacer(); Button("关闭") { model.dismissNewClaim() } }
             editorBanner(model.newClaimPhase, issues: model.newClaimServerIssues)
-            V15Field("标题", text: Binding(get: { model.claimTitle }, set: { model.claimTitle = $0 }), prompt: "例如：八月差旅", issues: fieldIssues(model.newClaimIssues, path: "title")).accessibilityIdentifier("v15.f3c.mac.claim.title")
-            V15Field("当事人", text: Binding(get: { model.partyName }, set: { model.partyName = $0 }), prompt: "例如：公司", issues: fieldIssues(model.newClaimIssues, path: "parties[0].name")).accessibilityIdentifier("v15.f3c.mac.claim.party")
-            V15Field("预计日期", text: Binding(get: { model.expectedDateText }, set: { model.expectedDateText = $0 }), prompt: "YYYY-MM-DD", issues: fieldIssues(model.newClaimIssues, path: "parties[0].expected_date")).accessibilityIdentifier("v15.f3c.mac.claim.date")
+            V15Field("标题", text: Binding(get: { model.claimTitle }, set: { model.claimTitle = $0 }), prompt: "例如：八月差旅", issues: fieldIssues(model.visibleNewClaimIssues, path: "title")).accessibilityIdentifier("v15.f3c.mac.claim.title")
+            V15Field("当事人", text: Binding(get: { model.partyName }, set: { model.partyName = $0 }), prompt: "例如：公司", issues: fieldIssues(model.visibleNewClaimIssues, path: "parties[0].name")).accessibilityIdentifier("v15.f3c.mac.claim.party")
+            V15Field("预计日期", text: Binding(get: { model.expectedDateText }, set: { model.expectedDateText = $0 }), prompt: "YYYY-MM-DD", issues: fieldIssues(model.visibleNewClaimIssues, path: "parties[0].expected_date")).accessibilityIdentifier("v15.f3c.mac.claim.date")
             V15SearchField(text: Binding(get: { model.candidateQuery }, set: { model.candidateQuery = $0 })).accessibilityIdentifier("v15.f3c.mac.candidates.query")
             V15ActionButton("读取候选", kind: .secondary) { Task { await model.retryCandidates() } }.accessibilityIdentifier("v15.f3c.mac.candidates.load")
             candidateInspector
-            V15Field("分摊金额（元）", text: Binding(get: { model.allocationAmountText }, set: { model.allocationAmountText = $0 }), prompt: "0.00", issues: fieldIssues(model.newClaimIssues, path: "parties[0].allocations[0].amount_minor")).accessibilityIdentifier("v15.f3c.mac.claim.amount")
-            V15ActionButton("创建报销单", disabledReasons: model.createClaimDisabledReasons) { Task { await model.createClaim() } }.accessibilityIdentifier("v15.f3c.mac.claim.create")
+            V15Field("分摊金额（元）", text: Binding(get: { model.allocationAmountText }, set: { model.allocationAmountText = $0 }), prompt: "0.00", issues: fieldIssues(model.visibleNewClaimIssues, path: "parties[0].allocations[0].amount_minor")).accessibilityIdentifier("v15.f3c.mac.claim.amount")
+            V15ActionButton("创建报销单", disabledReasons: model.createClaimDisabledReasons, showsDisabledReasons: false) { Task { await model.createClaim() } }.accessibilityIdentifier("v15.f3c.mac.claim.create")
             if model.hasRecoverableCreateAttempt && model.newClaimPhase == .unknown {
                 HStack(alignment: .top) {
                     V15ActionButton("安全检查保存结果", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能检查保存结果。", fieldPath: nil) : nil) { Task { await model.retryUnknownCreateClaim() } }.accessibilityIdentifier("v15.f3c.mac.claim.retry-same-key")
@@ -315,26 +323,13 @@ public struct V15ReimbursementMacView: View {
 
     @ViewBuilder private func editorBanner(_ phase: V15ReimbursementModel.EditorPhase, issues: [V15FieldIssue]) -> some View {
         switch phase {
-        case .failed(let failure): nonRetryableMessage(title: "操作未完成", message: failure.message).accessibilityIdentifier("v15.f3c.mac.inspector.error")
+        case .failed(let failure): V15ErrorMessageState(title: "操作未完成", message: failure.message).accessibilityIdentifier("v15.f3c.mac.inspector.error")
         case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.refresh() } }.accessibilityIdentifier("v15.f3c.mac.inspector.conflict")
-        case .unknown: nonRetryableMessage(title: "保存结果暂时不明", message: "这笔可能已经保存。安全检查不会重复操作，你也可以停止恢复。").accessibilityIdentifier("v15.f3c.mac.inspector.unknown")
+        case .unknown: V15OutcomeUnknownState(title: "保存结果暂时不明", message: "这笔可能已经保存。安全检查不会重复操作，你也可以停止恢复。").accessibilityIdentifier("v15.f3c.mac.inspector.unknown")
         case .succeeded: V15SuccessReceiptState(title: "已保存", detail: "可以查看最新结果。")
         default: EmptyView()
         }
         V15FieldIssues(issues: issues).accessibilityIdentifier("v15.f3c.mac.remote-reasons")
-    }
-
-    private func nonRetryableMessage(title: String, message: String) -> some View {
-        VStack(alignment: .leading, spacing: V15Spacing.xs) {
-            Label(title, systemImage: V15Symbol.warning).font(V15Typography.cardTitle).foregroundStyle(V15Palette.teal.color)
-            Text(message).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(V15Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(V15Palette.selected.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
-        .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(V15Palette.teal.color.opacity(0.55), lineWidth: 1) }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title)：\(message)")
     }
 
     private func fieldIssues(_ values: [V15FieldIssue], path: String) -> [V15FieldIssue] { values.filter { $0.fieldPath == path || $0.fieldPath?.hasPrefix(path + ".") == true } }
@@ -371,6 +366,10 @@ public struct V15ReimbursementMacView: View {
             await model.openReceipt(); await model.previewReceipt(); await model.commitReceipt()
         case "reimbursements-receipt-refresh-failure":
             await model.openReceipt(); await model.previewReceipt(); await model.commitReceipt()
+        case "reimbursements-receipt-unknown":
+            await model.openReceipt(); await model.previewReceipt(); await model.commitReceipt()
+        case "reimbursements-direct-readback":
+            await model.performDirectClaim(.void)
         default:
             break
         }

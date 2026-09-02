@@ -35,4 +35,12 @@ import XCTest
             app.terminate()
         }
     }
+
+    func testMacUnknownOutcomeUsesRecoveryCopyNotFailureCopy() {
+        let app = launchGalleryMac(["--v15-f3d-route", "cash-flow-unknown"])
+        let state = element(app, "v15.f3d.mac.unknown")
+        XCTAssertTrue(state.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["暂时无法取得数据"].exists)
+        app.terminate()
+    }
 }

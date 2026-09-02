@@ -54,6 +54,19 @@ import XCTest
         app.terminate()
     }
 
+    func testPeriodKindCanSwitchFromYearBackToMonth() {
+        let app = launchGalleryMac(["--v15-f4a-route", "reports"])
+        let any = app.descendants(matching: .any)
+        XCTAssertTrue(any["v15.f4a.reports.macos"].waitForExistence(timeout: 10))
+        app.buttons["年报"].click()
+        XCTAssertTrue(app.buttons["年报"].isSelected)
+        XCTAssertTrue(element(app, "v15.f4a.period.toggle").value as? String == "2026")
+        app.buttons["月报"].click()
+        XCTAssertTrue(app.buttons["月报"].isSelected)
+        XCTAssertTrue(element(app, "v15.f4a.period.toggle").value as? String == "2026-01")
+        app.terminate()
+    }
+
     func testRevisionBoundPDFExport() {
         let app = launchGalleryMac(["--v15-f4b-route", "reports"])
         let any = app.descendants(matching: .any)

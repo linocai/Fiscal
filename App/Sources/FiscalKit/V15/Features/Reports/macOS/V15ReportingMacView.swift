@@ -28,7 +28,7 @@ public struct V15ReportingMacView: View {
                 phaseSurface
             }
         }
-        .background(V15Palette.paper.color)
+        .v15MacWorkspaceCanvas()
         .tint(V15Palette.teal.color)
         .sheet(isPresented: exportPresented) {
             exportPanel.frame(width: 460).padding(24).background(V15Palette.paper.color)
@@ -68,14 +68,17 @@ public struct V15ReportingMacView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("上一个期间")
                 .accessibilityIdentifier("v15.f4a.period.previous")
-            Button(model.periodLabel) { Task { await model.togglePeriodKind() } }
-                .buttonStyle(.plain)
+            HStack(spacing: 2) {
+                periodKindButton("月报", selected: isMonthly)
+                periodKindButton("年报", selected: !isMonthly)
+            }
+            .padding(3)
+            .background(V15Palette.paper.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+            .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(V15Palette.hairline.color) }
+            Text(model.periodLabel)
                 .font(V15Typography.secondary.weight(.semibold))
-                .padding(.horizontal, 11)
-                .frame(height: 30)
-                .background(V15Palette.paper.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
-                .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(V15Palette.hairline.color) }
-                .accessibilityHint("在月报表和年报表之间切换")
+                .monospacedDigit()
+                .padding(.horizontal, 8)
                 .accessibilityIdentifier("v15.f4a.period.toggle")
             Button { Task { await model.movePeriod(by: 1) } } label: { Image(systemName: "chevron.right") }
                 .buttonStyle(.plain)
@@ -135,9 +138,8 @@ public struct V15ReportingMacView: View {
                         if let at = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: at) }
                         lensSurface(report)
                     }
-                    .padding(24)
-                    .frame(maxWidth: 1_180, alignment: .leading)
-                    .frame(maxWidth: .infinity)
+                    .padding(V15MacLayout.contentPadding)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .accessibilityIdentifier("v15.f4a.content.scroll")
             }
@@ -147,8 +149,8 @@ public struct V15ReportingMacView: View {
     private func reportHeader(_ meta: V15ReportMeta) -> some View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("报表是看法，不是地点").font(V15Typography.surfaceTitle)
-                Text("收支、资产、信用和分类使用同一期间。")
+                Text("财务分析").font(V15Typography.surfaceTitle)
+                Text("收支、资产、信用与分类均使用当前期间。")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
@@ -227,11 +229,7 @@ public struct V15ReportingMacView: View {
                 }
                 sevenMeasures(report.summary)
                 categoryDistribution(report)
-                if let daily = report.daily {
-                    reportCard("每日 · \(spendingLabel(model.spendingMeasure))") {
-                        ForEach(daily) { point in valueRow(point.date, dailyAmount(point), .neutral) }
-                    }
-                }
+                if let daily = report.daily { dailyTrend(daily) }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             VStack(alignment: .leading, spacing: 18) {
@@ -357,6 +355,31 @@ public struct V15ReportingMacView: View {
     private func dailyAmount(_ point: V15PeriodReport.Daily) -> Int64 {
         switch model.spendingMeasure { case .grossConsumption: point.grossConsumptionMinor; case .merchantRefund: point.merchantRefundMinor; case .netConsumption: point.netConsumptionMinor; case .expectedReimbursement: point.expectedReimbursementMinor; case .receivedReimbursement: point.receivedReimbursementMinor; case .personalExpected: point.personalExpectedMinor; case .personalRealized: point.personalRealizedMinor }
     }
+
+    private func dailyTrend(_ daily: [V15PeriodReport.Daily]) -> some View {
+        reportCard("每日趋势 · \(spendingLabel(model.spendingMeasure))") {
+            let values = daily.map(dailyAmount)
+            let maximum = max(values.map { abs($0) }.max() ?? 0, 1)
+            HStack(alignment: .bottom, spacing: 4) {
+                ForEach(daily) { point in
+                    VStack(spacing: 5) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(V15ReportingMacVisualSemantics.dailyTrendTone(for: model.spendingMeasure) == .spending ? V15Palette.gold.color : V15Palette.teal.color)
+                            .frame(height: max(3, 84 * CGFloat(abs(Double(dailyAmount(point))) / Double(maximum))))
+                        Text(String(point.date.suffix(2))).font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .bottom)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(point.date)，\(V15MoneyPresentation(minorUnits: dailyAmount(point), direction: .neutral).text)")
+                }
+            }
+            .frame(height: 120, alignment: .bottom)
+            Text("柱高代表每日金额；可从分类继续下钻查看明细。")
+                .font(V15Typography.secondary)
+                .foregroundStyle(V15Palette.ink.color.opacity(0.62))
+        }
+    }
     private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral).text }
     private func certaintyLabel(_ value: V15FutureEventCertainty) -> String { switch value { case .exactDue: "确定应还"; case .confirmed: "已确认"; case .expected: "预计"; case .scheduled: "已排期" } }
 
@@ -429,8 +452,7 @@ public struct V15ReportingMacView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 78, alignment: .leading)
                 .padding(14)
-                .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card))
-                .overlay { RoundedRectangle(cornerRadius: V15Radius.card).stroke(V15Palette.hairline.color) }
+                .v15MacPanel()
             }
         }
     }
@@ -531,8 +553,7 @@ public struct V15ReportingMacView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card))
-        .overlay { RoundedRectangle(cornerRadius: V15Radius.card).stroke(V15Palette.hairline.color) }
+        .v15MacPanel()
     }
 
     private func unavailableCard(_ title: String, _ reason: String) -> some View {
@@ -569,7 +590,7 @@ public struct V15ReportingMacView: View {
                     drillTable
                 }
                 .padding(22)
-                .frame(minWidth: 920, alignment: .topLeading)
+                .frame(minWidth: 920, maxWidth: .infinity, alignment: .topLeading)
             }
         }
         .accessibilityIdentifier("v15.f4a.drill")
@@ -587,7 +608,7 @@ public struct V15ReportingMacView: View {
                 drillHeaderRow
                 ForEach(model.drillItems) { item in drillItemRow(item) }
             }
-            .frame(width: 980)
+            .frame(minWidth: 980, maxWidth: .infinity)
             .overlay { RoundedRectangle(cornerRadius: V15Radius.card).stroke(V15Palette.hairline.color) }
             if model.hasNextPage {
                 V15ActionButton("读取下一页", kind: .secondary, disabledReason: model.isPaging ? .init(code: "loading", message: "正在读取下一页。", fieldPath: nil) : nil) { Task { await model.loadNextPage() } }
@@ -697,6 +718,25 @@ public struct V15ReportingMacView: View {
         }
     }
 
+    private var isMonthly: Bool {
+        if case .month = model.selectedPeriod { return true }
+        return false
+    }
+
+    private func periodKindButton(_ title: String, selected: Bool) -> some View {
+        Button(title) {
+            guard !selected else { return }
+            Task { await model.togglePeriodKind() }
+        }
+        .buttonStyle(.plain)
+        .font(V15Typography.label)
+        .foregroundStyle(selected ? V15Palette.primaryButtonText.color : V15Palette.ink.color.opacity(0.68))
+        .padding(.horizontal, 8)
+        .frame(height: 24)
+        .background(selected ? V15Palette.teal.color : Color.clear, in: RoundedRectangle(cornerRadius: V15Radius.tag))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
     private func spendingLabel(_ measure: V15ReportingModel.SpendingMeasure) -> String {
         switch measure {
         case .grossConsumption: "消费总额"; case .merchantRefund: "商户退款"; case .netConsumption: "净消费"
@@ -722,6 +762,19 @@ public struct V15ReportingMacView: View {
 
     private func accountKindLabel(_ kind: V15ReportAccountKind) -> String {
         switch kind { case .cash: "现金"; case .debit: "借记"; case .credit: "信用"; case .unknown: "其他类型" }
+    }
+}
+
+enum V15ReportingMacVisualSemantics {
+    enum TrendTone: Equatable { case spending, positive }
+
+    static func dailyTrendTone(for measure: V15ReportingModel.SpendingMeasure) -> TrendTone {
+        switch measure {
+        case .grossConsumption, .netConsumption, .personalExpected, .personalRealized:
+            .spending
+        case .merchantRefund, .expectedReimbursement, .receivedReimbursement:
+            .positive
+        }
     }
 }
 

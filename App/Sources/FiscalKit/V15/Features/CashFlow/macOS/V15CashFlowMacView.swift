@@ -21,7 +21,7 @@ public struct V15CashFlowMacView: View {
             spine.frame(minWidth: 380, idealWidth: 520, maxWidth: .infinity)
             inspector.frame(minWidth: 320, idealWidth: 390, maxWidth: 460)
         }
-        .background(V15Palette.paper.color)
+        .v15MacWorkspaceCanvas()
         .task { if model.phase == .idle { await model.load(); await applyInitialScenario() }; if let initialItem { model.showVerifiedItem(initialItem) } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f3d.cash-flow.macos")
@@ -190,7 +190,7 @@ public struct V15CashFlowMacView: View {
 
     @ViewBuilder private var mutationSurface: some View {
         if let message = model.factRefreshMessage { V15ServiceErrorState(message: message) { Task { await model.retryFactRefresh() } }.accessibilityIdentifier("v15.f3d.mac.fact-refresh") }
-        else { switch model.mutationPhase { case .idle: EmptyView(); case .loading: V15LoadingSkeleton(); case .unknown: V15ServiceErrorState(message: model.directReadbackMessage ?? "暂时无法确认操作结果。安全检查不会重复保存。") { if model.hasUnknownStableAttempt { Task { await model.retryUnknownStable() } } else { Task { await model.readBackUnknownDirect() } } }.accessibilityIdentifier("v15.f3d.mac.unknown"); case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.reloadAfterConflict() } }.accessibilityIdentifier("v15.f3d.mac.conflict"); case .failed(let failure): V15ServiceErrorState(message: failure.message) { if model.hasFactRefreshGate { Task { await model.retryFactRefresh() } } else { Task { await model.refresh() } } }; case .succeeded: V15SuccessReceiptState(title: "现金流已更新", detail: "未来安排、历史与详情均已更新。").accessibilityIdentifier("v15.f3d.mac.success") } }
+        else { switch model.mutationPhase { case .idle: EmptyView(); case .loading: V15LoadingSkeleton(); case .unknown: V15OutcomeUnknownState(message: model.directReadbackMessage ?? "暂时无法确认操作结果。安全检查不会重复保存。").accessibilityIdentifier("v15.f3d.mac.unknown"); case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.reloadAfterConflict() } }.accessibilityIdentifier("v15.f3d.mac.conflict"); case .failed(let failure): V15ServiceErrorState(message: failure.message) { if model.hasFactRefreshGate { Task { await model.retryFactRefresh() } } else { Task { await model.refresh() } } }; case .succeeded: V15SuccessReceiptState(title: "现金流已更新", detail: "未来安排、历史与详情均已更新。").accessibilityIdentifier("v15.f3d.mac.success") } }
     }
 
     @ViewBuilder private var recoveryActions: some View {

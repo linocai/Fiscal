@@ -11,6 +11,9 @@ import XCTest
         XCTAssertTrue(element(app, "v15.f3c.mac.inspector").waitForExistence(timeout: 5))
         element(app, "v15.f3c.mac.claim.new.open").click()
         XCTAssertTrue(element(app, "v15.f3c.mac.claim.inspector").waitForExistence(timeout: 6))
+        XCTAssertFalse(app.staticTexts["请填写报销标题。"].exists)
+        XCTAssertFalse(app.staticTexts["请填写报销当事人。"].exists)
+        XCTAssertFalse(app.staticTexts["请选择一笔垫付。"].exists)
         app.terminate()
 
         let receipt = launchGalleryMac(["--v15-f3c-route", "reimbursements"])
@@ -41,5 +44,18 @@ import XCTest
         element(app, "v15.f3c.mac.fact-refresh.retry").click()
         XCTAssertFalse(element(app, "v15.f3c.mac.fact-refresh.required").waitForExistence(timeout: 3))
         app.terminate()
+    }
+
+    func testReceiptAndDirectUnknownOutcomesUseRecoveryCopyNotFailureCopy() {
+        for (route, identifier) in [
+            ("reimbursements-receipt-unknown", "v15.f3c.mac.inspector.unknown"),
+            ("reimbursements-direct-readback", "v15.f3c.mac.direct.unknown"),
+        ] {
+            let app = launchGalleryMac(["--v15-f3c-route", route])
+            let state = element(app, identifier)
+            XCTAssertTrue(state.waitForExistence(timeout: 12))
+            XCTAssertFalse(app.staticTexts["暂时无法取得数据"].exists)
+            app.terminate()
+        }
     }
 }

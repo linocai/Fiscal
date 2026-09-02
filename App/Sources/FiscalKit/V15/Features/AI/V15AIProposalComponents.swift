@@ -52,6 +52,9 @@ struct V15AIProposalRow: View {
 struct V15AIProposalDetail: View {
     let proposal: V15AIProposal
     let events: [V15AIQualityEvent]
+#if os(macOS)
+    @State private var evidenceExpanded = false
+#endif
     var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.lg) {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
@@ -63,7 +66,17 @@ struct V15AIProposalDetail: View {
                 if let amount = proposal.amountMinor { V15MoneyText(minorUnits: amount, direction: .outflow, font: V15Typography.moneyLarge) }
                 VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                     Text("你输入的原文").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+#if os(macOS)
+                    DisclosureGroup(isExpanded: $evidenceExpanded) {
+                        Text("「\(proposal.text)」").font(V15Typography.body).foregroundStyle(V15Palette.ink.color.opacity(0.76)).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                            .padding(.top, V15Spacing.xs)
+                    } label: {
+                        Text(evidenceExpanded ? "收起原始证据" : "查看原始证据")
+                            .font(V15Typography.secondary.weight(.medium))
+                    }
+#else
                     Text("「\(proposal.text)」").font(V15Typography.body).foregroundStyle(V15Palette.ink.color.opacity(0.76)).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+#endif
                 }
                 .padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading)
                 .background(V15Palette.ink.color.opacity(0.035), in: RoundedRectangle(cornerRadius: V15Radius.control))

@@ -142,6 +142,7 @@ public struct V151MacWorkspace: View {
     @State private var accountDetail: V15AccountDetailModel
     @State private var searchDraft = ""
     @State private var futureTarget: V15FutureOpenTarget?
+    @FocusState private var searchFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
 
     public init(services: V15Services) {
@@ -153,7 +154,7 @@ public struct V151MacWorkspace: View {
 
     public var body: some View {
         workspace
-        .frame(minWidth: 1_000, minHeight: 680)
+        .frame(minWidth: V15MacLayout.minimumWindowWidth, minHeight: V15MacLayout.minimumWindowHeight)
         .background(V15Palette.paper.color)
         .tint(V15Palette.teal.color)
         .task { await loadInitialFacts() }
@@ -172,12 +173,13 @@ public struct V151MacWorkspace: View {
         GeometryReader { proxy in
             let narrow = proxy.size.width < 1_180
             HStack(spacing: 0) {
-                indexPane.frame(width: narrow ? 184 : 208)
+                indexPane(compact: narrow)
+                    .frame(width: narrow ? V15MacLayout.compactSidebarWidth : V15MacLayout.sidebarWidth)
                 Rectangle().fill(V15Palette.hairline.color).frame(width: 1)
                 if destination == .ledger {
                     spinePane.frame(minWidth: narrow ? 420 : 500, maxWidth: .infinity)
                     Rectangle().fill(V15Palette.hairline.color).frame(width: 1)
-                    inspectorPane.frame(width: narrow ? 280 : 320)
+                    inspectorPane.frame(width: narrow ? V15MacLayout.compactInspectorWidth : V15MacLayout.inspectorWidth)
                 } else {
                     modulePane.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -185,31 +187,67 @@ public struct V151MacWorkspace: View {
         }
     }
 
-    private var indexPane: some View {
+    private func indexPane(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 3) {
-                moduleNavigation("流水", symbol: "list.bullet", destination: .ledger)
-                moduleNavigation("未来现金流", symbol: "calendar", destination: .future)
-                moduleNavigation("报表", symbol: "chart.bar", destination: .reports)
-                moduleNavigation("系统与数据", symbol: "tray.full", destination: .archive)
-                moduleNavigation("设置", symbol: "gearshape", destination: .settings)
+            Group {
+                if compact {
+                    Text("F")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(V15Palette.primaryButtonText.color)
+                        .frame(width: 36, height: 36)
+                        .background(V15Palette.teal.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                        .accessibilityLabel("Fiscal 个人财务工作台")
+                } else {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("FISCAL").font(.system(size: 11, weight: .bold, design: .rounded))
+                            .tracking(1.4)
+                            .foregroundStyle(V15Palette.teal.color)
+                        Text("个人财务工作台").font(V15Typography.secondary)
+                            .foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                    }
+                }
             }
-            .padding(12)
+            .frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
+            .padding(.horizontal, compact ? 10 : 18)
+            .padding(.top, 20)
+            .padding(.bottom, 18)
+            VStack(alignment: .leading, spacing: 3) {
+                moduleNavigation("流水", symbol: "list.bullet", destination: .ledger, compact: compact)
+                moduleNavigation("未来现金流", symbol: "calendar", destination: .future, compact: compact)
+                moduleNavigation("报表", symbol: "chart.bar", destination: .reports, compact: compact)
+                moduleNavigation("系统与数据", symbol: "tray.full", destination: .archive, compact: compact)
+                moduleNavigation("设置", symbol: "gearshape", destination: .settings, compact: compact)
+            }
+            .padding(.horizontal, compact ? 10 : 12)
             Spacer()
         }
-        .background(V15Palette.card.color)
+        .background(V15Palette.sidebar.color)
     }
 
-    private func moduleNavigation(_ title: String, symbol: String, destination value: Destination) -> some View {
+    private func moduleNavigation(_ title: String, symbol: String, destination value: Destination, compact: Bool) -> some View {
         Button { futureTarget = nil; destination = value } label: {
-            Label(title, systemImage: symbol)
-                .font(.system(size: 13, weight: destination == value ? .semibold : .regular))
-                .foregroundStyle(destination == value ? Color.white : V15Palette.ink.color)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10).frame(height: 34)
-                .background(destination == value ? V15Palette.teal.color : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+            Group {
+                if compact {
+                    Image(systemName: symbol)
+                        .font(.system(size: 16, weight: destination == value ? .semibold : .regular))
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Label(title, systemImage: symbol)
+                        .font(.system(size: 13, weight: destination == value ? .semibold : .regular))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 11)
+                }
+            }
+                .foregroundStyle(destination == value ? V15Palette.teal.color : V15Palette.ink.color.opacity(0.76))
+                .frame(height: 40)
+                .background(destination == value ? V15Palette.selected.color : Color.clear, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                .overlay(alignment: .leading) {
+                    if destination == value { Capsule().fill(V15Palette.teal.color).frame(width: 3, height: 20) }
+                }
         }
         .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
         .accessibilityIdentifier("v151.mac.module.\(value.rawValue)")
     }
 
@@ -271,7 +309,7 @@ public struct V151MacWorkspace: View {
             V15ActionButton("记一笔") { destination = .record }
                 .keyboardShortcut("n", modifiers: .command)
         }
-        .padding(.horizontal, 18).frame(minHeight: 48)
+        .padding(.horizontal, V15MacLayout.contentPadding).frame(minHeight: V15MacLayout.toolbarHeight)
     }
 
     @ViewBuilder private var accountBalanceBoard: some View {
@@ -522,7 +560,13 @@ public struct V151MacWorkspace: View {
             } else {
                 V15ActionButton("查看提交范围", disabledReason: batchCategoryID == nil ? .init(code: "category_required", message: "请先选择目标分类。", fieldPath: nil) : nil) { previewBatchCategory() }
             }
-            if let failure = ledger.categoryChangeFailure { V15ServiceErrorState(message: failure.message) { previewBatchCategory() } }
+            if let failure = ledger.categoryChangeFailure {
+                if V15StateVisualSpec.resolve(failure).semantic == .outcomeUnknown {
+                    V15OutcomeUnknownState(message: failure.message, actionTitle: "重新读取账目") { previewBatchCategory() }
+                } else {
+                    V15ServiceErrorState(message: failure.message) { previewBatchCategory() }
+                }
+            }
             V15ActionButton("清除选择", kind: .secondary) { selectedIDs.removeAll(); batchResult = nil; batchPreviewed = false }
         }
     }
@@ -714,7 +758,7 @@ public struct V151MacWorkspace: View {
             if let transaction = selectedTransaction {
                 HStack(spacing: 8) {
                     V15ActionButton("加入报销", kind: .secondary, disabledReason: reimbursementReason(transaction)) { destination = .reimbursements }
-                    V15ActionButton(transaction.voidedAt == nil ? "作废" : "恢复", kind: .secondary, disabledReason: ledger.disabledReason(for: transaction.voidedAt == nil ? .void : .restore, transaction: transaction)) {
+                    V15ActionButton(transaction.voidedAt == nil ? "作废" : "恢复", kind: transaction.voidedAt == nil ? .destructive : .secondary, disabledReason: ledger.disabledReason(for: transaction.voidedAt == nil ? .void : .restore, transaction: transaction)) {
                         Task { if transaction.voidedAt == nil { await ledger.voidSelected() } else { await ledger.restoreSelected() } }
                     }
                 }
@@ -737,8 +781,17 @@ public struct V151MacWorkspace: View {
     private var searchPopover: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("搜索账目").font(.system(size: 14, weight: .semibold))
-            V15SearchField(text: $searchDraft)
-                .accessibilityIdentifier("v151.mac.ledger.search.draft")
+            HStack(spacing: V15Spacing.xs) {
+                Image(systemName: V15Symbol.search).accessibilityHidden(true)
+                TextField("搜索账目", text: $searchDraft)
+                    .textFieldStyle(.plain)
+                    .focused($searchFocused)
+                    .onSubmit { commitSearch() }
+                    .accessibilityIdentifier("v151.mac.ledger.search.draft")
+            }
+            .padding(V15Spacing.sm)
+            .background(V15Palette.paper.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+            .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(V15Palette.hairline.color) }
             HStack {
                 V15ActionButton("取消", kind: .secondary) { searchPresented = false }
                 Spacer()
@@ -747,6 +800,8 @@ public struct V151MacWorkspace: View {
             }
         }
         .padding(16).frame(width: 360)
+        .onAppear { searchFocused = true }
+        .onExitCommand { searchPresented = false }
     }
 
     private var categorySheet: some View {
@@ -783,7 +838,13 @@ public struct V151MacWorkspace: View {
                         V15ActionButton("查看分类影响", disabledReason: categoryID == nil ? .init(code: "category_required", message: "请先选择分类。", fieldPath: nil) : (ledger.isOffline ? .init(code: "category_read_requires_network", message: "需要联网取得最新账目。", fieldPath: nil) : nil)) { readCategoryCurrentFact() }
                     }
                 }
-                if let failure = ledger.categoryChangeFailure { V15ServiceErrorState(message: failure.message) { readCategoryCurrentFact() } }
+                if let failure = ledger.categoryChangeFailure {
+                    if V15StateVisualSpec.resolve(failure).semantic == .outcomeUnknown {
+                        V15OutcomeUnknownState(message: failure.message, actionTitle: "重新读取账目") { readCategoryCurrentFact() }
+                    } else {
+                        V15ServiceErrorState(message: failure.message) { readCategoryCurrentFact() }
+                    }
+                }
             }
         }
         .padding(24).frame(width: 420)

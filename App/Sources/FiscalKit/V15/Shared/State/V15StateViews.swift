@@ -149,18 +149,130 @@ public struct V15EmptyState: View {
     }
 }
 
+public enum V15StateSemantic: Sendable, Equatable {
+    case deterministicFailure
+    case outcomeUnknown
+}
+
+/// A testable semantic contract for state colors. A response-unknown write is
+/// not a confirmed failure: it must remain visually recoverable and distinct
+/// from service errors even when a feature model temporarily stores it inside
+/// a generic failure phase.
+public struct V15StateVisualSpec: Sendable, Equatable {
+    public let semantic: V15StateSemantic
+    public let marker: V15ColorToken
+    public let background: V15ColorToken
+    public let dashed: Bool
+
+    public static var deterministicFailure: Self {
+#if os(macOS)
+        .init(semantic: .deterministicFailure, marker: V15Palette.danger, background: V15Palette.dangerSurface, dashed: false)
+#else
+        .init(semantic: .deterministicFailure, marker: V15Palette.teal, background: V15Palette.selected, dashed: false)
+#endif
+    }
+
+    public static let outcomeUnknown = Self(
+        semantic: .outcomeUnknown,
+        marker: V15Palette.yellow,
+        background: V15Palette.provisional,
+        dashed: true
+    )
+
+    public static func resolve(_ failure: V15Failure) -> Self {
+        failure.kind == .responseUnknown ? .outcomeUnknown : .deterministicFailure
+    }
+}
+
 public struct V15ServiceErrorState: View {
     private let message: String; private let retryIdentifier: String?; private let retry: () -> Void
     public init(message: String, retryIdentifier: String? = nil, retry: @escaping () -> Void) { self.message = message; self.retryIdentifier = retryIdentifier; self.retry = retry }
     public var body: some View {
-        V15StateContainer(marker: V15Palette.teal.color, background: V15Palette.selected.color) {
+        let spec = V15StateVisualSpec.deterministicFailure
+        V15StateContainer(marker: spec.marker.color, background: spec.background.color, dashed: spec.dashed) {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                Label("暂时无法取得数据", systemImage: V15Symbol.warning).font(V15Typography.cardTitle).foregroundStyle(V15Palette.teal.color)
+                Label("暂时无法取得数据", systemImage: V15Symbol.warning).font(V15Typography.cardTitle).foregroundStyle(spec.marker.color)
                 Text(message).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
                 if let retryIdentifier { V15ActionButton("重试", symbol: V15Symbol.retry, action: retry).accessibilityIdentifier(retryIdentifier) }
                 else { V15ActionButton("重试", symbol: V15Symbol.retry, action: retry) }
             }
         }.v15StateAccessibility(hasAction: true)
+    }
+}
+
+/// A deterministic operation failure that cannot be retried from inside the
+/// message itself. This keeps failures visually distinct from warnings and
+/// response-unknown states without inventing a meaningless retry action.
+public struct V15ErrorMessageState: View {
+    private let title: String
+    private let message: String
+
+    public init(title: String = "操作未完成", message: String) {
+        self.title = title
+        self.message = message
+    }
+
+    public var body: some View {
+        let spec = V15StateVisualSpec.deterministicFailure
+        V15StateContainer(marker: spec.marker.color, background: spec.background.color, dashed: spec.dashed) {
+            VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                Label(title, systemImage: V15Symbol.warning)
+                    .font(V15Typography.cardTitle)
+                    .foregroundStyle(spec.marker.color)
+                Text(message)
+                    .font(V15Typography.secondary)
+                    .foregroundStyle(V15Palette.ink.color)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title)：\(message)")
+    }
+}
+
+public struct V15OutcomeUnknownState: View {
+    private let title: String
+    private let message: String
+    private let actionTitle: String?
+    private let actionIdentifier: String?
+    private let action: (() -> Void)?
+
+    public init(
+        title: String = "操作结果暂时不明",
+        message: String,
+        actionTitle: String? = nil,
+        actionIdentifier: String? = nil,
+        action: (() -> Void)? = nil
+    ) {
+        self.title = title
+        self.message = message
+        self.actionTitle = actionTitle
+        self.actionIdentifier = actionIdentifier
+        self.action = action
+    }
+
+    public var body: some View {
+        let spec = V15StateVisualSpec.outcomeUnknown
+        V15StateContainer(marker: spec.marker.color, background: spec.background.color, dashed: spec.dashed) {
+            VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                Label(title, systemImage: V15Symbol.warning)
+                    .font(V15Typography.cardTitle)
+                    .foregroundStyle(V15Palette.gold.color)
+                Text(message)
+                    .font(V15Typography.secondary)
+                    .foregroundStyle(V15Palette.ink.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let actionTitle, let action {
+                    if let actionIdentifier {
+                        V15ActionButton(actionTitle, symbol: V15Symbol.retry, kind: .secondary, action: action)
+                            .accessibilityIdentifier(actionIdentifier)
+                    } else {
+                        V15ActionButton(actionTitle, symbol: V15Symbol.retry, kind: .secondary, action: action)
+                    }
+                }
+            }
+        }
+        .v15StateAccessibility(hasAction: action != nil, label: "\(title)。\(message)")
     }
 }
 

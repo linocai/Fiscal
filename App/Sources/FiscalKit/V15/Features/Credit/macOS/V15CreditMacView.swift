@@ -13,7 +13,7 @@ public struct V15CreditMacView: View {
             cycles.frame(minWidth: 380, idealWidth: 500)
             inspector.frame(minWidth: 300, idealWidth: 360)
         }
-        .background(V15Palette.paper.color)
+        .v15MacWorkspaceCanvas()
         .task { await loadInitialState() }
         .sheet(isPresented: Binding(get: { model.scheduleSheetVisible }, set: { if !$0 { model.dismissScheduleSheet() } })) { V15CreditScheduleMacSheet(model: model) }
         .accessibilityElement(children: .contain)
@@ -121,21 +121,19 @@ private struct V15CreditScheduleMacSheet: View {
             Picker("账期方式", selection: $model.cycleMode) { Text("账单日截点").tag(V15CreditCycleMode.statementDayCutoff); Text("上个自然月").tag(V15CreditCycleMode.previousCalendarMonth) }.accessibilityIdentifier("v15.f3b1.schedule.mode")
             TextField("账单日（1–28）", text: $model.statementDayText).accessibilityIdentifier("v15.f3b1.schedule.statement-day")
             TextField("还款日（1–28）", text: $model.dueDayText).accessibilityIdentifier("v15.f3b1.schedule.due-day")
-            ForEach(model.scheduleIssues, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) }
-            ForEach(model.scheduleServerFieldIssues, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) }.accessibilityIdentifier("v15.f3b1.schedule.server-field-reasons")
-            Button("取预览") { Task { await model.requestSchedulePreview() } }
-                .disabled(!model.canRequestSchedulePreview)
-                .accessibilityIdentifier("v15.f3b1.schedule.preview")
-            if let reason = model.schedulePreviewDisabledReason {
-                Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.preview-reason")
+            V15FieldIssues(issues: model.scheduleIssues)
+                .accessibilityIdentifier("v15.f3b1.schedule.local-reasons")
+            V15FieldIssues(issues: model.scheduleServerFieldIssues)
+                .accessibilityIdentifier("v15.f3b1.schedule.server-field-reasons")
+            V15ActionButton("取预览", disabledReason: model.schedulePreviewDisabledReason, showsDisabledReasons: false, accessibilityIdentifier: "v15.f3b1.schedule.preview") {
+                Task { await model.requestSchedulePreview() }
             }
+            disabledReasonNotice(model.schedulePreviewDisabledReason, accessibilityIdentifier: "v15.f3b1.schedule.preview-reason")
             if model.scheduleCommandDisabledReason != nil {
-                Button("提交账期变更") { Task { await model.commitSchedule() } }
-                    .disabled(!model.canCommitSchedule)
-                    .accessibilityIdentifier("v15.f3b1.schedule.commit")
-                if let reason = model.scheduleDisabledReason {
-                    Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.commit-reason")
+                V15ActionButton("提交账期变更", disabledReason: model.scheduleDisabledReason, showsDisabledReasons: false, accessibilityIdentifier: "v15.f3b1.schedule.commit") {
+                    Task { await model.commitSchedule() }
                 }
+                disabledReasonNotice(model.scheduleDisabledReason, accessibilityIdentifier: "v15.f3b1.schedule.commit-reason")
             }
             state
         }.padding(V15Spacing.lg).frame(minWidth: 480, idealWidth: 560).accessibilityElement(children: .contain).accessibilityIdentifier("v15.f3b1.schedule.sheet")
@@ -145,7 +143,20 @@ private struct V15CreditScheduleMacSheet: View {
         case .idle: EmptyView()
         case .previewing, .committing: V15LoadingSkeleton()
         case .previewed:
-            if let preview = model.schedulePreview { V15Section("影响预览", detail: "\(preview.affectedCycleCount) 个账期") { Text("消费 \(preview.purchaseCount) 笔 · 还款 \(preview.repaymentCount) 笔 · 分期 \(preview.installmentPeriodCount) 期").font(V15Typography.secondary); ForEach(preview.warnings + preview.conflicts, id: \.self) { Text($0).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) }; Button("确认账期变更") { Task { await model.commitSchedule() } }.disabled(!model.canCommitSchedule).accessibilityIdentifier("v15.f3b1.schedule.commit"); if let reason = model.scheduleDisabledReason { Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.commit-reason") } }.accessibilityIdentifier("v15.f3b1.schedule.preview") }
+            if let preview = model.schedulePreview {
+                V15Section("影响预览", detail: "\(preview.affectedCycleCount) 个账期") {
+                    Text("消费 \(preview.purchaseCount) 笔 · 还款 \(preview.repaymentCount) 笔 · 分期 \(preview.installmentPeriodCount) 期")
+                        .font(V15Typography.secondary)
+                    ForEach(preview.warnings + preview.conflicts, id: \.self) {
+                        Text($0).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color)
+                    }
+                    V15ActionButton("确认账期变更", disabledReason: model.scheduleDisabledReason, showsDisabledReasons: false, accessibilityIdentifier: "v15.f3b1.schedule.commit") {
+                        Task { await model.commitSchedule() }
+                    }
+                    disabledReasonNotice(model.scheduleDisabledReason, accessibilityIdentifier: "v15.f3b1.schedule.commit-reason")
+                }
+                .accessibilityIdentifier("v15.f3b1.schedule.preview")
+            }
         case .succeeded: V15Section("已提交") { Text("账期已更新。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3b1.schedule.receipt")
         case .readbackConfirmed: V15Section("已核对") { Text("当前账期与刚才的修改一致。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3b1.schedule.readback-confirmed")
         case .unknown: V15Section("提交结果未知") {
@@ -153,7 +164,7 @@ private struct V15CreditScheduleMacSheet: View {
             switch model.unknownReadbackPhase {
             case .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.loading")
             case .notConfirmed: Text(model.unknownReadbackNotice ?? "尚未确认这次修改是否生效。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.not-confirmed")
-            case .failed(let failure): Text(failure.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.error")
+            case .failed(let failure): Text(failure.message).font(V15Typography.secondary).foregroundStyle(V15Palette.danger.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.error")
             case .idle, .confirmed: EmptyView()
             }
             Button("安全检查保存结果") { Task { await model.retryUnknownCommit() } }
@@ -169,8 +180,22 @@ private struct V15CreditScheduleMacSheet: View {
                 .disabled(model.unknownReadbackPhase == .loading)
                 .accessibilityIdentifier("v15.f3b1.schedule.unknown.abandon")
         }.accessibilityIdentifier("v15.f3b1.schedule.unknown")
-        case .conflict(let conflict): V15Section("账期已变化") { Text(conflict.message).font(V15Typography.secondary); if let error = model.scheduleReloadError { Text(error.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.conflict.reload-error") }; Button("刷新账户后重新预览") { Task { await model.reloadAfterConflict() } }.accessibilityIdentifier("v15.f3b1.schedule.conflict.reload") }.accessibilityIdentifier("v15.f3b1.schedule.conflict")
+        case .conflict(let conflict): V15Section("账期已变化") { Text(conflict.message).font(V15Typography.secondary); if let error = model.scheduleReloadError { Text(error.message).font(V15Typography.secondary).foregroundStyle(V15Palette.danger.color).accessibilityIdentifier("v15.f3b1.schedule.conflict.reload-error") }; Button("刷新账户后重新预览") { Task { await model.reloadAfterConflict() } }.accessibilityIdentifier("v15.f3b1.schedule.conflict.reload") }.accessibilityIdentifier("v15.f3b1.schedule.conflict")
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.requestSchedulePreview() } }.accessibilityIdentifier("v15.f3b1.schedule.error")
+        }
+    }
+
+    /// Field validation is already shown in the danger treatment directly
+    /// above. Only non-field gates belong beside a disabled action, where a
+    /// neutral explanation avoids presenting a normal workflow state as an
+    /// additional error.
+    @ViewBuilder private func disabledReasonNotice(_ reason: V15DisabledReason?, accessibilityIdentifier: String) -> some View {
+        if let reason, reason.fieldPath == nil {
+            Text(V15Accessibility.safeReason(reason))
+                .font(V15Typography.secondary)
+                .foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier(accessibilityIdentifier)
         }
     }
 }
