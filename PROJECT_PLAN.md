@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 当前目标：**发布 Fiscal v1.9.0（Build 37）** ｜更新：2026-09-03（Asia/Shanghai）｜阶段：**RELEASING · 一条龙发布执行中**
+> 当前目标：**Fiscal v1.9.0（Build 37）发布完成** ｜更新：2026-09-03（Asia/Shanghai）｜阶段：**RELEASED · 等待 iOS 真机安装反馈**
 
 ## 1. 当前事实、范围与边界
 
@@ -84,7 +84,7 @@
 - **修复**：只处理 Review findings，并重跑受影响的单测、iOS/macOS build、Gallery/UI 与真实模拟器走查；不为修复另起 P。
 - **独立复审**：修复后由未参与施工者复扫全部 iOS 页面和共享 macOS 回归；复审只读，不修改代码、scheme、版本或发布记录。
 - **发布**：用户已于 2026-09-03 授权“一条龙发布”。目标锁定为 v1.9.0（Build 37）；完成最终门禁后提交并推送源码、创建不可变标签、从干净标签签名打包、只读核验宁波生产、可恢复更换 macOS 客户端并交付 iOS IPA。
-- **当前状态**：P1–P6、Review、修复和独立复审已闭环，现金流 AX5 长金额裁切等最后问题均已修复。发布前累计核对确认从宁波现役 revision `64cb1aee0190eeba81f1a38cf6b322d4d1ee33e4` 到本次候选没有 `Backend/`、API 或 migration 差异；生产仍为 Alembic `20260831_0038`，服务、定时任务、内外网健康与鉴权读取均通过，因此不会部署、迁移、重启或创建发布专用数据库备份。当前正在生成 1.9.0（37）工程并执行最终 Apple 门禁；六个受保护 scheme 必须保持原有本地修改且不进入发布提交。
+- **当前状态**：v1.9.0（Build 37）一条龙发布完成，权威证据见 `archive/releases/v1.9.0/RELEASE_STATE.md`。源码提交 `9fe0f3af914fcccda4a93c56fa08c132c2c7637d` 与不可变标签 `v1.9.0` 已推送；最终门禁为 `FiscalKitTests` 399/399、iOS Gallery 89/89、iOS Root Smoke 6/6，iOS/macOS Release 编译通过。双端签名包均从干净标签构建并通过解包后二次严格验签与可执行文件哈希比对；macOS 已可恢复换装、严格验签、启动并读取宁波生产账户余额板，旧版备份为 `/Applications/Fiscal-v1.8.0-build36-backup-20260903-170948.app`；iOS IPA 已交付到 `/Users/linotsai/Downloads/Fiscal-iOS-v1.9.0-build37-development.ipa`，SHA-256 为 `4266362c9b15b8a8a49d1ac2d25dceddf93e96a185e13e4e3fc77fe9902d3a0c`，真机安装仍由用户本人完成。累计差异没有 Backend/API/migration，宁波保持 revision `64cb1aee0190eeba81f1a38cf6b322d4d1ee33e4` / Alembic `20260831_0038`，未部署、迁移、重启或创建发布专用备份；生产只读验收全绿。六个受保护 scheme 未进入提交且仍保持原有本地修改。
 
 ## 6. 后续 Backlog 与白话摘要
 
