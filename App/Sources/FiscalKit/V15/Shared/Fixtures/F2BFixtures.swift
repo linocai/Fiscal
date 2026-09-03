@@ -49,6 +49,9 @@ actor V15F2BFixtureTransport: V15Transporting {
         }
         let data: Data
         switch request.path {
+        case "accounts": data = V15F1AFixtures.accounts
+        case "categories": data = V15F1AFixtures.categories
+        case "transactions": data = V15F1BFixtures.page
         case "reports/facts":
             if route == .factsError { throw V15Failure(kind: .transport, message: "当前事实服务暂时不可用。") }
             factsReads += 1

@@ -23,4 +23,13 @@ import XCTest
         XCTAssertTrue(element("v15.f3a.empty").waitForExistence(timeout: 5)); XCTAssertTrue(element("v15.f3a.account.selection").label.contains("旅行现金")); attach("f3a-ios-account-filter-empty")
         launch("timeline-account-error"); XCTAssertTrue(element("v15.f3a.account-error").waitForExistence(timeout: 5)); attach("f3a-ios-account-filter-error")
     }
+    func testBoundaryAmountDoesNotSqueezeFutureTitleIntoTallColumn() {
+        launch("timeline")
+        let event = element("v15.f3a.event.credit_cycle:00000000-0000-0000-0000-00000000F301")
+        XCTAssertTrue(event.waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(event.frame.width, 300)
+        XCTAssertLessThan(event.frame.height, 170)
+        XCTAssertTrue(event.label.contains("超长中文信用账期到期事项"))
+        XCTAssertTrue(event.label.contains("9,223,372,036,854,775.80"))
+    }
 }

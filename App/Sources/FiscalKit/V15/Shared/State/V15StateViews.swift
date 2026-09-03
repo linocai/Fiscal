@@ -36,6 +36,21 @@ private struct V15StateContainer<Content: View>: View {
     let content: Content
     init(marker: Color, background: Color, dashed: Bool = false, @ViewBuilder content: () -> Content) { self.marker = marker; self.background = background; self.dashed = dashed; self.content = content() }
     var body: some View {
+#if os(iOS)
+        VStack(alignment: .leading, spacing: V15Spacing.sm) {
+            HStack(spacing: V15Spacing.xs) {
+                Circle().fill(marker).frame(width: 8, height: 8)
+                Rectangle().fill(marker.opacity(0.34)).frame(maxWidth: .infinity).frame(height: 1)
+            }
+            content.frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(V15Spacing.md)
+        .background(background, in: RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous)
+                .stroke(marker.opacity(0.52), style: StrokeStyle(lineWidth: 1, dash: dashed ? [5, 4] : []))
+        }
+#else
         HStack(alignment: .top, spacing: V15Spacing.sm) {
             RoundedRectangle(cornerRadius: 2).fill(marker).frame(width: 4).accessibilityHidden(true)
             content.frame(maxWidth: .infinity, alignment: .leading)
@@ -43,6 +58,7 @@ private struct V15StateContainer<Content: View>: View {
         .padding(V15Spacing.md)
         .background(background, in: UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: V15Radius.control, topTrailingRadius: V15Radius.control))
         .overlay { UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: V15Radius.control, topTrailingRadius: V15Radius.control).stroke(marker.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: dashed ? [4, 3] : [])) }
+#endif
     }
 }
 
@@ -165,11 +181,7 @@ public struct V15StateVisualSpec: Sendable, Equatable {
     public let dashed: Bool
 
     public static var deterministicFailure: Self {
-#if os(macOS)
         .init(semantic: .deterministicFailure, marker: V15Palette.danger, background: V15Palette.dangerSurface, dashed: false)
-#else
-        .init(semantic: .deterministicFailure, marker: V15Palette.teal, background: V15Palette.selected, dashed: false)
-#endif
     }
 
     public static let outcomeUnknown = Self(
@@ -264,8 +276,13 @@ public struct V15OutcomeUnknownState: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if let actionTitle, let action {
                     if let actionIdentifier {
-                        V15ActionButton(actionTitle, symbol: V15Symbol.retry, kind: .secondary, action: action)
-                            .accessibilityIdentifier(actionIdentifier)
+                        V15ActionButton(
+                            actionTitle,
+                            symbol: V15Symbol.retry,
+                            kind: .secondary,
+                            accessibilityIdentifier: actionIdentifier,
+                            action: action
+                        )
                     } else {
                         V15ActionButton(actionTitle, symbol: V15Symbol.retry, kind: .secondary, action: action)
                     }
@@ -320,9 +337,9 @@ public struct V15ConflictState: View {
     }
 
     public var body: some View {
-        V15StateContainer(marker: V15Palette.teal.color, background: V15Palette.selected.color) {
+        V15StateContainer(marker: V15Palette.yellow.color, background: V15Palette.provisional.color, dashed: true) {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                Text("数据已更新").font(V15Typography.cardTitle).foregroundStyle(V15Palette.teal.color)
+                Text("数据已更新").font(V15Typography.cardTitle).foregroundStyle(V15Palette.gold.color)
                 Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
                 if !changes.isEmpty {
                     VStack(alignment: .leading, spacing: V15Spacing.sm) {

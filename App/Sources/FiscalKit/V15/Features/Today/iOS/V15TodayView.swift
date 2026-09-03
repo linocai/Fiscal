@@ -29,7 +29,7 @@ public struct V15TodayView: View {
                 .padding(V15Spacing.md)
                 .frame(maxWidth: 680, alignment: .leading)
             }
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle("今日")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -106,6 +106,8 @@ private struct V15TodayHeader: View {
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
         }
+        .padding(V15Spacing.md)
+        .v15IOSCard()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(model.facts.map { "今日概览，截至 \(V15TodayReadModel.shanghaiDateLabel($0.meta.asOf))，人民币" } ?? "正在更新今日概览")
         .accessibilityIdentifier("v15.f2b.snapshot")
@@ -116,7 +118,7 @@ private struct V15TodayKnownFuture: View {
     let events: [V15FutureEvent]
     var body: some View {
         if !events.isEmpty {
-            V15Section("已知未来", detail: "仅提示，完整时间轴在后续阶段") {
+            V15Section("已知未来", detail: "已确认事项") {
                 ForEach(events.prefix(2)) { event in
                     HStack(alignment: .top, spacing: V15Spacing.sm) {
                         Image(systemName: "calendar").foregroundStyle(V15Palette.ink.color.opacity(0.6)).accessibilityHidden(true)
@@ -244,8 +246,7 @@ private struct V15TodayFactCard: View {
             }
             .frame(maxWidth: .infinity, minHeight: 148, alignment: .leading)
             .padding(V15Spacing.md)
-            .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card))
-            .overlay { RoundedRectangle(cornerRadius: V15Radius.card).stroke(V15Palette.hairline.color, lineWidth: 1) }
+            .v15IOSCard()
         }
         .buttonStyle(.plain)
         .disabled(scope == nil)
@@ -292,7 +293,7 @@ private struct V15TodayScopeSheet: View {
                 }
                 .padding(V15Spacing.md)
             }
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle(scopeTitle)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭", action: dismissScope).accessibilityIdentifier("v15.f2b.scope.close") } }
         }
@@ -372,7 +373,7 @@ private struct V15TodayReadOnlyInspector: View {
                 .padding(V15Spacing.md)
                 .accessibilityIdentifier(inspectorIdentifier)
             }
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle("只读说明")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.closeLinkedRead(); close() }.accessibilityIdentifier("v15.f2b.readonly.close") } }
         }

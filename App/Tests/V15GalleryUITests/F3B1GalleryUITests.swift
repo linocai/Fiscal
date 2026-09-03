@@ -49,8 +49,8 @@ import XCTest
         XCTAssertEqual(due.value as? String, "3")
         element("v15.f3b1.schedule.preview").tap()
         XCTAssertTrue(element("v15.f3b1.schedule.preview").waitForExistence(timeout: 5))
-        let version = element("v15.f3b1.schedule.preview.account-version")
-        XCTAssertTrue(version.waitForExistence(timeout: 3)); XCTAssertTrue(version.label.contains("7")); attach("f3b1-ios-account-race-b-preview")
+        let version = element("v15.f3b1.schedule.preview.account-version.7")
+        XCTAssertTrue(version.waitForExistence(timeout: 3)); attach("f3b1-ios-account-race-b-preview")
     }
     func testUnknownAIsInvisibleOnBAndReturnsOnlyToAWithSameKeyRecovery() {
         launch("credit-account-unknown")

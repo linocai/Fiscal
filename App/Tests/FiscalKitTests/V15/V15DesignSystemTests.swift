@@ -42,6 +42,12 @@ struct V15DesignSystemTests {
         #expect(V15Accessibility.macVisibleRowHeight == 28)
         #expect(V15Accessibility.macHitInset == 4)
         #expect(V15Accessibility.largeTextYieldOrder.last == "金额不缩小、不换行、不截断")
+        #expect(V15IOSLayout.compactWidth == 375)
+        #expect(V15IOSLayout.regularWidth == 393)
+        #expect(V15IOSLayout.largeWidth == 430)
+        #expect(V15IOSLayout.contentPadding(for: 375) == V15IOSLayout.compactContentPadding)
+        #expect(V15IOSLayout.contentPadding(for: 430) == V15IOSLayout.contentPadding)
+        #expect(V15IOSLayout.bottomBarMinimumHeight >= V15Accessibility.minimumTouchTarget)
     }
 
 #if os(macOS)
@@ -65,6 +71,11 @@ struct V15DesignSystemTests {
         let destructive = V15ButtonVisualSpec.resolve(kind: .destructive, isEnabled: true)
         #expect(destructive.foreground == V15Palette.danger)
         #expect(destructive.background == V15Palette.dangerSurface && destructive.border == V15Palette.danger)
+        let phoneSecondary = V15ButtonVisualSpec.resolve(kind: .secondary, isEnabled: true, interface: .iPhone)
+        let phoneDanger = V15ButtonVisualSpec.resolve(kind: .destructive, isEnabled: true, interface: .iPhone)
+        #expect(phoneSecondary.background == V15Palette.selected && phoneSecondary.border == nil)
+        #expect(phoneDanger.foreground == V15Palette.danger)
+        #expect(phoneDanger.background == V15Palette.dangerSurface && phoneDanger.border == nil)
     }
 
     @Test("state vocabulary preserves preview, conflict, archive and display-only honesty")
@@ -90,9 +101,7 @@ struct V15DesignSystemTests {
         #expect(unknown.background == V15Palette.provisional)
         #expect(unknown.dashed)
         #expect(failure.semantic == .deterministicFailure)
-#if os(macOS)
         #expect(failure.marker == V15Palette.danger)
         #expect(failure.background == V15Palette.dangerSurface)
-#endif
     }
 }

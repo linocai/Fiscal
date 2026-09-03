@@ -29,7 +29,7 @@ public struct V15AIProposalView: View {
                 .frame(maxWidth: 720, alignment: .leading)
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle("AI 记账")
             .toolbar { Button("刷新") { Task { await model.load() } }.accessibilityIdentifier("v15.f3f.refresh") }
         }
@@ -51,6 +51,8 @@ public struct V15AIProposalView: View {
             .accessibilityIdentifier("v15.f3f.d3-invariant")
             if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot).accessibilityIdentifier("v15.f3f.offline") }
         }
+        .padding(V15Spacing.md)
+        .v15IOSCard()
     }
 
     private var createSurface: some View {
@@ -120,7 +122,7 @@ public struct V15AIProposalView: View {
                 }.padding(V15Spacing.md)
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle("检查 AI 内容")
             .toolbar { Button("关闭") { showsReview = false }.disabled(model.mutationPhase == .loading).accessibilityIdentifier("v15.f3f.editor.close") }
         }

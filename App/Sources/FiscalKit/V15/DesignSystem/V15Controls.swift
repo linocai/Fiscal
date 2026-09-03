@@ -2,6 +2,24 @@ import SwiftUI
 
 public enum V15ButtonKind: Sendable, Equatable { case primary, secondary, destructive, quiet }
 
+public enum V15FieldKeyboard: Sendable, Equatable {
+    case standard
+    case decimal
+    case integer
+}
+
+public enum V15InterfaceFamily: Sendable, Equatable {
+    case iPhone, mac
+
+    public static var current: Self {
+#if os(iOS)
+        .iPhone
+#else
+        .mac
+#endif
+    }
+}
+
 public struct V15ButtonVisualSpec: Sendable, Equatable {
     public let foreground: V15ColorToken
     public let background: V15ColorToken?
@@ -9,19 +27,26 @@ public struct V15ButtonVisualSpec: Sendable, Equatable {
     public let foregroundOpacity: Double
     public let backgroundOpacity: Double
 
-    public static func resolve(kind: V15ButtonKind, isEnabled: Bool) -> V15ButtonVisualSpec {
+    public static func resolve(
+        kind: V15ButtonKind,
+        isEnabled: Bool,
+        interface: V15InterfaceFamily = .current
+    ) -> V15ButtonVisualSpec {
         guard isEnabled else {
             return .init(foreground: V15Palette.ink, background: V15Palette.ink, border: V15Palette.hairline, foregroundOpacity: 0.35, backgroundOpacity: 0.08)
         }
         switch kind {
         case .primary: return .init(foreground: V15Palette.primaryButtonText, background: V15Palette.teal, border: nil, foregroundOpacity: 1, backgroundOpacity: 1)
-        case .secondary: return .init(foreground: V15Palette.teal, background: V15Palette.selected, border: V15Palette.teal, foregroundOpacity: 1, backgroundOpacity: 1)
+        case .secondary:
+            return .init(
+                foreground: V15Palette.teal,
+                background: V15Palette.selected,
+                border: interface == .mac ? V15Palette.teal : nil,
+                foregroundOpacity: 1,
+                backgroundOpacity: 1
+            )
         case .destructive:
-#if os(macOS)
-            return .init(foreground: V15Palette.danger, background: V15Palette.dangerSurface, border: V15Palette.danger, foregroundOpacity: 1, backgroundOpacity: 1)
-#else
-            return .init(foreground: V15Palette.ink, background: V15Palette.provisional, border: V15Palette.gold, foregroundOpacity: 1, backgroundOpacity: 1)
-#endif
+            return .init(foreground: V15Palette.danger, background: V15Palette.dangerSurface, border: interface == .mac ? V15Palette.danger : nil, foregroundOpacity: 1, backgroundOpacity: 1)
         case .quiet: return .init(foreground: V15Palette.teal, background: nil, border: nil, foregroundOpacity: 1, backgroundOpacity: 1)
         }
     }
@@ -156,20 +181,25 @@ public struct V15Field: View {
     @Binding private var text: String
     private let issues: [V15FieldIssue]
     private let axis: Axis
+    private let keyboard: V15FieldKeyboard
 
-    public init(_ title: String, text: Binding<String>, prompt: String = "", issues: [V15FieldIssue] = [], axis: Axis = .horizontal) {
-        self.title = title; _text = text; self.prompt = prompt; self.issues = issues; self.axis = axis
+    public init(_ title: String, text: Binding<String>, prompt: String = "", issues: [V15FieldIssue] = [], axis: Axis = .horizontal, keyboard: V15FieldKeyboard = .standard) {
+        self.title = title; _text = text; self.prompt = prompt; self.issues = issues; self.axis = axis; self.keyboard = keyboard
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.xs) {
             Text(title).font(V15Typography.secondary.weight(.semibold)).foregroundStyle(V15Palette.ink.color)
-            TextField(prompt, text: $text, axis: axis)
+            inputField
                 .font(V15Typography.body)
                 .textFieldStyle(.plain)
                 .padding(V15Spacing.sm)
-                .background(V15Palette.paper.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
-                .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(issues.isEmpty ? V15Palette.hairline.color : issueColor, lineWidth: issues.isEmpty ? 1 : 1.5) }
+                .background(fieldBackground, in: RoundedRectangle(cornerRadius: V15Radius.control, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: V15Radius.control)
+                        .stroke(issues.isEmpty ? V15Palette.hairline.color : issueColor, lineWidth: issues.isEmpty ? 1 : 1.5)
+                        .allowsHitTesting(false)
+                }
                 .accessibilityLabel(title)
                 .accessibilityValue(text)
                 .accessibilityHint(issues.isEmpty ? "" : issues.map(\.message).joined(separator: "；"))
@@ -177,11 +207,27 @@ public struct V15Field: View {
         }
     }
 
-    private var issueColor: Color {
-#if os(macOS)
-        V15Palette.danger.color
+    @ViewBuilder private var inputField: some View {
+#if os(iOS)
+        switch keyboard {
+        case .standard:
+            TextField(prompt, text: $text, axis: axis)
+        case .decimal:
+            TextField(prompt, text: $text, axis: axis).keyboardType(.decimalPad)
+        case .integer:
+            TextField(prompt, text: $text, axis: axis).keyboardType(.numberPad)
+        }
 #else
-        V15Palette.teal.color
+        TextField(prompt, text: $text, axis: axis)
+#endif
+    }
+
+    private var issueColor: Color { V15Palette.danger.color }
+    private var fieldBackground: Color {
+#if os(iOS)
+        V15Palette.surfaceRaised.color
+#else
+        V15Palette.paper.color
 #endif
     }
 }
@@ -204,13 +250,7 @@ public struct V15FieldIssues: View {
         }
     }
 
-    private var issueColor: Color {
-#if os(macOS)
-        V15Palette.danger.color
-#else
-        V15Palette.teal.color
-#endif
-    }
+    private var issueColor: Color { V15Palette.danger.color }
 }
 
 public struct V15SearchField: View {
@@ -224,8 +264,8 @@ public struct V15SearchField: View {
                 .font(V15Typography.body)
         }
         .padding(V15Spacing.sm)
-        .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
-        .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(V15Palette.hairline.color, lineWidth: 1) }
+        .background(V15Palette.surfaceRaised.color, in: RoundedRectangle(cornerRadius: V15Radius.control, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: V15Radius.control, style: .continuous).stroke(V15Palette.hairline.color.opacity(0.82), lineWidth: 1) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("搜索账目")
     }
@@ -242,9 +282,27 @@ public struct V15PickerRow<Selection: Hashable, Content: View>: View {
         Picker(title, selection: $selection) { content }
             .pickerStyle(.menu)
             .font(V15Typography.body)
+            .padding(.horizontal, pickerHorizontalPadding)
             .padding(.vertical, V15Spacing.xs)
+            .background(pickerBackground, in: RoundedRectangle(cornerRadius: V15Radius.control, style: .continuous))
             .v15PlatformHitArea()
             .accessibilityLabel(title)
+    }
+
+    private var pickerHorizontalPadding: CGFloat {
+#if os(iOS)
+        V15Spacing.sm
+#else
+        0
+#endif
+    }
+
+    private var pickerBackground: Color {
+#if os(iOS)
+        V15Palette.card.color
+#else
+        .clear
+#endif
     }
 }
 
@@ -252,12 +310,13 @@ public struct V15LedgerRow: View {
     public enum Marker: Sendable, Equatable { case ordinary, decision, provisional, archive }
     private let title: String
     private let detail: String
+    private let amountMinor: Int64
     private let amount: V15MoneyPresentation
     private let marker: Marker
     private let action: (() -> Void)?
 
     public init(title: String, detail: String, amountMinor: Int64, direction: V15MoneyDirection, marker: Marker = .ordinary, action: (() -> Void)? = nil) {
-        self.title = title; self.detail = detail; self.amount = .init(minorUnits: amountMinor, direction: direction, includeCurrency: false); self.marker = marker; self.action = action
+        self.title = title; self.detail = detail; self.amountMinor = amountMinor; self.amount = .init(minorUnits: amountMinor, direction: direction, includeCurrency: false); self.marker = marker; self.action = action
     }
     public var body: some View {
         Group {
@@ -268,13 +327,31 @@ public struct V15LedgerRow: View {
         .accessibilityLabel("\(markerLabel)，\(title)，\(detail)，\(amount.text)")
         .accessibilityAddTraits(action == nil ? .isStaticText : .isButton)
     }
-    private var row: some View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    @ViewBuilder private var row: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            HStack(alignment: .top, spacing: V15Spacing.sm) {
+                markerShape.frame(width: 4, height: 24).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                    metadata
+                    V15MoneyText(minorUnits: amountMinor, direction: amount.direction, includeCurrency: false)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, V15Spacing.md)
+            .padding(.vertical, verticalPadding)
+            .frame(minHeight: V15Accessibility.macVisibleRowHeight)
+            .background(marker == .archive ? V15Palette.card.color.opacity(0.45) : .clear)
+        } else {
+            compactRow
+        }
+    }
+
+    private var compactRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: V15Spacing.sm) {
             markerShape.frame(width: 4, height: 24).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: V15Spacing.xxs) {
-                Text(title).font(V15Typography.body).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
-                Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
-            }
+            metadata
             Spacer(minLength: V15Spacing.sm)
             Text(amount.text).font(V15Typography.money).monospacedDigit().lineLimit(1).fixedSize(horizontal: true, vertical: false).foregroundStyle(amountColor)
         }
@@ -282,6 +359,13 @@ public struct V15LedgerRow: View {
         .padding(.vertical, verticalPadding)
         .frame(minHeight: V15Accessibility.macVisibleRowHeight)
         .background(marker == .archive ? V15Palette.card.color.opacity(0.45) : .clear)
+    }
+
+    private var metadata: some View {
+        VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+            Text(title).font(V15Typography.body).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
+            Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+        }
     }
     @ViewBuilder private var markerShape: some View {
         switch marker {
@@ -306,6 +390,21 @@ public struct V15Section<Content: View>: View {
     private let title: String; private let detail: String?; private let content: Content
     public init(_ title: String, detail: String? = nil, @ViewBuilder content: () -> Content) { self.title = title; self.detail = detail; self.content = content() }
     public var body: some View {
+#if os(iOS)
+        VStack(alignment: .leading, spacing: V15Spacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                Spacer()
+                if let detail { Text(detail).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.54)) }
+            }
+            VStack(alignment: .leading, spacing: V15Spacing.sm) { content }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(V15Spacing.md)
+                .v15IOSCard()
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+#else
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title.uppercased()).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.66))
@@ -316,6 +415,7 @@ public struct V15Section<Content: View>: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
+#endif
     }
 }
 
@@ -343,6 +443,7 @@ public struct V15InspectorAction: View {
                     Spacer(minLength: V15Spacing.xs)
                     Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).accessibilityHidden(true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(V15ButtonStyle(kind: kind, reduceMotion: reduceMotion, dark: colorScheme == .dark))
             .disabled(disabledReason != nil)

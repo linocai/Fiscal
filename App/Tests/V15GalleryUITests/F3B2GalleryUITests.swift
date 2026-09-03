@@ -49,6 +49,20 @@ import XCTest
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
 
+    func testLedgerHandoffOpensExistingPurchaseWithTransactionPrefilled() {
+        app.terminate()
+        app = XCUIApplication()
+        app.launchArguments = ["--v15-f3b2-route", "installments-existing-prefilled"]
+        app.launch()
+        XCTAssertTrue(element("v15.f3b2.installments.ios").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("v15.f3b2.sheet.existingPurchase").waitForExistence(timeout: 6))
+        let transaction = textField("v15.f3b2.eligibility.transaction")
+        XCTAssertTrue(transaction.waitForExistence(timeout: 5))
+        XCTAssertEqual((transaction.value as? String)?.lowercased(), "00000000-0000-0000-0000-00000000b410")
+        button("v15.f3b2.eligibility.check").tap()
+        XCTAssertTrue(reveal("v15.f3b2.eligibility.success").waitForExistence(timeout: 6))
+    }
+
     func testFiveStatesFutureUnknownAndOfflineReadOnlyAreVisible() {
         launch("installments")
         for id in [

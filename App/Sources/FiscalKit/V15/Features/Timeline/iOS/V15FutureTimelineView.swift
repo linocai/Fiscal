@@ -20,7 +20,7 @@ public struct V15FutureTimelineView: View {
                 accountPicker
                 surface
             }.padding(V15Spacing.md).frame(maxWidth: 680, alignment: .leading) }
-            .background(V15Palette.paper.color).navigationTitle("已知未来")
+            .v15IOSScreenCanvas().navigationTitle("已知未来")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { Task { await model.reload() } } label: { Label("重新读取", systemImage: V15Symbol.retry) }.accessibilityIdentifier("v15.f3a.reload") } }
         }
         .sheet(isPresented: $inspectorShown, onDismiss: { model.closeInspector() }) { inspector.presentationDetents([.medium, .large]) }
@@ -30,7 +30,10 @@ public struct V15FutureTimelineView: View {
     private var header: some View { VStack(alignment: .leading, spacing: V15Spacing.xs) {
         Text("未来时间线").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
         Text(model.meta.map { "更新于 \(V15TodayReadModel.shanghaiDateLabel($0.asOf))" } ?? "这里只显示已经确认的未来事项，不计算预测。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
-    }.accessibilityIdentifier("v15.f3a.header") }
+    }
+    .padding(V15Spacing.md)
+    .v15IOSCard()
+    .accessibilityIdentifier("v15.f3a.header") }
     private var windowPicker: some View { Picker("时间窗口", selection: Binding(get: { model.selectedWindowDays }, set: { value in Task { await model.setWindowDays(value) } })) {
         Text("7天").tag(7); Text("30天").tag(30); Text("60天").tag(60); Text("90天").tag(90)
     }.pickerStyle(.segmented).accessibilityIdentifier("v15.f3a.window") }
@@ -103,7 +106,35 @@ public struct V15FutureTimelineView: View {
 
 struct V15FutureEventRow: View {
     let event: V15FutureEvent
-    var body: some View { HStack(alignment: .top, spacing: V15Spacing.sm) { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(event.date).font(V15Typography.label).foregroundStyle(V15Palette.teal.color); Text(event.title).font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true); Text("\(label(event.certainty)) · \(sourceLabel(event.sourceType))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; Spacer(minLength: V15Spacing.xs); V15MoneyText(minorUnits: event.amountMinor, direction: event.direction == .inflow ? .inflow : .outflow, font: V15Typography.secondary).lineLimit(1).minimumScaleFactor(0.72) }.padding(V15Spacing.md).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card)).overlay { RoundedRectangle(cornerRadius: V15Radius.card).stroke(V15Palette.hairline.color, lineWidth: 1) }.accessibilityElement(children: .combine) }
+    var body: some View {
+        VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+            HStack(alignment: .firstTextBaseline, spacing: V15Spacing.sm) {
+                Text(event.date)
+                    .font(V15Typography.label)
+                    .foregroundStyle(V15Palette.teal.color)
+                Spacer(minLength: V15Spacing.xs)
+                V15MoneyText(
+                    minorUnits: event.amountMinor,
+                    direction: event.direction == .inflow ? .inflow : .outflow,
+                    font: V15Typography.secondary
+                )
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityIdentifier("v15.f3a.event.amount.\(event.id)")
+            }
+            Text(event.title)
+                .font(V15Typography.body.weight(.semibold))
+                .foregroundStyle(V15Palette.ink.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("v15.f3a.event.title.\(event.id)")
+            Text("\(label(event.certainty)) · \(sourceLabel(event.sourceType))")
+                .font(V15Typography.secondary)
+                .foregroundStyle(V15Palette.ink.color.opacity(0.66))
+        }
+        .padding(V15Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .v15IOSCard()
+        .accessibilityElement(children: .combine)
+    }
     private func label(_ certainty: V15FutureEventCertainty) -> String { switch certainty { case .exactDue: "到期日已确认"; case .confirmed: "已确认"; case .expected: "预计"; case .scheduled: "已排期" } }
     private func sourceLabel(_ source: V15FutureEventSource) -> String { switch source { case .creditCycle: "信用账期"; case .reimbursementParty: "报销对象"; case .cashFlowItem: "现金流事项" } }
 }

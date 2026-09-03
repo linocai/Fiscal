@@ -36,7 +36,7 @@ public struct V15RecordView: View {
                     VStack(alignment: .leading, spacing: V15Spacing.lg) {
                         V15RecordHeader(open: { editorPresented = true })
                         Text("保存后会显示最终金额、账户和分录。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                    }.padding(V15Spacing.lg).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(V15Palette.paper.color).navigationTitle("录入")
+                    }.padding(V15Spacing.lg).v15IOSScreenCanvas().navigationTitle("录入")
                 }
             }
         }
@@ -66,49 +66,118 @@ private struct V15RecordEditor: View {
     let onCommitted: (V15RecordModel.CommitOutcome) -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: V15Spacing.md) {
-                HStack { Text("新建账目").font(V15Typography.surfaceTitle); Spacer() }
-                form
-                references
-                repaymentPreviewState
-                submissionState
-                if model.kind == .repayment, !repaymentPreviewIsReady {
-                    V15ActionButton("查看还款影响", symbol: "eye", disabledReasons: displayedDisabledReasons) { Task { await model.previewRepayment() } }
-                        .disabled(!disabledReasons.isEmpty)
-                        .accessibilityIdentifier("v15.f1a.record.preview")
-                } else {
-                    V15ActionButton(model.kind == .repayment ? "确认还款" : "保存账目", symbol: V15Symbol.receipt, disabledReasons: displayedDisabledReasons, action: submit)
-                        .disabled(!disabledReasons.isEmpty)
-                        .accessibilityIdentifier("v15.f1a.record.submit")
-                }
-            }.padding(V15Spacing.lg)
+        Group {
+#if os(iOS)
+            ScrollView {
+                VStack(alignment: .leading, spacing: V15Spacing.md) {
+                    iOSForm
+                    repaymentPreviewState
+                    submissionState
+                }.padding(V15IOSLayout.contentPadding)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .v15IOSScreenCanvas()
+            .navigationTitle("记一笔")
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                primaryAction
+                    .padding(.horizontal, V15IOSLayout.contentPadding)
+                    .padding(.vertical, V15Spacing.sm)
+                    .background(.regularMaterial)
+                    .overlay(alignment: .top) { Rectangle().fill(V15Palette.hairline.color.opacity(0.7)).frame(height: 1) }
+            }
+#else
+            ScrollView {
+                VStack(alignment: .leading, spacing: V15Spacing.md) {
+                    HStack { Text("新建账目").font(V15Typography.surfaceTitle); Spacer() }
+                    form
+                    references
+                    repaymentPreviewState
+                    submissionState
+                    primaryAction
+                }.padding(V15Spacing.lg)
+            }
+            .background(V15Palette.paper.color)
+#endif
         }
-        .background(V15Palette.paper.color)
         .task { await model.loadReferences() }
         .task(id: model.kind) { await model.loadCategories() }
         .task(id: model.destinationAccountID) { if model.kind == .repayment { await model.loadCreditCycles() } }
         .accessibilityIdentifier("v15.f1a.record.editor")
     }
 
+    @ViewBuilder private var primaryAction: some View {
+        if model.kind == .repayment, !repaymentPreviewIsReady {
+            V15ActionButton("查看还款影响", symbol: "eye", disabledReasons: displayedDisabledReasons) { Task { await model.previewRepayment() } }
+                .disabled(!disabledReasons.isEmpty)
+                .accessibilityIdentifier("v15.f1a.record.preview")
+        } else {
+            V15ActionButton(model.kind == .repayment ? "确认还款" : "保存账目", symbol: V15Symbol.receipt, disabledReasons: displayedDisabledReasons, action: submit)
+                .disabled(!disabledReasons.isEmpty)
+                .accessibilityIdentifier("v15.f1a.record.submit")
+        }
+    }
+
     private var form: some View {
         V15Section("内容") {
             V15PickerRow("类型", selection: $model.kind) { ForEach(V15ManualTransactionKind.allCases) { Text($0.displayName).tag($0) } }
                 .accessibilityIdentifier("v15.f1a.record.kind")
-            V15Field("金额（元）", text: $model.amountText, prompt: "例如 12.80", issues: issues("amount_minor"))
+            V15Field("金额（元）", text: $model.amountText, prompt: "例如 12.80", issues: issues("amount_minor"), keyboard: .decimal)
+                .accessibilityIdentifier("v15.f1a.record.amount")
             V15Field("名称", text: $model.title, prompt: "例如 午餐", issues: issues("title"))
+                .accessibilityIdentifier("v15.f1a.record.title")
             V15Field("备注", text: $model.note, prompt: "可选")
-            VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                Text("业务日期").font(V15Typography.secondary.weight(.semibold)).foregroundStyle(V15Palette.ink.color)
-                DatePicker("", selection: $model.occurredOn, displayedComponents: .date)
-                    .labelsHidden()
-                    .environment(\.locale, Locale(identifier: "zh_CN"))
-                    .environment(\.calendar, shanghaiCalendar)
-                    .environment(\.timeZone, ShanghaiBusinessDate.timeZone)
-                    .dynamicTypeSize(...datePickerDynamicTypeSize)
-                    .accessibilityLabel("业务日期（上海）")
-                    .accessibilityValue(shanghaiDateAccessibilityValue)
+            businessDateField
+        }
+    }
+    private var iOSForm: some View {
+        V15Section("内容") {
+            V15Field("金额（元）", text: $model.amountText, prompt: "例如 12.80", issues: issues("amount_minor"), keyboard: .decimal)
+                .accessibilityIdentifier("v15.f1a.record.amount")
+            V15PickerRow("类型", selection: $model.kind) { ForEach(V15ManualTransactionKind.allCases) { Text($0.displayName).tag($0) } }
+                .accessibilityIdentifier("v15.f1a.record.kind")
+            referenceState
+            Picker("账户", selection: $model.accountID) {
+                Text("请选择").tag(Optional<UUID>.none)
+                ForEach(accounts(for: model.kind)) { Text($0.name).tag(Optional($0.id)) }
             }
+            .pickerStyle(.menu)
+            .accessibilityIdentifier("v15.f1a.record.account")
+            if model.kind == .transfer || model.kind == .repayment {
+                Picker("目标账户", selection: $model.destinationAccountID) {
+                    Text("请选择").tag(Optional<UUID>.none)
+                    ForEach(destinationAccounts(for: model.kind)) { Text($0.name).tag(Optional($0.id)) }
+                }
+                .pickerStyle(.menu)
+                .accessibilityIdentifier("v15.f1a.record.destination")
+            }
+            businessDateField
+            V15Field("名称", text: $model.title, prompt: "例如 午餐", issues: issues("title"))
+                .accessibilityIdentifier("v15.f1a.record.title")
+            V15Field("备注", text: $model.note, prompt: "可选")
+            if model.kind == .expense || model.kind == .income || model.kind == .creditPurchase {
+                Picker("分类（可选）", selection: $model.categoryID) {
+                    Text("不分类").tag(Optional<UUID>.none)
+                    ForEach(model.categories) { Text($0.name).tag(Optional($0.id)) }
+                }
+                .pickerStyle(.menu)
+                .accessibilityIdentifier("v15.f1a.record.category")
+            }
+            if model.kind == .repayment { creditCyclePicker }
+        }
+    }
+    private var businessDateField: some View {
+        VStack(alignment: .leading, spacing: V15Spacing.xs) {
+            Text("业务日期").font(V15Typography.secondary.weight(.semibold)).foregroundStyle(V15Palette.ink.color)
+            DatePicker("", selection: $model.occurredOn, displayedComponents: .date)
+                .labelsHidden()
+                .environment(\.locale, Locale(identifier: "zh_CN"))
+                .environment(\.calendar, shanghaiCalendar)
+                .environment(\.timeZone, ShanghaiBusinessDate.timeZone)
+                .dynamicTypeSize(...datePickerDynamicTypeSize)
+                .accessibilityLabel("业务日期（上海）")
+                .accessibilityValue(shanghaiDateAccessibilityValue)
+                .accessibilityIdentifier("v15.f1a.record.date")
         }
     }
     @ViewBuilder private var references: some View {
@@ -157,15 +226,11 @@ private struct V15RecordEditor: View {
                 .accessibilityIdentifier("v15.f1a.record.success")
         case .conflict(let conflict): V15ConflictState(conflict: conflict, reload: { Task { await model.reloadAfterConflict() } })
         case .failed(let failure):
-#if os(macOS)
             if V15StateVisualSpec.resolve(failure).semantic == .outcomeUnknown {
                 V15OutcomeUnknownState(message: failure.message, actionTitle: "安全检查保存结果", action: submit)
             } else {
                 V15ServiceErrorState(message: failure.message, retry: submit)
             }
-#else
-            V15ServiceErrorState(message: failure.message, retry: submit)
-#endif
         default: EmptyView()
         }
     }

@@ -56,7 +56,8 @@ final class V15RootSmokeUITests: XCTestCase {
     func testColdLaunchUsesFormalV15BootstrapWithoutGalleryRoute() {
         let app = launchApp(service: uniqueKeychainService())
 
-        XCTAssertTrue(app.staticTexts["连接 Fiscal"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f1a.bootstrap"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Fiscal"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["v15.gallery.ios"].exists)
     }
 
@@ -65,14 +66,15 @@ final class V15RootSmokeUITests: XCTestCase {
         let service = uniqueKeychainService()
         let app = launchApp(service: service, accessKey: qaAccessKey)
 
-        XCTAssertTrue(app.descendants(matching: .any)["v15.f2b.today.ios"].waitForExistence(timeout: 12))
-        app.tabBars.buttons["账目"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["v15.f1b.ledger.ios"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.workspace-marker"].waitForExistence(timeout: 12))
+        app.buttons.matching(identifier: "v151.ios.bottom.ledger").firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.ledger"].waitForExistence(timeout: 8))
         app.terminate()
 
         assertAppCleanup(service: service)
         let freshLaunch = launchApp(service: service)
-        XCTAssertTrue(freshLaunch.staticTexts["连接 Fiscal"].waitForExistence(timeout: 8))
+        XCTAssertTrue(freshLaunch.descendants(matching: .any)["v15.f1a.bootstrap"].waitForExistence(timeout: 8))
+        XCTAssertTrue(freshLaunch.staticTexts["Fiscal"].exists)
         freshLaunch.terminate()
     }
 
@@ -81,18 +83,21 @@ final class V15RootSmokeUITests: XCTestCase {
 
         let errorService = uniqueKeychainService()
         let errorApp = launchApp(service: errorService, accessKey: qaAccessKey, forceTransportError: true)
-        XCTAssertTrue(errorApp.staticTexts["暂时无法取得数据"].waitForExistence(timeout: 8))
+        XCTAssertTrue(errorApp.descendants(matching: .any)["v15.f1a.bootstrap"].waitForExistence(timeout: 8))
+        XCTAssertTrue(errorApp.staticTexts["无法连接"].exists)
         XCTAssertFalse(errorApp.descendants(matching: .any)["v15.gallery.ios"].exists)
         errorApp.terminate()
         assertAppCleanup(service: errorService)
 
         let offlineService = uniqueKeychainService()
         let connectedApp = launchApp(service: offlineService, accessKey: qaAccessKey)
-        XCTAssertTrue(connectedApp.descendants(matching: .any)["v15.f2b.today.ios"].waitForExistence(timeout: 12))
+        XCTAssertTrue(connectedApp.descendants(matching: .any)["v151.ios.workspace-marker"].waitForExistence(timeout: 12))
+        XCTAssertTrue(connectedApp.descendants(matching: .any)["v151.ios.today.account-value"].waitForExistence(timeout: 12))
         connectedApp.terminate()
 
         let offlineApp = launchApp(service: offlineService, forceTransportError: true)
-        XCTAssertTrue(offlineApp.descendants(matching: .any)["v15.f2b.offline"].waitForExistence(timeout: 8))
+        XCTAssertTrue(offlineApp.descendants(matching: .any)["v151.ios.workspace-marker"].waitForExistence(timeout: 8))
+        XCTAssertTrue(offlineApp.descendants(matching: .any)["v151.ios.offline"].waitForExistence(timeout: 8))
         XCTAssertFalse(offlineApp.descendants(matching: .any)["v15.gallery.ios"].exists)
         offlineApp.terminate()
         assertAppCleanup(service: offlineService)
@@ -130,7 +135,6 @@ final class V15RootSmokeUITests: XCTestCase {
             add(attachment)
             app.terminate()
         }
-        assertAppCleanup(service: service)
     }
 
     func testFormalWorkspaceBoundaryKeepsMoneyLocalAndNavigationReachable() {
@@ -151,6 +155,30 @@ final class V15RootSmokeUITests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
         app.terminate()
-        assertAppCleanup(service: service)
+    }
+
+    func testFormalWorkspaceLedgerKeepsAccountBalanceBoardVisible() {
+        let service = uniqueKeychainService()
+        let app = launchApp(service: service, formalFixture: true, scheme: "light")
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.workspace-marker"].waitForExistence(timeout: 8))
+
+        app.buttons.matching(identifier: "v151.ios.bottom.ledger").firstMatch.tap()
+
+        XCTAssertTrue(app.staticTexts["账户余额"].waitForExistence(timeout: 8))
+        let cash = app.descendants(matching: .any)["v151.ios.ledger.account.00000000-0000-0000-0000-000000000101"]
+        let credit = app.descendants(matching: .any)["v151.ios.ledger.account.00000000-0000-0000-0000-000000000103"]
+        XCTAssertTrue(cash.waitForExistence(timeout: 6))
+        XCTAssertTrue(credit.waitForExistence(timeout: 6))
+        XCTAssertTrue(cash.label.contains("可用余额"))
+        XCTAssertTrue(credit.label.contains("信用欠款"))
+        let record = app.buttons.matching(identifier: "v151.ios.record").firstMatch
+        XCTAssertTrue(record.isHittable)
+        let next = app.buttons["v151.ios.ledger.next"]
+        for _ in 0..<8 where !next.isHittable { app.swipeUp() }
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
+        XCTAssertTrue(next.isHittable)
+        XCTAssertFalse(next.frame.intersects(record.frame))
+
+        app.terminate()
     }
 }

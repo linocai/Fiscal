@@ -144,6 +144,26 @@ public enum V15MacLayout {
     }
 }
 
+/// The supported iPhone canvas is intentionally narrow and portrait-only.
+/// These values are data, not one-off view guesses, so Gallery and unit tests
+/// can keep every screen honest as the shared UI evolves.
+public enum V15IOSLayout {
+    public static let compactWidth: CGFloat = 375
+    public static let regularWidth: CGFloat = 393
+    public static let largeWidth: CGFloat = 430
+    public static let contentPadding: CGFloat = 16
+    public static let compactContentPadding: CGFloat = 14
+    public static let bottomBarMinimumHeight: CGFloat = 72
+    public static let floatingActionDiameter: CGFloat = 58
+    /// Keeps the last scrollable action above the centre floating record button.
+    public static let floatingActionContentClearance: CGFloat = 16
+    public static let cardCornerRadius: CGFloat = 18
+
+    public static func contentPadding(for width: CGFloat) -> CGFloat {
+        width <= compactWidth ? compactContentPadding : contentPadding
+    }
+}
+
 #if os(macOS)
 public extension View {
     /// Gives standalone macOS pages a stable desktop canvas without affecting
@@ -168,6 +188,47 @@ public extension View {
 public extension View {
     func v15MacWorkspaceCanvas() -> some View { self }
     func v15MacPanel() -> some View { self }
+}
+#endif
+
+#if os(iOS)
+private struct V15IOSCardModifier: ViewModifier {
+    let selected: Bool
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                selected ? V15Palette.selected.color : V15Palette.surfaceRaised.color,
+                in: RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous)
+                    .stroke(selected ? V15Palette.teal.color.opacity(0.34) : V15Palette.hairline.color.opacity(0.82), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+            .shadow(
+                color: colorScheme == .light ? Color.black.opacity(0.045) : .clear,
+                radius: 12,
+                y: 5
+            )
+    }
+}
+
+public extension View {
+    func v15IOSScreenCanvas() -> some View {
+        frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(V15Palette.canvas.color.ignoresSafeArea())
+    }
+
+    func v15IOSCard(selected: Bool = false) -> some View {
+        modifier(V15IOSCardModifier(selected: selected))
+    }
+}
+#else
+public extension View {
+    func v15IOSScreenCanvas() -> some View { self }
+    func v15IOSCard(selected: Bool = false) -> some View { self }
 }
 #endif
 
@@ -258,7 +319,12 @@ public struct V15MoneyText: View {
             .monospacedDigit()
             .foregroundStyle(color)
             .lineLimit(1)
+#if os(iOS)
+            .minimumScaleFactor(0.68)
+            .allowsTightening(true)
+#else
             .fixedSize(horizontal: true, vertical: false)
+#endif
             .accessibilityLabel(accessibilityText)
     }
 

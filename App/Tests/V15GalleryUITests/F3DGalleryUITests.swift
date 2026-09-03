@@ -3,10 +3,14 @@ import XCTest
 @MainActor final class F3DGalleryUITests: XCTestCase {
     private var app = XCUIApplication()
 
-    private func launch(_ route: String = "cash-flow", extra: [String] = []) {
+    private func launch(
+        _ route: String = "cash-flow",
+        contentSizeCategory: String = "UICTContentSizeCategoryLarge",
+        extra: [String] = []
+    ) {
         app.terminate()
         app = XCUIApplication()
-        app.launchArguments = ["--v15-f3d-route", route, "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryLarge"] + extra
+        app.launchArguments = ["--v15-f3d-route", route, "-UIPreferredContentSizeCategoryName", contentSizeCategory] + extra
         app.launch()
         XCTAssertTrue(element("v15.f3d.cash-flow.ios").waitForExistence(timeout: 10))
     }
@@ -55,9 +59,15 @@ import XCTest
         value.name = name; value.lifetime = .keepAlways; add(value)
     }
 
+    private func assertInsideHorizontalBounds(_ value: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(value.waitForExistence(timeout: 6), "missing \(value.identifier)", file: file, line: line)
+        XCTAssertGreaterThanOrEqual(value.frame.minX, app.frame.minX - 1, "left edge overflowed for \(value.identifier)", file: file, line: line)
+        XCTAssertLessThanOrEqual(value.frame.maxX, app.frame.maxX + 1, "right edge overflowed for \(value.identifier)", file: file, line: line)
+    }
+
     func testActiveHistoryDetailEmptyErrorOfflineAndUnknownAreReachable() {
         launch()
-        XCTAssertTrue(element("v15.f3d.summary").waitForExistence(timeout: 6))
+        XCTAssertTrue(element("v15.f3d.summary.inflow.label").waitForExistence(timeout: 6))
         revealButton("v15.f3d.item.00000000-0000-0000-0000-00000000D311").tap()
         XCTAssertTrue(reveal("v15.f3d.detail").waitForExistence(timeout: 6))
         attach("f3d-ios-active-detail")
@@ -73,7 +83,19 @@ import XCTest
         launch("cash-flow-offline")
         XCTAssertTrue(reveal("v15.f3d.offline").waitForExistence(timeout: 6))
         XCTAssertFalse(revealButton("v15.f3d.create.open", enabled: false).isEnabled)
-        launch("cash-flow-long")
+        launch("cash-flow-long", contentSizeCategory: "UICTContentSizeCategoryAccessibilityXXXL")
+        for id in [
+            "v15.f3d.header.title",
+            "v15.f3d.header.detail",
+            "v15.f3d.summary.inflow.label",
+            "v15.f3d.summary.inflow.amount",
+            "v15.f3d.summary.outflow.label",
+            "v15.f3d.summary.outflow.amount",
+            "v15.f3d.summary.net.label",
+            "v15.f3d.summary.net.amount",
+        ] {
+            assertInsideHorizontalBounds(element(id))
+        }
         let unknownStatus = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label CONTAINS %@", "暂时无法识别"))
             .firstMatch
@@ -147,7 +169,9 @@ import XCTest
         XCTAssertTrue(reveal("v15.f3d.unknown", down: true).waitForExistence(timeout: 8))
         XCTAssertFalse(revealButton("v15.f3d.unknown.abandon-direct", enabled: false).isEnabled)
         revealButton("v15.f3d.unknown.readback").tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "无法把该事实归因")).firstMatch.waitForExistence(timeout: 8))
+        let readback = app.descendants(matching: .any).matching(identifier: "v15.f3d.unknown").firstMatch
+        XCTAssertTrue(readback.waitForExistence(timeout: 8))
+        XCTAssertTrue(readback.label.contains("仍无法确认"))
         XCTAssertTrue(revealButton("v15.f3d.unknown.abandon-direct", enabled: true).isEnabled)
         attach("f3d-ios-direct-unknown-readback")
     }

@@ -25,6 +25,23 @@ final class F1AGalleryUITests: XCTestCase {
         add(attachment)
     }
 
+    func testRecordFormStartsWithAmountThenTypeAccountDateAndName() {
+        launch("record")
+        app.buttons["新建账目"].tap()
+        let amount = app.textFields["v15.f1a.record.amount"]
+        let kind = app.descendants(matching: .any)["v15.f1a.record.kind"].firstMatch
+        let account = app.descendants(matching: .any)["v15.f1a.record.account"].firstMatch
+        let date = app.datePickers["v15.f1a.record.date"]
+        let title = app.textFields["v15.f1a.record.title"]
+        for element in [amount, kind, account, date, title] {
+            XCTAssertTrue(element.waitForExistence(timeout: 5))
+        }
+        XCTAssertLessThan(amount.frame.minY, kind.frame.minY)
+        XCTAssertLessThan(kind.frame.minY, account.frame.minY)
+        XCTAssertLessThan(account.frame.minY, date.frame.minY)
+        XCTAssertLessThan(date.frame.minY, title.frame.minY)
+    }
+
     func testRecordSheetAcceptsInputAndShowsUserFacingSuccess() {
         launch("record-valid")
         app.buttons["新建账目"].tap()

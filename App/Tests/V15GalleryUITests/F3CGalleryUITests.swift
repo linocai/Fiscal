@@ -53,24 +53,37 @@ import XCTest
             .exists
     }
 
-    private func focus(_ field: XCUIElement) {
+    private func waitForKeyboardFocus(_ field: XCUIElement, timeout: TimeInterval = 0.8) -> Bool {
+        if hasKeyboardFocus(field) { return true }
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "hasKeyboardFocus == true"),
+            object: field
+        )
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func focus(_ field: XCUIElement) -> XCUIElement {
+        let identifier = field.identifier
         for _ in 0..<3 {
-            field.tap()
-            if hasKeyboardFocus(field) { return }
+            let current = textField(identifier)
+            if hasKeyboardFocus(current) { return current }
+            if app.keyboards.firstMatch.exists, current.frame.maxY > 500 {
+                app.swipeUp()
+            }
+            let tappable = textField(identifier)
+            tappable.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            if waitForKeyboardFocus(tappable) { return tappable }
         }
-        XCTFail("field did not gain keyboard focus: \(field.identifier)")
+        XCTFail("failed to focus field \(identifier)")
+        return textField(identifier)
     }
 
     private func replace(_ value: String, in field: XCUIElement) {
-        focus(field); field.press(forDuration: 0.7)
-        var selectedAll = false
-        if app.menuItems["Select All"].waitForExistence(timeout: 1) { app.menuItems["Select All"].tap(); selectedAll = true }
-        else if app.menuItems["全选"].waitForExistence(timeout: 1) { app.menuItems["全选"].tap(); selectedAll = true }
-        if !hasKeyboardFocus(field) { focus(field) }
-        if !selectedAll, let current = field.value as? String, !current.isEmpty {
-            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+        let active = focus(field)
+        if let current = active.value as? String, !current.isEmpty {
+            active.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
         }
-        field.typeText(value.isEmpty ? XCUIKeyboardKey.delete.rawValue : value)
+        active.typeText(value.isEmpty ? XCUIKeyboardKey.delete.rawValue : value)
     }
 
     private func attach(_ name: String) {
@@ -213,7 +226,7 @@ import XCTest
         XCTAssertTrue(revealButton("v15.f3c.receipt.retry-same-key").exists)
         XCTAssertTrue(revealButton("v15.f3c.receipt.abandon").exists)
         XCTAssertFalse(revealButton("v15.f3c.receipt.preview", requireHittable: false).isEnabled)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "上一笔到账请求仍在提交或结果未知")).firstMatch.exists)
+        XCTAssertTrue(element("v15.f3c.receipt.preview.reasons").exists)
         attach("f3c-ios-receipt-unknown-before-close")
         app.buttons["关闭"].tap()
         XCTAssertFalse(element("v15.f3c.sheet.receipt").waitForExistence(timeout: 2))
@@ -242,7 +255,7 @@ import XCTest
         XCTAssertTrue(revealButton("v15.f3c.claim.retry-same-key").exists)
         XCTAssertTrue(revealButton("v15.f3c.claim.abandon").exists)
         XCTAssertFalse(revealButton("v15.f3c.claim.create", requireHittable: false).isEnabled)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "上一笔新建请求仍在提交或结果未知")).firstMatch.exists)
+        XCTAssertTrue(element("v15.f3c.claim.create.reasons").exists)
         app.buttons["关闭"].tap()
         XCTAssertFalse(element("v15.f3c.sheet.claim").waitForExistence(timeout: 2))
         revealButton("v15.f3c.claim.new.open").tap()
@@ -297,7 +310,7 @@ import XCTest
         let unknown = reveal("v15.f3c.direct.unknown")
         XCTAssertTrue(unknown.waitForExistence(timeout: 7))
         XCTAssertFalse(revealButton("v15.f3c.direct.abandon", requireHittable: false).isEnabled)
-        app.buttons["重试"].firstMatch.tap()
+        revealButton("v15.f3c.unknown.readback").tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "仍无法确认")).firstMatch.waitForExistence(timeout: 7))
         XCTAssertTrue(revealButton("v15.f3c.direct.abandon").isEnabled)
         revealButton("v15.f3c.direct.abandon").tap()
@@ -338,7 +351,7 @@ import XCTest
         revealButton("v15.f3c.receipt.replace.commit").tap()
         let gate = reveal("v15.f3c.fact-refresh.required")
         XCTAssertTrue(gate.waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "写入已被服务端接受")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "到账已经保存")).firstMatch.exists)
         XCTAssertTrue(revealButton("v15.f3c.fact-refresh.retry").isEnabled)
         app.buttons["关闭"].tap()
         XCTAssertTrue(reveal("v15.f3c.fact-refresh.required").waitForExistence(timeout: 5))

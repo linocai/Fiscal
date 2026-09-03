@@ -17,9 +17,15 @@ struct V15RootSmokeiOSApp: App {
 
     init() {
         let environment = ProcessInfo.processInfo.environment
-        let baseURL = environment["FISCAL_ROOT_SMOKE_FORCE_TRANSPORT_ERROR"] == "1"
-            ? URL(string: "http://127.0.0.1:1")!
-            : APIConfiguration.baseURL()
+        let baseURL = APIConfiguration.baseURL()
+        let session: URLSession
+        if environment["FISCAL_ROOT_SMOKE_FORCE_TRANSPORT_ERROR"] == "1" {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [V15RootSmokeFailingURLProtocol.self]
+            session = URLSession(configuration: configuration)
+        } else {
+            session = .shared
+        }
         let bundleIdentifier = Bundle.main.bundleIdentifier
         let policy = APIConfiguration.iOSAccessKeyPolicy(bundleIdentifier: bundleIdentifier)
         let keychainService = environment["FISCAL_ROOT_SMOKE_KEYCHAIN_SERVICE"]
@@ -47,6 +53,7 @@ struct V15RootSmokeiOSApp: App {
         let revisionStore = DataRevisionStore()
         services = V15Services(
             baseURL: baseURL,
+            session: session,
             accessKeyStore: accessKeyStore,
             offlineSnapshots: offlineSnapshots,
             revisionStore: revisionStore
@@ -67,6 +74,17 @@ struct V15RootSmokeiOSApp: App {
             }
         }
     }
+}
+
+/// Keeps the production-shaped loopback URL (and therefore the same encrypted
+/// snapshot cache key) while deterministically simulating a transport outage.
+private final class V15RootSmokeFailingURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+    }
+    override func stopLoading() {}
 }
 
 private struct V15RootSmokeCleanupView: View {

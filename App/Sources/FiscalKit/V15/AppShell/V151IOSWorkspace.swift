@@ -7,10 +7,24 @@ import SwiftUI
 /// record action, and the searchable ledger. Domain-heavy work opens as a
 /// full-screen workspace instead of becoming a fourth generic tab.
 public struct V151IOSWorkspace: View {
-    fileprivate enum Destination: String, Identifiable {
-        case future, credit, installments, reimbursements, cashFlow
+    fileprivate enum Destination: Identifiable {
+        case future, credit, installments(UUID?), reimbursements, cashFlow
         case proposals, statementImport, reports, archive, settings, pendingSync
-        var id: String { rawValue }
+        var id: String {
+            switch self {
+            case .future: "future"
+            case .credit: "credit"
+            case .installments(let transactionID): "installments:\(transactionID?.uuidString ?? "new")"
+            case .reimbursements: "reimbursements"
+            case .cashFlow: "cashFlow"
+            case .proposals: "proposals"
+            case .statementImport: "statementImport"
+            case .reports: "reports"
+            case .archive: "archive"
+            case .settings: "settings"
+            case .pendingSync: "pendingSync"
+            }
+        }
         var title: String {
             switch self {
             case .future: "未来时间线"
@@ -54,7 +68,9 @@ public struct V151IOSWorkspace: View {
                 V151IOSLedger(services: services, focusID: ledgerFocusID, recordFactsRevision: recordFactsRevision, openDestination: { destination = $0 })
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            bottomBar.padding(.top, V15IOSLayout.floatingActionContentClearance)
+        }
         .frame(maxWidth: .infinity)
         .overlay(alignment: .topLeading) {
             Text("V151 iOS workspace")
@@ -64,7 +80,7 @@ public struct V151IOSWorkspace: View {
                 .accessibilityIdentifier("v151.ios.workspace-marker")
                 .accessibilityLabel("V151 iOS workspace")
         }
-        .background(V15Palette.paper.color.ignoresSafeArea())
+        .background(V15Palette.canvas.color.ignoresSafeArea())
         .tint(V15Palette.teal.color)
         .fullScreenCover(isPresented: $recordPresented) {
             V15RecordView(services: services, presentsEditorDirectly: true, onCommitted: recordCommitted)
@@ -80,22 +96,26 @@ public struct V151IOSWorkspace: View {
     }
 
     private var bottomBar: some View {
-        HStack {
+        HStack(alignment: .bottom) {
             bottomButton("今日", kind: .today, selected: tab == .today, badge: todayDecisionCount) { tab = .today }
             Spacer()
             bottomButton("账目", kind: .ledger, selected: tab == .ledger, badge: 0) { tab = .ledger }
         }
-        .padding(.horizontal, 28).frame(minHeight: 66)
+        .padding(.horizontal, 22)
+        .padding(.top, 8)
+        .frame(minHeight: V15IOSLayout.bottomBarMinimumHeight)
         .dynamicTypeSize(.large ... .accessibility1)
-        .background(V15Palette.card.color)
-        .overlay(alignment: .top) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
+        .background(.regularMaterial)
+        .overlay(alignment: .top) { Rectangle().fill(V15Palette.hairline.color.opacity(0.72)).frame(height: 1) }
         .overlay {
             Button { recordPresented = true } label: {
-                Image(systemName: "plus").font(V15Typography.cardTitle).foregroundStyle(Color.white)
-                    .frame(width: 56, height: 56).background(V15Palette.teal.color, in: Circle())
-                    .shadow(color: Color.black.opacity(0.18), radius: 8, y: 4)
+                Image(systemName: "plus").font(.title3.weight(.bold)).foregroundStyle(Color.white)
+                    .frame(width: V15IOSLayout.floatingActionDiameter, height: V15IOSLayout.floatingActionDiameter)
+                    .background(V15Palette.teal.color, in: Circle())
+                    .overlay { Circle().stroke(Color.white.opacity(0.2), lineWidth: 1) }
+                    .shadow(color: Color.black.opacity(0.16), radius: 12, y: 6)
             }
-            .buttonStyle(.plain).offset(y: -16).accessibilityLabel("记一笔").accessibilityIdentifier("v151.ios.record")
+            .buttonStyle(.plain).offset(y: -19).accessibilityLabel("记一笔").accessibilityHint("打开新建账目").accessibilityIdentifier("v151.ios.record")
         }
     }
 
@@ -103,20 +123,11 @@ public struct V151IOSWorkspace: View {
 
     private func bottomButton(_ title: String, kind: BottomKind, selected: Bool, badge: Int, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: 5) {
                 ZStack(alignment: .topTrailing) {
-                    Group {
-                        if kind == .today {
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(selected ? V15Palette.teal.color : V15Palette.ink.color.opacity(0.38), lineWidth: selected ? 2 : 1.5)
-                                .frame(width: 20, height: 18)
-                        } else {
-                            VStack(spacing: 3) {
-                                ForEach(0..<3, id: \.self) { _ in Capsule().frame(width: 21, height: 2) }
-                            }
-                            .frame(width: 22, height: 18)
-                        }
-                    }
+                    Image(systemName: kind == .today ? (selected ? "house.fill" : "house") : (selected ? "list.bullet.rectangle.fill" : "list.bullet.rectangle"))
+                        .font(.system(size: 19, weight: .semibold))
+                        .frame(width: 26, height: 22)
                     if badge > 0 {
                         Text(badge > 9 ? "9+" : "\(badge)")
                             .font(.caption2.weight(.bold))
@@ -132,8 +143,14 @@ public struct V151IOSWorkspace: View {
                     .font(.caption2.weight(selected ? .semibold : .regular))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
-            }.foregroundStyle(selected ? V15Palette.teal.color : V15Palette.ink.color.opacity(0.62)).frame(minWidth: 62)
-        }.buttonStyle(.plain).accessibilityIdentifier("v151.ios.bottom.\(kind.rawValue)")
+            }
+            .foregroundStyle(selected ? V15Palette.teal.color : V15Palette.ink.color.opacity(0.58))
+            .frame(minWidth: 74, minHeight: V15Accessibility.minimumTouchTarget)
+            .background(selected ? V15Palette.selected.color : Color.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("v151.ios.bottom.\(kind.rawValue)")
     }
 }
 
@@ -160,15 +177,14 @@ private struct V151IOSTodayDashboard: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: V15Spacing.md) {
                 header
                 if let offline = model.offlineSnapshotAt { offlineBanner(offline) }
-                Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
                 factsSurface
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(V15Palette.paper.color)
+        .v15IOSScreenCanvas()
         .refreshable { await refresh() }
         .task(id: recordFactsRevision) { await refresh() }
         .onAppear { decisionCountChanged(0) }
@@ -217,7 +233,10 @@ private struct V151IOSTodayDashboard: View {
                 Text("正在读取账目").font(V15Typography.cardTitle)
             }
         }
-        .padding(.horizontal, 20).padding(.top, 15).padding(.bottom, 18)
+        .padding(V15IOSLayout.contentPadding)
+        .v15IOSCard()
+        .padding(.horizontal, V15IOSLayout.contentPadding)
+        .padding(.top, V15Spacing.sm)
     }
 
     private func metric(_ title: String, _ amount: Int64, _ direction: V15MoneyDirection) -> some View {
@@ -322,7 +341,7 @@ private struct V151IOSTodayDashboard: View {
                 }
             }
         }
-        .padding(16).background(V15Palette.paper.color, in: RoundedRectangle(cornerRadius: 15)).overlay { RoundedRectangle(cornerRadius: 15).stroke(V15Palette.hairline.color) }
+        .padding(16).v15IOSCard()
     }
 
     private var calmState: some View {
@@ -330,7 +349,7 @@ private struct V151IOSTodayDashboard: View {
             Text("今天没有需要你决定的事项").font(V15Typography.cardTitle)
             Text("全部账目仍可在“账目”中查看。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
         }
-        .padding(18).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: 15))
+        .padding(18).frame(maxWidth: .infinity, alignment: .leading).v15IOSCard()
     }
 
     private func knownFuture(_ events: [V15FutureEvent]) -> some View {
@@ -351,7 +370,7 @@ private struct V151IOSTodayDashboard: View {
                 Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
             }
         }
-        .padding(15).background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: 14))
+        .padding(15).background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous))
     }
 
     private func offlineBanner(_ at: Date) -> some View {
@@ -359,7 +378,10 @@ private struct V151IOSTodayDashboard: View {
             Rectangle().fill(V15Palette.yellow.color).frame(width: 3)
             VStack(alignment: .leading, spacing: 2) { Text("离线 · 仅可查看").font(V15Typography.secondary.weight(.semibold)); Text("数据保存于 \(V15TodayReadModel.shanghaiDateLabel(model.offlineAsOf ?? at))").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.58)) }
             Spacer(); V15ActionButton("查看", kind: .secondary) { openLedger(nil) }
-        }.padding(.horizontal, 16).frame(minHeight: 62).background(V15Palette.provisional.color)
+        }
+        .padding(.horizontal, 16).frame(minHeight: 62).background(V15Palette.provisional.color)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("v151.ios.offline")
     }
 
     private func refresh() async {
@@ -512,7 +534,7 @@ private struct V151IOSRepaymentInlineDecision: View {
         VStack(alignment: .leading, spacing: 12) {
             Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
             Text("记录还款").font(.title3.weight(.semibold))
-            V15Field("还款金额（元）", text: $model.amountText, prompt: "0.00", issues: model.allIssues)
+            V15Field("还款金额（元）", text: $model.amountText, prompt: "0.00", issues: model.allIssues, keyboard: .decimal)
                 .onChange(of: model.amountText) { _, _ in previewed = false }
             Picker("还款来源", selection: $model.accountID) {
                 Text("请选择").tag(Optional<UUID>.none)
@@ -668,7 +690,7 @@ private struct V151IOSReimbursementInlineDecision: View {
             Picker("入账账户", selection: Binding(get: { model.selectedReceiptAccount?.id }, set: { id in if let account = model.receiptAccounts.first(where: { $0.id == id }) { model.chooseReceiptAccount(account) } })) {
                 ForEach(model.receiptAccounts) { Text($0.name).tag(Optional($0.id)) }
             }.pickerStyle(.menu)
-            V15Field("实收金额（元）", text: $model.receiptAmountText, prompt: "0.00", issues: model.receiptIssues + model.receiptServerIssues)
+            V15Field("实收金额（元）", text: $model.receiptAmountText, prompt: "0.00", issues: model.receiptIssues + model.receiptServerIssues, keyboard: .decimal)
             V15Field("收款日期", text: $model.receiptDateText, prompt: "YYYY-MM-DD", issues: model.receiptIssues + model.receiptServerIssues)
             receiptPhase
         }
@@ -875,10 +897,9 @@ private struct V151IOSLedger: View {
     var body: some View {
         VStack(spacing: 0) {
             ledgerHeader
-            Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
             ledgerList
         }
-        .background(V15Palette.paper.color)
+        .v15IOSScreenCanvas()
         .task(id: LedgerRefreshOwner(focusID: focusID, revision: recordFactsRevision)) { await loadInitialContent() }
         .sheet(item: Binding(
             get: { selectedID.map(SelectedTransactionID.init) },
@@ -906,7 +927,7 @@ private struct V151IOSLedger: View {
                 Spacer()
                 Menu {
                     Button("未来时间线") { openDestination(.future) }
-                    Button("分期") { openDestination(.installments) }
+                    Button("分期") { openDestination(.installments(nil)) }
                     Button("信用账期") { openDestination(.credit) }
                     Button("现金流") { openDestination(.cashFlow) }
                     Button("设置") { openDestination(.settings) }
@@ -914,27 +935,35 @@ private struct V151IOSLedger: View {
                 } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
             }
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                workspaceEntry("报表", detail: "收支、资产、信用与分类", symbol: "chart.bar") { openDestination(.reports) }
-                workspaceEntry("账单导入", detail: "逐行处置", symbol: "doc.text.viewfinder") { openDestination(.statementImport) }
-                workspaceEntry("报销", detail: "记录收款", symbol: "person.2") { openDestination(.reimbursements) }
+                workspaceEntry("报表", detail: "查看收支与趋势", symbol: "chart.bar.xaxis") { openDestination(.reports) }
+                workspaceEntry("账单导入", detail: "核对并逐行处置", symbol: "doc.text.viewfinder") { openDestination(.statementImport) }
+                workspaceEntry("报销", detail: "查看待收与到账", symbol: "person.2") { openDestination(.reimbursements) }
             }
             if !model.accounts.isEmpty {
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("账户").font(.caption.weight(.semibold)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                    HStack {
+                        Text("账户余额").font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text("点按查看详情").font(.caption).foregroundStyle(V15Palette.ink.color.opacity(0.52))
+                    }
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(model.accounts) { account in
                                 Button { selectedAccountID = account.id } label: {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(account.name).font(.subheadline.weight(.semibold)).lineLimit(1)
-                                        V15MoneyText(minorUnits: account.currentBalanceMinor, direction: account.kind == .credit ? .outflow : .balance, includeCurrency: false, font: .caption.monospacedDigit())
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(account.name).font(.subheadline.weight(.semibold)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                                        Text(account.kind == .credit ? "信用欠款" : "可用余额")
+                                            .font(.caption2).foregroundStyle(V15Palette.ink.color.opacity(0.52))
+                                        V15MoneyText(minorUnits: account.currentBalanceMinor, direction: account.kind == .credit ? .outflow : .balance, includeCurrency: false, font: .subheadline.weight(.semibold).monospacedDigit())
+                                            .frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                     .foregroundStyle(V15Palette.ink.color)
-                                    .padding(.horizontal, 12).frame(width: 145, alignment: .leading).frame(minHeight: 54, alignment: .leading)
-                                    .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: 10))
-                                    .overlay { RoundedRectangle(cornerRadius: 10).stroke(V15Palette.hairline.color) }
+                                    .padding(12).frame(width: 154, alignment: .leading).frame(minHeight: 82, alignment: .leading)
+                                    .v15IOSCard()
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("\(account.name)，\(account.kind == .credit ? "信用欠款" : "可用余额")，\(V15MoneyPresentation(minorUnits: account.currentBalanceMinor, direction: account.kind == .credit ? .outflow : .balance).text)")
+                                .accessibilityIdentifier("v151.ios.ledger.account.\(account.id)")
                             }
                         }
                     }
@@ -942,34 +971,35 @@ private struct V151IOSLedger: View {
             }
             HStack(spacing: 9) {
                 V15SearchField(text: Binding(get: { model.filter.query ?? "" }, set: { model.setQuery($0) }))
-                Button { filtersPresented = true } label: { Image(systemName: "line.3.horizontal.decrease").font(V15Typography.body.weight(.semibold)).frame(width: V15Accessibility.minimumTouchTarget, height: V15Accessibility.minimumTouchTarget).overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(V15Palette.hairline.color) } }.buttonStyle(.plain)
+                Button { filtersPresented = true } label: { Image(systemName: "line.3.horizontal.decrease").font(V15Typography.body.weight(.semibold)).frame(width: V15Accessibility.minimumTouchTarget, height: V15Accessibility.minimumTouchTarget).background(V15Palette.surfaceRaised.color, in: RoundedRectangle(cornerRadius: V15Radius.control, style: .continuous)).overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(V15Palette.hairline.color) } }.buttonStyle(.plain).accessibilityLabel("筛选账目")
                 Button { Task { await model.load() } } label: { Image(systemName: "magnifyingglass").font(V15Typography.body.weight(.semibold)).frame(width: V15Accessibility.minimumTouchTarget, height: V15Accessibility.minimumTouchTarget).background(V15Palette.teal.color, in: RoundedRectangle(cornerRadius: V15Radius.control)).foregroundStyle(Color.white) }.buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 13)
+        .padding(V15IOSLayout.contentPadding)
+        .v15IOSCard()
+        .padding(.horizontal, V15IOSLayout.contentPadding)
+        .padding(.top, V15Spacing.sm)
     }
 
     private func workspaceEntry(_ title: String, detail: String, symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: symbol).font(V15Typography.body.weight(.medium)).foregroundStyle(V15Palette.teal.color).frame(width: 24)
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: symbol).font(.title3.weight(.semibold)).foregroundStyle(V15Palette.teal.color).frame(width: 30, height: 30)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.subheadline.weight(.semibold))
-                    Text(detail).font(.caption2).foregroundStyle(V15Palette.ink.color.opacity(0.56)).lineLimit(1)
+                    Text(detail).font(.caption).foregroundStyle(V15Palette.ink.color.opacity(0.56)).lineLimit(2)
                 }
-                Spacer(minLength: 2)
             }
             .foregroundStyle(V15Palette.ink.color)
-            .padding(.horizontal, 11).frame(minHeight: 50)
-            .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: 10))
-            .overlay { RoundedRectangle(cornerRadius: 10).stroke(V15Palette.hairline.color) }
+            .padding(12).frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
+            .v15IOSCard()
         }
         .buttonStyle(.plain)
     }
 
     private var ledgerList: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
+            LazyVStack(spacing: V15Spacing.sm) {
                 if let offline = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: offline).padding(16) }
                 switch model.phase {
                 case .idle, .loading: V15LoadingSkeleton(layout: .list(rows: 7)).padding(18)
@@ -977,9 +1007,19 @@ private struct V151IOSLedger: View {
                 case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.load() } }.padding(18)
                 case .loaded:
                     ForEach(model.items, id: \.id) { transaction in row(transaction) }
-                    if model.nextCursor != nil { V15ActionButton(model.isLoadingNext ? "正在读取" : "读取下一页", kind: .quiet, disabledReason: model.isLoadingNext ? .init(code: "page_loading", message: "正在读取下一页。", fieldPath: nil) : nil) { Task { await model.loadNext() } } }
+                    if model.nextCursor != nil {
+                        V15ActionButton(
+                            model.isLoadingNext ? "正在读取" : "读取下一页",
+                            kind: .quiet,
+                            disabledReason: model.isLoadingNext ? .init(code: "page_loading", message: "正在读取下一页。", fieldPath: nil) : nil,
+                            accessibilityIdentifier: "v151.ios.ledger.next"
+                        ) { Task { await model.loadNext() } }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.top, V15Spacing.xs)
+                    }
                 }
             }
+            .padding(V15IOSLayout.contentPadding)
         }.refreshable { await model.load() }
     }
 
@@ -999,26 +1039,14 @@ private struct V151IOSLedger: View {
                 Spacer(minLength: 8)
                 V15MoneyText(minorUnits: presentation.amountMinor, direction: presentation.direction, includeCurrency: false, font: V15Typography.money)
             }
-            .padding(.horizontal, 16).padding(.vertical, 13).contentShape(Rectangle())
+            .padding(14).contentShape(Rectangle())
             .background { if transaction.voidedAt != nil { V15ArchiveHatch() } }
             .opacity(transaction.voidedAt == nil ? 1 : 0.72)
-        }.buttonStyle(.plain).overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
+        }.buttonStyle(.plain).v15IOSCard()
     }
 
     private var detailSheet: some View {
-        VStack(spacing: 0) {
-            Capsule().fill(V15Palette.ink.color.opacity(0.20)).frame(width: 38, height: 5).padding(.top, 8)
-            HStack {
-                Button(categoryEditing ? "返回" : "账目详情") { if categoryEditing { resetCategoryEditor() } }
-                    .font(.headline)
-                    .buttonStyle(.plain)
-                    .disabled(!categoryEditing || model.categoryChangeIsCommitting)
-                Spacer()
-                Button("完成") { selectedID = nil }.font(.subheadline.weight(.semibold))
-                    .disabled(model.categoryChangeIsCommitting)
-            }
-            .padding(.horizontal, 20).frame(minHeight: 48)
-            Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
+        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     switch model.detailPhase {
@@ -1028,12 +1056,24 @@ private struct V151IOSLedger: View {
                         if categoryEditing { categoryEditor }
                         else if let transaction = model.selected { detail(transaction) }
                     }
-                }.padding(20)
+                }.padding(V15IOSLayout.contentPadding)
+            }
+            .v15IOSScreenCanvas()
+            .navigationTitle(categoryEditing ? "修改分类" : "账目详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if categoryEditing {
+                        Button("返回") { resetCategoryEditor() }.disabled(model.categoryChangeIsCommitting)
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { selectedID = nil }.disabled(model.categoryChangeIsCommitting)
+                }
             }
         }
-        .background(V15Palette.card.color)
         .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.hidden)
+        .presentationDragIndicator(.visible)
     }
 
     private func detail(_ transaction: V15Transaction) -> some View {
@@ -1067,11 +1107,14 @@ private struct V151IOSLedger: View {
             }
             V15AdaptiveStack {
                 V15ActionButton("加入报销", kind: .secondary, disabledReason: reimbursementReason(transaction)) { openDestination(.reimbursements) }
-                V15ActionButton(transaction.voidedAt == nil ? "作废" : "恢复", kind: .secondary, disabledReason: model.disabledReason(for: transaction.voidedAt == nil ? .void : .restore, transaction: transaction)) {
+                V15ActionButton(transaction.voidedAt == nil ? "作废" : "恢复", kind: transaction.voidedAt == nil ? .destructive : .secondary, disabledReason: model.disabledReason(for: transaction.voidedAt == nil ? .void : .restore, transaction: transaction)) {
                     Task { if transaction.voidedAt == nil { await model.voidSelected() } else { await model.restoreSelected() } }
                 }
             }
-            V15ActionButton("改为分期", kind: .secondary, disabledReason: installmentReason(transaction)) { openDestination(.installments) }
+            V15ActionButton("改为分期", kind: .secondary, disabledReason: installmentReason(transaction)) {
+                selectedID = nil
+                openDestination(.installments(transaction.id))
+            }
             mutationState
             V15Section("修改历史") { ForEach(model.revisions) { revision in Text(revision.displayEvent).font(V15Typography.secondary) } }
         }
@@ -1100,7 +1143,7 @@ private struct V151IOSLedger: View {
                 }
                 .padding(V15Spacing.md)
             }
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle("筛选")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("应用") { filtersPresented = false; Task { await model.load() } } } }
         }
@@ -1213,14 +1256,7 @@ private struct V151IOSAccountDetail: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("账户详情").font(.headline)
-                Spacer()
-                Button("完成") { dismiss() }.font(.subheadline.weight(.semibold))
-            }
-            .padding(.horizontal, 20).frame(minHeight: 50)
-            Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
+        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     switch model.phase {
@@ -1230,10 +1266,13 @@ private struct V151IOSAccountDetail: View {
                         if let account = model.account { accountContent(account) }
                     }
                 }
-                .padding(20)
+                .padding(V15IOSLayout.contentPadding)
             }
+            .v15IOSScreenCanvas()
+            .navigationTitle("账户详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }
-        .background(V15Palette.card.color)
         .task(id: recordFactsRevision) { await load() }
     }
 
@@ -1242,7 +1281,7 @@ private struct V151IOSAccountDetail: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(account.name).font(.title2.weight(.bold))
-                    Text("当前余额").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.60))
+                    Text(account.kind == .credit ? "当前信用欠款" : "当前可用余额").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.60))
                 }
                 Spacer()
                 if account.archivedAt != nil { Text("归档 · 只读").font(.caption.weight(.semibold)).foregroundStyle(V15Palette.ink.color.opacity(0.58)) }
@@ -1307,7 +1346,7 @@ private struct V151IOSPendingSyncQueue: View {
             }
             .padding(20)
         }
-        .background(V15Palette.paper.color)
+        .v15IOSScreenCanvas()
         .navigationTitle("待同步")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -1338,8 +1377,8 @@ private struct V151IOSPendingSyncQueue: View {
             }
         }
         .padding(14)
-        .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: 13))
-        .overlay { RoundedRectangle(cornerRadius: 13).stroke(V15Palette.hairline.color) }
+        .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous).stroke(V15Palette.yellow.color.opacity(0.42)) }
     }
 
     private func kindLabel(_ value: V15PendingWriteStore.Kind) -> String { value == .transactionCreate ? "新建账目" : "分类决定" }
@@ -1366,6 +1405,7 @@ private struct V151IOSDestinationHost: View {
                 }
         }
         .tint(V15Palette.teal.color)
+        .background(V15Palette.canvas.color.ignoresSafeArea())
     }
     @ViewBuilder private var content: some View {
         switch destination {
@@ -1373,7 +1413,7 @@ private struct V151IOSDestinationHost: View {
             if let futureTarget { futureTargetContent(futureTarget) }
             else { V15FutureTimelineView(services: services, onOpen: { futureTarget = $0 }) }
         case .credit: V15CreditView(services: services)
-        case .installments: V15InstallmentView(services: services)
+        case .installments(let transactionID): V15InstallmentView(services: services, initialPurchaseTransactionID: transactionID)
         case .reimbursements: V15ReimbursementView(services: services)
         case .cashFlow: V15CashFlowView(services: services)
         case .proposals: V15AIProposalView(services: services)

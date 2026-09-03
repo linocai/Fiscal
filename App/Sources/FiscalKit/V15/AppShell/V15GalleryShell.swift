@@ -245,7 +245,12 @@ private struct V15F3B2GalleryRoute: View {
 #if os(macOS)
         V15InstallmentMacView(services: services, offlineSnapshotAt: route == "installments-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil, initialGalleryScenario: route, now: { Self.fixtureNow })
 #else
-        V15InstallmentView(services: services, offlineSnapshotAt: route == "installments-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil, now: { Self.fixtureNow })
+        V15InstallmentView(
+            services: services,
+            offlineSnapshotAt: route == "installments-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil,
+            initialPurchaseTransactionID: route == "installments-existing-prefilled" ? V15F3B2Fixtures.purchaseID : nil,
+            now: { Self.fixtureNow }
+        )
 #endif
     }
 }
@@ -308,7 +313,8 @@ private struct V15F1CGalleryRoute: View {
     let route: String
     @MainActor private var services: V15Services { V15F1CFixtures.services(conflict: route == "master-conflict") }
     var body: some View {
-        if route == "master" || route == "master-conflict" { V15MasterDataView(services: services) }
+        if route == "settings" { V15SettingsView(services: services) }
+        else if route == "master" || route == "master-conflict" { V15MasterDataView(services: services) }
         else if route == "master-offline" { V15MasterDataView(services: services, offlineSnapshotAt: Date(timeIntervalSince1970: 1_786_464_000)) }
         else { V15EmptyState(title: "无法识别主数据路由", explanation: "该链接只可用于并行主数据检查。") }
     }

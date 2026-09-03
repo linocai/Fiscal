@@ -73,7 +73,8 @@ final class F2BGalleryUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
         XCTAssertTrue(element("v15.f2b.readonly.inspector").waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["账户只读信息"].exists)
+        XCTAssertTrue(app.staticTexts["账户详情"].exists)
+        XCTAssertTrue(app.staticTexts["当前仅供查看。"].exists)
         attach("f2b-ios-scope-readonly-inspector")
     }
 
@@ -95,17 +96,18 @@ final class F2BGalleryUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["暂时无法取得数据"].exists)
         element("v15.f2b.scope.sheet").buttons["重试"].tap()
         XCTAssertTrue(element("v15.f2b.snapshot").waitForExistence(timeout: 5))
-        XCTAssertTrue(element("v15.f2b.snapshot").label.contains("数据版本 43"))
+        XCTAssertFalse(element("v15.f2b.scope.sheet").exists)
         XCTAssertTrue(reveal("v15.f2b.fact.cash_accounts").exists)
         attach("f2b-ios-conflict-reloaded")
     }
 
     func testOfflineFactsStayReadOnly() {
         launch("today-offline", ["--v15-f1a-appearance", "dark", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
-        XCTAssertTrue(element("v15.f2b.offline").waitForExistence(timeout: 8))
+        let offline = element("v15.f2b.offline")
+        XCTAssertTrue(offline.waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["离线 · 只读"].exists)
-        XCTAssertTrue(app.staticTexts["当前显示的事实截止时间：2026年8月16日 00:01；离线期间仅可查看。"].exists)
-        XCTAssertFalse(app.staticTexts["当前显示的事实截止时间：2026年8月12日 00:00；离线期间仅可查看。"].exists)
+        XCTAssertTrue(offline.label.contains("2026年8月16日 00:01"))
+        XCTAssertFalse(offline.label.contains("2026年8月12日 00:00"))
         attach("f2b-ios-offline-facts-as-of")
         XCTAssertTrue(revealHittable("v15.f2b.fact.cash_accounts").isHittable)
         XCTAssertFalse(app.buttons["保存"].exists)
@@ -118,7 +120,7 @@ final class F2BGalleryUITests: XCTestCase {
         let totals = revealOnScreen("v15.f2b.future-totals")
         XCTAssertTrue(totals.exists)
         XCTAssertTrue(element("v15.f2b.future-totals.zero").exists)
-        XCTAssertTrue(app.staticTexts["确认后现金（服务端口径）"].exists)
+        XCTAssertTrue(app.staticTexts["预计变动后现金"].exists)
         XCTAssertFalse(app.staticTexts["完整时间轴"].exists)
         attach("f2b-ios-future-totals-zero-dark-ax5")
     }

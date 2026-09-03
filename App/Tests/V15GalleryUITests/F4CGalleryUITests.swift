@@ -19,6 +19,9 @@ import XCTest
     }
     func testArchiveConfirmationTransferAndRestoreBoundary() {
         launch()
+        XCTAssertTrue(app.secureTextFields["v15.f4c.password"].exists)
+        XCTAssertTrue(app.secureTextFields["v15.f4c.password-confirmation"].exists)
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", "密码须为 12 到 128 个字符。")).count, 1)
         enterPasswordAndConfirm()
         XCTAssertTrue(app.descendants(matching: .any)["v15.f4c.handoff"].waitForExistence(timeout: 6))
         XCTAssertTrue(app.buttons["v15.f4c.restore-disabled"].exists)

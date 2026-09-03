@@ -12,4 +12,15 @@ import XCTest
     func testOfflineArchiveIsDisabledWithReason() {
         launch("master-offline", ["--v15-f1a-appearance", "dark", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]); let account = app.descendants(matching: .any)["v15.f1c.account.00000000-0000-0000-0000-00000000C101"]; XCTAssertTrue(account.waitForExistence(timeout: 8)); XCTAssertTrue(app.staticTexts["离线 · 只读"].waitForExistence(timeout: 5)); let add = app.buttons["v15.f1c.add"]; XCTAssertTrue(add.exists); XCTAssertFalse(add.isEnabled); attach("f1c-ios-dark-ax5-offline")
     }
+    func testSettingsChildPaneHasExplicitClosePath() {
+        launch("settings")
+        let open = app.buttons["v15.settings.open.master-data"]
+        XCTAssertTrue(open.waitForExistence(timeout: 8))
+        XCTAssertTrue(open.isHittable)
+        open.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)).tap()
+        let close = app.buttons["v15.settings.pane.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: 6))
+        close.tap()
+        XCTAssertTrue(open.waitForExistence(timeout: 6))
+    }
 }

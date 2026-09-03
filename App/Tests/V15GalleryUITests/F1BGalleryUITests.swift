@@ -9,6 +9,12 @@ final class F1BGalleryUITests: XCTestCase {
         app.launch()
     }
     private func attach(_ name: String) { let image = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); image.name = name; image.lifetime = .keepAlways; add(image) }
+    private func reveal(_ identifier: String) -> XCUIElement {
+        let element = app.descendants(matching: .any)[identifier]
+        for _ in 0..<10 where !element.isHittable { app.swipeUp() }
+        XCTAssertTrue(element.isHittable, "missing or unreachable \(identifier)")
+        return element
+    }
 
     func testSearchListOpensServerDetailWithHistoryAndProvenance() {
         launch()
@@ -20,8 +26,8 @@ final class F1BGalleryUITests: XCTestCase {
         let row = app.descendants(matching: .any)["v15.f1b.row.00000000-0000-0000-0000-00000000B101"]
         XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
         XCTAssertTrue(app.descendants(matching: .any)["v15.f1b.detail.title"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["v2 · updated"].exists)
-        XCTAssertTrue(app.staticTexts["merchant_mapping → merchant"].exists)
+        XCTAssertTrue(reveal("v15.f1b.revision.2").label.contains("已修改"))
+        XCTAssertTrue(reveal("v15.f1b.provenance.links").label.contains("已关联 2 条相关记录"))
         attach("f1b-ios-detail-light-history-provenance")
     }
 
@@ -35,7 +41,7 @@ final class F1BGalleryUITests: XCTestCase {
         XCTAssertFalse(app.buttons["恢复账目"].exists)
         attach("f1b-ios-detail-dark-ax5-history-provenance")
         void.tap()
-        XCTAssertTrue(app.staticTexts["该账目已作废；当前服务器没有提供恢复授权。"].waitForExistence(timeout: 5))
+        XCTAssertTrue(reveal("v15.f1b.archive-read-only").label.contains("归档，只读"))
     }
 
     func testFiltersAutoLoadAndOfflineMutationExplainsReadOnlyReason() {

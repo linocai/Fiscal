@@ -11,7 +11,7 @@ public struct V15LedgerLibraryView: View {
 #if os(iOS)
         NavigationStack {
             VStack(spacing: 0) { V15LedgerSearchBar(model: model, showFilters: { filtersPresented = true }); Divider(); V15LedgerList(model: model, open: open) }
-                .background(V15Palette.paper.color).navigationTitle("账目")
+                .v15IOSScreenCanvas().navigationTitle("账目")
         }
         .sheet(isPresented: $detailPresented) { V15LedgerDetail(model: model).presentationDetents([.large]).accessibilityIdentifier("v15.f1b.detail.sheet") }
         .sheet(isPresented: $filtersPresented) { NavigationStack { V15LedgerFilters(model: model).navigationTitle("筛选账目").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { filtersPresented = false } } } }.accessibilityIdentifier("v15.f1b.filters.sheet") }
@@ -71,8 +71,8 @@ private struct V15LedgerFilters: View {
                     V15Field("结束日期", text: Binding(get: { model.dateToText }, set: { model.setDateTo($0) }), prompt: "YYYY-MM-DD", issues: model.filterIssues.filter { $0.fieldPath == "date_to" }).accessibilityIdentifier("v15.f1b.filter.date-to")
                 }
                 V15Section("金额（元）") {
-                    V15Field("最低金额", text: Binding(get: { model.amountMinText }, set: { model.setAmountMin($0) }), prompt: "例如 12.50", issues: model.filterIssues.filter { $0.fieldPath == "amount_min" }).accessibilityIdentifier("v15.f1b.filter.min")
-                    V15Field("最高金额", text: Binding(get: { model.amountMaxText }, set: { model.setAmountMax($0) }), prompt: "例如 100.00", issues: model.filterIssues.filter { $0.fieldPath == "amount_max" }).accessibilityIdentifier("v15.f1b.filter.max")
+                    V15Field("最低金额", text: Binding(get: { model.amountMinText }, set: { model.setAmountMin($0) }), prompt: "例如 12.50", issues: model.filterIssues.filter { $0.fieldPath == "amount_min" }, keyboard: .decimal).accessibilityIdentifier("v15.f1b.filter.min")
+                    V15Field("最高金额", text: Binding(get: { model.amountMaxText }, set: { model.setAmountMax($0) }), prompt: "例如 100.00", issues: model.filterIssues.filter { $0.fieldPath == "amount_max" }, keyboard: .decimal).accessibilityIdentifier("v15.f1b.filter.max")
                 }
             }.padding(.vertical, V15Spacing.md)
         }.accessibilityIdentifier("v15.f1b.filters.content")
@@ -118,7 +118,10 @@ private struct V15LedgerDetail: View {
             case .loaded: if let selected = model.selected { detail(selected) }
             }
             if let error = model.deepLinkError { V15ServiceErrorState(message: error, retry: { Task { await model.retryDetail() } }) }
-        }.padding(V15Spacing.md) }.background(V15Palette.paper.color).accessibilityIdentifier("v15.f1b.detail")
+        }.padding(V15Spacing.md) }
+            .v15IOSScreenCanvas()
+            .background(detailBackground)
+            .accessibilityIdentifier("v15.f1b.detail")
     }
     @ViewBuilder private func detail(_ transaction: V15Transaction) -> some View {
         let presentation = model.transactionPresentation(transaction)
@@ -132,7 +135,7 @@ private struct V15LedgerDetail: View {
             Text("分类：\(model.categoryName(transaction.categoryID))").font(V15Typography.secondary)
             if let cycle = model.selectedCycle { Text("信用账期：\(cycle.periodStart) 至 \(cycle.periodEnd) · 还款日 \(cycle.dueDate)").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true) }
             if let cycleReadError = model.cycleReadError { Text(cycleReadError).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
-            if transaction.voidedAt != nil { V15ArchiveReadOnlyState { Text("该账目已作废，目前不能恢复。").font(V15Typography.secondary) } }
+            if transaction.voidedAt != nil { V15ArchiveReadOnlyState { Text("该账目已作废，目前不能恢复。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f1b.archive-read-only") }
         }
         V15Section("分录") { ForEach(transaction.postings, id: \.id) { posting in HStack { Text(postingRole(posting.role) + " · " + model.accountName(posting.accountID)).font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true); Spacer(); V15MoneyText(minorUnits: posting.amountMinor, direction: posting.amountMinor < 0 ? .outflow : .inflow, font: V15Typography.secondary) } } }
         V15Section("变更历史") { if model.revisions.isEmpty { Text("暂无可查看的变更历史。").font(V15Typography.secondary) } else { ForEach(model.revisions) { revision in Text(revision.displayEvent).font(V15Typography.secondary).accessibilityIdentifier("v15.f1b.revision.\(revision.version)") } } }
@@ -146,16 +149,19 @@ private struct V15LedgerDetail: View {
         } else { Text(V15DisabledReason.unknownCapability.message).font(V15Typography.secondary).accessibilityIdentifier("v15.f1b.no-action") }
     }
     private var voidInspectorKind: V15ButtonKind {
-#if os(macOS)
         .destructive
-#else
-        .quiet
-#endif
     }
-    @ViewBuilder private var provenance: some View { if let provenance = model.provenance { Text("来源：\(sourceLabel(provenance.source))").font(V15Typography.secondary); if !provenance.links.isEmpty { Text("已关联 \(provenance.links.count) 条相关记录").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) } } else { Text("正在读取来源信息。").font(V15Typography.secondary) } }
+    @ViewBuilder private var provenance: some View { if let provenance = model.provenance { Text("来源：\(sourceLabel(provenance.source))").font(V15Typography.secondary); if !provenance.links.isEmpty { Text("已关联 \(provenance.links.count) 条相关记录").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).accessibilityIdentifier("v15.f1b.provenance.links") } } else { Text("正在读取来源信息。").font(V15Typography.secondary) } }
     @ViewBuilder private var mutationState: some View { switch model.mutation { case .idle: EmptyView(); case .working: V15LoadingSkeleton(); case .reconciled(let message): V15ServerFactState(title: "数据已更新", detail: message); case .conflict(let conflict): V15ConflictState(conflict: conflict, changes: model.mutationConflictChanges, reload: { Task { await model.retryDetail() } }); case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.retryLastMutation() } }) } }
     private func sourceLabel(_ source: String) -> String { switch source { case "manual": "手工录入"; case "statement_import": "账单导入"; case "reimbursement": "报销"; case "installment": "分期"; default: "其他" } }
     private func transactionKindLabel(_ kind: String) -> String { switch kind { case "income": "收入"; case "expense": "支出"; case "transfer": "转账"; case "repayment": "还款"; case "reimbursement_receipt": "报销到账"; default: "账目" } }
+    private var detailBackground: Color {
+#if os(iOS)
+        .clear
+#else
+        V15Palette.paper.color
+#endif
+    }
     private func safeReadOnlyDestination(_ link: V15TransactionProvenanceLink) -> String? { guard let deepLink = link.deepLink, URL(string: deepLink)?.scheme == "fiscal" else { return nil }; return link.targetType }
 }
 

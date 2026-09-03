@@ -38,7 +38,7 @@ public struct V15ReimbursementView: View {
                 .padding(V15Spacing.md)
                 .frame(maxWidth: 720, alignment: .leading)
             }
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle("报销")
             .toolbar { ToolbarItem(placement: .primaryAction) { Button { Task { await model.refresh() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityLabel("刷新报销数据").accessibilityIdentifier("v15.f3c.refresh") } }
         }
@@ -59,6 +59,8 @@ public struct V15ReimbursementView: View {
             V15ActionButton("新建报销单", symbol: "plus", disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时只可查看，无法新建报销单。", fieldPath: nil) : nil) { Task { await model.openNewClaim() } }
                 .accessibilityIdentifier("v15.f3c.claim.new.open")
         }
+        .padding(V15Spacing.md)
+        .v15IOSCard()
     }
 
     @ViewBuilder private var listSurface: some View {
@@ -220,7 +222,7 @@ public struct V15ReimbursementView: View {
                 }.padding(V15Spacing.md)
             }
             .scrollDismissesKeyboard(.immediately)
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle(operationTitle(sheet))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭") { operationSheet = nil } }
@@ -299,7 +301,7 @@ public struct V15ReimbursementView: View {
                 .accessibilityIdentifier("v15.f3c.receipt.replace.title")
             V15Field("到账日期", text: Binding(get: { model.receiptReplacementDateText }, set: { model.receiptReplacementDateText = $0 }), prompt: "YYYY-MM-DD", issues: issues(model.secondaryIssues, prefix: "received_at"))
                 .accessibilityIdentifier("v15.f3c.receipt.replace.date")
-            V15Field("到账金额（元）", text: Binding(get: { model.receiptReplacementAmountText }, set: { model.receiptReplacementAmountText = $0 }), issues: issues(model.secondaryIssues, prefix: "amount_minor"))
+            V15Field("到账金额（元）", text: Binding(get: { model.receiptReplacementAmountText }, set: { model.receiptReplacementAmountText = $0 }), issues: issues(model.secondaryIssues, prefix: "amount_minor"), keyboard: .decimal)
                 .accessibilityIdentifier("v15.f3c.receipt.replace.amount")
             V15FieldIssues(issues: model.receiptReplacementPreviewReasons(for: receipt, claim: claim).map {
                 .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath)
@@ -354,10 +356,15 @@ public struct V15ReimbursementView: View {
                     V15Field("预计日期", text: Binding(get: { model.expectedDateText }, set: { model.expectedDateText = $0 }), prompt: "YYYY-MM-DD", issues: issues(model.newClaimIssues, prefix: "parties[0].expected_date"))
                         .accessibilityIdentifier("v15.f3c.claim.date")
                     candidateSurface
-                    V15Field("分摊金额（元）", text: Binding(get: { model.allocationAmountText }, set: { model.allocationAmountText = $0 }), prompt: "0.00", issues: issues(model.newClaimIssues, prefix: "parties[0].allocations[0].amount_minor"))
+                    V15Field("分摊金额（元）", text: Binding(get: { model.allocationAmountText }, set: { model.allocationAmountText = $0 }), prompt: "0.00", issues: issues(model.newClaimIssues, prefix: "parties[0].allocations[0].amount_minor"), keyboard: .decimal)
                         .accessibilityIdentifier("v15.f3c.claim.amount")
-                    V15ActionButton("创建报销单", symbol: "checkmark", disabledReasons: model.createClaimDisabledReasons) { Task { await model.createClaim() } }
-                        .accessibilityIdentifier("v15.f3c.claim.create")
+                    V15ActionButton(
+                        "创建报销单",
+                        symbol: "checkmark",
+                        disabledReasons: model.createClaimDisabledReasons,
+                        disabledReasonAccessibilityIdentifier: "v15.f3c.claim.create.reasons",
+                        accessibilityIdentifier: "v15.f3c.claim.create"
+                    ) { Task { await model.createClaim() } }
                     if model.hasRecoverableCreateAttempt && model.newClaimPhase == .unknown {
                         HStack(alignment: .top) {
                             V15ActionButton("安全检查保存结果", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能检查保存结果。", fieldPath: nil) : nil) { Task { await model.retryUnknownCreateClaim() } }.accessibilityIdentifier("v15.f3c.claim.retry-same-key")
@@ -367,7 +374,7 @@ public struct V15ReimbursementView: View {
                 }.padding(V15Spacing.md)
             }
             .scrollDismissesKeyboard(.immediately)
-            .background(V15Palette.paper.color).navigationTitle("新建报销单").toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismissNewClaim() } } }
+            .v15IOSScreenCanvas().navigationTitle("新建报销单").toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismissNewClaim() } } }
         }
         .presentationDetents([.large])
         .accessibilityIdentifier("v15.f3c.sheet.claim")
@@ -408,9 +415,15 @@ public struct V15ReimbursementView: View {
                     }
                     V15Field("到账标题", text: Binding(get: { model.receiptTitle }, set: { model.receiptTitle = $0 }), prompt: "例如：公司回款", issues: issues(model.receiptIssues, prefix: "title")).accessibilityIdentifier("v15.f3c.receipt.title")
                     V15Field("到账日期", text: Binding(get: { model.receiptDateText }, set: { model.receiptDateText = $0 }), prompt: "YYYY-MM-DD", issues: issues(model.receiptIssues, prefix: "received_at")).accessibilityIdentifier("v15.f3c.receipt.date")
-                    V15Field("到账金额（元）", text: Binding(get: { model.receiptAmountText }, set: { model.receiptAmountText = $0 }), prompt: "0.00", issues: issues(model.receiptIssues, prefix: "amount_minor")).accessibilityIdentifier("v15.f3c.receipt.amount")
+                    V15Field("到账金额（元）", text: Binding(get: { model.receiptAmountText }, set: { model.receiptAmountText = $0 }), prompt: "0.00", issues: issues(model.receiptIssues, prefix: "amount_minor"), keyboard: .decimal).accessibilityIdentifier("v15.f3c.receipt.amount")
                     receiptAccountSurface
-                    V15ActionButton("预览到账影响", kind: .secondary, disabledReasons: model.receiptPreviewDisabledReasons) { Task { await model.previewReceipt() } }.accessibilityIdentifier("v15.f3c.receipt.preview")
+                    V15ActionButton(
+                        "预览到账影响",
+                        kind: .secondary,
+                        disabledReasons: model.receiptPreviewDisabledReasons,
+                        disabledReasonAccessibilityIdentifier: "v15.f3c.receipt.preview.reasons",
+                        accessibilityIdentifier: "v15.f3c.receipt.preview"
+                    ) { Task { await model.previewReceipt() } }
                     if let preview = model.receiptPreview {
                         V15PreviewState(version: "到账预览") { Text("报销单已到账将从 \(money(preview.claimReceivedBeforeMinor)) 变为 \(money(preview.claimReceivedAfterMinor))；将保存 \(preview.persistedAllocations.count) 条分配。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3c.receipt.preview.result")
                     }
@@ -425,7 +438,7 @@ public struct V15ReimbursementView: View {
             }
             .id(model.receiptPhase == .succeeded)
             .scrollDismissesKeyboard(.immediately)
-            .background(V15Palette.paper.color).navigationTitle("登记到账").toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismissReceipt() }.accessibilityIdentifier("v15.f3c.receipt.close") } }
+            .v15IOSScreenCanvas().navigationTitle("登记到账").toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismissReceipt() }.accessibilityIdentifier("v15.f3c.receipt.close") } }
         }.presentationDetents([.large]).accessibilityIdentifier("v15.f3c.sheet.receipt")
     }
 
@@ -443,27 +456,22 @@ public struct V15ReimbursementView: View {
 
     @ViewBuilder private func sheetBanner(_ phase: V15ReimbursementModel.EditorPhase, serverIssues: [V15FieldIssue]) -> some View {
         switch phase {
-        case .failed(let failure): nonRetryableMessage(title: "操作未完成", message: failure.message).accessibilityIdentifier("v15.f3c.sheet.error")
+        case .failed(let failure): V15ErrorMessageState(title: "操作未完成", message: failure.message).accessibilityIdentifier("v15.f3c.sheet.error")
         case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.refresh() } }.accessibilityIdentifier("v15.f3c.sheet.conflict")
-        case .unknown: nonRetryableMessage(title: "保存结果暂时不明", message: "这笔可能已经保存。安全检查不会重复登记，你也可以停止恢复。").accessibilityIdentifier("v15.f3c.sheet.unknown")
+        case .unknown: V15OutcomeUnknownState(title: "保存结果暂时不明", message: "这笔可能已经保存。安全检查不会重复登记，你也可以停止恢复。").accessibilityIdentifier("v15.f3c.sheet.unknown")
         case .succeeded: V15SuccessReceiptState(title: "已保存", detail: "可以关闭并查看最新结果。", actionTitle: nil).accessibilityIdentifier("v15.f3c.sheet.success")
         default: EmptyView()
         }
         V15FieldIssues(issues: serverIssues).accessibilityIdentifier("v15.f3c.sheet.remote-reasons")
     }
 
-    private func unknownState(_ message: String, retry: @escaping () -> Void) -> some View { V15ServiceErrorState(message: message, retry: retry) }
-    private func nonRetryableMessage(title: String, message: String) -> some View {
-        VStack(alignment: .leading, spacing: V15Spacing.xs) {
-            Label(title, systemImage: V15Symbol.warning).font(V15Typography.cardTitle).foregroundStyle(V15Palette.teal.color)
-            Text(message).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(V15Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(V15Palette.selected.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
-        .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(V15Palette.teal.color.opacity(0.55), lineWidth: 1) }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title)：\(message)")
+    private func unknownState(_ message: String, retry: @escaping () -> Void) -> some View {
+        V15OutcomeUnknownState(
+            message: message,
+            actionTitle: "安全检查最新状态",
+            actionIdentifier: "v15.f3c.unknown.readback",
+            action: retry
+        )
     }
     private func issues(_ values: [V15FieldIssue], prefix: String) -> [V15FieldIssue] { values.filter { $0.fieldPath == prefix || $0.fieldPath?.hasPrefix(prefix + ".") == true } }
     private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral, includeCurrency: true).text }

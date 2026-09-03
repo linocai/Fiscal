@@ -26,7 +26,7 @@ public struct V15ReportingView: View {
                 .padding(V15Spacing.md)
                 .frame(maxWidth: 760, alignment: .leading)
             }
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle("报表")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -72,7 +72,7 @@ public struct V15ReportingView: View {
 
     private var reportHeader: some View {
         VStack(alignment: .leading, spacing: V15Spacing.xs) {
-            Text("报表是看法，不是地点")
+            Text("收支与资产，一眼看清")
                 .font(V15Typography.surfaceTitle)
             if let meta = model.report?.meta {
                 Text("上海业务日 \(meta.dateFrom) 至 \(meta.dateTo) · CNY\n更新于 \(V15TodayReadModel.shanghaiDateLabel(meta.generatedAt))")
@@ -87,6 +87,8 @@ public struct V15ReportingView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .padding(V15Spacing.md)
+        .v15IOSCard()
     }
 
     private var periodControls: some View {
@@ -113,6 +115,9 @@ public struct V15ReportingView: View {
                 .font(V15Typography.label)
                 .foregroundStyle(V15Palette.ink.color.opacity(0.58))
         }
+        .padding(V15Spacing.xs)
+        .background(V15Palette.surfaceRaised.color, in: RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous).stroke(V15Palette.hairline.color) }
     }
 
     private var lensControls: some View {
@@ -542,7 +547,7 @@ public struct V15ReportingView: View {
                 .padding(V15Spacing.md)
                 .frame(maxWidth: 760, alignment: .leading)
             }
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle("报表钻取")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -659,7 +664,7 @@ public struct V15ReportingView: View {
                 Spacer(minLength: 0)
             }
             .padding(V15Spacing.md)
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
         }
         .tint(V15Palette.teal.color)
         .accessibilityIdentifier("v15.f4b.export.sheet")

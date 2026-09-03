@@ -2,6 +2,7 @@ import SwiftUI
 
 #if os(iOS)
 public struct V15CashFlowView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var model: V15CashFlowModel
     @State private var showsHistory = false
     private let initialItem: V15CashFlowItem?
@@ -25,7 +26,7 @@ public struct V15CashFlowView: View {
                 .padding(V15Spacing.md)
                 .frame(maxWidth: 760, alignment: .leading)
             }
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle("现金流")
             .toolbar { ToolbarItem(placement: .primaryAction) { Button { Task { await model.refresh() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityLabel("刷新现金流数据").accessibilityIdentifier("v15.f3d.refresh") } }
         }
@@ -38,15 +39,25 @@ public struct V15CashFlowView: View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
             Text("逐笔看清计划与实际").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("v15.f3d.header.title")
             Text("集中查看未来收支、已完成记录，以及报销和信用账单安排。")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("v15.f3d.header.detail")
             if let summary = model.active?.summary {
-                HStack(alignment: .top, spacing: V15Spacing.sm) {
-                    metric("30 日流入", summary.inflowMinor, .inflow)
-                    metric("30 日流出", summary.outflowMinor, .outflow)
-                    metric("净额", summary.netMinor, netDirection(summary.netMinor))
+                VStack(spacing: V15Spacing.sm) {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(spacing: V15Spacing.sm) {
+                            metric("30 日流入", summary.inflowMinor, .inflow, id: "inflow")
+                            metric("30 日流出", summary.outflowMinor, .outflow, id: "outflow")
+                        }
+                    } else {
+                        HStack(alignment: .top, spacing: V15Spacing.sm) {
+                            metric("30 日流入", summary.inflowMinor, .inflow, id: "inflow")
+                            metric("30 日流出", summary.outflowMinor, .outflow, id: "outflow")
+                        }
+                    }
+                    metric("净额", summary.netMinor, netDirection(summary.netMinor), id: "net")
                 }
-                .accessibilityIdentifier("v15.f3d.summary")
             }
             V15PickerRow("账户筛选", selection: Binding(get: { model.accountFilterID }, set: { value in Task { await model.setAccountFilter(value) } })) {
                 Text("全部账户").tag(UUID?.none)
@@ -55,10 +66,20 @@ public struct V15CashFlowView: View {
             .disabled(model.selectionLocked)
             V15ActionButton("新建现金流", symbol: "plus", disabledReasons: model.openCreateReasons) { model.openCreate() }.accessibilityIdentifier("v15.f3d.create.open")
         }
+        .padding(V15Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .v15IOSCard()
     }
 
-    private func metric(_ title: String, _ amount: V15MinorUnits, _ direction: V15MoneyDirection) -> some View {
-        VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)); Text(V15MoneyPresentation(minorUnits: amount, direction: direction, includeCurrency: true).text).font(V15Typography.money).monospacedDigit().fixedSize(horizontal: true, vertical: false) }
+    private func metric(_ title: String, _ amount: V15MinorUnits, _ direction: V15MoneyDirection, id: String) -> some View {
+        VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+            Text(title)
+                .font(V15Typography.label)
+                .foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                .accessibilityIdentifier("v15.f3d.summary.\(id).label")
+            V15MoneyText(minorUnits: amount, direction: direction)
+                .accessibilityIdentifier("v15.f3d.summary.\(id).amount")
+        }
             .padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
     }
 
@@ -104,29 +125,29 @@ public struct V15CashFlowView: View {
 
     private func detail(_ item: V15CashFlowItem) -> some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
-            HStack(spacing: V15Spacing.xs) {
+            V15AdaptiveStack(spacing: V15Spacing.xs) {
                 Text(item.isSystem ? "系统派生" : "手工计划").font(V15Typography.label)
                     .padding(.horizontal, V15Spacing.xs).padding(.vertical, V15Spacing.xxs)
                     .background(item.isSystem ? V15Palette.provisional.color : V15Palette.selected.color, in: RoundedRectangle(cornerRadius: V15Radius.tag))
                 if item.isSystem { Text(sourceLabel(item)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
             }
-            HStack(alignment: .firstTextBaseline) { Text(item.title).font(V15Typography.cardTitle); Spacer(); Text(item.status.displayName).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
+            V15AdaptiveStack(horizontalAlignment: .firstTextBaseline) { Text(item.title).font(V15Typography.cardTitle); Spacer(); Text(item.status.displayName).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
                 .accessibilityIdentifier("v15.f3d.detail")
             Text("\(item.expectedDate) · \(item.direction.displayName) · \(item.status.displayName)").font(V15Typography.secondary)
-            HStack(alignment: .top, spacing: V15Spacing.sm) {
+            V15AdaptiveStack(spacing: V15Spacing.sm) {
                 cashFlowFact("计划金额", value: item.plannedAmountMinor, date: item.expectedDate, provisional: true)
                 if let actual = item.actualAmountMinor { cashFlowFact("实际入账", value: actual, date: item.actualDate ?? "日期未提供", provisional: false) }
                 else { cashFlowUnavailableFact("实际入账", detail: item.isSystem ? "回来源流程确认" : "尚未结算") }
             }
             .accessibilityIdentifier("v15.f3d.plan-actual")
             if item.isOverdue { Label("已逾期", systemImage: V15Symbol.warning).foregroundStyle(V15Palette.gold.color) }
-            if item.isDisplayOnly { Text("暂时无法识别此事项的状态或方向，当前只供查看。") .font(V15Typography.secondary).foregroundStyle(V15Palette.teal.color).accessibilityIdentifier("v15.f3d.display-only") }
+            if item.isDisplayOnly { Text("暂时无法识别此事项的状态或方向，当前只供查看。") .font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3d.display-only") }
             if item.isSystem {
                 Label(item.systemKind == .creditCycle ? "信用账单安排 · 请到还款页面处理" : "报销到账安排 · 请到报销页面登记", systemImage: "link")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                 V15ActionButton("修改显示信息", kind: .secondary, disabledReasons: systemOpenReasons(item)) { model.openEdit(item) }.accessibilityIdentifier("v15.f3d.system.edit.open")
             } else {
-                HStack(alignment: .top, spacing: V15Spacing.sm) {
+                V15AdaptiveStack(spacing: V15Spacing.sm) {
                     if let preview = model.confirmPreview, preview.itemBefore.id == item.id {
                         V15ActionButton(model.confirmCommitIsInFlight ? "正在提交" : "确认本次", kind: .secondary, disabledReasons: model.actionReasons(.confirm, for: item)) { Task { await model.commitConfirmPreview() } }.accessibilityIdentifier("v15.f3d.confirm.commit")
                     } else {
@@ -134,7 +155,7 @@ public struct V15CashFlowView: View {
                     }
                     V15ActionButton("入账", disabledReasons: settleOpenReasons(item)) { model.openSettle(item) }.accessibilityIdentifier("v15.f3d.settle.open")
                 }
-                HStack(alignment: .top, spacing: V15Spacing.sm) {
+                V15AdaptiveStack(spacing: V15Spacing.sm) {
                     V15ActionButton("修改", kind: .quiet, disabledReasons: editOpenReasons(item)) { model.openEdit(item) }.accessibilityIdentifier("v15.f3d.edit.open")
                     V15ActionButton("取消", kind: .destructive, disabledReasons: model.actionReasons(.cancel, for: item)) { Task { await model.perform(.cancel, on: item) } }.accessibilityIdentifier("v15.f3d.cancel")
                 }
@@ -164,7 +185,7 @@ public struct V15CashFlowView: View {
                 .padding(V15Spacing.md)
             }
             .scrollDismissesKeyboard(.immediately)
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle(editorTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismissEditor() }.accessibilityIdentifier("v15.f3d.editor.close") }
@@ -191,7 +212,7 @@ public struct V15CashFlowView: View {
     private var manualEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
             V15Field("标题", text: $model.title, issues: visibleEditorIssues("title")).accessibilityIdentifier("v15.f3d.editor.title")
-            V15Field("计划金额（元）", text: $model.amountText, prompt: "0.00", issues: visibleEditorIssues("planned_amount_minor")).accessibilityIdentifier("v15.f3d.editor.amount")
+            V15Field("计划金额（元）", text: $model.amountText, prompt: "0.00", issues: visibleEditorIssues("planned_amount_minor"), keyboard: .decimal).accessibilityIdentifier("v15.f3d.editor.amount")
             Picker("方向", selection: $model.direction) { ForEach([V15CashFlowDirection.inflow, .outflow, .transfer]) { Text($0.displayName).tag($0) } }.pickerStyle(.segmented).accessibilityIdentifier("v15.f3d.editor.direction")
             V15Field("预计日期", text: $model.expectedDateText, prompt: "YYYY-MM-DD", issues: issues(model.editorIssues, "expected_date")).accessibilityIdentifier("v15.f3d.editor.date")
             accountPickers(source: $model.selectedAccountID, destination: $model.selectedDestinationAccountID, transfer: model.direction == .transfer)
@@ -214,7 +235,7 @@ public struct V15CashFlowView: View {
     private var settlementEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
             Text("计划金额不会自动成为实际金额；请填写本次真实入账金额。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-            V15Field("实际金额（元）", text: $model.settleAmountText, issues: issues(model.settleIssues, "actual_amount_minor")).accessibilityIdentifier("v15.f3d.settle.amount")
+            V15Field("实际金额（元）", text: $model.settleAmountText, issues: issues(model.settleIssues, "actual_amount_minor"), keyboard: .decimal).accessibilityIdentifier("v15.f3d.settle.amount")
             V15Field("发生日期", text: $model.settleDateText, prompt: "YYYY-MM-DD", issues: issues(model.settleIssues, "occurred_at")).accessibilityIdentifier("v15.f3d.settle.date")
             accountPickers(source: $model.settleAccountID, destination: $model.settleDestinationAccountID, transfer: model.selectedItem?.direction == .transfer)
             if model.selectedItem?.direction != .transfer { categoryPicker(selection: $model.settleCategoryID, categories: model.selectedItem?.direction == .inflow ? model.incomeCategories : model.expenseCategories) }
@@ -247,7 +268,7 @@ public struct V15CashFlowView: View {
             V15ServiceErrorState(message: message) { Task { await model.retryFactRefresh() } }.accessibilityIdentifier("v15.f3d.fact-refresh")
         } else {
             switch model.mutationPhase {
-            case .unknown: V15ServiceErrorState(message: model.directReadbackMessage ?? "暂时无法确认操作结果。安全检查不会重复保存。") { if model.hasUnknownStableAttempt { Task { await model.retryUnknownStable() } } else { Task { await model.readBackUnknownDirect() } } }.accessibilityIdentifier("v15.f3d.unknown")
+            case .unknown: V15OutcomeUnknownState(message: model.directReadbackMessage ?? "暂时无法确认操作结果。安全检查不会重复保存。", actionTitle: "安全检查最新状态") { if model.hasUnknownStableAttempt { Task { await model.retryUnknownStable() } } else { Task { await model.readBackUnknownDirect() } } }.accessibilityIdentifier("v15.f3d.unknown")
             case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.reloadAfterConflict() } }.accessibilityIdentifier("v15.f3d.conflict")
             case .failed(let failure): V15ServiceErrorState(message: failure.message) { if model.hasFactRefreshGate { Task { await model.retryFactRefresh() } } else { Task { await model.refresh() } } }.accessibilityIdentifier("v15.f3d.mutation.error")
             case .succeeded: V15SuccessReceiptState(title: "现金流已更新", detail: "未来安排、历史与详情均已更新。").accessibilityIdentifier("v15.f3d.success")

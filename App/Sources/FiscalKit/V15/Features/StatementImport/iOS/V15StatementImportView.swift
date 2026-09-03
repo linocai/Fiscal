@@ -32,7 +32,7 @@ public struct V15StatementImportView: View {
                 .padding(V15Spacing.md)
                 .frame(maxWidth: 680, alignment: .leading)
             }
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle("账单导入")
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.pdf], allowsMultipleSelection: false) { outcome in
@@ -71,6 +71,8 @@ public struct V15StatementImportView: View {
                 V15OfflineReadOnlyBanner(snapshotAt: snapshot).accessibilityIdentifier("v15.f3g.offline")
             }
         }
+        .padding(V15Spacing.md)
+        .v15IOSCard()
     }
 
     private var intake: some View {
@@ -258,19 +260,24 @@ public struct V15StatementImportView: View {
     }
 
     private func evidenceCard(_ row: V15StatementWorkbenchRow) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Text("第 \(row.pageNumber.map(String.init) ?? "—") 页 · 脱敏内容").font(V15Typography.label)
-                Spacer()
-                if row.evidenceTextMasked == nil { Text("内容不可用").font(V15Typography.label) }
-            }
+        DisclosureGroup {
             Text(row.evidenceTextMasked ?? "页面图像与文本均不可用；只保留行号、页码与结构化候选。")
                 .font(V15Typography.body)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, V15Spacing.xs)
+        } label: {
+            HStack {
+                Text("第 \(row.pageNumber.map(String.init) ?? "—") 页 · 原始证据").font(V15Typography.label)
+                Spacer()
+                Text(row.evidenceTextMasked == nil ? "不可用" : "已脱敏")
+                    .font(V15Typography.label)
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.56))
+            }
         }
         .padding(V15Spacing.md)
-        .background(row.evidenceTextMasked == nil ? V15Palette.provisional.color : V15Palette.paper.color, in: RoundedRectangle(cornerRadius: V15Radius.decisionCard))
+        .background(row.evidenceTextMasked == nil ? V15Palette.provisional.color : V15Palette.surfaceRaised.color, in: RoundedRectangle(cornerRadius: V15Radius.decisionCard, style: .continuous))
         .overlay { RoundedRectangle(cornerRadius: V15Radius.decisionCard).stroke(V15Palette.hairline.color, style: StrokeStyle(lineWidth: 1, dash: row.evidenceTextMasked == nil ? [5, 4] : [])) }
+        .accessibilityIdentifier("v15.f3g.evidence.\(row.id)")
     }
 
     private func resolutionButton(_ title: String, resolution: V15StatementResolution, row: V15StatementWorkbenchRow, disabled: Bool = false) -> some View {
@@ -371,8 +378,13 @@ public struct V15StatementImportView: View {
             V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("v15.f3g.resolution-readback-loading")
         }
         if case .failed(let failure) = model.phase {
-            V15ServiceErrorState(message: failure.message, retryIdentifier: failure.code == "resolution_response_unknown" ? "v15.f3g.resolution-readback-retry" : nil, retry: { model.retryFromFailure() })
-                .accessibilityIdentifier("v15.f3g.error")
+            if V15StateVisualSpec.resolve(failure).semantic == .outcomeUnknown || failure.code == "resolution_response_unknown" {
+                V15OutcomeUnknownState(message: failure.message, actionTitle: "安全检查最新状态", actionIdentifier: "v15.f3g.resolution-readback-retry", action: { model.retryFromFailure() })
+                    .accessibilityIdentifier("v15.f3g.error")
+            } else {
+                V15ServiceErrorState(message: failure.message, retry: { model.retryFromFailure() })
+                    .accessibilityIdentifier("v15.f3g.error")
+            }
         }
     }
 
@@ -384,7 +396,7 @@ public struct V15StatementImportView: View {
                 }
                 .padding(V15Spacing.md)
             }
-            .background(V15Palette.paper.color)
+            .v15IOSScreenCanvas()
             .navigationTitle("确认前检查")
             .toolbar {
                 Button("关闭") { showingConfirmation = false }

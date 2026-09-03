@@ -14,7 +14,7 @@ import XCTest
     }
     func testSyntheticMaskedEvidenceRequestBoundReviewAndExactConfirmation() {
         launch("statement-import-provider"); prepareReview(); button("v15.f3g.page-load").tap(); XCTAssertTrue(reveal("v15.f3g.masked-page").label.contains("•"))
-        button("v15.f3g.preview").tap(); XCTAssertTrue(element("v15.f3g.confirmation-sheet").waitForExistence(timeout: 8)); XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "原样提交服务器返回的行与版本")).firstMatch.exists)
+        button("v15.f3g.preview").tap(); XCTAssertTrue(element("v15.f3g.confirmation-sheet").waitForExistence(timeout: 8)); XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "所选行会一起确认")).firstMatch.exists)
         button("v15.f3g.confirm").tap(); XCTAssertTrue(element("v15.f3g.sheet-receipt").waitForExistence(timeout: 8)); button("v15.f3g.preview-dismiss").tap(); XCTAssertTrue(reveal("v15.f3g.receipt").exists)
     }
     func testResponseUnknownReadsReceiptWithoutSecondConfirm() {
