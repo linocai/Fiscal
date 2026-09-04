@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 当前目标：**Fiscal V2 前端升级** ｜更新：2026-09-04（Asia/Shanghai）｜状态：**COMPLETE · P4 Review closure 已通过**
+> 当前目标：**Fiscal V2 前端升级** ｜更新：2026-09-04（Asia/Shanghai）｜状态：**RELEASED · v2.0.0 (38)**
 
 ## 1. 目标与完成定义
 
@@ -114,7 +114,7 @@ V2 不是继续增加财务模块，而是让用户打开 Fiscal 后能立刻回
 
 已通过：F3B1 26/26、F3A 7/7、`FiscalKitTests` 405 tests / 39 suites、`FiscaliOS` generic iOS Simulator build、`FiscalmacOS` build、iOS Root Smoke 7/7、macOS Root Smoke 4/4，以及 `git diff --check`。六个受保护 scheme 哈希保持不变。Root smoke 使用隔离的临时 QA 数据库；服务、数据库与本轮 `fiscal-v2-p4` 临时 DerivedData 均已清理。
 
-上述 smoke 覆盖已实现的真实内容路径与 P4 回归；它不等同于人工视觉验收。浅/深色、最大动态字体、macOS 窄/标准窗口及完整离线恢复仍应在下一次发布前作人工复核，不能把自动 smoke 表述为已完成这些视觉检查。
+上述 smoke 覆盖已实现的真实内容路径与 P4 回归；它本身不等同于人工视觉验收。v2.0.0 发布候选已另行完成人工复核：iPhone 390×844 浅色、深色、AX5 与长金额，macOS 1000×760/1400×850，以及完整离线只读状态；证据与发布事实见 `archive/releases/v2.0.0/RELEASE_STATE.md`。
 
 ### 7.2 P3 基线（仅供参照）
 
@@ -128,6 +128,6 @@ P3 曾通过 399 个 FiscalKit 测试、iOS root smoke 7/7、macOS root smoke 4/
 
 ## 9. 完成状态与后续边界
 
-V2 与 P4 Review closure 均已完成：五项原始 P1/P2 与两项 closure P2 已关闭，独立 closure Review 没有 P0/P1/P2。工作区仍未提交、推送、打 tag、发布、签名、替换本机客户端或进入 iOS 安装交付；这些动作须用户另行授权。六个受保护 Xcode scheme 的既有本地修改保持原样，未被本轮生成、覆盖或纳入施工。
+V2 与 P4 Review closure 均已完成并于 2026-09-04 作为 `v2.0.0 (38)` 发布。源码提交 `bf5b9c99443a5184a83319b605dd691577d5987f` 已推送到 `origin/main`，不可变标签 `v2.0.0` 已推送；macOS 签名包已替换并启动，iOS development IPA 已交付到 Downloads 等待用户安装。累计差异不含 `Backend/`，因此线上后端、数据库与 Alembic `20260831_0038` 保持不变。完整发布、签名、生产核验、制品与回滚记录见 `archive/releases/v2.0.0/RELEASE_STATE.md`。
 
-若用户启动发布流程，先阅读本文件与 `FISCAL_V2_FRONTEND_UPGRADE_PLAN.md`、检查 `git status`，再完成发布前人工视觉复核（浅/深色、最大动态字体、macOS 窄/标准窗口、完整离线恢复）及发布所需的累计差异审计。不得将现有 root smoke 扩大表述为这些人工检查已经完成。
+六个受保护 Xcode scheme 的既有本地修改保持原样，未被生成、覆盖或纳入发布提交。后续工作从已发布 V2 基线开始，不得重新引入重复根入口、模块大厅、无来源未来或脱离对象上下文的专项跳转。
