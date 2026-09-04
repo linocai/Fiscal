@@ -4,10 +4,15 @@ public struct V15InstallmentView: View {
     private enum Sheet: String, Identifiable { case purchase, existingPurchase, edit, command; var id: String { rawValue } }
     @State private var model: V15InstallmentModel
     @State private var sheet: Sheet?
+    private let initialAccountID: UUID?
+    private let initialPlanID: UUID?
+    private let initialPurchaseTransactionID: UUID?
 
     @MainActor public init(
         services: V15Services,
         offlineSnapshotAt: Date? = nil,
+        initialAccountID: UUID? = nil,
+        initialPlanID: UUID? = nil,
         initialPurchaseTransactionID: UUID? = nil,
         now: @escaping () -> Date = { .now }
     ) {
@@ -15,6 +20,9 @@ public struct V15InstallmentView: View {
         model.purchaseTransactionIDText = initialPurchaseTransactionID?.uuidString ?? ""
         _model = State(initialValue: model)
         _sheet = State(initialValue: initialPurchaseTransactionID == nil ? nil : .existingPurchase)
+        self.initialAccountID = initialAccountID
+        self.initialPlanID = initialPlanID
+        self.initialPurchaseTransactionID = initialPurchaseTransactionID
     }
 
     public var body: some View {
@@ -23,7 +31,7 @@ public struct V15InstallmentView: View {
                 switch model.phase {
                 case .idle, .loading: V15LoadingSkeleton().padding()
                 case .empty: V15EmptyState(title: "还没有分期计划", explanation: "可以为已有信用消费建立计划，或直接录入新的分期消费。", actionTitle: "新建分期消费") { sheet = .purchase }
-                case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.load() } }.padding()
+                case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await loadInitialState() } }.padding()
                 case .loaded: content
                 }
             }
@@ -34,11 +42,16 @@ public struct V15InstallmentView: View {
                     Button { sheet = .purchase } label: { Label("新分期消费", systemImage: "plus") }.accessibilityIdentifier("v15.f3b2.purchase.open")
                 }
             }
-            .task { if case .idle = model.phase { await model.load() } }
+            .task { if case .idle = model.phase { await loadInitialState() } }
             .refreshable { await model.refresh() }
             .sheet(item: $sheet, onDismiss: model.dismissEditor) { value in editor(value) }
         }
         .accessibilityIdentifier("v15.f3b2.installments.ios")
+    }
+
+    private func loadInitialState() async {
+        await model.load(initialAccountID: initialAccountID, initialPlanID: initialPlanID)
+        if initialPurchaseTransactionID != nil { await model.checkEligibility() }
     }
 
     private var content: some View {
@@ -89,6 +102,11 @@ public struct V15InstallmentView: View {
     private func detail(_ plan: V15InstallmentPlan) -> some View {
         V15Section("计划详情", detail: plan.status.displayName) {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
+                if model.detailPhase == .loading { V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("v15.f3b2.detail.loading") }
+                if case .failed(let failure) = model.detailPhase {
+                    V15ServiceErrorState(message: failure.message) { Task { await model.selectPlan(plan, readCachePolicy: .reloadIgnoringCache) } }
+                        .accessibilityIdentifier("v15.f3b2.detail.error")
+                }
                 HStack { VStack(alignment: .leading) { Text(plan.title).font(V15Typography.cardTitle); Text(plan.status.displayName).font(V15Typography.secondary) }; Spacer(); V15MoneyText(minorUnits: plan.totalFinancedMinor, direction: .outflow) }
                 if plan.isDisplayOnly { V15DisplayOnlyState(detail: "暂时无法识别此计划状态，当前只供查看。").accessibilityIdentifier("v15.f3b2.unknown-state") }
                 HStack { fact("已锁定", "\(plan.lockedCount) 期"); fact("未来", "\(plan.futureCount) 期"); fact("已取消", "\(plan.cancelledCount) 期") }

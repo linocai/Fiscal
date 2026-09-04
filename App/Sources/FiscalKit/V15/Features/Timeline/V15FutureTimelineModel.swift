@@ -12,6 +12,15 @@ public enum V15FutureOpenTarget: Sendable, Equatable {
 /// forecast from the returned rows.
 @MainActor @Observable
 public final class V15FutureTimelineModel {
+    /// A display-only grouping for the financial timeline. It never changes
+    /// the server response or infers a new event: it merely gives both
+    /// platforms a stable date → certainty → direction → source reading order.
+    public struct DateSection: Identifiable, Equatable {
+        public let date: String
+        public let events: [V15FutureEvent]
+        public var id: String { date }
+    }
+
     public enum Phase { case idle, loading, loaded, empty, failed(V15Failure), requiresReload(V15Failure) }
     public enum PagePhase { case idle, loading, failed(V15Failure) }
     public enum AccountOptionsPhase { case idle, loading, loaded, empty, failed(V15Failure) }
@@ -52,6 +61,12 @@ public final class V15FutureTimelineModel {
     public var isLoadingNextPage: Bool { if case .loading = pagePhase { return true }; return false }
     public var isLoadingAccountOptions: Bool { if case .loading = accountOptionsPhase { return true }; return false }
     public var selectedAccountDisplayName: String? { accountOptions.first(where: { $0.id == selectedAccountID })?.name }
+    public var dateSections: [DateSection] {
+        let grouped = Dictionary(grouping: events, by: \.date)
+        return grouped.keys.sorted().map { date in
+            DateSection(date: date, events: (grouped[date] ?? []).sorted(by: Self.readingOrder))
+        }
+    }
 
     public func setWindowDays(_ value: Int) async {
         guard [7, 30, 60, 90].contains(value) else { return }
@@ -110,6 +125,10 @@ public final class V15FutureTimelineModel {
     public func retryNextPage() async { await loadNextPage() }
 
     public func openInspector(_ event: V15FutureEvent) {
+        // Selecting another row is a new navigation intent.  A late owner
+        // read for the previous row must not return a target into this newly
+        // selected inspector (or into a specialist page after it closes).
+        openGeneration &+= 1
         guard Self.isSafeLocator(event.deepLink, event: event) else {
             inspectorPhase = .unavailable("此链接暂时无法打开。")
             return
@@ -209,6 +228,17 @@ public final class V15FutureTimelineModel {
         openGeneration &+= 1
         events = []; meta = nil; serverWindow = nil; nextCursor = nil; pageFailure = nil; pagePhase = .idle; inspectorPhase = .idle; openPhase = .idle
         phase = .requiresReload(failure)
+    }
+
+    private static func readingOrder(_ lhs: V15FutureEvent, _ rhs: V15FutureEvent) -> Bool {
+        let certaintyRank: [V15FutureEventCertainty: Int] = [.exactDue: 0, .confirmed: 1, .scheduled: 2, .expected: 3]
+        let directionRank: [V15FutureEventDirection: Int] = [.outflow: 0, .inflow: 1]
+        let sourceRank: [V15FutureEventSource: Int] = [.creditCycle: 0, .reimbursementParty: 1, .cashFlowItem: 2]
+        if certaintyRank[lhs.certainty] != certaintyRank[rhs.certainty] { return certaintyRank[lhs.certainty, default: .max] < certaintyRank[rhs.certainty, default: .max] }
+        if directionRank[lhs.direction] != directionRank[rhs.direction] { return directionRank[lhs.direction, default: .max] < directionRank[rhs.direction, default: .max] }
+        if sourceRank[lhs.sourceType] != sourceRank[rhs.sourceType] { return sourceRank[lhs.sourceType, default: .max] < sourceRank[rhs.sourceType, default: .max] }
+        if lhs.title != rhs.title { return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending }
+        return lhs.id < rhs.id
     }
 
     /// Strict source-aware local routes. Query/fragment, host aliases and

@@ -5,11 +5,15 @@ public struct V15CreditView: View {
     private let initialGalleryScenario: String?
     private let fixtureReconnectAction: (() -> Void)?
     private let initialCycle: V15CreditCycle?
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, initialGalleryScenario: String? = nil, fixtureReconnectAction: (() -> Void)? = nil, initialCycle: V15CreditCycle? = nil) {
+    private let initialAccountID: UUID?
+    @State private var initialContextFailure: V15Failure?
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, initialGalleryScenario: String? = nil, fixtureReconnectAction: (() -> Void)? = nil, initialCycle: V15CreditCycle? = nil, initialAccountID: UUID? = nil) {
         _model = State(initialValue: .init(services: services, offlineSnapshotAt: offlineSnapshotAt, offlineSnapshotProvider: offlineSnapshotProvider))
+        _initialContextFailure = State(initialValue: nil)
         self.initialGalleryScenario = initialGalleryScenario
         self.fixtureReconnectAction = fixtureReconnectAction
         self.initialCycle = initialCycle
+        self.initialAccountID = initialAccountID
     }
 
     public var body: some View {
@@ -32,14 +36,39 @@ public struct V15CreditView: View {
                 scheduleSheet
             }
         }
+        .overlay {
+            if let initialContextFailure {
+                ZStack {
+                    V15Palette.paper.color.ignoresSafeArea()
+                    V15ServiceErrorState(message: initialContextFailure.message) { Task { await loadInitialState() } }
+                        .padding(V15Spacing.md)
+                        .accessibilityIdentifier("v15.f3b1.initial-context.error")
+                }
+            }
+        }
         .accessibilityIdentifier("v15.f3b1.credit.ios")
     }
 
     private func loadInitialState() async {
+        initialContextFailure = nil
         await model.load()
-        if let initialCycle, let account = model.accounts.first(where: { $0.id == initialCycle.accountID }) {
+        // A contextual route must not replace a genuine list/master-data
+        // failure with "account unavailable".  The normal content state owns
+        // that failure and its retry action; absence is only meaningful after
+        // the list has completed successfully.
+        guard initialContextMayResolve else { return }
+        if let initialCycle {
+            guard let account = model.accounts.first(where: { $0.id == initialCycle.accountID }) else {
+                initialContextFailure = .init(kind: .decoding, code: "initial_credit_account_unavailable", message: "无法打开这个账期所属的信用账户；它可能已停用或不再存在。")
+                return
+            }
+            await model.selectAccount(account); await model.selectCycle(initialCycle)
+        } else if let initialAccountID {
+            guard let account = model.accounts.first(where: { $0.id == initialAccountID }) else {
+                initialContextFailure = .init(kind: .decoding, code: "initial_credit_account_unavailable", message: "无法打开指定的信用账户；它可能已停用或不再存在。")
+                return
+            }
             await model.selectAccount(account)
-            await model.selectCycle(initialCycle)
         }
         guard let scenario = initialGalleryScenario else { return }
         if scenario == "credit-page-error" { await model.loadNextCycles(); return }
@@ -47,6 +76,13 @@ public struct V15CreditView: View {
         model.openScheduleSheet(); model.cycleMode = .statementDayCutoff; model.statementDayText = "25"; model.dueDayText = "10"
         await model.requestSchedulePreview()
         if scenario == "credit-conflict" { await model.commitSchedule() }
+    }
+
+    private var initialContextMayResolve: Bool {
+        switch model.phase {
+        case .loaded, .empty: true
+        case .idle, .loading, .failed: false
+        }
     }
 
     private var header: some View {

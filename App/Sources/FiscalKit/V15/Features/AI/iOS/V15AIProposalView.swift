@@ -6,9 +6,15 @@ import UIKit
 public struct V15AIProposalView: View {
     @State private var model: V15AIProposalModel
     @State private var showsReview = false
+    private let closeAction: (() -> Void)?
 
-    @MainActor public init(services: V15Services, offlineSnapshotAt: Date? = nil) {
+    @MainActor public init(
+        services: V15Services,
+        offlineSnapshotAt: Date? = nil,
+        onClose: (() -> Void)? = nil
+    ) {
         _model = State(initialValue: V15AIProposalModel(services: services, offlineSnapshotAt: offlineSnapshotAt))
+        closeAction = onClose
     }
 
     public var body: some View {
@@ -31,7 +37,20 @@ public struct V15AIProposalView: View {
             .scrollDismissesKeyboard(.interactively)
             .v15IOSScreenCanvas()
             .navigationTitle("AI 记账")
-            .toolbar { Button("刷新") { Task { await model.load() } }.accessibilityIdentifier("v15.f3f.refresh") }
+            .toolbar {
+#if os(iOS)
+                if let closeAction {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("关闭", action: closeAction).accessibilityIdentifier("v15.f3f.close")
+                    }
+                }
+#endif
+#if os(iOS)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("刷新") { Task { await model.load() } }.accessibilityIdentifier("v15.f3f.refresh")
+                }
+#endif
+            }
         }
         .accessibilityIdentifier("v15.f3f.ai.ios")
         .task { if model.phase == .idle { await model.load() } }

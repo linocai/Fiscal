@@ -3,10 +3,24 @@ import SwiftUI
 #if os(macOS)
 public struct V15FutureTimelineMacView: View {
     @State private var model: V15FutureTimelineModel
-    @State private var selectedID: String?
+    @Binding private var selectedID: String?
     private let initialAutoLoadNext: Bool
     private let onOpen: @MainActor (V15FutureOpenTarget) -> Void
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialAutoLoadNext: Bool = false, onOpen: @escaping @MainActor (V15FutureOpenTarget) -> Void = { _ in }) { _model = State(initialValue: .init(services: services, offlineSnapshotProvider: { offlineSnapshotAt })); self.initialAutoLoadNext = initialAutoLoadNext; self.onOpen = onOpen }
+    public init(model: V15FutureTimelineModel, selectedID: Binding<String?>, initialAutoLoadNext: Bool = false, onOpen: @escaping @MainActor (V15FutureOpenTarget) -> Void = { _ in }) {
+        _model = State(initialValue: model)
+        _selectedID = selectedID
+        self.initialAutoLoadNext = initialAutoLoadNext
+        self.onOpen = onOpen
+    }
+
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialAutoLoadNext: Bool = false, onOpen: @escaping @MainActor (V15FutureOpenTarget) -> Void = { _ in }) {
+        self.init(
+            model: .init(services: services, offlineSnapshotProvider: { offlineSnapshotAt }),
+            selectedID: .constant(nil),
+            initialAutoLoadNext: initialAutoLoadNext,
+            onOpen: onOpen
+        )
+    }
     public var body: some View {
         HSplitView {
             sidebar.frame(minWidth: 190, idealWidth: 220, maxWidth: 280)
@@ -14,7 +28,13 @@ public struct V15FutureTimelineMacView: View {
             inspector.frame(minWidth: 280, idealWidth: 350)
         }
         .v15MacWorkspaceCanvas()
-        .task { async let timeline: Void = model.reload(); async let accounts: Void = model.loadAccountOptions(); _ = await (timeline, accounts); if initialAutoLoadNext { await model.loadNextPage() } }.accessibilityElement(children: .contain).accessibilityIdentifier("v15.f3a.timeline.macos")
+        .task { async let timeline: Void = model.reload(); async let accounts: Void = model.loadAccountOptions(); _ = await (timeline, accounts); if initialAutoLoadNext { await model.loadNextPage() } }
+        // Leaving this contextual page must invalidate an in-flight ownership
+        // check, otherwise a late response could navigate into a specialist
+        // page after the user has already returned elsewhere.
+        .onDisappear { model.closeInspector() }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("v15.f3a.timeline.macos")
     }
     private var sidebar: some View { VStack(alignment: .leading, spacing: V15Spacing.md) {
         Text("已知未来").font(V15Typography.surfaceTitle)
@@ -40,7 +60,7 @@ public struct V15FutureTimelineMacView: View {
         }
     }
     @ViewBuilder private var spine: some View { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) {
-        HStack { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text("未来日程").font(V15Typography.cardTitle); Text(model.meta.map { "更新于 \(V15TodayReadModel.shanghaiDateLabel($0.asOf))" } ?? "正在读取未来事项").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; Spacer(); Button { Task { await model.reload() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityIdentifier("v15.f3a.reload") }
+        HStack { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text("已知未来").font(V15Typography.cardTitle); Text(model.meta.map { "数据更新于 \(V15TodayReadModel.shanghaiDateLabel($0.asOf))" } ?? "只读时间范围，不把未来事项计入当前余额或正式流水。 ").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; Spacer(); Button { Task { await model.reload() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityIdentifier("v15.f3a.reload") }
         switch model.phase {
         case .idle, .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3a.loading")
         case .failed(let f): V15ServiceErrorState(message: f.message) { Task { await model.reload() } }.accessibilityIdentifier("v15.f3a.error")
@@ -49,7 +69,17 @@ public struct V15FutureTimelineMacView: View {
         case .loaded: rows
         }
     }.padding(V15Spacing.md) } }
-    private var rows: some View { VStack(alignment: .leading, spacing: V15Spacing.xs) { ForEach(model.events) { event in Button { selectedID = event.id; model.openInspector(event) } label: { V15FutureEventRow(event: event).overlay(alignment: .leading) { Rectangle().fill(V15Palette.teal.color).frame(width: 3).opacity(selectedID == event.id ? 1 : 0) } }.buttonStyle(.plain).v15PlatformHitArea().accessibilityIdentifier("v15.f3a.event.\(event.id)") }
+    private var rows: some View { VStack(alignment: .leading, spacing: V15Spacing.sm) {
+        V15FutureTimelineTruthNotice()
+        if let window = model.serverWindow { Text("上海业务日：\(window.dateFrom) 至 \(window.dateTo)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(model.dateSections) { section in
+                V15FutureDateSection(section: section, selectedID: selectedID) { event in
+                    selectedID = event.id
+                    model.openInspector(event)
+                }
+            }
+        }
         if model.hasNextPage { V15ActionButton("读取下一页", kind: .secondary, disabledReason: model.isLoadingNextPage ? .init(code: "loading_next_page", message: "正在读取下一页。", fieldPath: nil) : nil) { Task { await model.loadNextPage() } }.keyboardShortcut(.downArrow, modifiers: [.command, .option]).accessibilityIdentifier("v15.f3a.next") }
         if let f = model.pageFailure { V15ServiceErrorState(message: f.message) { Task { await model.retryNextPage() } }.accessibilityIdentifier("v15.f3a.page-error") }
     } }
@@ -71,10 +101,65 @@ public struct V15FutureTimelineMacView: View {
     }.padding(V15Spacing.md) } }
 }
 
+private struct V15FutureTimelineTruthNotice: View {
+    var body: some View {
+        Text("“预计”仅表示预计；“已确认”与“到期日已确认”分开显示。未来事项不会改变当前余额或正式流水。")
+            .font(V15Typography.secondary)
+            .foregroundStyle(V15Palette.ink.color.opacity(0.66))
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("v15.f3a.truth-notice")
+    }
+}
+
+private struct V15FutureDateSection: View {
+    let section: V15FutureTimelineModel.DateSection
+    let selectedID: String?
+    let open: (V15FutureEvent) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(section.date).font(V15Typography.label.weight(.semibold)).foregroundStyle(V15Palette.ink.color.opacity(0.72))
+                Spacer()
+                Text("\(section.events.count) 项").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.52))
+            }
+            .padding(.top, V15Spacing.sm)
+            .padding(.bottom, V15Spacing.xxs)
+            ForEach(Array(section.events.enumerated()), id: \.element.id) { index, event in
+                Button { open(event) } label: {
+                    V15FutureEventRow(event: event, continuesToNext: index < section.events.count - 1)
+                        .background(selectedID == event.id ? V15Palette.selected.color : .clear)
+                }
+                .buttonStyle(.plain)
+                .v15PlatformHitArea()
+                .accessibilityIdentifier("v15.f3a.event.\(event.id)")
+            }
+        }
+    }
+}
+
 private struct V15FutureEventRow: View {
     let event: V15FutureEvent
-    var body: some View { HStack(alignment: .top, spacing: V15Spacing.sm) { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(event.date).font(V15Typography.label).foregroundStyle(V15Palette.teal.color); Text(event.title).font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true); Text("\(certainty) · \(source)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; Spacer(minLength: V15Spacing.xs); V15MoneyText(minorUnits: event.amountMinor, direction: event.direction == .inflow ? .inflow : .outflow, font: V15Typography.secondary).lineLimit(1).minimumScaleFactor(0.72) }.padding(V15Spacing.md).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card)).overlay { RoundedRectangle(cornerRadius: V15Radius.card).stroke(V15Palette.hairline.color, lineWidth: 1) } }
-    private var certainty: String { switch event.certainty { case .exactDue: "到期日已确认"; case .confirmed: "已确认"; case .expected: "预计"; case .scheduled: "已排期" } }
+    var continuesToNext = false
+    var body: some View { HStack(alignment: .top, spacing: V15Spacing.sm) {
+        VStack(spacing: 0) {
+            Circle().fill(certaintyColor).frame(width: 8, height: 8).padding(.top, 6)
+            Rectangle().fill(V15Palette.hairline.color).frame(width: 1).frame(maxHeight: .infinity).opacity(continuesToNext ? 1 : 0)
+        }.frame(width: 8)
+        VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+            HStack(alignment: .firstTextBaseline, spacing: V15Spacing.sm) {
+                Text(event.title).font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: V15Spacing.xs)
+                V15MoneyText(minorUnits: event.amountMinor, direction: event.direction == .inflow ? .inflow : .outflow, font: V15Typography.secondary).lineLimit(1).minimumScaleFactor(0.72)
+            }
+            Text("\(certainty) · \(direction) · \(source)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, V15Spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }.contentShape(Rectangle()).accessibilityElement(children: .combine) }
+    private var certaintyColor: Color { switch event.certainty { case .exactDue, .confirmed: V15Palette.teal.color; case .scheduled: V15Palette.gold.color; case .expected: V15Palette.ink.color.opacity(0.48) } }
+    private var certainty: String { switch event.certainty { case .exactDue: "到期日已确认"; case .confirmed: "已确认"; case .expected: "预计（尚未确认）"; case .scheduled: "已排期" } }
+    private var direction: String { event.direction == .inflow ? "流入" : "流出" }
     private var source: String { switch event.sourceType { case .creditCycle: "信用账期"; case .reimbursementParty: "报销对象"; case .cashFlowItem: "现金流事项" } }
 }
 

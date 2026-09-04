@@ -6,15 +6,19 @@ public struct V15ReimbursementMacView: View {
     @State private var inspectorMode: InspectorMode = .claim
     private let initialGalleryScenario: String?
     private let initialClaim: V15ReimbursementClaim?
+    private let initialClaimID: UUID?
     private let initialPartyID: UUID?
+    private let initialTransactionID: UUID?
 
     private enum InspectorMode: Equatable { case claim, claimReplacement, receiptActions(UUID), receiptReplacement(UUID) }
 
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialGalleryScenario: String? = nil, initialClaim: V15ReimbursementClaim? = nil, initialPartyID: UUID? = nil) {
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialGalleryScenario: String? = nil, initialClaim: V15ReimbursementClaim? = nil, initialClaimID: UUID? = nil, initialPartyID: UUID? = nil, initialTransactionID: UUID? = nil) {
         _model = State(initialValue: V15ReimbursementModel(services: services, offlineSnapshotAt: offlineSnapshotAt))
         self.initialGalleryScenario = initialGalleryScenario
         self.initialClaim = initialClaim
+        self.initialClaimID = initialClaimID
         self.initialPartyID = initialPartyID
+        self.initialTransactionID = initialTransactionID
     }
 
     public var body: some View {
@@ -27,8 +31,14 @@ public struct V15ReimbursementMacView: View {
         }
         .v15MacWorkspaceCanvas()
         .task {
-            if model.phase == .idle { await model.load() }
-            if let initialClaim { await model.selectClaim(initialClaim, readCachePolicy: .reloadIgnoringCache) }
+            if let initialClaim {
+                await model.openClaim(initialClaim, readCachePolicy: .reloadIgnoringCache)
+            } else if let initialClaimID {
+                await model.openClaim(id: initialClaimID, readCachePolicy: .reloadIgnoringCache)
+            } else {
+                if model.phase == .idle { await model.load() }
+                if let initialTransactionID { await model.openNewClaim(preselecting: initialTransactionID) }
+            }
             if let initialGalleryScenario { await prepareGalleryScenario(initialGalleryScenario) }
         }
         .accessibilityElement(children: .contain)

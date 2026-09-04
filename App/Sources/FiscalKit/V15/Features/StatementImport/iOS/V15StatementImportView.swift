@@ -12,10 +12,17 @@ public struct V15StatementImportView: View {
     @State private var showingConfirmation = false
     @State private var reviewIndex = 0
     private let initialGalleryScenario: String?
+    private let closeAction: (() -> Void)?
 
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialGalleryScenario: String? = nil) {
+    public init(
+        services: V15Services,
+        offlineSnapshotAt: Date? = nil,
+        initialGalleryScenario: String? = nil,
+        onClose: (() -> Void)? = nil
+    ) {
         _model = State(initialValue: V15StatementImportModel(services: services, offlineSnapshotAt: offlineSnapshotAt))
         self.initialGalleryScenario = initialGalleryScenario
+        closeAction = onClose
     }
 
     public var body: some View {
@@ -34,6 +41,15 @@ public struct V15StatementImportView: View {
             }
             .v15IOSScreenCanvas()
             .navigationTitle("账单导入")
+            .toolbar {
+#if os(iOS)
+                if let closeAction {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("关闭", action: closeAction).accessibilityIdentifier("v15.f3g.close")
+                    }
+                }
+#endif
+            }
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.pdf], allowsMultipleSelection: false) { outcome in
             if case .success(let urls) = outcome, let url = urls.first { model.selectFile(url: url) }

@@ -545,4 +545,65 @@ struct F3CTests {
         #expect(!direct.hasPendingFactRefresh && direct.directMutationPhase == .succeeded && direct.selectedClaim?.version == 4)
         #expect(await directTransport.recordedWires().filter { $0.method == "POST" && $0.path.hasSuffix("/void") }.count == 1)
     }
+
+    @MainActor @Test("initial expense transaction is found across server candidate pages and selected exactly")
+    func initialTransactionPagesToExactCandidate() async {
+        let transport = InitialCandidatePagingTransport(outcome: .foundOnSecondPage)
+        let model = V15ReimbursementModel(services: V15Services(transport: transport))
+        await model.openNewClaim(preselecting: V15F3CFixtures.candidateID)
+
+        #expect(model.newClaimSheetVisible)
+        #expect(model.selectedCandidate?.transactionID == V15F3CFixtures.candidateID)
+        #expect(model.allocationAmountText == "300.00")
+        #expect(model.newClaimPhase == .ready)
+        #expect(await transport.requestedCursors() == [nil, "candidate-page-2"])
+    }
+
+    @MainActor @Test("missing initial expense transaction reports an explicit error and never selects another candidate")
+    func missingInitialTransactionDoesNotFallback() async {
+        let transport = InitialCandidatePagingTransport(outcome: .missing)
+        let model = V15ReimbursementModel(services: V15Services(transport: transport))
+        await model.openNewClaim(preselecting: V15F3CFixtures.candidateID)
+
+        #expect(model.selectedCandidate == nil)
+        #expect(model.newClaimServerIssues.contains { $0.code == "initial_reimbursement_candidate_not_found" })
+        if case .failed(let failure) = model.newClaimPhase {
+            #expect(failure.code == "initial_reimbursement_candidate_not_found")
+        } else {
+            Issue.record("expected an explicit missing-candidate failure")
+        }
+        #expect(await transport.requestedCursors() == [nil, "candidate-page-2"])
+    }
+}
+
+private actor InitialCandidatePagingTransport: V15Transporting {
+    enum Outcome { case foundOnSecondPage, missing }
+
+    private let outcome: Outcome
+    private var cursors: [String?] = []
+
+    init(outcome: Outcome) { self.outcome = outcome }
+
+    func requestedCursors() -> [String?] { cursors }
+
+    func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
+        guard request.path == "reimbursement-expense-candidates", request.method == "GET" else {
+            throw V15Failure(kind: .transport, code: "fixture_missing", message: "Unexpected request: \(request.method) \(request.path)")
+        }
+        let cursor = request.query.first(where: { $0.name == "cursor" })?.value
+        cursors.append(cursor)
+        let payload: String
+        if cursor == nil {
+            payload = #"{"items":[],"next_cursor":"candidate-page-2"}"#
+        } else if outcome == .foundOnSecondPage {
+            payload = V15F3CFixtures.candidates
+        } else {
+            payload = #"{"items":[],"next_cursor":null}"#
+        }
+        return try V15FixtureCodec.decoder.decode(Response.self, from: Data(payload.utf8))
+    }
+
+    func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data {
+        throw V15Failure(kind: .transport, code: "fixture_missing", message: "No artifact fixture.")
+    }
 }

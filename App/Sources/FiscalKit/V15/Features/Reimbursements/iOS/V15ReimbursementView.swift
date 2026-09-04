@@ -5,7 +5,9 @@ public struct V15ReimbursementView: View {
     @State private var model: V15ReimbursementModel
     @State private var operationSheet: OperationSheet?
     private let initialClaim: V15ReimbursementClaim?
+    private let initialClaimID: UUID?
     private let initialPartyID: UUID?
+    private let initialTransactionID: UUID?
 
     private enum OperationSheet: Identifiable {
         case claimReplacement, cancellation, claimActions, receiptReplacement(UUID), receiptActions(UUID)
@@ -20,10 +22,12 @@ public struct V15ReimbursementView: View {
         }
     }
 
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialClaim: V15ReimbursementClaim? = nil, initialPartyID: UUID? = nil) {
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialClaim: V15ReimbursementClaim? = nil, initialClaimID: UUID? = nil, initialPartyID: UUID? = nil, initialTransactionID: UUID? = nil) {
         _model = State(initialValue: V15ReimbursementModel(services: services, offlineSnapshotAt: offlineSnapshotAt))
         self.initialClaim = initialClaim
+        self.initialClaimID = initialClaimID
         self.initialPartyID = initialPartyID
+        self.initialTransactionID = initialTransactionID
     }
 
     public var body: some View {
@@ -43,8 +47,14 @@ public struct V15ReimbursementView: View {
             .toolbar { ToolbarItem(placement: .primaryAction) { Button { Task { await model.refresh() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityLabel("刷新报销数据").accessibilityIdentifier("v15.f3c.refresh") } }
         }
         .task {
-            if model.phase == .idle { await model.load() }
-            if let initialClaim { await model.selectClaim(initialClaim, readCachePolicy: .reloadIgnoringCache) }
+            if let initialClaim {
+                await model.openClaim(initialClaim, readCachePolicy: .reloadIgnoringCache)
+            } else if let initialClaimID {
+                await model.openClaim(id: initialClaimID, readCachePolicy: .reloadIgnoringCache)
+            } else {
+                if model.phase == .idle { await model.load() }
+                if let initialTransactionID { await model.openNewClaim(preselecting: initialTransactionID) }
+            }
         }
         .sheet(isPresented: Binding(get: { model.newClaimSheetVisible }, set: { if !$0 { model.dismissNewClaim() } })) { newClaimSheet }
         .sheet(isPresented: Binding(get: { model.receiptSheetVisible }, set: { if !$0 { model.dismissReceipt() } })) { receiptSheet }

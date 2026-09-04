@@ -114,19 +114,18 @@ final class V15RootSmokeUITests: XCTestCase {
             let app = launchApp(service: service, formalFixture: true, scheme: testCase.scheme, extraArguments: testCase.arguments)
             let workspace = app.descendants(matching: .any)["v151.ios.workspace-marker"]
             XCTAssertTrue(workspace.waitForExistence(timeout: 8), testCase.name)
-            let monthlyExpense = app.descendants(matching: .any)["v151.ios.today.monthly-expense"]
-            XCTAssertTrue(monthlyExpense.waitForExistence(timeout: 8), testCase.name)
-            XCTAssertTrue(monthlyExpense.label.contains("1,234.56"), testCase.name)
-            XCTAssertFalse(app.staticTexts["暂不可用"].exists, testCase.name)
             XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.today").firstMatch.isHittable, testCase.name)
             XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.ledger").firstMatch.isHittable, testCase.name)
+            XCTAssertFalse(app.buttons.matching(identifier: "v151.ios.bottom.more").firstMatch.exists, testCase.name)
             XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.record").firstMatch.isHittable, testCase.name)
+            XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.today.reports").firstMatch.isHittable, testCase.name)
+            XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.today.settings").firstMatch.isHittable, testCase.name)
             if testCase.name.hasSuffix("ax5") {
-                let future = app.buttons["v151.ios.today.known-future.item.0"]
-                XCTAssertTrue(future.waitForExistence(timeout: 6), testCase.name)
+                let due = app.buttons["v151.ios.today.near-term.item.0"]
+                XCTAssertTrue(due.waitForExistence(timeout: 6), testCase.name)
                 let today = app.descendants(matching: .any)["v151.ios.today"]
-                for _ in 0..<12 where !future.isHittable { today.swipeUp() }
-                XCTAssertTrue(future.isHittable, "AX5 content below the first screen must remain reachable")
+                for _ in 0..<12 where !due.isHittable { today.swipeUp() }
+                XCTAssertTrue(due.isHittable, "AX5 content below the first screen must remain reachable")
                 XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.today").firstMatch.isHittable, testCase.name)
             }
             let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
@@ -149,6 +148,7 @@ final class V15RootSmokeUITests: XCTestCase {
         XCTAssertLessThanOrEqual(frame.maxX, app.frame.maxX)
         XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.today").firstMatch.isHittable)
         XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.ledger").firstMatch.isHittable)
+        XCTAssertFalse(app.buttons.matching(identifier: "v151.ios.bottom.more").firstMatch.exists)
         XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.record").firstMatch.isHittable)
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = "v151-ios-workspace-boundary-390x844"
@@ -157,20 +157,58 @@ final class V15RootSmokeUITests: XCTestCase {
         app.terminate()
     }
 
-    func testFormalWorkspaceLedgerKeepsAccountBalanceBoardVisible() {
+    func testFormalWorkspaceLedgerProvidesCompactScopeAndTimeNavigation() {
         let service = uniqueKeychainService()
         let app = launchApp(service: service, formalFixture: true, scheme: "light")
         XCTAssertTrue(app.descendants(matching: .any)["v151.ios.workspace-marker"].waitForExistence(timeout: 8))
 
         app.buttons.matching(identifier: "v151.ios.bottom.ledger").firstMatch.tap()
 
-        XCTAssertTrue(app.staticTexts["账户余额"].waitForExistence(timeout: 8))
-        let cash = app.descendants(matching: .any)["v151.ios.ledger.account.00000000-0000-0000-0000-000000000101"]
-        let credit = app.descendants(matching: .any)["v151.ios.ledger.account.00000000-0000-0000-0000-000000000103"]
-        XCTAssertTrue(cash.waitForExistence(timeout: 6))
-        XCTAssertTrue(credit.waitForExistence(timeout: 6))
-        XCTAssertTrue(cash.label.contains("可用余额"))
-        XCTAssertTrue(credit.label.contains("信用欠款"))
+        let accountScope = app.descendants(matching: .any)["v151.ios.ledger.account-scope"]
+        let accountScopeLabel = app.buttons["全部账户"]
+        let accountScopeText = app.staticTexts["全部账户"]
+        let past = app.descendants(matching: .any)["v151.ios.ledger.time.past"]
+        let today = app.descendants(matching: .any)["v151.ios.ledger.time.today"]
+        let future = app.descendants(matching: .any)["v151.ios.ledger.time.future"]
+        XCTAssertTrue(
+            accountScope.waitForExistence(timeout: 8)
+            || accountScopeLabel.waitForExistence(timeout: 8)
+            || accountScopeText.waitForExistence(timeout: 8)
+        )
+        XCTAssertTrue(past.isHittable)
+        XCTAssertTrue(today.isHittable)
+        XCTAssertTrue(future.isHittable)
+
+        let scopeButton = app.buttons["全部账户"]
+        if scopeButton.exists { scopeButton.tap() }
+        else { accountScope.tap() }
+        let cashAccount = app.buttons["日常现金"]
+        XCTAssertTrue(cashAccount.waitForExistence(timeout: 5))
+        cashAccount.tap()
+        let accountDetail = app.buttons.matching(identifier: "v151.ios.ledger.account-detail").firstMatch
+        XCTAssertTrue(accountDetail.waitForExistence(timeout: 5))
+        XCTAssertTrue(accountDetail.isHittable)
+        accountDetail.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.account-detail"].waitForExistence(timeout: 8))
+        app.buttons.matching(identifier: "v151.ios.account-detail.close").firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.ledger"].waitForExistence(timeout: 5))
+
+        future.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f3a.timeline.ios"].waitForExistence(timeout: 8))
+        app.buttons.matching(identifier: "v151.ios.ledger.future.close").firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.ledger"].waitForExistence(timeout: 5))
+
+        future.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f3a.timeline.ios"].waitForExistence(timeout: 8))
+        let cashFlowPlan = app.buttons.matching(identifier: "v151.ios.ledger.future.cash-flow").firstMatch
+        XCTAssertTrue(cashFlowPlan.isHittable)
+        cashFlowPlan.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f3d.cash-flow.ios"].waitForExistence(timeout: 8))
+        app.buttons["关闭"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f3a.timeline.ios"].waitForExistence(timeout: 5))
+        app.buttons.matching(identifier: "v151.ios.ledger.future.close").firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.ledger"].waitForExistence(timeout: 5))
+
         let record = app.buttons.matching(identifier: "v151.ios.record").firstMatch
         XCTAssertTrue(record.isHittable)
         let next = app.buttons["v151.ios.ledger.next"]
@@ -179,6 +217,47 @@ final class V15RootSmokeUITests: XCTestCase {
         XCTAssertTrue(next.isHittable)
         XCTAssertFalse(next.frame.intersects(record.frame))
 
+        app.terminate()
+    }
+
+    func testFormalWorkspaceSettingsAndGovernancePathsRemainReachable() {
+        let service = uniqueKeychainService()
+        let app = launchApp(service: service, formalFixture: true, scheme: "light")
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.workspace-marker"].waitForExistence(timeout: 8))
+
+        app.descendants(matching: .any)["v151.ios.today.settings"].tap()
+        let settings = app.descendants(matching: .any)["v15.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 8))
+
+        let proposals = app.descendants(matching: .any)["v15.settings.open.proposals"]
+        let statementImport = app.descendants(matching: .any)["v15.settings.open.statement-import"]
+        let pendingSync = app.descendants(matching: .any)["v15.settings.open.pending-sync"]
+        let security = app.descendants(matching: .any)["v15.settings.open.security"]
+        XCTAssertTrue(proposals.isHittable)
+        XCTAssertTrue(statementImport.isHittable)
+        XCTAssertTrue(pendingSync.isHittable)
+        for _ in 0..<6 where !security.isHittable { settings.swipeUp() }
+        XCTAssertTrue(security.isHittable)
+
+        pendingSync.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.pending-sync"].waitForExistence(timeout: 8))
+        app.buttons["返回设置与治理"].tap()
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+
+        proposals.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f3f.ai.ios"].waitForExistence(timeout: 8))
+        app.buttons.matching(identifier: "v15.f3f.close").firstMatch.tap()
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+
+        statementImport.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f3g.statement-import.ios"].waitForExistence(timeout: 8))
+        app.buttons.matching(identifier: "v15.f3g.close").firstMatch.tap()
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+
+        security.tap()
+        XCTAssertTrue(app.staticTexts["数据与安全"].waitForExistence(timeout: 8))
+        app.buttons.matching(identifier: "v15.settings.pane.close").firstMatch.tap()
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
         app.terminate()
     }
 }

@@ -66,6 +66,44 @@ struct F3B2Tests {
         #expect(model.planMutationDisabledReason?.code == "unknown_plan_status")
     }
 
+    @MainActor @Test("initial account and plan select the exact plan and refresh never falls back to the first item")
+    func exactInitialPlanSelection() async {
+        let model = V15InstallmentModel(services: V15F3B2Fixtures.services(), now: { fixedNow })
+        await model.load(initialAccountID: V15F3B2Fixtures.accountID, initialPlanID: V15F3B2Fixtures.completedPlanID)
+        #expect(model.filterAccountID == V15F3B2Fixtures.accountID)
+        #expect(model.selectedPlan?.id == V15F3B2Fixtures.completedPlanID)
+        #expect(model.selectedPlan?.id != model.plans.first?.id)
+        #expect(model.detailPhase == .loaded)
+
+        await model.refresh()
+        #expect(model.selectedPlan?.id == V15F3B2Fixtures.completedPlanID)
+        #expect(model.detailPhase == .loaded)
+    }
+
+    @MainActor @Test("initial plan missing from the first page is fetched by exact server id")
+    func exactInitialPlanOutsideFirstPage() async {
+        let transport = ExactInstallmentEntryTransport()
+        let model = V15InstallmentModel(services: V15Services(transport: transport), now: { fixedNow })
+        await model.load(initialAccountID: V15F3B2Fixtures.accountID, initialPlanID: V15F3B2Fixtures.completedPlanID)
+
+        #expect(model.selectedPlan?.id == V15F3B2Fixtures.completedPlanID)
+        #expect(model.selectedPlan?.status == .completed)
+        #expect(model.plans.map(\.id) == [V15F3B2Fixtures.completedPlanID])
+        #expect(await transport.requestedPaths().contains("installment-plans/\(V15F3B2Fixtures.completedPlanID)"))
+    }
+
+    @MainActor @Test("missing initial credit account fails explicitly without selecting another account plan")
+    func missingInitialAccountDoesNotFallback() async {
+        let model = V15InstallmentModel(services: V15F3B2Fixtures.services(), now: { fixedNow })
+        await model.load(initialAccountID: UUID(uuidString: "00000000-0000-0000-0000-00000000B499")!)
+        #expect(model.selectedPlan == nil)
+        if case .failed(let failure) = model.phase {
+            #expect(failure.code == "initial_credit_account_unavailable")
+        } else {
+            Issue.record("expected an explicit initial account failure")
+        }
+    }
+
     @MainActor @Test("fee categories have independent loading empty error retry and generation ownership")
     func feeCategoryStatesAndRace() async throws {
         let failureTransport = F3B2Transport(mode: .categoryFailureThenSuccess)
@@ -538,5 +576,30 @@ struct F3B2Tests {
         let wires = await transport.recordedWires().filter { $0.method == "POST" && $0.key != nil }
         #expect(Set(wires.map(\.path)) == ["installment-plans/\(V15F3B2Fixtures.activePlanID)/settle-early", "installment-plans/\(V15F3B2Fixtures.activePlanID)/reverse-settlement", "installment-plans/\(V15F3B2Fixtures.activePlanID)/cancel-future"])
         #expect(wires.allSatisfy { UUID(uuidString: $0.key ?? "") != nil })
+    }
+}
+
+private actor ExactInstallmentEntryTransport: V15Transporting {
+    private var paths: [String] = []
+
+    func requestedPaths() -> [String] { paths }
+
+    func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
+        paths.append(request.path)
+        let payload: String
+        switch (request.path, request.method) {
+        case ("accounts", "GET"): payload = V15F3B2Fixtures.accounts
+        case ("categories", "GET"): payload = V15F3B2Fixtures.categories
+        case ("installment-plans", "GET"): payload = #"{"items":[],"next_cursor":null}"#
+        case ("installment-plans/\(V15F3B2Fixtures.completedPlanID)", "GET"): payload = V15F3B2Fixtures.plan(V15F3B2Fixtures.completedPlanID, status: "completed")
+        case ("transactions/\(V15F3B2Fixtures.purchaseID)", "GET"): payload = V15F3B2Fixtures.transaction()
+        case ("installment-liabilities", "GET"): payload = V15F3B2Fixtures.liabilities
+        default: throw V15Failure(kind: .transport, code: "fixture_missing", message: "Unexpected request: \(request.method) \(request.path)")
+        }
+        return try V15FixtureCodec.decoder.decode(Response.self, from: Data(payload.utf8))
+    }
+
+    func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data {
+        throw V15Failure(kind: .transport, code: "fixture_missing", message: "No artifact fixture.")
     }
 }

@@ -305,12 +305,14 @@ public struct V15MasterDataView: View {
 
 public struct V15SettingsView: View {
     private enum Pane: String, CaseIterable, Identifiable {
-        case masterData, archive, ai, security
+        case masterData, archive, proposals, statementImport, ai, security
         var id: String { rawValue }
         var title: String {
             switch self {
             case .masterData: "主数据"
-            case .archive: "归档区"
+            case .archive: "归档与恢复"
+            case .proposals: "AI 待确认"
+            case .statementImport: "账单导入"
             case .ai: "AI 与识别"
             case .security: "系统与数据"
             }
@@ -319,6 +321,8 @@ public struct V15SettingsView: View {
             switch self {
             case .masterData: "tray.full"
             case .archive: "archivebox"
+            case .proposals: "sparkles"
+            case .statementImport: "doc.text.viewfinder"
             case .ai: "sparkles"
             case .security: "lock.shield"
             }
@@ -327,13 +331,19 @@ public struct V15SettingsView: View {
 
     private let services: V15Services
     private let offlineSnapshotAt: Date?
+    private let openPendingSync: (() -> Void)?
     @State private var model: V15SettingsOverviewModel
     @State private var presentedPane: Pane?
     @State private var selectedPane: Pane = .masterData
 
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil) {
+    public init(
+        services: V15Services,
+        offlineSnapshotAt: Date? = nil,
+        onOpenPendingSync: (() -> Void)? = nil
+    ) {
         self.services = services
         self.offlineSnapshotAt = offlineSnapshotAt
+        openPendingSync = onOpenPendingSync
         _model = State(initialValue: .init(services: services, offlineSnapshotAt: offlineSnapshotAt))
     }
 
@@ -344,16 +354,32 @@ public struct V15SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.lg) {
                     phaseSurface
-                    masterDataOverview
-                    archiveDirectory
-                    aiOverview
-                    navigationCard("系统与数据", detail: "运行状态、加密归档、恢复边界与个人口令", symbol: "lock.shield") { presentedPane = .security }
-                        .accessibilityIdentifier("v15.settings.open.security")
+                    V15Section("账本治理") { masterDataRows }
+                    V15Section("复核与导入") {
+                        navigationRow("AI 待确认", detail: "核验提案与查看历史", symbol: "checkmark.bubble") { presentedPane = .proposals }
+                            .accessibilityIdentifier("v15.settings.open.proposals")
+                        Divider()
+                        navigationRow("账单导入", detail: "导入并逐行核对账单结果", symbol: "doc.text.viewfinder") { presentedPane = .statementImport }
+                            .accessibilityIdentifier("v15.settings.open.statement-import")
+                        if let openPendingSync {
+                            Divider()
+                            navigationRow("待同步与核验", detail: "查看待处理写入与安全核验结果", symbol: "arrow.triangle.2.circlepath", action: openPendingSync)
+                                .accessibilityIdentifier("v15.settings.open.pending-sync")
+                        }
+                    }
+                    V15Section("AI 与识别") {
+                        navigationRow("AI 与识别", detail: aiSummary, symbol: "sparkles") { presentedPane = .ai }
+                            .accessibilityIdentifier("v15.settings.open.ai")
+                    }
+                    V15Section("归档与安全") {
+                        navigationRow("数据与安全", detail: "运行状态、加密归档、恢复边界与个人口令", symbol: "lock.shield") { presentedPane = .security }
+                            .accessibilityIdentifier("v15.settings.open.security")
+                    }
                 }
                 .padding(V15Spacing.md)
             }
             .v15IOSScreenCanvas()
-            .navigationTitle("设置")
+            .navigationTitle("设置与治理")
         }
         .sheet(item: $presentedPane) { pane in
             switch pane {
@@ -362,9 +388,13 @@ public struct V15SettingsView: View {
             case .archive:
                 NavigationStack {
                     ScrollView { archiveDirectory.padding(V15Spacing.md) }
-                        .v15IOSScreenCanvas().navigationTitle("归档区")
+                        .v15IOSScreenCanvas().navigationTitle("归档与恢复")
                         .toolbar { closePaneToolbar }
                 }
+            case .proposals:
+                V15AIProposalView(services: services, offlineSnapshotAt: model.offlineSnapshotAt, onClose: closePresentedPane)
+            case .statementImport:
+                V15StatementImportView(services: services, offlineSnapshotAt: model.offlineSnapshotAt, onClose: closePresentedPane)
             case .ai:
                 NavigationStack {
                     ScrollView { aiDetail.padding(V15Spacing.md) }
@@ -378,21 +408,14 @@ public struct V15SettingsView: View {
 #else
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                Text("设置").font(V15Typography.surfaceTitle).padding(.horizontal, V15Spacing.md).padding(.vertical, V15Spacing.sm)
-                ForEach(macPanes) { pane in
-                    Button { selectedPane = pane } label: {
-                        HStack(spacing: V15Spacing.sm) {
-                            Image(systemName: pane.symbol).frame(width: 18)
-                            Text(pane.title)
-                            Spacer()
-                        }
-                        .font(V15Typography.body.weight(selectedPane == pane ? .semibold : .regular))
-                        .padding(.horizontal, V15Spacing.md).frame(height: 42)
-                        .background(selectedPane == pane ? V15Palette.selected.color : .clear, in: RoundedRectangle(cornerRadius: V15Radius.control))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("v15.settings.pane.\(pane.rawValue)")
+                Text("设置与治理").font(V15Typography.surfaceTitle).padding(.horizontal, V15Spacing.md).padding(.vertical, V15Spacing.sm)
+                macPaneGroup("账本治理", panes: [.masterData, .archive])
+                macPaneGroup("复核与导入", panes: [.proposals, .statementImport])
+                if let openPendingSync {
+                    macExternalPane("待同步与核验", symbol: "arrow.triangle.2.circlepath", action: openPendingSync)
+                        .accessibilityIdentifier("v15.settings.open.pending-sync")
                 }
+                macPaneGroup("智能与安全", panes: [.ai, .security])
                 Spacer()
             }
             .padding(V15Spacing.sm).frame(width: 230).background(V15Palette.card.color)
@@ -403,6 +426,7 @@ public struct V15SettingsView: View {
         }
         .task { await model.load() }
         .onDisappear { model.invalidate() }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.settings")
     }
 
@@ -426,17 +450,13 @@ public struct V15SettingsView: View {
         }
     }
 
-    private var masterDataOverview: some View {
-        V15Section("主数据") {
-            VStack(spacing: 0) {
-                overviewRow("账户", value: "\(model.activeAccountCount) 个", detail: "按账簿顺序排列", symbol: "creditcard") { presentedPane = .masterData }
-                    .accessibilityIdentifier("v15.settings.open.master-data")
-                Divider()
-                overviewRow("分类", value: "\(model.activeCategoryCount) 个", detail: "支持排序、合并与拆分", symbol: "tag") { presentedPane = .masterData }
-                Divider()
-                overviewRow("归档区", value: model.archiveCountLabel, detail: "历史仍保留，只读项目可恢复", symbol: "archivebox") { presentedPane = .archive }
-                    .accessibilityIdentifier("v15.settings.open.archive")
-            }
+    private var masterDataRows: some View {
+        VStack(spacing: 0) {
+            overviewRow("主数据", value: "\(model.activeAccountCount) 个账户 · \(model.activeCategoryCount) 个分类", detail: "管理账户、分类与商户", symbol: "tray.full") { presentedPane = .masterData }
+                .accessibilityIdentifier("v15.settings.open.master-data")
+            Divider()
+            overviewRow("归档与恢复", value: model.archiveCountLabel, detail: "历史仍保留，只读项目可恢复", symbol: "archivebox") { presentedPane = .archive }
+                .accessibilityIdentifier("v15.settings.open.archive")
         }
     }
 
@@ -474,15 +494,6 @@ public struct V15SettingsView: View {
         .accessibilityIdentifier("v15.settings.archive")
     }
 
-    private var aiOverview: some View {
-        navigationCard(
-            "AI 与识别",
-            detail: aiSummary,
-            symbol: "sparkles"
-        ) { presentedPane = .ai }
-        .accessibilityIdentifier("v15.settings.open.ai")
-    }
-
     private func closePresentedPane() { presentedPane = nil }
 
     @ToolbarContentBuilder private var closePaneToolbar: some ToolbarContent {
@@ -507,8 +518,6 @@ public struct V15SettingsView: View {
     }
 
 #if os(macOS)
-    private var macPanes: [Pane] { [.masterData, .archive, .ai] }
-
     @ViewBuilder private var macDetail: some View {
         switch selectedPane {
         case .masterData:
@@ -516,6 +525,10 @@ public struct V15SettingsView: View {
         case .archive:
             ScrollView { VStack(alignment: .leading, spacing: V15Spacing.lg) { phaseSurface; archiveDirectory }.padding(V15Spacing.xl).frame(maxWidth: 860, alignment: .leading) }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(V15Palette.paper.color)
+        case .proposals:
+            V15AIProposalMacView(services: services, offlineSnapshotAt: model.offlineSnapshotAt)
+        case .statementImport:
+            V15StatementImportMacView(services: services, offlineSnapshotAt: model.offlineSnapshotAt)
         case .ai:
             ScrollView { VStack(alignment: .leading, spacing: V15Spacing.lg) { phaseSurface; aiDetail }.padding(V15Spacing.xl).frame(maxWidth: 860, alignment: .leading) }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(V15Palette.paper.color)
@@ -545,22 +558,63 @@ public struct V15SettingsView: View {
         .accessibilityIdentifier("v15.settings.archive.\(id)")
     }
 
-    private func navigationCard(_ title: String, detail: String, symbol: String, action: @escaping () -> Void) -> some View {
+    private func navigationRow(_ title: String, detail: String, symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: V15Spacing.md) {
-                Image(systemName: symbol).font(.system(size: 20, weight: .medium)).foregroundStyle(V15Palette.teal.color).frame(width: 28)
+            HStack(spacing: V15Spacing.sm) {
+                Image(systemName: symbol).foregroundStyle(V15Palette.teal.color).frame(width: 24)
                 VStack(alignment: .leading, spacing: V15Spacing.xxs) {
-                    Text(title).font(V15Typography.cardTitle)
+                    Text(title).font(V15Typography.body.weight(.semibold))
                     Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 Image(systemName: "chevron.right").foregroundStyle(V15Palette.ink.color.opacity(0.40))
             }
-            .padding(V15Spacing.md).frame(maxWidth: .infinity, alignment: .leading)
-            .v15IOSCard()
+            .padding(.vertical, V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.plain).v15PlatformHitArea()
     }
+
+#if os(macOS)
+    private func macPaneGroup(_ title: String, panes: [Pane]) -> some View {
+        VStack(alignment: .leading, spacing: V15Spacing.xxs) {
+            Text(title)
+                .font(V15Typography.secondary)
+                .foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                .padding(.horizontal, V15Spacing.md)
+                .padding(.top, V15Spacing.sm)
+            ForEach(panes) { pane in macPaneButton(pane) }
+        }
+    }
+
+    private func macPaneButton(_ pane: Pane) -> some View {
+        Button { selectedPane = pane } label: {
+            HStack(spacing: V15Spacing.sm) {
+                Image(systemName: pane.symbol).frame(width: 18)
+                Text(pane.title)
+                Spacer()
+            }
+            .font(V15Typography.body.weight(selectedPane == pane ? .semibold : .regular))
+            .padding(.horizontal, V15Spacing.md).frame(height: 38)
+            .background(selectedPane == pane ? V15Palette.selected.color : .clear, in: RoundedRectangle(cornerRadius: V15Radius.control))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("v15.settings.pane.\(pane.rawValue)")
+    }
+
+    private func macExternalPane(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: V15Spacing.sm) {
+                Image(systemName: symbol).frame(width: 18)
+                Text(title)
+                Spacer()
+                Image(systemName: "arrow.up.right").font(.caption)
+            }
+            .font(V15Typography.body)
+            .padding(.horizontal, V15Spacing.md).frame(height: 38)
+        }
+        .buttonStyle(.plain)
+    }
+#endif
 
     private func overviewRow(_ title: String, value: String, detail: String, symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {

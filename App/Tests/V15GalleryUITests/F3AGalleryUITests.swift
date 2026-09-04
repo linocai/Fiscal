@@ -32,4 +32,13 @@ import XCTest
         XCTAssertTrue(event.label.contains("超长中文信用账期到期事项"))
         XCTAssertTrue(event.label.contains("9,223,372,036,854,775.80"))
     }
+    func testFutureCertaintyDirectionAndSourceStayExplicit() {
+        launch("timeline")
+        let event = element("v15.f3a.event.cash_flow_item:00000000-0000-0000-0000-00000000F303")
+        XCTAssertTrue(event.waitForExistence(timeout: 5))
+        XCTAssertTrue(event.label.contains("预计（尚未确认）"))
+        XCTAssertTrue(event.label.contains("流出"))
+        XCTAssertTrue(event.label.contains("现金流事项"))
+        XCTAssertTrue(element("v15.f3a.truth-notice").exists)
+    }
 }

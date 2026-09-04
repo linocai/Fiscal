@@ -272,7 +272,7 @@ public final class V15InstallmentModel {
         return nil
     }
 
-    public func load() async {
+    public func load(initialAccountID: UUID? = nil, initialPlanID: UUID? = nil) async {
         listGeneration &+= 1; let generation = listGeneration
         pageGeneration &+= 1; detailGeneration &+= 1
         phase = .loading; pagePhase = .idle; serverFailure = nil; reloadRequired = false
@@ -280,7 +280,17 @@ public final class V15InstallmentModel {
             let loadedAccounts = try await services.masterData.accounts(includeArchived: false)
             guard generation == listGeneration else { return }
             accounts = loadedAccounts
-            await loadPlans(reset: true, listGeneration: generation)
+            if let initialAccountID,
+               !loadedAccounts.contains(where: { $0.id == initialAccountID && $0.kind == .credit }) {
+                phase = .failed(.init(
+                    kind: .decoding,
+                    code: "initial_credit_account_unavailable",
+                    message: "无法打开指定的信用账户；它可能已停用或不再存在。"
+                ))
+            } else {
+                filterAccountID = initialAccountID
+                await loadPlans(reset: true, listGeneration: generation, preferredPlanID: initialPlanID)
+            }
         } catch let failure as V15Failure {
             guard generation == listGeneration else { return }; phase = failure.kind == .cancelled ? .idle : .failed(failure)
         } catch { guard generation == listGeneration else { return }; phase = .failed(.init(kind: .transport, message: "分期基础资料读取失败。")) }
@@ -317,12 +327,22 @@ public final class V15InstallmentModel {
         listGeneration &+= 1; let generation = listGeneration
         pageGeneration &+= 1; detailGeneration &+= 1
         reloadRequired = false
-        await loadPlans(reset: true, listGeneration: generation, readCachePolicy: .reloadIgnoringCache)
+        await loadPlans(
+            reset: true,
+            listGeneration: generation,
+            readCachePolicy: .reloadIgnoringCache,
+            preferredPlanID: selectedPlan?.id
+        )
     }
 
     public func loadNextPage() async { await loadPlans(reset: false, listGeneration: listGeneration) }
 
-    private func loadPlans(reset: Bool, listGeneration generation: UInt64, readCachePolicy: V15ReadCachePolicy = .standard) async {
+    private func loadPlans(
+        reset: Bool,
+        listGeneration generation: UInt64,
+        readCachePolicy: V15ReadCachePolicy = .standard,
+        preferredPlanID: UUID? = nil
+    ) async {
         guard generation == listGeneration else { return }
         guard reset || (nextCursor != nil && pagePhase != .loading) else { return }
         pageGeneration &+= 1; let ownership = pageGeneration
@@ -332,6 +352,33 @@ public final class V15InstallmentModel {
             let page = try await services.installments.list(accountID: filterAccountID, status: filterStatus, cursor: cursor, limit: 20, readCachePolicy: readCachePolicy)
             guard generation == listGeneration, ownership == pageGeneration else { return }
             plans = unique(reset ? page.items : plans + page.items); nextCursor = page.nextCursor; pagePhase = .idle
+            if let preferredPlanID {
+                if let preferred = plans.first(where: { $0.id == preferredPlanID }) {
+                    if let filterAccountID, preferred.creditAccountID != filterAccountID {
+                        throw V15Failure(
+                            kind: .decoding,
+                            code: "initial_installment_account_mismatch",
+                            message: "指定的分期计划不属于当前信用账户，已停止打开以避免显示错误计划。"
+                        )
+                    }
+                    phase = .loaded
+                    await selectPlan(preferred, readCachePolicy: readCachePolicy)
+                    return
+                }
+                let preferred = try await services.installments.plan(id: preferredPlanID, readCachePolicy: readCachePolicy)
+                guard generation == listGeneration, ownership == pageGeneration else { return }
+                if let filterAccountID, preferred.creditAccountID != filterAccountID {
+                    throw V15Failure(
+                        kind: .decoding,
+                        code: "initial_installment_account_mismatch",
+                        message: "指定的分期计划不属于当前信用账户，已停止打开以避免显示错误计划。"
+                    )
+                }
+                plans = unique([preferred] + plans)
+                phase = .loaded
+                await selectLoadedPlan(preferred, readCachePolicy: readCachePolicy)
+                return
+            }
             guard let first = plans.first else { selectedPlan = nil; phase = .empty; return }
             phase = .loaded
             if reset || selectedPlan == nil || !plans.contains(where: { $0.id == selectedPlan?.id }) { await selectPlan(first, readCachePolicy: readCachePolicy) }
@@ -359,6 +406,22 @@ public final class V15InstallmentModel {
         } catch let failure as V15Failure {
             guard generation == detailGeneration, selectedPlan?.id == planID else { return }; detailPhase = failure.kind == .cancelled ? .idle : .failed(failure)
         } catch { guard generation == detailGeneration, selectedPlan?.id == planID else { return }; detailPhase = .failed(.init(kind: .transport, message: "分期计划详情读取失败。")) }
+    }
+
+    private func selectLoadedPlan(_ detail: V15InstallmentPlan, readCachePolicy: V15ReadCachePolicy) async {
+        detailGeneration &+= 1; let generation = detailGeneration; let planID = detail.id
+        selectedPlan = detail; selectedPurchase = nil; liabilities = nil; detailPhase = .loading; fieldIssues = []; serverFailure = nil
+        do {
+            let purchase = try await services.ledger.get(transactionID: detail.purchaseTransactionID, readCachePolicy: readCachePolicy)
+            guard generation == detailGeneration, selectedPlan?.id == planID else { return }
+            let debt = try await services.installments.liabilities(accountID: detail.creditAccountID, readCachePolicy: readCachePolicy)
+            guard generation == detailGeneration, selectedPlan?.id == planID else { return }
+            selectedPurchase = purchase; liabilities = debt; applyEditDraft(plan: detail, purchase: purchase); applyCommandDefaults(plan: detail); detailPhase = .loaded
+        } catch let failure as V15Failure {
+            guard generation == detailGeneration, selectedPlan?.id == planID else { return }; detailPhase = failure.kind == .cancelled ? .idle : .failed(failure)
+        } catch {
+            guard generation == detailGeneration, selectedPlan?.id == planID else { return }; detailPhase = .failed(.init(kind: .transport, message: "分期计划详情读取失败。"))
+        }
     }
 
     public func checkEligibility() async {

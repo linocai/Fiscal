@@ -13,9 +13,18 @@ struct V15RootSmokemacOSApp: App {
 
     init() {
         let environment = ProcessInfo.processInfo.environment
-        let baseURL = environment["FISCAL_ROOT_SMOKE_FORCE_TRANSPORT_ERROR"] == "1"
-            ? URL(string: "http://127.0.0.1:1")!
-            : APIConfiguration.baseURL()
+        // Keep the production-shaped loopback URL so a forced transport
+        // failure uses the same encrypted offline-snapshot cache key as the
+        // preceding online launch.
+        let baseURL = APIConfiguration.baseURL()
+        let session: URLSession
+        if environment["FISCAL_ROOT_SMOKE_FORCE_TRANSPORT_ERROR"] == "1" {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [V15RootSmokemacOSFailingURLProtocol.self]
+            session = URLSession(configuration: configuration)
+        } else {
+            session = .shared
+        }
         let bundleIdentifier = Bundle.main.bundleIdentifier
         let keychainService = environment["FISCAL_ROOT_SMOKE_KEYCHAIN_SERVICE"]
             ?? "\(Self.keychainServicePrefix)manual"
@@ -32,6 +41,7 @@ struct V15RootSmokemacOSApp: App {
         let revisionStore = DataRevisionStore()
         services = V15Services(
             baseURL: baseURL,
+            session: session,
             accessKeyStore: accessKeyStore,
             offlineSnapshots: offlineSnapshots,
             revisionStore: revisionStore
@@ -48,6 +58,16 @@ struct V15RootSmokemacOSApp: App {
         }
         .defaultSize(width: 1_280, height: 820)
     }
+}
+
+/// Keeps the loopback cache key intact while deterministically failing requests.
+private final class V15RootSmokemacOSFailingURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+    }
+    override func stopLoading() {}
 }
 
 private struct V15RootSmokeCleanupView: View {

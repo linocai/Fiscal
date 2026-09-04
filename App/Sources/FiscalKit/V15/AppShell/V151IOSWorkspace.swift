@@ -8,35 +8,36 @@ import SwiftUI
 /// full-screen workspace instead of becoming a fourth generic tab.
 public struct V151IOSWorkspace: View {
     fileprivate enum Destination: Identifiable {
-        case future, credit, installments(UUID?), reimbursements, cashFlow
-        case proposals, statementImport, reports, archive, settings, pendingSync
+        case futureTarget(V15FutureOpenTarget)
+        case credit(accountID: UUID?)
+        case installments(accountID: UUID?, planID: UUID?, purchaseTransactionID: UUID?)
+        case reimbursements(transactionID: UUID?)
+        case reimbursementClaim(claimID: UUID, partyID: UUID?)
+        case cashFlow
+        case reports, settings, pendingSync
         var id: String {
             switch self {
-            case .future: "future"
-            case .credit: "credit"
-            case .installments(let transactionID): "installments:\(transactionID?.uuidString ?? "new")"
-            case .reimbursements: "reimbursements"
+            case .futureTarget(let target): "futureTarget:\(String(describing: target))"
+            case .credit(let accountID): "credit:\(accountID?.uuidString ?? "all")"
+            case .installments(let accountID, let planID, let purchaseTransactionID):
+                "installments:\(accountID?.uuidString ?? "all"):\(planID?.uuidString ?? "new"):\(purchaseTransactionID?.uuidString ?? "none")"
+            case .reimbursements(let transactionID): "reimbursements:\(transactionID?.uuidString ?? "all")"
+            case .reimbursementClaim(let claimID, let partyID): "reimbursementClaim:\(claimID.uuidString):\(partyID?.uuidString ?? "claim")"
             case .cashFlow: "cashFlow"
-            case .proposals: "proposals"
-            case .statementImport: "statementImport"
             case .reports: "reports"
-            case .archive: "archive"
             case .settings: "settings"
             case .pendingSync: "pendingSync"
             }
         }
         var title: String {
             switch self {
-            case .future: "未来时间线"
+            case .futureTarget: "已知未来"
             case .credit: "信用账期"
             case .installments: "分期"
-            case .reimbursements: "报销"
-            case .cashFlow: "现金流"
-            case .proposals: "AI 待确认"
-            case .statementImport: "账单导入"
+            case .reimbursements, .reimbursementClaim: "报销"
+            case .cashFlow: "现金流计划"
             case .reports: "报表"
-            case .archive: "数据与安全"
-            case .settings: "设置"
+            case .settings: "设置与治理"
             case .pendingSync: "待同步"
             }
         }
@@ -48,7 +49,6 @@ public struct V151IOSWorkspace: View {
     @State private var recordPresented = false
     @State private var destination: Destination?
     @State private var ledgerFocusID: UUID?
-    @State private var todayDecisionCount = 0
     @State private var recordFactsRevision: UInt64 = 0
 
     public init(services: V15Services) { self.services = services }
@@ -61,11 +61,16 @@ public struct V151IOSWorkspace: View {
                     services: services,
                     recordFactsRevision: recordFactsRevision,
                     openLedger: { id in ledgerFocusID = id; tab = .ledger },
-                    openDestination: { destination = $0 },
-                    decisionCountChanged: { todayDecisionCount = $0 }
+                    openDestination: { destination = $0 }
                 )
             case .ledger:
-                V151IOSLedger(services: services, focusID: ledgerFocusID, recordFactsRevision: recordFactsRevision, openDestination: { destination = $0 })
+                V151IOSLedger(
+                    services: services,
+                    focusID: ledgerFocusID,
+                    recordFactsRevision: recordFactsRevision,
+                    openDestination: { destination = $0 },
+                    refreshRootFacts: refreshRootFacts
+                )
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -86,18 +91,23 @@ public struct V151IOSWorkspace: View {
             V15RecordView(services: services, presentsEditorDirectly: true, onCommitted: recordCommitted)
         }
         .fullScreenCover(item: $destination) { value in
-            V151IOSDestinationHost(services: services, destination: value)
+            V151IOSDestinationHost(services: services, destination: value, onDismiss: refreshRootFacts)
         }
     }
 
     private func recordCommitted(_ outcome: V15RecordModel.CommitOutcome) {
         guard case .confirmed = outcome else { return }
-        recordFactsRevision &+= 1
+        refreshRootFacts()
     }
+
+    /// Domain views do not yet expose a confirmed-write callback. Reloading
+    /// after their explicit close is conservative: it never claims success,
+    /// while ensuring a completed write is not left stale at the root.
+    private func refreshRootFacts() { recordFactsRevision &+= 1 }
 
     private var bottomBar: some View {
         HStack(alignment: .bottom) {
-            bottomButton("今日", kind: .today, selected: tab == .today, badge: todayDecisionCount) { tab = .today }
+            bottomButton("今日", kind: .today, selected: tab == .today, badge: 0) { tab = .today }
             Spacer()
             bottomButton("账目", kind: .ledger, selected: tab == .ledger, badge: 0) { tab = .ledger }
         }
@@ -152,26 +162,23 @@ public struct V151IOSWorkspace: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("v151.ios.bottom.\(kind.rawValue)")
     }
+
 }
 
 private struct V151IOSTodayDashboard: View {
-    private enum ReportPhase { case idle, loading, loaded, failed }
     let services: V15Services
     let recordFactsRevision: UInt64
     let openLedger: (UUID?) -> Void
     let openDestination: (V151IOSWorkspace.Destination) -> Void
-    let decisionCountChanged: (Int) -> Void
     @State private var model: V15TodayReadModel
-    @State private var monthReport: V15PeriodReport?
-    @State private var reportPhase: ReportPhase = .idle
-    @State private var creditDecisionExpanded = false
+    @State private var futureOpenGeneration: UInt64 = 0
+    @State private var futureOpenFailure: String?
 
-    init(services: V15Services, recordFactsRevision: UInt64, openLedger: @escaping (UUID?) -> Void, openDestination: @escaping (V151IOSWorkspace.Destination) -> Void, decisionCountChanged: @escaping (Int) -> Void) {
+    init(services: V15Services, recordFactsRevision: UInt64, openLedger: @escaping (UUID?) -> Void, openDestination: @escaping (V151IOSWorkspace.Destination) -> Void) {
         self.services = services
         self.recordFactsRevision = recordFactsRevision
         self.openLedger = openLedger
         self.openDestination = openDestination
-        self.decisionCountChanged = decisionCountChanged
         _model = State(initialValue: V15TodayReadModel(services: services, offlineSnapshotProvider: { services.offlineSnapshotAt }))
     }
 
@@ -187,7 +194,7 @@ private struct V151IOSTodayDashboard: View {
         .v15IOSScreenCanvas()
         .refreshable { await refresh() }
         .task(id: recordFactsRevision) { await refresh() }
-        .onAppear { decisionCountChanged(0) }
+        .onDisappear { invalidateFutureOpen() }
         .accessibilityIdentifier("v151.ios.today")
     }
 
@@ -199,15 +206,13 @@ private struct V151IOSTodayDashboard: View {
                     Text("\(todayLabel) · 更新于 \(updateTime)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
                 }
                 Spacer()
-                Menu {
-                    Button("报表") { openDestination(.reports) }
-                    Button("账单导入") { openDestination(.statementImport) }
-                    Button("现金流") { openDestination(.cashFlow) }
-                    Button("设置") { openDestination(.settings) }
-                    Button("数据与安全") { openDestination(.archive) }
-                } label: {
-                    Image(systemName: "ellipsis").font(V15Typography.body.weight(.semibold)).frame(width: V15Accessibility.minimumTouchTarget, height: V15Accessibility.minimumTouchTarget)
+                Button { openTodayDestination(.settings) } label: {
+                    Label("设置与治理", systemImage: "gearshape")
+                        .font(V15Typography.secondary.weight(.semibold))
                 }
+                .buttonStyle(.plain)
+                .v15PlatformHitArea()
+                .accessibilityIdentifier("v151.ios.today.settings")
             }
             Text("账户价值").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.52))
             if let facts = model.facts {
@@ -220,15 +225,15 @@ private struct V151IOSTodayDashboard: View {
                 )
                 V15AdaptiveStack(spacing: 12) {
                     metric("信用欠款", facts.credit.currentDebtMinor, .outflow)
-                    reportMetric
                     metric("未收报销", facts.reimbursements.outstandingMinor, .balance)
                 }
-                if let difference = expectedDifference, difference != 0 {
-                    Text("支出口径：个人实际承担 · 另有 \(V15MoneyPresentation(minorUnits: difference, direction: .neutral).text) 预计可报销尚未收到")
-                        .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58)).fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text("支出口径：个人实际承担").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                Button { openTodayDestination(.reports) } label: {
+                    Label("财务分析", systemImage: "chart.bar.xaxis")
+                        .font(V15Typography.secondary.weight(.semibold))
                 }
+                .buttonStyle(.plain)
+                .v15PlatformHitArea()
+                .accessibilityIdentifier("v151.ios.today.reports")
             } else {
                 Text("正在读取账目").font(V15Typography.cardTitle)
             }
@@ -245,24 +250,6 @@ private struct V151IOSTodayDashboard: View {
             scrollingMoney(minorUnits: amount, direction: direction, includeCurrency: false, font: V15Typography.money)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var reportMetric: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("本月支出").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.54)).lineLimit(1)
-            if reportPhase == .loaded, let value = monthReport?.summary.personalRealizedMinor {
-                scrollingMoney(
-                    minorUnits: value,
-                    direction: .outflow,
-                    includeCurrency: false,
-                    font: V15Typography.money,
-                    accessibilityIdentifier: "v151.ios.today.monthly-expense",
-                    accessibilityLabel: "本月支出 \(V15MoneyPresentation(minorUnits: value, direction: .outflow, includeCurrency: false).text)"
-                )
-            } else {
-                Text(reportPhase == .failed ? "暂不可用" : "—").font(V15Typography.secondary.weight(.semibold)).foregroundStyle(V15Palette.ink.color.opacity(0.52))
-            }
-        }
     }
 
     /// Amounts remain complete at AX5 and for long server values without
@@ -283,71 +270,94 @@ private struct V151IOSTodayDashboard: View {
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await refresh() } }.padding(20)
         case .requiresReload(let failure): V15ConflictState(conflict: failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: failure.message)) { Task { await refresh() } }.padding(20)
         case .loaded:
+            let events = model.facts?.knownFutureEvents ?? []
+            let nearTermDue = events.filter { $0.certainty == .exactDue }
+            let future = events.filter { $0.certainty != .exactDue }
             VStack(alignment: .leading, spacing: 14) {
-                pendingSyncGroup
-                if let debt = model.facts?.credit.currentDebtMinor,
-                   debt != 0 {
-                    creditDecision(debt)
+                recentChangesLink
+                if !nearTermDue.isEmpty { nearTermDueEvents(nearTermDue) }
+                if !future.isEmpty { knownFuture(future) }
+                if let futureOpenFailure {
+                    V15ErrorMessageState(title: "暂时无法打开所属记录", message: futureOpenFailure)
                 }
-                if (model.facts?.credit.currentDebtMinor ?? 0) == 0 {
+                pendingSyncNotice
+                if nearTermDue.isEmpty && future.isEmpty && services.pendingWrites.items.isEmpty {
                     calmState
                 }
-                if let events = model.facts?.knownFutureEvents, !events.isEmpty { knownFuture(events) }
             }
             .padding(.horizontal, 16).padding(.vertical, 18)
         }
     }
 
-    @ViewBuilder private var pendingSyncGroup: some View {
-        if !services.pendingWrites.items.isEmpty || services.pendingWrites.lastSyncReceipt != nil {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("待同步 · \(services.pendingWrites.count)").font(V15Typography.label).foregroundStyle(V15Palette.teal.color)
-                    Spacer()
-                    Button("查看待同步") { openDestination(.pendingSync) }.buttonStyle(.borderless)
-                }
-                if let receipt = services.pendingWrites.lastSyncReceipt {
-                    V15SuccessReceiptState(title: "同步已完成", detail: receipt)
-                }
-                Text("顶部数值暂不包含 \(services.pendingWrites.count) 项待同步更改。")
+    @ViewBuilder private var pendingSyncNotice: some View {
+        if !services.pendingWrites.items.isEmpty {
+            HStack(alignment: .top, spacing: 9) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                Text("有 \(services.pendingWrites.count) 项更改等待同步；当前金额不包含这些变更。")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.62))
                     .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("核验") { openTodayDestination(.settings) }
+                    .font(V15Typography.secondary.weight(.semibold))
+                    .buttonStyle(.plain)
+                    .v15PlatformHitArea()
             }
-            .padding(14)
-            .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: 14))
+            .padding(.vertical, 6)
         }
     }
 
-    private func creditDecision(_ amount: Int64) -> some View {
-        let event = model.facts?.knownFutureEvents.first(where: { $0.sourceType == .creditCycle })
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) { Circle().stroke(V15Palette.teal.color, lineWidth: 2).frame(width: 11, height: 11); Text("信用账单待处理").font(V15Typography.secondary.weight(.semibold)).foregroundStyle(V15Palette.teal.color) }
-            V15MoneyText(minorUnits: amount, direction: .outflow, font: V15Typography.moneyLarge)
-            Text("查看当前账期，并可在这里记录还款。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
-            V15AdaptiveStack(spacing: 8) {
-                V15ActionButton("记录还款", disabledReason: event == nil ? .init(code: "credit_cycle_required", message: "暂时无法确定当期账期，请先选择信用账期。", fieldPath: nil) : nil) { creditDecisionExpanded.toggle() }
-                V15ActionButton("查看账期", kind: .secondary) { openDestination(.credit) }
+    private var recentChangesLink: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("最近变化").font(V15Typography.cardTitle)
+                Text("按上海业务日查看已发生账目。")
+                    .font(V15Typography.secondary)
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.58))
             }
-            if creditDecisionExpanded, let event {
-                V151IOSRepaymentInlineDecision(
-                    services: services,
-                    cycleID: event.cycleID ?? event.sourceID,
-                    destinationAccountID: event.accountID,
-                    amountMinor: event.amountMinor
-                ) {
-                    creditDecisionExpanded = false
-                    Task { await refresh() }
+            Spacer()
+            Button("查看账目") { openTodayLedger(nil) }
+                .font(V15Typography.secondary.weight(.semibold))
+                .buttonStyle(.plain)
+                .v15PlatformHitArea()
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func nearTermDueEvents(_ events: [V15FutureEvent]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("近期确定事项").font(V15Typography.label).foregroundStyle(V15Palette.teal.color)
+            ForEach(Array(events.prefix(2).enumerated()), id: \.element.id) { indexed in
+                let event = indexed.element
+                Button { Task { await openVerifiedFutureEvent(event) } } label: {
+                    V15AdaptiveStack(spacing: 10) {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "calendar").foregroundStyle(V15Palette.teal.color)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(event.title).font(V15Typography.body.weight(.semibold))
+                                Text("到期日 \(event.date)").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        V15MoneyText(minorUnits: event.amountMinor, direction: event.direction == .inflow ? .inflow : .outflow, includeCurrency: false, font: V15Typography.label.monospacedDigit())
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .padding(.vertical, 8)
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("v151.ios.today.near-term.item.\(indexed.offset)")
             }
         }
-        .padding(16).v15IOSCard()
+        .padding(15)
+        .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous))
     }
 
     private var calmState: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("今天没有需要你决定的事项").font(V15Typography.cardTitle)
-            Text("全部账目仍可在“账目”中查看。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+            Text("今天没有需要你处理的事项").font(V15Typography.cardTitle)
+            Text("当前金额、最近账目和未来安排都在各自的清楚位置。")
+                .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading).v15IOSCard()
     }
@@ -357,13 +367,20 @@ private struct V151IOSTodayDashboard: View {
             Text("已知未来").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.58)).padding(.bottom, 8)
             ForEach(Array(events.prefix(3).enumerated()), id: \.element.id) { indexed in
                 let event = indexed.element
-                Button { openDestination(event.sourceType == .creditCycle ? .credit : event.sourceType == .reimbursementParty ? .reimbursements : .cashFlow) } label: {
-                    HStack(spacing: 10) {
-                        Rectangle().fill(V15Palette.yellow.color).frame(width: 3, height: 28)
-                        VStack(alignment: .leading, spacing: 3) { Text(event.title).font(V15Typography.body.weight(.medium)); Text(event.date).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.54)) }
-                        Spacer()
+                Button { Task { await openVerifiedFutureEvent(event) } } label: {
+                    V15AdaptiveStack(spacing: 10) {
+                        HStack(alignment: .top, spacing: 10) {
+                            Rectangle().fill(V15Palette.yellow.color).frame(width: 3, height: 28)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(event.title).font(V15Typography.body.weight(.medium))
+                                Text(event.date).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.54))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         V15MoneyText(minorUnits: event.amountMinor, direction: .neutral, includeCurrency: false, font: V15Typography.label.monospacedDigit())
-                    }.padding(.vertical, 10)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .padding(.vertical, 10)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("v151.ios.today.known-future.item.\(indexed.offset)")
@@ -377,40 +394,82 @@ private struct V151IOSTodayDashboard: View {
         HStack(spacing: 12) {
             Rectangle().fill(V15Palette.yellow.color).frame(width: 3)
             VStack(alignment: .leading, spacing: 2) { Text("离线 · 仅可查看").font(V15Typography.secondary.weight(.semibold)); Text("数据保存于 \(V15TodayReadModel.shanghaiDateLabel(model.offlineAsOf ?? at))").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.58)) }
-            Spacer(); V15ActionButton("查看", kind: .secondary) { openLedger(nil) }
+            Spacer(); V15ActionButton("查看", kind: .secondary) { openTodayLedger(nil) }
         }
         .padding(.horizontal, 16).frame(minHeight: 62).background(V15Palette.provisional.color)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v151.ios.offline")
     }
 
-    private func refresh() async {
-        async let facts: Void = model.refresh()
-        async let report: Void = loadReport()
-        _ = await (facts, report)
+    @MainActor private func refresh() async {
+        invalidateFutureOpen()
+        await model.refresh()
     }
 
-    @MainActor private func loadReport() async {
-        guard let period = V15ReportMonth(monthRaw) else { reportPhase = .failed; return }
-        reportPhase = .loading
+    @MainActor private func invalidateFutureOpen() {
+        futureOpenGeneration &+= 1
+        futureOpenFailure = nil
+    }
+
+    private func openTodayDestination(_ destination: V151IOSWorkspace.Destination) {
+        invalidateFutureOpen()
+        openDestination(destination)
+    }
+
+    private func openTodayLedger(_ id: UUID?) {
+        invalidateFutureOpen()
+        openLedger(id)
+    }
+
+    /// A future event is an invitation to inspect one verified source object,
+    /// never a shortcut to a generic module with its original context lost.
+    @MainActor private func openVerifiedFutureEvent(_ event: V15FutureEvent) async {
+        futureOpenGeneration &+= 1
+        let current = futureOpenGeneration
+        futureOpenFailure = nil
         do {
-            monthReport = try await services.reports.monthly(period)
-            reportPhase = .loaded
+            let target: V15FutureOpenTarget
+            switch event.sourceType {
+            case .creditCycle:
+                let cycle = try await services.credit.cycle(id: event.sourceID, readCachePolicy: .reloadIgnoringCache)
+                guard cycle.id == event.sourceID, cycle.id == event.cycleID,
+                      event.accountID == nil || cycle.accountID == event.accountID else {
+                    throw V15Failure(kind: .conflict, code: "future_owner_changed", message: "这项信用账期的归属已经变化，请刷新后再打开。")
+                }
+                target = .creditCycle(cycle)
+            case .reimbursementParty:
+                guard let claimID = event.claimID, let partyID = event.partyID else {
+                    throw V15Failure(kind: .decoding, code: "future_owner_missing", message: "这项报销记录缺少归属信息。")
+                }
+                let claim = try await services.reimbursements.claim(id: claimID, readCachePolicy: .reloadIgnoringCache)
+                guard claim.id == claimID, partyID == event.sourceID,
+                      claim.parties.contains(where: { $0.id == partyID }) else {
+                    throw V15Failure(kind: .conflict, code: "future_owner_changed", message: "这项报销记录的归属已经变化，请刷新后再打开。")
+                }
+                target = .reimbursementParty(claim: claim, partyID: partyID)
+            case .cashFlowItem:
+                let item = try await services.cashFlow.item(id: event.sourceID, readCachePolicy: .reloadIgnoringCache)
+                let accountMatches = event.accountID == nil || event.accountID == item.accountID || event.accountID == item.destinationAccountID
+                guard item.manualItemID == event.sourceID, accountMatches else {
+                    throw V15Failure(kind: .conflict, code: "future_owner_changed", message: "这项现金流记录的归属已经变化，请刷新后再打开。")
+                }
+                target = .cashFlowItem(item)
+            }
+            guard current == futureOpenGeneration else { return }
+            openTodayDestination(.futureTarget(target))
+        } catch is CancellationError {
+            guard current == futureOpenGeneration else { return }
+        } catch let failure as V15Failure {
+            guard current == futureOpenGeneration else { return }
+            futureOpenFailure = failure.message
         } catch {
-            monthReport = nil
-            reportPhase = .failed
+            guard current == futureOpenGeneration else { return }
+            futureOpenFailure = "暂时无法核验这项未来事项，请稍后重试。"
         }
     }
 
-    private var expectedDifference: Int64? { monthReport.map { $0.summary.personalRealizedMinor - $0.summary.personalExpectedMinor } }
     private var todayLabel: String { let f = DateFormatter(); f.locale = Locale(identifier: "zh_Hans_CN"); f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateFormat = "M月d日 EEEE"; return f.string(from: Date()) }
     private var updateTime: String { guard let value = model.facts?.meta.asOf else { return "读取中" }; let f = DateFormatter(); f.locale = Locale(identifier: "zh_Hans_CN"); f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateFormat = "HH:mm"; return f.string(from: value) }
-    private var monthRaw: String { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "Asia/Shanghai"); f.dateFormat = "yyyy-MM"; return f.string(from: Date()) }
-    private func pendingStatus(_ item: V15PendingWriteStore.Item) -> String {
-        let status: String
-        switch item.status { case .queued: status = "等待联网后同步"; case .syncing: status = "正在同步"; case .requiresDecision: status = "数据已变化，需要重新决定"; case .outcomeUnknown: status = "结果不明，需要核对"; case .failed: status = "同步失败" }
-        return item.message.map { "\(status) · \($0)" } ?? status
-    }
 }
 
 private struct V151IOSCategoryInlineDecision: View {
@@ -877,20 +936,32 @@ private struct V151IOSLedger: View {
     let focusID: UUID?
     let recordFactsRevision: UInt64
     let openDestination: (V151IOSWorkspace.Destination) -> Void
+    let refreshRootFacts: () -> Void
     @State private var model: V15LedgerModel
     @State private var selectedID: UUID?
     @State private var filtersPresented = false
+    @State private var futurePresented = false
+    @State private var futureDestination: V151IOSWorkspace.Destination?
+    @State private var accountDetailID: UUID?
+    @State private var transactionContextDestination: V151IOSWorkspace.Destination?
+    @State private var hasLoadedInitialContent = false
     @State private var categoryID: UUID?
     @State private var categoryPreviewed = false
     @State private var categoryEditing = false
     @State private var categoryCommitNotice: String?
-    @State private var selectedAccountID: UUID?
 
-    init(services: V15Services, focusID: UUID?, recordFactsRevision: UInt64, openDestination: @escaping (V151IOSWorkspace.Destination) -> Void) {
+    init(
+        services: V15Services,
+        focusID: UUID?,
+        recordFactsRevision: UInt64,
+        openDestination: @escaping (V151IOSWorkspace.Destination) -> Void,
+        refreshRootFacts: @escaping () -> Void
+    ) {
         self.services = services
         self.focusID = focusID
         self.recordFactsRevision = recordFactsRevision
         self.openDestination = openDestination
+        self.refreshRootFacts = refreshRootFacts
         _model = State(initialValue: V15LedgerModel(services: services))
     }
 
@@ -900,7 +971,10 @@ private struct V151IOSLedger: View {
             ledgerList
         }
         .v15IOSScreenCanvas()
-        .task(id: LedgerRefreshOwner(focusID: focusID, revision: recordFactsRevision)) { await loadInitialContent() }
+        .task(id: LedgerRefreshOwner(focusID: focusID, revision: recordFactsRevision)) {
+            if hasLoadedInitialContent { await refreshPreservingContext() }
+            else { hasLoadedInitialContent = true; await loadInitialContent() }
+        }
         .sheet(item: Binding(
             get: { selectedID.map(SelectedTransactionID.init) },
             set: { value in
@@ -908,16 +982,52 @@ private struct V151IOSLedger: View {
                 if value == nil { resetCategoryEditor() }
             }
         )) { _ in detailSheet }
-        .sheet(isPresented: $filtersPresented) { filterSheet }
         .sheet(item: Binding(
-            get: { selectedAccountID.map(SelectedAccountID.init) },
-            set: { selectedAccountID = $0?.id }
-        )) { value in
-            V151IOSAccountDetail(services: services, accountID: value.id, recordFactsRevision: recordFactsRevision, openDestination: openDestination)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            get: { accountDetailID.map(SelectedAccountID.init) },
+            set: { accountDetailID = $0?.id }
+        )) { selection in
+            V151IOSAccountDetail(
+                services: services,
+                accountID: selection.id,
+                recordFactsRevision: recordFactsRevision,
+                refreshRootFacts: refreshRootFacts
+            )
         }
-        .accessibilityIdentifier("v151.ios.ledger")
+        .sheet(isPresented: $filtersPresented) { filterSheet }
+        .sheet(isPresented: $futurePresented) {
+            V15FutureTimelineView(services: services, refreshToken: recordFactsRevision, onOpen: { target in
+                futureDestination = .futureTarget(target)
+            })
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    HStack {
+                        Button("关闭") { futurePresented = false }
+                            .font(V15Typography.secondary.weight(.semibold))
+                            .v15PlatformHitArea()
+                            .accessibilityIdentifier("v151.ios.ledger.future.close")
+                        Spacer()
+                        Button("现金流计划") {
+                            futureDestination = .cashFlow
+                        }
+                        .font(V15Typography.secondary.weight(.semibold))
+                        .v15PlatformHitArea()
+                        .accessibilityIdentifier("v151.ios.ledger.future.cash-flow")
+                    }
+                    .padding(.horizontal, V15Spacing.md)
+                    .padding(.vertical, V15Spacing.sm)
+                    .background(.regularMaterial)
+                }
+                .fullScreenCover(item: $futureDestination) { value in
+                    V151IOSDestinationHost(services: services, destination: value, onDismiss: refreshRootFacts)
+                }
+        }
+        .overlay(alignment: .topLeading) {
+            Text("V151 iOS ledger")
+                .font(.caption2)
+                .foregroundStyle(.clear)
+                .frame(width: 1, height: 1)
+                .accessibilityIdentifier("v151.ios.ledger")
+                .accessibilityLabel("V151 iOS ledger")
+        }
     }
 
     private var ledgerHeader: some View {
@@ -925,49 +1035,34 @@ private struct V151IOSLedger: View {
             HStack {
                 Text("账目").font(V15Typography.surfaceTitle)
                 Spacer()
-                Menu {
-                    Button("未来时间线") { openDestination(.future) }
-                    Button("分期") { openDestination(.installments(nil)) }
-                    Button("信用账期") { openDestination(.credit) }
-                    Button("现金流") { openDestination(.cashFlow) }
-                    Button("设置") { openDestination(.settings) }
-                    Button("数据与安全") { openDestination(.archive) }
-                } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
+                Text("按上海业务日").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.54))
             }
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                workspaceEntry("报表", detail: "查看收支与趋势", symbol: "chart.bar.xaxis") { openDestination(.reports) }
-                workspaceEntry("账单导入", detail: "核对并逐行处置", symbol: "doc.text.viewfinder") { openDestination(.statementImport) }
-                workspaceEntry("报销", detail: "查看待收与到账", symbol: "person.2") { openDestination(.reimbursements) }
+            V15AdaptiveStack(spacing: 8) {
+                Button { moveToPast() } label: { Label("过去", systemImage: "chevron.left") }
+                    .buttonStyle(.plain).v15PlatformHitArea().accessibilityIdentifier("v151.ios.ledger.time.past")
+                Button { returnToToday() } label: { Label("回到今天", systemImage: "calendar") }
+                    .buttonStyle(.plain).v15PlatformHitArea().accessibilityIdentifier("v151.ios.ledger.time.today")
+                Button { futurePresented = true } label: { Label("未来", systemImage: "chevron.right") }
+                    .buttonStyle(.plain).v15PlatformHitArea().accessibilityIdentifier("v151.ios.ledger.time.future")
             }
-            if !model.accounts.isEmpty {
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack {
-                        Text("账户余额").font(.subheadline.weight(.semibold))
-                        Spacer()
-                        Text("点按查看详情").font(.caption).foregroundStyle(V15Palette.ink.color.opacity(0.52))
-                    }
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(model.accounts) { account in
-                                Button { selectedAccountID = account.id } label: {
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text(account.name).font(.subheadline.weight(.semibold)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                                        Text(account.kind == .credit ? "信用欠款" : "可用余额")
-                                            .font(.caption2).foregroundStyle(V15Palette.ink.color.opacity(0.52))
-                                        V15MoneyText(minorUnits: account.currentBalanceMinor, direction: account.kind == .credit ? .outflow : .balance, includeCurrency: false, font: .subheadline.weight(.semibold).monospacedDigit())
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .foregroundStyle(V15Palette.ink.color)
-                                    .padding(12).frame(width: 154, alignment: .leading).frame(minHeight: 82, alignment: .leading)
-                                    .v15IOSCard()
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("\(account.name)，\(account.kind == .credit ? "信用欠款" : "可用余额")，\(V15MoneyPresentation(minorUnits: account.currentBalanceMinor, direction: account.kind == .credit ? .outflow : .balance).text)")
-                                .accessibilityIdentifier("v151.ios.ledger.account.\(account.id)")
-                            }
-                        }
-                    }
+            Menu {
+                Button("全部账户") { selectAccount(nil) }
+                ForEach(model.accounts) { account in
+                    Button(account.name) { selectAccount(account.id) }
                 }
+            } label: {
+                Label(accountScopeTitle, systemImage: "rectangle.3.group")
+                    .font(V15Typography.secondary.weight(.semibold))
+            }
+            .accessibilityIdentifier("v151.ios.ledger.account-scope")
+            if let accountID = model.filter.accountID {
+                Button { accountDetailID = accountID } label: {
+                    Label("查看 \(accountScopeTitle) 详情", systemImage: "info.circle")
+                        .font(V15Typography.secondary.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .v15PlatformHitArea()
+                .accessibilityIdentifier("v151.ios.ledger.account-detail")
             }
             HStack(spacing: 9) {
                 V15SearchField(text: Binding(get: { model.filter.query ?? "" }, set: { model.setQuery($0) }))
@@ -981,32 +1076,21 @@ private struct V151IOSLedger: View {
         .padding(.top, V15Spacing.sm)
     }
 
-    private func workspaceEntry(_ title: String, detail: String, symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: symbol).font(.title3.weight(.semibold)).foregroundStyle(V15Palette.teal.color).frame(width: 30, height: 30)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.subheadline.weight(.semibold))
-                    Text(detail).font(.caption).foregroundStyle(V15Palette.ink.color.opacity(0.56)).lineLimit(2)
-                }
-            }
-            .foregroundStyle(V15Palette.ink.color)
-            .padding(12).frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-            .v15IOSCard()
-        }
-        .buttonStyle(.plain)
-    }
-
     private var ledgerList: some View {
         ScrollView {
-            LazyVStack(spacing: V15Spacing.sm) {
+            LazyVStack(spacing: 0) {
                 if let offline = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: offline).padding(16) }
                 switch model.phase {
                 case .idle, .loading: V15LoadingSkeleton(layout: .list(rows: 7)).padding(18)
                 case .empty: V15EmptyState(title: "没有符合条件的账目", explanation: "更改搜索或筛选后重新读取。", actionTitle: "重新读取") { Task { await model.load() } }.padding(18)
                 case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.load() } }.padding(18)
                 case .loaded:
-                    ForEach(model.items, id: \.id) { transaction in row(transaction) }
+                    ForEach(Array(model.items.enumerated()), id: \.element.id) { index, transaction in
+                        row(transaction)
+                        if index < model.items.count - 1 {
+                            Divider().padding(.leading, 14)
+                        }
+                    }
                     if model.nextCursor != nil {
                         V15ActionButton(
                             model.isLoadingNext ? "正在读取" : "读取下一页",
@@ -1040,9 +1124,12 @@ private struct V151IOSLedger: View {
                 V15MoneyText(minorUnits: presentation.amountMinor, direction: presentation.direction, includeCurrency: false, font: V15Typography.money)
             }
             .padding(14).contentShape(Rectangle())
-            .background { if transaction.voidedAt != nil { V15ArchiveHatch() } }
+            .background {
+                if transaction.voidedAt != nil { V15ArchiveHatch() }
+                else if selectedID == transaction.id { V15Palette.surfaceRaised.color }
+            }
             .opacity(transaction.voidedAt == nil ? 1 : 0.72)
-        }.buttonStyle(.plain).v15IOSCard()
+        }.buttonStyle(.plain)
     }
 
     private var detailSheet: some View {
@@ -1074,6 +1161,9 @@ private struct V151IOSLedger: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .fullScreenCover(item: $transactionContextDestination) { value in
+            V151IOSDestinationHost(services: services, destination: value, onDismiss: refreshRootFacts)
+        }
     }
 
     private func detail(_ transaction: V15Transaction) -> some View {
@@ -1106,14 +1196,33 @@ private struct V151IOSLedger: View {
                 }
             }
             V15AdaptiveStack {
-                V15ActionButton("加入报销", kind: .secondary, disabledReason: reimbursementReason(transaction)) { openDestination(.reimbursements) }
+                if transaction.reimbursementRelations.isEmpty {
+                    V15ActionButton("加入报销", kind: .secondary, disabledReason: reimbursementReason(transaction)) {
+                        transactionContextDestination = .reimbursements(transactionID: transaction.id)
+                    }
+                }
                 V15ActionButton(transaction.voidedAt == nil ? "作废" : "恢复", kind: transaction.voidedAt == nil ? .destructive : .secondary, disabledReason: model.disabledReason(for: transaction.voidedAt == nil ? .void : .restore, transaction: transaction)) {
                     Task { if transaction.voidedAt == nil { await model.voidSelected() } else { await model.restoreSelected() } }
                 }
             }
-            V15ActionButton("改为分期", kind: .secondary, disabledReason: installmentReason(transaction)) {
-                selectedID = nil
-                openDestination(.installments(transaction.id))
+            if let planID = transaction.installmentPlanID ?? transaction.installmentRelation?.planID {
+                V15ActionButton("查看分期计划", kind: .secondary) {
+                    transactionContextDestination = .installments(accountID: transaction.accountID, planID: planID, purchaseTransactionID: nil)
+                }
+            } else {
+                V15ActionButton("改为分期", kind: .secondary, disabledReason: installmentReason(transaction)) {
+                    transactionContextDestination = .installments(accountID: transaction.accountID, planID: nil, purchaseTransactionID: transaction.id)
+                }
+            }
+            if !transaction.reimbursementRelations.isEmpty {
+                V15Section("关联报销") {
+                    ForEach(Array(transaction.reimbursementRelations.enumerated()), id: \.offset) { indexed in
+                        let relation = indexed.element
+                        V15ActionButton("查看报销单 · \(relation.claimTitle)", kind: .secondary) {
+                            transactionContextDestination = .reimbursementClaim(claimID: relation.claimID, partyID: relation.partyID)
+                        }
+                    }
+                }
             }
             mutationState
             V15Section("修改历史") { ForEach(model.revisions) { revision in Text(revision.displayEvent).font(V15Typography.secondary) } }
@@ -1195,6 +1304,7 @@ private struct V151IOSLedger: View {
                 ?? "分类已保存；现在显示最新账目。"
             categoryEditing = false
             categoryPreviewed = false
+            refreshRootFacts()
         }
     }
 
@@ -1206,9 +1316,53 @@ private struct V151IOSLedger: View {
             selectedID = focusID
             await model.loadDetail(transactionID: focusID)
         } else {
+            returnToToday(loadImmediately: false)
             await model.load()
         }
         _ = await references
+    }
+
+    /// A root-fact revision must not reset the user's ledger range, account,
+    /// search, or selected detail back to the initial "today" defaults.
+    private func refreshPreservingContext() async {
+        async let references: Void = model.loadReferences()
+        await model.load()
+        if let selectedID { await model.loadDetail(transactionID: selectedID) }
+        _ = await references
+    }
+
+    private func selectAccount(_ id: UUID?) {
+        model.setAccount(id)
+        Task { await model.load() }
+    }
+
+    private func moveToPast() {
+        model.setDateFrom("")
+        model.setDateTo(shanghaiBusinessDate(daysFromToday: -1))
+        Task { await model.load() }
+    }
+
+    private func returnToToday(loadImmediately: Bool = true) {
+        model.setDateFrom("")
+        model.setDateTo(shanghaiBusinessDate(daysFromToday: 0))
+        if loadImmediately { Task { await model.load() } }
+    }
+
+    private var accountScopeTitle: String {
+        guard let id = model.filter.accountID,
+              let account = model.accounts.first(where: { $0.id == id }) else { return "全部账户" }
+        return account.name
+    }
+
+    private func shanghaiBusinessDate(daysFromToday: Int) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        let date = calendar.date(byAdding: .day, value: daysFromToday, to: Date()) ?? Date()
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
     }
 
     private func resetCategoryEditor() {
@@ -1222,14 +1376,13 @@ private struct V151IOSLedger: View {
     private func reimbursementReason(_ transaction: V15Transaction) -> V15DisabledReason? {
         if transaction.voidedAt != nil { return .init(code: "transaction_voided", message: "已作废账目不能加入报销。", fieldPath: nil) }
         if !["expense", "credit_purchase"].contains(transaction.kind) { return .init(code: "not_reimbursable", message: "只有支出或信用消费可加入报销。", fieldPath: nil) }
-        if !transaction.reimbursementRelations.isEmpty { return .init(code: "reimbursement_exists", message: "这笔账目已有报销关系。", fieldPath: nil) }
         return nil
     }
 
     private func installmentReason(_ transaction: V15Transaction) -> V15DisabledReason? {
         if transaction.voidedAt != nil { return .init(code: "transaction_voided", message: "已作废账目不能改为分期。", fieldPath: nil) }
         if transaction.kind != "credit_purchase" { return .init(code: "not_credit_purchase", message: "只有信用消费可改为分期。", fieldPath: nil) }
-        if transaction.installmentPlanID != nil || transaction.installmentRelation != nil { return .init(code: "installment_exists", message: "这笔消费已经关联分期。", fieldPath: nil) }
+        if transaction.accountID == nil { return .init(code: "credit_account_missing", message: "缺少信用账户，无法安全建立分期。", fieldPath: nil) }
         return nil
     }
 
@@ -1246,12 +1399,13 @@ private struct V151IOSAccountDetail: View {
     let services: V15Services
     let accountID: UUID
     let recordFactsRevision: UInt64
-    let openDestination: (V151IOSWorkspace.Destination) -> Void
+    let refreshRootFacts: () -> Void
     @State private var model: V15AccountDetailModel
+    @State private var contextDestination: V151IOSWorkspace.Destination?
     @Environment(\.dismiss) private var dismiss
 
-    init(services: V15Services, accountID: UUID, recordFactsRevision: UInt64, openDestination: @escaping (V151IOSWorkspace.Destination) -> Void) {
-        self.services = services; self.accountID = accountID; self.recordFactsRevision = recordFactsRevision; self.openDestination = openDestination
+    init(services: V15Services, accountID: UUID, recordFactsRevision: UInt64, refreshRootFacts: @escaping () -> Void) {
+        self.services = services; self.accountID = accountID; self.recordFactsRevision = recordFactsRevision; self.refreshRootFacts = refreshRootFacts
         _model = State(initialValue: V15AccountDetailModel(services: services))
     }
 
@@ -1271,9 +1425,18 @@ private struct V151IOSAccountDetail: View {
             .v15IOSScreenCanvas()
             .navigationTitle("账户详情")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                        .accessibilityIdentifier("v151.ios.account-detail.close")
+                }
+            }
         }
         .task(id: recordFactsRevision) { await load() }
+        .fullScreenCover(item: $contextDestination) { value in
+            V151IOSDestinationHost(services: services, destination: value, onDismiss: refreshRootFacts)
+        }
+        .accessibilityIdentifier("v151.ios.account-detail")
     }
 
     private func accountContent(_ account: V15AccountResponse) -> some View {
@@ -1303,9 +1466,12 @@ private struct V151IOSAccountDetail: View {
                     accountRow("账单日", account.statementDay.map { "每月 \($0) 日" } ?? "未设置")
                     accountRow("还款日", account.dueDay.map { "每月 \($0) 日" } ?? "未设置")
                 }
-                V15ActionButton("查看信用账期", kind: .secondary) { dismiss(); openDestination(.credit) }
+                V15AdaptiveStack {
+                    V15ActionButton("查看信用账期", kind: .secondary) { contextDestination = .credit(accountID: account.id) }
+                    V15ActionButton("分期计划", kind: .secondary) { contextDestination = .installments(accountID: account.id, planID: nil, purchaseTransactionID: nil) }
+                }
             }
-            V15ActionButton("账户与分类设置", kind: .secondary) { dismiss(); openDestination(.settings) }
+            V15ActionButton("账户与分类设置", kind: .secondary) { contextDestination = .settings }
         }
     }
 
@@ -1349,6 +1515,7 @@ private struct V151IOSPendingSyncQueue: View {
         .v15IOSScreenCanvas()
         .navigationTitle("待同步")
         .navigationBarTitleDisplayMode(.inline)
+        .accessibilityIdentifier("v151.ios.pending-sync")
     }
 
     private func pendingCard(_ item: V15PendingWriteStore.Item) -> some View {
@@ -1392,15 +1559,16 @@ private struct V151IOSPendingSyncQueue: View {
 private struct V151IOSDestinationHost: View {
     let services: V15Services
     let destination: V151IOSWorkspace.Destination
-    @State private var futureTarget: V15FutureOpenTarget?
+    let onDismiss: () -> Void
+    @State private var governanceTarget: V151IOSWorkspace.Destination?
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
             content
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        if futureTarget != nil { Button("返回未来") { futureTarget = nil } }
-                        else { Button("关闭") { dismiss() } }
+                        if governanceTarget != nil { Button("返回设置与治理") { governanceTarget = nil } }
+                        else { Button("关闭") { onDismiss(); dismiss() } }
                     }
                 }
         }
@@ -1408,19 +1576,34 @@ private struct V151IOSDestinationHost: View {
         .background(V15Palette.canvas.color.ignoresSafeArea())
     }
     @ViewBuilder private var content: some View {
-        switch destination {
-        case .future:
-            if let futureTarget { futureTargetContent(futureTarget) }
-            else { V15FutureTimelineView(services: services, onOpen: { futureTarget = $0 }) }
-        case .credit: V15CreditView(services: services)
-        case .installments(let transactionID): V15InstallmentView(services: services, initialPurchaseTransactionID: transactionID)
-        case .reimbursements: V15ReimbursementView(services: services)
+        if let governanceTarget {
+            destinationContent(governanceTarget)
+        } else {
+            destinationContent(destination)
+        }
+    }
+
+    @ViewBuilder private func destinationContent(_ value: V151IOSWorkspace.Destination) -> some View {
+        switch value {
+        case .futureTarget(let target): futureTargetContent(target)
+        case .credit(let accountID): V15CreditView(services: services, initialAccountID: accountID)
+        case .installments(let accountID, let planID, let purchaseTransactionID):
+            V15InstallmentView(
+                services: services,
+                initialAccountID: accountID,
+                initialPlanID: planID,
+                initialPurchaseTransactionID: purchaseTransactionID
+            )
+        case .reimbursements(let transactionID): V15ReimbursementView(services: services, initialTransactionID: transactionID)
+        case .reimbursementClaim(let claimID, let partyID):
+            V15ReimbursementView(services: services, initialClaimID: claimID, initialPartyID: partyID)
         case .cashFlow: V15CashFlowView(services: services)
-        case .proposals: V15AIProposalView(services: services)
-        case .statementImport: V15StatementImportView(services: services)
         case .reports: V15ReportingView(services: services)
-        case .archive: V15DataSecurityView(services: services)
-        case .settings: V15SettingsView(services: services)
+        case .settings:
+            V15SettingsView(
+                services: services,
+                onOpenPendingSync: { governanceTarget = .pendingSync }
+            )
         case .pendingSync: V151IOSPendingSyncQueue(services: services)
         }
     }
@@ -1435,6 +1618,7 @@ private struct V151IOSDestinationHost: View {
             V15CashFlowView(services: services, initialItem: item)
         }
     }
+
 }
 
 #endif

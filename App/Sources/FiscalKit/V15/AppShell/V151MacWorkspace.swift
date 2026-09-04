@@ -90,24 +90,21 @@ enum V151MacLedgerSearch {
 /// It keeps the V15 services and models, but owns every visible navigation and
 /// layout decision instead of inheriting the system split-view appearance.
 public struct V151MacWorkspace: View {
-    private enum Destination: String, Identifiable {
-        case ledger, record, future, credit, installments, reimbursements, cashFlow
-        case proposals, statementImport, reports, archive, settings
+    fileprivate enum Destination: String, Identifiable, Equatable {
+        case timeline, reports, settings, record, future, credit, installments, reimbursements, cashFlow, pendingSync
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .ledger: "流水"
+            case .timeline: "财务时间线"
             case .record: "记一笔"
-            case .future: "未来现金流"
+            case .future: "有来源未来"
             case .credit: "信用账期"
             case .installments: "分期"
             case .reimbursements: "报销"
             case .cashFlow: "现金流"
-            case .proposals: "AI 待确认"
-            case .statementImport: "账单导入"
-            case .reports: "报表"
-            case .archive: "系统与数据"
-            case .settings: "设置"
+            case .reports: "财务分析"
+            case .pendingSync: "待同步"
+            case .settings: "设置与治理"
             }
         }
     }
@@ -116,12 +113,33 @@ public struct V151MacWorkspace: View {
         case idle, loading, loaded, failed(V15Failure)
     }
 
+    private enum KnownFutureOpenPhase: Equatable {
+        case idle
+        case loading(String)
+        case failed(id: String, message: String)
+    }
+
+    /// Specialist pages are contextual, never root spaces.  Keep the page that
+    /// supplied the context so Back does not silently turn a timeline action
+    /// into a future-timeline detour (or vice versa).
+    private enum ContextualOrigin {
+        case timeline
+        case future
+
+        var destination: Destination {
+            switch self {
+            case .timeline: .timeline
+            case .future: .future
+            }
+        }
+    }
+
     private static let transactionRowHeight: CGFloat = 39
 
     private let services: V15Services
     @State private var ledger: V15LedgerModel
     @State private var facts: V15TodayReadModel
-    @State private var destination: Destination = .ledger
+    @State private var destination: Destination = .timeline
     @State private var selectedID: UUID?
     @State private var selectedIDs: Set<UUID> = []
     @State private var searchPresented = false
@@ -142,6 +160,19 @@ public struct V151MacWorkspace: View {
     @State private var accountDetail: V15AccountDetailModel
     @State private var searchDraft = ""
     @State private var futureTarget: V15FutureOpenTarget?
+    @State private var knownFuture: V15FutureTimelineModel
+    @State private var futureTimeline: V15FutureTimelineModel
+    @State private var futureTimelineSelectedID: String?
+    @State private var knownFutureOpenPhase: KnownFutureOpenPhase = .idle
+    @State private var knownFutureOpenGeneration: UInt64 = 0
+    @State private var contextualOrigin: ContextualOrigin = .timeline
+    @State private var initialCreditAccountID: UUID?
+    @State private var initialInstallmentAccountID: UUID?
+    @State private var initialInstallmentPlanID: UUID?
+    @State private var initialInstallmentPurchaseTransactionID: UUID?
+    @State private var initialReimbursementClaimID: UUID?
+    @State private var initialReimbursementPartyID: UUID?
+    @State private var initialReimbursementTransactionID: UUID?
     @FocusState private var searchFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
 
@@ -150,6 +181,8 @@ public struct V151MacWorkspace: View {
         _ledger = State(initialValue: V15LedgerModel(services: services))
         _accountDetail = State(initialValue: V15AccountDetailModel(services: services))
         _facts = State(initialValue: V15TodayReadModel(services: services, offlineSnapshotProvider: { services.offlineSnapshotAt }))
+        _knownFuture = State(initialValue: V15FutureTimelineModel(services: services, offlineSnapshotProvider: { services.offlineSnapshotAt }))
+        _futureTimeline = State(initialValue: V15FutureTimelineModel(services: services, offlineSnapshotProvider: { services.offlineSnapshotAt }))
     }
 
     public var body: some View {
@@ -160,11 +193,7 @@ public struct V151MacWorkspace: View {
         .task { await loadInitialFacts() }
         .popover(isPresented: $searchPresented, arrowEdge: .top) { searchPopover }
         .sheet(isPresented: $categoryPresented) { categorySheet }
-        .overlay {
-            if destination == .ledger {
-                keyboardCommands
-            }
-        }
+        .overlay { if destination == .timeline { keyboardCommands } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v151.mac.workspace")
     }
@@ -176,7 +205,7 @@ public struct V151MacWorkspace: View {
                 indexPane(compact: narrow)
                     .frame(width: narrow ? V15MacLayout.compactSidebarWidth : V15MacLayout.sidebarWidth)
                 Rectangle().fill(V15Palette.hairline.color).frame(width: 1)
-                if destination == .ledger {
+                if destination == .timeline {
                     spinePane.frame(minWidth: narrow ? 420 : 500, maxWidth: .infinity)
                     Rectangle().fill(V15Palette.hairline.color).frame(width: 1)
                     inspectorPane.frame(width: narrow ? V15MacLayout.compactInspectorWidth : V15MacLayout.inspectorWidth)
@@ -190,33 +219,34 @@ public struct V151MacWorkspace: View {
     private func indexPane(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Group {
-                if compact {
-                    Text("F")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundStyle(V15Palette.primaryButtonText.color)
-                        .frame(width: 36, height: 36)
-                        .background(V15Palette.teal.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
-                        .accessibilityLabel("Fiscal 个人财务工作台")
-                } else {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("FISCAL").font(.system(size: 11, weight: .bold, design: .rounded))
-                            .tracking(1.4)
-                            .foregroundStyle(V15Palette.teal.color)
-                        Text("个人财务工作台").font(V15Typography.secondary)
-                            .foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                Button { navigateRoot(to: .timeline) } label: {
+                    if compact {
+                        Text("F")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(V15Palette.primaryButtonText.color)
+                            .frame(width: 36, height: 36)
+                            .background(V15Palette.teal.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                            .accessibilityLabel("Fiscal 个人财务工作台，返回财务时间线")
+                    } else {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("FISCAL").font(.system(size: 11, weight: .bold, design: .rounded))
+                                .tracking(1.4)
+                                .foregroundStyle(V15Palette.teal.color)
+                            Text("个人财务工作台").font(V15Typography.secondary)
+                                .foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                        }
                     }
                 }
+                .buttonStyle(.plain)
             }
             .frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
             .padding(.horizontal, compact ? 10 : 18)
             .padding(.top, 20)
             .padding(.bottom, 18)
             VStack(alignment: .leading, spacing: 3) {
-                moduleNavigation("流水", symbol: "list.bullet", destination: .ledger, compact: compact)
-                moduleNavigation("未来现金流", symbol: "calendar", destination: .future, compact: compact)
-                moduleNavigation("报表", symbol: "chart.bar", destination: .reports, compact: compact)
-                moduleNavigation("系统与数据", symbol: "tray.full", destination: .archive, compact: compact)
-                moduleNavigation("设置", symbol: "gearshape", destination: .settings, compact: compact)
+                moduleNavigation("财务时间线", symbol: "timeline.selection", destination: .timeline, compact: compact)
+                moduleNavigation("财务分析", symbol: "chart.bar", destination: .reports, compact: compact)
+                moduleNavigation("设置与治理", symbol: "slider.horizontal.3", destination: .settings, compact: compact)
             }
             .padding(.horizontal, compact ? 10 : 12)
             Spacer()
@@ -225,7 +255,7 @@ public struct V151MacWorkspace: View {
     }
 
     private func moduleNavigation(_ title: String, symbol: String, destination value: Destination, compact: Bool) -> some View {
-        Button { futureTarget = nil; destination = value } label: {
+        Button { navigateRoot(to: value) } label: {
             Group {
                 if compact {
                     Image(systemName: symbol)
@@ -258,8 +288,11 @@ public struct V151MacWorkspace: View {
             ScrollView {
                 LazyVStack(spacing: 0, pinnedViews: []) {
                     if let snapshotAt = ledger.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshotAt, pendingCount: services.pendingWrites.count).padding(12) }
+                    timelineAnchor
+                    timelineSectionLabel("正式账目", detail: "已发生并已确认的账目；未来计划不会混入余额或流水。")
                     transactionRows
                     if ledger.nextCursor != nil { loadMoreRow }
+                    knownFutureSection
                 }
             }
             Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
@@ -279,7 +312,7 @@ public struct V151MacWorkspace: View {
 
     private var spineToolbar: some View {
         HStack(spacing: 10) {
-            Text("流水").font(.system(size: 15, weight: .semibold))
+            Text("财务时间线").font(.system(size: 15, weight: .semibold))
                 .accessibilityIdentifier("v151.mac.ledger.title")
             Menu(periodLabel) {
                 ForEach(monthChoices, id: \.self) { month in
@@ -306,7 +339,7 @@ public struct V151MacWorkspace: View {
                     .keyboardShortcut("f", modifiers: .command)
                     .accessibilityIdentifier("v151.mac.ledger.search")
             }
-            V15ActionButton("记一笔") { destination = .record }
+            V15ActionButton("记一笔") { openRecord() }
                 .keyboardShortcut("n", modifiers: .command)
         }
         .padding(.horizontal, V15MacLayout.contentPadding).frame(minHeight: V15MacLayout.toolbarHeight)
@@ -315,102 +348,62 @@ public struct V151MacWorkspace: View {
     @ViewBuilder private var accountBalanceBoard: some View {
         switch ledger.referencePhase {
         case .idle, .loading:
-            LazyVGrid(columns: accountBalanceColumns, spacing: 8) {
-                ForEach(0..<3, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(V15Palette.paper.color.opacity(0.72))
-                        .frame(height: 78)
-                        .overlay { V15LoadingSkeleton(layout: .compact).padding(10) }
-                }
-            }
-            .padding(12)
-            .accessibilityIdentifier("v151.mac.account.board.loading")
+            V15LoadingSkeleton(layout: .compact)
+                .padding(.horizontal, V15MacLayout.contentPadding)
+                .padding(.vertical, 10)
+                .accessibilityIdentifier("v151.mac.account.scope.loading")
         case .failed(let failure):
             V15ServiceErrorState(message: failure.message) {
                 Task { await refreshLedgerReferencesAndReconcileSelectedAccount() }
             }
-            .padding(12)
-            .accessibilityIdentifier("v151.mac.account.board.error")
+            .padding(.horizontal, V15MacLayout.contentPadding)
+            .padding(.vertical, 10)
+            .accessibilityIdentifier("v151.mac.account.scope.error")
         case .empty:
             V15EmptyState(title: "还没有可用账户", explanation: "请先在设置中建立账户。")
-                .padding(12)
-                .accessibilityIdentifier("v151.mac.account.board.empty")
+                .padding(.horizontal, V15MacLayout.contentPadding)
+                .padding(.vertical, 10)
+                .accessibilityIdentifier("v151.mac.account.scope.empty")
         case .loaded:
-            LazyVGrid(columns: accountBalanceColumns, spacing: 8) {
-                allAccountsBalanceCard
-                ForEach(ledger.accounts) { account in
-                    accountBalanceCard(account)
+            HStack(spacing: 12) {
+                Menu {
+                    Button("全部账户") { selectAllAccounts() }
+                        .accessibilityIdentifier("v151.mac.account.scope.all")
+                    Divider()
+                    ForEach(ledger.accounts) { account in
+                        Button("\(account.name) · \(V151MacAccountBalanceSemantics.kindLabel(account.kind))") {
+                            selectAccount(account.id)
+                        }
+                        .accessibilityIdentifier("v151.mac.account.scope.\(account.id)")
+                    }
+                } label: {
+                    Label(filteredAccount?.name ?? "全部账户", systemImage: "line.3.horizontal.decrease.circle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
                 }
-            }
-            .padding(12)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("v151.mac.account.board")
-        }
-    }
+                .menuStyle(.borderlessButton)
+                .accessibilityIdentifier("v151.mac.account.scope")
 
-    private var accountBalanceColumns: [GridItem] {
-        [GridItem(.adaptive(minimum: 154, maximum: 220), spacing: 8, alignment: .top)]
-    }
-
-    private var allAccountsBalanceCard: some View {
-        Button(action: selectAllAccounts) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text("全部账户").font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                    Spacer(minLength: 4)
-                    Text("总览").font(.system(size: 10, weight: .medium)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
-                }
                 if let value = facts.facts {
-                    accountSummaryRow("资产余额", minorUnits: value.cash.currentBalanceMinor, direction: .balance)
+                    accountSummaryRow("资产", minorUnits: value.cash.currentBalanceMinor, direction: .balance)
+                    Divider().frame(height: 18)
                     accountSummaryRow("信用欠款", minorUnits: value.credit.currentDebtMinor, direction: .outflow)
                 } else {
                     Text(factsSummaryPlaceholder)
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundStyle(V15Palette.ink.color.opacity(0.56))
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                Spacer(minLength: 0)
+                Text(accountScopeDetail)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                    .lineLimit(1)
             }
-            .padding(10)
-            .frame(maxWidth: .infinity, minHeight: 78, maxHeight: 78, alignment: .topLeading)
-            .background(accountFilterID == nil ? V15Palette.selected.color : V15Palette.paper.color, in: RoundedRectangle(cornerRadius: 7))
-            .overlay { RoundedRectangle(cornerRadius: 7).stroke(accountFilterID == nil ? V15Palette.teal.color : V15Palette.hairline.color, lineWidth: accountFilterID == nil ? 1.5 : 1) }
-            .contentShape(RoundedRectangle(cornerRadius: 7))
+            .padding(.horizontal, V15MacLayout.contentPadding)
+            .padding(.vertical, 10)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("v151.mac.account.scope.summary")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(allAccountsAccessibilityLabel)
-        .accessibilityAddTraits(accountFilterID == nil ? .isSelected : [])
-        .accessibilityIdentifier("v151.mac.account.summary")
-    }
-
-    private func accountBalanceCard(_ account: V15AccountResponse) -> some View {
-        let selected = accountFilterID == account.id
-        let kind = V151MacAccountBalanceSemantics.kindLabel(account.kind)
-        let amountLabel = V151MacAccountBalanceSemantics.amountLabel(account.kind)
-        let direction = V151MacAccountBalanceSemantics.direction(account.kind, minorUnits: account.currentBalanceMinor)
-        return Button { selectAccount(account.id) } label: {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 6) {
-                    Text(account.name).font(.system(size: 12, weight: .semibold)).lineLimit(1).truncationMode(.middle)
-                    Spacer(minLength: 4)
-                    Text(kind).font(.system(size: 10, weight: .medium)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
-                }
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(amountLabel).font(.system(size: 10)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
-                    Spacer(minLength: 4)
-                    V15MoneyText(minorUnits: account.currentBalanceMinor, direction: direction, font: .system(size: 12, weight: .semibold, design: .monospaced))
-                        .minimumScaleFactor(0.72)
-                }
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, minHeight: 78, maxHeight: 78, alignment: .topLeading)
-            .background(selected ? V15Palette.selected.color : V15Palette.paper.color, in: RoundedRectangle(cornerRadius: 7))
-            .overlay { RoundedRectangle(cornerRadius: 7).stroke(selected ? V15Palette.teal.color : V15Palette.hairline.color, lineWidth: selected ? 1.5 : 1) }
-            .contentShape(RoundedRectangle(cornerRadius: 7))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(account.name)，\(kind)账户，\(amountLabel) \(V15MoneyPresentation(minorUnits: account.currentBalanceMinor, direction: direction).text)")
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("v151.mac.account.card.\(account.id)")
     }
 
     private func accountSummaryRow(_ label: String, minorUnits: Int64, direction: V15MoneyDirection) -> some View {
@@ -434,14 +427,181 @@ public struct V151MacWorkspace: View {
         }
     }
 
-    private var allAccountsAccessibilityLabel: String {
-        guard let value = facts.facts else { return "全部账户，总览暂不可用" }
-        let assets = V15MoneyPresentation(minorUnits: value.cash.currentBalanceMinor, direction: .balance).text
-        let debt = V15MoneyPresentation(
-            minorUnits: value.credit.currentDebtMinor,
-            direction: value.credit.currentDebtMinor == 0 ? .balance : .outflow
-        ).text
-        return "全部账户，资产余额 \(assets)，信用欠款 \(debt)"
+    private var accountScopeDetail: String {
+        if let account = filteredAccount {
+            let direction = V151MacAccountBalanceSemantics.direction(account.kind, minorUnits: account.currentBalanceMinor)
+            return "\(V151MacAccountBalanceSemantics.amountLabel(account.kind)) \(V15MoneyPresentation(minorUnits: account.currentBalanceMinor, direction: direction).text)"
+        }
+        return "\(ledger.accounts.count) 个账户"
+    }
+
+    private var timelineAnchor: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "circle.inset.filled")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(V15Palette.teal.color)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("今天 · \(shanghaiBusinessDate)")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("从这里读回已发生账目，也读向有来源的未来事项。")
+                    .font(.system(size: 11))
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.58))
+            }
+            Spacer(minLength: 0)
+            Button("回到本月") { applyMonth(monthParser.string(from: Date())) }
+                .buttonStyle(.borderless)
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .padding(.horizontal, V15MacLayout.contentPadding)
+        .padding(.vertical, 12)
+        .background(V15Palette.selected.color.opacity(0.45))
+        .accessibilityIdentifier("v151.mac.timeline.today-anchor")
+    }
+
+    private func timelineSectionLabel(_ title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.system(size: 12, weight: .semibold))
+            Text(detail).font(.system(size: 10)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, V15MacLayout.contentPadding)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+        .accessibilityIdentifier("v151.mac.timeline.section.\(title)")
+    }
+
+    private var knownFutureSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            timelineSectionLabel("有来源未来", detail: "只显示来自信用账期、报销对象或现金流计划的已知事项。")
+            switch knownFuture.phase {
+            case .idle, .loading:
+                V15LoadingSkeleton(layout: .compact)
+                    .padding(.horizontal, V15MacLayout.contentPadding)
+                    .padding(.bottom, 16)
+            case .failed(let failure), .requiresReload(let failure):
+                V15ServiceErrorState(message: failure.message) { reloadKnownFuture() }
+                    .padding(.horizontal, V15MacLayout.contentPadding)
+                    .padding(.bottom, 16)
+            case .empty:
+                Text("当前读取范围没有已知未来事项。")
+                    .font(.system(size: 11))
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                    .padding(.horizontal, V15MacLayout.contentPadding)
+                    .padding(.bottom, 16)
+            case .loaded:
+                ForEach(Array(knownFuture.events.prefix(3))) { event in
+                    knownFutureRow(event)
+                    knownFutureOpenState(for: event)
+                }
+            }
+            Button {
+                openFutureOverview()
+            } label: {
+                Label("查看全部有来源未来", systemImage: "arrow.right")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(.borderless)
+            .padding(.horizontal, V15MacLayout.contentPadding)
+            .padding(.vertical, 12)
+            .accessibilityIdentifier("v151.mac.timeline.future")
+            Button {
+                openCashFlow(from: .timeline)
+            } label: {
+                Label("管理现金流计划", systemImage: "calendar.badge.clock")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(.borderless)
+            .padding(.horizontal, V15MacLayout.contentPadding)
+            .padding(.bottom, 12)
+            .accessibilityIdentifier("v151.mac.timeline.cash-flow")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("v151.mac.timeline.known-future")
+    }
+
+    private func knownFutureRow(_ event: V15FutureEvent) -> some View {
+        Button {
+            openKnownFuture(event)
+        } label: {
+            HStack(spacing: 12) {
+                Text(event.date)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                    .frame(width: 72, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(event.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                    Text(knownFutureSourceLabel(event.sourceType))
+                        .font(.system(size: 10))
+                        .foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                }
+                Spacer(minLength: 8)
+                V15MoneyText(
+                    minorUnits: event.amountMinor,
+                    direction: event.direction == .inflow ? .inflow : .outflow,
+                    includeCurrency: false,
+                    font: .system(size: 12, weight: .semibold, design: .monospaced)
+                )
+            }
+            .padding(.horizontal, V15MacLayout.contentPadding)
+            .frame(height: Self.transactionRowHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isOpeningKnownFuture)
+        .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
+        .accessibilityIdentifier("v151.mac.timeline.future-event.\(event.id)")
+    }
+
+    @ViewBuilder private func knownFutureOpenState(for event: V15FutureEvent) -> some View {
+        switch knownFutureOpenPhase {
+        case .loading(let id) where id == event.id:
+            V15LoadingSkeleton(layout: .compact)
+                .padding(.horizontal, V15MacLayout.contentPadding)
+                .padding(.bottom, 10)
+                .accessibilityIdentifier("v151.mac.timeline.future-event.loading.\(event.id)")
+        case .failed(let id, let message) where id == event.id:
+            V15ServiceErrorState(message: message) { openKnownFuture(event) }
+                .padding(.horizontal, V15MacLayout.contentPadding)
+                .padding(.bottom, 10)
+                .accessibilityIdentifier("v151.mac.timeline.future-event.error.\(event.id)")
+        default:
+            EmptyView()
+        }
+    }
+
+    private var isOpeningKnownFuture: Bool {
+        if case .loading = knownFutureOpenPhase { return true }
+        return false
+    }
+
+    private func openKnownFuture(_ event: V15FutureEvent) {
+        guard !isOpeningKnownFuture else { return }
+        knownFutureOpenGeneration &+= 1
+        let generation = knownFutureOpenGeneration
+        knownFutureOpenPhase = .loading(event.id)
+        Task {
+            guard let target = await knownFuture.resolveOpenTarget(event) else {
+                guard generation == knownFutureOpenGeneration else { return }
+                guard case .loading(let id) = knownFutureOpenPhase, id == event.id else { return }
+                let message: String
+                if case .failed(let value) = knownFuture.openPhase { message = value }
+                else { message = "暂时无法核验这项未来事项的最新归属。" }
+                knownFutureOpenPhase = .failed(id: event.id, message: message)
+                return
+            }
+            guard generation == knownFutureOpenGeneration else { return }
+            guard case .loading(let id) = knownFutureOpenPhase, id == event.id else { return }
+            knownFutureOpenPhase = .idle
+            openVerifiedFutureTarget(target, from: .timeline)
+        }
+    }
+
+    private func knownFutureSourceLabel(_ source: V15FutureEventSource) -> String {
+        switch source {
+        case .creditCycle: "信用账期 · 有来源"
+        case .reimbursementParty: "报销对象 · 有来源"
+        case .cashFlowItem: "现金流事项 · 有来源"
+        }
     }
 
     @ViewBuilder private var transactionRows: some View {
@@ -670,7 +830,10 @@ public struct V151MacWorkspace: View {
                         clearAccountDetailSelection()
                     }
                     if account.kind == .credit {
-                        V15ActionButton("进入信用账期", kind: .secondary) { destination = .credit }
+                        V15ActionButton("进入信用账期", kind: .secondary) { openCredit(accountID: account.id, from: .timeline) }
+                            .accessibilityIdentifier("v151.mac.account.open-credit.\(account.id)")
+                        V15ActionButton("查看分期", kind: .secondary) { openInstallments(accountID: account.id, from: .timeline) }
+                            .accessibilityIdentifier("v151.mac.account.open-installments.\(account.id)")
                     }
                     V15ActionButton("打开设置", kind: .secondary) { destination = .settings }
                 }
@@ -701,6 +864,7 @@ public struct V151MacWorkspace: View {
                     Text(sourceLabel(transaction.source)).font(.system(size: 11, weight: .semibold)).foregroundStyle(V15Palette.teal.color).padding(.horizontal, 9).padding(.vertical, 5).background(V15Palette.selected.color, in: RoundedRectangle(cornerRadius: 5))
                 }
             }
+            specialistRelations(transaction)
             inspectorSection("账本影响") {
                 VStack(spacing: 0) {
                     ForEach(transaction.postings, id: \.id) { posting in
@@ -757,15 +921,56 @@ public struct V151MacWorkspace: View {
             }
             if let transaction = selectedTransaction {
                 HStack(spacing: 8) {
-                    V15ActionButton("加入报销", kind: .secondary, disabledReason: reimbursementReason(transaction)) { destination = .reimbursements }
+                    if transaction.reimbursementRelations.isEmpty {
+                        V15ActionButton("加入报销", kind: .secondary, disabledReason: reimbursementReason(transaction)) {
+                            openReimbursements(transactionID: transaction.id, from: .timeline)
+                        }
+                        .accessibilityIdentifier("v151.mac.transaction.reimbursement.create.\(transaction.id)")
+                    }
                     V15ActionButton(transaction.voidedAt == nil ? "作废" : "恢复", kind: transaction.voidedAt == nil ? .destructive : .secondary, disabledReason: ledger.disabledReason(for: transaction.voidedAt == nil ? .void : .restore, transaction: transaction)) {
                         Task { if transaction.voidedAt == nil { await ledger.voidSelected() } else { await ledger.restoreSelected() } }
                     }
                 }
-                V15ActionButton("改为分期", kind: .secondary, disabledReason: installmentReason(transaction)) { destination = .installments }
+                if let planID = transaction.installmentPlanID ?? transaction.installmentRelation?.planID {
+                    V15ActionButton("查看分期", kind: .secondary) {
+                        openInstallments(accountID: transaction.accountID, planID: planID, from: .timeline)
+                    }
+                    .accessibilityIdentifier("v151.mac.transaction.installment.\(planID)")
+                } else {
+                    V15ActionButton("改为分期", kind: .secondary, disabledReason: installmentReason(transaction)) {
+                        openInstallments(accountID: transaction.accountID, purchaseTransactionID: transaction.id, from: .timeline)
+                    }
+                    .accessibilityIdentifier("v151.mac.transaction.installment.create.\(transaction.id)")
+                }
             }
         }
         .padding(14).background(V15Palette.card.color)
+    }
+
+    @ViewBuilder private func specialistRelations(_ transaction: V15Transaction) -> some View {
+        if transaction.installmentPlanID != nil || transaction.installmentRelation != nil || !transaction.reimbursementRelations.isEmpty {
+            inspectorSection("专项关联") {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let plan = transaction.installmentRelation {
+                        V15ActionButton("分期 · \(plan.planTitle)", kind: .secondary) {
+                            openInstallments(accountID: transaction.accountID, planID: plan.planID, from: .timeline)
+                        }
+                        .accessibilityIdentifier("v151.mac.transaction.installment.\(plan.planID)")
+                    } else if let planID = transaction.installmentPlanID {
+                        V15ActionButton("查看关联分期", kind: .secondary) {
+                            openInstallments(accountID: transaction.accountID, planID: planID, from: .timeline)
+                        }
+                        .accessibilityIdentifier("v151.mac.transaction.installment.\(planID)")
+                    }
+                    ForEach(Array(transaction.reimbursementRelations.enumerated()), id: \.offset) { _, relation in
+                        V15ActionButton("报销 · \(relation.claimTitle)\(relation.partyName.map { " · \($0)" } ?? "")", kind: .secondary) {
+                            openReimbursements(claimID: relation.claimID, partyID: relation.partyID, from: .timeline)
+                        }
+                        .accessibilityIdentifier("v151.mac.transaction.reimbursement.\(relation.claimID).\(relation.partyID?.uuidString ?? "claim")")
+                    }
+                }
+            }
+        }
     }
 
     @ViewBuilder private var mutationState: some View {
@@ -862,47 +1067,25 @@ public struct V151MacWorkspace: View {
 
     private var showsModuleHeader: Bool {
         switch destination {
-        case .reports, .settings: false
+        case .timeline, .reports, .settings: false
         default: true
         }
     }
 
     @ViewBuilder private var moduleHeader: some View {
         switch destination {
-        case .ledger: EmptyView()
+        case .timeline: EmptyView()
         case .future:
-            primaryModuleHeader("未来现金流") {
-                V15ActionButton("现金流计划", kind: .secondary) { destination = .cashFlow }
-                V15ActionButton("信用账期", kind: .secondary) { destination = .credit }
-                V15ActionButton("分期", kind: .secondary) { destination = .installments }
-                    .accessibilityIdentifier("v151.mac.future.installments")
-                V15ActionButton("报销", kind: .secondary) { destination = .reimbursements }
-            }
-        case .reports: EmptyView()
-        case .archive:
-            actionModuleHeader {
-                V15ActionButton("AI 待确认", kind: .secondary) { destination = .proposals }
-                    .accessibilityIdentifier("v151.mac.system.ai-proposals")
-                V15ActionButton("账单导入", kind: .secondary) { destination = .statementImport }
-                    .accessibilityIdentifier("v151.mac.system.statement-import")
-            }
-        case .settings: EmptyView()
-        case .record: secondaryModuleHeader("记一笔", parent: .ledger)
-        case .credit: secondaryModuleHeader("信用账期", parent: .future)
-        case .installments: secondaryModuleHeader("分期", parent: .future)
-        case .reimbursements: secondaryModuleHeader("报销", parent: .future)
-        case .cashFlow: secondaryModuleHeader("现金流计划", parent: .future)
-        case .proposals: secondaryModuleHeader("AI 待确认", parent: .archive)
-        case .statementImport: secondaryModuleHeader("账单导入", parent: .archive)
+            secondaryModuleHeader("有来源未来", parent: .timeline)
+        case .pendingSync:
+            secondaryModuleHeader("待同步", parent: .settings)
+        case .reports, .settings: EmptyView()
+        case .record: secondaryModuleHeader("记一笔", parent: .timeline)
+        case .credit: secondaryModuleHeader("信用账期", parent: contextualOrigin.destination)
+        case .installments: secondaryModuleHeader("分期", parent: contextualOrigin.destination)
+        case .reimbursements: secondaryModuleHeader("报销", parent: contextualOrigin.destination)
+        case .cashFlow: secondaryModuleHeader("现金流计划", parent: contextualOrigin.destination)
         }
-    }
-
-    private func actionModuleHeader<Actions: View>(@ViewBuilder actions: () -> Actions) -> some View {
-        HStack(spacing: 8) {
-            Spacer()
-            actions()
-        }
-        .padding(.horizontal, 18).frame(height: 48).background(V15Palette.card.color)
     }
 
     private func primaryModuleHeader<Actions: View>(_ title: String, @ViewBuilder actions: () -> Actions) -> some View {
@@ -919,8 +1102,7 @@ public struct V151MacWorkspace: View {
     private func secondaryModuleHeader(_ title: String, parent: Destination) -> some View {
         HStack(spacing: 12) {
             Button {
-                futureTarget = nil
-                destination = parent
+                returnFromSecondary(to: parent)
             } label: {
                 Label("返回\(parent.title)", systemImage: "chevron.left")
             }
@@ -936,35 +1118,169 @@ public struct V151MacWorkspace: View {
 
     @ViewBuilder private var moduleContent: some View {
         switch destination {
-        case .ledger: EmptyView()
+        case .timeline: EmptyView()
         case .record: V15RecordView(services: services, onCommitted: recordCommitted)
         case .future:
-            V15FutureTimelineMacView(services: services, onOpen: openVerifiedFutureTarget)
+            V15FutureTimelineMacView(model: futureTimeline, selectedID: $futureTimelineSelectedID) { target in
+                openVerifiedFutureTarget(target, from: .future)
+            }
         case .credit:
             if case .creditCycle(let cycle) = futureTarget { V15CreditMacView(services: services, initialCycle: cycle) }
-            else { V15CreditMacView(services: services) }
-        case .installments: V15InstallmentMacView(services: services)
+            else { V15CreditMacView(services: services, initialAccountID: initialCreditAccountID) }
+        case .installments:
+            V15InstallmentMacView(
+                services: services,
+                initialAccountID: initialInstallmentAccountID,
+                initialPlanID: initialInstallmentPlanID,
+                initialPurchaseTransactionID: initialInstallmentPurchaseTransactionID
+            )
         case .reimbursements:
             if case .reimbursementParty(let claim, let partyID) = futureTarget { V15ReimbursementMacView(services: services, initialClaim: claim, initialPartyID: partyID) }
-            else { V15ReimbursementMacView(services: services) }
+            else {
+                V15ReimbursementMacView(
+                    services: services,
+                    initialClaimID: initialReimbursementClaimID,
+                    initialPartyID: initialReimbursementPartyID,
+                    initialTransactionID: initialReimbursementTransactionID
+                )
+            }
         case .cashFlow:
             if case .cashFlowItem(let item) = futureTarget { V15CashFlowMacView(services: services, initialItem: item) }
             else { V15CashFlowMacView(services: services) }
-        case .proposals: V15AIProposalMacView(services: services)
-        case .statementImport: V15StatementImportMacView(services: services)
         case .reports: V15ReportingMacView(services: services)
-        case .archive: V15DataSecurityMacView(services: services)
-        case .settings: V15SettingsView(services: services)
+        case .pendingSync: V151MacPendingSyncHub(services: services)
+        case .settings:
+            V15SettingsView(services: services, onOpenPendingSync: { openPendingSync() })
         }
     }
 
-    private func openVerifiedFutureTarget(_ target: V15FutureOpenTarget) {
+    private func openVerifiedFutureTarget(_ target: V15FutureOpenTarget, from origin: ContextualOrigin) {
+        invalidateKnownFutureOpen()
+        clearSpecialistInitialTargets()
+        contextualOrigin = origin
         futureTarget = target
         switch target {
         case .creditCycle: destination = .credit
         case .reimbursementParty: destination = .reimbursements
         case .cashFlowItem: destination = .cashFlow
         }
+    }
+
+    private func navigateRoot(to value: Destination) {
+        let leaving = destination
+        invalidateKnownFutureOpen()
+        futureTarget = nil
+        clearSpecialistInitialTargets()
+        destination = value
+        if value == .timeline, leaving != .timeline {
+            Task { await refreshAfterReturningToTimeline() }
+        }
+    }
+
+    private func openRecord() {
+        invalidateKnownFutureOpen()
+        futureTarget = nil
+        clearSpecialistInitialTargets()
+        destination = .record
+    }
+
+    private func openFutureOverview() {
+        invalidateKnownFutureOpen()
+        futureTarget = nil
+        clearSpecialistInitialTargets()
+        destination = .future
+    }
+
+    private func openCredit(accountID: UUID, from origin: ContextualOrigin) {
+        invalidateKnownFutureOpen()
+        futureTarget = nil
+        clearSpecialistInitialTargets()
+        contextualOrigin = origin
+        initialCreditAccountID = accountID
+        destination = .credit
+    }
+
+    private func openInstallments(accountID: UUID? = nil, planID: UUID? = nil, purchaseTransactionID: UUID? = nil, from origin: ContextualOrigin) {
+        invalidateKnownFutureOpen()
+        futureTarget = nil
+        clearSpecialistInitialTargets()
+        contextualOrigin = origin
+        initialInstallmentAccountID = accountID
+        initialInstallmentPlanID = planID
+        initialInstallmentPurchaseTransactionID = purchaseTransactionID
+        destination = .installments
+    }
+
+    private func openReimbursements(claimID: UUID? = nil, partyID: UUID? = nil, transactionID: UUID? = nil, from origin: ContextualOrigin) {
+        invalidateKnownFutureOpen()
+        futureTarget = nil
+        clearSpecialistInitialTargets()
+        contextualOrigin = origin
+        initialReimbursementClaimID = claimID
+        initialReimbursementPartyID = partyID
+        initialReimbursementTransactionID = transactionID
+        destination = .reimbursements
+    }
+
+    private func openCashFlow(from origin: ContextualOrigin) {
+        invalidateKnownFutureOpen()
+        futureTarget = nil
+        clearSpecialistInitialTargets()
+        contextualOrigin = origin
+        destination = .cashFlow
+    }
+
+    private func openPendingSync() {
+        invalidateKnownFutureOpen()
+        futureTarget = nil
+        clearSpecialistInitialTargets()
+        destination = .pendingSync
+    }
+
+    private func returnFromSecondary(to parent: Destination) {
+        let leaving = destination
+        invalidateKnownFutureOpen()
+        futureTarget = nil
+        clearSpecialistInitialTargets()
+        destination = parent
+        if parent == .timeline {
+            Task { await refreshAfterReturningToTimeline() }
+        } else if parent == .future, isMutableSpecialist(leaving) {
+            Task {
+                async let root: Void = refreshAfterReturningToTimeline()
+                async let future: Void = futureTimeline.reload()
+                _ = await (root, future)
+            }
+        }
+    }
+
+    private func isMutableSpecialist(_ value: Destination) -> Bool {
+        switch value {
+        case .credit, .installments, .reimbursements, .cashFlow:
+            true
+        default:
+            false
+        }
+    }
+
+    private func clearSpecialistInitialTargets() {
+        initialCreditAccountID = nil
+        initialInstallmentAccountID = nil
+        initialInstallmentPlanID = nil
+        initialInstallmentPurchaseTransactionID = nil
+        initialReimbursementClaimID = nil
+        initialReimbursementPartyID = nil
+        initialReimbursementTransactionID = nil
+    }
+
+    private func invalidateKnownFutureOpen() {
+        knownFutureOpenGeneration &+= 1
+        knownFutureOpenPhase = .idle
+    }
+
+    private func reloadKnownFuture() {
+        invalidateKnownFutureOpen()
+        Task { await knownFuture.reload() }
     }
 
     private var selectedTransaction: V15Transaction? {
@@ -979,6 +1295,7 @@ public struct V151MacWorkspace: View {
     }
 
     private func loadInitialFacts() async {
+        invalidateKnownFutureOpen()
         applyLedgerMonthRange(selectedMonth)
         accountContext.clearAllAccounts()
         ledger.setAccount(nil)
@@ -987,7 +1304,8 @@ public struct V151MacWorkspace: View {
         async let references: Void = refreshLedgerReferencesAndReconcileSelectedAccount()
         async let list: Void = ledger.load()
         async let current: Void = facts.refresh()
-        _ = await (references, list, current)
+        async let future: Void = knownFuture.reload()
+        _ = await (references, list, current, future)
     }
 
     private func recordCommitted(_ outcome: V15RecordModel.CommitOutcome) {
@@ -998,9 +1316,22 @@ public struct V151MacWorkspace: View {
     @MainActor private func refreshAfterConfirmedRecord() async {
         async let list: Void = ledger.load()
         async let current: Void = facts.refresh()
+        async let future: Void = knownFuture.reload()
         await refreshLedgerReferencesAndReconcileSelectedAccount()
         await refreshSelectedAccountAfterConfirmedRecord()
-        _ = await (list, current)
+        _ = await (list, current, future)
+    }
+
+    /// Specialist views currently expose no write-confirmation callback.  On a
+    /// deliberate return we only re-read server facts; this never presents a
+    /// success receipt for a failed or cancelled specialist operation.
+    @MainActor private func refreshAfterReturningToTimeline() async {
+        async let list: Void = ledger.load()
+        async let current: Void = facts.refresh()
+        async let future: Void = knownFuture.reload()
+        await refreshLedgerReferencesAndReconcileSelectedAccount()
+        await refreshSelectedAccountAfterConfirmedRecord()
+        _ = await (list, current, future)
     }
 
     @MainActor private func refreshSelectedAccountAfterConfirmedRecord() async {
@@ -1050,7 +1381,8 @@ public struct V151MacWorkspace: View {
     }
 
     private func selectAccount(_ id: UUID) {
-        destination = .ledger
+        invalidateKnownFutureOpen()
+        destination = .timeline
         selectedID = nil
         selectedIDs.removeAll()
         ledger.clearSelection()
@@ -1061,11 +1393,13 @@ public struct V151MacWorkspace: View {
         Task {
             async let list: Void = ledger.load()
             async let detail: Void = loadAccount(id)
-            _ = await (list, detail)
+            async let future: Void = knownFuture.setAccount(id)
+            _ = await (list, detail, future)
         }
     }
 
     private func selectAllAccounts() {
+        invalidateKnownFutureOpen()
         selectedID = nil
         selectedIDs.removeAll()
         ledger.clearSelection()
@@ -1074,7 +1408,11 @@ public struct V151MacWorkspace: View {
         accountDetailPhase = .idle
         accountDetail.clear()
         ledger.setAccount(nil)
-        Task { await ledger.load() }
+        Task {
+            async let list: Void = ledger.load()
+            async let future: Void = knownFuture.setAccount(nil)
+            _ = await (list, future)
+        }
     }
 
     @MainActor private func loadAccount(_ id: UUID) async {
@@ -1134,6 +1472,7 @@ public struct V151MacWorkspace: View {
                 } else {
                     categoryPresented = false
                 }
+                await refreshAfterReturningToTimeline()
             }
         }
     }
@@ -1165,6 +1504,9 @@ public struct V151MacWorkspace: View {
             selectedIDs.subtract(result.committedIDs)
             batchWorking = false
             batchPreviewed = !selectedIDs.isEmpty && ledger.categoryChangePreview != nil
+            if !result.committedIDs.isEmpty {
+                await refreshAfterReturningToTimeline()
+            }
         }
     }
 
@@ -1191,19 +1533,19 @@ public struct V151MacWorkspace: View {
     private var keyboardCommands: some View {
         VStack {
             Button("下一笔") {
-                guard destination == .ledger else { return }
+                guard destination == .timeline else { return }
                 moveSelection(1)
             }.keyboardShortcut("j", modifiers: [])
             Button("上一笔") {
-                guard destination == .ledger else { return }
+                guard destination == .timeline else { return }
                 moveSelection(-1)
             }.keyboardShortcut("k", modifiers: [])
             Button("预览") {
-                guard destination == .ledger else { return }
+                guard destination == .timeline else { return }
                 previewSelected()
             }.keyboardShortcut(.space, modifiers: [])
             Button("提交") {
-                guard destination == .ledger else { return }
+                guard destination == .timeline else { return }
                 if categoryPresented, categoryPreviewed { commitCategory() }
                 else if batchPreviewed { submitBatchCategory() }
             }.keyboardShortcut(.return, modifiers: .command)
@@ -1218,12 +1560,108 @@ public struct V151MacWorkspace: View {
     private var monthChoices: [String] { (0..<4).compactMap { offset in shanghaiCalendar.date(byAdding: .month, value: -offset, to: Date()).map { monthParser.string(from: $0) } } }
 
     private var shanghaiCalendar: Calendar { var value = Calendar(identifier: .gregorian); value.locale = Locale(identifier: "zh_Hans_CN"); value.timeZone = TimeZone(identifier: "Asia/Shanghai")!; return value }
+    private var shanghaiBusinessDate: String { let value = DateFormatter(); value.locale = Locale(identifier: "zh_Hans_CN"); value.timeZone = TimeZone(identifier: "Asia/Shanghai"); value.dateFormat = "yyyy-MM-dd"; return value.string(from: Date()) }
     private var monthParser: DateFormatter { let value = DateFormatter(); value.locale = Locale(identifier: "zh_Hans_CN"); value.timeZone = TimeZone(identifier: "Asia/Shanghai"); value.dateFormat = "yyyy 年 M 月"; return value }
     private func shortDate(_ value: String) -> String { value.count >= 5 ? String(value.suffix(5)) : value }
     private func timeLabel(_ value: Date) -> String { let formatter = DateFormatter(); formatter.locale = Locale(identifier: "zh_Hans_CN"); formatter.timeZone = TimeZone(identifier: "Asia/Shanghai"); formatter.dateFormat = "MM-dd HH:mm"; return formatter.string(from: value) }
     private func sourceLabel(_ value: String) -> String { switch value { case "manual": "手工录入"; case "system": "系统生成"; case "ai_text": "AI 文本"; case "ocr": "OCR"; case "legacy_import": "历史导入"; case "cash_flow": "现金流"; case "statement_import": "账单导入"; default: "未知来源" } }
     private func transactionKindLabel(_ value: String) -> String { V15LedgerReadKind(rawValue: value)?.displayName ?? "账目" }
     private func accountKindLabel(_ value: V15AccountKind) -> String { switch value { case .cash: "现金"; case .debit: "储蓄账户"; case .credit: "信用账户"; case .unknown: "未知类型" } }
+}
+
+private struct V151MacPendingSyncHub: View {
+    let services: V15Services
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: V15Spacing.lg) {
+                header
+                if queuedCount > 0 {
+                    V15ActionButton("同步全部（\(queuedCount)）", kind: .secondary, disabledReason: replayDisabledReason) {
+                        Task { await services.pendingWrites.replay(using: services) }
+                    }
+                    .accessibilityIdentifier("v151.mac.pending-sync.replay-all")
+                }
+                if services.pendingWrites.items.isEmpty {
+                    V15EmptyState(title: "没有待同步项目", explanation: "离线记账和离线分类决定会出现在这里。")
+                        .v15MacPanel()
+                } else {
+                    ForEach(services.pendingWrites.items) { item in
+                        pendingCard(item)
+                    }
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 760, alignment: .leading)
+        }
+        .v15MacWorkspaceCanvas()
+        .accessibilityIdentifier("v151.mac.pending-sync")
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("待同步").font(V15Typography.surfaceTitle)
+            Text("这里收纳离线记账、离线分类和结果不明的更改。")
+                .font(V15Typography.secondary)
+                .foregroundStyle(V15Palette.ink.color.opacity(0.64))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .v15MacPanel()
+    }
+
+    private var queuedCount: Int {
+        services.pendingWrites.items.filter { $0.status == .queued }.count
+    }
+
+    private var replayDisabledReason: V15DisabledReason? {
+        guard services.offlineSnapshotAt != nil else { return nil }
+        return .init(code: "offline_read_only", message: "离线时不能同步；联网后可继续重试。", fieldPath: nil)
+    }
+
+    private func pendingCard(_ item: V15PendingWriteStore.Item) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Rectangle().fill(V15Palette.yellow.color).frame(width: 3, height: 38)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.title).font(.headline).lineLimit(2)
+                    Text("\(kindLabel(item.kind)) · \(statusLabel(item))")
+                        .font(.caption)
+                        .foregroundStyle(V15Palette.ink.color.opacity(0.60))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                if let amount = item.amountMinor {
+                    V15MoneyText(minorUnits: amount, direction: .neutral, includeCurrency: false, font: .subheadline.weight(.semibold).monospacedDigit())
+                }
+            }
+            if item.status == .requiresDecision || item.status == .outcomeUnknown {
+                Text("这项更改不会自动重试。请移除后回到原记录重新操作，或在流水中检查最新状态。")
+                    .font(V15Typography.secondary)
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            V15AdaptiveStack(spacing: 8) {
+                if item.status == .queued || item.status == .failed {
+                    V15ActionButton(item.status == .queued ? "同步" : "重试同步", kind: .secondary, disabledReason: replayDisabledReason) {
+                        services.pendingWrites.retry(item.id)
+                        Task { await services.pendingWrites.replay(using: services) }
+                    }
+                    .accessibilityIdentifier(item.status == .queued ? "v151.mac.pending-sync.sync.\(item.id)" : "v151.mac.pending-sync.retry.\(item.id)")
+                }
+                V15ActionButton("移除", kind: .secondary) { services.pendingWrites.remove(item.id) }
+            }
+        }
+        .padding(14)
+        .v15MacPanel()
+    }
+
+    private func kindLabel(_ value: V15PendingWriteStore.Kind) -> String { value == .transactionCreate ? "新建账目" : "分类决定" }
+    private func statusLabel(_ item: V15PendingWriteStore.Item) -> String {
+        let value: String
+        switch item.status { case .queued: value = "排队中"; case .syncing: value = "同步中"; case .requiresDecision: value = "需要重新决定"; case .outcomeUnknown: value = "结果不明"; case .failed: value = "同步失败" }
+        return item.message.map { "\(value) · \($0)" } ?? value
+    }
 }
 
 #endif

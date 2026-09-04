@@ -204,6 +204,14 @@ public final class V15CreditModel {
         }
     }
 
+    public func selectAccount(id: UUID) async {
+        guard let account = accounts.first(where: { $0.id == id }) else {
+            await load()
+            return
+        }
+        await selectAccount(account)
+    }
+
     public func loadNextCycles() async { await loadCycles(reset: false, generation: listGeneration) }
     private func loadCycles(reset: Bool, generation: UInt64) async {
         guard let account = selectedAccount else { return }

@@ -12,6 +12,8 @@ struct F3ATests {
         await model.reload()
         #expect(model.events.count == 4 && model.events.map(\.certainty) == [.exactDue, .confirmed, .expected, .scheduled])
         #expect(Set(model.events.map(\.sourceType)) == Set(V15FutureEventSource.allCases))
+        #expect(model.dateSections.map(\.date) == ["2026-08-20", "2026-08-22", "2026-08-25", "2026-08-27"])
+        #expect(model.dateSections.flatMap(\.events).map(\.id) == model.events.map(\.id))
         await model.loadNextPage()
         #expect(model.events.count == 5 && !model.hasNextPage)
         let requests = await transport.allRequests()
@@ -128,6 +130,35 @@ struct F3ATests {
         try await Task.sleep(for: .milliseconds(20))
         race.closeInspector()
         #expect(await oldRead.value == nil)
+        #expect(race.openPhase == .idle)
+    }
+
+    @Test("closing or replacing an inspector invalidates a slow owner read")
+    @MainActor func inspectorLifecycleInvalidatesSlowOwnerRead() async throws {
+        let race = V15FutureTimelineModel(services: V15Services(transport: F3ATransport(mode: .openRace)))
+        await race.reload()
+        let credit = try #require(race.events.first(where: { $0.sourceType == .creditCycle }))
+        let replacement = try #require(race.events.first(where: { $0.sourceType == .reimbursementParty }))
+
+        race.openInspector(credit)
+        let oldRead = Task { await race.resolveOpenTarget(credit) }
+        try await Task.sleep(for: .milliseconds(20))
+        // This is the same invalidation used by iOS sheet dismissal and by
+        // the whole timeline view's onDisappear.
+        race.closeInspector()
+        #expect(await oldRead.value == nil)
+        #expect(race.openPhase == .idle)
+
+        race.openInspector(credit)
+        let replacedRead = Task { await race.resolveOpenTarget(credit) }
+        try await Task.sleep(for: .milliseconds(20))
+        race.openInspector(replacement)
+        #expect(await replacedRead.value == nil)
+        guard case .showing(let showing) = race.inspectorPhase else {
+            Issue.record("replacement selection must remain visible")
+            return
+        }
+        #expect(showing.id == replacement.id)
         #expect(race.openPhase == .idle)
     }
 }

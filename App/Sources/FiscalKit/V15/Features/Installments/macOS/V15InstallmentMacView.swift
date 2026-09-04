@@ -1,16 +1,38 @@
 import SwiftUI
 
+private enum V15InstallmentMacCreationMode { case purchase, existingPurchase }
+
 public struct V15InstallmentMacView: View {
     private enum InspectorMode: String, CaseIterable { case facts = "详情", edit = "修改", command = "操作" }
     @State private var model: V15InstallmentModel
     @State private var inspectorMode: InspectorMode = .facts
-    @State private var showsCreation = false
+    @State private var showsCreation: Bool
+    @State private var creationMode: V15InstallmentMacCreationMode
     @State private var appliedGalleryScenario = false
+    @State private var appliedInitialContext = false
     private let initialGalleryScenario: String?
+    private let initialAccountID: UUID?
+    private let initialPlanID: UUID?
+    private let initialPurchaseTransactionID: UUID?
 
-    @MainActor public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialGalleryScenario: String? = nil, now: @escaping () -> Date = { .now }) {
-        _model = State(initialValue: V15InstallmentModel(services: services, offlineSnapshotAt: offlineSnapshotAt, now: now))
+    @MainActor public init(
+        services: V15Services,
+        offlineSnapshotAt: Date? = nil,
+        initialGalleryScenario: String? = nil,
+        initialAccountID: UUID? = nil,
+        initialPlanID: UUID? = nil,
+        initialPurchaseTransactionID: UUID? = nil,
+        now: @escaping () -> Date = { .now }
+    ) {
+        let model = V15InstallmentModel(services: services, offlineSnapshotAt: offlineSnapshotAt, now: now)
+        model.purchaseTransactionIDText = initialPurchaseTransactionID?.uuidString ?? ""
+        _model = State(initialValue: model)
+        _showsCreation = State(initialValue: initialPurchaseTransactionID != nil)
+        _creationMode = State(initialValue: initialPurchaseTransactionID == nil ? .purchase : .existingPurchase)
         self.initialGalleryScenario = initialGalleryScenario
+        self.initialAccountID = initialAccountID
+        self.initialPlanID = initialPlanID
+        self.initialPurchaseTransactionID = initialPurchaseTransactionID
     }
 
     public var body: some View {
@@ -32,10 +54,14 @@ public struct V15InstallmentMacView: View {
         .background(V15Palette.paper.color)
         .toolbar {
             Button { Task { await model.refresh() } } label: { Label("刷新", systemImage: V15Symbol.retry) }.keyboardShortcut("r", modifiers: .command)
-            Button { showsCreation = true } label: { Label("新分期", systemImage: "plus") }.accessibilityIdentifier("v15.f3b2.mac.create")
+            Button { creationMode = .purchase; showsCreation = true } label: { Label("新分期", systemImage: "plus") }.accessibilityIdentifier("v15.f3b2.mac.create")
         }
         .task {
-            if case .idle = model.phase { await model.load() }
+            if case .idle = model.phase { await model.load(initialAccountID: initialAccountID, initialPlanID: initialPlanID) }
+            if !appliedInitialContext {
+                appliedInitialContext = true
+                if initialPurchaseTransactionID != nil { await model.checkEligibility() }
+            }
             guard !appliedGalleryScenario else { return }
             appliedGalleryScenario = true
             switch initialGalleryScenario {
@@ -49,7 +75,7 @@ public struct V15InstallmentMacView: View {
             default: break
             }
         }
-        .sheet(isPresented: $showsCreation, onDismiss: model.dismissEditor) { V15InstallmentMacCreationView(model: model).frame(minWidth: 620, minHeight: 640) }
+        .sheet(isPresented: $showsCreation, onDismiss: model.dismissEditor) { V15InstallmentMacCreationView(model: model, mode: creationMode).frame(minWidth: 620, minHeight: 640) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f3b2.installments.macos")
     }
@@ -65,7 +91,7 @@ public struct V15InstallmentMacView: View {
             switch model.phase {
             case .idle, .loading: V15LoadingSkeleton().padding()
             case .empty: V15EmptyState(title: "暂无计划", explanation: "创建后会显示在这里。")
-            case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.load() } }.padding()
+            case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.load(initialAccountID: initialAccountID, initialPlanID: initialPlanID) } }.padding()
             case .loaded:
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: V15Spacing.xxs) {
@@ -111,6 +137,11 @@ public struct V15InstallmentMacView: View {
             if let plan = model.selectedPlan {
                 ScrollView {
                     VStack(alignment: .leading, spacing: V15Spacing.lg) {
+                        if model.detailPhase == .loading { V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("v15.f3b2.mac.detail.loading") }
+                        if case .failed(let failure) = model.detailPhase {
+                            V15ServiceErrorState(message: failure.message) { Task { await model.selectPlan(plan, readCachePolicy: .reloadIgnoringCache) } }
+                                .accessibilityIdentifier("v15.f3b2.mac.detail.error")
+                        }
                         HStack(alignment: .firstTextBaseline) { VStack(alignment: .leading) { Text(plan.title).font(V15Typography.surfaceTitle); Text(plan.status.displayName).font(V15Typography.secondary) }; Spacer(); V15MoneyText(minorUnits: plan.totalFinancedMinor, direction: .outflow, font: V15Typography.moneyLarge) }
                         if plan.isDisplayOnly { V15DisplayOnlyState(detail: "暂时无法识别此计划状态，当前只供查看。").accessibilityIdentifier("v15.f3b2.mac.unknown") }
                         HStack(spacing: V15Spacing.sm) { metric("锁定", plan.lockedCount); metric("未来", plan.futureCount); metric("取消", plan.cancelledCount); metric("已结账期", plan.cycleSettledCount) }
@@ -264,11 +295,21 @@ public struct V15InstallmentMacView: View {
 
 private struct V15InstallmentMacCreationView: View {
     @Bindable var model: V15InstallmentModel
+    let mode: V15InstallmentMacCreationMode
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            HStack { Text("新分期消费").font(V15Typography.surfaceTitle); Spacer(); Button("关闭") { dismiss() }.accessibilityIdentifier("v15.f3b2.mac.create.dismiss") }
-            ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { purchaseForm }.frame(maxWidth: .infinity, alignment: .leading) }
+            HStack { Text(mode == .purchase ? "新分期消费" : "已有消费转分期").font(V15Typography.surfaceTitle); Spacer(); Button("关闭") { dismiss() }.accessibilityIdentifier("v15.f3b2.mac.create.dismiss") }
+            ScrollView {
+                VStack(alignment: .leading, spacing: V15Spacing.md) {
+                    if let failure = model.serverFailure { V15ServiceErrorState(message: failure.message) {} }
+                    switch mode {
+                    case .purchase: purchaseForm
+                    case .existingPurchase: existingPurchaseForm
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }.padding(V15Spacing.xl).accessibilityIdentifier("v15.f3b2.mac.create.sheet")
     }
 
@@ -284,6 +325,83 @@ private struct V15InstallmentMacCreationView: View {
             if let preview = model.purchasePreview { V15PreviewState { V15InstallmentPurchasePreviewDetails(preview: preview, prefix: "v15.f3b2.mac.purchase.preview-detail") }.accessibilityIdentifier("v15.f3b2.mac.purchase.preview-result") }
             V15ActionButton("确认创建", disabledReason: model.purchaseCommitDisabledReason) { Task { await model.commitPurchase() } }.accessibilityIdentifier("v15.f3b2.mac.purchase.commit")
             if model.purchasePhase == .unknown { Text("这笔可能已经创建。安全检查不会重复记账。").foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b2.mac.purchase.unknown"); V15ActionButton("安全检查创建结果") { Task { await model.retryUnknownPurchase() } }.accessibilityIdentifier("v15.f3b2.mac.purchase.retry") }
+        }
+    }
+
+    private var existingPurchaseForm: some View {
+        Group {
+            V15Section("第 1 步 · 找到信用消费") {
+                V15Field("消费账目 ID", text: $model.purchaseTransactionIDText, issues: model.fieldIssues.filter { $0.fieldPath == "purchase_transaction_id" })
+                    .accessibilityIdentifier("v15.f3b2.mac.eligibility.transaction")
+                V15ActionButton(
+                    "检查能否分期",
+                    kind: .secondary,
+                    disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时无法检查分期资格。", fieldPath: nil) : nil
+                ) { Task { await model.checkEligibility() } }
+                    .accessibilityIdentifier("v15.f3b2.mac.eligibility.check")
+                eligibilitySurface
+            }
+            V15Section("第 2 步 · 设置计划") {
+                V15Field("期数", text: $model.createInstallmentCountText, issues: model.fieldIssues.filter { $0.fieldPath == "installment_count" })
+                V15Field("手续费（元）", text: $model.createFeeText, issues: model.fieldIssues.filter { $0.fieldPath == "total_fee_minor" })
+                if positiveFee(model.createFeeText) { feeDetails(categoryID: $model.createFeeCategoryID, occurredDateText: $model.createFeeOccurredDateText, prefix: "v15.f3b2.mac.existing") }
+                Picker("起始账单日", selection: $model.createStartStatementDate) {
+                    Text("请选择").tag("")
+                    ForEach(model.cycleOptions.filter(\.eligible), id: \.statementDate) { option in
+                        Text("\(option.statementDate) · 到期 \(option.dueDate)").tag(option.statementDate)
+                    }
+                }
+                .pickerStyle(.menu)
+                .disabled(model.eligibility?.eligible != true || model.isOffline)
+                .accessibilityIdentifier("v15.f3b2.mac.existing.start")
+                V15ActionButton("确认建立分期", disabledReason: model.createPlanDisabledReason) { Task { await model.createPlan() } }
+                    .accessibilityIdentifier("v15.f3b2.mac.existing.commit")
+                existingPurchaseResultSurface
+            }
+        }
+    }
+
+    @ViewBuilder private var eligibilitySurface: some View {
+        switch model.eligibilityPhase {
+        case .idle: EmptyView()
+        case .loading: V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("v15.f3b2.mac.eligibility.loading")
+        case .empty: V15EmptyState(title: "没有找到消费", explanation: "请检查账目 ID 后重试。")
+        case .failed(let failure): V15ErrorMessageState(title: "暂时无法检查资格", message: failure.message)
+        case .loaded:
+            if let eligibility = model.eligibility {
+                if eligibility.eligible {
+                    V15SuccessReceiptState(title: "可以建立分期", detail: "已取得可用账期，请继续设置计划。")
+                        .accessibilityIdentifier("v15.f3b2.mac.eligibility.success")
+                } else {
+                    V15ErrorMessageState(title: "当前不能分期", message: eligibility.reasonCode ?? "这笔消费当前不符合分期条件。")
+                        .accessibilityIdentifier("v15.f3b2.mac.eligibility.reason")
+                }
+            }
+        }
+        switch model.eligibilityPurchasePhase {
+        case .loaded:
+            if let purchase = model.eligibilityPurchase {
+                V15LedgerRow(title: purchase.title, detail: "已核对信用消费", amountMinor: purchase.amountMinor, direction: .outflow)
+                    .accessibilityIdentifier("v15.f3b2.mac.eligibility.purchase.loaded")
+            }
+        case .loading: V15LoadingSkeleton(layout: .compact).accessibilityIdentifier("v15.f3b2.mac.eligibility.purchase.loading")
+        case .failed(let failure): V15ErrorMessageState(title: "消费详情读取失败", message: failure.message)
+        case .idle, .empty: EmptyView()
+        }
+    }
+
+    @ViewBuilder private var existingPurchaseResultSurface: some View {
+        switch model.createPlanPhase {
+        case .idle, .previewing, .previewed: EmptyView()
+        case .committing: V15LoadingSkeleton(layout: .decisionCard).accessibilityIdentifier("v15.f3b2.mac.existing.loading")
+        case .succeeded: V15SuccessReceiptState(title: "分期计划已建立", detail: "原信用消费已关联到新计划。")
+        case .unknown:
+            V15OutcomeUnknownState(title: "建立结果暂时不明", message: "这项计划可能已经建立。安全检查不会重复创建。", actionTitle: "安全检查建立结果") {
+                Task { await model.retryUnknownCreatePlan() }
+            }
+            .accessibilityIdentifier("v15.f3b2.mac.existing.unknown")
+        case .conflict(let conflict): V15ConflictState(conflict: conflict) { Task { await model.refresh() } }
+        case .failed(let failure): V15ErrorMessageState(message: failure.message)
         }
     }
 
