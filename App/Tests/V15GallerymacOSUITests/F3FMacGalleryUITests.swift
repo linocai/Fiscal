@@ -13,6 +13,7 @@ import XCTest
         XCTAssertTrue(element(app, "v15.f3f.detail").waitForExistence(timeout: 5))
         XCTAssertTrue(element(app, "v15.f3f.inspector").waitForExistence(timeout: 5))
         XCTAssertTrue(element(app, "v15.f3f.editor.sheet").waitForExistence(timeout: 8))
+        attachV220(app, name: "v220-mac-F3FMacGalleryUITests-app")
         app.terminate()
     }
 

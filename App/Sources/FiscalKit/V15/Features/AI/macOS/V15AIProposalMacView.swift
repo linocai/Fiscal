@@ -13,13 +13,14 @@ public struct V15AIProposalMacView: View {
     }
 
     public var body: some View {
-        HStack(spacing: 0) {
-            spine.frame(minWidth: V15MacLayout.compactAIWidths.spine, idealWidth: 290, maxWidth: 340)
-            Divider()
-            detail.frame(minWidth: V15MacLayout.compactAIWidths.detail, maxWidth: .infinity)
-            Divider()
-            inspector.frame(minWidth: V15MacLayout.compactAIWidths.inspector, idealWidth: 330, maxWidth: 330)
+        VStack(alignment: .leading, spacing: 24) {
+            V22PageHeader("AI 记账", symbol: "sparkles", subtitle: "把描述整理为账目，每一笔由你确认")
+            HStack(spacing: 20) {
+                spine.frame(minWidth: 260, idealWidth: 300, maxWidth: 340).v22FormSurface()
+                detail.frame(minWidth: 420, maxWidth: .infinity)
+            }
         }
+        .padding(24)
         .v15MacWorkspaceCanvas()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f3f.ai.macos")
@@ -32,7 +33,7 @@ public struct V15AIProposalMacView: View {
     private var spine: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                Text("AI 记账").font(V15Typography.cardTitle)
+                Text("待确认与历史").font(V15Typography.cardTitle)
                 Text(model.pendingCount == 0 ? "当前没有待确认内容" : "\(model.pendingCount) 笔需要你确认")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 Picker("内容范围", selection: $listScope) {
@@ -91,6 +92,7 @@ public struct V15AIProposalMacView: View {
     private var detail: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: V15Spacing.section) {
+                inspector
                 HStack { Text("内容详情").font(V15Typography.surfaceTitle); Spacer(); Button("刷新") { Task { await model.load() } } }
                 V15AIMutationSurface(model: model)
                 switch model.detailPhase {
@@ -109,9 +111,8 @@ public struct V15AIProposalMacView: View {
     }
 
     private var inspector: some View {
-        ScrollView {
             VStack(alignment: .leading, spacing: V15Spacing.lg) {
-                V15Section("安全边界") {
+                VStack(alignment: .leading, spacing: V15Spacing.sm) {
                     Label("只接受人工确认", systemImage: "hand.raised.fill").font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.teal.color)
                     Text("每一笔都由你确认，AI 不会自动记账。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("v15.f3f.d3-invariant")
                     if let reason = model.settingsSafetyReason {
@@ -120,7 +121,7 @@ public struct V15AIProposalMacView: View {
                     }
                     if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot) }
                 }
-                V15Section("新建待确认内容") {
+                V22FormSection("描述这笔收支") {
                     Picker("来源", selection: $model.source) { ForEach(V15AIProposalSource.allCases) { Text($0.displayName).tag($0) } }.pickerStyle(.menu)
                     V15Field("记账文字", text: $model.inputText, prompt: "午餐 132 元", axis: .vertical)
                     V15ActionButton("生成待确认账目", kind: .primary, disabledReasons: model.createReasons) { Task { await model.create() } }.accessibilityIdentifier("v15.f3f.create.submit")
@@ -129,8 +130,7 @@ public struct V15AIProposalMacView: View {
                 if let proposal = visibleSelectedProposal {
                     V15Section("人工动作") { V15AIProposalActions(model: model, proposal: proposal) { model.openReview(proposal); showsReview = true } }
                 }
-            }.padding(V15Spacing.md)
-        }
+            }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f3f.inspector")
     }
@@ -138,10 +138,7 @@ public struct V15AIProposalMacView: View {
     private var reviewSheet: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                VStack(alignment: .leading, spacing: V15Spacing.xxs) {
-                    Text("检查并修改").font(V15Typography.cardTitle)
-                    Text("保存修改后，还需要由你确认记账。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                }
+                V22PageHeader("核对这笔账", symbol: "checkmark.bubble", subtitle: "保存修改后，再由你确认记账")
                 Spacer()
                 Button("关闭") { showsReview = false }.disabled(model.mutationPhase == .loading)
             }.padding(V15Spacing.lg)

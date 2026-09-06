@@ -22,12 +22,15 @@ public struct V15FutureTimelineMacView: View {
         )
     }
     public var body: some View {
-        HSplitView {
-            sidebar.frame(minWidth: 190, idealWidth: 220, maxWidth: 280)
-            spine.frame(minWidth: 390, idealWidth: 520)
-            inspector.frame(minWidth: 280, idealWidth: 350)
+        VStack(alignment: .leading, spacing: 20) {
+            sidebar
+            HSplitView {
+                spine.frame(minWidth: 320, idealWidth: 520)
+                inspector.frame(minWidth: 280, idealWidth: 350)
+            }
         }
-        .v15MacWorkspaceCanvas()
+        .padding(24)
+        .v22PageCanvas()
         .task { async let timeline: Void = model.reload(); async let accounts: Void = model.loadAccountOptions(); _ = await (timeline, accounts); if initialAutoLoadNext { await model.loadNextPage() } }
         // Leaving this contextual page must invalidate an in-flight ownership
         // check, otherwise a late response could navigate into a specialist
@@ -36,19 +39,28 @@ public struct V15FutureTimelineMacView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f3a.timeline.macos")
     }
-    private var sidebar: some View { VStack(alignment: .leading, spacing: V15Spacing.md) {
-        Text("已知未来").font(V15Typography.surfaceTitle)
-        Text("只读时间线").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-        Picker("时间范围", selection: Binding(get: { model.selectedWindowDays }, set: { days in Task { await model.setWindowDays(days) } })) {
-            Text("7 天").tag(7); Text("30 天").tag(30); Text("60 天").tag(60); Text("90 天").tag(90)
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            V22PageHeader("未来安排", symbol: "calendar", subtitle: "预计事项，尚未计入实际收支")
+            HStack(spacing: 20) {
+                Picker("时间范围", selection: Binding(get: { model.selectedWindowDays }, set: { days in Task { await model.setWindowDays(days) } })) {
+                    Text("7 天").tag(7); Text("30 天").tag(30); Text("60 天").tag(60); Text("90 天").tag(90)
+                }.pickerStyle(.segmented).frame(maxWidth: 320).accessibilityIdentifier("v15.f3a.window.range")
+                Spacer(minLength: 8)
+                Menu {
+                    Button("全部账户") { Task { await model.setAccount(nil) } }.accessibilityIdentifier("v15.f3a.account.all")
+                    ForEach(model.accountOptions) { account in
+                        Button(accountLabel(account)) { Task { await model.setAccount(account.id) } }.accessibilityIdentifier("v15.f3a.account.\(account.id)")
+                    }
+                } label: { Label("筛选账户", systemImage: "line.3.horizontal.decrease") }
+                .disabled(model.isLoadingAccountOptions).accessibilityIdentifier("v15.f3a.account-filter")
+                Text(model.selectedAccountDisplayName ?? (model.selectedAccountID == nil ? "全部账户" : "已保留筛选账户"))
+                    .font(V15Typography.secondary).accessibilityIdentifier("v15.f3a.account.selection")
+            }
+            accountOptionsNotice
+            if let at = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: at).accessibilityIdentifier("v15.f3a.offline") }
         }
-        .pickerStyle(.segmented)
-        .accessibilityIdentifier("v15.f3a.window.range")
-        Divider(); Menu { Button("全部账户") { Task { await model.setAccount(nil) } }.accessibilityIdentifier("v15.f3a.account.all"); ForEach(model.accountOptions) { account in Button(accountLabel(account)) { Task { await model.setAccount(account.id) } }.accessibilityIdentifier("v15.f3a.account.\(account.id)") } } label: { Label(model.selectedAccountDisplayName ?? (model.selectedAccountID == nil ? "全部账户" : "已筛选账户"), systemImage: "line.3.horizontal.decrease.circle") }.disabled(model.isLoadingAccountOptions).accessibilityIdentifier("v15.f3a.account-filter")
-        Text(model.selectedAccountDisplayName ?? (model.selectedAccountID == nil ? "全部账户" : "已保留筛选账户")).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).accessibilityIdentifier("v15.f3a.account.selection")
-        accountOptionsNotice
-        Spacer(); if let at = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: at).accessibilityIdentifier("v15.f3a.offline") }
-    }.padding(V15Spacing.md) }
+    }
     @ViewBuilder private var accountOptionsNotice: some View { switch model.accountOptionsPhase { case .idle: EmptyView(); case .loading: Text("正在读取可筛选账户，筛选暂不可用。 ").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).accessibilityIdentifier("v15.f3a.account-filter-reason"); case .loaded: EmptyView(); case .empty: Text("没有可筛选账户；可继续查看全部账户。 ").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).accessibilityIdentifier("v15.f3a.account-empty"); case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.retryAccountOptions() } }.accessibilityIdentifier("v15.f3a.account-error") } }
     private func accountLabel(_ account: V15AccountResponse) -> String { "\(account.name) · \(accountKindLabel(account.kind))" }
     private func accountKindLabel(_ kind: V15AccountKind) -> String {
@@ -60,7 +72,7 @@ public struct V15FutureTimelineMacView: View {
         }
     }
     @ViewBuilder private var spine: some View { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) {
-        HStack { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text("已知未来").font(V15Typography.cardTitle); Text(model.meta.map { "数据更新于 \(V15TodayReadModel.shanghaiDateLabel($0.asOf))" } ?? "只读时间范围，不把未来事项计入当前余额或正式流水。 ").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; Spacer(); Button { Task { await model.reload() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityIdentifier("v15.f3a.reload") }
+        HStack { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text("事项").font(V15Typography.cardTitle); Text(model.meta.map { "数据更新于 \(V15TodayReadModel.shanghaiDateLabel($0.asOf))" } ?? "预计事项，尚未计入实际收支").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; Spacer(); Button { Task { await model.reload() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityIdentifier("v15.f3a.reload") }
         switch model.phase {
         case .idle, .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3a.loading")
         case .failed(let f): V15ServiceErrorState(message: f.message) { Task { await model.reload() } }.accessibilityIdentifier("v15.f3a.error")
@@ -71,7 +83,7 @@ public struct V15FutureTimelineMacView: View {
     }.padding(V15Spacing.md) } }
     private var rows: some View { VStack(alignment: .leading, spacing: V15Spacing.sm) {
         V15FutureTimelineTruthNotice()
-        if let window = model.serverWindow { Text("上海业务日：\(window.dateFrom) 至 \(window.dateTo)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
+        if let window = model.serverWindow { Text("\(window.dateFrom) 至 \(window.dateTo)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
         VStack(alignment: .leading, spacing: 0) {
             ForEach(model.dateSections) { section in
                 V15FutureDateSection(section: section, selectedID: selectedID) { event in

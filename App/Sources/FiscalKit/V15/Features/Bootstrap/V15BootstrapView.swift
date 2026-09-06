@@ -16,27 +16,30 @@ public struct V15BootstrapView: View {
     public var body: some View {
         ZStack {
             bootstrapBackgroundColor.ignoresSafeArea()
-            VStack(spacing: 0) {
-                Spacer(minLength: 28)
-                VStack(spacing: 15) {
-                    Text("F")
-                        .font(.largeTitle.bold())
-                        .foregroundStyle(V15Palette.brandInk.color)
-                        .frame(width: 88, height: 88)
-                        .background(V15Palette.yellow.color, in: RoundedRectangle(cornerRadius: 20))
-                    Text("Fiscal").font(V15Typography.surfaceTitle)
-                    Text("输入个人口令以解锁本机账本")
-                        .font(V15Typography.secondary)
-                        .foregroundStyle(V15Palette.ink.color.opacity(0.58))
-                    content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 32) {
+                    HStack(spacing: 14) {
+                        Text("F").font(.system(size: 34, weight: .bold, design: .rounded))
+                            .foregroundStyle(V15Palette.brandInk.color)
+                            .frame(width: 68, height: 68)
+                            .background(V15Palette.yellow.color, in: RoundedRectangle(cornerRadius: 20))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Fiscal").font(.system(size: 30, weight: .bold, design: .rounded))
+                            Text("收支有序，心中有数").font(V15Typography.secondary)
+                                .foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                        }
+                    }
+                    V22FormSection("你的个人账本", subtitle: "输入个人口令，继续管理每一笔收支") {
+                        content
+                    }
+                    serviceFootnote
                 }
-                .padding(bootstrapCardPadding)
-                .frame(maxWidth: 390)
-                .v15IOSCard()
-                Spacer(minLength: 28)
-                serviceFootnote
+                .frame(maxWidth: 460)
+                .padding(.vertical, 48)
+                .padding(.horizontal, bootstrapOuterPadding)
+                .frame(maxWidth: .infinity)
             }
-            .padding(bootstrapOuterPadding)
+            .scrollDismissesKeyboard(.interactively)
         }
         .task {
             await model.connect()
@@ -82,7 +85,7 @@ public struct V15BootstrapView: View {
                         .font(V15Typography.secondary).foregroundStyle(V15Palette.danger.color)
                 }
                 V15ActionButton("解锁", action: unlock)
-                V15ActionButton("修改口令", kind: .quiet, disabledReason: .init(code: "authenticated_session_required", message: "修改口令需要有效会话；请先解锁，再到“系统与数据”中修改。", fieldPath: nil)) {}
+                V15ActionButton("修改口令", kind: .quiet, disabledReason: .init(code: "authenticated_session_required", message: "修改口令需要有效会话；请先解锁，再到“数据与安全”中修改。", fieldPath: nil)) {}
             }
             .padding(.top, 20)
         case .passphraseNotSet: compactState(title: "尚未设置访问口令", message: "请先完成个人访问口令设置。", retry: false)

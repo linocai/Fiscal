@@ -252,11 +252,14 @@ struct V15AIEditorFields: View {
                 Text("执行时会按你确认的方向、计划金额和预计日期创建现金流事项。")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
             }
+            V22FormSection(model.isCashFlowReview ? "计划收支" : "交易信息") {
             Picker(model.isCashFlowReview ? "现金流方向" : "交易类型", selection: $model.kind) { ForEach(model.reviewKinds) { Text($0.displayName).tag($0) } }.pickerStyle(.menu).accessibilityIdentifier("v15.f3f.editor.kind")
-            V15Field(model.isCashFlowReview ? "计划金额（元）" : "金额（元）", text: $model.amountText, prompt: "0.00", issues: issues("draft.amount_minor")).accessibilityIdentifier("v15.f3f.editor.amount")
+            V15AmountInput(text: $model.amountText, issues: issues("draft.amount_minor"), accessibilityIdentifier: "v15.f3f.editor.amount")
             DatePicker(model.isCashFlowReview ? "预计日期" : "发生时间", selection: $model.occurredAt).accessibilityIdentifier("v15.f3f.editor.date")
             V15Field("标题", text: $model.title, prompt: "最多120字", issues: issues("draft.title")).accessibilityIdentifier("v15.f3f.editor.title")
             V15Field("备注", text: $model.note, prompt: "可选，最多500字", issues: issues("draft.note"), axis: .vertical).accessibilityIdentifier("v15.f3f.editor.note")
+            }
+            V22FormSection("账户与分类") {
             Picker("账户", selection: $model.accountID) {
                 Text("请选择").tag(nil as UUID?)
                 ForEach(model.activeAccounts) { Text($0.name).tag(Optional($0.id)) }
@@ -278,6 +281,7 @@ struct V15AIEditorFields: View {
                     Text("请选择").tag(nil as UUID?)
                     ForEach(model.creditCycles) { Text("\($0.statementDate) · \(Self.accountName($0.accountID, model: model))").tag(Optional($0.id)) }
                 }.pickerStyle(.menu).accessibilityIdentifier("v15.f3f.editor.credit-cycle")
+            }
             }
             if !model.editorIssues.isEmpty { V15FieldIssues(issues: model.editorIssues).accessibilityIdentifier("v15.f3f.editor.local-issues") }
         }

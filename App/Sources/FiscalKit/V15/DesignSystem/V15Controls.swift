@@ -308,11 +308,19 @@ public struct V15FieldIssues: View {
 
 public struct V15SearchField: View {
     @Binding private var text: String
-    public init(text: Binding<String>) { _text = text }
+    private let prompt: String
+
+    /// Keep the ledger wording as the default so existing callers retain their
+    /// established accessibility contract. Other domains can name what the
+    /// user is actually searching.
+    public init(text: Binding<String>, prompt: String = "搜索账目") {
+        _text = text
+        self.prompt = prompt
+    }
     public var body: some View {
         HStack(spacing: V15Spacing.xs) {
             Image(systemName: V15Symbol.search).accessibilityHidden(true)
-            TextField("搜索账目", text: $text)
+            TextField(prompt, text: $text)
                 .textFieldStyle(.plain)
                 .font(V15Typography.body)
         }
@@ -320,7 +328,7 @@ public struct V15SearchField: View {
         .background(V15Palette.surfaceRaised.color, in: RoundedRectangle(cornerRadius: V15Radius.control, style: .continuous))
         .overlay { RoundedRectangle(cornerRadius: V15Radius.control, style: .continuous).stroke(V15Palette.hairline.color.opacity(0.82), lineWidth: 1) }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("搜索账目")
+        .accessibilityLabel(prompt)
     }
 }
 

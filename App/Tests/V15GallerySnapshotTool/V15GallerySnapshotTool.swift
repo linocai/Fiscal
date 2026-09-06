@@ -10,6 +10,14 @@ private struct V15GallerySnapshotTool {
         let output = URL(fileURLWithPath: environment["FISCAL_V15_GALLERY_SCREENSHOT_DIR"] ?? "../archive/releases/v1.5.0/qa/frontend/screenshots", isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
 
+        if environment["FISCAL_V15_SNAPSHOT_SCOPE"] == "v220-picker" {
+            try verifyV220Picker(to: output)
+            return
+        }
+        if environment["FISCAL_V15_SNAPSHOT_SCOPE"] == "v220" {
+            try renderV220(to: output)
+            return
+        }
         if environment["FISCAL_V15_SNAPSHOT_SCOPE"] == "v210" {
             try renderV210(to: output, selectedScene: environment["FISCAL_V210_SNAPSHOT_SCENE"])
             return
@@ -264,6 +272,84 @@ private struct V15GallerySnapshotTool {
         }
     }
 
+    /// Small V2.2 coverage set: production root and each secondary page family.
+    @MainActor
+    private static func verifyV220Picker(to output: URL) throws {
+        let json = (1...5).map { index in
+            """
+            {"id":"00000000-0000-0000-0000-00000000020\(index)","name":"测试账户 \(index)","kind":"debit","institution":"测试银行","last_four":"200\(index)","opening_balance_minor":0,"current_balance_minor":12345,"sort_order":\(index),"usage_count":0,"version":1,"created_at":"2026-09-01T00:00:00Z","updated_at":"2026-09-01T00:00:00Z"}
+            """
+        }.joined(separator: ",")
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let accounts = try decoder.decode([V15AccountResponse].self, from: Data("[\(json)]".utf8))
+        var selections: [UUID] = []
+        var closed = false
+        NSApplication.shared.setActivationPolicy(.accessory)
+        let picker = V22AccountPicker(title: "现金与储蓄", accounts: accounts, onSelect: { selections.append($0) }, onManage: {}, onClose: { closed = true })
+        let host = NSHostingView(rootView: picker.environment(\.colorScheme, .light))
+        host.frame = NSRect(x: 0, y: 0, width: 370, height: 500)
+        let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = host
+        window.setFrameOrigin(NSPoint(x: -10_000, y: -10_000))
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        func settle() { RunLoop.main.run(until: Date().addingTimeInterval(0.2)); host.layoutSubtreeIfNeeded() }
+        func field(in view: NSView) -> NSTextField? {
+            if let text = view as? NSTextField, text.accessibilityIdentifier() == "v22.account-picker.search" { return text }
+            return view.subviews.lazy.compactMap { field(in: $0) }.first
+        }
+        func require(_ condition: Bool, _ message: String) throws {
+            if !condition { throw NSError(domain: "V220PickerVerification", code: 1, userInfo: [NSLocalizedDescriptionKey: message]) }
+        }
+        settle()
+        guard let search = field(in: host) else { throw CocoaError(.coderValueNotFound) }
+        try require(search.currentEditor() != nil, "Native search must acquire first responder on presentation")
+        guard let editor = window.firstResponder as? NSTextView else { throw CocoaError(.coderValueNotFound) }
+        // Deliver text through AppKit's real field editor, without sending
+        // system keyboard events to the user's foreground application.
+        func replace(_ value: String) {
+            editor.selectAll(nil)
+            editor.insertText(value, replacementRange: NSRange(location: NSNotFound, length: 0))
+            settle()
+        }
+        replace("no-such-account")
+        editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+        try require(selections.isEmpty, "An empty search must not open an account")
+        replace("2005")
+        editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+        try require(selections.last == accounts[4].id, "Tail-number search must open the fifth account")
+        replace("")
+        for _ in 0..<4 { editor.doCommand(by: #selector(NSResponder.moveDown(_:))); settle() }
+        editor.doCommand(by: #selector(NSResponder.moveUp(_:))); settle()
+        editor.doCommand(by: #selector(NSResponder.moveDown(_:))); settle()
+        editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+        try require(selections.count == 2 && selections.last == accounts[4].id, "Arrow selection must reach overflow accounts")
+        editor.doCommand(by: #selector(NSResponder.cancelOperation(_:)))
+        try require(closed, "Escape must close the picker")
+        guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { throw CocoaError(.fileWriteUnknown) }
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        try bitmap.representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent("mac-account-picker-native.png"))
+        print("PASS: native first responder; continuous text; empty search; tail-number lookup; arrows/Return to fifth account; Escape. Offscreen AppKit integration, no system keyboard injection.")
+    }
+
+    @MainActor
+    private static func renderV220(to output: URL) throws {
+        // Capture the root through RootSmoke window screenshots: bitmap
+        // caching cannot include NavigationSplitView's composited sidebar.
+        let scenes = [
+            ("record", "f1a", "record-valid"), ("master-data", "f1c", "master"),
+            ("future", "f3a", "timeline"), ("credit", "f3b1", "credit"),
+            ("installments", "f3b2", "installments"), ("reimbursements", "f3c", "reimbursements"),
+            ("cash-flow", "f3d", "cash-flow"), ("ai", "f3f", "ai"),
+            ("import", "f3g", "statement-import"), ("analysis", "f4a", "reports-spending"),
+            ("security", "f4c", "archive")
+        ]
+        for (name, family, route) in scenes {
+            let view = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-\(family)-route", route])
+            try render(view, to: output.appendingPathComponent("mac-\(name).png"), colorScheme: .light, size: CGSize(width: 1400, height: 900), settlingDelay: 1.0)
+        }
+    }
+
     /// A bounded capture set keeps visual verification cheap on the shared Mac.
     /// Root captures render the production workspace, not the legacy Today gallery.
     @MainActor
@@ -297,6 +383,9 @@ private struct V15GallerySnapshotTool {
         let window = NSWindow(contentRect: hosting.frame, styleMask: [.borderless], backing: .buffered, defer: false)
         window.backgroundColor = NSColor(v15: colorScheme == .dark ? 0x0F1615 : 0xFFFFFF)
         window.contentView = hosting
+        // Render outside the desktop so bounded captures do not cover the
+        // user's foreground application or change keyboard focus.
+        window.setFrameOrigin(NSPoint(x: -10_000, y: -10_000))
         window.orderFrontRegardless()
         hosting.layoutSubtreeIfNeeded()
         if settlingDelay > 0 { RunLoop.main.run(until: Date().addingTimeInterval(settlingDelay)) }

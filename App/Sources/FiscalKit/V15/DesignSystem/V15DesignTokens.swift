@@ -23,14 +23,20 @@ public struct V15ColorToken: Sendable, Equatable {
 /// Fiscal keeps one restrained brand palette and a separate safety semantic.
 /// Errors and destructive actions must never borrow the brand or warning hue.
 public enum V15Palette {
-    /// Reading surfaces deliberately stay close to white. Brand colour belongs
-    /// to an action or a fact, never to a whole page background.
-    public static let paper = V15ColorToken(lightHex: 0xFFFEFA, darkHex: 0x101918)
+    /// Reading surfaces remain cool white so financial values, rather than
+    /// decoration, own the page. The warm paper of V2.1 made the Mac app read
+    /// like a settings pane instead of a financial workspace.
+    public static let paper = V15ColorToken(lightHex: 0xFFFFFF, darkHex: 0x101918)
     public static let card = V15ColorToken(lightHex: 0xFFFFFF, darkHex: 0x182322)
-    public static let canvas = V15ColorToken(lightHex: 0xF7F7F3, darkHex: 0x0C1312)
-    public static let ink = V15ColorToken(lightHex: 0x12312F, darkHex: 0xE8F0ED)
-    /// Fiscal's deep teal is the navigation, selection and primary-action bone.
-    public static let teal = V15ColorToken(lightHex: 0x0B5E5B, darkHex: 0x67C5BC)
+    public static let canvas = V15ColorToken(lightHex: 0xF4F6F5, darkHex: 0x0C1312)
+    public static let ink = V15ColorToken(lightHex: 0x153B35, darkHex: 0xE8F0ED)
+    /// Fiscal's deep teal anchors navigation and primary decisions.
+    public static let teal = V15ColorToken(lightHex: 0x153B35, darkHex: 0x76D0C4)
+    /// Raised teal is only for durable navigation/account context, never a
+    /// substitute for safety semantics or a general card background.
+    public static let tealRaised = V15ColorToken(lightHex: 0x2D5B52, darkHex: 0x315E57)
+    public static let sidebarDeep = V15ColorToken(lightHex: 0x153B35, darkHex: 0x0E2420)
+    public static let sidebarRaised = V15ColorToken(lightHex: 0x2D5B52, darkHex: 0x1E403A)
     /// Brand yellow only marks a Fiscal focal point. It is never a warning.
     public static let yellow = V15ColorToken(lightHex: 0xF5C84C, darkHex: 0xE7B936)
     /// Yellow keeps a dark foreground in both appearances for legible brand marks.
@@ -45,7 +51,7 @@ public enum V15Palette {
     /// compatibility alias while moving state UI to `warning` explicitly.
     public static let gold = outflow
     public static let hairline = V15ColorToken(lightHex: 0xE1E5DF, darkHex: 0x2B3937)
-    public static let selected = V15ColorToken(lightHex: 0xE5F2EE, darkHex: 0x12312E)
+    public static let selected = V15ColorToken(lightHex: 0xE5F0ED, darkHex: 0x12312E)
     public static let provisional = V15ColorToken(lightHex: 0xF3F1EA, darkHex: 0x202624)
     public static let unknown = V15ColorToken(lightHex: 0x66568F, darkHex: 0xC7B8F5)
     public static let unknownSurface = V15ColorToken(lightHex: 0xF1EFFA, darkHex: 0x25213A)
@@ -53,10 +59,9 @@ public enum V15Palette {
     public static let dangerSurface = V15ColorToken(lightHex: 0xFFF0F1, darkHex: 0x2B1618)
     public static let receipt = V15ColorToken(lightHex: 0xE5F5EE, darkHex: 0x123126)
     public static let primaryButtonText = V15ColorToken(lightHex: 0xFFFFFF, darkHex: 0x08201F)
-    /// A quiet desktop sidebar is intentionally distinct from content paper.
-    /// It lets selection carry the navigation signal instead of turning every
-    /// module into a large coloured button.
-    public static let sidebar = V15ColorToken(lightHex: 0xF1F2ED, darkHex: 0x111B1A)
+    /// `sidebar` remains source compatible for secondary panels. New V2.2
+    /// roots use `sidebarDeep` and `sidebarRaised` explicitly.
+    public static let sidebar = V15ColorToken(lightHex: 0xEAF0ED, darkHex: 0x111B1A)
     public static let surfaceRaised = V15ColorToken(lightHex: 0xFFFFFF, darkHex: 0x1D2927)
 }
 
@@ -84,13 +89,13 @@ public enum V15Radius {
 #if os(macOS)
     public static let tag: CGFloat = 4
     public static let control: CGFloat = 6
-    public static let card: CGFloat = 8
-    public static let decisionCard: CGFloat = 10
+    public static let card: CGFloat = 12
+    public static let decisionCard: CGFloat = 14
 #else
     public static let tag: CGFloat = 5
     public static let control: CGFloat = 10
-    public static let card: CGFloat = 12
-    public static let decisionCard: CGFloat = 14
+    public static let card: CGFloat = 16
+    public static let decisionCard: CGFloat = 18
 #endif
 }
 
@@ -285,7 +290,10 @@ public struct V15MoneyPresentation: Sendable, Equatable {
         switch direction {
         case .inflow: sign = "+"
         case .outflow: sign = "−"
-        case .balance, .neutral: sign = ""
+        /// A negative balance is a financial fact (for example, a negative
+        /// net position). Omitting its sign turns a liability into an asset.
+        case .balance: sign = minorUnits < 0 ? "−" : ""
+        case .neutral: sign = ""
         }
         text = "\(sign)\(includeCurrency ? "¥" : "")\(number)"
     }
@@ -318,6 +326,32 @@ public struct V15MoneyTruthPresentation: Sendable, Equatable {
 
     public var hasPendingValue: Bool { pendingCount > 0 }
     public var pendingLabel: String? { hasPendingValue ? "含 \(pendingCount) 项未同步" : nil }
+}
+
+/// Pure, display-only guards used by overview surfaces. They intentionally do
+/// not clamp arithmetic: an unavailable aggregate is more honest than a
+/// believable-looking maximum amount.
+enum V15OverviewAmountGate {
+    enum Result: Equatable { case amount(Int64), unavailable }
+
+    static func net(cash: Int64, debt: Int64) -> Result {
+        let (value, overflow) = cash.subtractingReportingOverflow(debt)
+        return overflow ? .unavailable : .amount(value)
+    }
+
+    static func sum(_ amounts: [Int64]) -> Result {
+        var result = Int64.zero
+        for amount in amounts {
+            let (value, overflow) = result.addingReportingOverflow(amount)
+            guard !overflow else { return .unavailable }
+            result = value
+        }
+        return .amount(result)
+    }
+
+    static func canCombine(factsRevision: Int64, reportRevision: Int64) -> Bool {
+        factsRevision == reportRevision
+    }
 }
 
 public struct V15MoneyText: View {
@@ -392,3 +426,16 @@ private extension NSColor {
     }
 }
 #endif
+
+/// Presentation entry points use the current Shanghai calendar month. Gallery
+/// and model fixtures can still pass a fixed period for reproducible evidence.
+public enum V22ReportCalendar {
+    public static func currentMonth(at date: Date = Date()) -> V15ReportPeriod {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        formatter.dateFormat = "yyyy-MM"
+        return .month(V15ReportMonth(formatter.string(from: date))!)
+    }
+}

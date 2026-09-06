@@ -70,13 +70,14 @@ enum V151MacAccountBalanceSemantics {
         }
     }
 
-    static func amountLabel(_ kind: V15AccountKind) -> String {
-        kind == .credit ? "欠款" : "余额"
+    static func amountLabel(_ kind: V15AccountKind, minorUnits: Int64) -> String {
+        if kind == .credit { return minorUnits < 0 ? "信用溢缴" : "欠款" }
+        return "余额"
     }
 
     static func direction(_ kind: V15AccountKind, minorUnits: Int64) -> V15MoneyDirection {
         guard minorUnits != 0 else { return .balance }
-        return kind == .credit ? .outflow : .balance
+        return kind == .credit ? (minorUnits < 0 ? .neutral : .outflow) : .balance
     }
 }
 
@@ -91,11 +92,13 @@ enum V151MacLedgerSearch {
 /// layout decision instead of inheriting the system split-view appearance.
 public struct V151MacWorkspace: View {
     fileprivate enum Destination: String, Identifiable, Equatable {
-        case timeline, reports, settings, record, future, credit, installments, reimbursements, cashFlow, pendingSync
+        case overview, timeline, accounts, reports, settings, record, future, credit, installments, reimbursements, cashFlow, pendingSync
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .timeline: "财务时间线"
+            case .overview: "总览"
+            case .timeline: "交易"
+            case .accounts: "账户"
             case .record: "记一笔"
             case .future: "有来源未来"
             case .credit: "信用账期"
@@ -104,7 +107,7 @@ public struct V151MacWorkspace: View {
             case .cashFlow: "现金流"
             case .reports: "财务分析"
             case .pendingSync: "待同步"
-            case .settings: "设置与治理"
+            case .settings: "设置与数据"
             }
         }
     }
@@ -113,21 +116,29 @@ public struct V151MacWorkspace: View {
         case idle, loading, loaded, failed(V15Failure)
     }
 
-    private enum KnownFutureOpenPhase: Equatable {
+    fileprivate enum KnownFutureOpenPhase: Equatable {
         case idle
         case loading(String)
         case failed(id: String, message: String)
+    }
+
+    private enum SidebarAccountGroup: String, Identifiable {
+        case cash, credit
+        var id: String { rawValue }
+        var title: String { self == .cash ? "现金与储蓄" : "信用账户" }
     }
 
     /// Specialist pages are contextual, never root spaces.  Keep the page that
     /// supplied the context so Back does not silently turn a timeline action
     /// into a future-timeline detour (or vice versa).
     private enum ContextualOrigin {
+        case overview
         case timeline
         case future
 
         var destination: Destination {
             switch self {
+            case .overview: .overview
             case .timeline: .timeline
             case .future: .future
             }
@@ -138,8 +149,9 @@ public struct V151MacWorkspace: View {
 
     private let services: V15Services
     @State private var ledger: V15LedgerModel
+    @State private var overviewLedger: V15LedgerModel
     @State private var facts: V15TodayReadModel
-    @State private var destination: Destination = .timeline
+    @State private var destination: Destination = .overview
     @State private var selectedID: UUID?
     @State private var selectedIDs: Set<UUID> = []
     @State private var searchPresented = false
@@ -163,6 +175,9 @@ public struct V151MacWorkspace: View {
     @State private var knownFuture: V15FutureTimelineModel
     @State private var futureTimeline: V15FutureTimelineModel
     @State private var futureTimelineSelectedID: String?
+    @State private var recordOrigin: Destination = .timeline
+    @State private var futureOverviewOrigin: Destination = .timeline
+    @State private var sidebarAccountGroup: SidebarAccountGroup?
     @State private var knownFutureOpenPhase: KnownFutureOpenPhase = .idle
     @State private var knownFutureOpenGeneration: UInt64 = 0
     @State private var contextualOrigin: ContextualOrigin = .timeline
@@ -179,6 +194,7 @@ public struct V151MacWorkspace: View {
     public init(services: V15Services) {
         self.services = services
         _ledger = State(initialValue: V15LedgerModel(services: services))
+        _overviewLedger = State(initialValue: V15LedgerModel(services: services))
         _accountDetail = State(initialValue: V15AccountDetailModel(services: services))
         _facts = State(initialValue: V15TodayReadModel(services: services, offlineSnapshotProvider: { services.offlineSnapshotAt }))
         _knownFuture = State(initialValue: V15FutureTimelineModel(services: services, offlineSnapshotProvider: { services.offlineSnapshotAt }))
@@ -191,7 +207,6 @@ public struct V151MacWorkspace: View {
         .background(V15Palette.paper.color)
         .tint(V15Palette.teal.color)
         .task { await loadInitialFacts() }
-        .popover(isPresented: $searchPresented, arrowEdge: .top) { searchPopover }
         .sheet(isPresented: $categoryPresented) { categorySheet }
         .overlay { if destination == .timeline { keyboardCommands } }
         .accessibilityElement(children: .contain)
@@ -199,40 +214,42 @@ public struct V151MacWorkspace: View {
     }
 
     private var workspace: some View {
-        GeometryReader { proxy in
-            let narrow = proxy.size.width < 1_160
-            let showsInspector = timelineInspectorVisible
-            HStack(spacing: 0) {
-                indexPane(compact: narrow)
-                    .frame(width: narrow ? V15MacLayout.compactSidebarWidth : V15MacLayout.sidebarWidth)
-                Rectangle().fill(V15Palette.hairline.color).frame(width: 1)
-                if destination == .timeline {
-                    // An empty inspector competes with the list for the one
-                    // thing the timeline needs most: a stable reading column.
-                    // It returns only when a selected fact has useful context.
-                    spinePane.frame(minWidth: showsInspector ? 440 : 560, maxWidth: .infinity)
-                    if showsInspector {
+        GeometryReader { geometry in
+        let compact = geometry.size.width < 1_160
+        let sidebarWidth = compact ? V15MacLayout.compactSidebarWidth : V15MacLayout.sidebarWidth
+        NavigationSplitView {
+            indexPane(compact: compact)
+                .navigationSplitViewColumnWidth(min: sidebarWidth, ideal: sidebarWidth, max: sidebarWidth)
+        } detail: {
+            if destination == .timeline {
+                // Keep the reading column stable; the supporting inspector is
+                // only present when the selected fact has useful context.
+                HStack(spacing: 0) {
+                    spinePane.frame(minWidth: timelineInspectorVisible ? 440 : 560, maxWidth: .infinity)
+                    if timelineInspectorVisible {
                         Rectangle().fill(V15Palette.hairline.color).frame(width: 1)
-                        inspectorPane.frame(width: narrow ? 280 : 320)
+                        inspectorPane.frame(width: compact ? 280 : 320)
                     }
-                } else {
-                    modulePane.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+            } else {
+                modulePane.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+        .navigationSplitViewStyle(.balanced)
         }
     }
 
     private func indexPane(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Group {
-                Button { navigateRoot(to: .timeline) } label: {
+                Button { navigateRoot(to: .overview) } label: {
                     if compact {
                         Text("F")
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundStyle(V15Palette.brandInk.color)
                             .frame(width: 36, height: 36)
                             .background(V15Palette.yellow.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
-                            .accessibilityLabel("Fiscal 个人财务工作台，返回财务时间线")
+                            .accessibilityLabel("Fiscal 个人财务工作台，返回总览")
                     } else {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("FISCAL").font(.system(size: 11, weight: .bold, design: .rounded))
@@ -241,7 +258,7 @@ public struct V151MacWorkspace: View {
                                 .padding(.horizontal, 8).padding(.vertical, 4)
                                 .background(V15Palette.yellow.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
                             Text("个人财务工作台").font(V15Typography.secondary)
-                                .foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                                .foregroundStyle(Color.white.opacity(0.62))
                         }
                     }
                 }
@@ -252,9 +269,10 @@ public struct V151MacWorkspace: View {
             .padding(.top, 20)
             .padding(.bottom, 18)
             VStack(alignment: .leading, spacing: 3) {
-                moduleNavigation("财务时间线", symbol: "timeline.selection", destination: .timeline, compact: compact)
-                moduleNavigation("财务分析", symbol: "chart.bar", destination: .reports, compact: compact)
-                moduleNavigation("设置与治理", symbol: "slider.horizontal.3", destination: .settings, compact: compact)
+                moduleNavigation("总览", symbol: "square.grid.2x2", destination: .overview, compact: compact)
+                moduleNavigation("交易", symbol: "list.bullet.rectangle", destination: .timeline, compact: compact)
+                moduleNavigation("账户", symbol: "building.columns", destination: .accounts, compact: compact)
+                moduleNavigation("分析", symbol: "chart.line.uptrend.xyaxis", destination: .reports, compact: compact)
             }
             .padding(.horizontal, compact ? 10 : 12)
             if !compact {
@@ -264,64 +282,97 @@ public struct V151MacWorkspace: View {
             }
             Spacer()
         }
-        .background(V15Palette.sidebar.color)
+        .background(V15Palette.sidebarDeep.color)
     }
 
     @ViewBuilder private var sidebarAccounts: some View {
-        switch ledger.referencePhase {
-        case .loaded where !ledger.accounts.isEmpty:
-            VStack(alignment: .leading, spacing: 5) {
-                Text("账户与余额")
+        if case .loaded = ledger.referencePhase, !ledger.accounts.isEmpty {
+            let cash = ledger.accounts.filter { $0.kind != .credit }
+            let credit = ledger.accounts.filter { $0.kind == .credit }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("账户概览")
                     .font(V15Typography.label)
-                    .foregroundStyle(V15Palette.ink.color.opacity(0.60))
-                    .padding(.horizontal, 10)
-                ForEach(Array(ledger.accounts.prefix(4))) { account in
-                    Button { selectAccount(account.id) } label: {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(account.name)
-                                    .font(V15Typography.secondary.weight(.semibold))
-                                    .lineLimit(1)
-                                Text(V151MacAccountBalanceSemantics.amountLabel(account.kind))
-                                    .font(V15Typography.label)
-                                    .foregroundStyle(V15Palette.ink.color.opacity(0.58))
-                            }
-                            Spacer(minLength: 4)
-                            V15MoneyText(
-                                minorUnits: account.currentBalanceMinor,
-                                direction: V151MacAccountBalanceSemantics.direction(account.kind, minorUnits: account.currentBalanceMinor),
-                                includeCurrency: false,
-                                font: .system(size: 12, weight: .semibold, design: .monospaced)
-                            )
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.78)
-                        }
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: 42)
-                        .background(accountContext.filterID == account.id ? V15Palette.selected.color : Color.clear, in: RoundedRectangle(cornerRadius: V15Radius.control))
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("v151.mac.sidebar.account.\(account.id)")
+                    .foregroundStyle(Color.white.opacity(0.62))
+                    .padding(.horizontal, 12)
+                VStack(spacing: 0) {
+                    sidebarAccountSummary(.cash, accounts: cash, amount: sidebarTotal(cash), direction: .balance)
+                    Rectangle().fill(Color.white.opacity(0.13)).frame(height: 1).padding(.horizontal, 12)
+                    sidebarAccountSummary(.credit, accounts: credit, amount: sidebarTotal(credit), direction: .outflow)
                 }
-                if ledger.accounts.count > 4 {
-                    Menu("查看全部 \(ledger.accounts.count) 个账户") {
-                        Button("全部账户流水") { selectAllAccounts() }
-                        Divider()
-                        ForEach(ledger.accounts) { account in
-                            Button(account.name) { selectAccount(account.id) }
-                        }
-                    }
-                        .menuStyle(.borderlessButton)
-                        .font(V15Typography.label)
-                        .foregroundStyle(V15Palette.teal.color)
-                        .padding(.horizontal, 10)
-                        .accessibilityIdentifier("v151.mac.sidebar.all-accounts")
+                .background(V15Palette.sidebarRaised.color, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .popover(item: $sidebarAccountGroup, arrowEdge: .trailing) { group in
+                    sidebarAccountPopover(group).id(group.id)
                 }
             }
-        default:
-            EmptyView()
         }
+    }
+
+    private func sidebarAccountSummary(_ group: SidebarAccountGroup, accounts: [V15AccountResponse], amount: V15OverviewAmountGate.Result, direction: V15MoneyDirection) -> some View {
+        let overpaid: Bool
+        if case .amount(let value) = amount { overpaid = group == .credit && value < 0 }
+        else { overpaid = false }
+        return Button { sidebarAccountGroup = group } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: group == .cash ? "building.columns" : "creditcard")
+                        .foregroundStyle(group == .cash ? V15Palette.yellow.color : Color.white.opacity(0.84))
+                        .frame(width: 16)
+                    Text(group.title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .lineLimit(1)
+                    Text("\(accounts.count) 个")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.64))
+                    Spacer(minLength: 6)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Color.white.opacity(0.58))
+                }
+                Text(group == .cash ? "当前余额" : overpaid ? "当前溢缴" : "当前欠款")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.white.opacity(0.60))
+                switch amount {
+                case .amount(let value):
+                    Text(V15MoneyPresentation(minorUnits: value, direction: overpaid ? .neutral : direction, includeCurrency: false).text)
+                        .font(.system(size: 19, weight: .semibold, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.68)
+                case .unavailable:
+                    Text("暂不可汇总")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.88))
+                }
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("v152.mac.sidebar.accounts.\(group.rawValue)")
+    }
+
+    private func sidebarTotal(_ accounts: [V15AccountResponse]) -> V15OverviewAmountGate.Result { V15OverviewAmountGate.sum(accounts.map(\.currentBalanceMinor)) }
+
+    private func sidebarAccountPopover(_ group: SidebarAccountGroup) -> some View {
+        let accounts = ledger.accounts.filter { group == .credit ? $0.kind == .credit : $0.kind != .credit }
+        return V22AccountPicker(
+            title: group.title,
+            accounts: accounts,
+            onSelect: { id in
+                sidebarAccountGroup = nil
+                navigateRoot(to: .timeline)
+                selectAccount(id)
+            },
+            onManage: {
+                sidebarAccountGroup = nil
+                navigateRoot(to: .accounts)
+            },
+            onClose: { sidebarAccountGroup = nil }
+        )
     }
 
     private func moduleNavigation(_ title: String, symbol: String, destination value: Destination, compact: Bool) -> some View {
@@ -338,12 +389,9 @@ public struct V151MacWorkspace: View {
                         .padding(.horizontal, 11)
                 }
             }
-                .foregroundStyle(destination == value ? V15Palette.teal.color : V15Palette.ink.color.opacity(0.76))
+                .foregroundStyle(destination == value ? V15Palette.brandInk.color : Color.white.opacity(0.70))
                 .frame(height: 40)
-                .background(destination == value ? V15Palette.selected.color : Color.clear, in: RoundedRectangle(cornerRadius: V15Radius.control))
-                .overlay(alignment: .leading) {
-                    if destination == value { Capsule().fill(V15Palette.teal.color).frame(width: 3, height: 20) }
-                }
+                .background(destination == value ? V15Palette.yellow.color : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(title)
@@ -408,6 +456,7 @@ public struct V151MacWorkspace: View {
                     .buttonStyle(.borderless)
                     .keyboardShortcut("f", modifiers: .command)
                     .accessibilityIdentifier("v151.mac.ledger.search")
+                    .popover(isPresented: $searchPresented, arrowEdge: .top) { searchPopover }
             }
             V15ActionButton("记一笔") { openRecord() }
                 .keyboardShortcut("n", modifiers: .command)
@@ -458,7 +507,7 @@ public struct V151MacWorkspace: View {
                 if let value = facts.facts {
                     accountSummaryRow("资产", minorUnits: value.cash.currentBalanceMinor, direction: .balance)
                     Divider().frame(height: 18)
-                    accountSummaryRow("信用欠款", minorUnits: value.credit.currentDebtMinor, direction: .outflow)
+                    accountSummaryRow(value.credit.currentDebtMinor < 0 ? "信用溢缴" : "信用欠款", minorUnits: value.credit.currentDebtMinor, direction: value.credit.currentDebtMinor < 0 ? .neutral : .outflow)
                 } else {
                     Text(factsSummaryPlaceholder)
                         .font(.system(size: 11))
@@ -501,7 +550,7 @@ public struct V151MacWorkspace: View {
     private var accountScopeDetail: String {
         if let account = filteredAccount {
             let direction = V151MacAccountBalanceSemantics.direction(account.kind, minorUnits: account.currentBalanceMinor)
-            return "\(V151MacAccountBalanceSemantics.amountLabel(account.kind)) \(V15MoneyPresentation(minorUnits: account.currentBalanceMinor, direction: direction).text)"
+            return "\(V151MacAccountBalanceSemantics.amountLabel(account.kind, minorUnits: account.currentBalanceMinor)) \(V15MoneyPresentation(minorUnits: account.currentBalanceMinor, direction: direction).text)"
         }
         return "\(ledger.accounts.count) 个账户"
     }
@@ -645,7 +694,7 @@ public struct V151MacWorkspace: View {
         return false
     }
 
-    private func openKnownFuture(_ event: V15FutureEvent) {
+    private func openKnownFuture(_ event: V15FutureEvent, from origin: ContextualOrigin = .timeline) {
         guard !isOpeningKnownFuture else { return }
         knownFutureOpenGeneration &+= 1
         let generation = knownFutureOpenGeneration
@@ -663,7 +712,7 @@ public struct V151MacWorkspace: View {
             guard generation == knownFutureOpenGeneration else { return }
             guard case .loading(let id) = knownFutureOpenPhase, id == event.id else { return }
             knownFutureOpenPhase = .idle
-            openVerifiedFutureTarget(target, from: .timeline)
+            openVerifiedFutureTarget(target, from: origin)
         }
     }
 
@@ -888,7 +937,7 @@ public struct V151MacWorkspace: View {
                     direction: V151MacAccountBalanceSemantics.direction(account.kind, minorUnits: account.currentBalanceMinor),
                     font: .system(size: 26, weight: .bold, design: .monospaced)
                 )
-                Text(V151MacAccountBalanceSemantics.amountLabel(account.kind)).font(.system(size: 11)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                Text(V151MacAccountBalanceSemantics.amountLabel(account.kind, minorUnits: account.currentBalanceMinor)).font(.system(size: 11)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
             }
             VStack(spacing: 0) {
                 fieldRow("类型", value: accountKindLabel(account.kind), emphasized: false)
@@ -934,6 +983,7 @@ public struct V151MacWorkspace: View {
         return VStack(alignment: .leading, spacing: 17) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(transaction.title).font(.system(size: 18, weight: .semibold))
+                    .accessibilityIdentifier("v220.mac.detail.title.\(transaction.id)")
                 V15MoneyText(minorUnits: presentation.amountMinor, direction: presentation.direction, font: .system(size: 28, weight: .bold, design: .monospaced))
                 if transaction.categoryID == nil {
                     HStack(spacing: 7) { Rectangle().fill(V15Palette.teal.color).frame(width: 7, height: 7); Text("未分类 · 需要你决定") }
@@ -1154,20 +1204,20 @@ public struct V151MacWorkspace: View {
 
     private var showsModuleHeader: Bool {
         switch destination {
-        case .timeline, .reports, .settings: false
+        case .overview, .timeline, .accounts, .reports, .settings: false
         default: true
         }
     }
 
     @ViewBuilder private var moduleHeader: some View {
         switch destination {
-        case .timeline: EmptyView()
+        case .overview, .timeline, .accounts: EmptyView()
         case .future:
-            secondaryModuleHeader("有来源未来", parent: .timeline)
+            secondaryModuleHeader("有来源未来", parent: futureOverviewOrigin)
         case .pendingSync:
             secondaryModuleHeader("待同步", parent: .settings)
         case .reports, .settings: EmptyView()
-        case .record: secondaryModuleHeader("记一笔", parent: .timeline)
+        case .record: secondaryModuleHeader("记一笔", parent: recordOrigin)
         case .credit: secondaryModuleHeader("信用账期", parent: contextualOrigin.destination)
         case .installments: secondaryModuleHeader("分期", parent: contextualOrigin.destination)
         case .reimbursements: secondaryModuleHeader("报销", parent: contextualOrigin.destination)
@@ -1205,7 +1255,24 @@ public struct V151MacWorkspace: View {
 
     @ViewBuilder private var moduleContent: some View {
         switch destination {
+        case .overview: V152MacOverview(
+            services: services,
+            facts: facts,
+            ledger: overviewLedger,
+            futureOpenPhase: knownFutureOpenPhase,
+            openLedger: { navigateRoot(to: .timeline) },
+            openTransaction: openOverviewTransaction,
+            openPendingSync: openPendingSync,
+            openAllFuture: openFutureOverview,
+            openRecord: { openRecord() },
+            openReports: { navigateRoot(to: .reports) },
+            openFuture: { event in openKnownFuture(event, from: .overview) }
+        )
         case .timeline: EmptyView()
+        case .accounts: V152MacAccountsHub(ledger: ledger, selectAccount: { id in
+            navigateRoot(to: .timeline)
+            selectAccount(id)
+        }, openSettings: { navigateRoot(to: .settings) }, retry: { Task { await refreshLedgerReferencesAndReconcileSelectedAccount() } })
         case .record: V15RecordView(services: services, onCommitted: recordCommitted)
         case .future:
             V15FutureTimelineMacView(model: futureTimeline, selectedID: $futureTimelineSelectedID) { target in
@@ -1259,12 +1326,13 @@ public struct V151MacWorkspace: View {
         futureTarget = nil
         clearSpecialistInitialTargets()
         destination = value
-        if value == .timeline, leaving != .timeline {
-            Task { await refreshAfterReturningToTimeline() }
+        if leaving != value, [.overview, .timeline, .accounts].contains(value) || isMutableSpecialist(leaving) {
+            Task { await refreshAfterRootNavigation() }
         }
     }
 
     private func openRecord() {
+        recordOrigin = destination
         invalidateKnownFutureOpen()
         futureTarget = nil
         clearSpecialistInitialTargets()
@@ -1272,6 +1340,7 @@ public struct V151MacWorkspace: View {
     }
 
     private func openFutureOverview() {
+        futureOverviewOrigin = destination
         invalidateKnownFutureOpen()
         futureTarget = nil
         clearSpecialistInitialTargets()
@@ -1330,11 +1399,11 @@ public struct V151MacWorkspace: View {
         futureTarget = nil
         clearSpecialistInitialTargets()
         destination = parent
-        if parent == .timeline {
-            Task { await refreshAfterReturningToTimeline() }
+        if parent == .timeline || ((parent == .overview || parent == .accounts) && isMutableSpecialist(leaving)) {
+            Task { await refreshAfterRootNavigation() }
         } else if parent == .future, isMutableSpecialist(leaving) {
             Task {
-                async let root: Void = refreshAfterReturningToTimeline()
+                async let root: Void = refreshAfterRootNavigation()
                 async let future: Void = futureTimeline.reload()
                 _ = await (root, future)
             }
@@ -1343,7 +1412,7 @@ public struct V151MacWorkspace: View {
 
     private func isMutableSpecialist(_ value: Destination) -> Bool {
         switch value {
-        case .credit, .installments, .reimbursements, .cashFlow:
+        case .credit, .installments, .reimbursements, .cashFlow, .settings, .pendingSync, .record:
             true
         default:
             false
@@ -1390,9 +1459,10 @@ public struct V151MacWorkspace: View {
         ledger.setClassification("all")
         async let references: Void = refreshLedgerReferencesAndReconcileSelectedAccount()
         async let list: Void = ledger.load()
+        async let recent: Void = refreshOverviewTransactions()
         async let current: Void = facts.refresh()
         async let future: Void = knownFuture.reload()
-        _ = await (references, list, current, future)
+        _ = await (references, list, recent, current, future)
     }
 
     private func recordCommitted(_ outcome: V15RecordModel.CommitOutcome) {
@@ -1402,23 +1472,25 @@ public struct V151MacWorkspace: View {
 
     @MainActor private func refreshAfterConfirmedRecord() async {
         async let list: Void = ledger.load()
+        async let recent: Void = refreshOverviewTransactions()
         async let current: Void = facts.refresh()
         async let future: Void = knownFuture.reload()
         await refreshLedgerReferencesAndReconcileSelectedAccount()
         await refreshSelectedAccountAfterConfirmedRecord()
-        _ = await (list, current, future)
+        _ = await (list, recent, current, future)
     }
 
     /// Specialist views currently expose no write-confirmation callback.  On a
     /// deliberate return we only re-read server facts; this never presents a
     /// success receipt for a failed or cancelled specialist operation.
-    @MainActor private func refreshAfterReturningToTimeline() async {
+    @MainActor private func refreshAfterRootNavigation() async {
         async let list: Void = ledger.load()
+        async let recent: Void = refreshOverviewTransactions()
         async let current: Void = facts.refresh()
         async let future: Void = knownFuture.reload()
         await refreshLedgerReferencesAndReconcileSelectedAccount()
         await refreshSelectedAccountAfterConfirmedRecord()
-        _ = await (list, current, future)
+        _ = await (list, recent, current, future)
     }
 
     @MainActor private func refreshSelectedAccountAfterConfirmedRecord() async {
@@ -1428,6 +1500,7 @@ public struct V151MacWorkspace: View {
 
     @MainActor private func refreshLedgerReferencesAndReconcileSelectedAccount() async {
         await ledger.loadReferences()
+        guard ledger.referencePhase == .loaded || ledger.referencePhase == .empty else { return }
         let detailWasFilteredAccount = selectedAccountID == accountFilterID
         guard accountContext.clearMissingFilter(availableAccounts: ledger.accounts) != nil
         else { return }
@@ -1437,6 +1510,21 @@ public struct V151MacWorkspace: View {
         if detailWasFilteredAccount { clearAccountDetailSelection() }
         ledger.setAccount(nil)
         await ledger.load()
+    }
+
+    @MainActor private func refreshOverviewTransactions() async {
+        // This query belongs to the global overview, never to the workbench's
+        // account, month, category or text filters.
+        overviewLedger.setClassification("all")
+        overviewLedger.setIncludeVoided(false)
+        async let references: Void = overviewLedger.loadReferences()
+        async let transactions: Void = overviewLedger.load()
+        _ = await (references, transactions)
+    }
+
+    private func openOverviewTransaction(_ transaction: V15Transaction) {
+        selectAllAccounts()
+        selectTransaction(transaction)
     }
 
     private func applyMonth(_ label: String) {
@@ -1560,7 +1648,7 @@ public struct V151MacWorkspace: View {
                 } else {
                     categoryPresented = false
                 }
-                await refreshAfterReturningToTimeline()
+                await refreshAfterRootNavigation()
             }
         }
     }
@@ -1593,7 +1681,7 @@ public struct V151MacWorkspace: View {
             batchWorking = false
             batchPreviewed = !selectedIDs.isEmpty && ledger.categoryChangePreview != nil
             if !result.committedIDs.isEmpty {
-                await refreshAfterReturningToTimeline()
+                await refreshAfterRootNavigation()
             }
         }
     }
@@ -1655,6 +1743,454 @@ public struct V151MacWorkspace: View {
     private func sourceLabel(_ value: String) -> String { switch value { case "manual": "手工录入"; case "system": "系统生成"; case "ai_text": "AI 文本"; case "ocr": "OCR"; case "legacy_import": "历史导入"; case "cash_flow": "现金流"; case "statement_import": "账单导入"; default: "未知来源" } }
     private func transactionKindLabel(_ value: String) -> String { V15LedgerReadKind(rawValue: value)?.displayName ?? "账目" }
     private func accountKindLabel(_ value: V15AccountKind) -> String { switch value { case .cash: "现金"; case .debit: "储蓄账户"; case .credit: "信用账户"; case .unknown: "未知类型" } }
+}
+
+/// V2.2's desktop overview is a reading surface, not a second ledger. Facts
+/// remain from one server snapshot and the monthly report keeps its own route,
+/// so no unrelated revisions are silently combined here.
+private struct V152MacOverview: View {
+    let services: V15Services
+    let facts: V15TodayReadModel
+    let ledger: V15LedgerModel
+    let futureOpenPhase: V151MacWorkspace.KnownFutureOpenPhase
+    let openLedger: () -> Void
+    let openTransaction: (V15Transaction) -> Void
+    let openPendingSync: () -> Void
+    let openAllFuture: () -> Void
+    let openRecord: () -> Void
+    let openReports: () -> Void
+    let openFuture: (V15FutureEvent) -> Void
+    @State private var report: V15ReportingModel
+
+    init(services: V15Services, facts: V15TodayReadModel, ledger: V15LedgerModel, futureOpenPhase: V151MacWorkspace.KnownFutureOpenPhase, openLedger: @escaping () -> Void, openTransaction: @escaping (V15Transaction) -> Void, openPendingSync: @escaping () -> Void, openAllFuture: @escaping () -> Void, openRecord: @escaping () -> Void, openReports: @escaping () -> Void, openFuture: @escaping (V15FutureEvent) -> Void) {
+        self.services = services
+        self.facts = facts
+        self.ledger = ledger
+        self.futureOpenPhase = futureOpenPhase
+        self.openTransaction = openTransaction
+        self.openPendingSync = openPendingSync
+        self.openAllFuture = openAllFuture
+        self.openLedger = openLedger
+        self.openRecord = openRecord
+        self.openReports = openReports
+        self.openFuture = openFuture
+        _report = State(initialValue: V15ReportingModel(services: services, initialPeriod: V22ReportCalendar.currentMonth(), offlineSnapshotAt: services.offlineSnapshotAt))
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                header
+                if let at = facts.offlineSnapshotAt {
+                    V15OfflineReadOnlyBanner(snapshotAt: facts.offlineAsOf ?? at, pendingCount: services.pendingWrites.count)
+                        .accessibilityIdentifier("v220.mac.overview.offline")
+                }
+                if services.pendingWrites.count > 0 {
+                    HStack {
+                        Text("有 \(services.pendingWrites.count) 项更改等待同步；当前金额不包含这些变更。")
+                            .font(V15Typography.secondary)
+                        Spacer()
+                        Button("核验", action: openPendingSync).buttonStyle(.borderless)
+                    }
+                    .padding(12).background(V15Palette.warningSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                    .accessibilityIdentifier("v220.mac.overview.pending")
+                }
+                phaseSurface
+            }
+            .padding(24)
+            .frame(maxWidth: 1_380, alignment: .leading)
+        }
+        .background(V15Palette.canvas.color)
+        .task(id: facts.facts?.meta.dataRevision) { await refreshMonthlyReport() }
+        .accessibilityIdentifier("v152.mac.overview")
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 24) {
+            VStack(alignment: .leading, spacing: 7) {
+                Text("总览")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                Text("把账户、欠款和下一件要处理的事放在同一处。")
+                    .font(V15Typography.secondary)
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.62))
+            }
+            Spacer(minLength: 20)
+            HStack(spacing: 10) {
+                Button(action: openReports) { Label("财务分析", systemImage: "chart.line.uptrend.xyaxis") }
+                    .buttonStyle(.bordered)
+                Button(action: openRecord) { Label("记一笔", systemImage: "plus") }
+                    .buttonStyle(.borderedProminent)
+                    .tint(V15Palette.yellow.color)
+                    .foregroundStyle(V15Palette.brandInk.color)
+                    .keyboardShortcut("n", modifiers: .command)
+                    .accessibilityIdentifier("v220.mac.overview.record")
+            }
+        }
+    }
+
+    @ViewBuilder private var phaseSurface: some View {
+        switch facts.factsPhase {
+        case .idle, .loading:
+            V15LoadingSkeleton(layout: .list(rows: 5))
+        case .failed(let failure):
+            V15ServiceErrorState(message: failure.message) { Task { await facts.refresh() } }
+        case .requiresReload(let failure):
+            V15ConflictState(conflict: failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: failure.message)) {
+                Task { await facts.refresh() }
+            }
+        case .loaded:
+            if let snapshot = facts.facts { content(snapshot) }
+        }
+    }
+
+    private func content(_ snapshot: V15Facts) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .center, spacing: 24) {
+                netWorthCard(snapshot).frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 12) {
+                    miniMetric("现金与储蓄", snapshot.cash.currentBalanceMinor, .balance)
+                    creditMetric(snapshot.credit.currentDebtMinor)
+                    miniMetric("待收报销", snapshot.reimbursements.outstandingMinor, .balance)
+                }
+                .frame(width: 240, alignment: .leading)
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 18) {
+                    monthlyFlow(snapshot).frame(minWidth: 420, maxWidth: .infinity)
+                    upcoming(snapshot).frame(minWidth: 340, maxWidth: .infinity)
+                }
+                VStack(alignment: .leading, spacing: 18) {
+                    upcoming(snapshot)
+                    monthlyFlow(snapshot)
+                }
+            }
+            recentTransactions
+            dataCare(snapshot)
+            Text("更新于 \(V15TodayReadModel.shanghaiDateLabel(snapshot.meta.asOf)) · 上海业务日")
+                .font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.52))
+        }
+    }
+
+    @ViewBuilder private func monthlyFlow(_ snapshot: V15Facts) -> some View {
+        if let monthly = report.report, V15OverviewAmountGate.canCombine(factsRevision: snapshot.meta.dataRevision, reportRevision: monthly.meta.dataRevision) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("本月流动").font(V15Typography.cardTitle)
+                        Text("\(monthly.meta.dateFrom) 至 \(monthly.meta.dateTo)")
+                            .font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.54))
+                    }
+                    Spacer()
+                    Button("完整分析", action: openReports).buttonStyle(.plain).foregroundStyle(V15Palette.teal.color)
+                }
+                HStack(spacing: 14) {
+                    V22Metric("收入", minorUnits: monthly.summary.incomeMinor, direction: .inflow)
+                    V22Metric("实际支出", minorUnits: monthly.summary.personalRealizedMinor, direction: .outflow)
+                    V22Metric("净收支", minorUnits: monthly.summary.netIncomeExpenseMinor, direction: .balance)
+                }
+                V22SpendingTrend(points: monthly.daily?.map { .init(date: $0.date, amountMinor: $0.personalRealizedMinor) } ?? [], height: 120)
+            }
+            .padding(18)
+            .v22FormSurface()
+        } else if case .failed(let failure) = report.phase {
+            reportStatus("本月收支暂时无法读取：\(failure.message)")
+        } else if case .requiresReload(let failure) = report.phase {
+            reportStatus("本月收支已更新，请刷新后再查看。\(failure.message)")
+        } else {
+            reportStatus("本月收支正在同步到当前账户快照。")
+        }
+    }
+
+    @MainActor private func refreshMonthlyReport() async {
+        let period = V22ReportCalendar.currentMonth()
+        if report.selectedPeriod != period { await report.selectPeriod(period) }
+        else { await report.load() }
+    }
+
+    private func netWorthCard(_ snapshot: V15Facts) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("账户净额")
+                .font(V15Typography.label)
+                .foregroundStyle(Color.white.opacity(0.70))
+            switch net(cash: snapshot.cash.currentBalanceMinor, debt: snapshot.credit.currentDebtMinor) {
+            case .amount(let value):
+                V152SignedMoneyText(minorUnits: value).foregroundStyle(Color.white)
+                    .accessibilityIdentifier("v220.mac.overview.net")
+            case .unavailable:
+                Text("暂无法汇总")
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.white)
+                Text("请查看现金与信用账户明细。")
+                    .font(V15Typography.secondary)
+                    .foregroundStyle(Color.white.opacity(0.74))
+            }
+            Text("现金与储蓄余额 − 当前信用欠款")
+                .font(V15Typography.secondary)
+                .foregroundStyle(Color.white.opacity(0.70))
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity, minHeight: 148, alignment: .topLeading)
+        .background(V15Palette.sidebarDeep.color, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private func miniMetric(_ title: String, _ amount: Int64, _ direction: V15MoneyDirection) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.55))
+            V15MoneyText(minorUnits: amount, direction: direction, font: .system(size: 19, weight: .semibold, design: .monospaced))
+        }
+    }
+
+    private func creditMetric(_ amount: Int64) -> some View {
+        let overpaid = amount < 0
+        return miniMetric(overpaid ? "信用溢缴" : "当前信用欠款", amount, overpaid ? .neutral : .outflow)
+    }
+
+    private var recentTransactions: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("最近交易").font(V15Typography.cardTitle)
+                Spacer()
+                Button("查看全部", action: openLedger).buttonStyle(.plain).foregroundStyle(V15Palette.teal.color)
+            }
+            switch ledger.phase {
+            case .idle, .loading:
+                V15LoadingSkeleton(layout: .compact)
+            case .failed(let failure):
+                V15ServiceErrorState(message: failure.message) { Task { await ledger.load() } }
+            case .empty:
+                Text("还没有已发生的交易。")
+                    .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                    .padding(.vertical, 10)
+            case .loaded:
+                ForEach(ledger.items.prefix(3), id: \.id) { transaction in
+                    Button { openTransaction(transaction) } label: {
+                        HStack(spacing: 12) {
+                            Text(transaction.businessDate).font(.system(size: 11, design: .monospaced)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                            Text(transaction.title).font(V15Typography.body.weight(.semibold)).lineLimit(1)
+                            Spacer(minLength: 10)
+                            V15MoneyText(minorUnits: transaction.amountMinor, direction: transactionDirection(transaction), includeCurrency: false, font: V15Typography.money)
+                        }
+                        .padding(.vertical, 9).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("v220.mac.recent.transaction.\(transaction.id)")
+                    .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color.opacity(0.65)).frame(height: 1) }
+                }
+            }
+        }
+        .padding(18)
+        .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: V15Radius.card, style: .continuous).stroke(V15Palette.hairline.color.opacity(0.8), lineWidth: 1) }
+    }
+
+    private func reportStatus(_ message: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(V15Palette.warning.color)
+            Text(message).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+            Spacer()
+            Button("刷新") { Task { await facts.refresh(); await refreshMonthlyReport() } }.buttonStyle(.borderless)
+        }
+        .padding(18)
+        .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card, style: .continuous))
+    }
+
+    private func upcoming(_ snapshot: V15Facts) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("接下来要处理") .font(V15Typography.cardTitle)
+                Spacer()
+                Button("查看全部", action: openAllFuture).buttonStyle(.plain).foregroundStyle(V15Palette.teal.color)
+                    .accessibilityIdentifier("v220.mac.overview.future.all")
+            }
+            if snapshot.knownFutureEvents.isEmpty {
+                Text("当前没有已核验的未来事项。")
+                    .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                    .padding(.vertical, 18)
+            } else {
+                ForEach(snapshot.knownFutureEvents.prefix(4)) { event in
+                    Button { openFuture(event) } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(event.title).font(V15Typography.body.weight(.semibold)).lineLimit(2)
+                            Text(event.date).font(.system(size: 12, design: .monospaced)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                        }
+                        Spacer(minLength: 10)
+                        V15MoneyText(minorUnits: event.amountMinor, direction: event.direction == .inflow ? .inflow : .outflow, includeCurrency: false, font: V15Typography.money)
+                    }
+                    .padding(.vertical, 8)
+                    .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color.opacity(0.65)).frame(height: 1) }
+                    .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isOpeningFuture)
+                    .accessibilityIdentifier("v220.mac.overview.future.\(event.id)")
+                    switch futureOpenPhase {
+                    case .loading(let id) where id == event.id:
+                        ProgressView("正在核验所属记录…")
+                    case .failed(let id, let message) where id == event.id:
+                        V15ServiceErrorState(message: message, retryIdentifier: "v220.mac.overview.future.retry") { openFuture(event) }
+                            .accessibilityIdentifier("v220.mac.overview.future.error.\(event.id)")
+                    default: EmptyView()
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: V15Radius.card, style: .continuous).stroke(V15Palette.hairline.color.opacity(0.8), lineWidth: 1) }
+    }
+
+    private var isOpeningFuture: Bool {
+        if case .loading = futureOpenPhase { return true }
+        return false
+    }
+
+    private func dataCare(_ snapshot: V15Facts) -> some View {
+        HStack(spacing: 24) {
+            Text("需要留意").font(V15Typography.label)
+            careRow("未分类交易", count: snapshot.completeness.uncategorizedTransactionCount)
+            careRow("待处理导入", count: snapshot.completeness.unresolvedImportCount)
+            careRow("导入失败", count: snapshot.completeness.failedImportCount)
+        }
+        .foregroundStyle(V15Palette.ink.color.opacity(0.65))
+    }
+
+    private func careRow(_ title: String, count: Int) -> some View {
+        HStack(spacing: 6) {
+            Text(title).font(V15Typography.secondary)
+            Text("\(count)").font(V15Typography.money).foregroundStyle(count == 0 ? V15Palette.positive.color : V15Palette.warning.color)
+        }
+    }
+
+    private func net(cash: Int64, debt: Int64) -> V15OverviewAmountGate.Result { V15OverviewAmountGate.net(cash: cash, debt: debt) }
+
+    private func transactionDirection(_ transaction: V15Transaction) -> V15MoneyDirection {
+        switch transaction.kind {
+        case "income", "reimbursement_receipt": .inflow
+        case "transfer": .neutral
+        default: .outflow
+        }
+    }
+}
+
+
+private struct V152SignedMoneyText: View {
+    let minorUnits: Int64
+    var body: some View {
+        let absolute = minorUnits == Int64.min ? UInt64(Int64.max) + 1 : UInt64(Swift.abs(minorUnits))
+        let whole = absolute / 100
+        let fraction = absolute % 100
+        let sign = minorUnits < 0 ? "−" : ""
+        Text("\(sign)¥\(grouped(whole)).\(String(format: "%02llu", fraction))")
+            .font(.system(size: 38, weight: .bold, design: .monospaced))
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.55)
+            .accessibilityLabel("账户净额 \(sign)\(grouped(whole)).\(String(format: "%02llu", fraction)) 元")
+    }
+
+    private func grouped(_ value: UInt64) -> String {
+        let digits = String(value)
+        var result = ""
+        for (index, digit) in digits.reversed().enumerated() {
+            if index > 0 && index.isMultiple(of: 3) { result.insert(",", at: result.startIndex) }
+            result.insert(digit, at: result.startIndex)
+        }
+        return result
+    }
+}
+
+private struct V152MacAccountsHub: View {
+    let ledger: V15LedgerModel
+    let selectAccount: (UUID) -> Void
+    let openSettings: () -> Void
+    let retry: () -> Void
+    @State private var query = ""
+
+    private var accounts: [V15AccountResponse] {
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return term.isEmpty ? ledger.accounts : ledger.accounts.filter { $0.name.localizedCaseInsensitiveContains(term) || ($0.institution?.localizedCaseInsensitiveContains(term) ?? false) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("账户") .font(.system(size: 28, weight: .bold, design: .rounded))
+                    Text("完整账户列表与余额；信用账户可继续进入账期。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.60))
+                }
+                Spacer()
+                Button("设置与数据", action: openSettings).buttonStyle(.bordered)
+            }
+            .padding(28)
+            V15SearchField(text: $query, prompt: "搜索账户").padding(.horizontal, 28).padding(.bottom, 16)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    if let at = ledger.offlineSnapshotAt {
+                        V15OfflineReadOnlyBanner(snapshotAt: at, pendingCount: 0)
+                    }
+                    switch ledger.referencePhase {
+                    case .idle, .loading:
+                        V15LoadingSkeleton(layout: .list(rows: 3))
+                    case .failed(let failure):
+                        V15ServiceErrorState(message: failure.message, retryIdentifier: "v220.mac.accounts.retry", retry: retry)
+                            .accessibilityIdentifier("v220.mac.accounts.error")
+                    case .empty:
+                        V15EmptyState(title: "还没有账户", explanation: "添加现金、储蓄或信用账户，开始整理账目。")
+                            .accessibilityIdentifier("v220.mac.accounts.empty")
+                        Button("添加账户", action: openSettings).buttonStyle(.borderedProminent)
+                    case .loaded:
+                        section("现金与储蓄", values: accounts.filter { $0.kind != .credit })
+                        section("信用账户", values: accounts.filter { $0.kind == .credit })
+                    }
+                }
+                .padding(.horizontal, 28).padding(.bottom, 28)
+            }
+        }
+        .background(V15Palette.canvas.color)
+        .accessibilityIdentifier("v152.mac.accounts")
+    }
+
+    private func section(_ title: String, values: [V15AccountResponse]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(V15Typography.cardTitle)
+            if values.isEmpty {
+                Text(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "还没有这类账户。" : "没有符合当前搜索条件的账户。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(values.enumerated()), id: \.element.id) { index, account in
+                        Button { selectAccount(account.id) } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: account.kind == .credit ? "creditcard" : "building.columns")
+                                    .foregroundStyle(account.kind == .credit ? V15Palette.outflow.color : V15Palette.teal.color)
+                                    .frame(width: 26)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(account.name).font(V15Typography.body.weight(.semibold))
+                                    Text(account.institution ?? kind(account.kind)).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                                }
+                                Spacer()
+                                V15MoneyText(minorUnits: account.currentBalanceMinor, direction: V151MacAccountBalanceSemantics.direction(account.kind, minorUnits: account.currentBalanceMinor), font: V15Typography.money)
+                                    .frame(minWidth: 112, alignment: .trailing)
+                                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(V15Palette.ink.color.opacity(0.38))
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 14)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if index < values.count - 1 {
+                            Rectangle().fill(V15Palette.hairline.color.opacity(0.8)).frame(height: 1).padding(.leading, 54)
+                        }
+                    }
+                }
+                .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: V15Radius.card, style: .continuous).stroke(V15Palette.hairline.color.opacity(0.8), lineWidth: 1) }
+            }
+        }
+    }
+
+    private func kind(_ value: V15AccountKind) -> String {
+        switch value { case .cash: "现金"; case .debit: "储蓄"; case .credit: "信用"; case .unknown: "其他" }
+    }
 }
 
 private struct V151MacPendingSyncHub: View {

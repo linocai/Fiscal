@@ -117,6 +117,7 @@
 		58D58F47A45AD9947FD3CC62 /* InstallmentDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = B776D98F419D1A0D118D08AC /* InstallmentDTO.swift */; };
 		58FBD87CA067E47D81059C68 /* CashFlowModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A778C118F4503E15450A6E25 /* CashFlowModel.swift */; };
 		59205AF643E830B5910E1EE4 /* V15CashFlowContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 205FFC1249660A862C2A18C7 /* V15CashFlowContracts.swift */; };
+		5ABC7A95C8F9779794F99126 /* V22PageComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79828BCB93314C88AD4B8CD2 /* V22PageComponents.swift */; };
 		5ACE493847FAF747044F6971 /* F1CGalleryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FC10A1F28A61086AB68157 /* F1CGalleryUITests.swift */; };
 		5ADFE8834A9269F452359EB7 /* F4AFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = D14846DD87DCE8E0A47BA646 /* F4AFixtures.swift */; };
 		5B2F4AC6CE7774985225E179 /* DataRevision.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9BB5FDCFCE803A456803360 /* DataRevision.swift */; };
@@ -178,6 +179,7 @@
 		82EAA7FD317B5A8EAC8A7453 /* V15RecordModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD42F668F917961995F4D72 /* V15RecordModel.swift */; };
 		830689914AD7D22FC9F5749F /* TransactionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0752D3D57AD3B99FE1943E05 /* TransactionModels.swift */; };
 		83469C4C09BE7378492F2B31 /* AISettingsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F67EBD69105DDF7D3E4FED2 /* AISettingsRepository.swift */; };
+		83E80F77EA9C881D28998930 /* V22PageComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79828BCB93314C88AD4B8CD2 /* V22PageComponents.swift */; };
 		83FEEB95FE249DC4D90EBADE /* F3AFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C20696A9B4B3503BB48AFF /* F3AFixtures.swift */; };
 		84EF06F7B21E09C7CCCC0D38 /* F3DFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61D9AC0741741AB715B1FDBF /* F3DFixtures.swift */; };
 		84F713F63841ABD5091E756C /* P28StatementImportIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F873A80478359CBF365C25E2 /* P28StatementImportIntakeTests.swift */; };
@@ -621,6 +623,7 @@
 		6F6D5C08025FA9E847D78B61 /* CreditRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditRepository.swift; sourceTree = "<group>"; };
 		76B1727BB54B26FE4B958251 /* F1AFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = F1AFixtures.swift; sourceTree = "<group>"; };
 		786C03B5C2BBE3BB82A41793 /* V15CreditModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V15CreditModel.swift; sourceTree = "<group>"; };
+		79828BCB93314C88AD4B8CD2 /* V22PageComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V22PageComponents.swift; sourceTree = "<group>"; };
 		7AD00D6C79F77A25CD8B574E /* V15StatementImportContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V15StatementImportContracts.swift; sourceTree = "<group>"; };
 		7FA05C25E7B8990028ED86AC /* F4CGalleryUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = F4CGalleryUITests.swift; sourceTree = "<group>"; };
 		804F88664C4025B50AD0FC75 /* FiscalKitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiscalKitTests.swift; sourceTree = "<group>"; };
@@ -815,6 +818,7 @@
 			children = (
 				124CD574D48C47E5DEC6D3D1 /* V15Controls.swift */,
 				EFCA0DBBE623687E0F6C50A2 /* V15DesignTokens.swift */,
+				79828BCB93314C88AD4B8CD2 /* V22PageComponents.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -1549,7 +1553,7 @@
 			path = DataSecurity;
 			sourceTree = "<group>";
 		};
-		"TEMP_5C25A667-F7B1-46C7-8426-BDC6B2172130" /* Reconciliation */ = {
+		"TEMP_CA0100E1-1A94-4782-9AB1-426E10221D00" /* Reconciliation */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -2135,6 +2139,7 @@
 				012D8F8B1A54FAB48117D5FA /* V15TodayMacView.swift in Sources */,
 				71093B931E645FD9590B25ED /* V15TodayReadModel.swift in Sources */,
 				53192FF97608EE150E5334B9 /* V15TodayView.swift in Sources */,
+				83E80F77EA9C881D28998930 /* V22PageComponents.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2285,6 +2290,7 @@
 				8716E081D62C9C6121F5E7E2 /* V15TodayMacView.swift in Sources */,
 				63687188DF8F99F2F98BA9CE /* V15TodayReadModel.swift in Sources */,
 				AF817100CA5A91BBBFF3BABE /* V15TodayView.swift in Sources */,
+				5ABC7A95C8F9779794F99126 /* V22PageComponents.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2760,7 +2766,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 39;
+				CURRENT_PROJECT_VERSION = 40;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -2782,7 +2788,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 2.1.0;
+				MARKETING_VERSION = 2.2.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -3004,7 +3010,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 39;
+				CURRENT_PROJECT_VERSION = 40;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -3020,7 +3026,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 2.1.0;
+				MARKETING_VERSION = 2.2.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

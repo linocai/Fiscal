@@ -12,6 +12,7 @@ final class F3GMacGalleryUITests: XCTestCase {
         let preview = app.buttons["v15.f3g.mac.preview"]
         XCTAssertTrue(preview.waitForExistence(timeout: 5)); preview.click()
         XCTAssertTrue(element(app, "v15.f3g.mac.confirmation").waitForExistence(timeout: 5))
+        attachV220(app, name: "v220-mac-F3GMacGalleryUITests-app")
         app.terminate()
     }
 

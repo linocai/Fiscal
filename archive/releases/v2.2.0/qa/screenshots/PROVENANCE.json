@@ -1,0 +1,323 @@
+[
+  {
+    "file": "mac-credit-rules.png",
+    "source": "mac-gallery-final.xcresult",
+    "attachment": "C39ED005-22CE-4DDC-98AF-5ABF7CA75EC5.png",
+    "test": "F3B1MacGalleryUITests/testCreditSpineInspectorAndScheduleEntryAreReachable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "37e4dd7b0e5a19eefd5189a54e0535a76263b3598e6ade11ff2a88efe2541a37"
+  },
+  {
+    "file": "mac-installment-editor.png",
+    "source": "mac-gallery-final.xcresult",
+    "attachment": "32C861D7-0241-41C4-8B02-B68D98228821.png",
+    "test": "F3B2MacGalleryUITests/testInstallmentSpineScheduleInspectorAndCreationSheetAreReachable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "f0a528c31b0d11c741f3b0095e33b73c8efdea8fcea00aaddf757e1d3744439e"
+  },
+  {
+    "file": "mac-claim-editor.png",
+    "source": "mac-gallery-final.xcresult",
+    "attachment": "E5D5C1B3-E935-4405-9415-42565E5B9AE1.png",
+    "test": "F3CMacGalleryUITests/testReimbursementSpineDetailAndBothEditorsAreReachable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "d29277ff08ece5945f5caf9d7038e0f23745fe8a21c4c717fb439794ec0f0b2e"
+  },
+  {
+    "file": "mac-cash-flow-editor.png",
+    "source": "mac-gallery-final.xcresult",
+    "attachment": "CF2ABFBC-D321-45C7-A41F-F06DDC54F3D1.png",
+    "test": "F3DMacGalleryUITests/testCashFlowSpineInspectorEditorsAndRecoverySurfacesAreReachable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "e2eb41921346f62cb73d4aa13ede544262e085f1b5b3d68581d7da256ff7bc94"
+  },
+  {
+    "file": "mac-ai-review.png",
+    "source": "mac-gallery-final.xcresult",
+    "attachment": "B25B07D0-9C48-494F-8DB4-98F9E691FEAE.png",
+    "test": "F3FMacGalleryUITests/testProposalSpineDetailInspectorAndReviewSheetAreReachable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "c329fa1fbcde64e68908d374908bbeb80cef7aa9afbd38cad08d57782b58ef25"
+  },
+  {
+    "file": "mac-import-confirmation.png",
+    "source": "mac-gallery-final.xcresult",
+    "attachment": "EB4ABF54-48A6-4E28-A260-EA2DF96593C7.png",
+    "test": "F3GMacGalleryUITests/testStatementImportWorkbenchBuildsForAutomation()",
+    "data": "isolated synthetic fixture",
+    "sha256": "c11045c8423a70b991eea12daa5de50dee5caf6e1b243009da6996e435ce36cd"
+  },
+  {
+    "file": "ios-master-offline-ax5.png",
+    "source": "ios-gallery-final.xcresult",
+    "attachment": "BB097549-C34F-4B73-AAC8-87485AB77CD2.png",
+    "test": "F1CGalleryUITests/testOfflineArchiveIsDisabledWithReason()",
+    "data": "isolated synthetic fixture",
+    "sha256": "862c172dc310a9c07397c31f1e4d14fdc7fca18ece79bacb138ffbcf0299a7ce"
+  },
+  {
+    "file": "ios-credit-offline-ax5.png",
+    "source": "ios-gallery-final.xcresult",
+    "attachment": "D2288F6E-3BEA-4CE0-99EC-0ED31BB0DEA9.png",
+    "test": "F3B1GalleryUITests/testOfflineAndAX5ShowReadonlyReasonWithoutWriteEntry()",
+    "data": "isolated synthetic fixture",
+    "sha256": "5c283b02fed9e84311c443ec59cc8149ea71c71105cdf51af10b4664fc17ebdb"
+  },
+  {
+    "file": "ios-receipt-preview-invalidated.png",
+    "source": "ios-gallery-final.xcresult",
+    "attachment": "C20DADF5-F76C-468B-A32E-441C90B6CA70.png",
+    "test": "F3CGalleryUITests/testReceiptInvalidValidPreviewInvalidationAndCommitCompletes()",
+    "data": "isolated synthetic fixture",
+    "sha256": "d9be383ad2af9ce484b923a13b3e9b7eba5b4fffe4ef55899fd7534175044c90"
+  },
+  {
+    "file": "ios-cash-flow-editor.png",
+    "source": "ios-gallery-final.xcresult",
+    "attachment": "478D7230-FD13-4587-AECC-4FA10E84DBB4.png",
+    "test": "F3DGalleryUITests/testCreateStartsNeutralThenShowsOneRelevantFieldIssueAndCompletes()",
+    "data": "isolated synthetic fixture",
+    "sha256": "26d5a29483d929e7ff0a80e2f2054744a2007acf6590b369eba5a1798655af0c"
+  },
+  {
+    "file": "ios-cash-flow-field-error.png",
+    "source": "ios-gallery-final.xcresult",
+    "attachment": "44C01A2E-A089-462F-B865-87FB5B138314.png",
+    "test": "F3DGalleryUITests/testCreateStartsNeutralThenShowsOneRelevantFieldIssueAndCompletes()",
+    "data": "isolated synthetic fixture",
+    "sha256": "307f86c5099e3cdeea4248af283f8e377b603b70fd2f861262dc9dae50becceb"
+  },
+  {
+    "file": "ios-ai-confirmation.png",
+    "source": "ios-gallery-final.xcresult",
+    "attachment": "C20583E8-2A8E-42A6-BF34-688216FB190F.png",
+    "test": "F3FGalleryUITests/testEditMustBeConfirmedBeforeHumanExecute()",
+    "data": "isolated synthetic fixture",
+    "sha256": "d8aa9756349e45f766df9240b32740edb58c7020c080f50d7e3898129f5a78e8"
+  },
+  {
+    "file": "ios-credit-rules-conflict.png",
+    "source": "ios-gallery-r2.xcresult",
+    "attachment": "EF2D78FD-0B15-496E-B71D-83DFB063D8F3.png",
+    "test": "F3B1GalleryUITests/testSchedulePreviewInvalidationConflictSuccessAndReceiptAreReachable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "f00085818fb81f7cbcf8840081dc35d5a490c7dac448a45d19aeb96ea09f7a09"
+  },
+  {
+    "file": "ios-installment-update-success.png",
+    "source": "ios-gallery-r2.xcresult",
+    "attachment": "AF1E553A-83F2-450F-9484-6056A14C93FC.png",
+    "test": "F3B2GalleryUITests/testPositiveFeeExistingPurchaseAndEditFlowsExposeCategoryDateAndComplete()",
+    "data": "isolated synthetic fixture",
+    "sha256": "15acc2d1a39d2deba045c66989a04077f334650ec84fce86f81848facf6fdb02"
+  },
+  {
+    "file": "ios-account-editor.png",
+    "source": "ios-gallery-r3.xcresult",
+    "attachment": "DFB72891-C2C0-491B-AB7D-01D2AD644B89.png",
+    "test": "F1CGalleryUITests/testMasterDataShowsPrivacySafeAccountsAndLongMerchant()",
+    "data": "isolated synthetic fixture",
+    "sha256": "3c914ba674f0dc06f3ec886cfd4290117586272e1123b48f3d5151e674798fae"
+  },
+  {
+    "file": "ios-overview-light.png",
+    "source": "ios-root-r3.xcresult",
+    "attachment": "D5875145-ADA1-4750-A1D3-9C576DC23A40.png",
+    "test": "V15RootSmokeUITests/testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5()",
+    "data": "isolated synthetic fixture",
+    "sha256": "13d417a765492682aba16f673e68f75a299a914fed6319089427ecc58f68801a"
+  },
+  {
+    "file": "ios-overview-dark.png",
+    "source": "ios-root-r3.xcresult",
+    "attachment": "C2E0DEF5-00D0-47C8-9C9D-C5BB8BA39123.png",
+    "test": "V15RootSmokeUITests/testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5()",
+    "data": "isolated synthetic fixture",
+    "sha256": "0172f94dd35abb1f215883f093f7274128fccd590f088984183c8e0bf4702d03"
+  },
+  {
+    "file": "ios-accounts.png",
+    "source": "ios-root-r3.xcresult",
+    "attachment": "E0E0A5D3-1D23-4BFD-A31F-63D2C174D631.png",
+    "test": "V15RootSmokeUITests/testAccountAndAnalysisTabsKeepBottomCreationAvailable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "5f5f2d5e2d8b1ae8817f9d9461c388df7633551afe0427fe03f3b2f1ef06bcbf"
+  },
+  {
+    "file": "ios-analysis.png",
+    "source": "ios-root-r3.xcresult",
+    "attachment": "955EB09D-05C0-475B-B5DF-757C96A18943.png",
+    "test": "V15RootSmokeUITests/testAccountAndAnalysisTabsKeepBottomCreationAvailable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "ce85239817335d7877f0e34310642d003837ea34270fae103bca5cbcaaf021be"
+  },
+  {
+    "file": "ios-record.png",
+    "source": "ios-root-r3.xcresult",
+    "attachment": "DB3148A3-BE43-4016-8A48-F8C7E1523DD7.png",
+    "test": "V15RootSmokeUITests/testFormalRecordKeepsKeyboardAndReturnPathReachable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "9c49c12972b3b44b2ea77f42fcd86a84bf59ff527de14f2da7812d05d2c12ab0"
+  },
+  {
+    "file": "ios-transactions.png",
+    "source": "ios-root-r3.xcresult",
+    "attachment": "A918E15A-0CC7-4F28-A566-158D7CB799A1.png",
+    "test": "V15RootSmokeUITests/testFormalWorkspaceLedgerProvidesCompactScopeAndTimeNavigation()",
+    "data": "isolated synthetic fixture",
+    "sha256": "f5beccfcc999860001331f74270c2ccc4b77400e04c70f689d663ba50575b851"
+  },
+  {
+    "file": "ios-overview-ax5.png",
+    "source": "ios-root-r3.xcresult",
+    "attachment": "C68370E2-621D-4AFE-9247-713A9A3184D2.png",
+    "test": "V15RootSmokeUITests/testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5()",
+    "data": "isolated synthetic fixture",
+    "sha256": "d3547cbbe8e4907e9d395f7a897d2e443d47e7231dbdac9c53f17d0798ecce96"
+  },
+  {
+    "file": "ios-reduced-effects.png",
+    "source": "ios-reduced-effects.xcresult",
+    "attachment": "BE2CACBA-B41A-4397-B334-7CFF414CEDA1.png",
+    "test": "V15RootSmokeUITests/testReducedEffectsKeepNavigationAndCreationAvailable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "b67d0748fa38703c18da0024d9639b4a151f8199bfb1df264a596e45f2391d76"
+  },
+  {
+    "file": "mac-overview-dark.png",
+    "source": "mac-root-r4.xcresult",
+    "attachment": "C3B503D3-5175-437C-9C7E-F3F81293D20A.png",
+    "test": "V15RootSmokemacOSUITests/testOverviewDarkAndNarrowWindowKeepNavigationReadable()",
+    "data": "isolated synthetic fixture; native window capture",
+    "sha256": "d2159f41f58ff8b9ea3ebc6607ed35367b0109531dce4ceadd5ac5b3fbb0feef"
+  },
+  {
+    "file": "mac-overview-narrow.png",
+    "source": "mac-root-r4.xcresult",
+    "attachment": "C709825D-9184-4B9D-897B-580940DCE1B0.png",
+    "test": "V15RootSmokemacOSUITests/testOverviewDarkAndNarrowWindowKeepNavigationReadable()",
+    "data": "isolated synthetic fixture; native window capture",
+    "sha256": "4dc36fce2d840e0a6d4c495c89c87a146fe41998055071e72f20f089c0350ed8"
+  },
+  {
+    "file": "mac-account-picker-native.png",
+    "source": "V15GallerySnapshotTool",
+    "mode": "v220-picker",
+    "data": "isolated synthetic fixture; offscreen native view capture",
+    "sha256": "fede7a7b4f8891f815be748533cce4889fb006dac6066e93e861e57869905768"
+  },
+  {
+    "file": "mac-credit.png",
+    "source": "V15GallerySnapshotTool",
+    "mode": "v220",
+    "data": "isolated synthetic fixture; offscreen native view capture",
+    "sha256": "9c677fa31f0d90904c23101b259f13d82920f6a1115d1465893be52561538e69"
+  },
+  {
+    "file": "mac-future.png",
+    "source": "V15GallerySnapshotTool",
+    "mode": "v220",
+    "data": "isolated synthetic fixture; offscreen native view capture",
+    "sha256": "116f368e5631e6afa69c8d59624a4c4ac5af92d1fbc3104eea7b98c6e41b2bf1"
+  },
+  {
+    "file": "mac-master-data.png",
+    "source": "V15GallerySnapshotTool",
+    "mode": "v220",
+    "data": "isolated synthetic fixture; offscreen native view capture",
+    "sha256": "9862488de56873a4761dbc5ca5d2587dc4a002858da16d79b0ee8d24c6a364f0"
+  },
+  {
+    "file": "mac-security.png",
+    "source": "V15GallerySnapshotTool",
+    "mode": "v220",
+    "data": "isolated synthetic fixture; offscreen native view capture",
+    "sha256": "2fa4eb2dbe8f4e3837e018aee3f333915389e5c6cca2cf0f9d5545e4bf239b1d"
+  },
+  {
+    "file": "mac-record.png",
+    "source": "V15GallerySnapshotTool with final FiscalKit framework",
+    "mode": "v220",
+    "data": "isolated synthetic fixture; offscreen native view capture",
+    "sha256": "09da2289b18874c3d5c7f3d563bcfa199f4d7cd31b5e638b0d4edf738cdb4dd7"
+  },
+  {
+    "file": "mac-analysis.png",
+    "source": "V15GallerySnapshotTool with final FiscalKit framework",
+    "mode": "v220",
+    "data": "isolated synthetic fixture; offscreen native view capture",
+    "sha256": "d3ed6c65b3b0f0d7c7dfba312bdfdf6739fe19367d56ee2df8361606d8012496"
+  },
+  {
+    "file": "fix-mac-overview-narrow.png",
+    "source": "fix-mac-root-final.xcresult",
+    "attachment": "D35AF847-DEE5-4260-8A46-2D8B05A4A2F0.png",
+    "test": "V15RootSmokemacOSUITests/testOverviewDarkAndNarrowWindowKeepNavigationReadable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "80bcde92739f177ec5026332620a65c98b3d541e55ff8d752c9ac0dc57b83067"
+  },
+  {
+    "file": "fix-mac-overview-dark.png",
+    "source": "fix-mac-root-final.xcresult",
+    "attachment": "800EEA21-46E5-4C81-A353-65585267434B.png",
+    "test": "V15RootSmokemacOSUITests/testOverviewDarkAndNarrowWindowKeepNavigationReadable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "efa5ac0d4c13053f2b84db072ab8294a328efac2e5de6f25cc11f81c6510fb50"
+  },
+  {
+    "file": "fix-mac-overview-offline.png",
+    "source": "fix-mac-root.xcresult",
+    "attachment": "AD484B4E-E177-4B72-BAA7-F46CDF9D480D.png",
+    "test": "V15RootSmokemacOSUITests/testOverviewLabelsOfflineSnapshotAndPendingChanges()",
+    "data": "isolated synthetic fixture",
+    "sha256": "f3dcf23ad2d877f9f95226968e2ae47b5dea16fd16c20773d8732b19de4ee0ec"
+  },
+  {
+    "file": "fix-ios-overview-dark.png",
+    "source": "fix-ios-root-final.xcresult",
+    "attachment": "6C098AB8-1C11-403E-A138-B7C1929CDE39.png",
+    "test": "V15RootSmokeUITests/testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5()",
+    "data": "isolated synthetic fixture",
+    "sha256": "2e82fdd435a7d4021a19cacefccd5f9c8625b597b0cdb6ce989e7d64422db202"
+  },
+  {
+    "file": "fix-ios-overview-light.png",
+    "source": "fix-ios-root-final.xcresult",
+    "attachment": "7F6E0584-0A74-429B-8CB4-F745BEC97480.png",
+    "test": "V15RootSmokeUITests/testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5()",
+    "data": "isolated synthetic fixture",
+    "sha256": "33eb8871c6eb3e4698dabe53b3e95c7b53e6d826d22ecf8b149d978138adc158"
+  },
+  {
+    "file": "fix-ios-recent-ax5-amount-end.png",
+    "source": "fix-ios-root-final.xcresult",
+    "attachment": "88B50B09-0B2D-4F15-934F-A49EA539AF77.png",
+    "test": "V15RootSmokeUITests/testOverviewRecentAX5KeepsFullAmountReachable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "67f43f45d0514c257a2bbf3b88971948a25f4ab4b801dc3d31c340ade2bfcadb"
+  },
+  {
+    "file": "fix-ios-recent-ax5.png",
+    "source": "fix-ios-root-final.xcresult",
+    "attachment": "44354B16-F45D-419D-ADDF-8A186EF927AC.png",
+    "test": "V15RootSmokeUITests/testOverviewRecentAX5KeepsFullAmountReachable()",
+    "data": "isolated synthetic fixture",
+    "sha256": "b36bea46f838556fb9e257a25b9e142552569afde082d9b7a75aff66b8d9e1b3"
+  },
+  {
+    "file": "fix-ios-recent-empty.png",
+    "source": "fix-ios-root-final.xcresult",
+    "attachment": "F9524595-7D8E-48C9-BFD1-02DE005CEEA1.png",
+    "test": "V15RootSmokeUITests/testOverviewRecentEmptyAndErrorRecoveryAreDistinct()",
+    "data": "isolated synthetic fixture",
+    "sha256": "82bb6170e8786f5002d17046b06b581068683fc2fe013d932bd3640251b070e0"
+  },
+  {
+    "file": "fix-mac-overview-light.png",
+    "source": "fix-mac-navigation-final.xcresult",
+    "attachment": "4A05D0B4-D808-4B9A-8822-8B4471AD5981.png",
+    "test": "V15RootSmokemacOSUITests/testOverviewFutureFailureRetriesAndReturnsToOverview()",
+    "data": "isolated synthetic fixture",
+    "sha256": "18a06f5dc9018082752f86b033143166d56fd46fdbeafb066273428239037ea9"
+  }
+]

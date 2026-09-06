@@ -35,10 +35,13 @@ public struct V15DataSecurityMacView: View {
                     message("离线时无法取得备份、恢复检查或存储空间的最新状态。")
                 }
                 operations
-                LazyVGrid(columns: [GridItem(.flexible(minimum: 360), spacing: V15Spacing.lg), GridItem(.flexible(minimum: 360), spacing: V15Spacing.lg)], alignment: .leading, spacing: V15Spacing.lg) {
-                    archiveExport
-                    restoreBoundary
-                    passphrase
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 24) {
+                        VStack(spacing: 24) { archiveExport; restoreBoundary }
+                            .frame(minWidth: 340, maxWidth: .infinity)
+                        passphrase.frame(minWidth: 340, maxWidth: .infinity)
+                    }
+                    VStack(spacing: 24) { archiveExport; restoreBoundary; passphrase }
                 }
             }
             .padding(V15MacLayout.contentPadding)
@@ -57,11 +60,7 @@ public struct V15DataSecurityMacView: View {
     }
 
     private var heading: some View {
-        VStack(alignment: .leading, spacing: V15Spacing.xs) {
-            Text("系统与数据").font(V15Typography.surfaceTitle)
-            Text("查看运行状态、导出加密归档或修改个人口令。")
-                .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-        }
+        V22PageHeader("数据与安全", symbol: "lock.shield", subtitle: "备份你的账本，管理个人口令")
     }
 
     @ViewBuilder private var operations: some View {
@@ -83,12 +82,12 @@ public struct V15DataSecurityMacView: View {
     }
 
     private var archiveExport: some View {
-        V15Section("归档导出") {
+        V22FormSection("导出加密归档", subtitle: "保存一份带密码的账本文件") {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 Text("归档经过加密，不包含登录信息和 AI 原始内容。创建后请妥善保管文件和密码。")
                     .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
-                SecureField("归档密码（12–128 个字符）", text: archivePassword).accessibilityIdentifier("v15.f4c.password")
-                SecureField("再次输入归档密码", text: archivePasswordConfirmation).accessibilityIdentifier("v15.f4c.password-confirmation")
+                secureField("归档密码", prompt: "12–128 个字符", text: archivePassword).accessibilityIdentifier("v15.f4c.password")
+                secureField("确认归档密码", prompt: "再次输入归档密码", text: archivePasswordConfirmation).accessibilityIdentifier("v15.f4c.password-confirmation")
                 if archiveCredentialsTouched, let issue = model.passwordIssue { fieldIssue(issue) }
                 phase
                 V15ActionButton("创建加密归档", disabledReason: model.canBeginExport ? nil : .init(code: "archive_unavailable", message: model.exportDisabledReason ?? "请先完成当前归档流程。", fieldPath: nil), showsDisabledReasons: false, accessibilityIdentifier: "v15.f4c.export") { model.beginExport() }
@@ -97,7 +96,7 @@ public struct V15DataSecurityMacView: View {
     }
 
     private var restoreBoundary: some View {
-        V15Section("恢复前置条件") {
+        V22FormSection("恢复归档") {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 Text("归档只能恢复到全新的空账本，不能覆盖当前账本。当前应用暂不提供恢复操作。")
                     .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
@@ -111,13 +110,13 @@ public struct V15DataSecurityMacView: View {
     }
 
     private var passphrase: some View {
-        V15Section("修改个人口令") {
+        V22FormSection("个人口令") {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 Text("修改后，本机继续使用新口令；其他设备需要用新口令重新解锁。账本数据不受影响。")
                     .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
-                SecureField("当前口令", text: oldPassphrase).disabled(facts.passphraseEntryDisabled).accessibilityIdentifier("v15.system.passphrase.old")
-                SecureField("新口令（8–128 个字符）", text: newPassphrase).disabled(facts.passphraseEntryDisabled).accessibilityIdentifier("v15.system.passphrase.new")
-                SecureField("再次输入新口令", text: newPassphraseConfirmation).disabled(facts.passphraseEntryDisabled).accessibilityIdentifier("v15.system.passphrase.confirmation")
+                secureField("当前口令", prompt: "输入当前口令", text: oldPassphrase).disabled(facts.passphraseEntryDisabled).accessibilityIdentifier("v15.system.passphrase.old")
+                secureField("新口令", prompt: "8–128 个字符", text: newPassphrase).disabled(facts.passphraseEntryDisabled).accessibilityIdentifier("v15.system.passphrase.new")
+                secureField("确认新口令", prompt: "再次输入新口令", text: newPassphraseConfirmation).disabled(facts.passphraseEntryDisabled).accessibilityIdentifier("v15.system.passphrase.confirmation")
                 if passphraseFieldsTouched, let issue = facts.passphraseDisabledReason, issue.fieldPath != nil { fieldIssue(issue.message) }
                 passphraseResult
                 V15ActionButton("修改口令", disabledReason: facts.passphraseDisabledReason, showsDisabledReasons: false, accessibilityIdentifier: "v15.system.passphrase.change") { Task { await facts.changePassphrase() } }
@@ -186,12 +185,24 @@ public struct V15DataSecurityMacView: View {
     }
     private var confirmation: some View {
         VStack(alignment: .leading, spacing: V15Spacing.lg) {
-            Text("确认创建加密归档").font(V15Typography.surfaceTitle)
+            V22PageHeader("创建加密归档", symbol: "lock.doc", subtitle: "使用刚刚设置的归档密码加密")
+            V22FlowProgress(["设置密码", "确认创建", "存入文件"], current: 1)
             Text("不包含 AI 原始内容或登录信息；不能恢复到当前账本。")
                 .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
             HStack { V15ActionButton("取消", kind: .secondary) { resetArchiveForm() }; Spacer(); V15ActionButton("开始创建", accessibilityIdentifier: "v15.f4c.confirm") { model.confirmExport() } }
         }
-        .padding(V15Spacing.lg).frame(width: 440)
+        .padding(24).frame(width: 500).v22PageCanvas()
+    }
+
+    private func secureField(_ title: String, prompt: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(V15Typography.secondary.weight(.semibold))
+            SecureField(prompt, text: text)
+                .textFieldStyle(.plain).font(V15Typography.body)
+                .padding(12)
+                .background(V15Palette.surfaceRaised.color, in: RoundedRectangle(cornerRadius: 12))
+                .overlay { RoundedRectangle(cornerRadius: 12).stroke(V15Palette.hairline.color, lineWidth: 0.75) }
+        }
     }
 
     private var archivePassword: Binding<String> {

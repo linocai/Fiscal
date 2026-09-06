@@ -37,6 +37,7 @@ import XCTest
         press("v15.f4c.confirm", in: app, revealing: any["v15.f4c.handoff"])
         press("v15.f4c.handoff", in: app, revealing: any["v15.f4c.success"])
         XCTAssertTrue(any["v15.f4c.restore-disabled"].exists, "恢复限制应以明确的只读边界呈现，而非占据界面的禁用大按钮")
+        attachV220(app, name: "v220-mac-F4CMacGalleryUITests-app")
         app.terminate()
     }
     func testUntouchedArchiveFormIsQuietAndDisabled() {

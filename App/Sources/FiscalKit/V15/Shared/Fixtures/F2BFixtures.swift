@@ -27,8 +27,14 @@ public enum V15F2BFixtures {
         case rootWorkspaceBoundary = "today-root-workspace-boundary"
     }
 
-    @MainActor public static func services(route: String, accountOverflow: Bool = false) -> V15Services {
-        V15Services(transport: V15F2BFixtureTransport(route: Route(rawValue: route) ?? .normal, accountOverflow: accountOverflow))
+    @MainActor public static func services(route: String, accountOverflow: Bool = false, reviewScenario: String = "") -> V15Services {
+        let pending = V15PendingWriteStore()
+        if reviewScenario == "offline-pending" {
+            pending.enqueueCreate(.init(kind: .expense, amountMinor: 100, occurredAt: offlineSnapshotAt,
+                                        title: "隔离测试待同步", accountID: V15F1AFixtures.accountID))
+        }
+        return V15Services(transport: V15F2BFixtureTransport(route: Route(rawValue: route) ?? .normal, accountOverflow: accountOverflow, reviewScenario: reviewScenario),
+                           offlineSnapshotProvider: { reviewScenario == "offline-pending" ? offlineSnapshotAt : nil }, pendingWrites: pending)
     }
 
     static let offlineSnapshotAt = Date(timeIntervalSince1970: 1_786_464_000)
@@ -39,9 +45,15 @@ actor V15F2BFixtureTransport: V15Transporting {
     private let route: V15F2BFixtures.Route
     private let accountOverflow: Bool
     private var factsReads = 0
+    private var accountReads = 0
+    private var transactionReads = 0
+    private var cycleReads = 0
+    private var categoryReads = 0
+    private let reviewScenario: String
     private var requests: [V15Request] = []
 
-    init(route: V15F2BFixtures.Route, accountOverflow: Bool = false) {
+    init(route: V15F2BFixtures.Route, accountOverflow: Bool = false, reviewScenario: String = "") {
+        self.reviewScenario = route == .rootWorkspace ? reviewScenario : ""
         self.route = route
         self.accountOverflow = accountOverflow && route == .rootWorkspace
     }
@@ -53,7 +65,17 @@ actor V15F2BFixtureTransport: V15Transporting {
         }
         let data: Data
         switch request.path {
-        case "accounts": data = accountOverflow ? V15F2BFixtures.overflowAccounts : V15F1AFixtures.accounts
+        case "accounts":
+            accountReads += 1
+            if reviewScenario == "accounts-error", accountReads <= 4 {
+                throw V15Failure(kind: .transport, message: "测试账户读取暂时失败。")
+            }
+            if reviewScenario == "accounts-empty" { data = Data("[]".utf8) }
+            else if reviewScenario == "refresh", accountReads >= 4 {
+                var values = try JSONSerialization.jsonObject(with: V15F1AFixtures.accounts) as! [[String: Any]]
+                values[0]["name"] = "复核后现金"
+                data = try JSONSerialization.data(withJSONObject: values)
+            } else { data = accountOverflow ? V15F2BFixtures.overflowAccounts : V15F1AFixtures.accounts }
         case let path where accountOverflow && path.hasPrefix("accounts/"):
             let id = String(path.dropFirst("accounts/".count))
             let accounts = try JSONSerialization.jsonObject(with: V15F2BFixtures.overflowAccounts) as! [[String: Any]]
@@ -61,10 +83,19 @@ actor V15F2BFixtureTransport: V15Transporting {
                 throw V15Failure(kind: .transport, message: "缺少测试账户。")
             }
             data = try JSONSerialization.data(withJSONObject: account)
-        case "categories": data = V15F1AFixtures.categories
+        case "categories":
+            categoryReads += 1
+            if reviewScenario == "categories-error", categoryReads == 1 {
+                throw V15Failure(kind: .transport, message: "测试分类暂时不可用。")
+            }
+            data = V15F1AFixtures.categories
         case "transactions":
+            transactionReads += 1
+            if reviewScenario == "recent-error", transactionReads == 1 {
+                throw V15Failure(kind: .transport, message: "测试最近交易暂时失败。")
+            }
             let accountID = request.query.first(where: { $0.name == "account_id" })?.value
-            data = accountOverflow && accountID?.hasSuffix("205") == true
+            data = reviewScenario == "recent-empty" || (accountOverflow && accountID?.hasSuffix("205") == true)
                 ? Data(#"{"items":[],"next_cursor":null}"#.utf8) : V15F1BFixtures.page
         case "reports/future-events" where route == .rootWorkspace || route == .rootWorkspaceBoundary:
             let account = request.query.first(where: { $0.name == "account_id" })?.value
@@ -82,7 +113,13 @@ actor V15F2BFixtureTransport: V15Transporting {
                 try await Task.sleep(for: .seconds(1))
                 data = V15F2AFixtures.facts()
             } else if route == .rootWorkspace {
-                data = V15F2BFixtures.rootWorkspaceFacts
+                if reviewScenario == "refresh", factsReads > 1 {
+                    var value = try JSONSerialization.jsonObject(with: V15F2BFixtures.rootWorkspaceFacts) as! [String: Any]
+                    var cash = value["cash"] as! [String: Any]
+                    cash["current_balance_minor"] = 288_650
+                    value["cash"] = cash
+                    data = try JSONSerialization.data(withJSONObject: value)
+                } else { data = V15F2BFixtures.rootWorkspaceFacts }
             } else if route == .rootWorkspaceBoundary {
                 data = V15F2AFixtures.facts()
             } else if route == .zeroFuture {
@@ -112,6 +149,16 @@ actor V15F2BFixtureTransport: V15Transporting {
             data = V15F1BFixtures.revisions
         case "transactions/\(V15F1BFixtures.transactionID)/provenance" where route == .rootWorkspace || route == .rootWorkspaceBoundary:
             data = V15F1BFixtures.provenance
+        case "transactions/\(V15F1BFixtures.otherTransactionID)" where route == .rootWorkspace:
+            data = V15F1BFixtures.other
+        case "transactions/\(V15F1BFixtures.otherTransactionID)/revisions" where route == .rootWorkspace:
+            data = Data(#"{"items":[]}"#.utf8)
+        case "transactions/\(V15F1BFixtures.otherTransactionID)/provenance" where route == .rootWorkspace:
+            data = V15F1BFixtures.provenance
+        case "credit-cycles/\(V15F2AFixtures.cycleID)" where reviewScenario == "future-retry":
+            cycleReads += 1
+            if cycleReads == 1 { throw V15Failure(kind: .transport, message: "测试账期核验暂时失败。") }
+            data = Data(V15F3B1Fixtures.cycle(V15F2AFixtures.cycleID, accountID: V15F2AFixtures.accountID, opening: false, overdue: false, status: "open").utf8)
         case let path where path.hasPrefix("reports/v2/monthly/"):
             guard route == .rootWorkspace || route == .rootWorkspaceBoundary else {
                 throw V15Failure(kind: .transport, code: "unexpected_path", message: "F2-B fixture 不应请求：\(request.path)")
@@ -179,7 +226,18 @@ extension V15F2BFixtures {
     /// summary and report rows are intentionally ordinary synthetic amounts;
     /// Int64 boundary validation has its own root route above.
     static func rootWorkspaceMonthlyReport(period: String) -> Data {
-        var payload = try! JSONSerialization.jsonObject(with: Data(V15F4AFixtures.report(period: period).utf8)) as! [String: Any]
+        var payload = try! JSONSerialization.jsonObject(with: Data(V15F4AFixtures.report(period: period, revision: 42).utf8)) as! [String: Any]
+        var meta = payload["meta"] as! [String: Any]
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        formatter.dateFormat = "yyyy-MM-dd"
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = formatter.timeZone
+        let start = formatter.date(from: "\(period)-01")!
+        let next = calendar.date(byAdding: .month, value: 1, to: start)!
+        meta["date_to"] = formatter.string(from: calendar.date(byAdding: .day, value: -1, to: next)!)
+        payload["meta"] = meta
         var summary = payload["summary"] as! [String: Any]
         summary["income_minor"] = 245_000
         summary["gross_consumption_minor"] = 136_400
@@ -188,8 +246,8 @@ extension V15F2BFixtures {
         summary["expected_reimbursement_minor"] = 21_000
         summary["received_reimbursement_minor"] = 8_000
         summary["personal_expected_minor"] = 110_900
-        summary["personal_realized_minor"] = 123_456
-        summary["net_income_expense_minor"] = 121_544
+        summary["personal_realized_minor"] = 123_900
+        summary["net_income_expense_minor"] = 121_100
         summary["cash_inflow_minor"] = 253_000
         summary["cash_outflow_minor"] = 136_400
         summary["cash_net_minor"] = 116_600
@@ -199,11 +257,25 @@ extension V15F2BFixtures {
         summary["reimbursement_outstanding_at_period_end_minor"] = 900
         payload["summary"] = summary
         var accounts = payload["accounts"] as! [[String: Any]]
-        accounts[0]["opening_balance_minor"] = 142_000
+        accounts[0]["opening_balance_minor"] = 72_050
         accounts[0]["closing_balance_minor"] = 188_650
-        accounts[0]["period_inflow_minor"] = 245_000
+        accounts[0]["period_inflow_minor"] = 253_000
         accounts[0]["period_outflow_minor"] = 136_400
         payload["accounts"] = accounts
+        // Only the isolated normal root fixture supplies this deterministic
+        // daily series. Production views never synthesize missing report data.
+        let gross = [12_000, 0, 50_000, 18_000, 35_000, 21_400]
+        payload["daily"] = gross.enumerated().map { index, amount -> [String: Any] in
+            let refund = index == 2 ? 4_500 : 0
+            let expected = index == 2 ? 21_000 : 0
+            let received = index == 5 ? 8_000 : 0
+            return ["date": "\(period)-\(String(format: "%02d", index + 1))",
+                    "gross_consumption_minor": amount, "merchant_refund_minor": refund,
+                    "net_consumption_minor": amount - refund,
+                    "expected_reimbursement_minor": expected, "received_reimbursement_minor": received,
+                    "personal_expected_minor": amount - refund - expected,
+                    "personal_realized_minor": amount - refund - received]
+        }
         return try! JSONSerialization.data(withJSONObject: payload)
     }
 

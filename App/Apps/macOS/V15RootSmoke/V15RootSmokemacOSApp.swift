@@ -62,13 +62,13 @@ struct V15RootSmokemacOSApp: App {
             } else if formalFixture {
                 // Only this isolated QA host can inject deterministic facts
                 // into the same workspace that the shipping app presents.
-                V151MacWorkspace(services: V15F2BFixtures.services(route: "today-root-workspace", accountOverflow: accountOverflow))
+                V151MacWorkspace(services: V15F2BFixtures.services(route: "today-root-workspace", accountOverflow: accountOverflow, reviewScenario: ProcessInfo.processInfo.environment["FISCAL_ROOT_SMOKE_REVIEW_SCENARIO"] ?? ""))
                     .preferredColorScheme(preferredScheme)
             } else {
                 MacRootView(services: services, bootstrapAccessKey: APIConfiguration.bootstrapAccessKey())
             }
         }
-        .defaultSize(width: 1_280, height: 820)
+        .defaultSize(width: Double(ProcessInfo.processInfo.environment["FISCAL_ROOT_SMOKE_WINDOW_WIDTH"] ?? "1280") ?? 1280, height: 820)
     }
 }
 

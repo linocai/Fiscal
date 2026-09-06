@@ -1,0 +1,492 @@
+{
+  "version": "2.2.0",
+  "build": 40,
+  "branch": "main",
+  "status": "Review R1–R9 and D1 fixed; targeted verification and both App targets passed; not released",
+  "apps": {
+    "macOS Debug": {
+      "info_plist": "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou/Build/Products/Debug/Fiscal.app/Contents/Info.plist",
+      "CFBundleIdentifier": "com.linotsai.fiscal.mac",
+      "CFBundleShortVersionString": "2.2.0",
+      "CFBundleVersion": "40",
+      "LSMinimumSystemVersion": "26.0"
+    },
+    "iOS Simulator Release arm64": {
+      "info_plist": "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou/Build/Products/Release-iphonesimulator/Fiscal.app/Info.plist",
+      "CFBundleIdentifier": "com.linotsai.fiscal",
+      "CFBundleShortVersionString": "2.2.0",
+      "CFBundleVersion": "40",
+      "MinimumOSVersion": "26.0",
+      "UIDeviceFamily": [
+        1
+      ]
+    }
+  },
+  "fiscalkit": {
+    "tests": 408,
+    "suites": 39,
+    "seconds": 46.734,
+    "log": "fix-fiscalkit-tests.log",
+    "log_sha256": "a448e43c69ad3769ab611de6326a9980132fa9234c2b2b5222c7dd68627cc6f4"
+  },
+  "ui_tests_passed": {
+    "V15RootSmokeUITests.V15RootSmokeUITests/testAccountAndAnalysisTabsKeepBottomCreationAvailable": {
+      "log": "ios-root-r3.log",
+      "log_sha256": "3da025eb16a666b4aa214154d68b91a59fdf819667f236e71c1bf98c132cefdd"
+    },
+    "V15RootSmokeUITests.V15RootSmokeUITests/testColdLaunchUsesFormalV15BootstrapWithoutGalleryRoute": {
+      "log": "ios-root-r3.log",
+      "log_sha256": "3da025eb16a666b4aa214154d68b91a59fdf819667f236e71c1bf98c132cefdd"
+    },
+    "V15RootSmokeUITests.V15RootSmokeUITests/testFormalRecordKeepsKeyboardAndReturnPathReachable": {
+      "log": "ios-root-r3.log",
+      "log_sha256": "3da025eb16a666b4aa214154d68b91a59fdf819667f236e71c1bf98c132cefdd"
+    },
+    "V15RootSmokeUITests.V15RootSmokeUITests/testFormalWorkspaceBoundaryKeepsMoneyLocalAndNavigationReachable": {
+      "log": "ios-root-r3.log",
+      "log_sha256": "3da025eb16a666b4aa214154d68b91a59fdf819667f236e71c1bf98c132cefdd"
+    },
+    "V15RootSmokeUITests.V15RootSmokeUITests/testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5": {
+      "log": "fix-ios-root-final.log",
+      "log_sha256": "b196b0f5442f45568f90466f1e4c39c81366fb036d0b29881cf46c6ce1681c21"
+    },
+    "V15RootSmokeUITests.V15RootSmokeUITests/testFormalWorkspaceLedgerProvidesCompactScopeAndTimeNavigation": {
+      "log": "ios-root-r3.log",
+      "log_sha256": "3da025eb16a666b4aa214154d68b91a59fdf819667f236e71c1bf98c132cefdd"
+    },
+    "V15RootSmokeUITests.V15RootSmokeUITests/testFormalWorkspaceSettingsAndGovernancePathsRemainReachable": {
+      "log": "ios-root-r3.log",
+      "log_sha256": "3da025eb16a666b4aa214154d68b91a59fdf819667f236e71c1bf98c132cefdd"
+    },
+    "V15RootSmokeUITests.V15RootSmokeUITests/testReducedEffectsKeepNavigationAndCreationAvailable": {
+      "log": "ios-reduced-effects.log",
+      "log_sha256": "06c36824cc932f27184c5502641c373348b02e691a683d2de838ba40791c262e"
+    },
+    "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testColdLaunchUsesFormalV15BootstrapWithoutGalleryRoute": {
+      "log": "mac-root-final.log",
+      "log_sha256": "f516bde1d7e581fae2f2bf2271ab0a2f71e670183ad4dd04fd6ba4a0bab8b95c"
+    },
+    "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testFixtureTimelineSelectionSurvivesAnalysisRoundTrip": {
+      "log": "fix-mac-root-final.log",
+      "log_sha256": "586ee633238efaf9b68677298069a3169ff0507d0a1deab04696320492060043"
+    },
+    "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testOverviewDarkAndNarrowWindowKeepNavigationReadable": {
+      "log": "fix-mac-root-final.log",
+      "log_sha256": "586ee633238efaf9b68677298069a3169ff0507d0a1deab04696320492060043"
+    },
+    "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testWorkspaceUsesFourFinancialSpacesAndKeepsDomainsContextual": {
+      "log": "mac-root-r3.log",
+      "log_sha256": "9762e5f2c72b52ffb55183130b280e03e6957b9bcef4a6276afcb336eea4f896"
+    },
+    "V15GalleryUITests.F1CGalleryUITests/testMasterDataShowsPrivacySafeAccountsAndLongMerchant": {
+      "log": "ios-gallery-r3.log",
+      "log_sha256": "4328ad599f5a2f84d8149dc20b0e1e0f7b5efb6f4261c90c165f2a420e561777"
+    },
+    "V15GalleryUITests.F1CGalleryUITests/testOfflineArchiveIsDisabledWithReason": {
+      "log": "ios-gallery-final.log",
+      "log_sha256": "64bcfd20650fc854dfa81cf86bed49e49ebdbc60bdcd7fd7e661a614d8b1263f"
+    },
+    "V15GalleryUITests.F1CGalleryUITests/testSettingsChildPaneHasExplicitClosePath": {
+      "log": "ios-gallery-final.log",
+      "log_sha256": "64bcfd20650fc854dfa81cf86bed49e49ebdbc60bdcd7fd7e661a614d8b1263f"
+    },
+    "V15GalleryUITests.F3B1GalleryUITests/testOfflineAndAX5ShowReadonlyReasonWithoutWriteEntry": {
+      "log": "ios-gallery-final.log",
+      "log_sha256": "64bcfd20650fc854dfa81cf86bed49e49ebdbc60bdcd7fd7e661a614d8b1263f"
+    },
+    "V15GalleryUITests.F3CGalleryUITests/testNewClaimGreyButtonReasonsThenEligibleUncategorizedCandidateCompletes": {
+      "log": "ios-gallery-final.log",
+      "log_sha256": "64bcfd20650fc854dfa81cf86bed49e49ebdbc60bdcd7fd7e661a614d8b1263f"
+    },
+    "V15GalleryUITests.F3CGalleryUITests/testReceiptInvalidValidPreviewInvalidationAndCommitCompletes": {
+      "log": "ios-gallery-final.log",
+      "log_sha256": "64bcfd20650fc854dfa81cf86bed49e49ebdbc60bdcd7fd7e661a614d8b1263f"
+    },
+    "V15GalleryUITests.F3DGalleryUITests/testCreateStartsNeutralThenShowsOneRelevantFieldIssueAndCompletes": {
+      "log": "ios-gallery-final.log",
+      "log_sha256": "64bcfd20650fc854dfa81cf86bed49e49ebdbc60bdcd7fd7e661a614d8b1263f"
+    },
+    "V15GalleryUITests.F3FGalleryUITests/testEditMustBeConfirmedBeforeHumanExecute": {
+      "log": "ios-gallery-final.log",
+      "log_sha256": "64bcfd20650fc854dfa81cf86bed49e49ebdbc60bdcd7fd7e661a614d8b1263f"
+    },
+    "V15GalleryUITests.F3GGalleryUITests/testSyntheticMaskedEvidenceRequestBoundReviewAndExactConfirmation": {
+      "log": "ios-gallery-final.log",
+      "log_sha256": "64bcfd20650fc854dfa81cf86bed49e49ebdbc60bdcd7fd7e661a614d8b1263f"
+    },
+    "V15GalleryUITests.F4CGalleryUITests/testArchiveConfirmationTransferAndRestoreBoundary": {
+      "log": "ios-gallery-final.log",
+      "log_sha256": "64bcfd20650fc854dfa81cf86bed49e49ebdbc60bdcd7fd7e661a614d8b1263f"
+    },
+    "V15GalleryUITests.F3B1GalleryUITests/testSchedulePreviewInvalidationConflictSuccessAndReceiptAreReachable": {
+      "log": "ios-gallery-r2.log",
+      "log_sha256": "0d07ae6927126be875bae2433a9499072151136d8e8721c3dee83986d02e1d33"
+    },
+    "V15GalleryUITests.F3B2GalleryUITests/testPositiveFeeExistingPurchaseAndEditFlowsExposeCategoryDateAndComplete": {
+      "log": "ios-gallery-r2.log",
+      "log_sha256": "0d07ae6927126be875bae2433a9499072151136d8e8721c3dee83986d02e1d33"
+    },
+    "V15GalleryUITests.F4AGalleryUITests/testRevisionBoundExportReadyHandoffAndStaleResponse": {
+      "log": "ios-gallery-r2.log",
+      "log_sha256": "0d07ae6927126be875bae2433a9499072151136d8e8721c3dee83986d02e1d33"
+    },
+    "V15GalleryUITests.F4AGalleryUITests/testPeriodFourLensSafeDrillPagingRetryAndReturn": {
+      "log": "ios-gallery-r3.log",
+      "log_sha256": "4328ad599f5a2f84d8149dc20b0e1e0f7b5efb6f4261c90c165f2a420e561777"
+    },
+    "V15GallerymacOSUITests.F3B1MacGalleryUITests/testCreditSpineInspectorAndScheduleEntryAreReachable": {
+      "log": "mac-gallery-final.log",
+      "log_sha256": "fd0df14dd37811ac36045a868b78dae2d6e4536a1955037e203391112cea2e88"
+    },
+    "V15GallerymacOSUITests.F3B2MacGalleryUITests/testInstallmentSpineScheduleInspectorAndCreationSheetAreReachable": {
+      "log": "mac-gallery-final.log",
+      "log_sha256": "fd0df14dd37811ac36045a868b78dae2d6e4536a1955037e203391112cea2e88"
+    },
+    "V15GallerymacOSUITests.F3CMacGalleryUITests/testReimbursementSpineDetailAndBothEditorsAreReachable": {
+      "log": "mac-gallery-final.log",
+      "log_sha256": "fd0df14dd37811ac36045a868b78dae2d6e4536a1955037e203391112cea2e88"
+    },
+    "V15GallerymacOSUITests.F3DMacGalleryUITests/testCashFlowSpineInspectorEditorsAndRecoverySurfacesAreReachable": {
+      "log": "mac-gallery-final.log",
+      "log_sha256": "fd0df14dd37811ac36045a868b78dae2d6e4536a1955037e203391112cea2e88"
+    },
+    "V15GallerymacOSUITests.F3FMacGalleryUITests/testProposalSpineDetailInspectorAndReviewSheetAreReachable": {
+      "log": "mac-gallery-final.log",
+      "log_sha256": "fd0df14dd37811ac36045a868b78dae2d6e4536a1955037e203391112cea2e88"
+    },
+    "V15GallerymacOSUITests.F3GMacGalleryUITests/testStatementImportWorkbenchBuildsForAutomation": {
+      "log": "mac-gallery-final.log",
+      "log_sha256": "fd0df14dd37811ac36045a868b78dae2d6e4536a1955037e203391112cea2e88"
+    },
+    "V15GallerymacOSUITests.F4AMacGalleryUITests/testReportTakeoverLensesAndSafeDrill": {
+      "log": "mac-gallery-final.log",
+      "log_sha256": "fd0df14dd37811ac36045a868b78dae2d6e4536a1955037e203391112cea2e88"
+    },
+    "V15GallerymacOSUITests.F4AMacGalleryUITests/testRevisionBoundPDFExport": {
+      "log": "mac-gallery-final.log",
+      "log_sha256": "fd0df14dd37811ac36045a868b78dae2d6e4536a1955037e203391112cea2e88"
+    },
+    "V15GallerymacOSUITests.F4CMacGalleryUITests/testArchiveConfirmationNativeSaveAndDisabledRestore": {
+      "log": "mac-gallery-final.log",
+      "log_sha256": "fd0df14dd37811ac36045a868b78dae2d6e4536a1955037e203391112cea2e88"
+    },
+    "V15RootSmokeUITests.V15RootSmokeUITests/testOverviewRecentAX5KeepsFullAmountReachable": {
+      "log": "fix-ios-root-final.log",
+      "log_sha256": "b196b0f5442f45568f90466f1e4c39c81366fb036d0b29881cf46c6ce1681c21"
+    },
+    "V15RootSmokeUITests.V15RootSmokeUITests/testOverviewRecentEmptyAndErrorRecoveryAreDistinct": {
+      "log": "fix-ios-root-final.log",
+      "log_sha256": "b196b0f5442f45568f90466f1e4c39c81366fb036d0b29881cf46c6ce1681c21"
+    },
+    "V15RootSmokeUITests.V15RootSmokeUITests/testOverviewRecentTransactionsConsumeEveryNavigationRequest": {
+      "log": "fix-ios-root-final.log",
+      "log_sha256": "b196b0f5442f45568f90466f1e4c39c81366fb036d0b29881cf46c6ce1681c21"
+    },
+    "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testOverviewFutureFailureRetriesAndReturnsToOverview": {
+      "log": "fix-mac-navigation-final.log",
+      "log_sha256": "c71293d227493449b85223a331acb0cffae583374c6d8965ceb44f7441dc3c1e"
+    },
+    "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testOverviewLabelsOfflineSnapshotAndPendingChanges": {
+      "log": "fix-mac-root.log",
+      "log_sha256": "c7f21de7d7f4234ed20e0fc5ee70336270aed05523c8880f99c426764891f553"
+    },
+    "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testOverviewRecentQuerySurvivesAccountFilterAndOpensExactDetail": {
+      "log": "fix-mac-root.log",
+      "log_sha256": "c7f21de7d7f4234ed20e0fc5ee70336270aed05523c8880f99c426764891f553"
+    },
+    "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testAccountReadFailureRetriesAndEmptyStateIsHonest": {
+      "log": "fix-mac-root-final.log",
+      "log_sha256": "586ee633238efaf9b68677298069a3169ff0507d0a1deab04696320492060043"
+    },
+    "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testMutableModuleReturnRefreshesOverviewAndAccounts": {
+      "log": "fix-mac-root-final.log",
+      "log_sha256": "586ee633238efaf9b68677298069a3169ff0507d0a1deab04696320492060043"
+    }
+  },
+  "ui_unique_pass_count": 43,
+  "native_input": {
+    "status": "passed",
+    "log": "mac-picker-native.log",
+    "method": "offscreen AppKit field editor; no foreground event injection"
+  },
+  "limitations": [
+    "Mac full-window account picker passed manual CUA native-key replay during Review; XCTest retrial timed out initializing automation mode before executing the test, not counted as passed.",
+    "No live API / production / physical-device run; existing iOS 26.5 simulator, deployment target 26.0."
+  ],
+  "screenshot_count": 41,
+  "review": {
+    "date": "2026-09-06",
+    "report": "REVIEW.md",
+    "evidence": "REVIEW_EVIDENCE.md",
+    "source_manifest": "review-source-manifest.json",
+    "findings": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 8,
+      "P3": 1
+    },
+    "design_acceptance_gaps": 1,
+    "production_source_modified": false,
+    "mac_picker_full_window_manual": "passed",
+    "mac_picker_xctest": "framework initialization timed out; zero test methods executed",
+    "fix": {
+      "date": "2026-09-06",
+      "report": "FIX_REPORT.md",
+      "source_manifest": "fix-source-manifest.json",
+      "closed_findings": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6",
+        "R7",
+        "R8",
+        "R9",
+        "D1"
+      ],
+      "remaining_original_findings": 0,
+      "independent_full_re_review": false,
+      "new_regression_tests": 8,
+      "distinct_ui_tests_verified_this_fix": 11,
+      "ui_tests": {
+        "V15RootSmokeUITests.V15RootSmokeUITests/testOverviewRecentAX5KeepsFullAmountReachable": {
+          "log": "fix-ios-root-final.log",
+          "log_sha256": "b196b0f5442f45568f90466f1e4c39c81366fb036d0b29881cf46c6ce1681c21"
+        },
+        "V15RootSmokeUITests.V15RootSmokeUITests/testOverviewRecentEmptyAndErrorRecoveryAreDistinct": {
+          "log": "fix-ios-root-final.log",
+          "log_sha256": "b196b0f5442f45568f90466f1e4c39c81366fb036d0b29881cf46c6ce1681c21"
+        },
+        "V15RootSmokeUITests.V15RootSmokeUITests/testOverviewRecentTransactionsConsumeEveryNavigationRequest": {
+          "log": "fix-ios-root-final.log",
+          "log_sha256": "b196b0f5442f45568f90466f1e4c39c81366fb036d0b29881cf46c6ce1681c21"
+        },
+        "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testOverviewFutureFailureRetriesAndReturnsToOverview": {
+          "log": "fix-mac-navigation-final.log",
+          "log_sha256": "c71293d227493449b85223a331acb0cffae583374c6d8965ceb44f7441dc3c1e"
+        },
+        "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testOverviewLabelsOfflineSnapshotAndPendingChanges": {
+          "log": "fix-mac-root.log",
+          "log_sha256": "c7f21de7d7f4234ed20e0fc5ee70336270aed05523c8880f99c426764891f553"
+        },
+        "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testOverviewRecentQuerySurvivesAccountFilterAndOpensExactDetail": {
+          "log": "fix-mac-root.log",
+          "log_sha256": "c7f21de7d7f4234ed20e0fc5ee70336270aed05523c8880f99c426764891f553"
+        },
+        "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testAccountReadFailureRetriesAndEmptyStateIsHonest": {
+          "log": "fix-mac-root-final.log",
+          "log_sha256": "586ee633238efaf9b68677298069a3169ff0507d0a1deab04696320492060043"
+        },
+        "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testFixtureTimelineSelectionSurvivesAnalysisRoundTrip": {
+          "log": "fix-mac-root-final.log",
+          "log_sha256": "586ee633238efaf9b68677298069a3169ff0507d0a1deab04696320492060043"
+        },
+        "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testMutableModuleReturnRefreshesOverviewAndAccounts": {
+          "log": "fix-mac-root-final.log",
+          "log_sha256": "586ee633238efaf9b68677298069a3169ff0507d0a1deab04696320492060043"
+        },
+        "V15RootSmokemacOSUITests.V15RootSmokemacOSUITests/testOverviewDarkAndNarrowWindowKeepNavigationReadable": {
+          "log": "fix-mac-root-final.log",
+          "log_sha256": "586ee633238efaf9b68677298069a3169ff0507d0a1deab04696320492060043"
+        },
+        "V15RootSmokeUITests.V15RootSmokeUITests/testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5": {
+          "log": "fix-ios-root-final.log",
+          "log_sha256": "b196b0f5442f45568f90466f1e4c39c81366fb036d0b29881cf46c6ce1681c21"
+        }
+      },
+      "app_build_logs": {
+        "fix-ios-app-final.log": "3d7e47f22f9a8569d8a2ecbc7fc3b9595a78a72375d5af20abcbe08f2937513b",
+        "fix-mac-app-final.log": "5a475c320ca4aa098e0c231d26f96d35c6e78e5a54e7672f40bab725ed2cf216"
+      },
+      "environment": {
+        "iOS": {
+          "path": "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou/Build/Products/Release-iphonesimulator/Fiscal.app/Info.plist",
+          "version": "2.2.0",
+          "build": "40",
+          "minimumOS": "26.0"
+        },
+        "macOS": {
+          "path": "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou/Build/Products/Debug/Fiscal.app/Contents/Info.plist",
+          "version": "2.2.0",
+          "build": "40",
+          "minimumOS": "26.0"
+        },
+        "protected_schemes": {
+          "FiscaliOS.xcscheme": true,
+          "FiscalmacOS.xcscheme": true,
+          "V15GalleryiOS.xcscheme": true,
+          "V15GallerymacOS.xcscheme": true,
+          "V15RootSmokeiOS.xcscheme": true,
+          "V15RootSmokemacOS.xcscheme": true
+        },
+        "free_disk_GiB": 53.66,
+        "derived_data_KiB": 3154312,
+        "module_cache_KiB": 2516364,
+        "qa_temporary_KiB": 1305312,
+        "simulator": [
+          {
+            "lastBootedAt": "2026-09-06T07:00:21Z",
+            "dataPath": "/Users/linotsai/Library/Developer/CoreSimulator/Devices/211DD03C-812D-4A42-97EF-F693D7DF924C/data",
+            "dataPathSize": 5450092544,
+            "logPath": "/Users/linotsai/Library/Logs/CoreSimulator/211DD03C-812D-4A42-97EF-F693D7DF924C",
+            "udid": "211DD03C-812D-4A42-97EF-F693D7DF924C",
+            "isAvailable": true,
+            "logPathSize": 532480,
+            "deviceTypeIdentifier": "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+            "state": "Booted",
+            "name": "主模拟器",
+            "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-5"
+          }
+        ]
+      },
+      "build_and_test_commands": [
+        {
+          "name": "fix-mac-root-final",
+          "command": [
+            "xcodebuild",
+            "-project",
+            "App/Fiscal.xcodeproj",
+            "-derivedDataPath",
+            "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou",
+            "-jobs",
+            "2",
+            "-parallel-testing-enabled",
+            "NO",
+            "-scheme",
+            "V15RootSmokemacOS",
+            "-destination",
+            "platform=macOS",
+            "-resultBundlePath",
+            "/Users/linotsai/Lino/Fiscal/build/v2.2.0-qa/fix-mac-root-final.xcresult",
+            "-only-testing:V15RootSmokemacOSUITests/V15RootSmokemacOSUITests/testAccountReadFailureRetriesAndEmptyStateIsHonest",
+            "-only-testing:V15RootSmokemacOSUITests/V15RootSmokemacOSUITests/testMutableModuleReturnRefreshesOverviewAndAccounts",
+            "-only-testing:V15RootSmokemacOSUITests/V15RootSmokemacOSUITests/testOverviewFutureFailureRetriesAndReturnsToOverview",
+            "-only-testing:V15RootSmokemacOSUITests/V15RootSmokemacOSUITests/testOverviewDarkAndNarrowWindowKeepNavigationReadable",
+            "-only-testing:V15RootSmokemacOSUITests/V15RootSmokemacOSUITests/testFixtureTimelineSelectionSurvivesAnalysisRoundTrip",
+            "test"
+          ],
+          "started": "2026-09-06T18:28:59.134943+08:00",
+          "status": "passed",
+          "exit_code": 0,
+          "finished": "2026-09-06T18:31:45.443192+08:00"
+        },
+        {
+          "name": "fix-ios-root-final",
+          "command": [
+            "xcodebuild",
+            "-project",
+            "App/Fiscal.xcodeproj",
+            "-derivedDataPath",
+            "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou",
+            "-jobs",
+            "2",
+            "-parallel-testing-enabled",
+            "NO",
+            "-scheme",
+            "V15RootSmokeiOS",
+            "-destination",
+            "platform=iOS Simulator,id=211DD03C-812D-4A42-97EF-F693D7DF924C",
+            "-resultBundlePath",
+            "/Users/linotsai/Lino/Fiscal/build/v2.2.0-qa/fix-ios-root-final.xcresult",
+            "-only-testing:V15RootSmokeUITests/V15RootSmokeUITests/testOverviewRecentTransactionsConsumeEveryNavigationRequest",
+            "-only-testing:V15RootSmokeUITests/V15RootSmokeUITests/testOverviewRecentEmptyAndErrorRecoveryAreDistinct",
+            "-only-testing:V15RootSmokeUITests/V15RootSmokeUITests/testOverviewRecentAX5KeepsFullAmountReachable",
+            "-only-testing:V15RootSmokeUITests/V15RootSmokeUITests/testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5",
+            "test"
+          ],
+          "started": "2026-09-06T18:31:45.443868+08:00",
+          "status": "passed",
+          "exit_code": 0,
+          "finished": "2026-09-06T18:33:39.993436+08:00"
+        },
+        {
+          "name": "fix-fiscalkit-tests",
+          "command": [
+            "xcodebuild",
+            "-project",
+            "App/Fiscal.xcodeproj",
+            "-derivedDataPath",
+            "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou",
+            "-jobs",
+            "2",
+            "-parallel-testing-enabled",
+            "NO",
+            "-scheme",
+            "FiscalmacOS",
+            "-destination",
+            "platform=macOS",
+            "-resultBundlePath",
+            "/Users/linotsai/Lino/Fiscal/build/v2.2.0-qa/fix-fiscalkit-tests.xcresult",
+            "-only-testing:FiscalKitTests",
+            "test"
+          ],
+          "started": "2026-09-06T18:33:39.994136+08:00",
+          "status": "passed",
+          "exit_code": 0,
+          "finished": "2026-09-06T18:34:56.763993+08:00"
+        },
+        {
+          "name": "fix-ios-app-final",
+          "command": [
+            "xcodebuild",
+            "-project",
+            "App/Fiscal.xcodeproj",
+            "-derivedDataPath",
+            "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou",
+            "-jobs",
+            "2",
+            "-parallel-testing-enabled",
+            "NO",
+            "-scheme",
+            "FiscaliOS",
+            "-destination",
+            "generic/platform=iOS Simulator",
+            "ARCHS=arm64",
+            "ONLY_ACTIVE_ARCH=YES",
+            "build"
+          ],
+          "started": "2026-09-06T18:34:56.764769+08:00",
+          "status": "passed",
+          "exit_code": 0,
+          "finished": "2026-09-06T18:36:33.807606+08:00"
+        },
+        {
+          "name": "fix-mac-app-final",
+          "command": [
+            "xcodebuild",
+            "-project",
+            "App/Fiscal.xcodeproj",
+            "-derivedDataPath",
+            "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou",
+            "-jobs",
+            "2",
+            "-parallel-testing-enabled",
+            "NO",
+            "-scheme",
+            "FiscalmacOS",
+            "-destination",
+            "platform=macOS",
+            "build"
+          ],
+          "started": "2026-09-06T18:36:33.808367+08:00",
+          "status": "passed",
+          "exit_code": 0,
+          "finished": "2026-09-06T18:36:35.719455+08:00"
+        }
+      ],
+      "cleanup": {
+        "removed": "fix-mac-root-r2.xcresult",
+        "size_KiB": 412216,
+        "reason": "aborted XCTest broad value query; no completed passing tests; preserve log",
+        "preserved": "fix-mac-root-r2.log"
+      },
+      "additional_mac_navigation_test": {
+        "log": "fix-mac-navigation-final.log",
+        "log_sha256": "c71293d227493449b85223a331acb0cffae583374c6d8965ceb44f7441dc3c1e",
+        "status": "passed",
+        "includes": "future item failure/retry and return; all future items return to overview"
+      }
+    }
+  }
+}

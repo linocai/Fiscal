@@ -184,7 +184,7 @@ public struct V15GalleryShell: View {
 #if os(macOS)
         V15ReportingMacView(services: services, offlineSnapshotAt: route == "reports-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil, initialLens: initialLens, artifactSaver: V15F4AFixtures.artifactSaver(route: route))
 #else
-        V15ReportingView(services: services, offlineSnapshotAt: route == "reports-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil, initialLens: initialLens)
+        V15ReportingView(services: services, offlineSnapshotAt: route == "reports-offline" ? Date(timeIntervalSince1970: 1_786_464_000) : nil, initialLens: initialLens, initialPeriod: .month(V15ReportMonth("2026-08")!))
 #endif
     }
 }

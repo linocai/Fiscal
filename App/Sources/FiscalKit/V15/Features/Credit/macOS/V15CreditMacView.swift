@@ -10,12 +10,15 @@ public struct V15CreditMacView: View {
     @State private var initialContextFailure: V15Failure?
     public init(services: V15Services, offlineSnapshotAt: Date? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, initialGalleryScenario: String? = nil, initialCycle: V15CreditCycle? = nil, initialAccountID: UUID? = nil) { _model = State(initialValue: .init(services: services, offlineSnapshotAt: offlineSnapshotAt, offlineSnapshotProvider: offlineSnapshotProvider)); _initialContextFailure = State(initialValue: nil); self.initialGalleryScenario = initialGalleryScenario; self.initialCycle = initialCycle; self.initialAccountID = initialAccountID }
     public var body: some View {
-        HSplitView {
-            accounts.frame(minWidth: 205, idealWidth: 240)
-            cycles.frame(minWidth: 380, idealWidth: 500)
-            inspector.frame(minWidth: 300, idealWidth: 360)
+        VStack(alignment: .leading, spacing: 20) {
+            accounts
+            HSplitView {
+                cycles.frame(minWidth: 300, idealWidth: 460)
+                inspector.frame(minWidth: 270, idealWidth: 340)
+            }
         }
-        .v15MacWorkspaceCanvas()
+        .padding(24)
+        .v22PageCanvas()
         .task { await loadInitialState() }
         .sheet(isPresented: Binding(get: { model.scheduleSheetVisible }, set: { if !$0 { model.dismissScheduleSheet() } })) { V15CreditScheduleMacSheet(model: model) }
         .overlay {
@@ -65,12 +68,24 @@ public struct V15CreditMacView: View {
         }
     }
     private var accounts: some View {
-        VStack(alignment: .leading, spacing: V15Spacing.sm) {
-            HStack { Text("信用账户").font(V15Typography.surfaceTitle); Spacer(); Button { Task { await model.load() } } label: { Image(systemName: V15Symbol.retry) }.accessibilityIdentifier("v15.f3b1.reload") }
-            ScrollView { VStack(alignment: .leading, spacing: V15Spacing.xxs) { ForEach(model.accounts) { account in Button { Task { await model.selectAccount(account) } } label: { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(account.name).font(V15Typography.body); Text("账单日 \(account.statementDay) · 还款日 \(account.dueDay)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }.frame(maxWidth: .infinity, alignment: .leading).padding(V15Spacing.sm).background(model.selectedAccount?.id == account.id ? V15Palette.selected.color : .clear, in: RoundedRectangle(cornerRadius: V15Radius.control)) }.buttonStyle(.plain).v15PlatformHitArea().v15KeyboardFocusable().accessibilityIdentifier("v15.f3b1.account.\(account.id)") } } }
-            Spacer()
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                V22PageHeader("信用账期", symbol: "creditcard", subtitle: "管理账单、还款日与可用额度")
+                Menu {
+                    ForEach(model.accounts) { account in
+                        Button(account.name) { Task { await model.selectAccount(account) } }
+                            .accessibilityIdentifier("v15.f3b1.account.\(account.id)")
+                    }
+                } label: { Label(model.selectedAccount?.name ?? "选择信用账户", systemImage: "creditcard") }
+                .fixedSize()
+                .accessibilityIdentifier("v22.credit.account-picker")
+                Button { Task { await model.load() } } label: { Image(systemName: V15Symbol.retry) }
+                    .buttonStyle(.borderless)
+                    .help("刷新信用账期")
+                    .accessibilityIdentifier("v15.f3b1.reload")
+            }
             if let at = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: at).accessibilityIdentifier("v15.f3b1.offline") }
-        }.padding(V15Spacing.md)
+        }
     }
     @ViewBuilder private var cycles: some View {
         ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) {
@@ -78,7 +93,6 @@ public struct V15CreditMacView: View {
                 HStack(alignment: .top) { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text("账期").font(V15Typography.surfaceTitle); Text("当前欠款").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)); V15MoneyText(minorUnits: account.currentDebtMinor, direction: .outflow) }; Spacer(); Button("调整账期") { model.openScheduleSheet() }.disabled(model.isOffline).keyboardShortcut("s", modifiers: [.command, .option]).accessibilityIdentifier("v15.f3b1.schedule.open") }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 125), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
                     creditMetric("信用额度", account.creditLimitMinor, .neutral)
-                    creditMetric("当前欠款", account.currentDebtMinor, .outflow)
                     creditMetric("可用额度", account.availableCreditMinor, .balance)
                     creditMetric("超额", account.overLimitMinor, account.overLimitMinor > 0 ? .outflow : .neutral)
                 }
@@ -95,7 +109,7 @@ public struct V15CreditMacView: View {
             switch model.phase {
             case .idle, .loading: V15LoadingSkeleton()
             case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.load() } }
-            case .empty: V15EmptyState(title: "目前没有信用账户", explanation: "账户创建和维护在主数据中完成。")
+            case .empty: V15EmptyState(title: "目前没有信用账户", explanation: "到账户页添加信用账户后，这里会显示账单。")
             case .loaded:
                 ForEach(model.cycles) { cycle in
                     Button { Task { await model.selectCycle(cycle) } } label: { cycleRow(cycle) }
@@ -140,7 +154,7 @@ public struct V15CreditMacView: View {
         }.padding(V15Spacing.md) }
         .accessibilityIdentifier("v15.f3b1.credit.inspector")
     }
-    private func creditMetric(_ title: String, _ value: V15MinorUnits, _ direction: V15MoneyDirection) -> some View { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)); V15MoneyText(minorUnits: value, direction: direction, font: V15Typography.body.weight(.semibold)) }.padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
+    private func creditMetric(_ title: String, _ value: V15MinorUnits, _ direction: V15MoneyDirection) -> some View { V22Metric(title, minorUnits: value, direction: direction) }
     private func cycleStatusLabel(_ value: V15CreditCycleStatus) -> String { switch value { case .open: "开放"; case .unpaid: "未还"; case .partial: "部分已还"; case .overdue: "已逾期"; case .settled: "已结清"; case .unknown: "未知状态" } }
     private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral).text }
 }
@@ -149,10 +163,15 @@ private struct V15CreditScheduleMacSheet: View {
     @Bindable var model: V15CreditModel
     var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            HStack { VStack(alignment: .leading) { Text("调整账期").font(V15Typography.surfaceTitle); Text("步骤 1 设置 → 步骤 2 预览 → 步骤 3 提交").font(V15Typography.secondary) }; Spacer(); Button("关闭") { model.dismissScheduleSheet() }.accessibilityIdentifier("v15.f3b1.schedule.dismiss") }
-            Picker("账期方式", selection: $model.cycleMode) { Text("账单日截点").tag(V15CreditCycleMode.statementDayCutoff); Text("上个自然月").tag(V15CreditCycleMode.previousCalendarMonth) }.accessibilityIdentifier("v15.f3b1.schedule.mode")
-            TextField("账单日（1–28）", text: $model.statementDayText).accessibilityIdentifier("v15.f3b1.schedule.statement-day")
-            TextField("还款日（1–28）", text: $model.dueDayText).accessibilityIdentifier("v15.f3b1.schedule.due-day")
+            HStack { V22PageHeader("调整账期", symbol: "calendar", subtitle: "先查看影响，再确认修改"); Button("关闭") { model.dismissScheduleSheet() }.accessibilityIdentifier("v15.f3b1.schedule.dismiss") }
+            V22FlowProgress(["设置", "查看影响", "确认"], current: model.schedulePreview == nil ? 0 : 1)
+            V22FormSection("账单规则") {
+                V15PickerRow("账期方式", selection: $model.cycleMode) { Text("账单日截点").tag(V15CreditCycleMode.statementDayCutoff); Text("上个自然月").tag(V15CreditCycleMode.previousCalendarMonth) }.accessibilityIdentifier("v15.f3b1.schedule.mode")
+                HStack(alignment: .top, spacing: 20) {
+                    V15Field("账单日", text: $model.statementDayText, prompt: "1–28", keyboard: .integer).accessibilityIdentifier("v15.f3b1.schedule.statement-day")
+                    V15Field("还款日", text: $model.dueDayText, prompt: "1–28", keyboard: .integer).accessibilityIdentifier("v15.f3b1.schedule.due-day")
+                }
+            }
             V15FieldIssues(issues: model.scheduleIssues)
                 .accessibilityIdentifier("v15.f3b1.schedule.local-reasons")
             V15FieldIssues(issues: model.scheduleServerFieldIssues)

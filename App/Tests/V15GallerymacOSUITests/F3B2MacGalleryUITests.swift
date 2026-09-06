@@ -9,7 +9,8 @@ import XCTest
         XCTAssertTrue(element(app, "v15.f3b2.mac.spine").waitForExistence(timeout: 5))
         XCTAssertTrue(element(app, "v15.f3b2.mac.schedule").waitForExistence(timeout: 5))
         XCTAssertTrue(element(app, "v15.f3b2.mac.inspector").waitForExistence(timeout: 5))
-        element(app, "v15.f3b2.mac.create").click(); XCTAssertTrue(element(app, "v15.f3b2.mac.create.sheet").waitForExistence(timeout: 5)); app.terminate()
+        element(app, "v15.f3b2.mac.create").click(); XCTAssertTrue(element(app, "v15.f3b2.mac.create.sheet").waitForExistence(timeout: 5)); attachV220(app, name: "v220-mac-F3B2MacGalleryUITests-app")
+        app.terminate()
     }
 
     func testNoKeyUpdateAndCommandRecoveryControlsCompileIntoInspector() {

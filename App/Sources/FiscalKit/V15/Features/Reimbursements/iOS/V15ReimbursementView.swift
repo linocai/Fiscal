@@ -64,13 +64,10 @@ public struct V15ReimbursementView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
-            Text("从垫付到到账，逐笔可追溯").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
-            Text("预览会列出金额、状态和到账分配，确认前不会保存。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
+            V22PageHeader("报销", symbol: "arrow.down.left.circle", subtitle: "垫付、待收与到账记录")
             V15ActionButton("新建报销单", symbol: "plus", disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时只可查看，无法新建报销单。", fieldPath: nil) : nil) { Task { await model.openNewClaim() } }
                 .accessibilityIdentifier("v15.f3c.claim.new.open")
         }
-        .padding(V15Spacing.md)
-        .v15IOSCard()
     }
 
     @ViewBuilder private var listSurface: some View {
@@ -106,7 +103,7 @@ public struct V15ReimbursementView: View {
                 Spacer()
                 Text(V15MoneyPresentation(minorUnits: claim.outstandingMinor, direction: .inflow, includeCurrency: true).text).font(V15Typography.money).foregroundStyle(V15Palette.teal.color).monospacedDigit()
             }
-            V15Section("报销金额矩阵") {
+            V15Section("报销进度") {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 125), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
                     claimAmountFact("已申报", claim.totalClaimedMinor)
                     claimAmountFact("已到账", claim.receivedMinor)
@@ -219,6 +216,7 @@ public struct V15ReimbursementView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.md) {
+                    V22PageHeader(operationTitle(sheet), symbol: "doc.text")
                     factRefreshSurface
                     secondarySurface
                     directSurface
@@ -233,7 +231,7 @@ public struct V15ReimbursementView: View {
             }
             .scrollDismissesKeyboard(.immediately)
             .v15IOSScreenCanvas()
-            .navigationTitle(operationTitle(sheet))
+            .navigationTitle(operationTitle(sheet)).v22CompactNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭") { operationSheet = nil } }
                 if case .receiptReplacement(let id) = sheet,
@@ -255,10 +253,12 @@ public struct V15ReimbursementView: View {
         if let claim = model.selectedClaim {
             Text("先编辑并查看完整预览；修改任何输入后需要重新预览。")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+            V22FormSection("报销信息") {
             V15Field("报销标题", text: Binding(get: { model.claimReplacementTitle }, set: { model.claimReplacementTitle = $0 }), issues: issues(model.secondaryIssues, prefix: "title"))
                 .accessibilityIdentifier("v15.f3c.replace.title")
             V15Field("备注", text: Binding(get: { model.claimReplacementNote }, set: { model.claimReplacementNote = $0 }))
                 .accessibilityIdentifier("v15.f3c.replace.note")
+            }
             V15ActionButton("预览报销单修改", kind: .secondary, disabledReasons: model.claimReplacementPreviewReasons(for: claim)) { Task { await model.previewCurrentClaimReplacement() } }
                 .accessibilityIdentifier("v15.f3c.replace.preview")
         }
@@ -307,12 +307,13 @@ public struct V15ReimbursementView: View {
         if let claim = model.selectedClaim, let receipt = model.receipts.first(where: { $0.id == id }) {
             Text("当事人和收款账户沿用原记录；金额、日期和标题需要重新预览。")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+            V22FormSection("修改到账信息") {
+            V15AmountInput(text: Binding(get: { model.receiptReplacementAmountText }, set: { model.receiptReplacementAmountText = $0 }), issues: issues(model.secondaryIssues, prefix: "amount_minor"), accessibilityIdentifier: "v15.f3c.receipt.replace.amount")
             V15Field("到账标题", text: Binding(get: { model.receiptReplacementTitle }, set: { model.receiptReplacementTitle = $0 }), issues: issues(model.secondaryIssues, prefix: "title"))
                 .accessibilityIdentifier("v15.f3c.receipt.replace.title")
             V15Field("到账日期", text: Binding(get: { model.receiptReplacementDateText }, set: { model.receiptReplacementDateText = $0 }), prompt: "YYYY-MM-DD", issues: issues(model.secondaryIssues, prefix: "received_at"))
                 .accessibilityIdentifier("v15.f3c.receipt.replace.date")
-            V15Field("到账金额（元）", text: Binding(get: { model.receiptReplacementAmountText }, set: { model.receiptReplacementAmountText = $0 }), issues: issues(model.secondaryIssues, prefix: "amount_minor"), keyboard: .decimal)
-                .accessibilityIdentifier("v15.f3c.receipt.replace.amount")
+            }
             V15FieldIssues(issues: model.receiptReplacementPreviewReasons(for: receipt, claim: claim).map {
                 .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath)
             })
@@ -359,15 +360,19 @@ public struct V15ReimbursementView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.md) {
                     sheetBanner(model.newClaimPhase, serverIssues: model.newClaimServerIssues)
+                    V22PageHeader("新建报销单", symbol: "doc.badge.plus")
+                    V22FormSection("报销信息") {
                     V15Field("报销标题", text: Binding(get: { model.claimTitle }, set: { model.claimTitle = $0 }), prompt: "例如：八月差旅报销", issues: issues(model.newClaimIssues, prefix: "title"))
                         .accessibilityIdentifier("v15.f3c.claim.title")
                     V15Field("当事人", text: Binding(get: { model.partyName }, set: { model.partyName = $0 }), prompt: "例如：公司", issues: issues(model.newClaimIssues, prefix: "parties[0].name"))
                         .accessibilityIdentifier("v15.f3c.claim.party")
                     V15Field("预计日期", text: Binding(get: { model.expectedDateText }, set: { model.expectedDateText = $0 }), prompt: "YYYY-MM-DD", issues: issues(model.newClaimIssues, prefix: "parties[0].expected_date"))
                         .accessibilityIdentifier("v15.f3c.claim.date")
+                    }
                     candidateSurface
-                    V15Field("分摊金额（元）", text: Binding(get: { model.allocationAmountText }, set: { model.allocationAmountText = $0 }), prompt: "0.00", issues: issues(model.newClaimIssues, prefix: "parties[0].allocations[0].amount_minor"), keyboard: .decimal)
-                        .accessibilityIdentifier("v15.f3c.claim.amount")
+                    V22FormSection("本次申报金额") {
+                        V15AmountInput(text: Binding(get: { model.allocationAmountText }, set: { model.allocationAmountText = $0 }), issues: issues(model.newClaimIssues, prefix: "parties[0].allocations[0].amount_minor"), accessibilityIdentifier: "v15.f3c.claim.amount")
+                    }
                     V15ActionButton(
                         "创建报销单",
                         symbol: "checkmark",
@@ -404,7 +409,7 @@ public struct V15ReimbursementView: View {
                         VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                             HStack { Text(candidate.title).font(V15Typography.body); Spacer(); Text(money(candidate.availableMinor)).font(V15Typography.money).monospacedDigit() }
                             Text("\(candidate.businessDate) · \(candidate.categoryID == nil ? "未分类（允许）" : "已分类")").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                            ForEach(candidate.eligibility.reasonDetails, id: \.code) { reason in Text("\(reason.fieldPath.map { "\($0)：" } ?? "")\(reason.message)").font(V15Typography.secondary).foregroundStyle(V15Palette.teal.color) }
+                            ForEach(candidate.eligibility.reasonDetails, id: \.code) { reason in Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.teal.color) }
                         }.padding(V15Spacing.sm).background(model.selectedCandidate?.transactionID == candidate.transactionID ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
                     }.buttonStyle(.plain).disabled(!candidate.eligibility.eligible).accessibilityIdentifier("v15.f3c.candidate.\(candidate.transactionID)")
                 }
@@ -418,15 +423,18 @@ public struct V15ReimbursementView: View {
                 VStack(alignment: .leading, spacing: V15Spacing.md) {
                     factRefreshSurface
                     sheetBanner(model.receiptPhase, serverIssues: model.receiptServerIssues)
+                    V22PageHeader("登记到账", symbol: "arrow.down.left.circle")
                     if let claim = model.selectedClaim {
                         V15Section("到账当事人") {
                             ForEach(claim.parties, id: \.id) { party in Button { model.chooseParty(party.id) } label: { HStack { Text(party.name); Spacer(); Text("未到账 \(money(party.outstandingMinor))") }.padding(V15Spacing.sm).background(model.selectedPartyID == party.id ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }.buttonStyle(.plain).disabled(party.outstandingMinor <= 0).accessibilityIdentifier("v15.f3c.receipt.party.\(party.id)") }
                         }
                     }
-                    V15Field("到账标题", text: Binding(get: { model.receiptTitle }, set: { model.receiptTitle = $0 }), prompt: "例如：公司回款", issues: issues(model.receiptIssues, prefix: "title")).accessibilityIdentifier("v15.f3c.receipt.title")
-                    V15Field("到账日期", text: Binding(get: { model.receiptDateText }, set: { model.receiptDateText = $0 }), prompt: "YYYY-MM-DD", issues: issues(model.receiptIssues, prefix: "received_at")).accessibilityIdentifier("v15.f3c.receipt.date")
-                    V15Field("到账金额（元）", text: Binding(get: { model.receiptAmountText }, set: { model.receiptAmountText = $0 }), prompt: "0.00", issues: issues(model.receiptIssues, prefix: "amount_minor"), keyboard: .decimal).accessibilityIdentifier("v15.f3c.receipt.amount")
-                    receiptAccountSurface
+                    V22FormSection("本次到账") {
+                        V15AmountInput(text: Binding(get: { model.receiptAmountText }, set: { model.receiptAmountText = $0 }), issues: issues(model.receiptIssues, prefix: "amount_minor"), accessibilityIdentifier: "v15.f3c.receipt.amount")
+                        V15Field("到账标题", text: Binding(get: { model.receiptTitle }, set: { model.receiptTitle = $0 }), prompt: "例如：公司回款", issues: issues(model.receiptIssues, prefix: "title")).accessibilityIdentifier("v15.f3c.receipt.title")
+                        V15Field("到账日期", text: Binding(get: { model.receiptDateText }, set: { model.receiptDateText = $0 }), prompt: "YYYY-MM-DD", issues: issues(model.receiptIssues, prefix: "received_at")).accessibilityIdentifier("v15.f3c.receipt.date")
+                        receiptAccountSurface
+                    }
                     V15ActionButton(
                         "预览到账影响",
                         kind: .secondary,

@@ -6,7 +6,12 @@ import XCTest
         app.terminate(); app = XCUIApplication(); app.launchArguments = ["--v15-f3b1-route", route] + extra; app.launch()
         XCTAssertTrue(app.otherElements["v15.f3b1.credit.ios"].waitForExistence(timeout: 8))
     }
-    private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
+    private func element(_ id: String) -> XCUIElement {
+        if id == "v15.f3b1.schedule.statement-day" || id == "v15.f3b1.schedule.due-day" {
+            return app.textFields[id].firstMatch
+        }
+        return app.descendants(matching: .any)[id].firstMatch
+    }
     private func replace(_ value: String, in element: XCUIElement) { element.tap(); element.press(forDuration: 0.8); app.menuItems["Select All"].tap(); element.typeText(value) }
     private func attach(_ name: String) { let value = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); value.name = name; value.lifetime = .keepAlways; add(value) }
 

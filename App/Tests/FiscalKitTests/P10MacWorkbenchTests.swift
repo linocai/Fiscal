@@ -41,12 +41,14 @@ struct V151MacLedgerScopeTests {
     #expect(V151MacAccountBalanceSemantics.kindLabel(.cash) == "现金")
     #expect(V151MacAccountBalanceSemantics.kindLabel(.debit) == "借记")
     #expect(V151MacAccountBalanceSemantics.kindLabel(.credit) == "信用")
-    #expect(V151MacAccountBalanceSemantics.amountLabel(.cash) == "余额")
-    #expect(V151MacAccountBalanceSemantics.amountLabel(.debit) == "余额")
-    #expect(V151MacAccountBalanceSemantics.amountLabel(.credit) == "欠款")
+    #expect(V151MacAccountBalanceSemantics.amountLabel(.cash, minorUnits: 100) == "余额")
+    #expect(V151MacAccountBalanceSemantics.amountLabel(.debit, minorUnits: 100) == "余额")
+    #expect(V151MacAccountBalanceSemantics.amountLabel(.credit, minorUnits: 100) == "欠款")
     #expect(V151MacAccountBalanceSemantics.direction(.debit, minorUnits: 100) == .balance)
     #expect(V151MacAccountBalanceSemantics.direction(.credit, minorUnits: 100) == .outflow)
     #expect(V151MacAccountBalanceSemantics.direction(.credit, minorUnits: 0) == .balance)
+    #expect(V151MacAccountBalanceSemantics.amountLabel(.credit, minorUnits: -100) == "信用溢缴")
+    #expect(V151MacAccountBalanceSemantics.direction(.credit, minorUnits: -100) == .neutral)
   }
 
   @Test("Month context uses the Shanghai business-month range")

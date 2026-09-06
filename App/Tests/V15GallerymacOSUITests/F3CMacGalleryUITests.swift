@@ -14,12 +14,14 @@ import XCTest
         XCTAssertFalse(app.staticTexts["请填写报销标题。"].exists)
         XCTAssertFalse(app.staticTexts["请填写报销当事人。"].exists)
         XCTAssertFalse(app.staticTexts["请选择一笔垫付。"].exists)
+        attachV220(app, name: "v220-mac-F3CMacGalleryUITests-app")
         app.terminate()
 
         let receipt = launchGalleryMac(["--v15-f3c-route", "reimbursements"])
         XCTAssertTrue(element(receipt, "v15.f3c.reimbursements.macos").waitForExistence(timeout: 10))
         element(receipt, "v15.f3c.mac.receipt.open").click()
         XCTAssertTrue(element(receipt, "v15.f3c.mac.receipt.inspector").waitForExistence(timeout: 6))
+        attachV220(receipt, name: "v220-mac-F3CMacGalleryUITests-receipt")
         receipt.terminate()
     }
 

@@ -67,12 +67,27 @@ struct V15RootSmokeiOSApp: App {
             } else if formalFixture {
                 // Test-only host: this is the actual formal workspace, fed by
                 // deterministic read-only facts rather than the Gallery shell.
-                V151IOSWorkspace(services: V15F2BFixtures.services(route: formalFixtureRoute))
+                V151IOSWorkspace(services: V15F2BFixtures.services(route: formalFixtureRoute, reviewScenario: ProcessInfo.processInfo.environment["FISCAL_ROOT_SMOKE_REVIEW_SCENARIO"] ?? ""))
                     .preferredColorScheme(preferredScheme)
+                    .overlay(alignment: .topLeading) { V220AccessibilitySettingsMarker() }
             } else {
                 IOSRootView(services: services, bootstrapAccessKey: APIConfiguration.bootstrapAccessKey())
             }
         }
+    }
+}
+
+/// Read actual device settings; these EnvironmentValues are read-only.
+private struct V220AccessibilitySettingsMarker: View {
+    @Environment(\.accessibilityReduceMotion) private var motion
+    @Environment(\.accessibilityReduceTransparency) private var transparency
+    var body: some View {
+        Color.clear.frame(width: 1, height: 1)
+            .accessibilityElement()
+            .accessibilityLabel("辅助功能验证")
+            .accessibilityValue("motion=\(motion);transparency=\(transparency)")
+            .accessibilityIdentifier("v220.qa.accessibility-settings")
+            .allowsHitTesting(false)
     }
 }
 

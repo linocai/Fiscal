@@ -38,10 +38,17 @@ public struct V15InstallmentMacView: View {
     public var body: some View {
         Group {
             #if os(macOS)
-            HSplitView {
-                spine.frame(minWidth: V15MacLayout.compactInstallmentWidths.spine, idealWidth: 300, maxWidth: 380)
-                schedule.frame(minWidth: V15MacLayout.compactInstallmentWidths.schedule, idealWidth: 560, maxWidth: .infinity)
-                inspector.frame(minWidth: V15MacLayout.compactInstallmentWidths.inspector, idealWidth: 410, maxWidth: 520)
+            GeometryReader { geometry in
+            VStack(alignment: .leading, spacing: 20) {
+                V22PageHeader("分期计划", symbol: "calendar.badge.clock", subtitle: "消费、每期账单与未来待还安排")
+                HSplitView {
+                    spine.frame(minWidth: V15MacLayout.compactInstallmentWidths.spine, idealWidth: 270, maxWidth: 330)
+                    schedule.frame(minWidth: V15MacLayout.compactInstallmentWidths.schedule, idealWidth: 480, maxWidth: .infinity)
+                    inspector.frame(minWidth: V15MacLayout.compactInstallmentWidths.inspector, idealWidth: 360, maxWidth: 440)
+                }
+            }
+            .padding(.vertical, 24)
+            .padding(.horizontal, geometry.size.width < 1_000 ? 4 : 24)
             }
             #else
             HStack(spacing: 0) {
@@ -210,13 +217,15 @@ public struct V15InstallmentMacView: View {
 
     private var editInspector: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
+            V22FormSection("修改分期") {
             Text("修改计划").font(V15Typography.cardTitle)
             V15Field("标题", text: $model.editTitle, issues: model.fieldIssues.filter { $0.fieldPath == "purchase.title" })
-            V15Field("消费金额（元）", text: $model.editAmountText, issues: model.fieldIssues.filter { $0.fieldPath == "purchase.amount_minor" })
+            V15AmountInput(text: $model.editAmountText, issues: model.fieldIssues.filter { $0.fieldPath == "purchase.amount_minor" })
             V15Field("期数", text: $model.editCountText, issues: model.fieldIssues.filter { $0.fieldPath == "installment_count" })
             V15Field("手续费（元）", text: $model.editFeeText, issues: model.fieldIssues.filter { $0.fieldPath == "total_fee_minor" })
             if positiveFee(model.editFeeText) { feeDetails(categoryID: $model.editFeeCategoryID, occurredDateText: $model.editFeeOccurredDateText, prefix: "v15.f3b2.mac.edit") }
             V15Field("起始账单日", text: $model.editStartStatementDate, issues: model.fieldIssues.filter { $0.fieldPath == "start_statement_date" })
+            }
             V15ActionButton("预览", disabledReason: model.planPreviewDisabledReason) { Task { await model.requestPlanPreview() } }.accessibilityIdentifier("v15.f3b2.mac.edit.preview")
             if let preview = model.planPreview { V15PreviewState(version: "修改预览") { V15InstallmentPlanPreviewDetails(preview: preview, prefix: "v15.f3b2.mac.edit.preview-detail") }.accessibilityIdentifier("v15.f3b2.mac.edit.preview-result") }
             V15ActionButton("确认修改", disabledReason: model.planCommitDisabledReason) { Task { await model.commitPlanUpdate() } }.accessibilityIdentifier("v15.f3b2.mac.edit.commit")
@@ -240,11 +249,12 @@ public struct V15InstallmentMacView: View {
 
     private var commandInspector: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            Text("计划操作").font(V15Typography.cardTitle)
+            V22FormSection("计划操作") {
             Picker("操作", selection: $model.commandKind) { ForEach(V15InstallmentModel.CommandKind.allCases) { Text($0.title).tag($0) } }.pickerStyle(.menu).accessibilityIdentifier("v15.f3b2.mac.command.kind")
             if model.commandKind == .settleEarly {
                 Picker("付款账户", selection: $model.paymentAccountID) { Text("请选择").tag(UUID?.none); ForEach(model.paymentAccounts) { Text($0.name).tag(Optional($0.id)) } }.pickerStyle(.menu)
                 V15Field("目标账单日", text: $model.targetStatementDate, issues: model.fieldIssues.filter { $0.fieldPath == "target_statement_date" })
+            }
             }
             V15ActionButton("查看操作预览", disabledReason: model.commandPreviewDisabledReason) { Task { await model.requestCommandPreview() } }.accessibilityIdentifier("v15.f3b2.mac.command.preview")
             if let preview = model.commandPreview { V15PreviewState { V15InstallmentCommandPreviewDetails(preview: preview, prefix: "v15.f3b2.mac.command.preview-detail") }.accessibilityIdentifier("v15.f3b2.mac.command.preview-result") }
@@ -299,7 +309,7 @@ private struct V15InstallmentMacCreationView: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            HStack { Text(mode == .purchase ? "新分期消费" : "已有消费转分期").font(V15Typography.surfaceTitle); Spacer(); Button("关闭") { dismiss() }.accessibilityIdentifier("v15.f3b2.mac.create.dismiss") }
+            HStack { V22PageHeader(mode == .purchase ? "新分期消费" : "已有消费转分期", symbol: "calendar.badge.plus"); Button("关闭") { dismiss() }.accessibilityIdentifier("v15.f3b2.mac.create.dismiss") }
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.md) {
                     if let failure = model.serverFailure { V15ServiceErrorState(message: failure.message) {} }
@@ -310,17 +320,24 @@ private struct V15InstallmentMacCreationView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-        }.padding(V15Spacing.xl).accessibilityIdentifier("v15.f3b2.mac.create.sheet")
+        }.padding(V15Spacing.xl).v22PageCanvas().accessibilityIdentifier("v15.f3b2.mac.create.sheet")
     }
 
     private var purchaseForm: some View {
         Group {
-            V15Field("标题", text: $model.newPurchaseTitle); V15Field("金额（元）", text: $model.newPurchaseAmountText)
-            Picker("信用账户", selection: $model.newPurchaseAccountID) { Text("请选择").tag(UUID?.none); ForEach(model.creditAccounts) { Text($0.name).tag(Optional($0.id)) } }.pickerStyle(.menu)
-            purchaseCategorySurface
-            HStack { V15Field("期数", text: $model.newPurchaseCountText); V15Field("手续费（元）", text: $model.newPurchaseFeeText) }
-            if positiveFee(model.newPurchaseFeeText) { feeDetails(categoryID: $model.newPurchaseFeeCategoryID, occurredDateText: $model.newPurchaseFeeOccurredDateText, prefix: "v15.f3b2.mac.purchase") }
-            V15Field("起始账单日", text: $model.newPurchaseStartStatementDate); V15FieldIssues(issues: model.fieldIssues)
+            V22FlowProgress(["消费", "分期", "确认"], current: model.purchasePreview == nil ? 0 : 2)
+            V22FormSection("消费信息") {
+                V15AmountInput(text: $model.newPurchaseAmountText)
+                V15Field("消费名称", text: $model.newPurchaseTitle)
+                V15PickerRow("信用账户", selection: $model.newPurchaseAccountID) { Text("请选择").tag(UUID?.none); ForEach(model.creditAccounts) { Text($0.name).tag(Optional($0.id)) } }
+                purchaseCategorySurface
+            }
+            V22FormSection("分期安排") {
+                HStack(alignment: .top, spacing: 20) { V15Field("期数", text: $model.newPurchaseCountText); V15Field("手续费（元）", text: $model.newPurchaseFeeText) }
+                if positiveFee(model.newPurchaseFeeText) { feeDetails(categoryID: $model.newPurchaseFeeCategoryID, occurredDateText: $model.newPurchaseFeeOccurredDateText, prefix: "v15.f3b2.mac.purchase") }
+                V15Field("起始账单日", text: $model.newPurchaseStartStatementDate)
+            }
+            V15FieldIssues(issues: model.fieldIssues)
             V15ActionButton("查看分期预览", disabledReason: model.purchasePreviewDisabledReason) { Task { await model.requestPurchasePreview() } }.accessibilityIdentifier("v15.f3b2.mac.purchase.preview")
             if let preview = model.purchasePreview { V15PreviewState { V15InstallmentPurchasePreviewDetails(preview: preview, prefix: "v15.f3b2.mac.purchase.preview-detail") }.accessibilityIdentifier("v15.f3b2.mac.purchase.preview-result") }
             V15ActionButton("确认创建", disabledReason: model.purchaseCommitDisabledReason) { Task { await model.commitPurchase() } }.accessibilityIdentifier("v15.f3b2.mac.purchase.commit")
@@ -330,7 +347,7 @@ private struct V15InstallmentMacCreationView: View {
 
     private var existingPurchaseForm: some View {
         Group {
-            V15Section("第 1 步 · 找到信用消费") {
+            V22FormSection("选择信用消费") {
                 V15Field("消费账目 ID", text: $model.purchaseTransactionIDText, issues: model.fieldIssues.filter { $0.fieldPath == "purchase_transaction_id" })
                     .accessibilityIdentifier("v15.f3b2.mac.eligibility.transaction")
                 V15ActionButton(
@@ -341,7 +358,7 @@ private struct V15InstallmentMacCreationView: View {
                     .accessibilityIdentifier("v15.f3b2.mac.eligibility.check")
                 eligibilitySurface
             }
-            V15Section("第 2 步 · 设置计划") {
+            V22FormSection("分期安排") {
                 V15Field("期数", text: $model.createInstallmentCountText, issues: model.fieldIssues.filter { $0.fieldPath == "installment_count" })
                 V15Field("手续费（元）", text: $model.createFeeText, issues: model.fieldIssues.filter { $0.fieldPath == "total_fee_minor" })
                 if positiveFee(model.createFeeText) { feeDetails(categoryID: $model.createFeeCategoryID, occurredDateText: $model.createFeeOccurredDateText, prefix: "v15.f3b2.mac.existing") }

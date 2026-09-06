@@ -18,17 +18,25 @@ public struct V15StatementImportMacView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 20) {
             toolbar
-            Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
-            HStack(spacing: 0) {
+            V22FlowProgress(["选择与解析", "核对明细", "确认入账"], current: model.receipt != nil ? 2 : model.workbench != nil ? 1 : 0)
+            if model.batch == nil && model.workbench == nil {
+                ScrollView {
+                    VStack(spacing: 24) { phaseFallback; intakeStatus }
+                        .frame(maxWidth: .infinity).padding(.vertical, 32)
+                }
+            } else {
+            HStack(spacing: 16) {
                 evidencePane.frame(minWidth: V15MacLayout.compactStatementImportWidths.evidence, idealWidth: 260, maxWidth: 300)
                 Divider()
                 rowPane.frame(minWidth: V15MacLayout.compactStatementImportWidths.rows, maxWidth: .infinity)
                 Divider()
                 inspector.frame(minWidth: V15MacLayout.compactStatementImportWidths.inspector, idealWidth: 340, maxWidth: 390)
             }
+            }
         }
+        .padding(24)
         .v15MacWorkspaceCanvas()
         .accessibilityElement(children: .contain)
         .fileImporter(isPresented: $importer, allowedContentTypes: [.pdf], allowsMultipleSelection: false) { result in
@@ -55,7 +63,7 @@ public struct V15StatementImportMacView: View {
 
     private var toolbar: some View {
         HStack(spacing: 12) {
-            Text("账单导入").font(V15Typography.cardTitle)
+            V22PageHeader("账单导入", symbol: "doc.text.viewfinder")
             if let batch = model.batch {
                 Text(batch.displayName).font(V15Typography.secondary)
                 Text(batch.status.displayName)
@@ -72,9 +80,7 @@ public struct V15StatementImportMacView: View {
                 .accessibilityIdentifier("v15.f3g.mac.reload")
             V15ActionButton(model.preview.map { "确认已选 \($0.counts.selected) 行" } ?? "确认已选行", disabledReasons: model.previewReasons, showsDisabledReasons: false, accessibilityIdentifier: "v15.f3g.mac.preview") { model.requestPreview(); confirmation = true }
         }
-        .padding(.horizontal, 18)
-        .frame(height: 50)
-        .background(V15Palette.card.color)
+        .padding(.vertical, 4)
     }
 
     private var evidencePane: some View {
@@ -125,7 +131,7 @@ public struct V15StatementImportMacView: View {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 Toggle("仅发送脱敏内容", isOn: $model.providerAuthorized)
                     .accessibilityIdentifier("v15.f3g.mac.provider-consent")
-                Text("execution_scope = request_bound").font(V15Typography.secondary.monospacedDigit())
+                Text("授权仅用于这次账单解析，离开或取消后不会在后台继续。").font(V15Typography.secondary)
                 Button("开始解析") { model.requestProviderAttempt() }
                     .disabled(!model.providerAuthorized || !model.writeReasons.isEmpty)
             }
@@ -209,7 +215,7 @@ public struct V15StatementImportMacView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("行").font(V15Typography.surfaceTitle)
+                    Text("账单明细").font(V15Typography.cardTitle)
                     if let board = model.workbench {
                         let resolved = board.rows.filter { $0.draft?.resolution.isExecutable == true }.count
                         Text("\(board.rows.count) 行 · 已处置 \(resolved) · 待定 \(board.rows.count - resolved)")
@@ -368,6 +374,7 @@ public struct V15StatementImportMacView: View {
             .buttonStyle(.borderedProminent)
             .tint(V15Palette.teal.color)
             .accessibilityIdentifier("v15.f3g.mac.empty.pick-file")
+            .disabled(!model.writeReasons.isEmpty)
             HStack(spacing: 5) {
                 ForEach(["选择文件", "本机提取", "解析", "逐行处置", "预览", "确认"], id: \.self) { phase in
                     Text(phase).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62))
@@ -455,8 +462,7 @@ public struct V15StatementImportMacView: View {
                     }
                 }
             }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("这一行是什么").font(V15Typography.label)
+            V22FormSection("处理这笔明细") {
                 resolutionButton("新建交易", resolution: .createNew, row: row)
                 resolutionButton("匹配已有", resolution: .matchExisting, row: row, disabled: row.candidates.allSatisfy { $0.transactionID == nil })
                 resolutionButton("非交易行", resolution: .ignoreNonTransaction, row: row)
@@ -513,7 +519,8 @@ public struct V15StatementImportMacView: View {
 
     private var confirmationSheet: some View {
         VStack(alignment: .leading, spacing: V15Spacing.lg) {
-            Text("确认预览").font(V15Typography.surfaceTitle)
+            V22PageHeader("确认导入", symbol: "checkmark.shield", subtitle: "核对本次选择的明细与金额")
+            V22FlowProgress(["选择与解析", "核对明细", "确认入账"], current: 2)
             confirmationContent
             Spacer(minLength: 0)
         }
@@ -551,7 +558,7 @@ public struct V15StatementImportMacView: View {
                 metric("跳过", preview.counts.ignoreNonTransaction + preview.counts.ignoreIntentional)
                 metric("批次待定", preview.counts.batchUnresolved)
             }
-            V15Section("已知金额合计") {
+            V22FormSection("本次已知金额合计") {
                 V15MoneyText(minorUnits: preview.amounts.knownTotalMinor, direction: .neutral, font: V15Typography.moneyLarge)
                 Text("未知来源 \(preview.amounts.unknownSelectedCount) 行不参与相加。 ").font(V15Typography.secondary)
             }

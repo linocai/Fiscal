@@ -36,29 +36,17 @@ private struct V15StateContainer<Content: View>: View {
     let content: Content
     init(marker: Color, background: Color, dashed: Bool = false, @ViewBuilder content: () -> Content) { self.marker = marker; self.background = background; self.dashed = dashed; self.content = content() }
     var body: some View {
-#if os(iOS)
-        VStack(alignment: .leading, spacing: V15Spacing.sm) {
-            HStack(spacing: V15Spacing.xs) {
-                Circle().fill(marker).frame(width: 8, height: 8)
-                Rectangle().fill(marker.opacity(0.34)).frame(maxWidth: .infinity).frame(height: 1)
-            }
+        HStack(alignment: .top, spacing: 12) {
+            Circle().fill(marker).frame(width: 7, height: 7)
+                .padding(.top, 7).accessibilityHidden(true)
             content.frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(V15Spacing.md)
-        .background(background, in: RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous))
+        .padding(18)
+        .background(background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous)
-                .stroke(marker.opacity(0.52), style: StrokeStyle(lineWidth: 1, dash: dashed ? [5, 4] : []))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(marker.opacity(dashed ? 0.48 : 0.22), style: StrokeStyle(lineWidth: 1, dash: dashed ? [5, 4] : []))
         }
-#else
-        HStack(alignment: .top, spacing: V15Spacing.sm) {
-            RoundedRectangle(cornerRadius: 2).fill(marker).frame(width: 4).accessibilityHidden(true)
-            content.frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(V15Spacing.md)
-        .background(background, in: UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: V15Radius.control, topTrailingRadius: V15Radius.control))
-        .overlay { UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: V15Radius.control, topTrailingRadius: V15Radius.control).stroke(marker.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: dashed ? [4, 3] : [])) }
-#endif
     }
 }
 
@@ -155,7 +143,11 @@ public struct V15EmptyState: View {
     public init(title: String, explanation: String, actionTitle: String? = nil, action: (() -> Void)? = nil) { self.title = title; self.explanation = explanation; self.actionTitle = actionTitle; self.action = action }
     public var body: some View {
         VStack(spacing: V15Spacing.sm) {
-            Image(systemName: "tray").font(.title2).foregroundStyle(V15Palette.ink.color.opacity(0.66)).accessibilityHidden(true)
+            Image(systemName: "tray").font(.system(size: 26, weight: .regular))
+                .foregroundStyle(V15Palette.teal.color)
+                .frame(width: 64, height: 64)
+                .background(V15Palette.selected.color, in: RoundedRectangle(cornerRadius: 22))
+                .padding(.bottom, 8).accessibilityHidden(true)
             Text(title).font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color).multilineTextAlignment(.center)
             Text(explanation).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             if let actionTitle, let action { V15ActionButton(actionTitle, action: action) }

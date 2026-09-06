@@ -40,7 +40,7 @@ public struct V15StatementImportView: View {
                 .frame(maxWidth: 680, alignment: .leading)
             }
             .v15IOSScreenCanvas()
-            .navigationTitle("账单导入")
+            .navigationTitle("账单导入").v22CompactNavigationTitle()
             .toolbar {
 #if os(iOS)
                 if let closeAction {
@@ -78,23 +78,24 @@ public struct V15StatementImportView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: V15Spacing.xs) {
-            Text("本地脱敏，人工确认入账").font(V15Typography.surfaceTitle)
-            Text("原始 PDF 不会长期保存；确认前不会把内容记到账目。")
-                .font(V15Typography.body)
-                .foregroundStyle(V15Palette.ink.color.opacity(0.68))
-                .fixedSize(horizontal: false, vertical: true)
+            V22PageHeader("账单导入", symbol: "doc.text.viewfinder", subtitle: "选一份账单，逐笔核对后入账")
+            V22FlowProgress(["选择与解析", "核对明细", "确认入账"], current: model.receipt != nil ? 2 : model.workbench != nil ? 1 : 0)
+                .padding(.top, 12)
             if let snapshot = model.offlineSnapshotAt {
                 V15OfflineReadOnlyBanner(snapshotAt: snapshot).accessibilityIdentifier("v15.f3g.offline")
             }
         }
-        .padding(V15Spacing.md)
-        .v15IOSCard()
     }
 
     private var intake: some View {
-        V15Section("1 · 授权与提取") {
+        V22FormSection("选择账单", subtitle: "支持 PDF，原始文件仅在本机提取") {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                Button("选择本地 PDF") { importing = true }
+                Button { importing = true } label: {
+                    Label(model.batch == nil ? "选择 PDF 文件" : "选择另一份账单", systemImage: "doc.badge.plus")
+                        .font(V15Typography.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 56)
+                        .background(V15Palette.selected.color, in: RoundedRectangle(cornerRadius: 14))
+                }.buttonStyle(.plain)
                     .accessibilityIdentifier("v15.f3g.pick-file")
                     .disabled(!model.writeReasons.isEmpty)
                 Label("本机提取文本与位置框", systemImage: "checkmark.shield")
@@ -117,20 +118,20 @@ public struct V15StatementImportView: View {
     @ViewBuilder private var progress: some View {
         switch model.phase {
         case .localProcessing, .registering, .extracting:
-            V15Section("2 · 提取进度") {
+            V22FormSection("正在读取账单") {
                 V15LoadingSkeleton().accessibilityIdentifier("v15.f3g.local-processing")
                 Text("可以离开；当前设备上的原始文件和临时提取会丢弃，导入进度仍可继续。")
                     .font(V15Typography.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         case .awaitingProviderConsent:
-            V15Section("2 · 解析授权") {
+            V22FormSection("本次解析授权") {
                 VStack(alignment: .leading, spacing: V15Spacing.sm) {
                     Button { model.providerAuthorized.toggle() } label: {
                         Label(model.providerAuthorized ? "已确认仅发送脱敏内容" : "确认仅发送脱敏文字和页面位置", systemImage: model.providerAuthorized ? "checkmark.shield.fill" : "shield")
                     }
                     .accessibilityIdentifier("v15.f3g.provider-consent")
-                    Text("本次范围 request_bound；离开、断线或取消不会在后台继续。")
+                    Text("授权仅用于这次解析；离开、断线或取消后，解析不会在后台继续。")
                         .font(V15Typography.secondary)
                     V15ActionButton("开始解析", disabledReason: (!model.providerAuthorized ? .init(code: "consent_required", message: "请先确认本次脱敏信息授权。", fieldPath: nil) : model.writeReasons.first), accessibilityIdentifier: "v15.f3g.provider-start") {
                         model.requestProviderAttempt()
@@ -146,7 +147,7 @@ public struct V15StatementImportView: View {
                     .disabled(model.isOffline || model.writeReasons.contains { $0.code == "unknown_import_status" })
             }
         case .reviewing:
-            V15Section("3 · 校验账单") {
+            V22FormSection("核对账单合计") {
                 V15ActionButton("校验账单", symbol: "checkmark.shield", disabledReason: model.writeReasons.first, accessibilityIdentifier: "v15.f3g.validation-run") { model.requestValidation() }
             }
         default:
@@ -156,7 +157,7 @@ public struct V15StatementImportView: View {
 
     @ViewBuilder private var review: some View {
         if let board = model.workbench {
-            V15Section("4 · 逐行审阅") {
+            V15Section("核对明细") {
                 VStack(alignment: .leading, spacing: V15Spacing.md) {
                     batchProgress(board)
                     checkSummary(board)
@@ -251,8 +252,7 @@ public struct V15StatementImportView: View {
                 .padding(V15Spacing.sm)
                 .overlay { RoundedRectangle(cornerRadius: V15Radius.decisionCard).stroke(V15Palette.hairline.color) }
             }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("这一行是什么").font(V15Typography.label)
+            V22FormSection("如何处理这笔明细") {
                 resolutionButton("新建交易", resolution: .createNew, row: row)
                 resolutionButton("匹配已有", resolution: .matchExisting, row: row, disabled: row.candidates.allSatisfy { $0.transactionID == nil })
                 resolutionButton("非交易行", resolution: .ignoreNonTransaction, row: row)
@@ -408,12 +408,14 @@ public struct V15StatementImportView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.lg) {
+                    V22PageHeader("确认导入", symbol: "checkmark.shield", subtitle: "核对本次选择的明细与金额")
+                    V22FlowProgress(["选择与解析", "核对明细", "确认入账"], current: 2)
                     confirmationContent
                 }
                 .padding(V15Spacing.md)
             }
             .v15IOSScreenCanvas()
-            .navigationTitle("确认前检查")
+            .navigationTitle("确认前检查").v22CompactNavigationTitle()
             .toolbar {
                 Button("关闭") { showingConfirmation = false }
                     .accessibilityIdentifier("v15.f3g.preview-dismiss")
@@ -453,7 +455,7 @@ public struct V15StatementImportView: View {
                 previewMetric("匹配", preview.counts.matchExisting)
                 previewMetric("跳过", preview.counts.ignoreNonTransaction + preview.counts.ignoreIntentional)
             }
-            V15Section("已知金额合计") {
+            V22FormSection("本次已知金额合计") {
                 V15MoneyText(minorUnits: preview.amounts.knownTotalMinor, direction: .neutral, font: V15Typography.moneyLarge)
                 Text("未知金额 \(preview.amounts.unknownSelectedCount) 行不参与相加。")
                     .font(V15Typography.secondary)

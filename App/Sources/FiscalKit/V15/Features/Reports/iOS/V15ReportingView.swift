@@ -3,11 +3,13 @@ import SwiftUI
 #if os(iOS)
 public struct V15ReportingView: View {
     @State private var model: V15ReportingModel
+    private let refreshToken: UInt64
 
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialLens: V15ReportingModel.Lens = .overview) {
-        let model = V15ReportingModel(services: services, offlineSnapshotAt: offlineSnapshotAt)
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialLens: V15ReportingModel.Lens = .overview, refreshToken: UInt64 = 0, initialPeriod: V15ReportPeriod = V22ReportCalendar.currentMonth()) {
+        let model = V15ReportingModel(services: services, initialPeriod: initialPeriod, offlineSnapshotAt: offlineSnapshotAt)
         model.selectLens(initialLens)
         _model = State(initialValue: model)
+        self.refreshToken = refreshToken
     }
 
     public var body: some View {
@@ -26,9 +28,8 @@ public struct V15ReportingView: View {
                 .padding(V15Spacing.md)
                 .frame(maxWidth: 760, alignment: .leading)
             }
-            .v15IOSScreenCanvas()
-            .navigationTitle("报表")
-            .navigationBarTitleDisplayMode(.inline)
+            .v22PageCanvas()
+            .v22CompactNavigationTitle()
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Menu {
@@ -53,6 +54,10 @@ public struct V15ReportingView: View {
         .fullScreenCover(isPresented: drillPresented) { drillTakeover }
         .sheet(isPresented: exportPresented) { exportSheet.presentationDetents([.medium, .large]) }
         .task { await model.load() }
+        .task(id: refreshToken) {
+            guard refreshToken != 0 else { return }
+            await model.load()
+        }
         .accessibilityIdentifier("v15.f4a.reports.ios")
     }
 
@@ -72,8 +77,7 @@ public struct V15ReportingView: View {
 
     private var reportHeader: some View {
         VStack(alignment: .leading, spacing: V15Spacing.xs) {
-            Text("收支与资产，一眼看清")
-                .font(V15Typography.surfaceTitle)
+            V22PageHeader("分析", symbol: "chart.line.uptrend.xyaxis", subtitle: "收支与资产，一眼看清")
             if let meta = model.report?.meta {
                 Text("上海业务日 \(meta.dateFrom) 至 \(meta.dateTo) · CNY\n更新于 \(V15TodayReadModel.shanghaiDateLabel(meta.generatedAt))")
                     .font(V15Typography.secondary)
@@ -228,7 +232,10 @@ public struct V15ReportingView: View {
             categoryDistribution(report)
             if let daily = report.daily {
                 reportCard("每日 · \(spendingLabel(model.spendingMeasure))") {
-                    ForEach(daily) { point in valueRow(point.date, dailyAmount(point), .neutral) }
+                    V22SpendingTrend(
+                        points: daily.map { .init(date: $0.date, amountMinor: dailyAmount($0)) },
+                        title: "每日 · \(spendingLabel(model.spendingMeasure))"
+                    )
                 }
             }
         }
@@ -392,6 +399,7 @@ public struct V15ReportingView: View {
                 .padding(V15Spacing.sm)
                 .background(category.categoryID == nil ? V15Palette.provisional.color : Color.clear, in: RoundedRectangle(cornerRadius: V15Radius.control))
                 .overlay(alignment: .leading) { if category.categoryID == nil { Rectangle().fill(V15Palette.provisionalMarker.color).frame(width: 4) } }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(!isEnabled(category.drillCapability))
@@ -408,13 +416,10 @@ public struct V15ReportingView: View {
     private func metricGrid(_ values: [(String, Int64, V15MoneyDirection)]) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: V15Spacing.xs)], spacing: V15Spacing.xs) {
             ForEach(Array(values.enumerated()), id: \.offset) { indexed in
-                VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                    Text(indexed.element.0).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                    V15MoneyText(minorUnits: indexed.element.1, direction: indexed.element.2, font: V15Typography.moneyLarge)
-                }
+                V22Metric(indexed.element.0, minorUnits: indexed.element.1, direction: indexed.element.2)
                 .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-                .padding(.vertical, V15Spacing.sm)
-                .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
+                .padding(V15Spacing.sm)
+                .v22FormSurface()
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("v15.f4a.metric.\(indexed.offset)")
             }
@@ -458,6 +463,7 @@ public struct V15ReportingView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, V15Spacing.xs)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(!isEnabled(account.drillCapability))
@@ -503,8 +509,8 @@ public struct V15ReportingView: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, V15Spacing.md)
-        .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
+        .padding(V15Spacing.md)
+        .v22FormSurface()
     }
 
     private func unavailableCard(_ title: String, _ reason: String) -> some View {
@@ -544,7 +550,7 @@ public struct V15ReportingView: View {
                 .frame(maxWidth: 760, alignment: .leading)
             }
             .v15IOSScreenCanvas()
-            .navigationTitle("报表钻取")
+            .navigationTitle("报表明细")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -2,6 +2,7 @@ import XCTest
 
 @MainActor final class F4AGalleryUITests: XCTestCase {
     private var app = XCUIApplication()
+    override func setUp() { super.setUp(); continueAfterFailure = false }
     private func launch(_ route: String = "reports") {
         app.terminate(); app = XCUIApplication()
         app.launchArguments = ["--v15-f4a-route", route, "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryLarge"]

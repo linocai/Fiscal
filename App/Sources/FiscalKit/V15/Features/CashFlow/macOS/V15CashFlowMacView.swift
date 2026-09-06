@@ -16,35 +16,48 @@ public struct V15CashFlowMacView: View {
     }
 
     public var body: some View {
-        HSplitView {
-            sidebar.frame(minWidth: 190, idealWidth: 220, maxWidth: 250)
-            spine.frame(minWidth: 380, idealWidth: 520, maxWidth: .infinity)
-            inspector.frame(minWidth: 320, idealWidth: 390, maxWidth: 460)
+        VStack(alignment: .leading, spacing: 20) {
+            sidebar
+            HSplitView {
+                spine.frame(minWidth: 320, idealWidth: 520, maxWidth: .infinity)
+                inspector.frame(minWidth: 300, idealWidth: 390, maxWidth: 460)
+            }
         }
-        .v15MacWorkspaceCanvas()
+        .padding(24)
+        .v22PageCanvas()
         .task { if model.phase == .idle { await model.load(); await applyInitialScenario() }; if let initialItem { model.showVerifiedItem(initialItem) } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f3d.cash-flow.macos")
     }
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: V15Spacing.md) {
-            Text("现金流").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
-            Text("计划与实际记录分开显示").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
-            ForEach(Section.allCases, id: \.rawValue) { value in
-                Button { section = value; Task { await model.setVisibleList(value == .active ? .active : .history) } } label: { HStack { Image(systemName: value == .active ? "calendar.badge.clock" : "clock.arrow.circlepath"); Text(value.title); Spacer() }.padding(.horizontal, V15Spacing.sm).padding(.vertical, V15Spacing.xs).background(section == value ? V15Palette.selected.color : .clear, in: RoundedRectangle(cornerRadius: V15Radius.control)) }
-                    .buttonStyle(.plain).v15PlatformHitArea().disabled(model.selectionLocked).accessibilityIdentifier("v15.f3d.mac.section.\(value.rawValue)")
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                V22PageHeader("计划收支", symbol: "calendar.badge.clock", subtitle: "计划与实际入账分开记录")
+                V15ActionButton("新建现金流", symbol: "plus", disabledReasons: model.openCreateReasons) { model.openCreate() }.accessibilityIdentifier("v15.f3d.mac.create.open")
             }
-            Divider()
-            V15PickerRow("账户筛选", selection: Binding(get: { model.accountFilterID }, set: { value in Task { await model.setAccountFilter(value) } })) { Text("全部账户").tag(UUID?.none); ForEach(model.accounts) { Text($0.name).tag(UUID?.some($0.id)) } }
-                .disabled(model.selectionLocked)
-            if section == .history { V15Field("月份", text: Binding(get: { model.historyMonth }, set: { value in Task { await model.setHistoryMonth(value) } }), prompt: "YYYY-MM").disabled(model.selectionLocked).accessibilityIdentifier("v15.f3d.mac.history.month") }
-            Spacer()
+            HStack(spacing: 16) {
+                ForEach(Section.allCases, id: \.rawValue) { value in
+                    Button { section = value; Task { await model.setVisibleList(value == .active ? .active : .history) } } label: {
+                        Label(value.title, systemImage: value == .active ? "calendar.badge.clock" : "clock.arrow.circlepath")
+                            .padding(.horizontal, 14).padding(.vertical, 9)
+                            .background(section == value ? V15Palette.selected.color : .clear, in: Capsule())
+                    }
+                    .buttonStyle(.plain).disabled(model.selectionLocked).accessibilityIdentifier("v15.f3d.mac.section.\(value.rawValue)")
+                }
+                Spacer(minLength: 8)
+                V15PickerRow("账户", selection: Binding(get: { model.accountFilterID }, set: { value in Task { await model.setAccountFilter(value) } })) {
+                    Text("全部账户").tag(UUID?.none)
+                    ForEach(model.accounts) { Text($0.name).tag(UUID?.some($0.id)) }
+                }.disabled(model.selectionLocked)
+                if section == .history {
+                    V15Field("月份", text: Binding(get: { model.historyMonth }, set: { value in Task { await model.setHistoryMonth(value) } }), prompt: "YYYY-MM")
+                        .frame(maxWidth: 150).disabled(model.selectionLocked).accessibilityIdentifier("v15.f3d.mac.history.month")
+                }
+                V15ActionButton("刷新", symbol: V15Symbol.retry, kind: .quiet) { Task { await model.refresh() } }.accessibilityIdentifier("v15.f3d.mac.refresh")
+            }
             if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot).accessibilityIdentifier("v15.f3d.mac.offline") }
-            V15ActionButton("新建现金流", symbol: "plus", disabledReasons: model.openCreateReasons) { model.openCreate() }.accessibilityIdentifier("v15.f3d.mac.create.open")
-            V15ActionButton("刷新", symbol: V15Symbol.retry, kind: .quiet) { Task { await model.refresh() } }.accessibilityIdentifier("v15.f3d.mac.refresh")
         }
-        .padding(V15Spacing.md).background(V15Palette.card.color.opacity(0.55))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f3d.mac.sidebar")
     }
@@ -155,11 +168,16 @@ public struct V15CashFlowMacView: View {
 
     private var editorInspector: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            HStack { Text(editorTitle).font(V15Typography.cardTitle); Spacer(); Button("关闭") { model.dismissEditor() }.accessibilityIdentifier("v15.f3d.mac.editor.close") }
+            HStack { V22PageHeader(editorTitle, symbol: "calendar.badge.plus"); Button("关闭") { model.dismissEditor() }.accessibilityIdentifier("v15.f3d.mac.editor.close") }
             V15FieldIssues(issues: model.serverIssues)
             switch model.editorMode {
             case .create, .edit:
-                V15Field("标题", text: $model.title, issues: visibleEditorIssues("title")); V15Field("计划金额（元）", text: $model.amountText, issues: visibleEditorIssues("planned_amount_minor")); Picker("方向", selection: $model.direction) { ForEach([V15CashFlowDirection.inflow, .outflow, .transfer]) { Text($0.displayName).tag($0) } }.pickerStyle(.segmented)
+                V22FormSection("收支安排") {
+                    Picker("方向", selection: $model.direction) { ForEach([V15CashFlowDirection.inflow, .outflow, .transfer]) { Text($0.displayName).tag($0) } }.pickerStyle(.segmented)
+                    V15AmountInput(text: $model.amountText, issues: visibleEditorIssues("planned_amount_minor"))
+                    V15Field("事项名称", text: $model.title, issues: visibleEditorIssues("title"))
+                }
+                V22FormSection("日期、账户与重复") {
                 V15Field("预计日期", text: $model.expectedDateText, prompt: "YYYY-MM-DD"); accountControls(source: $model.selectedAccountID, destination: $model.selectedDestinationAccountID, transfer: model.direction == .transfer)
                 if model.direction != .transfer { categoryControl(selection: $model.selectedCategoryID, categories: model.visibleCategories) }
                 if case .create = model.editorMode {
@@ -173,13 +191,16 @@ public struct V15CashFlowMacView: View {
                         .accessibilityIdentifier("v15.f3d.mac.editor.series-boundary")
                 }
                 V15Field("备注", text: $model.note, axis: .vertical)
+                }
                 if case .create = model.editorMode { V15ActionButton("创建", disabledReasons: displayReasons(model.createReasons)) { Task { await model.create() } }.disabled(!model.createReasons.isEmpty).accessibilityIdentifier("v15.f3d.mac.create.submit") }
                 else { V15ActionButton("保存修改", disabledReasons: displayReasons(model.updateReasons)) { Task { await model.update() } }.disabled(!model.updateReasons.isEmpty).accessibilityIdentifier("v15.f3d.mac.update.submit") }
             case .settle:
                 Text("填写真实发生金额与日期；计划金额不会自动记为已入账。") .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
-                V15Field("实际金额（元）", text: $model.settleAmountText, issues: fieldIssues(model.settleIssues, "actual_amount_minor")); V15Field("发生日期", text: $model.settleDateText, prompt: "YYYY-MM-DD"); accountControls(source: $model.settleAccountID, destination: $model.settleDestinationAccountID, transfer: model.selectedItem?.direction == .transfer)
+                V22FormSection("本次实际入账") {
+                V15AmountInput(text: $model.settleAmountText, issues: fieldIssues(model.settleIssues, "actual_amount_minor")); V15Field("发生日期", text: $model.settleDateText, prompt: "YYYY-MM-DD"); accountControls(source: $model.settleAccountID, destination: $model.settleDestinationAccountID, transfer: model.selectedItem?.direction == .transfer)
                 if model.selectedItem?.direction != .transfer { categoryControl(selection: $model.settleCategoryID, categories: model.selectedItem?.direction == .inflow ? model.incomeCategories : model.expenseCategories) }
                 V15Field("入账标题", text: $model.settleTitle); V15Field("备注", text: $model.settleNote, axis: .vertical)
+                }
                 V15ActionButton("确认入账", disabledReasons: model.settleReasons) { Task { await model.settle() } }.accessibilityIdentifier("v15.f3d.mac.settle.submit")
             case .systemEdit:
                 Text("这里只能修改标题、备注与预计日期；实际到账请到报销页面登记。") .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)

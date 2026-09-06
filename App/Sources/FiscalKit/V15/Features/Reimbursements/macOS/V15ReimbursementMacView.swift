@@ -22,14 +22,19 @@ public struct V15ReimbursementMacView: View {
     }
 
     public var body: some View {
-        HStack(spacing: 0) {
-            spine.frame(minWidth: V15MacLayout.compactReimbursementWidths.spine, idealWidth: 300, maxWidth: 340)
-            Divider()
-            detail.frame(minWidth: V15MacLayout.compactReimbursementWidths.detail, maxWidth: .infinity)
-            Divider()
-            inspector.frame(minWidth: V15MacLayout.compactReimbursementWidths.inspector, idealWidth: 370, maxWidth: 420)
+        GeometryReader { geometry in
+        VStack(alignment: .leading, spacing: 20) {
+            V22PageHeader("报销", symbol: "arrow.down.left.circle", subtitle: "垫付、待收与到账记录")
+            HSplitView {
+                spine.frame(minWidth: V15MacLayout.compactReimbursementWidths.spine, idealWidth: 280, maxWidth: 320)
+                detail.frame(minWidth: V15MacLayout.compactReimbursementWidths.detail, maxWidth: .infinity)
+                inspector.frame(minWidth: V15MacLayout.compactReimbursementWidths.inspector, idealWidth: 350, maxWidth: 420)
+            }
         }
-        .v15MacWorkspaceCanvas()
+        .padding(.vertical, 24)
+        .padding(.horizontal, geometry.size.width < 1_000 ? 4 : 24)
+        }
+        .v22PageCanvas()
         .task {
             if let initialClaim {
                 await model.openClaim(initialClaim, readCachePolicy: .reloadIgnoringCache)
@@ -81,7 +86,7 @@ public struct V15ReimbursementMacView: View {
                         VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(claim.title).font(V15Typography.surfaceTitle); Text("\(claim.status.displayName) · \(claim.partyCount) 位当事人").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
                         Spacer(); VStack(alignment: .trailing, spacing: 2) { Text("未到账").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)); Text(money(claim.outstandingMinor)).font(V15Typography.moneyLarge).foregroundStyle(V15Palette.teal.color).monospacedDigit() }
                     }
-                    V15Section("报销金额矩阵") {
+                    V15Section("报销进度") {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 135), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
                             claimAmountFact("已申报", claim.totalClaimedMinor)
                             claimAmountFact("已到账", claim.receivedMinor)
@@ -155,8 +160,10 @@ public struct V15ReimbursementMacView: View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
             HStack { Text("修改报销单").font(V15Typography.cardTitle); Spacer(); Button("返回") { inspectorMode = .claim } }
             Text("编辑后先查看完整预览；修改任何输入后需要重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+            V22FormSection("报销信息") {
             V15Field("报销标题", text: Binding(get: { model.claimReplacementTitle }, set: { model.claimReplacementTitle = $0 }), issues: fieldIssues(model.secondaryIssues, path: "title")).accessibilityIdentifier("v15.f3c.mac.replace.title")
             V15Field("备注", text: Binding(get: { model.claimReplacementNote }, set: { model.claimReplacementNote = $0 })).accessibilityIdentifier("v15.f3c.mac.replace.note")
+            }
             V15ActionButton("预览报销单修改", kind: .secondary, disabledReasons: model.claimReplacementPreviewReasons(for: claim)) { Task { await model.previewCurrentClaimReplacement() } }.accessibilityIdentifier("v15.f3c.mac.replace.preview")
             mutationInspector
         }
@@ -186,9 +193,12 @@ public struct V15ReimbursementMacView: View {
             HStack { Text("修改到账记录").font(V15Typography.cardTitle); Spacer(); Button("返回") { inspectorMode = .receiptActions(id) } }
             if let receipt = model.receipts.first(where: { $0.id == id }) {
                 Text("沿用原当事人与收款账户；金额、日期和标题需要重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                V22FormSection("修改到账信息") {
+                V15AmountInput(text: Binding(get: { model.receiptReplacementAmountText }, set: { model.receiptReplacementAmountText = $0 }), issues: fieldIssues(model.secondaryIssues, path: "amount_minor"), accessibilityIdentifier: "v15.f3c.mac.receipt.replace.amount")
                 V15Field("到账标题", text: Binding(get: { model.receiptReplacementTitle }, set: { model.receiptReplacementTitle = $0 }), issues: fieldIssues(model.secondaryIssues, path: "title")).accessibilityIdentifier("v15.f3c.mac.receipt.replace.title")
-                V15Field("到账金额（元）", text: Binding(get: { model.receiptReplacementAmountText }, set: { model.receiptReplacementAmountText = $0 }), issues: fieldIssues(model.secondaryIssues, path: "amount_minor")).accessibilityIdentifier("v15.f3c.mac.receipt.replace.amount")
+
                 V15Field("到账日期", text: Binding(get: { model.receiptReplacementDateText }, set: { model.receiptReplacementDateText = $0 }), prompt: "YYYY-MM-DD", issues: fieldIssues(model.secondaryIssues, path: "received_at")).accessibilityIdentifier("v15.f3c.mac.receipt.replace.date")
+                }
                 V15ActionButton("预览到账修改", kind: .secondary, disabledReasons: model.receiptReplacementPreviewReasons(for: receipt, claim: claim)) { Task { await model.previewReceiptReplacement(receipt) } }.accessibilityIdentifier("v15.f3c.mac.receipt.replace.preview")
             }
             mutationInspector
@@ -272,13 +282,19 @@ public struct V15ReimbursementMacView: View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
             HStack { Text("新建报销单").font(V15Typography.cardTitle); Spacer(); Button("关闭") { model.dismissNewClaim() } }
             editorBanner(model.newClaimPhase, issues: model.newClaimServerIssues)
+            V22FormSection("报销信息") {
             V15Field("标题", text: Binding(get: { model.claimTitle }, set: { model.claimTitle = $0 }), prompt: "例如：八月差旅", issues: fieldIssues(model.visibleNewClaimIssues, path: "title")).accessibilityIdentifier("v15.f3c.mac.claim.title")
             V15Field("当事人", text: Binding(get: { model.partyName }, set: { model.partyName = $0 }), prompt: "例如：公司", issues: fieldIssues(model.visibleNewClaimIssues, path: "parties[0].name")).accessibilityIdentifier("v15.f3c.mac.claim.party")
             V15Field("预计日期", text: Binding(get: { model.expectedDateText }, set: { model.expectedDateText = $0 }), prompt: "YYYY-MM-DD", issues: fieldIssues(model.visibleNewClaimIssues, path: "parties[0].expected_date")).accessibilityIdentifier("v15.f3c.mac.claim.date")
+            }
+            V22FormSection("选择垫付") {
             V15SearchField(text: Binding(get: { model.candidateQuery }, set: { model.candidateQuery = $0 })).accessibilityIdentifier("v15.f3c.mac.candidates.query")
             V15ActionButton("读取候选", kind: .secondary) { Task { await model.retryCandidates() } }.accessibilityIdentifier("v15.f3c.mac.candidates.load")
             candidateInspector
-            V15Field("分摊金额（元）", text: Binding(get: { model.allocationAmountText }, set: { model.allocationAmountText = $0 }), prompt: "0.00", issues: fieldIssues(model.visibleNewClaimIssues, path: "parties[0].allocations[0].amount_minor")).accessibilityIdentifier("v15.f3c.mac.claim.amount")
+            }
+            V22FormSection("本次申报金额") {
+                V15AmountInput(text: Binding(get: { model.allocationAmountText }, set: { model.allocationAmountText = $0 }), issues: fieldIssues(model.visibleNewClaimIssues, path: "parties[0].allocations[0].amount_minor"), accessibilityIdentifier: "v15.f3c.mac.claim.amount")
+            }
             V15ActionButton("创建报销单", disabledReasons: model.createClaimDisabledReasons, showsDisabledReasons: false) { Task { await model.createClaim() } }.accessibilityIdentifier("v15.f3c.mac.claim.create")
             if model.hasRecoverableCreateAttempt && model.newClaimPhase == .unknown {
                 HStack(alignment: .top) {
@@ -306,10 +322,12 @@ public struct V15ReimbursementMacView: View {
             if let claim = model.selectedClaim {
                 ForEach(claim.parties, id: \.id) { party in Button { model.chooseParty(party.id) } label: { HStack { Text(party.name); Spacer(); Text(money(party.outstandingMinor)).monospacedDigit() }.padding(V15Spacing.sm).background(model.selectedPartyID == party.id ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }.buttonStyle(.plain).disabled(party.outstandingMinor <= 0).accessibilityIdentifier("v15.f3c.mac.receipt.party.\(party.id)") }
             }
-            V15Field("到账标题", text: Binding(get: { model.receiptTitle }, set: { model.receiptTitle = $0 }), issues: fieldIssues(model.receiptIssues, path: "title")).accessibilityIdentifier("v15.f3c.mac.receipt.title")
-            V15Field("到账金额（元）", text: Binding(get: { model.receiptAmountText }, set: { model.receiptAmountText = $0 }), issues: fieldIssues(model.receiptIssues, path: "amount_minor")).accessibilityIdentifier("v15.f3c.mac.receipt.amount")
-            V15Field("到账日期", text: Binding(get: { model.receiptDateText }, set: { model.receiptDateText = $0 }), prompt: "YYYY-MM-DD", issues: fieldIssues(model.receiptIssues, path: "received_at")).accessibilityIdentifier("v15.f3c.mac.receipt.date")
-            accountInspector
+            V22FormSection("本次到账") {
+                V15AmountInput(text: Binding(get: { model.receiptAmountText }, set: { model.receiptAmountText = $0 }), issues: fieldIssues(model.receiptIssues, path: "amount_minor"), accessibilityIdentifier: "v15.f3c.mac.receipt.amount")
+                V15Field("到账标题", text: Binding(get: { model.receiptTitle }, set: { model.receiptTitle = $0 }), issues: fieldIssues(model.receiptIssues, path: "title")).accessibilityIdentifier("v15.f3c.mac.receipt.title")
+                V15Field("到账日期", text: Binding(get: { model.receiptDateText }, set: { model.receiptDateText = $0 }), prompt: "YYYY-MM-DD", issues: fieldIssues(model.receiptIssues, path: "received_at")).accessibilityIdentifier("v15.f3c.mac.receipt.date")
+                accountInspector
+            }
             V15ActionButton("预览到账影响", kind: .secondary, disabledReasons: model.receiptPreviewDisabledReasons) { Task { await model.previewReceipt() } }.accessibilityIdentifier("v15.f3c.mac.receipt.preview")
             if let preview = model.receiptPreview { V15PreviewState(version: "到账预览") { Text("已到账 \(money(preview.claimReceivedBeforeMinor)) → \(money(preview.claimReceivedAfterMinor))；将保存 \(preview.persistedAllocations.count) 条分配。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3c.mac.receipt.preview.result") }
             V15ActionButton("确认登记到账", disabledReasons: model.receiptCommitDisabledReasons) { Task { await model.commitReceipt() } }.accessibilityIdentifier("v15.f3c.mac.receipt.commit")
@@ -327,7 +345,7 @@ public struct V15ReimbursementMacView: View {
         case .idle, .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3c.mac.receipt.accounts.loading")
         case .empty: V15EmptyState(title: "没有收款账户", explanation: "需要启用的现金或借记账户。", actionTitle: "重试") { Task { await model.retryReceiptAccounts() } }.accessibilityIdentifier("v15.f3c.mac.receipt.accounts.empty")
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.retryReceiptAccounts() } }.accessibilityIdentifier("v15.f3c.mac.receipt.accounts.error")
-        case .loaded: ForEach(model.receiptAccounts) { account in Button { model.chooseReceiptAccount(account) } label: { HStack { Text(account.name); Spacer(); Text(account.kind) }.padding(V15Spacing.sm).background(model.selectedReceiptAccount?.id == account.id ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }.buttonStyle(.plain).accessibilityIdentifier("v15.f3c.mac.receipt.account.\(account.id)") }
+        case .loaded: ForEach(model.receiptAccounts) { account in Button { model.chooseReceiptAccount(account) } label: { HStack { Text(account.name); Spacer(); Text(account.kind == "cash" ? "现金" : account.kind == "debit" ? "借记" : "其他账户") }.padding(V15Spacing.sm).background(model.selectedReceiptAccount?.id == account.id ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }.buttonStyle(.plain).accessibilityIdentifier("v15.f3c.mac.receipt.account.\(account.id)") }
         }
     }
 

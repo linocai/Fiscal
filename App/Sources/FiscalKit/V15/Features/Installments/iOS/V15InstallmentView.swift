@@ -57,6 +57,7 @@ public struct V15InstallmentView: View {
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: V15Spacing.md) {
+                V22PageHeader("分期计划", symbol: "calendar.badge.clock", subtitle: "每期账单与未来待还安排")
                 if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot).accessibilityIdentifier("v15.f3b2.offline") }
                 V15Section("建立分期") {
                     V15ActionButton("从已有信用消费建立", symbol: "arrow.triangle.branch", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时只可查看，无法建立分期计划。", fieldPath: nil) : nil) {
@@ -149,6 +150,7 @@ public struct V15InstallmentView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.md) {
+                    V22PageHeader(sheetTitle(value), symbol: "calendar.badge.plus")
                     sheetErrorSurface
                     switch value {
                     case .purchase: purchaseEditor
@@ -160,9 +162,10 @@ public struct V15InstallmentView: View {
             }
             .v15IOSScreenCanvas()
             .navigationTitle(sheetTitle(value))
+            .v22CompactNavigationTitle()
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { sheet = nil }.accessibilityIdentifier("v15.f3b2.sheet.dismiss") } }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
         .accessibilityIdentifier("v15.f3b2.sheet.\(value.rawValue)")
     }
 
@@ -175,16 +178,19 @@ public struct V15InstallmentView: View {
 
     private var purchaseEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            Text("1 · 消费信息").font(V15Typography.cardTitle)
-            V15Field("标题", text: $model.newPurchaseTitle, prompt: "例如 工作设备", issues: issues("purchase.title")).accessibilityIdentifier("v15.f3b2.purchase.title")
-            V15Field("金额（元）", text: $model.newPurchaseAmountText, prompt: "3299.00", issues: issues("purchase.amount_minor"), keyboard: .decimal).accessibilityIdentifier("v15.f3b2.purchase.amount")
-            Picker("信用账户", selection: $model.newPurchaseAccountID) { Text("请选择").tag(UUID?.none); ForEach(model.creditAccounts) { Text($0.name).tag(Optional($0.id)) } }.pickerStyle(.menu).accessibilityIdentifier("v15.f3b2.purchase.account")
-            purchaseCategorySurface
-            Text("2 · 分期设置").font(V15Typography.cardTitle)
-            V15Field("期数", text: $model.newPurchaseCountText, prompt: "2–60", issues: issues("installment_count"), keyboard: .integer).accessibilityIdentifier("v15.f3b2.purchase.count")
-            V15Field("手续费（元）", text: $model.newPurchaseFeeText, prompt: "0.00", issues: issues("total_fee_minor"), keyboard: .decimal).accessibilityIdentifier("v15.f3b2.purchase.fee")
-            if positiveFee(model.newPurchaseFeeText) { feeDetails(categoryID: $model.newPurchaseFeeCategoryID, occurredDateText: $model.newPurchaseFeeOccurredDateText, prefix: "v15.f3b2.purchase") }
-            V15Field("起始账单日", text: $model.newPurchaseStartStatementDate, prompt: "YYYY-MM-DD", issues: issues("start_statement_date")).accessibilityIdentifier("v15.f3b2.purchase.start")
+            V22FlowProgress(["消费", "分期", "确认"], current: model.purchasePreview == nil ? 0 : 2)
+            V22FormSection("消费信息") {
+                V15AmountInput(text: $model.newPurchaseAmountText, issues: issues("purchase.amount_minor"), accessibilityIdentifier: "v15.f3b2.purchase.amount")
+                V15Field("消费名称", text: $model.newPurchaseTitle, prompt: "例如 工作设备", issues: issues("purchase.title")).accessibilityIdentifier("v15.f3b2.purchase.title")
+                V15PickerRow("信用账户", selection: $model.newPurchaseAccountID) { Text("请选择").tag(UUID?.none); ForEach(model.creditAccounts) { Text($0.name).tag(Optional($0.id)) } }.accessibilityIdentifier("v15.f3b2.purchase.account")
+                purchaseCategorySurface
+            }
+            V22FormSection("分期安排") {
+                V15Field("期数", text: $model.newPurchaseCountText, prompt: "2–60", issues: issues("installment_count"), keyboard: .integer).accessibilityIdentifier("v15.f3b2.purchase.count")
+                V15Field("手续费（元）", text: $model.newPurchaseFeeText, prompt: "0.00", issues: issues("total_fee_minor"), keyboard: .decimal).accessibilityIdentifier("v15.f3b2.purchase.fee")
+                if positiveFee(model.newPurchaseFeeText) { feeDetails(categoryID: $model.newPurchaseFeeCategoryID, occurredDateText: $model.newPurchaseFeeOccurredDateText, prefix: "v15.f3b2.purchase") }
+                V15Field("起始账单日", text: $model.newPurchaseStartStatementDate, prompt: "YYYY-MM-DD", issues: issues("start_statement_date")).accessibilityIdentifier("v15.f3b2.purchase.start")
+            }
             V15ActionButton("查看分期预览", disabledReason: model.purchasePreviewDisabledReason) { Task { await model.requestPurchasePreview() } }.accessibilityIdentifier("v15.f3b2.purchase.preview")
             purchasePreviewSurface
             V15ActionButton("确认创建", disabledReason: model.purchaseCommitDisabledReason) { Task { await model.commitPurchase() } }.accessibilityIdentifier("v15.f3b2.purchase.commit")
@@ -193,7 +199,7 @@ public struct V15InstallmentView: View {
 
     private var existingPurchaseEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            V15Section("第 1 步 · 找到信用消费") {
+            V22FormSection("选择信用消费") {
                 V15Field("消费账目 ID", text: $model.purchaseTransactionIDText, prompt: "粘贴信用消费账目 ID", issues: issues("purchase_transaction_id"))
                     .accessibilityIdentifier("v15.f3b2.eligibility.transaction")
                 V15ActionButton("检查是否可分期", symbol: "checkmark.circle", kind: .secondary, disabledReason: model.isOffline ? .init(code: "offline_read_only", message: "离线时不能检查分期资格。", fieldPath: nil) : nil) {
@@ -203,7 +209,7 @@ public struct V15InstallmentView: View {
                 eligibilitySurface
             }
 
-            V15Section("第 2 步 · 设置计划") {
+            V22FormSection("分期安排") {
                 V15Field("期数", text: $model.createInstallmentCountText, prompt: "2–60", issues: issues("installment_count"), keyboard: .integer)
                     .accessibilityIdentifier("v15.f3b2.existing.count")
                 V15Field("手续费（元）", text: $model.createFeeText, prompt: "0.00", issues: issues("total_fee_minor"), keyboard: .decimal)
@@ -323,12 +329,16 @@ public struct V15InstallmentView: View {
 
     private var planEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
+            V22FormSection("消费信息") {
+            V15AmountInput(text: $model.editAmountText, issues: issues("purchase.amount_minor"), accessibilityIdentifier: "v15.f3b2.edit.amount")
             V15Field("标题", text: $model.editTitle, issues: issues("purchase.title")).accessibilityIdentifier("v15.f3b2.edit.title")
-            V15Field("消费金额（元）", text: $model.editAmountText, issues: issues("purchase.amount_minor"), keyboard: .decimal).accessibilityIdentifier("v15.f3b2.edit.amount")
+            }
+            V22FormSection("分期安排") {
             V15Field("期数", text: $model.editCountText, issues: issues("installment_count"), keyboard: .integer).accessibilityIdentifier("v15.f3b2.edit.count")
             V15Field("手续费（元）", text: $model.editFeeText, issues: issues("total_fee_minor"), keyboard: .decimal).accessibilityIdentifier("v15.f3b2.edit.fee")
             if positiveFee(model.editFeeText) { feeDetails(categoryID: $model.editFeeCategoryID, occurredDateText: $model.editFeeOccurredDateText, prefix: "v15.f3b2.edit") }
             V15Field("起始账单日", text: $model.editStartStatementDate, issues: issues("start_statement_date")).accessibilityIdentifier("v15.f3b2.edit.start")
+            }
             V15ActionButton("预览锁定期与账期影响", disabledReason: model.planPreviewDisabledReason) { Task { await model.requestPlanPreview() } }.accessibilityIdentifier("v15.f3b2.edit.preview")
             planPreviewSurface
             V15ActionButton("确认修改", disabledReason: model.planCommitDisabledReason) { Task { await model.commitPlanUpdate() } }.accessibilityIdentifier("v15.f3b2.edit.commit")
@@ -353,10 +363,12 @@ public struct V15InstallmentView: View {
 
     private var commandEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
+            V22FormSection("本次操作") {
             Picker("操作", selection: $model.commandKind) { ForEach(V15InstallmentModel.CommandKind.allCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented).accessibilityIdentifier("v15.f3b2.command.kind")
             if model.commandKind == .settleEarly {
                 Picker("付款账户", selection: $model.paymentAccountID) { Text("请选择").tag(UUID?.none); ForEach(model.paymentAccounts) { Text($0.name).tag(Optional($0.id)) } }.pickerStyle(.menu).accessibilityIdentifier("v15.f3b2.command.payment")
                 V15Field("目标账单日", text: $model.targetStatementDate, prompt: "YYYY-MM-DD", issues: issues("target_statement_date")).accessibilityIdentifier("v15.f3b2.command.target")
+            }
             }
             V15ActionButton("查看操作预览", disabledReason: model.commandPreviewDisabledReason) { Task { await model.requestCommandPreview() } }.accessibilityIdentifier("v15.f3b2.command.preview")
             commandPreviewSurface

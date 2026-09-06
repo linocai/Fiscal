@@ -36,7 +36,7 @@ public struct V15AIProposalView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .v15IOSScreenCanvas()
-            .navigationTitle("AI 记账")
+            .navigationTitle("AI 记账").v22CompactNavigationTitle()
             .toolbar {
 #if os(iOS)
                 if let closeAction {
@@ -59,8 +59,7 @@ public struct V15AIProposalView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
-            Text("先看清，再记账").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
-            Text("AI 会先整理出待确认内容。请检查并保存修改，确认无误后再记账。").font(V15Typography.body).foregroundStyle(V15Palette.ink.color.opacity(0.68)).fixedSize(horizontal: false, vertical: true)
+            V22PageHeader("AI 记账", symbol: "sparkles", subtitle: "说一句，整理成一笔待确认账目")
             HStack(spacing: V15Spacing.xs) {
                 Image(systemName: "hand.raised.fill").foregroundStyle(V15Palette.teal.color)
                 Text("每一笔都由你确认，AI 不会自动记账").font(V15Typography.secondary.weight(.semibold)).foregroundStyle(V15Palette.teal.color)
@@ -70,12 +69,10 @@ public struct V15AIProposalView: View {
             .accessibilityIdentifier("v15.f3f.d3-invariant")
             if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot).accessibilityIdentifier("v15.f3f.offline") }
         }
-        .padding(V15Spacing.md)
-        .v15IOSCard()
     }
 
     private var createSurface: some View {
-        V15Section("新建待确认内容") {
+        V22FormSection("描述这笔收支") {
             Picker("来源", selection: $model.source) { ForEach(V15AIProposalSource.allCases) { Text($0.displayName).tag($0) } }.pickerStyle(.segmented).accessibilityIdentifier("v15.f3f.create.source")
             V15Field("记账文字", text: $model.inputText, prompt: "例如：午餐 132 元，日常借记", issues: [], axis: .vertical).accessibilityIdentifier("v15.f3f.create.text")
             V15ActionButton("生成待确认账目", kind: .primary, disabledReasons: model.createReasons) {
@@ -128,8 +125,8 @@ public struct V15AIProposalView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.lg) {
-                    Text("检查并修改").font(V15Typography.cardTitle)
-                    Text("保存修改不会自动记账。确认无误后，请再点一次确认记账。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.68)).fixedSize(horizontal: false, vertical: true)
+                    V22PageHeader("核对这笔账", symbol: "checkmark.bubble", subtitle: "保存修改后，再由你确认记账")
+                    V22FlowProgress(["核对信息", "保存修改", "确认记账"], current: 0)
                     V15AIEditorFields(model: model)
                     V15AIMutationSurface(model: model)
                     V15ActionButton("保存修改", kind: .secondary, disabledReasons: model.confirmReasons) { Task { await model.confirmDraft() } }.accessibilityIdentifier("v15.f3f.editor.confirm")
@@ -142,7 +139,7 @@ public struct V15AIProposalView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .v15IOSScreenCanvas()
-            .navigationTitle("检查 AI 内容")
+            .navigationTitle("检查 AI 内容").v22CompactNavigationTitle()
             .toolbar { Button("关闭") { showsReview = false }.disabled(model.mutationPhase == .loading).accessibilityIdentifier("v15.f3f.editor.close") }
         }
         .presentationDetents([.large])

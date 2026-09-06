@@ -5,12 +5,20 @@ import Testing
 
 @Suite("V15 design-system contracts")
 struct V15DesignSystemTests {
+    @Test("overview month follows Shanghai rollover instead of a fixed fixture month")
+    func overviewCalendarMonthRollover() {
+        let before = ISO8601DateFormatter().date(from: "2026-08-31T15:59:59Z")!
+        let after = ISO8601DateFormatter().date(from: "2026-08-31T16:00:00Z")!
+        #expect(V22ReportCalendar.currentMonth(at: before).rawValue == "2026-08")
+        #expect(V22ReportCalendar.currentMonth(at: after).rawValue == "2026-09")
+    }
+
     @Test("light and dark tokens preserve the approved semantic palette")
     func paletteValues() {
-        #expect(V15Palette.paper == .init(lightHex: 0xFFFEFA, darkHex: 0x101918))
+        #expect(V15Palette.paper == .init(lightHex: 0xFFFFFF, darkHex: 0x101918))
         #expect(V15Palette.card == .init(lightHex: 0xFFFFFF, darkHex: 0x182322))
-        #expect(V15Palette.ink == .init(lightHex: 0x12312F, darkHex: 0xE8F0ED))
-        #expect(V15Palette.teal == .init(lightHex: 0x0B5E5B, darkHex: 0x67C5BC))
+        #expect(V15Palette.ink == .init(lightHex: 0x153B35, darkHex: 0xE8F0ED))
+        #expect(V15Palette.teal == .init(lightHex: 0x153B35, darkHex: 0x76D0C4))
         #expect(V15Palette.yellow == .init(lightHex: 0xF5C84C, darkHex: 0xE7B936))
         #expect(V15Palette.yellow != V15Palette.warning)
         #expect(V15Palette.gold == V15Palette.outflow)
@@ -30,7 +38,7 @@ struct V15DesignSystemTests {
         let balance = V15MoneyPresentation(minorUnits: -100, direction: .balance)
         #expect(inflow.text == "+¥12.34" && inflow.isTabular && inflow.neverWraps)
         #expect(outflow.text == "−12.34")
-        #expect(balance.text == "¥1.00")
+        #expect(balance.text == "−¥1.00")
         #expect(V15MoneyPresentation(minorUnits: Int64.min, direction: .outflow).text == "−¥92,233,720,368,547,758.08")
         let optimistic = V15MoneyTruthPresentation(displayedMinorUnits: 12_300, confirmedMinorUnits: 10_000, pendingCount: 3, direction: .balance)
         #expect(optimistic.hasPendingValue)
@@ -38,6 +46,28 @@ struct V15DesignSystemTests {
         #expect(optimistic.displayed.text == "¥123.00")
         #expect(optimistic.confirmed.text == "¥100.00")
         #expect(!V15MoneyTruthPresentation(displayedMinorUnits: 100, confirmedMinorUnits: 100, pendingCount: -1, direction: .neutral).hasPendingValue)
+    }
+
+    @Test("credit overpayment keeps its exact magnitude without a debt sign")
+    func creditOverpaymentPresentation() {
+        #expect(V15MoneyPresentation(minorUnits: 0, direction: .neutral).text == "¥0.00")
+        #expect(V15MoneyPresentation(minorUnits: -4_567, direction: .neutral).text == "¥45.67")
+        #expect(V15MoneyPresentation(minorUnits: Int64.min, direction: .neutral).text == "¥92,233,720,368,547,758.08")
+        #expect(V15MoneyPresentation(minorUnits: Int64.max, direction: .balance).text == "¥92,233,720,368,547,758.07")
+    }
+
+    @Test("overview amounts refuse overflow and never combine different fact revisions")
+    func overviewAmountGates() {
+        #expect(V15OverviewAmountGate.net(cash: 100, debt: 100) == .amount(0))
+        #expect(V15OverviewAmountGate.net(cash: 100, debt: 250) == .amount(-150))
+        #expect(V15OverviewAmountGate.net(cash: Int64.max, debt: -1) == .unavailable)
+        #expect(V15OverviewAmountGate.net(cash: Int64.min, debt: 1) == .unavailable)
+        #expect(V15OverviewAmountGate.sum([Int64.max, 0]) == .amount(Int64.max))
+        #expect(V15OverviewAmountGate.sum([Int64.min, 0]) == .amount(Int64.min))
+        #expect(V15OverviewAmountGate.sum([Int64.max, 1]) == .unavailable)
+        #expect(V15OverviewAmountGate.sum([Int64.min, -1]) == .unavailable)
+        #expect(V15OverviewAmountGate.canCombine(factsRevision: 42, reportRevision: 42))
+        #expect(!V15OverviewAmountGate.canCombine(factsRevision: 42, reportRevision: 43))
     }
 
     @Test("platform dimensions and AX5 yielding order protect content")

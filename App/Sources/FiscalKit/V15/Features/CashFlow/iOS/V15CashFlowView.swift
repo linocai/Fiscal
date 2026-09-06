@@ -37,13 +37,12 @@ public struct V15CashFlowView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
-            Text("逐笔看清计划与实际").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
-                .fixedSize(horizontal: false, vertical: true)
+            V22PageHeader("计划收支", symbol: "calendar.badge.clock")
                 .accessibilityIdentifier("v15.f3d.header.title")
-            Text("集中查看未来收支、已完成记录，以及报销和信用账单安排。")
+            Text("计划与实际入账分开记录")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("v15.f3d.header.detail")
-            if let summary = model.active?.summary {
+            if !showsHistory, let summary = model.active?.summary {
                 VStack(spacing: V15Spacing.sm) {
                     if dynamicTypeSize.isAccessibilitySize {
                         VStack(spacing: V15Spacing.sm) {
@@ -66,9 +65,7 @@ public struct V15CashFlowView: View {
             .disabled(model.selectionLocked)
             V15ActionButton("新建现金流", symbol: "plus", disabledReasons: model.openCreateReasons) { model.openCreate() }.accessibilityIdentifier("v15.f3d.create.open")
         }
-        .padding(V15Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .v15IOSCard()
     }
 
     private func metric(_ title: String, _ amount: V15MinorUnits, _ direction: V15MoneyDirection, id: String) -> some View {
@@ -80,7 +77,7 @@ public struct V15CashFlowView: View {
             V15MoneyText(minorUnits: amount, direction: direction)
                 .accessibilityIdentifier("v15.f3d.summary.\(id).amount")
         }
-            .padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+            .padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func netDirection(_ amount: V15MinorUnits) -> V15MoneyDirection {
@@ -182,6 +179,7 @@ public struct V15CashFlowView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.md) {
+                    V22PageHeader(editorTitle, symbol: "calendar.badge.plus")
                     editorMessage
                     switch model.editorMode {
                     case .create, .edit: manualEditor
@@ -195,6 +193,7 @@ public struct V15CashFlowView: View {
             .scrollDismissesKeyboard(.immediately)
             .v15IOSScreenCanvas()
             .navigationTitle(editorTitle)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismissEditor() }.accessibilityIdentifier("v15.f3d.editor.close") }
                 if case .create = model.editorMode {
@@ -213,18 +212,23 @@ public struct V15CashFlowView: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
         .accessibilityIdentifier("v15.f3d.editor")
     }
 
     private var manualEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            V15Field("标题", text: $model.title, issues: visibleEditorIssues("title")).accessibilityIdentifier("v15.f3d.editor.title")
-            V15Field("计划金额（元）", text: $model.amountText, prompt: "0.00", issues: visibleEditorIssues("planned_amount_minor"), keyboard: .decimal).accessibilityIdentifier("v15.f3d.editor.amount")
-            Picker("方向", selection: $model.direction) { ForEach([V15CashFlowDirection.inflow, .outflow, .transfer]) { Text($0.displayName).tag($0) } }.pickerStyle(.segmented).accessibilityIdentifier("v15.f3d.editor.direction")
+            V22FormSection("收支安排") {
+                Picker("方向", selection: $model.direction) { ForEach([V15CashFlowDirection.inflow, .outflow, .transfer]) { Text($0.displayName).tag($0) } }.pickerStyle(.segmented).accessibilityIdentifier("v15.f3d.editor.direction")
+                V15AmountInput(text: $model.amountText, issues: visibleEditorIssues("planned_amount_minor"), accessibilityIdentifier: "v15.f3d.editor.amount")
+                V15Field("事项名称", text: $model.title, issues: visibleEditorIssues("title")).accessibilityIdentifier("v15.f3d.editor.title")
+            }
+            V22FormSection("日期与账户") {
             V15Field("预计日期", text: $model.expectedDateText, prompt: "YYYY-MM-DD", issues: issues(model.editorIssues, "expected_date")).accessibilityIdentifier("v15.f3d.editor.date")
             accountPickers(source: $model.selectedAccountID, destination: $model.selectedDestinationAccountID, transfer: model.direction == .transfer)
             if model.direction != .transfer { categoryPicker(selection: $model.selectedCategoryID, categories: model.visibleCategories) }
+            }
+            V22FormSection("重复与备注") {
             if case .create = model.editorMode {
                 Toggle("每月重复", isOn: $model.recurrenceEnabled).accessibilityIdentifier("v15.f3d.editor.recurrence")
                 if model.recurrenceEnabled { V15Field("重复结束日期", text: $model.recurrenceEndDateText, prompt: "YYYY-MM-DD", issues: issues(model.editorIssues, "recurrence_end_date")).accessibilityIdentifier("v15.f3d.editor.recurrence-end") }
@@ -236,6 +240,7 @@ public struct V15CashFlowView: View {
                     .accessibilityIdentifier("v15.f3d.editor.series-boundary")
             }
             V15Field("备注", text: $model.note, issues: issues(model.editorIssues, "note"), axis: .vertical)
+            }
             recoveryActions
         }
     }
@@ -243,12 +248,14 @@ public struct V15CashFlowView: View {
     private var settlementEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
             Text("计划金额不会自动成为实际金额；请填写本次真实入账金额。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-            V15Field("实际金额（元）", text: $model.settleAmountText, issues: issues(model.settleIssues, "actual_amount_minor"), keyboard: .decimal).accessibilityIdentifier("v15.f3d.settle.amount")
+            V22FormSection("本次实际入账") {
+            V15AmountInput(text: $model.settleAmountText, issues: issues(model.settleIssues, "actual_amount_minor"), accessibilityIdentifier: "v15.f3d.settle.amount")
             V15Field("发生日期", text: $model.settleDateText, prompt: "YYYY-MM-DD", issues: issues(model.settleIssues, "occurred_at")).accessibilityIdentifier("v15.f3d.settle.date")
             accountPickers(source: $model.settleAccountID, destination: $model.settleDestinationAccountID, transfer: model.selectedItem?.direction == .transfer)
             if model.selectedItem?.direction != .transfer { categoryPicker(selection: $model.settleCategoryID, categories: model.selectedItem?.direction == .inflow ? model.incomeCategories : model.expenseCategories) }
             V15Field("入账标题", text: $model.settleTitle)
             V15Field("备注", text: $model.settleNote, axis: .vertical)
+            }
             V15ActionButton("确认入账", disabledReasons: model.settleReasons) { Task { await model.settle() } }.accessibilityIdentifier("v15.f3d.settle.submit")
             recoveryActions
         }

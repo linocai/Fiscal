@@ -29,7 +29,6 @@ public struct V15DataSecurityView: View {
                 VStack(alignment: .leading, spacing: V15Spacing.lg) {
                     heading
                     operationsCard
-                    securityFacts
                     exportCard
                     restoreCard
                     passphraseCard
@@ -38,7 +37,7 @@ public struct V15DataSecurityView: View {
                 .frame(maxWidth: 680, alignment: .leading)
             }
             .v15IOSScreenCanvas()
-            .navigationTitle("数据与安全")
+            .navigationTitle("数据与安全").v22CompactNavigationTitle()
             .toolbar {
                 if let closeAction {
                     ToolbarItem(placement: .cancellationAction) {
@@ -62,13 +61,7 @@ public struct V15DataSecurityView: View {
     }
 
     private var heading: some View {
-        VStack(alignment: .leading, spacing: V15Spacing.xs) {
-            Text("数据与安全").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
-            Text("查看运行状态、导出加密归档或修改个人口令。")
-                .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.68)).fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(V15Spacing.md)
-        .v15IOSCard()
+        V22PageHeader("数据与安全", symbol: "lock.shield", subtitle: "备份你的账本，管理个人口令")
     }
     @ViewBuilder private var operationsCard: some View {
         if case .loading = facts.phase { V15LoadingSkeleton().accessibilityIdentifier("v15.system.loading") }
@@ -87,7 +80,7 @@ public struct V15DataSecurityView: View {
         }
     }
     private var securityFacts: some View {
-        V15Section("归档范围") {
+        DisclosureGroup("归档包含哪些内容") {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
                 Text("• 归档经过加密，必须使用密码打开")
                 Text("• 不包含登录信息和 AI 原始内容")
@@ -96,7 +89,8 @@ public struct V15DataSecurityView: View {
         }
     }
     private var exportCard: some View {
-        V15Section("导出加密归档") {
+        V22FormSection("导出加密归档", subtitle: "设置专属密码，将账本保存为加密文件") {
+            securityFacts
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 secureInput("归档密码", prompt: "12–128 个字符", text: $model.password, contentType: .newPassword, identifier: "v15.f4c.password")
                 secureInput("确认归档密码", prompt: "再次输入归档密码", text: $model.passwordConfirmation, contentType: .newPassword, identifier: "v15.f4c.password-confirmation")
@@ -142,7 +136,7 @@ public struct V15DataSecurityView: View {
     }
     private func message(_ value: String, foreground: Color = V15Palette.ink.color, background: Color = V15Palette.receipt.color) -> some View { Text(value).font(V15Typography.secondary).foregroundStyle(foreground).fixedSize(horizontal: false, vertical: true).padding(V15Spacing.sm).background(background, in: RoundedRectangle(cornerRadius: V15Radius.tag)) }
     private var restoreCard: some View {
-        V15Section("恢复前置条件") {
+        V22FormSection("恢复归档") {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
                 Text("归档只能恢复到全新的空账本，不能覆盖当前账本。当前应用暂不提供恢复操作。")
                     .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
@@ -152,7 +146,7 @@ public struct V15DataSecurityView: View {
         }
     }
     private var passphraseCard: some View {
-        V15Section("修改个人口令") {
+        V22FormSection("个人口令") {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
                 Text("修改后，本机继续使用新口令；其他设备需要用新口令重新解锁。账本数据不受影响。")
                     .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
@@ -194,7 +188,8 @@ public struct V15DataSecurityView: View {
     }
     private var confirmationSheet: some View {
         VStack(alignment: .leading, spacing: V15Spacing.lg) {
-            Text("确认创建加密归档").font(V15Typography.surfaceTitle)
+            V22PageHeader("创建加密归档", symbol: "lock.doc", subtitle: "使用刚刚设置的归档密码加密")
+            V22FlowProgress(["设置密码", "确认创建", "存入文件"], current: 1)
             Text("归档不包含 AI 原始内容或登录信息。")
                 .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
             HStack { V15ActionButton("取消", kind: .secondary) { model.cancel() }; Spacer(); V15ActionButton("开始创建", accessibilityIdentifier: "v15.f4c.confirm") { model.confirmExport() } }

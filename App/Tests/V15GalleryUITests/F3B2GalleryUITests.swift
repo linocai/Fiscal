@@ -13,7 +13,11 @@ import XCTest
     }
 
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
-    private func button(_ id: String) -> XCUIElement { app.buttons[id] }
+    private func button(_ id: String) -> XCUIElement {
+        let direct = app.buttons[id].firstMatch
+        if id != "v15.f3b2.purchase.account" || direct.exists { return direct }
+        return app.descendants(matching: .any)[id].firstMatch.buttons.firstMatch
+    }
     private func textField(_ id: String) -> XCUIElement { app.textFields[id] }
 
     @discardableResult private func reveal(_ id: String, swipes: Int = 8) -> XCUIElement {

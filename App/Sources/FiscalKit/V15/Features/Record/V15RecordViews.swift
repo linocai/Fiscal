@@ -71,6 +71,7 @@ private struct V15RecordEditor: View {
 #if os(iOS)
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.section) {
+                    V22PageHeader("记一笔", symbol: "plus.circle.fill", subtitle: "先输入金额，再补充必要信息")
                     iOSForm
                     repaymentPreviewState
                     submissionState
@@ -79,8 +80,7 @@ private struct V15RecordEditor: View {
             .accessibilityIdentifier("v15.f1a.record.scroll")
             .scrollDismissesKeyboard(.interactively)
             .v15IOSScreenCanvas()
-            .navigationTitle("记一笔")
-            .navigationBarTitleDisplayMode(.inline)
+            .v22CompactNavigationTitle()
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 primaryAction
                     .padding(.horizontal, V15IOSLayout.contentPadding)
@@ -91,7 +91,7 @@ private struct V15RecordEditor: View {
 #else
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.md) {
-                    HStack { Text("新建账目").font(V15Typography.surfaceTitle); Spacer() }
+                    V22PageHeader("记一笔", symbol: "plus.circle.fill", subtitle: "先输入金额，再补充必要信息")
                     form
                     references
                     repaymentPreviewState
@@ -99,7 +99,7 @@ private struct V15RecordEditor: View {
                     primaryAction
                 }.padding(V15Spacing.lg)
             }
-            .background(V15Palette.paper.color)
+            .v22PageCanvas()
 #endif
         }
         .task { await model.loadReferences() }
@@ -135,6 +135,9 @@ private struct V15RecordEditor: View {
         VStack(alignment: .leading, spacing: V15Spacing.lg) {
             iOSKindMenu
             V15AmountInput(text: $model.amountText, issues: issues("amount_minor"), automaticallyFocus: true, accessibilityIdentifier: "v15.f1a.record.amount")
+                .padding(.vertical, V15Spacing.sm)
+                .padding(.horizontal, V15Spacing.md)
+                .v22FormSurface()
             iOSTitleInput
             iOSReferenceControls
             iOSSecondaryControls

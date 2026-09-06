@@ -27,13 +27,22 @@ P1 financial values come only from `PreviewSupport/OverviewFixtures.swift`. They
 
 Accounts and categories use the protected `/api/v1/accounts` and `/api/v1/categories` resources directly. Their screens have explicit loading, empty, unauthorized, offline, validation, optimistic-conflict, and unexpected-error states; they never substitute preview fixtures. Updates send `expected_version`, safe deletion sends it as a query parameter, and ordering/merge/split use the frozen P2 contract in `archive/releases/v1.0-v1.3/contracts/p2-contracts.md`.
 
-The iOS shell intentionally does not use `TabView`: one explicit selection drives one custom glass bottom bar. Accounts and Categories are available from More. macOS exposes both as first-class sidebar destinations.
+The iOS shell uses the native iOS 26 `TabView` for four stable destinations:
+Overview, Transactions, Accounts, and Analysis. “记一笔” is a labelled
+bottom accessory action rather than a fake fifth tab, and opens the amount-first
+editor full screen. Accounts and data governance remain reachable from the
+Accounts destination. macOS exposes Overview, Transactions, Accounts, and
+Analysis in its deep-teal sidebar, with settings as a contextual tool.
 
 ## P3–P4 ledger and credit
 
 The shared transaction editor uses the authenticated unified ledger for income, expense, transfer, credit purchase, and repayment. Credit purchases are assigned to statement cycles by the server; repayments always name one payment account, one credit account, and one target cycle.
 
-iOS exposes Credit Cycles from More while preserving the single custom bottom bar. macOS keeps credit management inside Accounts with reference-style cards and a 256-point Inspector. Both platforms read debt, available/over-limit credit, opening-configuration state, cycle totals, overdue state, and archived history from the real API without Preview fallback.
+iOS exposes Credit Cycles from account detail and related transactions without
+breaking the four-tab root. macOS keeps credit management inside Accounts with
+reference-style cards and an inspector. Both platforms read debt,
+available/over-limit credit, opening-configuration state, cycle totals, overdue
+state, and archived history from the real API without Preview fallback.
 
 ## P8 AI proposals and settings
 

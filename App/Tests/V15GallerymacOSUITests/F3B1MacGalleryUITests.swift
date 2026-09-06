@@ -9,6 +9,7 @@ final class F3B1MacGalleryUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["v15.f3b1.cycle.inspector"].waitForExistence(timeout: 5))
         app.descendants(matching: .any)["v15.f3b1.schedule.open"].click()
         XCTAssertTrue(app.descendants(matching: .any)["v15.f3b1.schedule.sheet"].waitForExistence(timeout: 5))
+        attachV220(app, name: "v220-mac-F3B1MacGalleryUITests-app")
         app.terminate()
     }
     func testUnknownReadbackControlsCompileIntoTheMacScheduleSheet() {

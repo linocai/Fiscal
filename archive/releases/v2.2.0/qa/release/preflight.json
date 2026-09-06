@@ -1,0 +1,11 @@
+{
+  "checked_at": "2026-09-06T10:43:21.752170+00:00",
+  "source_files_matched": 51,
+  "protected_schemes_matched": 6,
+  "fiscalkit_tests": 408,
+  "cumulative_distinct_ui_passes": 43,
+  "unit_log_sha256": "a448e43c69ad3769ab611de6326a9980132fa9234c2b2b5222c7dd68627cc6f4",
+  "prior_evidence_reused": true,
+  "backend_diff_against_recorded_production": "",
+  "disk_free_bytes_before": 57566011392
+}

@@ -20,3 +20,13 @@ func launchGalleryMac(_ arguments: [String], file: StaticString = #filePath, lin
     }
     return app
 }
+
+// Keep a bounded, reproducible visual record of the exercised native surface.
+extension XCTestCase {
+    func attachV220(_ app: XCUIApplication, name: String) {
+        let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+}

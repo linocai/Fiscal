@@ -8,11 +8,11 @@ public struct V15ReportingMacView: View {
     private let artifactSaver: any V15ReportArtifactSaving
 
     public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialLens: V15ReportingModel.Lens = .overview) {
-        self.init(services: services, offlineSnapshotAt: offlineSnapshotAt, initialLens: initialLens, artifactSaver: V15SystemReportArtifactSaver())
+        self.init(services: services, offlineSnapshotAt: offlineSnapshotAt, initialLens: initialLens, initialPeriod: V22ReportCalendar.currentMonth(), artifactSaver: V15SystemReportArtifactSaver())
     }
 
-    init(services: V15Services, offlineSnapshotAt: Date? = nil, initialLens: V15ReportingModel.Lens = .overview, artifactSaver: any V15ReportArtifactSaving) {
-        let model = V15ReportingModel(services: services, offlineSnapshotAt: offlineSnapshotAt)
+    init(services: V15Services, offlineSnapshotAt: Date? = nil, initialLens: V15ReportingModel.Lens = .overview, initialPeriod: V15ReportPeriod = .month(V15ReportMonth("2026-08")!), artifactSaver: any V15ReportArtifactSaving) {
+        let model = V15ReportingModel(services: services, initialPeriod: initialPeriod, offlineSnapshotAt: offlineSnapshotAt)
         model.selectLens(initialLens)
         _model = State(initialValue: model)
         self.artifactSaver = artifactSaver
@@ -28,7 +28,7 @@ public struct V15ReportingMacView: View {
                 phaseSurface
             }
         }
-        .v15MacWorkspaceCanvas()
+        .v22PageCanvas()
         .tint(V15Palette.teal.color)
         .sheet(isPresented: exportPresented) {
             exportPanel.frame(width: 460).padding(24).background(V15Palette.paper.color)
@@ -149,10 +149,7 @@ public struct V15ReportingMacView: View {
     private func reportHeader(_ meta: V15ReportMeta) -> some View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("财务分析").font(V15Typography.surfaceTitle)
-                Text("先读本期结论，再按同一范围下钻到具体账目。")
-                    .font(V15Typography.secondary)
-                    .foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                V22PageHeader("财务分析", symbol: "chart.line.uptrend.xyaxis", subtitle: "先看本期收支，再查看具体账目")
             }
             Spacer(minLength: 20)
                 Text("上海业务日 \(meta.dateFrom) 至 \(meta.dateTo)\n更新于 \(V15TodayReadModel.shanghaiDateLabel(meta.generatedAt)) · \(meta.currency)")
@@ -347,26 +344,10 @@ public struct V15ReportingMacView: View {
 
     private func dailyTrend(_ daily: [V15PeriodReport.Daily]) -> some View {
         reportCard("每日趋势 · \(spendingLabel(model.spendingMeasure))") {
-            let values = daily.map(dailyAmount)
-            let maximum = max(values.map { abs($0) }.max() ?? 0, 1)
-            HStack(alignment: .bottom, spacing: 4) {
-                ForEach(daily) { point in
-                    VStack(spacing: 5) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(V15ReportingMacVisualSemantics.dailyTrendTone(for: model.spendingMeasure) == .spending ? V15Palette.outflow.color : V15Palette.positive.color)
-                            .frame(height: max(3, 84 * CGFloat(abs(Double(dailyAmount(point))) / Double(maximum))))
-                        Text(String(point.date.suffix(2))).font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(V15Palette.ink.color.opacity(0.56))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .bottom)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(point.date)，\(V15MoneyPresentation(minorUnits: dailyAmount(point), direction: .neutral).text)")
-                }
-            }
-            .frame(height: 120, alignment: .bottom)
-            Text("柱高代表每日金额；可从分类继续下钻查看明细。")
-                .font(V15Typography.secondary)
-                .foregroundStyle(V15Palette.ink.color.opacity(0.62))
+            V22SpendingTrend(
+                points: daily.map { .init(date: $0.date, amountMinor: dailyAmount($0)) },
+                title: "每日趋势 · \(spendingLabel(model.spendingMeasure))"
+            )
         }
     }
     private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral).text }
@@ -435,13 +416,10 @@ public struct V15ReportingMacView: View {
     private func metricGrid(_ values: [(String, Int64, V15MoneyDirection)]) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 12)], spacing: 12) {
             ForEach(Array(values.enumerated()), id: \.offset) { indexed in
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(indexed.element.0).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                    V15MoneyText(minorUnits: indexed.element.1, direction: indexed.element.2, font: V15Typography.moneyLarge)
-                }
+                V22Metric(indexed.element.0, minorUnits: indexed.element.1, direction: indexed.element.2)
                 .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
                 .padding(14)
-                .v15MacPanel()
+                .v22FormSurface()
             }
         }
     }
@@ -541,8 +519,8 @@ public struct V15ReportingMacView: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .v15MacPanel()
+        .padding(18)
+        .v22FormSurface()
     }
 
     private func unavailableCard(_ title: String, _ reason: String) -> some View {

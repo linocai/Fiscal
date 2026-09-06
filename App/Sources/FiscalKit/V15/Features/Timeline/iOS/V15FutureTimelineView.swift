@@ -23,7 +23,7 @@ public struct V15FutureTimelineView: View {
                 accountPicker
                 surface
             }.padding(V15Spacing.md).frame(maxWidth: 680, alignment: .leading) }
-            .v15IOSScreenCanvas().navigationTitle("已知未来")
+            .v15IOSScreenCanvas().navigationTitle("未来安排").v22CompactNavigationTitle()
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { Task { await model.reload() } } label: { Label("重新读取", systemImage: V15Symbol.retry) }.accessibilityIdentifier("v15.f3a.reload") } }
         }
         .sheet(isPresented: $inspectorShown, onDismiss: { invalidateOpenLifecycle() }) { inspector.presentationDetents([.medium, .large]) }
@@ -35,11 +35,10 @@ public struct V15FutureTimelineView: View {
         .onDisappear { invalidateOpenLifecycle() }
         .accessibilityIdentifier("v15.f3a.timeline.ios")
     }
-    private var header: some View { VStack(alignment: .leading, spacing: V15Spacing.xs) {
-        Text("已知未来").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.ink.color)
-        Text(model.meta.map { "数据更新于 \(V15TodayReadModel.shanghaiDateLabel($0.asOf))" } ?? "只读时间范围，不把未来事项计入当前余额或正式流水。")
-            .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
-    }.accessibilityIdentifier("v15.f3a.header") }
+    private var header: some View {
+        V22PageHeader("未来安排", symbol: "calendar", subtitle: model.meta.map { "更新于 \(V15TodayReadModel.shanghaiDateLabel($0.asOf))" } ?? "预计事项，尚未计入实际收支")
+            .accessibilityIdentifier("v15.f3a.header")
+    }
     private var windowPicker: some View { Picker("时间窗口", selection: Binding(get: { model.selectedWindowDays }, set: { value in Task { await model.setWindowDays(value) } })) {
         Text("7天").tag(7); Text("30天").tag(30); Text("60天").tag(60); Text("90天").tag(90)
     }.pickerStyle(.segmented).accessibilityIdentifier("v15.f3a.window") }
