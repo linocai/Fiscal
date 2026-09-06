@@ -40,7 +40,7 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         "\(keychainServicePrefix)\(UUID().uuidString.lowercased())"
     }
 
-    private func launchApp(service: String, accessKey: String? = nil, cleanupOnly: Bool = false, forceTransportError: Bool = false) -> XCUIApplication {
+    private func launchApp(service: String, accessKey: String? = nil, cleanupOnly: Bool = false, forceTransportError: Bool = false, formalFixture: Bool = false, scheme: String? = nil, accountOverflow: Bool = false) -> XCUIApplication {
         // XCTest's `XCUIApplication().terminate()` does not reliably end a
         // retained macOS process between test methods. Kill the exact app
         // bundle and wait for it to leave the process table before setting this
@@ -55,6 +55,9 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         app.launchEnvironment["FISCAL_ACCESS_KEY"] = accessKey ?? ""
         app.launchEnvironment["FISCAL_ROOT_SMOKE_CLEANUP_ONLY"] = cleanupOnly ? "1" : "0"
         app.launchEnvironment["FISCAL_ROOT_SMOKE_FORCE_TRANSPORT_ERROR"] = forceTransportError ? "1" : "0"
+        app.launchEnvironment["FISCAL_ROOT_SMOKE_FORMAL_FIXTURE"] = formalFixture ? "1" : "0"
+        app.launchEnvironment["FISCAL_ROOT_SMOKE_COLOR_SCHEME"] = scheme ?? ""
+        app.launchEnvironment["FISCAL_ROOT_SMOKE_ACCOUNT_OVERFLOW"] = accountOverflow ? "1" : "0"
         app.launch()
         return app
     }
@@ -77,6 +80,63 @@ final class V15RootSmokemacOSUITests: XCTestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["v15.f1a.bootstrap"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.descendants(matching: .any)["v15.gallery.macos"].exists)
+    }
+
+    func testFixtureTimelineSelectionSurvivesAnalysisRoundTrip() {
+        let app = launchApp(service: uniqueKeychainService(), formalFixture: true, scheme: "light")
+        XCTAssertTrue(app.descendants(matching: .any)["v151.mac.workspace"].waitForExistence(timeout: 8))
+        let inspector = app.descendants(matching: .any)["v151.mac.inspector"].firstMatch
+        XCTAssertFalse(inspector.exists)
+        let transaction = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "v151.mac.transaction.")).firstMatch
+        XCTAssertTrue(transaction.waitForExistence(timeout: 8))
+        transaction.click()
+        XCTAssertTrue(inspector.waitForExistence(timeout: 5))
+
+        app.descendants(matching: .any)["v151.mac.module.reports"].firstMatch.click()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f4a.reports.macos"].waitForExistence(timeout: 8))
+        app.descendants(matching: .any)["v151.mac.module.timeline"].firstMatch.click()
+        XCTAssertTrue(inspector.waitForExistence(timeout: 5), "Returning from analysis must preserve the selected transaction context")
+        let attachment = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        attachment.name = "v210-mac-timeline-selected"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        app.typeKey("n", modifierFlags: .command)
+        let amount = app.textFields["v15.f1a.record.amount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        amount.click()
+        amount.typeText("1280.50")
+        XCTAssertEqual(amount.value as? String, "1280.50")
+        let recordCapture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        recordCapture.name = "v210-mac-formal-record"
+        recordCapture.lifetime = .keepAlways
+        add(recordCapture)
+        app.buttons["v151.mac.module.back"].click()
+        XCTAssertTrue(inspector.waitForExistence(timeout: 5))
+    }
+
+    func testAllAccountsMenuSelectsOverflowAccountFromEverySpace() {
+        let app = launchApp(service: uniqueKeychainService(), formalFixture: true, accountOverflow: true)
+        let allAccounts = app.descendants(matching: .any)["v151.mac.sidebar.all-accounts"].firstMatch
+        XCTAssertTrue(allAccounts.waitForExistence(timeout: 8))
+        for space in ["timeline", "reports", "settings"] {
+            app.descendants(matching: .any)["v151.mac.module.\(space)"].firstMatch.click()
+            allAccounts.click()
+            let fifth = app.menuItems["测试账户5"]
+            XCTAssertTrue(fifth.waitForExistence(timeout: 3))
+            fifth.click()
+            let scope = app.descendants(matching: .any)["v151.mac.account.scope"].firstMatch
+            XCTAssertTrue(scope.waitForExistence(timeout: 5), "选择账户应返回时间线")
+            XCTAssertEqual(scope.value as? String, "测试账户5")
+            XCTAssertTrue(app.descendants(matching: .any)["v151.mac.inspector"].firstMatch.exists)
+        }
+        app.descendants(matching: .any)["v151.mac.module.reports"].firstMatch.click()
+        allAccounts.click()
+        app.menuItems["全部账户流水"].click()
+        let scope = app.descendants(matching: .any)["v151.mac.account.scope"].firstMatch
+        XCTAssertTrue(scope.waitForExistence(timeout: 5))
+        XCTAssertEqual(scope.value as? String, "全部账户")
+        XCTAssertFalse(app.descendants(matching: .any)["v151.mac.inspector"].firstMatch.exists)
     }
 
     func testLocalServerBootstrapThenOpensV2FinancialTimeline() async throws {

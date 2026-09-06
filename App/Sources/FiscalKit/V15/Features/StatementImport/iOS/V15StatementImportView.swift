@@ -203,7 +203,7 @@ public struct V15StatementImportView: View {
                 Label("\(board.sourceUnavailableCount) 页识别内容不可用", systemImage: "exclamationmark.triangle")
                     .font(V15Typography.secondary.weight(.semibold))
                     .padding(9)
-                    .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.tag))
+                    .background(V15Palette.unknownSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.tag))
                     .accessibilityIdentifier("v15.f3g.source-unavailable")
             }
         }
@@ -222,7 +222,7 @@ public struct V15StatementImportView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(V15Spacing.sm)
-            .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.decisionCard))
+            .background(V15Palette.warningSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.decisionCard))
             .accessibilityIdentifier("v15.f3g.validation-warning")
         }
     }
@@ -291,7 +291,7 @@ public struct V15StatementImportView: View {
             }
         }
         .padding(V15Spacing.md)
-        .background(row.evidenceTextMasked == nil ? V15Palette.provisional.color : V15Palette.surfaceRaised.color, in: RoundedRectangle(cornerRadius: V15Radius.decisionCard, style: .continuous))
+        .background(row.evidenceTextMasked == nil ? V15Palette.unknownSurface.color : V15Palette.surfaceRaised.color, in: RoundedRectangle(cornerRadius: V15Radius.decisionCard, style: .continuous))
         .overlay { RoundedRectangle(cornerRadius: V15Radius.decisionCard).stroke(V15Palette.hairline.color, style: StrokeStyle(lineWidth: 1, dash: row.evidenceTextMasked == nil ? [5, 4] : [])) }
         .accessibilityIdentifier("v15.f3g.evidence.\(row.id)")
     }
@@ -466,7 +466,7 @@ public struct V15StatementImportView: View {
                         .font(V15Typography.secondary.weight(.semibold))
                 }
                 .padding(V15Spacing.md)
-                .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.decisionCard))
+                .background(V15Palette.warningSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.decisionCard))
             }
             Text("所选行会一起确认；如果其中一行失败，本次不会导入任何一行。仍有 \(preview.counts.batchUnresolved) 行待处理。")
                 .font(V15Typography.secondary)

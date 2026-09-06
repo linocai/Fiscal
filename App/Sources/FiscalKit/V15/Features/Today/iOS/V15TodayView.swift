@@ -106,8 +106,8 @@ private struct V15TodayHeader: View {
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
         }
-        .padding(V15Spacing.md)
-        .v15IOSCard()
+        .padding(.vertical, V15Spacing.md)
+        .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(model.facts.map { "今日概览，截至 \(V15TodayReadModel.shanghaiDateLabel($0.meta.asOf))，人民币" } ?? "正在更新今日概览")
         .accessibilityIdentifier("v15.f2b.snapshot")
@@ -129,8 +129,8 @@ private struct V15TodayKnownFuture: View {
                         Spacer(minLength: V15Spacing.xs)
                         V15MoneyText(minorUnits: event.amountMinor, direction: event.direction == .inflow ? .inflow : .outflow, font: V15Typography.secondary)
                     }
-                    .padding(V15Spacing.md)
-                    .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card))
+                    .padding(.vertical, V15Spacing.md)
+                    .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
                 }
             }
             .accessibilityIdentifier("v15.f2b.known-future")
@@ -176,8 +176,8 @@ private struct V15TodayFutureTotalRow: View {
             Spacer(minLength: V15Spacing.xs)
             V15MoneyText(minorUnits: amount, direction: direction, font: V15Typography.secondary)
         }
-        .padding(V15Spacing.sm)
-        .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+        .padding(.vertical, V15Spacing.sm)
+        .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
         .accessibilityElement(children: .combine)
     }
 }
@@ -195,8 +195,8 @@ private struct V15TodayFutureTotalPair: View {
                 V15MoneyText(minorUnits: inflow, direction: .inflow, font: V15Typography.secondary)
             }
         }
-        .padding(V15Spacing.sm)
-        .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+        .padding(.vertical, V15Spacing.sm)
+        .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
         .accessibilityElement(children: .combine)
     }
 }
@@ -204,26 +204,10 @@ private struct V15TodayFutureTotalPair: View {
 private struct V15TodayFactsCards: View {
     let facts: V15Facts
     let open: (V15DrillDownScope?) -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
         V15Section("财务概览") {
-            if dynamicTypeSize.isAccessibilitySize || requiresSingleColumn {
-                VStack(spacing: V15Spacing.sm) { cards }
-            } else {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: V15Spacing.sm), GridItem(.flexible(), spacing: V15Spacing.sm)], spacing: V15Spacing.sm) { cards }
-            }
+            VStack(spacing: 0) { cards }
         }
-    }
-
-    /// A grid must never force a monetary value outside its card.  In the
-    /// exceptional long-value case, preserve the complete one-line amount by
-    /// giving each fact the full reading width.
-    private var requiresSingleColumn: Bool {
-        [facts.cash.currentBalanceMinor,
-         facts.credit.currentDebtMinor,
-         facts.reimbursements.outstandingMinor,
-         facts.completeness.uncategorizedTransactionAmountMinor]
-            .contains { String($0).count > 12 }
     }
 
     @ViewBuilder private var cards: some View {
@@ -244,9 +228,9 @@ private struct V15TodayFactCard: View {
                 Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                 Text(scope == nil ? "当前无法查看此范围" : "查看明细").font(V15Typography.label).foregroundStyle(V15Palette.teal.color)
             }
-            .frame(maxWidth: .infinity, minHeight: 148, alignment: .leading)
-            .padding(V15Spacing.md)
-            .v15IOSCard()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, V15Spacing.md)
+            .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
         }
         .buttonStyle(.plain)
         .disabled(scope == nil)

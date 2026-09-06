@@ -19,27 +19,39 @@ final class F1AGalleryUITests: XCTestCase {
         let businessDate = app.datePickers["业务日期（上海）"]
         XCTAssertTrue(businessDate.waitForExistence(timeout: 2))
         XCTAssertEqual(businessDate.value as? String, "2026年8月15日")
+        let dateLabel = app.staticTexts["日期"].firstMatch
+        XCTAssertTrue(dateLabel.waitForExistence(timeout: 2))
+        XCTAssertGreaterThan(dateLabel.frame.width, dateLabel.frame.height, "日期标签必须保持横向可读")
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = "f1a-ios-record-sheet-disabled"
         attachment.lifetime = .keepAlways
         add(attachment)
     }
 
-    func testRecordFormStartsWithAmountThenTypeAccountDateAndName() {
+    func testRecordKeepsAmountNameAndCommitReachableWithKeyboard() {
         launch("record")
         app.buttons["新建账目"].tap()
         let amount = app.textFields["v15.f1a.record.amount"]
         let kind = app.descendants(matching: .any)["v15.f1a.record.kind"].firstMatch
         let account = app.descendants(matching: .any)["v15.f1a.record.account"].firstMatch
-        let date = app.datePickers["v15.f1a.record.date"]
         let title = app.textFields["v15.f1a.record.title"]
-        for element in [amount, kind, account, date, title] {
+        let submit = app.buttons["保存账目"]
+        for element in [amount, kind, account, title, submit] {
             XCTAssertTrue(element.waitForExistence(timeout: 5))
         }
-        XCTAssertLessThan(amount.frame.minY, kind.frame.minY)
-        XCTAssertLessThan(kind.frame.minY, account.frame.minY)
-        XCTAssertLessThan(account.frame.minY, date.frame.minY)
-        XCTAssertLessThan(date.frame.minY, title.frame.minY)
+        XCTAssertLessThan(amount.frame.minY, title.frame.minY)
+        XCTAssertLessThan(title.frame.maxY, account.frame.maxY)
+        let keyboard = app.keyboards.firstMatch
+        if !keyboard.exists { amount.tap() }
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 2), "需要显示软件键盘后再验证录入区可达性")
+        XCTAssertGreaterThan(keyboard.frame.height, 150, "键盘必须有实际显示高度，不能由硬件键盘焦点冒充")
+        XCTAssertLessThan(keyboard.frame.minY, app.frame.maxY - 100, "键盘必须实际出现在屏幕内")
+        XCTAssertTrue(submit.isHittable)
+        XCTAssertLessThanOrEqual(submit.frame.maxY, keyboard.frame.minY, "确认操作必须位于软件键盘上方")
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "f1a-ios-record-software-keyboard"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testRecordSheetAcceptsInputAndShowsUserFacingSuccess() {
@@ -50,6 +62,41 @@ final class F1AGalleryUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["v15.f1a.record.success"].waitForExistence(timeout: 4))
         XCTAssertTrue(app.staticTexts["账目已保存"].exists)
         XCTAssertTrue(app.staticTexts["已生成 1 条分录"].exists)
+    }
+
+    func testNoteCollapsesWithoutLosingTextAndResetsForNextEntry() {
+        launch("record-valid")
+        app.buttons["新建账目"].tap()
+        let toggle = app.buttons["v15.f1a.record.note-toggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 4))
+        let note = app.textFields["备注"]
+        XCTAssertFalse(note.exists)
+        scrollUntilHittable(toggle)
+        toggle.tap()
+        XCTAssertTrue(note.waitForExistence(timeout: 2))
+        toggle.tap()
+        XCTAssertFalse(note.exists)
+        toggle.tap()
+        scrollUntilHittable(note)
+        note.tap()
+        note.typeText("Keep this note")
+        scrollUntilHittable(toggle)
+        toggle.tap()
+        XCTAssertFalse(note.exists)
+        XCTAssertEqual(toggle.label, "备注 · 已填写")
+        toggle.tap()
+        XCTAssertEqual(note.value as? String, "Keep this note")
+        app.buttons["保存账目"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f1a.record.success"].waitForExistence(timeout: 4))
+        XCTAssertFalse(note.exists)
+        XCTAssertEqual(toggle.label, "备注")
+        let next = app.buttons["录入下一笔"]
+        scrollUntilHittable(next)
+        next.tap()
+        scrollUntilHittable(toggle)
+        toggle.tap()
+        XCTAssertTrue(note.waitForExistence(timeout: 2))
+        XCTAssertTrue(["", "可选"].contains(note.value as? String ?? ""), "下一笔不得保留旧备注")
     }
 
     func testTypePickerReachesAllFiveKindsWithCompatibleFields() {
@@ -83,6 +130,12 @@ final class F1AGalleryUITests: XCTestCase {
         launch("record", extraArguments: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         app.buttons["新建账目"].tap()
         XCTAssertTrue(app.buttons["保存账目"].waitForExistence(timeout: 4))
+        let amount = app.textFields["v15.f1a.record.amount"]
+        let title = app.textFields["v15.f1a.record.title"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 2))
+        XCTAssertTrue(title.waitForExistence(timeout: 2))
+        XCTAssertGreaterThan(amount.frame.height, 52)
+        XCTAssertTrue(app.buttons["保存账目"].isHittable)
         XCTAssertFalse(app.staticTexts["请填写账目名称。"].exists)
         let ax5 = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         ax5.name = "f1a-ios-record-sheet-ax5"
@@ -171,7 +224,28 @@ final class F1AGalleryUITests: XCTestCase {
     }
 
     private func scrollUntilHittable(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
-        for _ in 0..<5 where !element.isHittable { app.swipeUp() }
+        // The sheet/root accessibility identifier can replace the identifier
+        // of its root ScrollView. Query its native role to target the content,
+        // keeping the fixed action bar and keyboard outside the swipe region.
+        let recordScroll = app.scrollViews.firstMatch
+        XCTAssertTrue(recordScroll.waitForExistence(timeout: 2), "记账编辑器滚动容器不存在", file: file, line: line)
+        for _ in 0..<8 where !element.isHittable {
+            let bounds = recordScroll.frame.intersection(app.frame)
+            var bottom = bounds.maxY
+            let keyboard = app.keyboards.firstMatch
+            if keyboard.exists { bottom = min(bottom, keyboard.frame.minY) }
+            for label in ["保存账目", "查看还款影响", "确认还款"] {
+                let action = app.buttons[label]
+                if action.exists { bottom = min(bottom, action.frame.minY) }
+            }
+            let height = bottom - bounds.minY
+            XCTAssertGreaterThan(height, 80, "必须保留可滑动的内容区域", file: file, line: line)
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            let x = bounds.minX + bounds.width * 0.9
+            let start = origin.withOffset(CGVector(dx: x, dy: bounds.minY + height * 0.85))
+            let end = origin.withOffset(CGVector(dx: x, dy: bounds.minY + height * 0.15))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
         XCTAssertTrue(element.isHittable, "element was not reachable", file: file, line: line)
     }
 }

@@ -150,12 +150,12 @@ public struct V15ReportingMacView: View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 5) {
                 Text("财务分析").font(V15Typography.surfaceTitle)
-                Text("收支、资产、信用与分类均使用当前期间。")
+                Text("先读本期结论，再按同一范围下钻到具体账目。")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
             Spacer(minLength: 20)
-                Text("上海业务日 \(meta.dateFrom) 至 \(meta.dateTo)\nCNY")
+                Text("上海业务日 \(meta.dateFrom) 至 \(meta.dateTo)\n更新于 \(V15TodayReadModel.shanghaiDateLabel(meta.generatedAt)) · \(meta.currency)")
                 .font(V15Typography.secondary)
                 .foregroundStyle(V15Palette.ink.color.opacity(0.62))
                 .multilineTextAlignment(.trailing)
@@ -202,44 +202,33 @@ public struct V15ReportingMacView: View {
     }
 
     private func spendingSurface(_ report: V15PeriodReport) -> some View {
-        HStack(alignment: .top, spacing: 20) {
-            VStack(alignment: .leading, spacing: 18) {
-                reportCard("本期支出 · \(spendingLabel(model.spendingMeasure))") {
-                    HStack(alignment: .firstTextBaseline) {
-                        V15MoneyText(minorUnits: model.spendingAmount(in: report.summary), direction: .neutral, font: .system(size: 34, weight: .semibold, design: .monospaced))
-                            .accessibilityIdentifier("v15.f4a.spending.hero")
-                        Spacer(minLength: 12)
-                        Menu("切换口径") {
-                            ForEach(V15ReportingModel.SpendingMeasure.allCases, id: \.self) { measure in
-                                Button(spendingLabel(measure)) { model.selectSpendingMeasure(measure) }
-                            }
+        VStack(alignment: .leading, spacing: 18) {
+            reportCard("本期支出 · \(spendingLabel(model.spendingMeasure))") {
+                HStack(alignment: .firstTextBaseline) {
+                    V15MoneyText(minorUnits: model.spendingAmount(in: report.summary), direction: .neutral, font: .system(size: 34, weight: .semibold, design: .monospaced))
+                        .accessibilityIdentifier("v15.f4a.spending.hero")
+                    Spacer(minLength: 12)
+                    Menu("切换口径") {
+                        ForEach(V15ReportingModel.SpendingMeasure.allCases, id: \.self) { measure in
+                            Button(spendingLabel(measure)) { model.selectSpendingMeasure(measure) }
                         }
-                        .menuStyle(.borderlessButton)
                     }
-                    Text("这些数字是同一期间的不同统计方式，不能相加。")
-                        .font(V15Typography.secondary)
-                        .foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                        .fixedSize(horizontal: false, vertical: true)
-                    if model.spendingMeasure == .personalRealized,
-                       report.summary.personalExpectedMinor != report.summary.personalRealizedMinor {
-                        Text("个人预计承担 \(V15MoneyPresentation(minorUnits: report.summary.personalExpectedMinor, direction: .neutral).text) · 预计可报销 \(V15MoneyPresentation(minorUnits: report.summary.expectedReimbursementMinor, direction: .neutral).text) · 已收 \(V15MoneyPresentation(minorUnits: report.summary.receivedReimbursementMinor, direction: .neutral).text)")
-                            .font(V15Typography.secondary)
-                            .foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                    }
+                    .menuStyle(.borderlessButton)
                 }
-                sevenMeasures(report.summary)
-                categoryDistribution(report)
-                if let daily = report.daily { dailyTrend(daily) }
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            VStack(alignment: .leading, spacing: 18) {
-                reportCard("期间为空时") {
-                    Text("可以切换到其他期间继续查看。")
+                Text("这些数字是同一期间的不同统计方式，不能相加。")
+                    .font(V15Typography.secondary)
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                    .fixedSize(horizontal: false, vertical: true)
+                if model.spendingMeasure == .personalRealized,
+                   report.summary.personalExpectedMinor != report.summary.personalRealizedMinor {
+                    Text("个人预计承担 \(V15MoneyPresentation(minorUnits: report.summary.personalExpectedMinor, direction: .neutral).text) · 预计可报销 \(V15MoneyPresentation(minorUnits: report.summary.expectedReimbursementMinor, direction: .neutral).text) · 已收 \(V15MoneyPresentation(minorUnits: report.summary.receivedReimbursementMinor, direction: .neutral).text)")
                         .font(V15Typography.secondary)
                         .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 }
             }
-            .frame(width: 330, alignment: .topLeading)
+            sevenMeasures(report.summary)
+            categoryDistribution(report)
+            if let daily = report.daily { dailyTrend(daily) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f4a.surface.spending")
@@ -364,7 +353,7 @@ public struct V15ReportingMacView: View {
                 ForEach(daily) { point in
                     VStack(spacing: 5) {
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(V15ReportingMacVisualSemantics.dailyTrendTone(for: model.spendingMeasure) == .spending ? V15Palette.gold.color : V15Palette.teal.color)
+                            .fill(V15ReportingMacVisualSemantics.dailyTrendTone(for: model.spendingMeasure) == .spending ? V15Palette.outflow.color : V15Palette.positive.color)
                             .frame(height: max(3, 84 * CGFloat(abs(Double(dailyAmount(point))) / Double(maximum))))
                         Text(String(point.date.suffix(2))).font(.system(size: 9, design: .monospaced))
                             .foregroundStyle(V15Palette.ink.color.opacity(0.56))
@@ -428,7 +417,7 @@ public struct V15ReportingMacView: View {
                 }
                 .padding(10)
                 .background(category.categoryID == nil ? V15Palette.provisional.color : Color.clear)
-                .overlay(alignment: .leading) { if category.categoryID == nil { Rectangle().fill(V15Palette.yellow.color).frame(width: 4) } }
+                .overlay(alignment: .leading) { if category.categoryID == nil { Rectangle().fill(V15Palette.warning.color).frame(width: 4) } }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -444,13 +433,13 @@ public struct V15ReportingMacView: View {
     }
 
     private func metricGrid(_ values: [(String, Int64, V15MoneyDirection)]) -> some View {
-        HStack(spacing: 12) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 12)], spacing: 12) {
             ForEach(Array(values.enumerated()), id: \.offset) { indexed in
                 VStack(alignment: .leading, spacing: 5) {
                     Text(indexed.element.0).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     V15MoneyText(minorUnits: indexed.element.1, direction: indexed.element.2, font: V15Typography.moneyLarge)
                 }
-                .frame(maxWidth: .infinity, minHeight: 78, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
                 .padding(14)
                 .v15MacPanel()
             }

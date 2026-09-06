@@ -60,16 +60,17 @@ public struct V15ActionButton: View {
     private let showsDisabledReasons: Bool
     private let disabledReasonAccessibilityIdentifier: String?
     private let controlAccessibilityIdentifier: String?
+    private let unavailableAccessibilityHint: String?
     private let action: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(_ title: String, symbol: String? = nil, kind: V15ButtonKind = .primary, disabledReason: V15DisabledReason? = nil, showsDisabledReasons: Bool = true, disabledReasonAccessibilityIdentifier: String? = nil, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
-        self.init(title, symbol: symbol, kind: kind, disabledReasons: disabledReason.map { [$0] } ?? [], showsDisabledReasons: showsDisabledReasons, disabledReasonAccessibilityIdentifier: disabledReasonAccessibilityIdentifier, accessibilityIdentifier: accessibilityIdentifier, action: action)
+    public init(_ title: String, symbol: String? = nil, kind: V15ButtonKind = .primary, disabledReason: V15DisabledReason? = nil, showsDisabledReasons: Bool = true, disabledReasonAccessibilityIdentifier: String? = nil, accessibilityIdentifier: String? = nil, unavailableAccessibilityHint: String? = nil, action: @escaping () -> Void) {
+        self.init(title, symbol: symbol, kind: kind, disabledReasons: disabledReason.map { [$0] } ?? [], showsDisabledReasons: showsDisabledReasons, disabledReasonAccessibilityIdentifier: disabledReasonAccessibilityIdentifier, accessibilityIdentifier: accessibilityIdentifier, unavailableAccessibilityHint: unavailableAccessibilityHint, action: action)
     }
 
-    public init(_ title: String, symbol: String? = nil, kind: V15ButtonKind = .primary, disabledReasons: [V15DisabledReason], showsDisabledReasons: Bool = true, disabledReasonAccessibilityIdentifier: String? = nil, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
-        self.title = title; self.symbol = symbol; self.kind = kind; self.disabledReasons = disabledReasons; self.showsDisabledReasons = showsDisabledReasons; self.disabledReasonAccessibilityIdentifier = disabledReasonAccessibilityIdentifier; self.controlAccessibilityIdentifier = accessibilityIdentifier; self.action = action
+    public init(_ title: String, symbol: String? = nil, kind: V15ButtonKind = .primary, disabledReasons: [V15DisabledReason], showsDisabledReasons: Bool = true, disabledReasonAccessibilityIdentifier: String? = nil, accessibilityIdentifier: String? = nil, unavailableAccessibilityHint: String? = nil, action: @escaping () -> Void) {
+        self.title = title; self.symbol = symbol; self.kind = kind; self.disabledReasons = disabledReasons; self.showsDisabledReasons = showsDisabledReasons; self.disabledReasonAccessibilityIdentifier = disabledReasonAccessibilityIdentifier; self.controlAccessibilityIdentifier = accessibilityIdentifier; self.unavailableAccessibilityHint = unavailableAccessibilityHint; self.action = action
     }
 
     public var body: some View {
@@ -104,7 +105,7 @@ public struct V15ActionButton: View {
         .buttonStyle(V15ButtonStyle(kind: kind, reduceMotion: reduceMotion, dark: colorScheme == .dark))
         .disabled(!disabledReasons.isEmpty)
         .v15KeyboardFocusable()
-        .v15ActionAccessibility(label: title, hint: disabledReasons.isEmpty ? nil : disabledReasons.map(V15Accessibility.safeReason).joined(separator: "；"))
+        .v15ActionAccessibility(label: title, hint: disabledReasons.isEmpty ? unavailableAccessibilityHint : disabledReasons.map(V15Accessibility.safeReason).joined(separator: "；"))
     }
 
     private var buttonExpands: Bool {
@@ -232,6 +233,58 @@ public struct V15Field: View {
     }
 }
 
+/// The record amount keeps Apple's text input semantics (paste, hardware
+/// keyboard, VoiceOver and Dynamic Type) while giving the high-frequency
+/// entry a dedicated, non-Form visual hierarchy.
+public struct V15AmountInput: View {
+    @Binding private var text: String
+    private let issues: [V15FieldIssue]
+    private let automaticallyFocus: Bool
+    private let controlAccessibilityIdentifier: String?
+    @ScaledMetric(relativeTo: .largeTitle) private var amountPointSize: CGFloat = 46
+    @FocusState private var focused: Bool
+
+    public init(text: Binding<String>, issues: [V15FieldIssue] = [], automaticallyFocus: Bool = false, accessibilityIdentifier: String? = nil) {
+        _text = text
+        self.issues = issues
+        self.automaticallyFocus = automaticallyFocus
+        controlAccessibilityIdentifier = accessibilityIdentifier
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: V15Spacing.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: V15Spacing.xs) {
+                Text("¥")
+                    .font(V15Typography.cardTitle.weight(.bold))
+                    .foregroundStyle(V15Palette.teal.color)
+                    .accessibilityHidden(true)
+                TextField("0.00", text: $text, prompt: Text("0.00").foregroundStyle(V15Palette.ink.color.opacity(0.56)))
+                    .font(.system(size: amountPointSize, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(V15Palette.ink.color)
+                    .tint(V15Palette.teal.color)
+#if os(iOS)
+                    .keyboardType(.decimalPad)
+#endif
+                    .textFieldStyle(.plain)
+                    .focused($focused)
+                    .accessibilityLabel("金额（元）")
+                    .accessibilityValue(text)
+                    .accessibilityHint(issues.isEmpty ? "输入元金额，最多两位小数。" : issues.map(\.message).joined(separator: "；"))
+                    .accessibilityIdentifier(controlAccessibilityIdentifier ?? "")
+            }
+            .padding(.vertical, V15Spacing.xs)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(issues.isEmpty ? V15Palette.hairline.color : V15Palette.danger.color)
+                    .frame(height: issues.isEmpty ? 1 : 2)
+            }
+            V15FieldIssues(issues: issues)
+        }
+        .onAppear { if automaticallyFocus { focused = true } }
+    }
+}
+
 public struct V15FieldIssues: View {
     private let issues: [V15FieldIssue]
     public init(issues: [V15FieldIssue]) { self.issues = issues }
@@ -279,6 +332,23 @@ public struct V15PickerRow<Selection: Hashable, Content: View>: View {
         self.title = title; _selection = selection; self.content = content()
     }
     public var body: some View {
+#if os(iOS)
+        HStack(alignment: .firstTextBaseline, spacing: V15Spacing.sm) {
+            Text(title)
+                .font(V15Typography.body.weight(.medium))
+                .foregroundStyle(V15Palette.ink.color)
+            Spacer(minLength: V15Spacing.sm)
+            Picker(title, selection: $selection) { content }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .font(V15Typography.body)
+        }
+        .padding(.vertical, V15Spacing.sm)
+        .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color.opacity(0.92)).frame(height: 1) }
+        .v15PlatformHitArea()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+#else
         Picker(title, selection: $selection) { content }
             .pickerStyle(.menu)
             .font(V15Typography.body)
@@ -287,22 +357,15 @@ public struct V15PickerRow<Selection: Hashable, Content: View>: View {
             .background(pickerBackground, in: RoundedRectangle(cornerRadius: V15Radius.control, style: .continuous))
             .v15PlatformHitArea()
             .accessibilityLabel(title)
+#endif
     }
 
     private var pickerHorizontalPadding: CGFloat {
-#if os(iOS)
-        V15Spacing.sm
-#else
         0
-#endif
     }
 
     private var pickerBackground: Color {
-#if os(iOS)
-        V15Palette.card.color
-#else
         .clear
-#endif
     }
 }
 
@@ -370,13 +433,13 @@ public struct V15LedgerRow: View {
     @ViewBuilder private var markerShape: some View {
         switch marker {
         case .ordinary: Color.clear
-        case .decision: V15Palette.teal.color
-        case .provisional: V15Palette.yellow.color
+        case .decision: V15Palette.warning.color
+        case .provisional: V15Palette.provisionalMarker.color
         case .archive: Rectangle().strokeBorder(V15Palette.ink.color.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
         }
     }
     private var markerLabel: String { switch marker { case .ordinary: "已确认"; case .decision: "需要决定"; case .provisional: "未定"; case .archive: "归档，只读" } }
-    private var amountColor: Color { switch amount.direction { case .inflow: V15Palette.teal.color; case .outflow: V15Palette.gold.color; case .balance: V15Palette.ink.color; case .neutral: V15Palette.ink.color.opacity(0.66) } }
+    private var amountColor: Color { switch amount.direction { case .inflow: V15Palette.positive.color; case .outflow: V15Palette.outflow.color; case .balance: V15Palette.ink.color; case .neutral: V15Palette.ink.color.opacity(0.66) } }
     private var verticalPadding: CGFloat {
 #if os(macOS)
         4
@@ -399,8 +462,8 @@ public struct V15Section<Content: View>: View {
             }
             VStack(alignment: .leading, spacing: V15Spacing.sm) { content }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(V15Spacing.md)
-                .v15IOSCard()
+                .padding(.vertical, V15Spacing.xs)
+                .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color.opacity(0.92)).frame(height: 1) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)

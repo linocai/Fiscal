@@ -87,8 +87,8 @@ public struct V15ReportingView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(V15Spacing.md)
-        .v15IOSCard()
+        .padding(.vertical, V15Spacing.md)
+        .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
     }
 
     private var periodControls: some View {
@@ -115,9 +115,7 @@ public struct V15ReportingView: View {
                 .font(V15Typography.label)
                 .foregroundStyle(V15Palette.ink.color.opacity(0.58))
         }
-        .padding(V15Spacing.xs)
-        .background(V15Palette.surfaceRaised.color, in: RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous).stroke(V15Palette.hairline.color) }
+        .padding(.vertical, V15Spacing.xs)
     }
 
     private var lensControls: some View {
@@ -392,8 +390,8 @@ public struct V15ReportingView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(V15Spacing.sm)
-                .background(category.categoryID == nil ? V15Palette.provisional.color : V15Palette.paper.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
-                .overlay(alignment: .leading) { if category.categoryID == nil { Rectangle().fill(V15Palette.yellow.color).frame(width: 4) } }
+                .background(category.categoryID == nil ? V15Palette.provisional.color : Color.clear, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                .overlay(alignment: .leading) { if category.categoryID == nil { Rectangle().fill(V15Palette.provisionalMarker.color).frame(width: 4) } }
             }
             .buttonStyle(.plain)
             .disabled(!isEnabled(category.drillCapability))
@@ -414,10 +412,9 @@ public struct V15ReportingView: View {
                     Text(indexed.element.0).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     V15MoneyText(minorUnits: indexed.element.1, direction: indexed.element.2, font: V15Typography.moneyLarge)
                 }
-                .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
-                .padding(V15Spacing.md)
-                .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card))
-                .overlay { RoundedRectangle(cornerRadius: V15Radius.card).stroke(V15Palette.hairline.color) }
+                .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+                .padding(.vertical, V15Spacing.sm)
+                .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("v15.f4a.metric.\(indexed.offset)")
             }
@@ -506,9 +503,8 @@ public struct V15ReportingView: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(V15Spacing.md)
-        .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card))
-        .overlay { RoundedRectangle(cornerRadius: V15Radius.card).stroke(V15Palette.hairline.color) }
+        .padding(.vertical, V15Spacing.md)
+        .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
     }
 
     private func unavailableCard(_ title: String, _ reason: String) -> some View {
@@ -588,9 +584,8 @@ public struct V15ReportingView: View {
                         drillMeasure("净消费", item.netConsumptionMinor)
                     }
                 }
-                .padding(V15Spacing.md)
-                .background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.card))
-                .overlay { RoundedRectangle(cornerRadius: V15Radius.card).stroke(V15Palette.hairline.color) }
+                .padding(.vertical, V15Spacing.md)
+                .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
                 .accessibilityIdentifier("v15.f4a.drill.item.\(item.id)")
             }
             if model.hasNextPage {

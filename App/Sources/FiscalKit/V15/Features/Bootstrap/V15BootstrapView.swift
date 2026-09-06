@@ -21,7 +21,7 @@ public struct V15BootstrapView: View {
                 VStack(spacing: 15) {
                     Text("F")
                         .font(.largeTitle.bold())
-                        .foregroundStyle(V15Palette.teal.color)
+                        .foregroundStyle(V15Palette.brandInk.color)
                         .frame(width: 88, height: 88)
                         .background(V15Palette.yellow.color, in: RoundedRectangle(cornerRadius: 20))
                     Text("Fiscal").font(V15Typography.surfaceTitle)
@@ -120,12 +120,13 @@ public struct V15BootstrapView: View {
 #if os(iOS)
         switch model.phase {
         case .invalidAccessKey, .credentialGenerationChanged: V15Palette.danger.color
-        case .failed(_), .systemNotReady, .offlineReadOnly(_): V15Palette.yellow.color
+        case .failed(_), .systemNotReady, .offlineReadOnly(_): V15Palette.warning.color
         default: V15Palette.teal.color
         }
 #else
         switch model.phase {
-        case .failed(_), .systemNotReady, .invalidAccessKey, .credentialGenerationChanged: V15Palette.yellow.color
+        case .invalidAccessKey, .credentialGenerationChanged: V15Palette.danger.color
+        case .failed(_), .systemNotReady: V15Palette.warning.color
         default: V15Palette.teal.color
         }
 #endif
@@ -163,17 +164,19 @@ public struct V15BootstrapView: View {
     private var compactStateColor: Color {
 #if os(iOS)
         if case .failed = model.phase { return V15Palette.danger.color }
-        return V15Palette.gold.color
+        return V15Palette.warning.color
 #else
-        return V15Palette.teal.color
+        if case .failed = model.phase { return V15Palette.danger.color }
+        return V15Palette.warning.color
 #endif
     }
     private var compactStateBackground: Color {
 #if os(iOS)
         if case .failed = model.phase { return V15Palette.dangerSurface.color }
-        return V15Palette.provisional.color
+        return V15Palette.warningSurface.color
 #else
-        return V15Palette.card.color
+        if case .failed = model.phase { return V15Palette.dangerSurface.color }
+        return V15Palette.warningSurface.color
 #endif
     }
     private var compactStateBorderColor: Color {

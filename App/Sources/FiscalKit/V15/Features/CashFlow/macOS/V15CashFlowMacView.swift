@@ -125,7 +125,13 @@ public struct V15CashFlowMacView: View {
                 if let actual = item.actualAmountMinor { cashFlowFact("实际入账", value: actual, date: item.actualDate ?? "日期未提供", provisional: false) }
                 else { cashFlowUnavailableFact("实际入账", detail: item.isSystem ? "回来源流程确认" : "尚未结算") }
             }.accessibilityIdentifier("v15.f3d.mac.plan-actual")
-            if item.isDisplayOnly { Label("未知状态或方向，只读展示", systemImage: V15Symbol.warning).foregroundStyle(V15Palette.teal.color).accessibilityIdentifier("v15.f3d.mac.display-only") }
+            if item.isDisplayOnly {
+                Label("未知状态或方向，只读展示", systemImage: V15Symbol.warning)
+                    .foregroundStyle(V15Palette.unknown.color)
+                    .padding(V15Spacing.sm)
+                    .background(V15Palette.unknownSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                    .accessibilityIdentifier("v15.f3d.mac.display-only")
+            }
             if item.isSystem {
                 V15Section("自动来源") { Text(item.systemKind == .creditCycle ? "这项来自信用账单；请到还款页面处理。" : "这项来自报销单；实际到账请到报销页面登记。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true) }
                 V15ActionButton("修改显示信息", kind: .secondary, disabledReasons: systemOpenReasons(item)) { model.openEdit(item) }.accessibilityIdentifier("v15.f3d.mac.system.edit.open")

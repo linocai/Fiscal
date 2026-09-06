@@ -171,7 +171,7 @@ public struct V15DataSecurityMacView: View {
         HStack { V15ActionButton("重新输入并创建", accessibilityIdentifier: "v15.f4c.retry") { resetArchiveForm() }; V15ActionButton("关闭", kind: .secondary, accessibilityIdentifier: "v15.f4c.close") { resetArchiveForm() } }
     }
     private func message(_ value: String) -> some View {
-        Text(value).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true).padding(V15Spacing.sm).background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.tag))
+        Text(value).font(V15Typography.secondary).foregroundStyle(V15Palette.unknown.color).fixedSize(horizontal: false, vertical: true).padding(V15Spacing.sm).background(V15Palette.unknownSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.tag))
     }
     private func fieldIssue(_ value: String) -> some View {
         Label(value, systemImage: "exclamationmark.circle.fill")
@@ -221,18 +221,19 @@ public struct V15DataSecurityMacView: View {
 
     private func operationCard(_ title: String, state: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack { Text(title).font(V15Typography.body.weight(.semibold)); Spacer(); Text(operationLabel(state)).font(V15Typography.label) }
+            HStack { Text(title).font(V15Typography.body.weight(.semibold)); Spacer(); Text(operationLabel(state)).font(V15Typography.label).foregroundStyle(operationColor(state)) }
             Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
         }
         .padding(V15Spacing.md).frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-        .background(operationIsProvisional(state) ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.decisionCard))
+        .background(operationSurface(state), in: RoundedRectangle(cornerRadius: V15Radius.decisionCard))
         .overlay { RoundedRectangle(cornerRadius: V15Radius.decisionCard).stroke(V15Palette.hairline.color) }
     }
     private func factRow(_ title: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline) { Text(title).font(V15Typography.secondary); Spacer(); Text(value).font(V15Typography.body.monospaced()).multilineTextAlignment(.trailing) }
     }
     private func operationLabel(_ state: String) -> String { switch state { case "healthy", "verified", "current", "ok": "已校验"; case "stale": "陈旧"; case "warning": "需关注"; case "failed", "failure": "失败"; default: state } }
-    private func operationIsProvisional(_ state: String) -> Bool { !["healthy", "verified", "current", "ok"].contains(state) }
+    private func operationColor(_ state: String) -> Color { switch state { case "healthy", "verified", "current", "ok": V15Palette.positive.color; case "stale", "warning": V15Palette.warning.color; case "failed", "failure": V15Palette.danger.color; default: V15Palette.unknown.color } }
+    private func operationSurface(_ state: String) -> Color { switch state { case "healthy", "verified", "current", "ok": V15Palette.card.color; case "stale", "warning": V15Palette.warningSurface.color; case "failed", "failure": V15Palette.dangerSurface.color; default: V15Palette.unknownSurface.color } }
     private func operationDetail(age: Int?, duration: Int?, size: Int?) -> String {
         let value = [age.map { "\($0) 小时前" }, duration.map { "耗时 \($0) 秒" }, size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) }].compactMap { $0 }.joined(separator: " · ")
         return value.isEmpty ? "暂无时间或大小" : value

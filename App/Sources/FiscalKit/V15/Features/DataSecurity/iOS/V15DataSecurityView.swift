@@ -124,7 +124,7 @@ public struct V15DataSecurityView: View {
             }
         case .unknown:
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                message("文件结果未知，未保留本地副本。请重新创建归档。").accessibilityIdentifier("v15.f4c.unknown")
+                message("文件结果未知，未保留本地副本。请重新创建归档。", foreground: V15Palette.unknown.color, background: V15Palette.unknownSurface.color).accessibilityIdentifier("v15.f4c.unknown")
                 retryControls
             }
         case .saveFailed(_, let failure):
@@ -140,7 +140,7 @@ public struct V15DataSecurityView: View {
     private var retryControls: some View {
         HStack { V15ActionButton("重新输入并创建", accessibilityIdentifier: "v15.f4c.retry") { model.resetForNewExport() }; V15ActionButton("关闭", kind: .secondary, accessibilityIdentifier: "v15.f4c.close") { model.dismiss() } }
     }
-    private func message(_ value: String) -> some View { Text(value).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true).padding(V15Spacing.sm).background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.tag)) }
+    private func message(_ value: String, foreground: Color = V15Palette.ink.color, background: Color = V15Palette.receipt.color) -> some View { Text(value).font(V15Typography.secondary).foregroundStyle(foreground).fixedSize(horizontal: false, vertical: true).padding(V15Spacing.sm).background(background, in: RoundedRectangle(cornerRadius: V15Radius.tag)) }
     private var restoreCard: some View {
         V15Section("恢复前置条件") {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
@@ -206,11 +206,11 @@ public struct V15DataSecurityView: View {
 
     private func operationRow(_ title: String, state: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack { Text(title).font(V15Typography.body.weight(.semibold)); Spacer(); Text(operationLabel(state)).font(V15Typography.label) }
+            HStack { Text(title).font(V15Typography.body.weight(.semibold)); Spacer(); Text(operationLabel(state)).font(V15Typography.label).foregroundStyle(operationColor(state)) }
             Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
         }
         .padding(V15Spacing.sm)
-        .background(operationIsProvisional(state) ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+        .background(operationSurface(state), in: RoundedRectangle(cornerRadius: V15Radius.control))
     }
     private func secureInput(_ title: String, prompt: String, text: Binding<String>, contentType: UITextContentType, identifier: String) -> some View {
         VStack(alignment: .leading, spacing: V15Spacing.xs) {
@@ -238,7 +238,8 @@ public struct V15DataSecurityView: View {
     private func operationLabel(_ state: String) -> String {
         switch state { case "healthy", "verified", "current", "ok": "已校验"; case "stale": "陈旧"; case "warning": "需关注"; case "failed", "failure": "失败"; default: state }
     }
-    private func operationIsProvisional(_ state: String) -> Bool { !["healthy", "verified", "current", "ok"].contains(state) }
+    private func operationColor(_ state: String) -> Color { switch state { case "healthy", "verified", "current", "ok": V15Palette.positive.color; case "stale", "warning": V15Palette.warning.color; case "failed", "failure": V15Palette.danger.color; default: V15Palette.unknown.color } }
+    private func operationSurface(_ state: String) -> Color { switch state { case "healthy", "verified", "current", "ok": V15Palette.card.color; case "stale", "warning": V15Palette.warningSurface.color; case "failed", "failure": V15Palette.dangerSurface.color; default: V15Palette.unknownSurface.color } }
     private func operationDetail(age: Int?, duration: Int?, size: Int?) -> String {
         [age.map { "\($0) 小时前" }, duration.map { "耗时 \($0) 秒" }, size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) }].compactMap { $0 }.joined(separator: " · ").nilIfEmpty ?? "暂无时间或大小"
     }

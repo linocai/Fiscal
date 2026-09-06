@@ -157,7 +157,7 @@ private struct V15FutureEventRow: View {
         .padding(.vertical, V15Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
     }.contentShape(Rectangle()).accessibilityElement(children: .combine) }
-    private var certaintyColor: Color { switch event.certainty { case .exactDue, .confirmed: V15Palette.teal.color; case .scheduled: V15Palette.gold.color; case .expected: V15Palette.ink.color.opacity(0.48) } }
+    private var certaintyColor: Color { switch event.certainty { case .exactDue, .confirmed: V15Palette.teal.color; case .scheduled: V15Palette.provisionalMarker.color; case .expected: V15Palette.ink.color.opacity(0.48) } }
     private var certainty: String { switch event.certainty { case .exactDue: "到期日已确认"; case .confirmed: "已确认"; case .expected: "预计（尚未确认）"; case .scheduled: "已排期" } }
     private var direction: String { event.direction == .inflow ? "流入" : "流出" }
     private var source: String { switch event.sourceType { case .creditCycle: "信用账期"; case .reimbursementParty: "报销对象"; case .cashFlowItem: "现金流事项" } }

@@ -10,6 +10,9 @@ struct V15RootSmokemacOSApp: App {
     private let accessKeyStore: AccessKeyStore
     private let offlineSnapshots: OfflineSnapshotStore
     private let cleanupOnly: Bool
+    private let formalFixture: Bool
+    private let accountOverflow: Bool
+    private let preferredScheme: ColorScheme?
 
     init() {
         let environment = ProcessInfo.processInfo.environment
@@ -38,6 +41,10 @@ struct V15RootSmokemacOSApp: App {
             keyStore: SnapshotKeyStore(service: "\(keychainService).offline-snapshot")
         )
         cleanupOnly = environment["FISCAL_ROOT_SMOKE_CLEANUP_ONLY"] == "1"
+        formalFixture = environment["FISCAL_ROOT_SMOKE_FORMAL_FIXTURE"] == "1"
+        accountOverflow = environment["FISCAL_ROOT_SMOKE_ACCOUNT_OVERFLOW"] == "1"
+        preferredScheme = environment["FISCAL_ROOT_SMOKE_COLOR_SCHEME"] == "dark" ? .dark
+            : environment["FISCAL_ROOT_SMOKE_COLOR_SCHEME"] == "light" ? .light : nil
         let revisionStore = DataRevisionStore()
         services = V15Services(
             baseURL: baseURL,
@@ -52,6 +59,11 @@ struct V15RootSmokemacOSApp: App {
         WindowGroup {
             if cleanupOnly {
                 V15RootSmokeCleanupView(accessKeyStore: accessKeyStore, offlineSnapshots: offlineSnapshots)
+            } else if formalFixture {
+                // Only this isolated QA host can inject deterministic facts
+                // into the same workspace that the shipping app presents.
+                V151MacWorkspace(services: V15F2BFixtures.services(route: "today-root-workspace", accountOverflow: accountOverflow))
+                    .preferredColorScheme(preferredScheme)
             } else {
                 MacRootView(services: services, bootstrapAccessKey: APIConfiguration.bootstrapAccessKey())
             }

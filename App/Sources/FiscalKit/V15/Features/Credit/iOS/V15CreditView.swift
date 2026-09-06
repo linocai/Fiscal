@@ -153,7 +153,7 @@ public struct V15CreditView: View {
                 creditMetric("可用额度", account.availableCreditMinor, .balance)
                 creditMetric("超额", account.overLimitMinor, account.overLimitMinor > 0 ? .outflow : .neutral)
             }
-            Text(account.hasOverdueCycle ? "含逾期账期" : "无逾期账期").font(V15Typography.label).foregroundStyle(account.hasOverdueCycle ? V15Palette.gold.color : V15Palette.teal.color)
+            Text(account.hasOverdueCycle ? "含逾期账期" : "无逾期账期").font(V15Typography.label).foregroundStyle(account.hasOverdueCycle ? V15Palette.warning.color : V15Palette.positive.color)
             if account.activeInstallmentCount > 0 || account.futureScheduledGrossMinor > 0 {
                 V15PreviewState {
                     VStack(alignment: .leading, spacing: V15Spacing.xxs) {
@@ -173,7 +173,7 @@ public struct V15CreditView: View {
     private func cycleRow(_ cycle: V15CreditCycle) -> some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: V15Spacing.xxs) {
-                Text(cycle.isOpeningCycle ? "期初账期" : "账期").font(V15Typography.label).foregroundStyle(cycle.isOverdue ? V15Palette.gold.color : V15Palette.teal.color)
+                Text(cycle.isOpeningCycle ? "期初账期" : "账期").font(V15Typography.label).foregroundStyle(cycle.isOverdue ? V15Palette.warning.color : V15Palette.teal.color)
                 Text("\(cycle.periodStart) 至 \(cycle.periodEnd)").font(V15Typography.body)
                 Text("还款日 \(cycle.dueDate) · \(cycleStatusLabel(cycle.status))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
@@ -281,7 +281,7 @@ public struct V15CreditView: View {
                     Button("提交账期变更") { Task { await model.commitSchedule() } }
                         .disabled(!model.canCommitSchedule)
                         .accessibilityIdentifier("v15.f3b1.schedule.commit")
-                    if let reason = model.scheduleDisabledReason { Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.commit-reason") }
+                    if let reason = model.scheduleDisabledReason { Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.warning.color).accessibilityIdentifier("v15.f3b1.schedule.commit-reason") }
                 }.accessibilityIdentifier("v15.f3b1.schedule.preview")
             }
         case .committing: V15LoadingSkeleton().accessibilityIdentifier("v15.f3b1.schedule.committing")
@@ -292,17 +292,17 @@ public struct V15CreditView: View {
                 .accessibilityIdentifier("v15.f3b1.schedule.unknown")
             switch model.unknownReadbackPhase {
             case .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.loading")
-            case .notConfirmed: Text(model.unknownReadbackNotice ?? "尚未确认这次修改是否生效。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.not-confirmed")
-            case .failed(let failure): Text(failure.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.error")
+            case .notConfirmed: Text(model.unknownReadbackNotice ?? "尚未确认这次修改是否生效。").font(V15Typography.secondary).foregroundStyle(V15Palette.unknown.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.not-confirmed")
+            case .failed(let failure): Text(failure.message).font(V15Typography.secondary).foregroundStyle(V15Palette.danger.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.error")
             case .idle, .confirmed: EmptyView()
             }
             Button("安全检查保存结果") { Task { await model.retryUnknownCommit() } }
                 .disabled(model.unknownReadbackPhase == .loading || model.unknownRetryDisabledReason != nil)
                 .accessibilityIdentifier("v15.f3b1.schedule.unknown.retry")
             if let reason = model.unknownRetryDisabledReason {
-                Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.retry-reason")
+                Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.unknown.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.retry-reason")
             } else if let notice = model.unknownRetryNotice {
-                Text(notice).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.retry-notice")
+                Text(notice).font(V15Typography.secondary).foregroundStyle(V15Palette.unknown.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.retry-notice")
             }
             Button("刷新账户后核对") { Task { await model.resolveUnknownByReadback() } }.disabled(model.unknownReadbackPhase == .loading).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback")
             Button("放弃同一键恢复并刷新账户") { model.abandonUnknownAttempt() }

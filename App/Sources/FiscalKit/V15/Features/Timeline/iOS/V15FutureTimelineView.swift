@@ -216,7 +216,7 @@ struct V15FutureEventRow: View {
     private var certaintyColor: Color {
         switch event.certainty {
         case .exactDue, .confirmed: V15Palette.teal.color
-        case .scheduled: V15Palette.gold.color
+        case .scheduled: V15Palette.provisionalMarker.color
         case .expected: V15Palette.ink.color.opacity(0.48)
         }
     }

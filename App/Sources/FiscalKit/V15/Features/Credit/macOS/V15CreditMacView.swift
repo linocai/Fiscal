@@ -90,7 +90,7 @@ public struct V15CreditMacView: View {
                         }
                     }.accessibilityIdentifier("v15.f3b1.mac.future-installments")
                 }
-                if account.hasOverdueCycle { Text("存在逾期账期，请先查看详情。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color) }
+                if account.hasOverdueCycle { Text("存在逾期账期，请先查看详情。").font(V15Typography.secondary).foregroundStyle(V15Palette.warning.color) }
             }
             switch model.phase {
             case .idle, .loading: V15LoadingSkeleton()
@@ -109,7 +109,7 @@ public struct V15CreditMacView: View {
         .accessibilityIdentifier("v15.f3b1.credit.spine")
     }
     private func cycleRow(_ cycle: V15CreditCycle) -> some View {
-        HStack { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(cycle.isOpeningCycle ? "期初账期" : "账期").font(V15Typography.label).foregroundStyle(cycle.isOverdue ? V15Palette.gold.color : V15Palette.teal.color); Text("\(cycle.periodStart) 至 \(cycle.periodEnd)").font(V15Typography.body); Text("还款日 \(cycle.dueDate) · \(cycleStatusLabel(cycle.status))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; Spacer(); V15MoneyText(minorUnits: cycle.remainingMinor, direction: .outflow, font: V15Typography.secondary) }
+        HStack { VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(cycle.isOpeningCycle ? "期初账期" : "账期").font(V15Typography.label).foregroundStyle(cycle.isOverdue ? V15Palette.warning.color : V15Palette.teal.color); Text("\(cycle.periodStart) 至 \(cycle.periodEnd)").font(V15Typography.body); Text("还款日 \(cycle.dueDate) · \(cycleStatusLabel(cycle.status))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; Spacer(); V15MoneyText(minorUnits: cycle.remainingMinor, direction: .outflow, font: V15Typography.secondary) }
             .padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background(model.selectedCycle?.id == cycle.id ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
     }
     @ViewBuilder private var inspector: some View {
@@ -180,7 +180,7 @@ private struct V15CreditScheduleMacSheet: View {
                     Text("消费 \(preview.purchaseCount) 笔 · 还款 \(preview.repaymentCount) 笔 · 分期 \(preview.installmentPeriodCount) 期")
                         .font(V15Typography.secondary)
                     ForEach(preview.warnings + preview.conflicts, id: \.self) {
-                        Text($0).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color)
+                        Text($0).font(V15Typography.secondary).foregroundStyle(V15Palette.warning.color)
                     }
                     V15ActionButton("确认账期变更", disabledReason: model.scheduleDisabledReason, showsDisabledReasons: false, accessibilityIdentifier: "v15.f3b1.schedule.commit") {
                         Task { await model.commitSchedule() }
@@ -195,7 +195,7 @@ private struct V15CreditScheduleMacSheet: View {
             Text("可以安全检查保存结果，或刷新账户后核对。").font(V15Typography.secondary)
             switch model.unknownReadbackPhase {
             case .loading: V15LoadingSkeleton().accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.loading")
-            case .notConfirmed: Text(model.unknownReadbackNotice ?? "尚未确认这次修改是否生效。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.not-confirmed")
+            case .notConfirmed: Text(model.unknownReadbackNotice ?? "尚未确认这次修改是否生效。").font(V15Typography.secondary).foregroundStyle(V15Palette.unknown.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.not-confirmed")
             case .failed(let failure): Text(failure.message).font(V15Typography.secondary).foregroundStyle(V15Palette.danger.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback.error")
             case .idle, .confirmed: EmptyView()
             }
@@ -203,9 +203,9 @@ private struct V15CreditScheduleMacSheet: View {
                 .disabled(model.unknownReadbackPhase == .loading || model.unknownRetryDisabledReason != nil)
                 .accessibilityIdentifier("v15.f3b1.schedule.unknown.retry")
             if let reason = model.unknownRetryDisabledReason {
-                Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.retry-reason")
+                Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.unknown.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.retry-reason")
             } else if let notice = model.unknownRetryNotice {
-                Text(notice).font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.retry-notice")
+                Text(notice).font(V15Typography.secondary).foregroundStyle(V15Palette.unknown.color).accessibilityIdentifier("v15.f3b1.schedule.unknown.retry-notice")
             }
             Button("刷新账户后核对") { Task { await model.resolveUnknownByReadback() } }.disabled(model.unknownReadbackPhase == .loading).accessibilityIdentifier("v15.f3b1.schedule.unknown.readback")
             Button("放弃同一键恢复并刷新账户") { model.abandonUnknownAttempt() }
@@ -264,9 +264,9 @@ public struct V15CreditMacGalleryEvidence: View {
     }
     @ViewBuilder private var notice: some View {
         switch scenario {
-        case "credit-expired": V15Section("预览已过期") { Text("预览已过期，请重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color); Button("重新取预览") {} }
-        case "credit-disabled": V15Section("暂时无法提交") { Text("当前预览不允许确认账期变更。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color); Button("确认账期变更") {}.disabled(true) }
-        default: V15Section("账期已变化") { Text("账期数据已变化。请刷新账户后重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color); Button("刷新账户后重新预览") {} }
+        case "credit-expired": V15Section("预览已过期") { Text("预览已过期，请重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.warning.color); Button("重新取预览") {} }
+        case "credit-disabled": V15Section("暂时无法提交") { Text("当前预览不允许确认账期变更。").font(V15Typography.secondary).foregroundStyle(V15Palette.warning.color); Button("确认账期变更") {}.disabled(true) }
+        default: V15Section("账期已变化") { Text("账期数据已变化。请刷新账户后重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.warning.color); Button("刷新账户后重新预览") {} }
         }
     }
 }

@@ -27,8 +27,8 @@ public enum V15F2BFixtures {
         case rootWorkspaceBoundary = "today-root-workspace-boundary"
     }
 
-    @MainActor public static func services(route: String) -> V15Services {
-        V15Services(transport: V15F2BFixtureTransport(route: Route(rawValue: route) ?? .normal))
+    @MainActor public static func services(route: String, accountOverflow: Bool = false) -> V15Services {
+        V15Services(transport: V15F2BFixtureTransport(route: Route(rawValue: route) ?? .normal, accountOverflow: accountOverflow))
     }
 
     static let offlineSnapshotAt = Date(timeIntervalSince1970: 1_786_464_000)
@@ -37,10 +37,14 @@ public enum V15F2BFixtures {
 
 actor V15F2BFixtureTransport: V15Transporting {
     private let route: V15F2BFixtures.Route
+    private let accountOverflow: Bool
     private var factsReads = 0
     private var requests: [V15Request] = []
 
-    init(route: V15F2BFixtures.Route) { self.route = route }
+    init(route: V15F2BFixtures.Route, accountOverflow: Bool = false) {
+        self.route = route
+        self.accountOverflow = accountOverflow && route == .rootWorkspace
+    }
 
     func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
         requests.append(request)
@@ -49,9 +53,22 @@ actor V15F2BFixtureTransport: V15Transporting {
         }
         let data: Data
         switch request.path {
-        case "accounts": data = V15F1AFixtures.accounts
+        case "accounts": data = accountOverflow ? V15F2BFixtures.overflowAccounts : V15F1AFixtures.accounts
+        case let path where accountOverflow && path.hasPrefix("accounts/"):
+            let id = String(path.dropFirst("accounts/".count))
+            let accounts = try JSONSerialization.jsonObject(with: V15F2BFixtures.overflowAccounts) as! [[String: Any]]
+            guard let account = accounts.first(where: { ($0["id"] as? String)?.lowercased() == id.lowercased() }) else {
+                throw V15Failure(kind: .transport, message: "缺少测试账户。")
+            }
+            data = try JSONSerialization.data(withJSONObject: account)
         case "categories": data = V15F1AFixtures.categories
-        case "transactions": data = V15F1BFixtures.page
+        case "transactions":
+            let accountID = request.query.first(where: { $0.name == "account_id" })?.value
+            data = accountOverflow && accountID?.hasSuffix("205") == true
+                ? Data(#"{"items":[],"next_cursor":null}"#.utf8) : V15F1BFixtures.page
+        case "reports/future-events" where route == .rootWorkspace || route == .rootWorkspaceBoundary:
+            let account = request.query.first(where: { $0.name == "account_id" })?.value
+            data = V15F2BFixtures.rootWorkspaceFutureEvents(accountID: account)
         case "reports/facts":
             if route == .factsError { throw V15Failure(kind: .transport, message: "当前事实服务暂时不可用。") }
             factsReads += 1
@@ -89,6 +106,12 @@ actor V15F2BFixtureTransport: V15Transporting {
             }
         case "accounts/\(V15F2AFixtures.accountID)": data = V15F2AFixtures.account
         case "transactions/\(V15F2AFixtures.transactionID)": data = V15F2AFixtures.transaction
+        case "transactions/\(V15F1BFixtures.transactionID)" where route == .rootWorkspace || route == .rootWorkspaceBoundary:
+            data = V15F1BFixtures.detail
+        case "transactions/\(V15F1BFixtures.transactionID)/revisions" where route == .rootWorkspace || route == .rootWorkspaceBoundary:
+            data = V15F1BFixtures.revisions
+        case "transactions/\(V15F1BFixtures.transactionID)/provenance" where route == .rootWorkspace || route == .rootWorkspaceBoundary:
+            data = V15F1BFixtures.provenance
         case let path where path.hasPrefix("reports/v2/monthly/"):
             guard route == .rootWorkspace || route == .rootWorkspaceBoundary else {
                 throw V15Failure(kind: .transport, code: "unexpected_path", message: "F2-B fixture 不应请求：\(request.path)")
@@ -111,6 +134,36 @@ actor V15F2BFixtureTransport: V15Transporting {
 }
 
 extension V15F2BFixtures {
+    /// Zero-balance QA accounts exercise the sidebar overflow without changing
+    /// the normal fixture or inventing extra aggregate money.
+    static var overflowAccounts: Data {
+        var accounts = try! JSONSerialization.jsonObject(with: V15F1AFixtures.accounts) as! [[String: Any]]
+        for index in 4...5 {
+            var account = accounts[0]
+            account["id"] = "00000000-0000-0000-0000-00000000020\(index)"
+            account["name"] = "测试账户\(index)"
+            account["sort_order"] = index
+            account["current_balance_minor"] = 0
+            account["usage_count"] = 0
+            accounts.append(account)
+        }
+        return try! JSONSerialization.data(withJSONObject: accounts)
+    }
+
+    /// The formal Mac timeline requests the full future feed as well as facts.
+    /// Reuse the same synthetic events so its normal QA route stays coherent.
+    static func rootWorkspaceFutureEvents(accountID: String?) -> Data {
+        let facts = try! JSONSerialization.jsonObject(with: rootWorkspaceFacts) as! [String: Any]
+        let items = (facts["known_future_events"] as! [[String: Any]]).filter {
+            accountID == nil || $0["account_id"] as? String == accountID
+        }
+        let payload: [String: Any] = [
+            "meta": facts["meta"]!, "window": facts["window"]!,
+            "account_id": accountID as Any? ?? NSNull(), "items": items, "next_cursor": NSNull()
+        ]
+        return try! JSONSerialization.data(withJSONObject: payload)
+    }
+
     static var rootWorkspaceFacts: Data {
         var payload = try! JSONSerialization.jsonObject(with: V15F2AFixtures.facts()) as! [String: Any]
         var cash = payload["cash"] as! [String: Any]

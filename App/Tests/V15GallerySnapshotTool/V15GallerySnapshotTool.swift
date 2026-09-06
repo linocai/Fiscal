@@ -10,6 +10,11 @@ private struct V15GallerySnapshotTool {
         let output = URL(fileURLWithPath: environment["FISCAL_V15_GALLERY_SCREENSHOT_DIR"] ?? "../archive/releases/v1.5.0/qa/frontend/screenshots", isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
 
+        if environment["FISCAL_V15_SNAPSHOT_SCOPE"] == "v210" {
+            try renderV210(to: output, selectedScene: environment["FISCAL_V210_SNAPSHOT_SCENE"])
+            return
+        }
+
         if environment["FISCAL_V15_SNAPSHOT_SCOPE"] == "f4b" {
             try renderF4B(to: output)
             return
@@ -256,6 +261,30 @@ private struct V15GallerySnapshotTool {
         for (route, style, scheme, size, type) in routes {
             let security = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f4c-route", route])
             try render(security, to: output.appendingPathComponent("f4c-mac-\(style).png"), colorScheme: scheme, size: size, dynamicTypeSize: type, settlingDelay: route == "archive-loading" ? 0.2 : 0.8)
+        }
+    }
+
+    /// A bounded capture set keeps visual verification cheap on the shared Mac.
+    /// Root captures render the production workspace, not the legacy Today gallery.
+    @MainActor
+    private static func renderV210(to output: URL, selectedScene: String?) throws {
+        let rootScenes: [(String, ColorScheme, CGSize)] = [
+            ("timeline-light", .light, CGSize(width: 1400, height: 850)),
+            ("timeline-dark", .dark, CGSize(width: 1400, height: 850)),
+            ("timeline-compact", .light, CGSize(width: 1000, height: 760))
+        ]
+        for (name, scheme, size) in rootScenes where selectedScene == nil || selectedScene == name {
+            let root = V151MacWorkspace(services: V15F2BFixtures.services(route: "today-root-workspace"))
+            try render(root, to: output.appendingPathComponent("v210-mac-\(name).png"), colorScheme: scheme, size: size, settlingDelay: 1.2)
+        }
+        let detailScenes: [(String, String, String, ColorScheme)] = [
+            ("analysis-light", "--v15-f4a-route", "reports-spending", .light),
+            ("analysis-dark", "--v15-f4a-route", "reports-spending", .dark),
+            ("record-light", "--v15-f1a-route", "record-valid", .light)
+        ]
+        for (name, flag, route, scheme) in detailScenes where selectedScene == nil || selectedScene == name {
+            let view = V15GalleryShell(arguments: ["V15GallerySnapshotTool", flag, route])
+            try render(view, to: output.appendingPathComponent("v210-mac-\(name).png"), colorScheme: scheme, size: CGSize(width: 1400, height: 850), settlingDelay: 1.2)
         }
     }
 

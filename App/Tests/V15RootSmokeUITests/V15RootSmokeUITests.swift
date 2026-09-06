@@ -103,12 +103,12 @@ final class V15RootSmokeUITests: XCTestCase {
         assertAppCleanup(service: offlineService)
     }
 
-    func testFormalWorkspaceFixtureRendersAt390x844LightDarkAndAX5() {
+    func testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5() {
         let service = uniqueKeychainService()
         let cases: [(name: String, scheme: String?, arguments: [String])] = [
-            ("v151-ios-workspace-390x844-light", "light", []),
-            ("v151-ios-workspace-390x844-dark", "dark", []),
-            ("v151-ios-workspace-390x844-ax5", "light", ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+            ("v151-ios-workspace-iphone17pro-light", "light", []),
+            ("v151-ios-workspace-iphone17pro-dark", "dark", []),
+            ("v151-ios-workspace-iphone17pro-ax5", "light", ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         ]
         for testCase in cases {
             let app = launchApp(service: service, formalFixture: true, scheme: testCase.scheme, extraArguments: testCase.arguments)
@@ -136,6 +136,31 @@ final class V15RootSmokeUITests: XCTestCase {
         }
     }
 
+    func testFormalRecordKeepsKeyboardAndReturnPathReachable() {
+        let app = launchApp(service: uniqueKeychainService(), formalFixture: true, scheme: "light")
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.workspace-marker"].waitForExistence(timeout: 8))
+        app.buttons.matching(identifier: "v151.ios.record").firstMatch.tap()
+        let amount = app.textFields["v15.f1a.record.amount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        let keyboard = app.keyboards.firstMatch
+        if !keyboard.waitForExistence(timeout: 2) { amount.tap() }
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 3))
+        XCTAssertGreaterThan(keyboard.frame.height, 150)
+        let save = app.buttons["保存账目"]
+        XCTAssertTrue(save.isHittable)
+        XCTAssertLessThanOrEqual(save.frame.maxY, keyboard.frame.minY)
+        let date = app.datePickers["业务日期（上海）"]
+        XCTAssertTrue(date.isHittable)
+        XCTAssertLessThanOrEqual(date.frame.maxY, save.frame.minY)
+        let capture = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        capture.name = "v210-ios-formal-record-keyboard"
+        capture.lifetime = .keepAlways
+        add(capture)
+        app.buttons["关闭"].firstMatch.tap()
+        XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.bottom.ledger").firstMatch.waitForExistence(timeout: 5))
+        app.terminate()
+    }
+
     func testFormalWorkspaceBoundaryKeepsMoneyLocalAndNavigationReachable() {
         let service = uniqueKeychainService()
         let app = launchApp(service: service, formalFixture: true, formalBoundary: true, scheme: "light")
@@ -151,7 +176,7 @@ final class V15RootSmokeUITests: XCTestCase {
         XCTAssertFalse(app.buttons.matching(identifier: "v151.ios.bottom.more").firstMatch.exists)
         XCTAssertTrue(app.buttons.matching(identifier: "v151.ios.record").firstMatch.isHittable)
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = "v151-ios-workspace-boundary-390x844"
+        attachment.name = "v151-ios-workspace-boundary-iphone17pro"
         attachment.lifetime = .keepAlways
         add(attachment)
         app.terminate()
@@ -178,6 +203,11 @@ final class V15RootSmokeUITests: XCTestCase {
         XCTAssertTrue(past.isHittable)
         XCTAssertTrue(today.isHittable)
         XCTAssertTrue(future.isHittable)
+
+        let ledgerCapture = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        ledgerCapture.name = "v210-ios-formal-ledger"
+        ledgerCapture.lifetime = .keepAlways
+        add(ledgerCapture)
 
         let scopeButton = app.buttons["全部账户"]
         if scopeButton.exists { scopeButton.tap() }

@@ -1,0 +1,63 @@
+## mac-final.log
+** BUILD SUCCEEDED **
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.002) seconds
+✔ Test run with 405 tests in 39 suites passed after 46.888 seconds.
+** TEST SUCCEEDED **
+
+## record-complete.log
+Test Case '-[V15GalleryUITests.F1AGalleryUITests testExpandedSheetDarkAndAX5RemainReadable]' passed (12.783 seconds).
+Test Case '-[V15GalleryUITests.F1AGalleryUITests testRecordKeepsAmountNameAndCommitReachableWithKeyboard]' passed (11.075 seconds).
+Test Case '-[V15GalleryUITests.F1AGalleryUITests testRecordSheetAcceptsInputAndShowsUserFacingSuccess]' passed (6.486 seconds).
+Test Case '-[V15GalleryUITests.F1AGalleryUITests testRecordSheetStartsNeutralWhileSaveRemainsSafelyDisabled]' passed (7.768 seconds).
+Test Case '-[V15GalleryUITests.F1AGalleryUITests testRepaymentPrefillKeepsCycleAndSaveReachableAtAX5]' passed (13.284 seconds).
+Test Case '-[V15GalleryUITests.F1AGalleryUITests testRepaymentUsesHumanCyclePickerPreviewAndUserFacingSuccess]' passed (39.717 seconds).
+Test Case '-[V15GalleryUITests.F1AGalleryUITests testTypePickerReachesAllFiveKindsWithCompatibleFields]' passed (33.283 seconds).
+	 Executed 7 tests, with 0 failures (0 unexpected) in 124.396 (124.404) seconds
+	 Executed 7 tests, with 0 failures (0 unexpected) in 124.396 (124.406) seconds
+	 Executed 7 tests, with 0 failures (0 unexpected) in 124.396 (124.407) seconds
+** TEST SUCCEEDED **
+
+## ios-root.log
+Test Case '-[V15RootSmokeUITests.V15RootSmokeUITests testColdLaunchUsesFormalV15BootstrapWithoutGalleryRoute]' passed (4.358 seconds).
+Test Case '-[V15RootSmokeUITests.V15RootSmokeUITests testFormalRecordKeepsKeyboardAndReturnPathReachable]' passed (11.829 seconds).
+Test Case '-[V15RootSmokeUITests.V15RootSmokeUITests testFormalWorkspaceBoundaryKeepsMoneyLocalAndNavigationReachable]' passed (4.520 seconds).
+Test Case '-[V15RootSmokeUITests.V15RootSmokeUITests testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5]' passed (17.144 seconds).
+Test Case '-[V15RootSmokeUITests.V15RootSmokeUITests testFormalWorkspaceLedgerProvidesCompactScopeAndTimeNavigation]' passed (28.844 seconds).
+Test Case '-[V15RootSmokeUITests.V15RootSmokeUITests testFormalWorkspaceSettingsAndGovernancePathsRemainReachable]' passed (23.129 seconds).
+	 Executed 6 tests, with 0 failures (0 unexpected) in 89.823 (89.830) seconds
+	 Executed 6 tests, with 0 failures (0 unexpected) in 89.823 (89.831) seconds
+	 Executed 6 tests, with 0 failures (0 unexpected) in 89.823 (89.832) seconds
+** TEST SUCCEEDED **
+
+## ios-root-final.log
+Test Case '-[V15RootSmokeUITests.V15RootSmokeUITests testFormalRecordKeepsKeyboardAndReturnPathReachable]' passed (11.941 seconds).
+Test Case '-[V15RootSmokeUITests.V15RootSmokeUITests testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5]' passed (17.423 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 29.364 (29.367) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 29.364 (29.369) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 29.364 (29.371) seconds
+** TEST SUCCEEDED **
+
+## mac-root.log
+Test Case '-[V15RootSmokemacOSUITests.V15RootSmokemacOSUITests testColdLaunchUsesFormalV15BootstrapWithoutGalleryRoute]' passed (23.283 seconds).
+Test Case '-[V15RootSmokemacOSUITests.V15RootSmokemacOSUITests testFixtureTimelineSelectionSurvivesAnalysisRoundTrip]' passed (28.058 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 51.341 (51.344) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 51.341 (51.345) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 51.341 (51.347) seconds
+** TEST SUCCEEDED **
+
+## mac-root-final.log
+Test Case '-[V15RootSmokemacOSUITests.V15RootSmokemacOSUITests testFixtureTimelineSelectionSurvivesAnalysisRoundTrip]' passed (37.719 seconds).
+** TEST SUCCEEDED **
+
+## mac-reports.log
+Test Case '-[V15GallerymacOSUITests.F4AMacGalleryUITests testReportTakeoverLensesAndSafeDrill]' passed (20.728 seconds).
+** TEST SUCCEEDED **
+
+## ios-app-final.log
+** BUILD SUCCEEDED **
+
+## mac-app-final.log
+** BUILD SUCCEEDED **
+
+## mac-snapshot-build.log
+** BUILD SUCCEEDED **

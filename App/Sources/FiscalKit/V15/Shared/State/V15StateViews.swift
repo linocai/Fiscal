@@ -186,8 +186,8 @@ public struct V15StateVisualSpec: Sendable, Equatable {
 
     public static let outcomeUnknown = Self(
         semantic: .outcomeUnknown,
-        marker: V15Palette.yellow,
-        background: V15Palette.provisional,
+        marker: V15Palette.unknown,
+        background: V15Palette.unknownSurface,
         dashed: true
     )
 
@@ -269,7 +269,7 @@ public struct V15OutcomeUnknownState: View {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
                 Label(title, systemImage: V15Symbol.warning)
                     .font(V15Typography.cardTitle)
-                    .foregroundStyle(V15Palette.gold.color)
+                    .foregroundStyle(V15Palette.unknown.color)
                 Text(message)
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color)
@@ -298,7 +298,7 @@ public struct V15OfflineReadOnlyBanner: View {
     private let pendingCount: Int
     public init(snapshotAt: Date, pendingCount: Int = 0) { self.snapshotAt = snapshotAt; self.pendingCount = max(0, pendingCount) }
     public var body: some View {
-        V15StateContainer(marker: V15Palette.yellow.color, background: V15Palette.provisional.color, dashed: true) {
+        V15StateContainer(marker: V15Palette.warning.color, background: V15Palette.warningSurface.color, dashed: true) {
             VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                 Label(pendingCount > 0 ? "离线 · \(pendingCount) 项待同步" : "离线 · 只读", systemImage: V15Symbol.offline).font(V15Typography.secondary.weight(.semibold))
                 Text("显示 \(snapshotLabel) 保存的数据；当前无法提交更改。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
@@ -337,9 +337,9 @@ public struct V15ConflictState: View {
     }
 
     public var body: some View {
-        V15StateContainer(marker: V15Palette.yellow.color, background: V15Palette.provisional.color, dashed: true) {
+        V15StateContainer(marker: V15Palette.warning.color, background: V15Palette.warningSurface.color, dashed: true) {
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                Text("数据已更新").font(V15Typography.cardTitle).foregroundStyle(V15Palette.gold.color)
+                Text("数据已更新").font(V15Typography.cardTitle).foregroundStyle(V15Palette.warning.color)
                 Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
                 if !changes.isEmpty {
                     VStack(alignment: .leading, spacing: V15Spacing.sm) {
@@ -392,7 +392,7 @@ public struct V15PreviewState<Content: View>: View {
     private let version: String?; private let content: Content
     public init(version: String? = nil, @ViewBuilder content: () -> Content) { self.version = version; self.content = content() }
     public var body: some View {
-        V15StateContainer(marker: V15Palette.yellow.color, background: V15Palette.provisional.color, dashed: true) {
+        V15StateContainer(marker: V15Palette.provisionalMarker.color, background: V15Palette.provisional.color, dashed: true) {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
                 Text(version.map { "\(V15StateCopy.preview) · \($0)" } ?? V15StateCopy.preview).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 content
@@ -437,7 +437,7 @@ public struct V15DisplayOnlyState: View {
     }
 
     public var body: some View {
-        V15StateContainer(marker: V15Palette.yellow.color, background: V15Palette.provisional.color, dashed: true) {
+        V15StateContainer(marker: V15Palette.unknown.color, background: V15Palette.unknownSurface.color, dashed: true) {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
                 Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.72))
                 Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
@@ -508,7 +508,7 @@ public struct V15MoneyTruthState: View {
                 V15MoneyTextValue(presentation.displayed, font: font)
                     .overlay(alignment: .bottom) {
                         if presentation.hasPendingValue {
-                            Rectangle().stroke(V15Palette.yellow.color, style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(height: 1).offset(y: 3)
+                            Rectangle().stroke(V15Palette.provisionalMarker.color, style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(height: 1).offset(y: 3)
                         }
                     }
                 if let pendingLabel = presentation.pendingLabel {
@@ -544,7 +544,7 @@ public struct V15ProvisionalMoneyState: View {
     }
 
     public var body: some View {
-        V15StateContainer(marker: V15Palette.yellow.color, background: V15Palette.provisional.color, dashed: true) {
+        V15StateContainer(marker: V15Palette.provisionalMarker.color, background: V15Palette.provisional.color, dashed: true) {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
                 Text("\(title) · 尚未发生").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 V15MoneyText(minorUnits: amountMinor, direction: .neutral, font: V15Typography.moneyLarge)

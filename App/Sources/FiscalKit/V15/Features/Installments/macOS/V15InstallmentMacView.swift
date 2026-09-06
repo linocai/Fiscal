@@ -276,7 +276,7 @@ public struct V15InstallmentMacView: View {
         }
     }
 
-    private func warning(_ text: String, id: String) -> some View { Text(text).font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true).padding(V15Spacing.md).background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.control)).accessibilityIdentifier(id) }
+    private func warning(_ text: String, id: String) -> some View { Text(text).font(V15Typography.secondary).foregroundStyle(V15Palette.warning.color).fixedSize(horizontal: false, vertical: true).padding(V15Spacing.md).background(V15Palette.warningSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.control)).accessibilityIdentifier(id) }
     @ViewBuilder private func readback(_ phase: V15InstallmentModel.ReadbackPhase, prefix: String) -> some View { switch phase { case .loading: V15LoadingSkeleton(layout: .compact); case .confirmed: Text("最新状态与本次操作一致").accessibilityIdentifier("\(prefix).confirmed"); case .notConfirmed: Text("最新状态仍不能确认本次操作结果").accessibilityIdentifier("\(prefix).not-confirmed"); case .failed(let failure): Text("核对失败：\(failure.message)").accessibilityIdentifier("\(prefix).error"); case .idle: EmptyView() } }
     @ViewBuilder private func commandReadback(_ phase: V15InstallmentModel.ReadbackPhase) -> some View { switch phase { case .loading: V15LoadingSkeleton(layout: .compact); case .notConfirmed: Text("计划可能已经变化，但仍无法确认付款账户、账单日和时间是否属于本次操作。你仍可继续安全检查。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("v15.f3b2.mac.command.readback.not-confirmed"); case .failed(let failure): Text("读取最新计划失败：\(failure.message)。你仍可继续安全检查。").font(V15Typography.secondary).accessibilityIdentifier("v15.f3b2.mac.command.readback.error"); case .confirmed: Text("本次操作已安全确认。"); case .idle: EmptyView() } }
     @ViewBuilder private func feeDetails(categoryID: Binding<UUID?>, occurredDateText: Binding<String>, prefix: String) -> some View {
@@ -324,7 +324,7 @@ private struct V15InstallmentMacCreationView: View {
             V15ActionButton("查看分期预览", disabledReason: model.purchasePreviewDisabledReason) { Task { await model.requestPurchasePreview() } }.accessibilityIdentifier("v15.f3b2.mac.purchase.preview")
             if let preview = model.purchasePreview { V15PreviewState { V15InstallmentPurchasePreviewDetails(preview: preview, prefix: "v15.f3b2.mac.purchase.preview-detail") }.accessibilityIdentifier("v15.f3b2.mac.purchase.preview-result") }
             V15ActionButton("确认创建", disabledReason: model.purchaseCommitDisabledReason) { Task { await model.commitPurchase() } }.accessibilityIdentifier("v15.f3b2.mac.purchase.commit")
-            if model.purchasePhase == .unknown { Text("这笔可能已经创建。安全检查不会重复记账。").foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3b2.mac.purchase.unknown"); V15ActionButton("安全检查创建结果") { Task { await model.retryUnknownPurchase() } }.accessibilityIdentifier("v15.f3b2.mac.purchase.retry") }
+            if model.purchasePhase == .unknown { Text("这笔可能已经创建。安全检查不会重复记账。").foregroundStyle(V15Palette.unknown.color).accessibilityIdentifier("v15.f3b2.mac.purchase.unknown"); V15ActionButton("安全检查创建结果") { Task { await model.retryUnknownPurchase() } }.accessibilityIdentifier("v15.f3b2.mac.purchase.retry") }
         }
     }
 

@@ -115,15 +115,15 @@ public struct V151IOSWorkspace: View {
         .padding(.top, 8)
         .frame(minHeight: V15IOSLayout.bottomBarMinimumHeight)
         .dynamicTypeSize(.large ... .accessibility1)
-        .background(.regularMaterial)
+        .background(V15Palette.paper.color)
         .overlay(alignment: .top) { Rectangle().fill(V15Palette.hairline.color.opacity(0.72)).frame(height: 1) }
         .overlay {
             Button { recordPresented = true } label: {
-                Image(systemName: "plus").font(.title3.weight(.bold)).foregroundStyle(Color.white)
+                Image(systemName: "plus").font(.title3.weight(.bold)).foregroundStyle(V15Palette.brandInk.color)
                     .frame(width: V15IOSLayout.floatingActionDiameter, height: V15IOSLayout.floatingActionDiameter)
-                    .background(V15Palette.teal.color, in: Circle())
-                    .overlay { Circle().stroke(Color.white.opacity(0.2), lineWidth: 1) }
-                    .shadow(color: Color.black.opacity(0.16), radius: 12, y: 6)
+                    .background(V15Palette.yellow.color, in: Circle())
+                    .overlay { Circle().stroke(V15Palette.teal.color.opacity(0.18), lineWidth: 1) }
+                    .shadow(color: Color.black.opacity(0.12), radius: 8, y: 4)
             }
             .buttonStyle(.plain).offset(y: -19).accessibilityLabel("记一笔").accessibilityHint("打开新建账目").accessibilityIdentifier("v151.ios.record")
         }
@@ -238,9 +238,9 @@ private struct V151IOSTodayDashboard: View {
                 Text("正在读取账目").font(V15Typography.cardTitle)
             }
         }
-        .padding(V15IOSLayout.contentPadding)
-        .v15IOSCard()
         .padding(.horizontal, V15IOSLayout.contentPadding)
+        .padding(.vertical, V15Spacing.md)
+        .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
         .padding(.top, V15Spacing.sm)
     }
 
@@ -281,9 +281,6 @@ private struct V151IOSTodayDashboard: View {
                     V15ErrorMessageState(title: "暂时无法打开所属记录", message: futureOpenFailure)
                 }
                 pendingSyncNotice
-                if nearTermDue.isEmpty && future.isEmpty && services.pendingWrites.items.isEmpty {
-                    calmState
-                }
             }
             .padding(.horizontal, 16).padding(.vertical, 18)
         }
@@ -349,17 +346,8 @@ private struct V151IOSTodayDashboard: View {
                 .accessibilityIdentifier("v151.ios.today.near-term.item.\(indexed.offset)")
             }
         }
-        .padding(15)
-        .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous))
-    }
-
-    private var calmState: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("今天没有需要你处理的事项").font(V15Typography.cardTitle)
-            Text("当前金额、最近账目和未来安排都在各自的清楚位置。")
-                .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.58))
-        }
-        .padding(18).frame(maxWidth: .infinity, alignment: .leading).v15IOSCard()
+        .padding(.vertical, V15Spacing.xs)
+        .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
     }
 
     private func knownFuture(_ events: [V15FutureEvent]) -> some View {
@@ -370,7 +358,7 @@ private struct V151IOSTodayDashboard: View {
                 Button { Task { await openVerifiedFutureEvent(event) } } label: {
                     V15AdaptiveStack(spacing: 10) {
                         HStack(alignment: .top, spacing: 10) {
-                            Rectangle().fill(V15Palette.yellow.color).frame(width: 3, height: 28)
+                            Rectangle().fill(V15Palette.provisionalMarker.color).frame(width: 3, height: 28)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(event.title).font(V15Typography.body.weight(.medium))
                                 Text(event.date).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.54))
@@ -387,16 +375,16 @@ private struct V151IOSTodayDashboard: View {
                 Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
             }
         }
-        .padding(15).background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous))
+        .padding(.vertical, V15Spacing.xs)
     }
 
     private func offlineBanner(_ at: Date) -> some View {
         HStack(spacing: 12) {
-            Rectangle().fill(V15Palette.yellow.color).frame(width: 3)
+            Rectangle().fill(V15Palette.warning.color).frame(width: 3)
             VStack(alignment: .leading, spacing: 2) { Text("离线 · 仅可查看").font(V15Typography.secondary.weight(.semibold)); Text("数据保存于 \(V15TodayReadModel.shanghaiDateLabel(model.offlineAsOf ?? at))").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.58)) }
             Spacer(); V15ActionButton("查看", kind: .secondary) { openTodayLedger(nil) }
         }
-        .padding(.horizontal, 16).frame(minHeight: 62).background(V15Palette.provisional.color)
+        .padding(.horizontal, 16).frame(minHeight: 62).background(V15Palette.warningSurface.color)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v151.ios.offline")
     }
@@ -1070,9 +1058,9 @@ private struct V151IOSLedger: View {
                 Button { Task { await model.load() } } label: { Image(systemName: "magnifyingglass").font(V15Typography.body.weight(.semibold)).frame(width: V15Accessibility.minimumTouchTarget, height: V15Accessibility.minimumTouchTarget).background(V15Palette.teal.color, in: RoundedRectangle(cornerRadius: V15Radius.control)).foregroundStyle(Color.white) }.buttonStyle(.plain)
             }
         }
-        .padding(V15IOSLayout.contentPadding)
-        .v15IOSCard()
         .padding(.horizontal, V15IOSLayout.contentPadding)
+        .padding(.vertical, V15Spacing.md)
+        .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
         .padding(.top, V15Spacing.sm)
     }
 
@@ -1085,9 +1073,14 @@ private struct V151IOSLedger: View {
                 case .empty: V15EmptyState(title: "没有符合条件的账目", explanation: "更改搜索或筛选后重新读取。", actionTitle: "重新读取") { Task { await model.load() } }.padding(18)
                 case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.load() } }.padding(18)
                 case .loaded:
-                    ForEach(Array(model.items.enumerated()), id: \.element.id) { index, transaction in
-                        row(transaction)
-                        if index < model.items.count - 1 {
+                    ForEach(ledgerDateGroups) { group in
+                        Text(group.date)
+                            .font(V15Typography.label)
+                            .foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                            .padding(.top, V15Spacing.md)
+                            .padding(.bottom, V15Spacing.xs)
+                        ForEach(group.transactions, id: \.id) { transaction in
+                            row(transaction)
                             Divider().padding(.leading, 14)
                         }
                     }
@@ -1105,6 +1098,26 @@ private struct V151IOSLedger: View {
             }
             .padding(V15IOSLayout.contentPadding)
         }.refreshable { await model.load() }
+    }
+
+    private struct LedgerDateGroup: Identifiable {
+        let date: String
+        var transactions: [V15Transaction]
+        var id: String { date }
+    }
+
+    /// The server's chronological order is preserved while exposing each
+    /// Shanghai business date as a readable, stable ledger boundary.
+    private var ledgerDateGroups: [LedgerDateGroup] {
+        var groups: [LedgerDateGroup] = []
+        for transaction in model.items {
+            if let index = groups.firstIndex(where: { $0.date == transaction.businessDate }) {
+                groups[index].transactions.append(transaction)
+            } else {
+                groups.append(.init(date: transaction.businessDate, transactions: [transaction]))
+            }
+        }
+        return groups
     }
 
     private func row(_ transaction: V15Transaction) -> some View {
@@ -1521,7 +1534,7 @@ private struct V151IOSPendingSyncQueue: View {
     private func pendingCard(_ item: V15PendingWriteStore.Item) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
-                Rectangle().fill(V15Palette.yellow.color).frame(width: 3, height: 38)
+                Rectangle().fill(pendingMarker(item.status)).frame(width: 3, height: 38)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title).font(.headline).lineLimit(2)
                     Text("\(kindLabel(item.kind)) · \(statusLabel(item))").font(.caption).foregroundStyle(V15Palette.ink.color.opacity(0.60)).fixedSize(horizontal: false, vertical: true)
@@ -1543,9 +1556,27 @@ private struct V151IOSPendingSyncQueue: View {
                 V15ActionButton("移除", kind: .secondary) { services.pendingWrites.remove(item.id) }
             }
         }
-        .padding(14)
-        .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous).stroke(V15Palette.yellow.color.opacity(0.42)) }
+        .padding(.vertical, 14)
+        .background(pendingSurface(item.status))
+        .overlay(alignment: .bottom) { Rectangle().fill(pendingMarker(item.status).opacity(0.42)).frame(height: 1) }
+    }
+
+    private func pendingMarker(_ status: V15PendingWriteStore.Status) -> Color {
+        switch status {
+        case .queued, .syncing: V15Palette.provisionalMarker.color
+        case .requiresDecision: V15Palette.warning.color
+        case .outcomeUnknown: V15Palette.unknown.color
+        case .failed: V15Palette.danger.color
+        }
+    }
+
+    private func pendingSurface(_ status: V15PendingWriteStore.Status) -> Color {
+        switch status {
+        case .queued, .syncing: V15Palette.provisional.color
+        case .requiresDecision: V15Palette.warningSurface.color
+        case .outcomeUnknown: V15Palette.unknownSurface.color
+        case .failed: V15Palette.dangerSurface.color
+        }
     }
 
     private func kindLabel(_ value: V15PendingWriteStore.Kind) -> String { value == .transactionCreate ? "新建账目" : "分类决定" }

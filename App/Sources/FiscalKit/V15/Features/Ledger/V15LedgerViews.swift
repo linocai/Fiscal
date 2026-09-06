@@ -45,7 +45,7 @@ private struct V15LedgerSearchBar: View {
             V15SearchField(text: Binding(get: { model.filter.query ?? "" }, set: { model.setQuery($0) })).accessibilityIdentifier("v15.f1b.search")
             HStack(spacing: V15Spacing.sm) {
                 Button(action: showFilters) { Label("筛选", systemImage: "line.3.horizontal.decrease.circle") }.buttonStyle(.plain).v15PlatformHitArea().accessibilityIdentifier("v15.f1b.filters")
-                if !model.filterIssues.isEmpty { Label("筛选项需修改", systemImage: V15Symbol.warning).font(V15Typography.secondary).foregroundStyle(V15Palette.teal.color) }
+                if !model.filterIssues.isEmpty { Label("筛选项需修改", systemImage: V15Symbol.warning).font(V15Typography.secondary).foregroundStyle(V15Palette.warning.color) }
                 Spacer(minLength: 0)
                 Button { Task { await model.load() } } label: { Label("刷新", systemImage: V15Symbol.retry) }.buttonStyle(.plain).v15PlatformHitArea().accessibilityIdentifier("v15.f1b.refresh")
             }

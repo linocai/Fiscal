@@ -23,25 +23,41 @@ public struct V15ColorToken: Sendable, Equatable {
 /// Fiscal keeps one restrained brand palette and a separate safety semantic.
 /// Errors and destructive actions must never borrow the brand or warning hue.
 public enum V15Palette {
-    public static let paper = V15ColorToken(lightHex: 0xFFFFFF, darkHex: 0x0F1615)
-    public static let card = V15ColorToken(lightHex: 0xF8F7F3, darkHex: 0x1A2423)
-    public static let canvas = V15ColorToken(lightHex: 0xF4F2EC, darkHex: 0x0B1110)
-    public static let ink = V15ColorToken(lightHex: 0x14201F, darkHex: 0xE8EFED)
-    public static let teal = V15ColorToken(lightHex: 0x0C5A5B, darkHex: 0x4FB3AC)
-    public static let yellow = V15ColorToken(lightHex: 0xFCD668, darkHex: 0xB99333)
-    public static let gold = V15ColorToken(lightHex: 0x8A6A12, darkHex: 0xD9A93C)
-    public static let hairline = V15ColorToken(lightHex: 0xE8E6E1, darkHex: 0x2A3534)
-    public static let selected = V15ColorToken(lightHex: 0xE9F2F0, darkHex: 0x122A29)
-    public static let provisional = V15ColorToken(lightHex: 0xFFF8E4, darkHex: 0x241F12)
+    /// Reading surfaces deliberately stay close to white. Brand colour belongs
+    /// to an action or a fact, never to a whole page background.
+    public static let paper = V15ColorToken(lightHex: 0xFFFEFA, darkHex: 0x101918)
+    public static let card = V15ColorToken(lightHex: 0xFFFFFF, darkHex: 0x182322)
+    public static let canvas = V15ColorToken(lightHex: 0xF7F7F3, darkHex: 0x0C1312)
+    public static let ink = V15ColorToken(lightHex: 0x12312F, darkHex: 0xE8F0ED)
+    /// Fiscal's deep teal is the navigation, selection and primary-action bone.
+    public static let teal = V15ColorToken(lightHex: 0x0B5E5B, darkHex: 0x67C5BC)
+    /// Brand yellow only marks a Fiscal focal point. It is never a warning.
+    public static let yellow = V15ColorToken(lightHex: 0xF5C84C, darkHex: 0xE7B936)
+    /// Yellow keeps a dark foreground in both appearances for legible brand marks.
+    public static let brandInk = V15ColorToken(lightHex: 0x12312F, darkHex: 0x12312F)
+    public static let brandSurface = V15ColorToken(lightHex: 0xFFF5D6, darkHex: 0x2C2512)
+    public static let positive = V15ColorToken(lightHex: 0x16765C, darkHex: 0x63D2A9)
+    public static let outflow = V15ColorToken(lightHex: 0xB05439, darkHex: 0xF19A7A)
+    public static let warning = V15ColorToken(lightHex: 0x9A6800, darkHex: 0xF1C45E)
+    public static let warningSurface = V15ColorToken(lightHex: 0xFFF5D8, darkHex: 0x2A2414)
+    public static let provisionalMarker = V15ColorToken(lightHex: 0x687571, darkHex: 0xAAB9B3)
+    /// Existing callers use `gold` for outflow; keep the name as a source
+    /// compatibility alias while moving state UI to `warning` explicitly.
+    public static let gold = outflow
+    public static let hairline = V15ColorToken(lightHex: 0xE1E5DF, darkHex: 0x2B3937)
+    public static let selected = V15ColorToken(lightHex: 0xE5F2EE, darkHex: 0x12312E)
+    public static let provisional = V15ColorToken(lightHex: 0xF3F1EA, darkHex: 0x202624)
+    public static let unknown = V15ColorToken(lightHex: 0x66568F, darkHex: 0xC7B8F5)
+    public static let unknownSurface = V15ColorToken(lightHex: 0xF1EFFA, darkHex: 0x25213A)
     public static let danger = V15ColorToken(lightHex: 0xB4232C, darkHex: 0xFF7A82)
     public static let dangerSurface = V15ColorToken(lightHex: 0xFFF0F1, darkHex: 0x2B1618)
-    public static let receipt = selected
+    public static let receipt = V15ColorToken(lightHex: 0xE5F5EE, darkHex: 0x123126)
     public static let primaryButtonText = V15ColorToken(lightHex: 0xFFFFFF, darkHex: 0x08201F)
     /// A quiet desktop sidebar is intentionally distinct from content paper.
     /// It lets selection carry the navigation signal instead of turning every
     /// module into a large coloured button.
-    public static let sidebar = V15ColorToken(lightHex: 0xEFEEE8, darkHex: 0x111A19)
-    public static let surfaceRaised = V15ColorToken(lightHex: 0xFCFBF8, darkHex: 0x202B2A)
+    public static let sidebar = V15ColorToken(lightHex: 0xF1F2ED, darkHex: 0x111B1A)
+    public static let surfaceRaised = V15ColorToken(lightHex: 0xFFFFFF, darkHex: 0x1D2927)
 }
 
 public enum V15Spacing {
@@ -73,8 +89,8 @@ public enum V15Radius {
 #else
     public static let tag: CGFloat = 5
     public static let control: CGFloat = 10
-    public static let card: CGFloat = 14
-    public static let decisionCard: CGFloat = 16
+    public static let card: CGFloat = 12
+    public static let decisionCard: CGFloat = 14
 #endif
 }
 
@@ -200,17 +216,17 @@ private struct V15IOSCardModifier: ViewModifier {
         content
             .background(
                 selected ? V15Palette.selected.color : V15Palette.surfaceRaised.color,
-                in: RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous)
+                in: RoundedRectangle(cornerRadius: V15Radius.card, style: .continuous)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: V15IOSLayout.cardCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: V15Radius.card, style: .continuous)
                     .stroke(selected ? V15Palette.teal.color.opacity(0.34) : V15Palette.hairline.color.opacity(0.82), lineWidth: 1)
                     .allowsHitTesting(false)
             }
             .shadow(
-                color: colorScheme == .light ? Color.black.opacity(0.045) : .clear,
-                radius: 12,
-                y: 5
+                color: colorScheme == .light ? Color.black.opacity(V15Elevation.lightCardShadowOpacity) : .clear,
+                radius: V15Elevation.lightCardShadowRadius,
+                y: V15Elevation.lightCardShadowY
             )
     }
 }
@@ -330,8 +346,8 @@ public struct V15MoneyText: View {
 
     private var color: Color {
         switch presentation.direction {
-        case .inflow: V15Palette.teal.color
-        case .outflow: V15Palette.gold.color
+        case .inflow: V15Palette.positive.color
+        case .outflow: V15Palette.outflow.color
         case .balance: V15Palette.ink.color
         case .neutral: V15Palette.ink.color.opacity(0.66)
         }

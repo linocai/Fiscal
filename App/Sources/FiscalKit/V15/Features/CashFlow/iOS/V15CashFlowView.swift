@@ -140,8 +140,16 @@ public struct V15CashFlowView: View {
                 else { cashFlowUnavailableFact("实际入账", detail: item.isSystem ? "回来源流程确认" : "尚未结算") }
             }
             .accessibilityIdentifier("v15.f3d.plan-actual")
-            if item.isOverdue { Label("已逾期", systemImage: V15Symbol.warning).foregroundStyle(V15Palette.gold.color) }
-            if item.isDisplayOnly { Text("暂时无法识别此事项的状态或方向，当前只供查看。") .font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).accessibilityIdentifier("v15.f3d.display-only") }
+            if item.isOverdue { Label("已逾期", systemImage: V15Symbol.warning).foregroundStyle(V15Palette.warning.color) }
+            if item.isDisplayOnly {
+                Label("暂时无法识别此事项的状态或方向，当前只供查看。", systemImage: V15Symbol.warning)
+                    .font(V15Typography.secondary)
+                    .foregroundStyle(V15Palette.unknown.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(V15Spacing.sm)
+                    .background(V15Palette.unknownSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                    .accessibilityIdentifier("v15.f3d.display-only")
+            }
             if item.isSystem {
                 Label(item.systemKind == .creditCycle ? "信用账单安排 · 请到还款页面处理" : "报销到账安排 · 请到报销页面登记", systemImage: "link")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)

@@ -84,7 +84,6 @@ public struct V15TodayMacView: View {
                 scopeLens("待完善", type: "completeness_issues")
             }
         }
-        .v15MacPanel()
     }
 
     @ViewBuilder private var factsSurface: some View {
@@ -228,16 +227,16 @@ private struct V15TodayMacFactCard: View {
         Button { open(scope) } label: {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
                 Text(title).font(V15Typography.secondary.weight(.semibold))
-                V15MoneyText(minorUnits: amount, direction: direction, font: V15Typography.money)
+                V15MoneyText(minorUnits: amount, direction: direction, font: V15Typography.moneyLarge)
                 Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.64))
                 Text(scope == nil ? "当前无法查看此范围" : "查看明细").font(V15Typography.label).foregroundStyle(V15Palette.teal.color)
             }
-            .frame(maxWidth: .infinity, minHeight: 132, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 116, alignment: .leading)
             .padding(V15Spacing.md)
+            .background(V15Palette.paper.color.opacity(0.65), in: RoundedRectangle(cornerRadius: V15Radius.control))
         }
         .buttonStyle(.plain)
         .disabled(scope == nil)
-        .v15MacPanel()
         .accessibilityIdentifier("v15.f2c.fact.\(identifier)")
     }
 }
@@ -276,7 +275,7 @@ private struct V15TodayMacInspector: View {
             HStack {
                 Text("详情").font(V15Typography.cardTitle).accessibilityIdentifier("v15.f2c.inspector")
                 if showsUnavailableInspector || isUnavailable {
-                    Text("暂不可打开").font(V15Typography.label).foregroundStyle(V15Palette.gold.color)
+                    Text("暂不可打开").font(V15Typography.label).foregroundStyle(V15Palette.warning.color)
                 }
                 Spacer()
                 Button("关闭", action: close).buttonStyle(.borderless).accessibilityIdentifier("v15.f2c.inspector.close")

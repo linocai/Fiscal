@@ -124,7 +124,7 @@ private func planComparison(_ title: String, count: Int, start: String, total: V
     }
     .padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .topLeading)
     .background(provisional ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
-    .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(provisional ? V15Palette.yellow.color : V15Palette.hairline.color, style: StrokeStyle(lineWidth: 1, dash: provisional ? [4, 3] : [])) }
+    .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(provisional ? V15Palette.provisionalMarker.color : V15Palette.hairline.color, style: StrokeStyle(lineWidth: 1, dash: provisional ? [4, 3] : [])) }
 }
 
 @MainActor
@@ -211,7 +211,7 @@ private func warningSection(_ warnings: [V15InstallmentWarning], prefix: String)
                     .font(V15Typography.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(V15Spacing.sm)
-                    .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                    .background(V15Palette.warningSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
                     .accessibilityIdentifier("\(prefix).\(warning.code)")
             }
         }

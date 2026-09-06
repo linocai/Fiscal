@@ -11,7 +11,7 @@ struct V15AIProposalRow: View {
                 VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                     Text(proposal.title ?? "未命名内容").font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.ink.color).lineLimit(2)
                     Text("\(Self.statusLabel(proposal.status)) · \(proposal.source.displayName)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                    if !proposal.missingFields.isEmpty { Text("待补充：\(proposal.missingFields.map(Self.fieldLabel).joined(separator: "、"))").font(V15Typography.secondary).foregroundStyle(V15Palette.gold.color).lineLimit(2) }
+                    if !proposal.missingFields.isEmpty { Text("待补充：\(proposal.missingFields.map(Self.fieldLabel).joined(separator: "、"))").font(V15Typography.secondary).foregroundStyle(V15Palette.warning.color).lineLimit(2) }
                 }
                 Spacer(minLength: V15Spacing.xs)
                 if let amount = proposal.amountMinor { V15MoneyText(minorUnits: amount, direction: .outflow) }
@@ -28,8 +28,17 @@ struct V15AIProposalRow: View {
         .accessibilityIdentifier("v15.f3f.proposal.\(proposal.id)")
     }
 
-    private var marker: Color {
-        switch proposal.status { case .pending: V15Palette.teal.color; case .processing: V15Palette.yellow.color; case .failed: V15Palette.gold.color; case .executed: V15Palette.teal.color.opacity(0.45); case .ignored, .undone: V15Palette.ink.color.opacity(0.3); case .unknown: V15Palette.yellow.color }
+    private var marker: Color { Self.statusColor(proposal.status) }
+
+    static func statusColor(_ status: V15AIProposalStatus) -> Color {
+        switch status {
+        case .pending: V15Palette.provisionalMarker.color
+        case .processing: V15Palette.provisionalMarker.color
+        case .failed: V15Palette.danger.color
+        case .executed: V15Palette.positive.color
+        case .ignored, .undone: V15Palette.ink.color.opacity(0.3)
+        case .unknown: V15Palette.unknown.color
+        }
     }
 
     static func statusLabel(_ status: V15AIProposalStatus) -> String {
@@ -59,7 +68,7 @@ struct V15AIProposalDetail: View {
         VStack(alignment: .leading, spacing: V15Spacing.lg) {
             VStack(alignment: .leading, spacing: V15Spacing.xs) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(V15AIProposalRow.statusLabel(proposal.status)).font(V15Typography.label).foregroundStyle(V15Palette.teal.color)
+                    Text(V15AIProposalRow.statusLabel(proposal.status)).font(V15Typography.label).foregroundStyle(V15AIProposalRow.statusColor(proposal.status))
                     Spacer()
                 }
                 Text(proposal.title ?? "未命名内容").font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
@@ -102,7 +111,7 @@ struct V15AIProposalDetail: View {
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                 if !proposal.missingFields.isEmpty {
                     Label("待补充：\(proposal.missingFields.map(Self.fieldLabel).joined(separator: "、"))", systemImage: V15Symbol.warning)
-                        .font(V15Typography.secondary.weight(.medium)).foregroundStyle(V15Palette.gold.color).fixedSize(horizontal: false, vertical: true)
+                        .font(V15Typography.secondary.weight(.medium)).foregroundStyle(V15Palette.warning.color).fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("v15.f3f.missing-fields")
                 }
                 if let explanation = proposal.explanation { Text(explanation).font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true) }
@@ -110,7 +119,7 @@ struct V15AIProposalDetail: View {
 
             if proposal.errorCode != nil || proposal.errorMessage != nil {
                 V15Section("处理失败") {
-                    Label(proposal.errorMessage ?? "没有可用的错误说明。", systemImage: V15Symbol.warning).font(V15Typography.body).fixedSize(horizontal: false, vertical: true)
+                    Label(proposal.errorMessage ?? "没有可用的错误说明。", systemImage: V15Symbol.warning).font(V15Typography.body).foregroundStyle(V15Palette.danger.color).fixedSize(horizontal: false, vertical: true)
                 }.accessibilityIdentifier("v15.f3f.proposal-error")
             }
 
@@ -142,14 +151,14 @@ struct V15AIProposalDetail: View {
     @ViewBuilder private func confidenceRow(_ label: String, value: Int?) -> some View {
         let needsReview = value.map { $0 < 9_000 } ?? true
         HStack(spacing: V15Spacing.sm) {
-            RoundedRectangle(cornerRadius: 2).fill(needsReview ? V15Palette.yellow.color : V15Palette.teal.color.opacity(0.45)).frame(width: 4, height: 24).accessibilityHidden(true)
+            RoundedRectangle(cornerRadius: 2).fill(needsReview ? V15Palette.warning.color : V15Palette.positive.color.opacity(0.60)).frame(width: 4, height: 24).accessibilityHidden(true)
             Text(label).font(V15Typography.secondary)
             if needsReview { Text("需复核").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
             Spacer()
             Text(value.map { "\($0 / 100)%" } ?? "未提供").font(V15Typography.money).foregroundStyle(V15Palette.ink.color)
         }
         .padding(.horizontal, V15Spacing.sm).padding(.vertical, V15Spacing.xs)
-        .background(needsReview ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+        .background(needsReview ? V15Palette.warningSurface.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
     }
     private static func fieldLabel(_ raw: String) -> String { ["kind": "类型", "amount_minor": "金额", "occurred_at": "时间", "title": "标题", "note": "备注", "account_id": "账户", "category_id": "分类", "destination_account_id": "目标账户", "credit_cycle_id": "账期", "target": "目标" ][raw] ?? "其他内容" }
     private static func diffSummary(_ value: V15AIEventValue?) -> String { guard case .object(let object)? = value else { return "已修改" }; return "\(scalar(object["from"])) → \(scalar(object["to"]))" }

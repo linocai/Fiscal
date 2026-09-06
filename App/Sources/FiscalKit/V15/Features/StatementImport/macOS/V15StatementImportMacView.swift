@@ -98,7 +98,7 @@ public struct V15StatementImportMacView: View {
                                 .font(V15Typography.secondary.weight(.semibold))
                                 .padding(V15Spacing.sm)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                                .background(V15Palette.unknownSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
                                 .accessibilityIdentifier("v15.f3g.mac.source-unavailable")
                         }
                     }
@@ -162,7 +162,7 @@ public struct V15StatementImportMacView: View {
         return Button { model.requestPage(page) } label: {
             HStack(alignment: .top, spacing: 10) {
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(unavailable ? V15Palette.provisional.color : V15Palette.card.color)
+                    .fill(unavailable ? V15Palette.unknownSurface.color : V15Palette.card.color)
                     .frame(width: 42, height: 56)
                     .overlay { Text(String(page)).font(V15Typography.cardTitle.monospacedDigit()) }
                     .overlay { RoundedRectangle(cornerRadius: 4).stroke(V15Palette.hairline.color) }
@@ -191,7 +191,7 @@ public struct V15StatementImportMacView: View {
                 .accessibilityIdentifier("v15.f3g.mac.masked-page")
         }
         .padding(V15Spacing.sm)
-        .background(page.sourceAvailable ? V15Palette.card.color : V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+        .background(page.sourceAvailable ? V15Palette.card.color : V15Palette.unknownSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
         .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(V15Palette.hairline.color, style: StrokeStyle(lineWidth: 1, dash: page.sourceAvailable ? [] : [5, 4])) }
     }
 
@@ -321,7 +321,7 @@ public struct V15StatementImportMacView: View {
                 Text(row.draft?.resolution.displayName ?? "未处理").font(V15Typography.secondary.weight(.semibold)).frame(width: 116, alignment: .trailing)
             }
             .padding(.horizontal, 18).padding(.vertical, 10)
-            .background(selectedID == row.id ? V15Palette.teal.color.opacity(0.10) : (row.evidenceTextMasked == nil ? V15Palette.provisional.color.opacity(0.55) : Color.clear))
+            .background(selectedID == row.id ? V15Palette.teal.color.opacity(0.10) : (row.evidenceTextMasked == nil ? V15Palette.unknownSurface.color.opacity(0.72) : Color.clear))
             .overlay(alignment: .bottom) { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
         }
         .buttonStyle(.plain)
@@ -442,7 +442,7 @@ public struct V15StatementImportMacView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(V15Spacing.sm)
-            .background(row.evidenceTextMasked == nil ? V15Palette.provisional.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+            .background(row.evidenceTextMasked == nil ? V15Palette.unknownSurface.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
             if !row.candidates.isEmpty {
                 VStack(alignment: .leading, spacing: 7) {
                     Text("可能匹配 · 不能证明重复").font(V15Typography.label)
@@ -562,7 +562,7 @@ public struct V15StatementImportMacView: View {
                     Text("确认这些行不会创建任何自动平衡交易。 ").font(V15Typography.secondary.weight(.semibold))
                 }
                 .padding(V15Spacing.sm)
-                .background(V15Palette.provisional.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                .background(V15Palette.warningSurface.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
             }
             Text("所选行会一起确认；如果其中一行失败，本次不会导入任何一行。")
                 .font(V15Typography.secondary)

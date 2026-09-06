@@ -1,0 +1,29 @@
+2026-09-06 V2.1.0 build39 review fixes; serial Debug/arm64; existing DerivedData and simulator.
+
+units.log
+✔ Test run with 405 tests in 39 suites passed after 46.948 seconds.
+** TEST SUCCEEDED **
+
+mac-ui.log
+Test Case '-[V15RootSmokemacOSUITests.V15RootSmokemacOSUITests testAllAccountsMenuSelectsOverflowAccountFromEverySpace]' failed (39.128 seconds).
+Test Case '-[V15RootSmokemacOSUITests.V15RootSmokemacOSUITests testFixtureTimelineSelectionSurvivesAnalysisRoundTrip]' passed (34.690 seconds).
+** TEST FAILED **
+
+mac-ui-final.log
+Test Case '-[V15RootSmokemacOSUITests.V15RootSmokemacOSUITests testAllAccountsMenuSelectsOverflowAccountFromEverySpace]' passed (38.588 seconds).
+** TEST SUCCEEDED **
+
+ios-ui.log
+Test Case '-[V15GalleryUITests.F1AGalleryUITests testNoteCollapsesWithoutLosingTextAndResetsForNextEntry]' passed (19.411 seconds).
+** TEST SUCCEEDED **
+
+ios-app.log
+** BUILD SUCCEEDED **
+
+mac-app.log
+** BUILD SUCCEEDED **
+
+Initial mac-ui run: menu label did not expose the selected value; explicit accessibilityValue added and final regression passed.
+All 6 protected scheme hashes unchanged.
+Debug-iphonesimulator/Fiscal.app/Info.plist: 2.1.0 (39); minimum OS 26.0
+Debug/Fiscal.app/Contents/Info.plist: 2.1.0 (39); minimum OS 26.0
