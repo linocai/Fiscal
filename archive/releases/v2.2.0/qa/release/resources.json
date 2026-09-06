@@ -1,0 +1,18 @@
+{
+  "checked_at": "2026-09-06T10:53:46.444743+00:00",
+  "derived_data": "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou",
+  "derived_data_kib": 3259048,
+  "shared_module_cache_kib": 2516364,
+  "disk_free_bytes": 55130955776,
+  "new_derived_data_directories": [],
+  "simulator_created_or_booted_for_release": false,
+  "runtime_downloaded": false,
+  "serial_jobs": 2,
+  "protected_schemes_verified": 6,
+  "removed_release_owned_temporary_paths": [
+    "build/release-v2.2.0-40/source",
+    "build/release-v2.2.0-40/staging"
+  ],
+  "temporary_kib_freed": 383056,
+  "release_retained_kib": 85228
+}

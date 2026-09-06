@@ -2,7 +2,7 @@
   "version": "2.2.0",
   "build": 40,
   "branch": "main",
-  "status": "Review R1–R9 and D1 fixed; targeted verification and both App targets passed; not released",
+  "status": "Released 2.2.0 (40): review fixes verified, signed archives checked, Mac installed and live reads passed; iOS IPA delivered for operator installation",
   "apps": {
     "macOS Debug": {
       "info_plist": "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou/Build/Products/Debug/Fiscal.app/Contents/Info.plist",
@@ -488,5 +488,12 @@
         "includes": "future item failure/retry and return; all future items return to overview"
       }
     }
+  },
+  "release": {
+    "source_commit": "080c6fadbd3062df2887fcb6b69e70e786908f66",
+    "tag": "v2.2.0",
+    "evidence": "release/verification.json",
+    "release_state": "../RELEASE_STATE.md",
+    "ios_installation": "operator action pending"
   }
 }

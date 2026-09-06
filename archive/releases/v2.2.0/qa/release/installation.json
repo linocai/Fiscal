@@ -1,0 +1,14 @@
+{
+  "installed": "/Applications/Fiscal.app",
+  "version": "2.2.0",
+  "build": "40",
+  "mac_executable_sha256": "d2a088b134639dbe3039b8a3ad4b22cc1c2b85f2b94abe133ddb5f27cf284648",
+  "backup": "/Applications/Fiscal-v2.1.0-build39-backup-20260906-185242.app",
+  "backup_executable_sha256": "5d3e71d731942d98e820b6a5718bbb304a63af291ce9aed265142e5efb7157e2",
+  "ios_delivery": "/Users/linotsai/Downloads/Fiscal-iOS-v2.2.0-build40-development.ipa",
+  "ios_sha256": "5824f857e825fe52423412fae30dcbdb4af30ea1cb3375ba727e16f08a015284",
+  "installed_at": "2026-09-06T18:52:44.102888+08:00",
+  "launch_and_live_read": "passed: installed signed app launched; overview, real account summary, upcoming items, monthly report and global recent transactions loaded; compact and expanded window inspected without offline/error state",
+  "production_financial_writes_performed": false,
+  "private_financial_screenshots_archived": false
+}

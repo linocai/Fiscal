@@ -1,0 +1,6 @@
+{
+  "initial_issue": "Verifier incorrectly required explicit keychain-access-groups and exact profile application-identifier; existing iOS profile uses valid wildcard and app default access group.",
+  "app_source_or_entitlements_changed": false,
+  "correction": "Verify effective access group including application-identifier; match allowed profile wildcard.",
+  "reference": "https://developer.apple.com/documentation/security/sharing-access-to-keychain-items-among-a-collection-of-apps"
+}

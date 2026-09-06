@@ -1,6 +1,6 @@
 # Fiscal V2.2.0（40）界面与验收
 
-Swift / SwiftUI 实现的 Build 候选，覆盖 macOS、iPhone 的主空间、专项页面、表单和状态。Review 发现已修复，408 项单测与新增 8 个回归用例通过，双端构建通过；[修复与回归记录](FIX_REPORT.md)。尚未发布。
+Swift / SwiftUI 实现的 V2.2.0（40），覆盖 macOS、iPhone 的主空间、专项页面、表单和状态。Review 发现已修复，408 项单测与新增 8 个回归用例通过，双端构建通过；[修复与回归记录](FIX_REPORT.md)。已完成一条龙发布，Mac 已换装；iOS 安装包已交付。见 [发布记录](../RELEASE_STATE.md)。
 
 ## 主界面
 
