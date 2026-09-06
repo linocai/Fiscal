@@ -1,0 +1,160 @@
+{
+  "devices": [
+    {
+      "architecture": "arm64",
+      "deviceId": "00008132-0001242821FA401C",
+      "deviceName": "My Mac",
+      "modelName": "Mac mini",
+      "osBuildNumber": "25G83",
+      "osVersion": "26.6.2",
+      "platform": "macOS"
+    }
+  ],
+  "testNodes": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "duration": "0.0006s",
+                  "durationInSeconds": 0.0005998611450195312,
+                  "name": "Batch classification encodes the frozen atomic request shape",
+                  "nodeIdentifier": "P10MacWorkbenchTests/batchClassificationEncoding()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P10MacWorkbenchTests/batchClassificationEncoding()",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.000084s",
+                  "durationInSeconds": 8.392333984375e-05,
+                  "name": "Classification filters keep the frozen raw query values",
+                  "nodeIdentifier": "P10MacWorkbenchTests/classificationRawValues()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P10MacWorkbenchTests/classificationRawValues()",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                }
+              ],
+              "name": "FiscalKit P10 macOS workbench contracts",
+              "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P10MacWorkbenchTests",
+              "nodeType": "Test Suite",
+              "result": "Passed"
+            },
+            {
+              "children": [
+                {
+                  "duration": "0.0018s",
+                  "durationInSeconds": 0.0018169879913330078,
+                  "name": "overview month follows Shanghai rollover instead of a fixed fixture month",
+                  "nodeIdentifier": "V15DesignSystemTests/overviewCalendarMonthRollover()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V15DesignSystemTests/overviewCalendarMonthRollover()",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.000077s",
+                  "durationInSeconds": 7.700920104980469e-05,
+                  "name": "light and dark tokens preserve the approved semantic palette",
+                  "nodeIdentifier": "V15DesignSystemTests/paletteValues()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V15DesignSystemTests/paletteValues()",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.00017s",
+                  "durationInSeconds": 0.00017499923706054688,
+                  "name": "money presentation is minor-unit, tabular and non-wrapping",
+                  "nodeIdentifier": "V15DesignSystemTests/moneySemantics()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V15DesignSystemTests/moneySemantics()",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.00014s",
+                  "durationInSeconds": 0.00013589859008789062,
+                  "name": "credit overpayment keeps its exact magnitude without a debt sign",
+                  "nodeIdentifier": "V15DesignSystemTests/creditOverpaymentPresentation()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V15DesignSystemTests/creditOverpaymentPresentation()",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.000076s",
+                  "durationInSeconds": 7.605552673339844e-05,
+                  "name": "overview amounts refuse overflow and never combine different fact revisions",
+                  "nodeIdentifier": "V15DesignSystemTests/overviewAmountGates()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V15DesignSystemTests/overviewAmountGates()",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.001s",
+                  "durationInSeconds": 0.00102996826171875,
+                  "name": "platform dimensions and AX5 yielding order protect content",
+                  "nodeIdentifier": "V15DesignSystemTests/accessibilitySpecifications()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V15DesignSystemTests/accessibilitySpecifications()",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.000065s",
+                  "durationInSeconds": 6.4849853515625e-05,
+                  "name": "minimum macOS window keeps the widest compact workbench visible",
+                  "nodeIdentifier": "V15DesignSystemTests/compactMacWorkspaceFitsMinimumWindow()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V15DesignSystemTests/compactMacWorkspaceFitsMinimumWindow()",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.0001s",
+                  "durationInSeconds": 0.00010204315185546875,
+                  "name": "unknown and missing disabled reasons always have an explanation",
+                  "nodeIdentifier": "V15DesignSystemTests/disabledReasons()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V15DesignSystemTests/disabledReasons()",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.00013s",
+                  "durationInSeconds": 0.00012803077697753906,
+                  "name": "state vocabulary preserves preview, conflict, archive and display-only honesty",
+                  "nodeIdentifier": "V15DesignSystemTests/stateCopy()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V15DesignSystemTests/stateCopy()",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                },
+                {
+                  "duration": "0.00014s",
+                  "durationInSeconds": 0.00014019012451171875,
+                  "name": "response-unknown uses warning semantics instead of deterministic failure",
+                  "nodeIdentifier": "V15DesignSystemTests/outcomeUnknownVisualContract()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V15DesignSystemTests/outcomeUnknownVisualContract()",
+                  "nodeType": "Test Case",
+                  "result": "Passed"
+                }
+              ],
+              "name": "V15 design-system contracts",
+              "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V15DesignSystemTests",
+              "nodeType": "Test Suite",
+              "result": "Passed"
+            }
+          ],
+          "name": "FiscalKitTests",
+          "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests",
+          "nodeType": "Unit test bundle",
+          "result": "Passed"
+        }
+      ],
+      "name": "FiscalmacOS",
+      "nodeType": "Test Plan",
+      "result": "Passed"
+    }
+  ],
+  "testPlanConfigurations": [
+    {
+      "configurationId": "1",
+      "configurationName": "Test Scheme Action"
+    }
+  ]
+}

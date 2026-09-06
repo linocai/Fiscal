@@ -1,12 +1,12 @@
 # Fiscal · PROJECT_PLAN
 
-> 更新：2026-09-06（Asia/Shanghai）｜目标：**V2.2.0 build 41 视觉快修**｜状态：**快修与针对性验收完成，正在提交和签名发布；营销版本不变**
+> 更新：2026-09-06（Asia/Shanghai）｜目标：**V2.2.0 build 41 视觉快修**｜状态：**Build 41 快修发布完成，Mac 已换包验证，iOS IPA 已交付；营销版本不变**
 
 ## 1. 目标、边界与当前事实
 
 - 把已发布的 V2.1.0（39）从旧骨架的小修升级为完整、清晰、现代的个人财务产品界面。实现必须是 Swift/SwiftUI；参考图只约束信息优先级、色彩关系和体验方向，绝不作为 PNG、HTML、WKWebView 或逐像素复刻规格。
 - 已确认的参考：Mac 的[总览与账户概览](archive/design/mac-redesign-2026-09-06/fiscal-mac-target-v2.png)及[账户选择浮层](archive/design/mac-redesign-2026-09-06/fiscal-mac-accounts-picker-v2.png)；iOS 的[页面内容](archive/design/ios-redesign-2026-09-06/fiscal-ios-main-pages-v1.png)、[记一笔](archive/design/ios-redesign-2026-09-06/fiscal-ios-record-v1.png)与[悬浮栏方向](archive/design/ios-redesign-2026-09-06/fiscal-ios-navigation-v2.png)。iOS 图中右上角铅笔不是冻结决定；高频“记一笔”必须留在底部、有文字、单手可发现。
-- 本次升级起点为标签 v2.1.0 的 build 39，源码 353c381ff6a2540a048e8c3d3a7d12b57e24e9ad，发布记录提交 96d2f9a27bc5413b915dbb74002035d96026d2c7。App/project.yml 已更新为 **2.2.0 / 40**，iOS/macOS 26.0、Swift 6；xcodegen 后六个受保护 scheme 已按原始字节恢复，用户已授权一条龙发布，执行进度见 [RELEASE_STATE.md](archive/releases/v2.2.0/RELEASE_STATE.md)。
+- 本次升级起点为标签 v2.1.0 的 build 39，源码 353c381ff6a2540a048e8c3d3a7d12b57e24e9ad，发布记录提交 96d2f9a27bc5413b915dbb74002035d96026d2c7。App/project.yml 当前为 **2.2.0 / 41**，iOS/macOS 26.0、Swift 6；xcodegen 后六个受保护 scheme 已按原始字节恢复，用户已授权一条龙发布，当前 build 41 交付见 [RELEASE_STATE.md](archive/releases/v2.2.0/build41/RELEASE_STATE.md)。
 - 仅支持 iOS/macOS 26+ 与 iPhone 16+。在 main 工作；不新增模拟器、runtime、分支或 DerivedData。复用 iOS 26.5 主模拟器 iPhone 17 Pro（211DD03C-812D-4A42-97EF-F693D7DF924C）、/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou 与 /Users/linotsai/Library/Developer/Xcode/DerivedData/ModuleCache.noindex；保持串行、少量构建；修复后仍有约 54 GiB 可用空间。
 - 六个已有本地 scheme 修改是受保护用户状态，必须逐字保留且不得暂存或回滚。V2.2.0 不改 Backend/API/migration，除非施工中证明现有只读契约无法支持已确定页面；届时先把缺口写回本计划再决定。
 
@@ -105,7 +105,7 @@
 - M4 修正包括：金额负号/溢出保护、上海当月与跨月测试、同 revision 总览组合、Mac 卡片/安全页布局、iOS 报表整行点击与日序列空态、账户原生焦点与文字说明。现有业务模型、Backend、API/migration 不变。
 - 资源收口：复用既有 iPhone 17 Pro / iOS 26.5，没有新增模拟器、runtime 或 DerivedData；当前缓存约 3.0 GiB + 2.4 GiB，磁盘剩余约 53.7 GiB。仅清理本轮中止测试生成的 402.6 MiB 诊断包并保留日志。六个 scheme 的原始 SHA-256 再次全部一致。
 - **Review 修复结论**：初次完整 Review 的 8 项 P2、1 项 P3 与 D1 均已修复。涵盖根读取刷新、双端最近交易隔离/重复导航、Mac 待办反馈与来源返回、账户读取状态、iOS 空态/分类引用/AX5 金额，以及离线/待同步说明和首屏待办布局。完整单测 408 项、新增 8 个回归用例与双端 App target 均通过；原发现与修复后证据分别见 [REVIEW.md](archive/releases/v2.2.0/qa/REVIEW.md)、[FIX_REPORT.md](archive/releases/v2.2.0/qa/FIX_REPORT.md)。本轮为针对性修复和主会话复核，未冒充第二次独立全量 Review。
-- 当前发布已完成：源码 `080c6fadbd3062df2887fcb6b69e70e786908f66` 与不可变标签 `v2.2.0` 已推送；三项 Release 构建和签名包校验通过，Mac 已备份换装并验证线上数据，iOS IPA 已交付。后端累计差异为空、服务/数据库/备份核验正常。六个用户 scheme 保持原始字节；没有剩余代理侧发布步骤，仅 iOS 真机安装由用户完成。详细发布、回退和资源记录见 [RELEASE_STATE.md](archive/releases/v2.2.0/RELEASE_STATE.md)。
+- Build 40 发布已完成：源码 `080c6fadbd3062df2887fcb6b69e70e786908f66` 与不可变标签 `v2.2.0` 已推送；三项 Release 构建和签名包校验通过，Mac 已备份换装并验证线上数据，iOS IPA 已交付。后端累计差异为空、服务/数据库/备份核验正常。六个用户 scheme 保持原始字节；没有剩余代理侧发布步骤，仅 iOS 真机安装由用户完成。详细发布、回退和资源记录见 [RELEASE_STATE.md](archive/releases/v2.2.0/RELEASE_STATE.md)。
 
 ## 8. Build 41 快修（当前任务）
 
@@ -113,4 +113,4 @@
 - 背景覆盖完整详情视口，1380 pt 仅约束内部阅读内容；不能让 ScrollView 的背景跟随内容限宽。主动作采用黄色胶囊，次动作采用轻色胶囊、统一图标/高度/悬停与按下反馈；保留键盘、禁用与辅助功能行为。Mac 小字提升约 1 pt，iOS 排版不动。
 - 验证：Mac 1000 / 1280 / 2000 pt 与深浅色、实际拖动缩放，直接检查背景连续和按钮可读可点；跑针对性根 UI 回归与设计系统/桌面布局单测，双端正式 App 构建。复用既有模拟器、DerivedData 和 ModuleCache，串行两 jobs。
 - 按同一发布流程交付 build 41：审计相对实际生产的累计差异；main 提交推送；独立不可变标签 v2.2.0-build41，保留 v2.2.0；签名校验、Mac 可恢复备份换包、iOS IPA 交付。六个已有用户 scheme 保持原始字节且不暂存。
-- 进度：修复完成。1000 / 1280 / 2000 pt 深浅色和实际拖动通过；两个不同根 UI 用例获得通过结果，12 项针对性单测通过。正在执行提交、不可变标签、三项 Release 构建与换包交付，详见 [Build 41 发布记录](archive/releases/v2.2.0/build41/RELEASE_STATE.md)。
+- 进度：修复完成。1000 / 1280 / 2000 pt 深浅色和实际拖动通过；两个不同根 UI 用例获得通过结果，12 项针对性单测通过。源码与独立不可变标签已推送，三项 Release 构建及签名验证通过，Mac 已备份换包并验证线上读取，iOS IPA 已交付。发布全部完成，详见 [Build 41 发布记录](archive/releases/v2.2.0/build41/RELEASE_STATE.md)。

@@ -1,0 +1,18 @@
+{
+  "checked_at": "2026-09-06T11:23:00.662925+00:00",
+  "fiscal_derived_data_bytes": 3340967936,
+  "shared_module_cache_bytes": 2624954368,
+  "free_disk_bytes": 52169990144,
+  "release_retained_bytes": 90464256,
+  "new_derived_data_directories": [],
+  "simulator_runtime_created_or_downloaded": false,
+  "protected_scheme_sha256": {
+    "V15RootSmokemacOS.xcscheme": "7bdfa006628711dee320e13aeee51d9520152116518b2f2ef225cae71c300d4f",
+    "FiscalmacOS.xcscheme": "b2b2e7fd6c8da9a64fb8ac0f0d161d3951addee59d1b91b66fd1cfcc600808f2",
+    "V15RootSmokeiOS.xcscheme": "e72c37c8503ba1be6d39c4720e254ceeccd78cd3e91db2fe886084c5974f9622",
+    "FiscaliOS.xcscheme": "62751c8af676755c2722e17cd6c6667920c7bf123aa91c8e6a0b64cf4218f382",
+    "V15GallerymacOS.xcscheme": "24bee7cca28bc8e50e8b1f99147a26a73bf44192aa11db935eb43903d73fa5c7",
+    "V15GalleryiOS.xcscheme": "28fb7d91285f7032b1058f1ab2e7c6e7496065112c3f0ba90945fd3916f9b7ff"
+  },
+  "removed_own_temporary_bytes": 737529856
+}

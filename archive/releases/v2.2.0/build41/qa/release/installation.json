@@ -1,0 +1,14 @@
+{
+  "installed": "/Applications/Fiscal.app",
+  "version": "2.2.0",
+  "build": "41",
+  "mac_executable_sha256": "1213e06659d2ebda29d1115d30574942a93dc2943be9ebefc0b3507939bdbdf9",
+  "backup": "/Applications/Fiscal-v2.2.0-build40-backup-20260906-192234.app",
+  "backup_executable_sha256": "d2a088b134639dbe3039b8a3ad4b22cc1c2b85f2b94abe133ddb5f27cf284648",
+  "ios_delivery": "/Users/linotsai/Downloads/Fiscal-iOS-v2.2.0-build41-development.ipa",
+  "ios_sha256": "10497d82e99ecdfacd822a915e4c801a41de284511f1b53905f03071f625de9a",
+  "installed_at": "2026-09-06T19:22:36.168264+08:00",
+  "launch_and_live_read": "passed",
+  "visual_check": "Installed release overview loaded from production; wide dark window canvas continuous and updated capsule header actions visible. Synthetic QA covers narrow/light and actual edge dragging. No ledger writes or private screenshot archive.",
+  "verified_at": "2026-09-06T11:23:00.484299+00:00"
+}

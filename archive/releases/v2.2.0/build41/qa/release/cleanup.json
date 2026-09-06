@@ -1,0 +1,33 @@
+{
+  "removed": [
+    {
+      "path": "build/release-v2.2.0-41/mac-ui.xcresult",
+      "allocated_bytes": 153772032
+    },
+    {
+      "path": "build/release-v2.2.0-41/mac-ui-final.xcresult",
+      "allocated_bytes": 160677888
+    },
+    {
+      "path": "build/release-v2.2.0-41/ui-attachments",
+      "allocated_bytes": 11771904
+    },
+    {
+      "path": "build/release-v2.2.0-41/ui-final-attachments",
+      "allocated_bytes": 17027072
+    },
+    {
+      "path": "build/release-v2.2.0-41/ui-passed-attachments",
+      "allocated_bytes": 1474560
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/release-v2.2.0-41/source",
+      "allocated_bytes": 6598656
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/release-v2.2.0-41/staging",
+      "allocated_bytes": 386207744
+    }
+  ],
+  "reason": "Own redundant QA diagnostics and exported duplicates only; final passing bundles, exact logs, structured outcomes and six window screenshots retained."
+}
