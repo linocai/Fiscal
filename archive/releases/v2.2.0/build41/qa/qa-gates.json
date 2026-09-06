@@ -1,0 +1,63 @@
+[
+  {
+    "name": "mac-wide-passed",
+    "command": [
+      "xcodebuild",
+      "-project",
+      "App/Fiscal.xcodeproj",
+      "-configuration",
+      "Debug",
+      "-destination",
+      "platform=macOS",
+      "-derivedDataPath",
+      "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou",
+      "-jobs",
+      "2",
+      "-parallel-testing-enabled",
+      "NO",
+      "MODULE_CACHE_DIR=/Users/linotsai/Library/Developer/Xcode/DerivedData/ModuleCache.noindex",
+      "CLANG_MODULE_CACHE_PATH=/Users/linotsai/Library/Developer/Xcode/DerivedData/ModuleCache.noindex",
+      "-scheme",
+      "V15RootSmokemacOS",
+      "-only-testing:V15RootSmokemacOSUITests/V15RootSmokemacOSUITests/testWideOverviewCanvasAndHeaderActions",
+      "-resultBundlePath",
+      "build/release-v2.2.0-41/mac-wide-passed.xcresult",
+      "test"
+    ],
+    "started": "2026-09-06T11:08:38.943358+00:00",
+    "status": "passed",
+    "exit_code": 0,
+    "finished": "2026-09-06T11:09:22.011301+00:00"
+  },
+  {
+    "name": "units",
+    "command": [
+      "xcodebuild",
+      "-project",
+      "App/Fiscal.xcodeproj",
+      "-configuration",
+      "Debug",
+      "-destination",
+      "platform=macOS",
+      "-derivedDataPath",
+      "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou",
+      "-jobs",
+      "2",
+      "-parallel-testing-enabled",
+      "NO",
+      "MODULE_CACHE_DIR=/Users/linotsai/Library/Developer/Xcode/DerivedData/ModuleCache.noindex",
+      "CLANG_MODULE_CACHE_PATH=/Users/linotsai/Library/Developer/Xcode/DerivedData/ModuleCache.noindex",
+      "-scheme",
+      "FiscalmacOS",
+      "-only-testing:FiscalKitTests/V15DesignSystemTests",
+      "-only-testing:FiscalKitTests/P10MacWorkbenchTests",
+      "-resultBundlePath",
+      "build/release-v2.2.0-41/units.xcresult",
+      "test"
+    ],
+    "started": "2026-09-06T11:09:22.012222+00:00",
+    "status": "passed",
+    "exit_code": 0,
+    "finished": "2026-09-06T11:09:43.876456+00:00"
+  }
+]

@@ -204,7 +204,7 @@ public struct V151MacWorkspace: View {
     public var body: some View {
         workspace
         .frame(minWidth: V15MacLayout.minimumWindowWidth, minHeight: V15MacLayout.minimumWindowHeight)
-        .background(V15Palette.paper.color)
+        .background(V15Palette.canvas.color.ignoresSafeArea())
         .tint(V15Palette.teal.color)
         .task { await loadInitialFacts() }
         .sheet(isPresented: $categoryPresented) { categorySheet }
@@ -233,6 +233,7 @@ public struct V151MacWorkspace: View {
                 }
             } else {
                 modulePane.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(V15Palette.canvas.color.ignoresSafeArea())
             }
         }
         .navigationSplitViewStyle(.balanced)
@@ -252,7 +253,7 @@ public struct V151MacWorkspace: View {
                             .accessibilityLabel("Fiscal 个人财务工作台，返回总览")
                     } else {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("FISCAL").font(.system(size: 11, weight: .bold, design: .rounded))
+                            Text("FISCAL").font(.system(size: 12, weight: .bold, design: .rounded))
                                 .tracking(1.4)
                                 .foregroundStyle(V15Palette.brandInk.color)
                                 .padding(.horizontal, 8).padding(.vertical, 4)
@@ -318,11 +319,11 @@ public struct V151MacWorkspace: View {
                         .foregroundStyle(group == .cash ? V15Palette.yellow.color : Color.white.opacity(0.84))
                         .frame(width: 16)
                     Text(group.title)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.white)
                         .lineLimit(1)
                     Text("\(accounts.count) 个")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color.white.opacity(0.64))
                     Spacer(minLength: 6)
                     Image(systemName: "chevron.right")
@@ -330,7 +331,7 @@ public struct V151MacWorkspace: View {
                         .foregroundStyle(Color.white.opacity(0.58))
                 }
                 Text(group == .cash ? "当前余额" : overpaid ? "当前溢缴" : "当前欠款")
-                    .font(.system(size: 10))
+                    .font(.system(size: 11))
                     .foregroundStyle(Color.white.opacity(0.60))
                 switch amount {
                 case .amount(let value):
@@ -384,7 +385,7 @@ public struct V151MacWorkspace: View {
                         .frame(maxWidth: .infinity)
                 } else {
                     Label(title, systemImage: symbol)
-                        .font(.system(size: 13, weight: destination == value ? .semibold : .regular))
+                        .font(.system(size: 14, weight: destination == value ? .semibold : .regular))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 11)
                 }
@@ -437,12 +438,12 @@ public struct V151MacWorkspace: View {
                     Button(month) { applyMonth(month) }
                 }
             }
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: 13, weight: .semibold))
             .menuStyle(.borderlessButton)
             Spacer(minLength: 8)
             if let query = ledger.filter.query {
                 Text("搜索：\(query)")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
                     .accessibilityIdentifier("v151.mac.ledger.search.active")
                 Button(action: clearSearch) { Label("清除搜索", systemImage: "xmark.circle") }
@@ -458,7 +459,8 @@ public struct V151MacWorkspace: View {
                     .accessibilityIdentifier("v151.mac.ledger.search")
                     .popover(isPresented: $searchPresented, arrowEdge: .top) { searchPopover }
             }
-            V15ActionButton("记一笔") { openRecord() }
+            Button { openRecord() } label: { Label("记一笔", systemImage: "plus") }
+                .buttonStyle(V22MacWorkspaceButtonStyle(primary: true))
                 .keyboardShortcut("n", modifiers: .command)
         }
         .padding(.horizontal, V15MacLayout.contentPadding).frame(minHeight: V15MacLayout.toolbarHeight)
@@ -497,7 +499,7 @@ public struct V151MacWorkspace: View {
                     }
                 } label: {
                     Label(filteredAccount?.name ?? "全部账户", systemImage: "line.3.horizontal.decrease.circle")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
                 }
                 .menuStyle(.borderlessButton)
@@ -510,12 +512,12 @@ public struct V151MacWorkspace: View {
                     accountSummaryRow(value.credit.currentDebtMinor < 0 ? "信用溢缴" : "信用欠款", minorUnits: value.credit.currentDebtMinor, direction: value.credit.currentDebtMinor < 0 ? .neutral : .outflow)
                 } else {
                     Text(factsSummaryPlaceholder)
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                         .foregroundStyle(V15Palette.ink.color.opacity(0.56))
                 }
                 Spacer(minLength: 0)
                 Text(accountScopeDetail)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(V15Palette.ink.color.opacity(0.56))
                     .lineLimit(1)
             }
@@ -533,7 +535,7 @@ public struct V151MacWorkspace: View {
             V15MoneyText(
                 minorUnits: minorUnits,
                 direction: minorUnits == 0 ? .balance : direction,
-                font: .system(size: 13, weight: .semibold, design: .monospaced)
+                font: .system(size: 14, weight: .semibold, design: .monospaced)
             )
                 .minimumScaleFactor(0.76)
         }
@@ -558,19 +560,19 @@ public struct V151MacWorkspace: View {
     private var timelineAnchor: some View {
         HStack(spacing: 10) {
             Image(systemName: "circle.inset.filled")
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(V15Palette.teal.color)
             VStack(alignment: .leading, spacing: 2) {
                 Text("今天 · \(shanghaiBusinessDate)")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                 Text("从这里读回已发生账目，也读向有来源的未来事项。")
-                    .font(.system(size: 11))
+                    .font(.system(size: 12))
                     .foregroundStyle(V15Palette.ink.color.opacity(0.58))
             }
             Spacer(minLength: 0)
             Button("回到本月") { applyMonth(monthParser.string(from: Date())) }
                 .buttonStyle(.borderless)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
         }
         .padding(.horizontal, V15MacLayout.contentPadding)
         .padding(.vertical, 12)
@@ -580,8 +582,8 @@ public struct V151MacWorkspace: View {
 
     private func timelineSectionLabel(_ title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.system(size: 12, weight: .semibold))
-            Text(detail).font(.system(size: 10)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+            Text(title).font(.system(size: 13, weight: .semibold))
+            Text(detail).font(.system(size: 11)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, V15MacLayout.contentPadding)
@@ -604,7 +606,7 @@ public struct V151MacWorkspace: View {
                     .padding(.bottom, 16)
             case .empty:
                 Text("当前读取范围没有已知未来事项。")
-                    .font(.system(size: 11))
+                    .font(.system(size: 12))
                     .foregroundStyle(V15Palette.ink.color.opacity(0.58))
                     .padding(.horizontal, V15MacLayout.contentPadding)
                     .padding(.bottom, 16)
@@ -618,7 +620,7 @@ public struct V151MacWorkspace: View {
                 openFutureOverview()
             } label: {
                 Label("查看全部有来源未来", systemImage: "arrow.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
             }
             .buttonStyle(.borderless)
             .padding(.horizontal, V15MacLayout.contentPadding)
@@ -628,7 +630,7 @@ public struct V151MacWorkspace: View {
                 openCashFlow(from: .timeline)
             } label: {
                 Label("管理现金流计划", systemImage: "calendar.badge.clock")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
             }
             .buttonStyle(.borderless)
             .padding(.horizontal, V15MacLayout.contentPadding)
@@ -645,13 +647,13 @@ public struct V151MacWorkspace: View {
         } label: {
             HStack(spacing: 12) {
                 Text(event.date)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(V15Palette.ink.color.opacity(0.56))
                     .frame(width: 72, alignment: .leading)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(event.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                    Text(event.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
                     Text(knownFutureSourceLabel(event.sourceType))
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundStyle(V15Palette.ink.color.opacity(0.56))
                 }
                 Spacer(minLength: 8)
@@ -659,7 +661,7 @@ public struct V151MacWorkspace: View {
                     minorUnits: event.amountMinor,
                     direction: event.direction == .inflow ? .inflow : .outflow,
                     includeCurrency: false,
-                    font: .system(size: 12, weight: .semibold, design: .monospaced)
+                    font: .system(size: 13, weight: .semibold, design: .monospaced)
                 )
             }
             .padding(.horizontal, V15MacLayout.contentPadding)
@@ -764,7 +766,7 @@ public struct V151MacWorkspace: View {
                 HStack(spacing: 12) {
                     Rectangle().fill(transaction.categoryID == nil ? V15Palette.warning.color : Color.clear).frame(width: 3, height: 30)
                     Text(shortDate(transaction.businessDate))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
                         .foregroundStyle(V15Palette.ink.color.opacity(0.62))
                         .frame(width: 54, alignment: .leading)
                     VStack(alignment: .leading, spacing: 3) {
@@ -773,7 +775,7 @@ public struct V151MacWorkspace: View {
                             .strikethrough(transaction.voidedAt != nil)
                             .lineLimit(1)
                         Text("\(ledger.categoryName(transaction.categoryID)) · \(presentation.accountPath)\(presentation.accountEffect.map { " · \($0)" } ?? "")\(transaction.voidedAt == nil ? "" : " · 归档 · 只读")")
-                            .font(.system(size: 12))
+                            .font(.system(size: 13))
                             .foregroundStyle(V15Palette.ink.color.opacity(0.62))
                             .lineLimit(1)
                     }
@@ -797,7 +799,7 @@ public struct V151MacWorkspace: View {
 
     private var loadMoreRow: some View {
         Button { Task { await ledger.loadNext() } } label: {
-            Text(ledger.isLoadingNext ? "正在读取下一页" : "读取下一页").font(.system(size: 12, weight: .semibold)).foregroundStyle(V15Palette.teal.color).frame(maxWidth: .infinity).frame(height: 38)
+            Text(ledger.isLoadingNext ? "正在读取下一页" : "读取下一页").font(.system(size: 13, weight: .semibold)).foregroundStyle(V15Palette.teal.color).frame(maxWidth: .infinity).frame(height: 38)
         }.buttonStyle(.plain).disabled(ledger.isLoadingNext)
     }
 
@@ -810,7 +812,7 @@ public struct V151MacWorkspace: View {
             Spacer()
             Text("\(spineItemCount) 项")
         }
-        .font(.system(size: 10)).foregroundStyle(V15Palette.ink.color.opacity(0.54)).padding(.horizontal, 18).frame(height: 31)
+        .font(.system(size: 11)).foregroundStyle(V15Palette.ink.color.opacity(0.54)).padding(.horizontal, 18).frame(height: 31)
     }
 
     private var inspectorPane: some View {
@@ -838,7 +840,7 @@ public struct V151MacWorkspace: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("批量设置分类").font(.system(size: 20, weight: .bold))
             Text("已选 \(selectedIDs.count) 笔 · 合计 \(V15MoneyPresentation(minorUnits: batchAmount, direction: .neutral).text)")
-                .font(.system(size: 12)).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                .font(.system(size: 13)).foregroundStyle(V15Palette.ink.color.opacity(0.62))
             Picker("目标分类", selection: $batchCategoryID) {
                 Text("请选择").tag(Optional<UUID>.none)
                 ForEach(ledger.categories) { category in Text(category.name).tag(Optional(category.id)) }
@@ -929,7 +931,7 @@ public struct V151MacWorkspace: View {
                     Text(account.name).font(.system(size: 18, weight: .semibold))
                     Spacer()
                     if account.archivedAt != nil {
-                        Text("归档 · 只读").font(.system(size: 10, weight: .semibold)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                        Text("归档 · 只读").font(.system(size: 11, weight: .semibold)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
                     }
                 }
                 V15MoneyText(
@@ -937,7 +939,7 @@ public struct V151MacWorkspace: View {
                     direction: V151MacAccountBalanceSemantics.direction(account.kind, minorUnits: account.currentBalanceMinor),
                     font: .system(size: 26, weight: .bold, design: .monospaced)
                 )
-                Text(V151MacAccountBalanceSemantics.amountLabel(account.kind, minorUnits: account.currentBalanceMinor)).font(.system(size: 11)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
+                Text(V151MacAccountBalanceSemantics.amountLabel(account.kind, minorUnits: account.currentBalanceMinor)).font(.system(size: 12)).foregroundStyle(V15Palette.ink.color.opacity(0.58))
             }
             VStack(spacing: 0) {
                 fieldRow("类型", value: accountKindLabel(account.kind), emphasized: false)
@@ -987,33 +989,33 @@ public struct V151MacWorkspace: View {
                 V15MoneyText(minorUnits: presentation.amountMinor, direction: presentation.direction, font: .system(size: 28, weight: .bold, design: .monospaced))
                 if transaction.categoryID == nil {
                     HStack(spacing: 7) { Rectangle().fill(V15Palette.teal.color).frame(width: 7, height: 7); Text("未分类 · 需要你决定") }
-                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(V15Palette.teal.color)
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(V15Palette.teal.color)
                 }
                 if transaction.voidedAt != nil {
                     Text("归档 · 只读 · 可从底部操作区恢复")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(V15Palette.ink.color.opacity(0.58))
                 }
             }
             fieldCard(transaction, presentation: presentation)
             inspectorSection("来源链") {
                 HStack(spacing: 8) {
-                    Text(sourceLabel(transaction.source)).font(.system(size: 11, weight: .semibold)).foregroundStyle(V15Palette.teal.color).padding(.horizontal, 9).padding(.vertical, 5).background(V15Palette.selected.color, in: RoundedRectangle(cornerRadius: 5))
+                    Text(sourceLabel(transaction.source)).font(.system(size: 12, weight: .semibold)).foregroundStyle(V15Palette.teal.color).padding(.horizontal, 9).padding(.vertical, 5).background(V15Palette.selected.color, in: RoundedRectangle(cornerRadius: 5))
                 }
             }
             specialistRelations(transaction)
             inspectorSection("账本影响") {
                 VStack(spacing: 0) {
                     ForEach(transaction.postings, id: \.id) { posting in
-                        HStack { Text(ledger.accountName(posting.accountID)); Spacer(); V15MoneyText(minorUnits: posting.amountMinor, direction: posting.amountMinor < 0 ? .outflow : .inflow, includeCurrency: false, font: .system(size: 11, weight: .semibold, design: .monospaced)) }
-                            .font(.system(size: 11)).padding(.horizontal, 10).frame(height: 32)
+                        HStack { Text(ledger.accountName(posting.accountID)); Spacer(); V15MoneyText(minorUnits: posting.amountMinor, direction: posting.amountMinor < 0 ? .outflow : .inflow, includeCurrency: false, font: .system(size: 12, weight: .semibold, design: .monospaced)) }
+                            .font(.system(size: 12)).padding(.horizontal, 10).frame(height: 32)
                         Rectangle().fill(V15Palette.hairline.color).frame(height: 1)
                     }
                 }.background(V15Palette.paper.color, in: RoundedRectangle(cornerRadius: 7)).overlay { RoundedRectangle(cornerRadius: 7).stroke(V15Palette.hairline.color) }
             }
             inspectorSection("修改历史") {
                 if ledger.revisions.isEmpty { Text("暂无可查看的修改历史。") }
-                else { ForEach(ledger.revisions.prefix(4)) { revision in Text("\(revision.displayEvent) · \(timeLabel(revision.createdAt))").font(.system(size: 10)).foregroundStyle(V15Palette.ink.color.opacity(0.62)) } }
+                else { ForEach(ledger.revisions.prefix(4)) { revision in Text("\(revision.displayEvent) · \(timeLabel(revision.createdAt))").font(.system(size: 11)).foregroundStyle(V15Palette.ink.color.opacity(0.62)) } }
             }
             mutationState
         }
@@ -1035,14 +1037,14 @@ public struct V151MacWorkspace: View {
     private func fieldRow(_ title: String, value: String, emphasized: Bool, last: Bool = false) -> some View {
         VStack(spacing: 0) {
             HStack { Text(title).foregroundStyle(V15Palette.ink.color.opacity(0.50)); Spacer(); Text(value).foregroundStyle(emphasized ? V15Palette.teal.color : V15Palette.ink.color).fontWeight(emphasized ? .semibold : .regular) }
-                .font(.system(size: 11)).padding(.horizontal, 10).frame(height: 33)
+                .font(.system(size: 12)).padding(.horizontal, 10).frame(height: 33)
             if !last { Rectangle().fill(V15Palette.hairline.color).frame(height: 1) }
         }
     }
 
     private func inspectorSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(V15Palette.ink.color.opacity(0.52))
+            Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(V15Palette.ink.color.opacity(0.52))
             content()
         }
     }
@@ -1149,7 +1151,7 @@ public struct V151MacWorkspace: View {
     private var categorySheet: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("设置分类").font(.system(size: 22, weight: .bold))
-            Text(selectedTransaction?.title ?? "账目").font(.system(size: 13)).foregroundStyle(V15Palette.ink.color.opacity(0.60))
+            Text(selectedTransaction?.title ?? "账目").font(.system(size: 14)).foregroundStyle(V15Palette.ink.color.opacity(0.60))
             if let categoryCommitNotice {
                 V15ServerFactState(title: "分类已保存", detail: categoryCommitNotice)
                 V15ActionButton("完成", kind: .secondary) { categoryPresented = false; self.categoryCommitNotice = nil }
@@ -1748,6 +1750,38 @@ public struct V151MacWorkspace: View {
 /// V2.2's desktop overview is a reading surface, not a second ledger. Facts
 /// remain from one server snapshot and the monthly report keeps its own route,
 /// so no unrelated revisions are silently combined here.
+private struct V22MacWorkspaceButtonStyle: ButtonStyle {
+    var primary = false
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovered = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = Capsule(style: .continuous)
+        configuration.label
+            .font(.system(size: 14, weight: .semibold))
+            .labelStyle(.titleAndIcon)
+            .foregroundStyle(primary ? V15Palette.brandInk.color : V15Palette.ink.color)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 38)
+            .background(primary ? V15Palette.yellow.color : V15Palette.card.color, in: shape)
+            .overlay {
+                shape.fill(V15Palette.teal.color.opacity(isEnabled && (hovered || configuration.isPressed) ? 0.08 : 0))
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                shape.strokeBorder(primary ? Color.clear : V15Palette.hairline.color, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+            .opacity(isEnabled ? 1 : 0.45)
+            .contentShape(shape)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+            .onHover { hovered = $0 }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: hovered)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: configuration.isPressed)
+    }
+}
+
 private struct V152MacOverview: View {
     let services: V15Services
     let facts: V15TodayReadModel
@@ -1799,8 +1833,10 @@ private struct V152MacOverview: View {
             }
             .padding(24)
             .frame(maxWidth: 1_380, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
-        .background(V15Palette.canvas.color)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(V15Palette.canvas.color.ignoresSafeArea())
         .task(id: facts.facts?.meta.dataRevision) { await refreshMonthlyReport() }
         .accessibilityIdentifier("v152.mac.overview")
     }
@@ -1817,11 +1853,10 @@ private struct V152MacOverview: View {
             Spacer(minLength: 20)
             HStack(spacing: 10) {
                 Button(action: openReports) { Label("财务分析", systemImage: "chart.line.uptrend.xyaxis") }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(V22MacWorkspaceButtonStyle())
+                    .accessibilityIdentifier("v221.mac.overview.analysis")
                 Button(action: openRecord) { Label("记一笔", systemImage: "plus") }
-                    .buttonStyle(.borderedProminent)
-                    .tint(V15Palette.yellow.color)
-                    .foregroundStyle(V15Palette.brandInk.color)
+                    .buttonStyle(V22MacWorkspaceButtonStyle(primary: true))
                     .keyboardShortcut("n", modifiers: .command)
                     .accessibilityIdentifier("v220.mac.overview.record")
             }
@@ -1965,7 +2000,7 @@ private struct V152MacOverview: View {
                 ForEach(ledger.items.prefix(3), id: \.id) { transaction in
                     Button { openTransaction(transaction) } label: {
                         HStack(spacing: 12) {
-                            Text(transaction.businessDate).font(.system(size: 11, design: .monospaced)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                            Text(transaction.businessDate).font(.system(size: 12, design: .monospaced)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
                             Text(transaction.title).font(V15Typography.body.weight(.semibold)).lineLimit(1)
                             Spacer(minLength: 10)
                             V15MoneyText(minorUnits: transaction.amountMinor, direction: transactionDirection(transaction), includeCurrency: false, font: V15Typography.money)
@@ -2012,7 +2047,7 @@ private struct V152MacOverview: View {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(event.title).font(V15Typography.body.weight(.semibold)).lineLimit(2)
-                            Text(event.date).font(.system(size: 12, design: .monospaced)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                            Text(event.date).font(.system(size: 13, design: .monospaced)).foregroundStyle(V15Palette.ink.color.opacity(0.56))
                         }
                         Spacer(minLength: 10)
                         V15MoneyText(minorUnits: event.amountMinor, direction: event.direction == .inflow ? .inflow : .outflow, includeCurrency: false, font: V15Typography.money)
@@ -2120,7 +2155,9 @@ private struct V152MacAccountsHub: View {
                     Text("完整账户列表与余额；信用账户可继续进入账期。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.60))
                 }
                 Spacer()
-                Button("设置与数据", action: openSettings).buttonStyle(.bordered)
+                Button(action: openSettings) { Label("设置与数据", systemImage: "slider.horizontal.3") }
+                    .buttonStyle(V22MacWorkspaceButtonStyle())
+                    .accessibilityIdentifier("v221.mac.accounts.settings")
             }
             .padding(28)
             V15SearchField(text: $query, prompt: "搜索账户").padding(.horizontal, 28).padding(.bottom, 16)
@@ -2138,7 +2175,8 @@ private struct V152MacAccountsHub: View {
                     case .empty:
                         V15EmptyState(title: "还没有账户", explanation: "添加现金、储蓄或信用账户，开始整理账目。")
                             .accessibilityIdentifier("v220.mac.accounts.empty")
-                        Button("添加账户", action: openSettings).buttonStyle(.borderedProminent)
+                        Button(action: openSettings) { Label("添加账户", systemImage: "plus") }
+                            .buttonStyle(V22MacWorkspaceButtonStyle(primary: true))
                     case .loaded:
                         section("现金与储蓄", values: accounts.filter { $0.kind != .credit })
                         section("信用账户", values: accounts.filter { $0.kind == .credit })
@@ -2148,6 +2186,7 @@ private struct V152MacAccountsHub: View {
             }
         }
         .background(V15Palette.canvas.color)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v152.mac.accounts")
     }
 

@@ -175,6 +175,53 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         }
     }
 
+    func testWideOverviewCanvasAndHeaderActions() throws {
+        for scheme in ["light", "dark"] {
+            let app = launchApp(service: uniqueKeychainService(), formalFixture: true, scheme: scheme, windowWidth: 2000)
+            let overview = app.scrollViews["v152.mac.overview"]
+            XCTAssertTrue(overview.waitForExistence(timeout: 8))
+            XCTAssertTrue(app.staticTexts["每日实际支出"].waitForExistence(timeout: 6))
+            let window = app.windows.firstMatch
+            XCTAssertGreaterThanOrEqual(overview.frame.width, window.frame.width - 250,
+                "The overview viewport must fill the detail column beyond the content's 1380 pt reading limit")
+            XCTAssertEqual(overview.frame.maxX, window.frame.maxX, accuracy: 3)
+            let screenshot = window.screenshot()
+            let bitmap = try XCTUnwrap(NSBitmapImageRep(data: screenshot.pngRepresentation))
+            // Compare pixels within the same captured color space. Display
+            // profiles can shift dark RGB values away from the token's hex.
+            let sampleY = bitmap.pixelsHigh - 48
+            let center = try XCTUnwrap(bitmap.colorAt(x: bitmap.pixelsWide / 2, y: sampleY)?.usingColorSpace(.sRGB))
+            let canvas = [center.redComponent, center.greenComponent, center.blueComponent]
+            XCTAssertTrue(scheme == "light" ? canvas.allSatisfy { $0 > 0.85 } : canvas.allSatisfy { $0 < 0.20 })
+            for fraction in [0.16, 0.96] {
+                let pixel = try XCTUnwrap(bitmap.colorAt(x: Int(Double(bitmap.pixelsWide) * fraction), y: sampleY)?.usingColorSpace(.sRGB))
+                for (actual, target) in zip([pixel.redComponent, pixel.greenComponent, pixel.blueComponent], canvas) {
+                    XCTAssertEqual(actual * 255, target * 255, accuracy: 1, "Window gutters must use the same canvas as the reading area, including the far edges")
+                }
+            }
+            let capture = XCTAttachment(screenshot: screenshot)
+            capture.name = "build41-wide-overview-\(scheme)"
+            capture.lifetime = .keepAlways
+            add(capture)
+            let analysis = app.buttons["v221.mac.overview.analysis"]
+            XCTAssertTrue(analysis.isHittable)
+            XCTAssertGreaterThanOrEqual(analysis.frame.height, 38)
+            analysis.click()
+            XCTAssertTrue(app.descendants(matching: .any)["v15.f4a.reports.macos"].waitForExistence(timeout: 8))
+            app.buttons["v151.mac.module.accounts"].click()
+            let settings = app.buttons["v221.mac.accounts.settings"]
+            XCTAssertTrue(settings.waitForExistence(timeout: 5))
+            XCTAssertGreaterThanOrEqual(settings.frame.height, 38)
+            let accounts = XCTAttachment(screenshot: window.screenshot())
+            accounts.name = "build41-accounts-\(scheme)"
+            accounts.lifetime = .keepAlways
+            add(accounts)
+            settings.click()
+            XCTAssertTrue(app.descendants(matching: .any)["v15.settings"].waitForExistence(timeout: 8))
+            XCTAssertTrue(V15RootSmokeSupport.terminateRootSmokeApp())
+        }
+    }
+
     func testOverviewRecentQuerySurvivesAccountFilterAndOpensExactDetail() {
         let app = launchApp(service: uniqueKeychainService(), formalFixture: true, accountOverflow: true)
         app.buttons["v151.mac.module.accounts"].click()

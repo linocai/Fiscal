@@ -117,11 +117,11 @@ public enum V15Motion {
 public enum V15Typography {
 #if os(macOS)
     public static let surfaceTitle = Font.system(size: 26, weight: .bold, design: .rounded)
-    public static let cardTitle = Font.system(.title3, design: .default, weight: .semibold)
-    public static let body = Font.system(.body, design: .default, weight: .regular)
-    public static let secondary = Font.system(.callout, design: .default, weight: .regular)
-    public static let label = Font.system(size: 11, weight: .semibold, design: .default)
-    public static let money = Font.system(.body, design: .monospaced, weight: .semibold)
+    public static let cardTitle = Font.system(size: 16, weight: .semibold)
+    public static let body = Font.system(size: 14, weight: .regular)
+    public static let secondary = Font.system(size: 13, weight: .regular)
+    public static let label = Font.system(size: 12, weight: .semibold, design: .default)
+    public static let money = Font.system(size: 14, weight: .semibold, design: .monospaced)
     public static let moneyLarge = Font.system(.title, design: .monospaced, weight: .semibold)
 #else
     public static let surfaceTitle = Font.system(.largeTitle, design: .default, weight: .bold)

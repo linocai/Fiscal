@@ -1,0 +1,50 @@
+[
+  {
+    "file": "v220-mac-overview-light-1000.png",
+    "sha256": "29a30c0618b0e50b15e2473a233ff9881b86b8431d0739cba2c7665167f1c07e",
+    "test": "V15RootSmokemacOSUITests/testOverviewDarkAndNarrowWindowKeepNavigationReadable()",
+    "source_export": "ui-final-attachments",
+    "timestamp": 1788692823.239,
+    "data": "isolated synthetic fixture; window only"
+  },
+  {
+    "file": "v220-mac-overview-dark-1280.png",
+    "sha256": "411c7cfd0d32b1c0573f33df721a8e8a18ea9777011f7774346b288950826b78",
+    "test": "V15RootSmokemacOSUITests/testOverviewDarkAndNarrowWindowKeepNavigationReadable()",
+    "source_export": "ui-final-attachments",
+    "timestamp": 1788692816.256,
+    "data": "isolated synthetic fixture; window only"
+  },
+  {
+    "file": "build41-accounts-dark.png",
+    "sha256": "dd661604ed239b63cfc2c0ef7ab1d0d4e09fcadcdfbb3fdba978a95c5b053d45",
+    "test": "V15RootSmokemacOSUITests/testWideOverviewCanvasAndHeaderActions()",
+    "source_export": "ui-passed-attachments",
+    "timestamp": 1788692939.868,
+    "data": "isolated synthetic fixture; window only"
+  },
+  {
+    "file": "build41-wide-overview-dark.png",
+    "sha256": "318ce5d9ef37c7cbb0bded359d09e68ed2011322cd52bfcaf792183d79c304ac",
+    "test": "V15RootSmokemacOSUITests/testWideOverviewCanvasAndHeaderActions()",
+    "source_export": "ui-passed-attachments",
+    "timestamp": 1788692936.564,
+    "data": "isolated synthetic fixture; window only"
+  },
+  {
+    "file": "build41-accounts-light.png",
+    "sha256": "a8f94073ce0f0b78bd832ba6f20197fa03fb4f7accc73278933706adbbfd10f2",
+    "test": "V15RootSmokemacOSUITests/testWideOverviewCanvasAndHeaderActions()",
+    "source_export": "ui-passed-attachments",
+    "timestamp": 1788692931.721,
+    "data": "isolated synthetic fixture; window only"
+  },
+  {
+    "file": "build41-wide-overview-light.png",
+    "sha256": "8efd6ffeb63920fc0f6157e5b57fa009d4ec398a36891f67b3498a53bade99f7",
+    "test": "V15RootSmokemacOSUITests/testWideOverviewCanvasAndHeaderActions()",
+    "source_export": "ui-passed-attachments",
+    "timestamp": 1788692928.092,
+    "data": "isolated synthetic fixture; window only"
+  }
+]
