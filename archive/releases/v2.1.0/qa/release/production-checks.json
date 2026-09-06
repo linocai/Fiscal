@@ -1,0 +1,39 @@
+{
+  "preflight": {
+    "/health/live": 200,
+    "/health/ready": 403,
+    "/accounts": 401,
+    "tls": {
+      "sha256": "8145ddb1431c4dced5b21b0d1c591721798dec0348251d9c8a3ddeaf69323523",
+      "not_after": "Oct 14 04:56:45 2026 GMT"
+    },
+    "/system/operations-status": {
+      "status": 200,
+      "release_revision": "64cb1aee0190eeba81f1a38cf6b322d4d1ee33e4",
+      "alembic_revision": "20260831_0038",
+      "schema_state": "current"
+    },
+    "/reports/v2/monthly/2026-09": {
+      "status": 200
+    },
+    "dns.alidns.com": [
+      "114.66.2.205"
+    ],
+    "dns.google": [
+      "114.66.2.205"
+    ]
+  },
+  "postflight": {
+    "installed_version": "2.1.0",
+    "installed_build": "39",
+    "pid": 48115,
+    "running_binary": "/Applications/Fiscal.app/Contents/MacOS/Fiscal",
+    "checks": {
+      "/health/live": 200,
+      "/health/ready": 403,
+      "/accounts": 401,
+      "/system/operations-status": 200
+    }
+  },
+  "backup_manifest": "fiscal-20260905T192856Z.dump: OK"
+}

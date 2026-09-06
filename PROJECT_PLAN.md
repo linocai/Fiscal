@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 当前目标：**V2.1.0 前端视觉与交互升级 · build 39** ｜更新：2026-09-06（Asia/Shanghai）｜状态：**RELEASE_IN_PROGRESS · 用户已授权一条龙发布**
+> 当前目标：**V2.1.0 前端视觉与交互升级 · build 39** ｜更新：2026-09-06（Asia/Shanghai）｜状态：**RELEASED · Mac 已换包，iOS IPA 已交付**
 
 ## 1. 目标、范围与 V2 基线
 
@@ -92,14 +92,11 @@ V2.1.0 是在已发布 V2 信息架构上完成一次有明确风格的产品级
 
 ## 6. 当前状态、Backlog 与下一步
 
-- **发布进行中**：用户已明确授权一条龙发布，取代本计划先前“未授权发布”的阶段限制。控制面见 [V2.1.0 发布状态](archive/releases/v2.1.0/RELEASE_STATE.md)：生产 revision / Alembic / 服务 / 备份已只读核验，累计无 Backend 差异。后续完成 main 提交推送、不可变标签、签名制品、可回退 Mac 换包和 iOS IPA 交付；只把最终 iOS 安装留给用户。
-
-- **P0–P4 已实现，P5 本地验收完成**：共享视觉系统、iOS 记一笔/今日/账目、Mac 时间线/分析/金额录入、专项页状态语义已收口。双端生成 App 均为 2.1.0 (39)，最低系统 26.0。仅视图、设计系统、版本、QA 和计划改动；未改领域模型或后端，未提交、推送、打包发布或替换正式 App。
-- **验证**：两轮完整 FiscalKitTests 各 405 tests / 39 suites 通过；最终正式 iOS/macOS App Debug arm64 构建通过。7 项 iOS 录入、6 项正式 iOS 根、2 项正式 Mac 根及 1 项 Mac 分析下钻测试通过，共 16 项不同 UI 用例。最后的日期布局、深色对比、桌面快捷录入均有针对性复测。
-- **实际修正**：日期被挤压和被固定保存栏遮挡、账期辅助值缺失、深色占位提示/黄色按钮图标对比不足；AX5 测试改为在键盘与固定按钮之外的可见内容区滑动，保留强可达断言。Mac 正式 fixture 补齐原有合成未来事项与交易详情，截图使用真实 workspace，不用旧 Today Gallery 替代。
-- **证据入口**：[V2.1.0 本地验收记录](archive/releases/v2.1.0/qa/frontend/RESULTS.md)，含截图、执行摘要、源码与 protected schemes 哈希（总约 3.9 MB）。验证采用隔离合成数据，未执行真实后端写入、实体 iPhone 安装或专项状态的穷举截图；这些边界详见记录。
-- **2026-09-06 审查与修复完成**：[审查记录](archive/releases/v2.1.0/qa/frontend/REVIEW.md)。R1 / P2 已改为完整账户菜单，选择账户或全部账户流水均回时间线；R2 / P3 已分离备注展开状态与内容，折叠保留文字，保存/下一笔重置。405 tests / 39 suites 通过，新增两个交互用例与原有 Mac 返回/快捷录入用例通过，最终双端正式 App Debug arm64 构建通过。账户菜单补充辅助功能当前值后新用例最终通过；六个受保护 scheme 未改，版本仍为 2.1.0 (39)。最新源码指纹与执行摘要分别为 `qa/frontend/review-fix-source-manifest.json` 和 `review-fix-verification.log`，均位于本版 archive。
-- **资源已收口**：复用既有 iPhone17Pro，未新建/克隆设备或下载 runtime；硬件键盘设置恢复为 1，模拟器已 Shutdown。只清理本任务新建重复缓存/结果包约 530 MB，既有缓存均保留。Fiscal DerivedData 约 1.8G → 2.0G，总 DerivedData 4.4G → 4.8G，剩余磁盘约 28 GiB。后续构建继续显式 Debug / arm64 / 2 jobs，并同时设置共享 `MODULE_CACHE_DIR` 和 `CLANG_MODULE_CACHE_PATH`。
-- **恢复入口与下一步**：先读本文件、审查记录和验收记录，再检查 `git status --short`，以 `review-fix-source-manifest.json` 核对最新源码。首次验收日志、6 个 scheme 原始备份在 `/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/fiscal-v210-s2uwky1l`；本次修复日志在 `/tmp/fiscal-v210-reviewfix.YX00US`。两项审查问题已关闭，等待用户体验验收；发布须进入既有完整发布流程，不能把本地验证当成发布。
-- 本版非目标：后端/API/数据/迁移；新预算、提醒、待办中心；iPad、Watch、Web；App 内 OCR/照片；物理删除领域能力；任何发布动作。
-- 后续 Backlog：只有在 V2.1 真实路径完成后，才评估更广的报表交互、预算产品或跨端功能；不得借本版视觉升级绕开现有产品合同。
+- **一条龙发布完成**：源码 `353c381ff6a2540a048e8c3d3a7d12b57e24e9ad` 已推送 `origin/main`，不可变标签 `v2.1.0` 已推送。签名制品、校验值与回退边界见 [V2.1.0 发布记录](archive/releases/v2.1.0/RELEASE_STATE.md)。用户另行授权发布，已完成本计划 P5 之后的既有发布流程。
+- **P0–P5 已完成**：共享视觉系统、iOS 记一笔/今日/账目、Mac 时间线/分析/金额录入及专项页语义已收口；双端为 2.1.0 (39)，最低系统 26.0。未改领域模型或后端。
+- **验证与审查修复**：[验收记录](archive/releases/v2.1.0/qa/frontend/RESULTS.md) 保留 16 项不同 UI 用例、合成数据截图与早期修正；[审查记录](archive/releases/v2.1.0/qa/frontend/REVIEW.md) 的 R1/P2 完整账户菜单、R2/P3 备注折叠均已修复。修复后 405 tests / 39 suites、两项新增交互用例及原有 Mac 返回/快捷录入用例通过，双端 Debug App 构建通过。发布源码与 `qa/frontend/review-fix-source-manifest.json` 一致，复用上述同源码证据；另从干净标签构建通过 iOS Simulator Release、macOS 通用 Release 和 iOS 真机 Release。
+- **交付**：`/Applications/Fiscal.app` 已换为 2.1.0 (39)，严格验签并启动，生产账户摘要和未来事项已加载。旧版回退包保留于 `/Applications/Fiscal-v2.0.0-build38-backup-20260906-130613.app`。iOS IPA 已交付 `/Users/linotsai/Downloads/Fiscal-iOS-v2.1.0-build39-development.ipa`，最终实体 iPhone 安装由用户完成。
+- **生产**：从实际部署 revision 到本版累计无 Backend 差异，生产保持 `64cb1aee0190eeba81f1a38cf6b322d4d1ee33e4` / Alembic `20260831_0038`；服务、备份及恢复验证、DNS/TLS、公开与鉴权只读检查通过。未执行生产财务写入。
+- **资源已收口**：复用既有 iPhone 17 Pro 和 Fiscal DerivedData，未新建/克隆模拟器或下载 runtime，模拟器已关闭；六个原有本地 scheme 修改保持字节不变且未提交。发布构建串行、2 jobs，并使用共享 ModuleCache。已清理本次发布临时源码/展开包约 354 MB；保留制品与日志约 81 MB，Fiscal DerivedData 约 2.5G、共享 ModuleCache 约 2.4G、可用磁盘约 28 GiB。未清除既有缓存或旧版制品。
+- **恢复入口与下一步**：先读本文件、发布记录，再检查 `git status --short`。当前无未完成的发布执行项；用户安装 iOS 后继续真实使用验收。后续新任务从已发布标签及当前 main 恢复，保持已有六个本地 scheme 修改。
+- 本版非目标：后端/API/数据/迁移；新预算、提醒、待办中心；iPad、Watch、Web；App 内 OCR/照片；物理删除领域能力。更广的报表交互、预算产品或跨端功能属于后续独立范围。

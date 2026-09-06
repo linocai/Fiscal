@@ -1,0 +1,46 @@
+{
+  "source_commit": "353c381ff6a2540a048e8c3d3a7d12b57e24e9ad",
+  "tag": "v2.1.0",
+  "tag_object": "92fb4838efa42efd5139b6719f7dcea07e58e979",
+  "macOS": {
+    "bundle_id": "com.linotsai.fiscal.mac",
+    "version": "2.1.0",
+    "build": "39",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "executable_sha256": "5d3e71d731942d98e820b6a5718bbb304a63af291ce9aed265142e5efb7157e2",
+    "uuids": {
+      "x86_64": "71B67D71-ADEE-3888-B1E2-062FB6C100D3",
+      "arm64": "91656EFC-D1E0-3DF1-810C-0BDEAD470D80"
+    },
+    "artifact": "Fiscal-macOS-v2.1.0-build39.zip"
+  },
+  "iOS": {
+    "bundle_id": "com.linotsai.fiscal",
+    "version": "2.1.0",
+    "build": "39",
+    "architectures": [
+      "arm64"
+    ],
+    "executable_sha256": "295fab369024c24f797f56dfb57f6b7b7d19c2cb5316c5fecb4807b93d148cb1",
+    "uuids": {
+      "arm64": "401143B4-0A2F-3CC0-B326-FAB9C929324E"
+    },
+    "profile": {
+      "uuid": "c2ca777b-b04b-484e-826e-eef28085a121",
+      "name": "iOS Team Provisioning Profile: *",
+      "expiration": "2027-07-21T00:57:54",
+      "registered_devices": 3
+    },
+    "artifact": "Fiscal-iOS-v2.1.0-build39-development.ipa"
+  },
+  "artifacts": {
+    "Fiscal-iOS-v2.1.0-build39-dSYMs.zip": "ddb5ed660552382316abd3c959705e39d82bc66ee96acc3cbea60f0ab488c9db",
+    "Fiscal-iOS-v2.1.0-build39-development.ipa": "5b84707b241970613de90cc1ed2c5e352890e679e4c190d49a75bda661047b38",
+    "Fiscal-macOS-v2.1.0-build39-dSYMs.zip": "85cacfaf6d1599a04724bd2abf322204af31e3eb26173810f798f079916acb2a",
+    "Fiscal-macOS-v2.1.0-build39.zip": "78d0021860cf832423d90ed3f97bf4b346a3e2b398170b29b3cbb097be718a44",
+    "RELEASE.txt": "b54c3f44516c5648ab81ddfc856e0ec21d66468e928e994ef72fa4959b891583"
+  }
+}

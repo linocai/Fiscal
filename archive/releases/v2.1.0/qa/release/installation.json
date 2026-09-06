@@ -1,0 +1,12 @@
+{
+  "installed": "/Applications/Fiscal.app",
+  "version": "2.1.0",
+  "build": "39",
+  "mac_executable_sha256": "5d3e71d731942d98e820b6a5718bbb304a63af291ce9aed265142e5efb7157e2",
+  "backup": "/Applications/Fiscal-v2.0.0-build38-backup-20260906-130613.app",
+  "backup_executable_sha256": "4f2a3f6a14576f521f4de220f81af27d0422340a99b3e1cf96c5774a318e02b2",
+  "ios_delivery": "/Users/linotsai/Downloads/Fiscal-iOS-v2.1.0-build39-development.ipa",
+  "ios_sha256": "5b84707b241970613de90cc1ed2c5e352890e679e4c190d49a75bda661047b38",
+  "installed_at": "2026-09-06T13:06:14.420393+08:00",
+  "launch_and_live_read": "passed: installed app launched; live workspace, account summary and known future feed loaded without offline/error state"
+}
