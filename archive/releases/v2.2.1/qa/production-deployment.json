@@ -1,0 +1,58 @@
+{
+  "deployed_audited_files_match": true,
+  "deployed_audited_file_count": 55,
+  "ledger_unchanged": true,
+  "release_path": "/opt/fiscal/releases/60efa4b3c7e9",
+  "release": "revision=60efa4b3c7e932967e1754ad9fd42b5cbf8a5882\nalembic_head=20260910_0039\ncreated_at=2026-09-10T11:45:28Z\n",
+  "backups": {
+    "pre": {
+      "path": "/var/lib/fiscal/backups/releases/v2.2.1-build42/pre/fiscal-20260910T114435Z.dump",
+      "sha256": "d811b6695e9dda2bd05b88146c1e105520eb3b47cd4885645971273c99841997",
+      "result": "verified",
+      "created_at": "2026-09-10T11:44:35Z",
+      "created_epoch": 1789040675,
+      "duration_seconds": 0,
+      "size_bytes": 415504,
+      "file": "fiscal-20260910T114435Z.dump"
+    },
+    "post": {
+      "path": "/var/lib/fiscal/backups/releases/v2.2.1-build42/post/fiscal-20260910T114530Z.dump",
+      "sha256": "ef31480e82269f6bb25078f47fd27e93d691672fc5c26b2eb6242cd583c6d34b",
+      "result": "verified",
+      "created_at": "2026-09-10T11:45:30Z",
+      "created_epoch": 1789040730,
+      "duration_seconds": 0,
+      "size_bytes": 415719,
+      "file": "fiscal-20260910T114530Z.dump"
+    }
+  },
+  "restore": {
+    "result": "verified",
+    "checked_at": "2026-09-10T11:45:36Z",
+    "checked_epoch": 1789040736,
+    "duration_seconds": 2,
+    "backup_file": "fiscal-20260910T114530Z.dump"
+  },
+  "units": {
+    "fiscal-api.service": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-backup.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-restore-verify.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-health-check.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-disk-check.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    }
+  }
+}

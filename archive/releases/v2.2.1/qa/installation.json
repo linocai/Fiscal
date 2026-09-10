@@ -1,0 +1,16 @@
+{
+  "installed": "/Applications/Fiscal.app",
+  "version": "2.2.1",
+  "build": "42",
+  "mac_executable_sha256": "69534bdff1b77a2a661d9064b230018248b6cf2362965daf64ed19c40d42eb97",
+  "backup": "/Applications/Fiscal-v2.2.0-build41-backup-20260910-194606.app",
+  "backup_executable_sha256": "1213e06659d2ebda29d1115d30574942a93dc2943be9ebefc0b3507939bdbdf9",
+  "ios_delivery": "Xcode device build ready; no IPA",
+  "installed_at": "2026-09-10T19:46:08.221932+08:00",
+  "launch_and_live_read": "verified: installed app overview and reports read production successfully via existing credentials; returned to overview",
+  "running_processes": {
+    "57522": "/Applications/Fiscal.app/Contents/MacOS/Fiscal"
+  },
+  "verified_at": "2026-09-10T11:47:10.805235+00:00",
+  "private_screenshots_archived": false
+}

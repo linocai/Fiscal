@@ -5,7 +5,7 @@
 ## 1. 目标、授权、基线与事实边界
 
 - 用户在独立只读审计后指定“2.2.1（42），进工作流修复所有问题”。本轮包括 A01–A17 缺陷、A18–A21 四条架构优化，全部需要完成或以具体反证纠正原 finding，不能默认为建议而移入 Backlog。
-- 已授权实施、本地/隔离验证及沿原审计范围复查修复。未请求本版本一条龙发布；不推送、不打发布标签、不生产迁移或业务写入、不替换已安装 App、不生成 IPA。
+- 初始修复授权范围（后续 §9 已新增发布授权）：实施、本地/隔离验证及沿原审计范围复查修复。当时未请求本版本一条龙发布；不推送、不打发布标签、不生产迁移或业务写入、不替换已安装 App、不生成 IPA。
 - 源码基线：main，`5a4991fc65e3326e411fcc96c9abfd7ec4b9bde4`；App 为 2.2.0/41；Alembic head `20260831_0038`。对外版本与 build 均由用户确定为 2.2.1/42。
 - 唯一既有工作区改动为六个共享 scheme；用户原字节备份/hash 在 `build/v2.2.1-42/preflight/baseline.json`、`build/v2.2.1-42/preflight/schemes/`。xcodegen 后从这些备份恢复，绝不执行泛用 git checkout，且不暂存这些用户改动。
 - 本轮唯一可迁移/truncate 的 PostgreSQL 库：`fiscal_v221_42_tests_20260910_103154`。测试 URL：`postgresql+asyncpg://linotsai@/fiscal_v221_42_tests_20260910_103154?host=/tmp`，通过 `FISCAL_TEST_DATABASE_URL` 显式传入；不得继承生产或其他现有财务库 URL。后端测试共用此库，统一串行调度。
@@ -164,7 +164,7 @@
 - 双端 App target 构建通过：`qa/ios-app-build.log`（scheme 既有 Release / generic iOS Simulator），`qa/macos-app-build.log`（scheme 既有 Debug / macOS）；实际产物均 2.2.1（42），路径和配置见 `qa/app-build-metadata.json`。未替换已安装 App，不将 DerivedData 旧 Release macOS 产物当本轮包。
 - 根 UI 首轮 macOS：启动失败→重试进入正式 workspace、分析往返保持交易选择通过；历史月份自动测试误查 AX label 两断言失败。xcresult 导出的 MenuButton title 证实实际已达“2026 年 4 月”和“全部时间”，仅修测试读取 title，不改产品行为；单例重跑及 iOS/导入 UI 继续执行。
 
-## 8. 最终交付结论（2026-09-10）
+## 8. 修复阶段交付结论（2026-09-10；后续发布见 §9）
 
 **A01–A21 全部完成，R1–R5 追加 findings 均闭环，无已知未修问题；2.2.1（42）仅为本地候选，未发布。**
 
@@ -178,3 +178,5 @@
 ## 9. 一条龙发布（2026-09-10，后续授权）
 
 用户已明确授权本版本完整发布，覆盖此前仅修复阶段的发布限制；按 [RELEASE_STATE.md](RELEASE_STATE.md) 执行并记录结果。实际生产后端 64cb1ae/0038 与已装客户端 89cb977 到修复基线的对应源码差异为空，R1–R5 因而覆盖本轮生产累计源码范围。iOS 采用当前 Xcode 安装约定，不生成 IPA。
+
+一条龙发布已完成：源码 `60efa4b3c7e932967e1754ad9fd42b5cbf8a5882` / `v2.2.1-build42` 推送；0039 迁移与恢复演练成功、账本指纹一致；三组 Release 构建/双端签名通过，Mac 已换包并真实读取生产，iOS Xcode 就绪。精确备份、安装路径、校验和、回滚边界和全部发布证据统一保存在 [RELEASE_STATE.md](RELEASE_STATE.md)，此处不重复维护。

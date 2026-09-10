@@ -1,0 +1,26 @@
+{
+  "production-dry-run.log": {
+    "path": "build/release-v2.2.1-42/logs/production-dry-run.log",
+    "sha256": "b09e9c5871364c1d4892f1275481f6a5f608e1514d0d018c5b2033804fb2d5f7"
+  },
+  "production-apply.log": {
+    "path": "build/release-v2.2.1-42/logs/production-apply.log",
+    "sha256": "f5514a94c511c1677036d9becf37b068b1b7d2f91d06e8e5f829b076540430ab"
+  },
+  "signature-verification.log": {
+    "path": "build/release-v2.2.1-42/logs/signature-verification.log",
+    "sha256": "f90f4c65b8a7884dca257acd43c81d88fe8e1891128defb125c74adbfae64725"
+  },
+  "ios-simulator.log": {
+    "path": "build/release-v2.2.1-42/logs/ios-simulator.log",
+    "sha256": "fc8ba0126add69c96ecc2d0138e8ecb6db27b34bb1f8dd67c7a028292d57070f"
+  },
+  "macos-universal.log": {
+    "path": "build/release-v2.2.1-42/logs/macos-universal.log",
+    "sha256": "6a99323a8446ffd8a8767caee3cf4fdeb8bb707c6ed62c0b69bf4d77549dd4f9"
+  },
+  "ios-device.log": {
+    "path": "build/release-v2.2.1-42/logs/ios-device.log",
+    "sha256": "b5bed88df9b895d6a886560b851a38e9d7820db794e27f5b7c1a06c204321509"
+  }
+}

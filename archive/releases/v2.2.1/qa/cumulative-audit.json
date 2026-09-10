@@ -1,0 +1,9 @@
+{
+  "source_commit": "60efa4b3c7e932967e1754ad9fd42b5cbf8a5882",
+  "tag": "v2.2.1-build42",
+  "tag_object": "a3784ae27fc7d2ded20725b4dbb7e798ed84c284",
+  "audited_files": 98,
+  "tagged_source_matches_final_audit_manifest": true,
+  "backend_live_to_work_baseline_delta_empty": true,
+  "app_live_to_work_baseline_delta_empty": true
+}

@@ -1,0 +1,20 @@
+{
+  "checked_at": "2026-09-10T11:48:11.839267+00:00",
+  "derived_data": "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou",
+  "shared_module_cache": "/Users/linotsai/Library/Developer/Xcode/DerivedData/ModuleCache.noindex",
+  "serial_jobs": 2,
+  "simulator_state": "Shutdown",
+  "simulator_id": "211DD03C-812D-4A42-97EF-F693D7DF924C",
+  "protected_schemes_unchanged": true,
+  "removed_reproducible_release_copies": [
+    "build/release-v2.2.1-42/source",
+    "build/release-v2.2.1-42/staging",
+    "build/release-v2.2.1-42/source.bundle"
+  ],
+  "remote_cleanup": {
+    "removed_only_release_source_and_bundle": true,
+    "current_release_preserved": "/opt/fiscal/releases/60efa4b3c7e9"
+  },
+  "free_disk_bytes": 41302003712,
+  "ios_device_app_retained": "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou/Build/Products/Release-iphoneos/Fiscal.app"
+}

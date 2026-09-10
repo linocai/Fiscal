@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 更新：2026-09-10（Asia/Shanghai）｜目标：**2.2.1（42）审计问题全修复**｜状态：**已完成修复与独立复查；一条龙发布进行中**
+> 更新：2026-09-10（Asia/Shanghai）｜目标：**2.2.1（42）审计问题全修复**｜状态：**2.2.1（42）已发布；无剩余施工**
 
 ## 概述
 
@@ -26,13 +26,13 @@
 - Apple 完整 FiscalKitTests 431 项通过；末轮 65 项定向回归通过；iOS/macOS App target 和 11 个关键 UI 场景通过。
 - 真实文字/扫描 PDF 经正式客户端 HTTP 和隔离后端完成确认及异常恢复；最终两份账单各入账一次，每笔支出 1850 分。
 - 独立复查 R1–R5 闭环，最终生产源码与 R5 一致；仅随后修正一处 macOS UI 测试读取菜单文字的方式，已重跑通过。固定最终源码清单见 `build/v2.2.1-42/qa/final-source/manifest.json`。
-- 六个用户既有 scheme 修改保持原字节，未暂存；当前改动保留在本地工作区，未提交/推送/打标签/部署/替换已安装 App/生成 IPA。
+- 源码 `60efa4b` 和不可变标签 `v2.2.1-build42` 已推送；六个用户 scheme 原字节保留、未提交。发布构建采用 canonical schemes。
 - 临时 loopback 服务已停止；唯一隔离测试库仅含合成数据。资源与日志位置见 `build/v2.2.1-42/preflight/runtime.json` 及版本记录。
-- 待用户决定项：**无**。发布已授权，按后端 0039/API 能力先就绪、再交付客户端的既有发布链执行。
+- 待用户决定项：**无**。NB 后端已上线并完成 0039、前后备份和恢复演练；Mac 2.2.1（42）已换装并读取生产；iOS 已签名构建就绪，用户通过 Xcode 安装。发布事实见 [发布记录](archive/releases/v2.2.1/RELEASE_STATE.md)。
 
 ## 当前 Plan
 
-B1–B6 全部验收完成；详细契约、测试、复查与发布边界统一在 [本轮版本记录](archive/releases/v2.2.1/execution.md)，本轮无剩余修复施工块。发布剩余：固定源码与签名 Release 构建 → 后端备份/迁移/部署及恢复演练 → Mac 换包/启动，iOS Xcode 就绪 → 记录归档。
+B1–B6 全部验收完成；详细契约、测试、复查与发布边界统一在 [本轮版本记录](archive/releases/v2.2.1/execution.md)，本轮修复与一条龙发布均完成，无剩余施工块。
 
 ## Backlog
 
@@ -41,4 +41,4 @@ B1–B6 全部验收完成；详细契约、测试、复查与发布边界统一
 ## 里程碑索引
 
 - V2.2.0（40–41）界面重构及视觉快修已发布；原详细 Plan 已移至 [执行历史](archive/releases/v2.2.0/execution.md)，Build 41 发布事实见 [发布记录](archive/releases/v2.2.0/build41/RELEASE_STATE.md)。
-- 2026-09-10：2.2.1（42）完成审计全修复、完整验证及 R1–R5 独立复查；本地候选未发布，详见 [版本记录](archive/releases/v2.2.1/execution.md)。
+- 2026-09-10：2.2.1（42）完成全修复、验证、独立复查与一条龙发布；详见 [发布记录](archive/releases/v2.2.1/RELEASE_STATE.md)。

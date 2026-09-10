@@ -1,0 +1,46 @@
+{
+  "backend-full-2.log": {
+    "path": "build/v2.2.1-42/qa/backend-full-2.log",
+    "sha256": "31547ffc11d7a80d626ee48a086c25b2c7ea8e5d4a61329d03046df2f92f1154"
+  },
+  "backend-static-final.log": {
+    "path": "build/v2.2.1-42/qa/backend-static-final.log",
+    "sha256": "a89d299d903dac422f41c7ca371078e34ba4ac326a009f76c78de260fd832b41"
+  },
+  "apple-full-6-e2e.log": {
+    "path": "build/v2.2.1-42/qa/apple-full-6-e2e.log",
+    "sha256": "9f406dd2df5c82344ab94fbab9f0a07778d507dda8c6855c90692cc9b6c40279"
+  },
+  "apple-r5-targeted.log": {
+    "path": "build/v2.2.1-42/qa/apple-r5-targeted.log",
+    "sha256": "17c7721caf0d1208914dd9d6a30a3a14e5ca04e31f2d62e72b7ffd43ffd05291"
+  },
+  "ios-app-build.log": {
+    "path": "build/v2.2.1-42/qa/ios-app-build.log",
+    "sha256": "86f7218b1850fa4b47f7ea465ec588a91df5a0bd2141b9792979d7b95ebbaa4b"
+  },
+  "macos-app-build.log": {
+    "path": "build/v2.2.1-42/qa/macos-app-build.log",
+    "sha256": "d8d78cf0bab7318d6e37a1cab54072ebd022831cc884a3ab5a8f23b28532f2d7"
+  },
+  "ui-macos-root.log": {
+    "path": "build/v2.2.1-42/qa/ui-macos-root.log",
+    "sha256": "ffe7e92694be887cc9f382bd1e70d171c5b6c46ce86048f874b49b3787183dc9"
+  },
+  "ui-macos-month-final.log": {
+    "path": "build/v2.2.1-42/qa/ui-macos-month-final.log",
+    "sha256": "f8e92124d3b123a235c6c91fb9cfcb8e9259679a5bf7896fb0e7ebfdc12d75ec"
+  },
+  "ui-ios-root.log": {
+    "path": "build/v2.2.1-42/qa/ui-ios-root.log",
+    "sha256": "e859d451f47e38b5858fb4e61a69e9a12d222bfdf329ee8b80f400fe70d79ca7"
+  },
+  "ui-macos-import.log": {
+    "path": "build/v2.2.1-42/qa/ui-macos-import.log",
+    "sha256": "4cbef2e1953ad9443823dad9485c2f1aa853dd43f3bd438bf1032ebd2c0ac3be"
+  },
+  "ui-ios-import.log": {
+    "path": "build/v2.2.1-42/qa/ui-ios-import.log",
+    "sha256": "ce5a51cf6bc3a2ed271659eb141a2bc202de790ed26f003e6efcab61a170f9b4"
+  }
+}
