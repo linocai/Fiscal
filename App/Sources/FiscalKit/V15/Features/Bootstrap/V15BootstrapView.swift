@@ -1,6 +1,7 @@
 import SwiftUI
 
 public struct V15BootstrapView: View {
+    @State private var didReleaseShell = false
     @State private var passphrase = ""
     @State private var showsPassphrase = false
     @State private var model: V15BootstrapModel
@@ -96,7 +97,7 @@ public struct V15BootstrapView: View {
                 V15OfflineReadOnlyBanner(snapshotAt: at)
                 Text("设备当前离线，只能查看上次保存的数据；系统和安全设置不会在离线时提交。")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
-                V15ActionButton("查看上次数据", symbol: "clock.arrow.circlepath") { onAvailable() }
+                V15ActionButton("查看上次数据", symbol: "clock.arrow.circlepath") { releaseShellIfAvailable() }
                 V15ActionButton("重试连接", symbol: V15Symbol.retry, kind: .secondary) { Task { await model.retry(); releaseShellIfAvailable() } }
             }
             .padding(.top, 18)
@@ -143,7 +144,7 @@ public struct V15BootstrapView: View {
         VStack(alignment: .leading, spacing: 9) {
             Text(title).font(V15Typography.body.weight(.semibold)).foregroundStyle(compactStateColor)
             Text(message).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
-            if retry { V15ActionButton("重试", symbol: V15Symbol.retry, kind: .secondary) { Task { await model.retry() } } }
+            if retry { V15ActionButton("重试", symbol: V15Symbol.retry, kind: .secondary) { Task { await model.retry(); releaseShellIfAvailable() } } }
         }
         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
         .background(compactStateBackground, in: RoundedRectangle(cornerRadius: compactStateCornerRadius, style: .continuous))
@@ -255,7 +256,9 @@ public struct V15BootstrapView: View {
 
     private func releaseShellIfAvailable() {
         switch model.phase {
-        case .ready:
+        case .ready, .offlineReadOnly:
+            guard !didReleaseShell else { return }
+            didReleaseShell = true
             onAvailable()
         default:
             break

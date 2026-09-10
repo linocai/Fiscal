@@ -96,6 +96,12 @@ public actor APITransport {
         decoder = Self.makeDecoder()
     }
 
+    /// Recovered writes may have completed without a mutation response in this process.
+    public func invalidateReadCacheAfterRecoveredWrite() async {
+        cacheGeneration &+= 1
+        await responseCache.removeAll()
+    }
+
     private static func makeDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { dateDecoder in
@@ -119,6 +125,7 @@ public actor APITransport {
     ) async throws -> Response {
         var request = URLRequest(url: try Self.endpointURL(baseURL: baseURL, path: path, query: query))
         request.httpMethod = method; request.timeoutInterval = 15
+        if path.hasPrefix("reports/v2/") { request.setValue("as-of-v1", forHTTPHeaderField: "X-Fiscal-Report-Balance-Semantics") }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
         let token: String?
@@ -165,6 +172,7 @@ public actor APITransport {
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
+        try verifyReportCapability(request, http)
         if isGET {
             // GET: decode before caching so an undecodable body never gets stored, and only cache
             // if no mutation bumped the generation while this read was in flight (M14).
@@ -174,6 +182,12 @@ public actor APITransport {
             if let cacheKey, cacheGeneration == startGeneration {
                 await responseCache.store(data, for: cacheKey)
                 await offlineSnapshots.store(data, for: cacheKey)
+            }
+            if path.contains("/by-idempotency/") || path.hasPrefix("action-operations/") {
+                // A recovered receipt confirms a mutation whose original response
+                // may never have reached this transport or process.
+                cacheGeneration &+= 1
+                await responseCache.removeAll()
             }
             await revisionStore?.markOnline()
             return decoded
@@ -194,6 +208,7 @@ public actor APITransport {
     ) async throws -> APIResponseMetadata<Response> {
         var request = URLRequest(url: try Self.endpointURL(baseURL: baseURL, path: path, query: []))
         request.httpMethod = method
+        if path.hasPrefix("reports/v2/") { request.setValue("as-of-v1", forHTTPHeaderField: "X-Fiscal-Report-Balance-Semantics") }
         request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -226,6 +241,7 @@ public actor APITransport {
     public func requestNoContent(_ path: String, method: String, query: [URLQueryItem] = []) async throws {
         var request = URLRequest(url: try Self.endpointURL(baseURL: baseURL, path: path, query: query))
         request.httpMethod = method; request.timeoutInterval = 15
+        if path.hasPrefix("reports/v2/") { request.setValue("as-of-v1", forHTTPHeaderField: "X-Fiscal-Report-Balance-Semantics") }
         if let token = try await tokenProvider(), !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let (data, http) = try await perform(request)
         guard (200..<300).contains(http.statusCode) else {
@@ -256,6 +272,7 @@ public actor APITransport {
     ) async throws {
         var request = URLRequest(url: try Self.endpointURL(baseURL: baseURL, path: path, query: []))
         request.httpMethod = method; request.timeoutInterval = 15
+        if path.hasPrefix("reports/v2/") { request.setValue("as-of-v1", forHTTPHeaderField: "X-Fiscal-Report-Balance-Semantics") }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = try await tokenProvider(), !token.isEmpty {
@@ -294,6 +311,7 @@ public actor APITransport {
     ) async throws -> APIArtifactResponse {
         var request = URLRequest(url: try Self.endpointURL(baseURL: baseURL, path: path, query: query))
         request.httpMethod = "GET"
+        if path.hasPrefix("reports/v2/") { request.setValue("as-of-v1", forHTTPHeaderField: "X-Fiscal-Report-Balance-Semantics") }
         request.timeoutInterval = 30
         request.setValue(accept, forHTTPHeaderField: "Accept")
         if let token = try await tokenProvider(), !token.isEmpty {
@@ -307,6 +325,7 @@ public actor APITransport {
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
+        try verifyReportCapability(request, http)
         await revisionStore?.markOnline()
         return .init(data: data, headers: http.allHeaderFields.reduce(into: [:]) { result, item in
             guard let key = item.key as? String else { return }
@@ -327,6 +346,7 @@ public actor APITransport {
     ) async throws -> APIArtifactResponse {
         var request = URLRequest(url: try Self.endpointURL(baseURL: baseURL, path: path, query: query))
         request.httpMethod = method
+        if path.hasPrefix("reports/v2/") { request.setValue("as-of-v1", forHTTPHeaderField: "X-Fiscal-Report-Balance-Semantics") }
         request.timeoutInterval = 30
         request.setValue(accept, forHTTPHeaderField: "Accept")
         if let body {
@@ -344,6 +364,7 @@ public actor APITransport {
             if let detail { throw FiscalAPIError.domain(status: http.statusCode, detail: detail) }
             throw FiscalAPIError.invalidResponse
         }
+        try verifyReportCapability(request, http)
         await revisionStore?.markOnline()
         return .init(data: data, headers: http.allHeaderFields.reduce(into: [:]) { result, item in
             guard let key = item.key as? String else { return }
@@ -351,11 +372,20 @@ public actor APITransport {
         })
     }
 
+    private func verifyReportCapability(_ request: URLRequest, _ response: HTTPURLResponse) throws {
+        guard request.value(forHTTPHeaderField: "X-Fiscal-Report-Balance-Semantics") == "as-of-v1" else { return }
+        guard response.value(forHTTPHeaderField: "X-Fiscal-Report-Balance-Semantics") == "as-of-v1" else {
+            throw FiscalAPIError.domain(status: 409, detail: .init(code: "report_balance_semantics_unavailable", message: "服务需更新，暂时无法读取历史余额报表。", details: nil, requestID: "client-capability"))
+        }
+    }
+
     private func cacheKey(for request: URLRequest, token: String?) -> String {
         let tokenScope = token.map {
             SHA256.hash(data: Data($0.utf8)).map { String(format: "%02x", $0) }.joined()
         } ?? "anonymous"
-        return "\(request.url?.absoluteString ?? "")|\(tokenScope)"
+        let base = "\(request.url?.absoluteString ?? "")|\(tokenScope)"
+        guard let semantics = request.value(forHTTPHeaderField: "X-Fiscal-Report-Balance-Semantics") else { return base }
+        return "\(base)|\(semantics)"
     }
 
     /// Builds the endpoint URL, percent-encoding literal "+" so it round-trips as "+" rather than

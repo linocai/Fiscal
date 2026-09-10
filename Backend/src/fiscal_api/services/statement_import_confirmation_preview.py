@@ -50,6 +50,8 @@ class StatementImportConfirmationPreviewService:
         )
         if batch is None:
             not_found("statement_import_not_found", "Statement import was not found")
+        if batch.status not in {"review_required", "ready_to_confirm", "partially_confirmed"}:
+            conflict("statement_import_confirmation_invalid", "The import is not editable")
         run = await self.session.scalar(
             select(StatementImportValidationRun)
             .where(StatementImportValidationRun.statement_import_id == batch.id)

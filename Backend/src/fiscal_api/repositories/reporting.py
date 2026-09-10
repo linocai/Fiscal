@@ -5,11 +5,25 @@ from datetime import date, datetime
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import String, and_, case, exists, func, literal, or_, select
+from sqlalchemy import (
+    Date,
+    String,
+    Uuid,
+    and_,
+    any_,
+    bindparam,
+    case,
+    exists,
+    func,
+    literal,
+    or_,
+    select,
+)
 from sqlalchemy import cast as sql_cast
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
-from sqlalchemy.sql.elements import ColumnElement
+from sqlalchemy.sql.elements import ColumnElement, SQLColumnExpression
 
 from fiscal_api.db.models import (
     Account,
@@ -33,6 +47,17 @@ from fiscal_api.db.models import (
     TransactionRevision,
 )
 from fiscal_api.services.common import checked_int64
+
+
+def uuid_membership(
+    column: SQLColumnExpression[UUID | None], ids: set[UUID]
+) -> ColumnElement[bool]:
+    """One typed bind for arbitrary source sets, including empty sets.
+
+    PostgreSQL ANY avoids asyncpg's 32,767-bind ceiling; sorting makes query
+    inputs reproducible. This is a transport bound, never a ledger size limit.
+    """
+    return column == any_(bindparam(None, sorted(ids), type_=ARRAY(Uuid())))
 
 
 @dataclass(frozen=True)
@@ -121,7 +146,7 @@ class ReportingRepository:
             statement = statement.where(
                 or_(
                     LedgerTransaction.category_id.is_(None),
-                    LedgerTransaction.category_id.not_in(excluded_category_ids),
+                    ~uuid_membership(LedgerTransaction.category_id, excluded_category_ids),
                 )
             )
         statement = statement.order_by(
@@ -153,12 +178,14 @@ class ReportingRepository:
             .options(selectinload(LedgerTransaction.postings))
         )
         if category_ids is not None:
-            statement = statement.where(LedgerTransaction.category_id.in_(category_ids))
+            statement = statement.where(
+                uuid_membership(LedgerTransaction.category_id, category_ids)
+            )
         if excluded_category_ids:
             statement = statement.where(
                 or_(
                     LedgerTransaction.category_id.is_(None),
-                    LedgerTransaction.category_id.not_in(excluded_category_ids),
+                    ~uuid_membership(LedgerTransaction.category_id, excluded_category_ids),
                 )
             )
         if account_id is not None:
@@ -239,7 +266,13 @@ class ReportingRepository:
         rows = await self.session.execute(
             select(Posting.account_id, func.coalesce(func.sum(Posting.amount_minor), 0))
             .join(LedgerTransaction, LedgerTransaction.id == Posting.transaction_id)
+            .join(Account, Account.id == Posting.account_id)
             .where(
+                or_(
+                    Account.opening_balance_as_of_date.is_(None),
+                    sql_cast(func.timezone("Asia/Shanghai", LedgerTransaction.occurred_at), Date)
+                    >= Account.opening_balance_as_of_date,
+                ),
                 LedgerTransaction.voided_at.is_(None),
                 LedgerTransaction.occurred_at < occurred_before,
             )
@@ -297,7 +330,7 @@ class ReportingRepository:
         rows = await self.session.execute(
             select(TransactionRevision.transaction_id, TransactionRevision.snapshot)
             .where(
-                TransactionRevision.transaction_id.in_(transaction_ids),
+                uuid_membership(TransactionRevision.transaction_id, transaction_ids),
                 TransactionRevision.created_at < recorded_before,
             )
             .distinct(TransactionRevision.transaction_id)
@@ -335,12 +368,14 @@ class ReportingRepository:
         if account_id is not None:
             statement = statement.where(Posting.account_id == account_id)
         if category_ids is not None:
-            statement = statement.where(LedgerTransaction.category_id.in_(category_ids))
+            statement = statement.where(
+                uuid_membership(LedgerTransaction.category_id, category_ids)
+            )
         if excluded_category_ids:
             statement = statement.where(
                 or_(
                     LedgerTransaction.category_id.is_(None),
-                    LedgerTransaction.category_id.not_in(excluded_category_ids),
+                    ~uuid_membership(LedgerTransaction.category_id, excluded_category_ids),
                 )
             )
         if cursor_time is not None and cursor_id is not None:
@@ -711,7 +746,7 @@ class ReportingRepository:
             .join(Posting, Posting.transaction_id == LedgerTransaction.id)
             .where(
                 InstallmentLedgerLink.role.in_(["principal_refund", "fee_refund"]),
-                source_id.in_(source_ids),
+                uuid_membership(source_id, source_ids),
                 LedgerTransaction.voided_at.is_(None),
             )
             .group_by(source_id, LedgerTransaction.id)
@@ -769,7 +804,9 @@ class ReportingRepository:
         if source_ids is not None:
             if not source_ids:
                 return []
-            statement = statement.where(ReimbursementAllocation.transaction_id.in_(source_ids))
+            statement = statement.where(
+                uuid_membership(ReimbursementAllocation.transaction_id, source_ids)
+            )
         rows = await self.session.execute(statement)
         return [
             ReimbursementFact(

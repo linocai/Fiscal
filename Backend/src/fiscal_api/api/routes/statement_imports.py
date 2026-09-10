@@ -28,6 +28,8 @@ from fiscal_api.api.p24_schemas import (
 from fiscal_api.api.p26_schemas import (
     StatementImportProviderAttemptCreate,
     StatementImportProviderAttemptResponse,
+    StatementImportRecovery,
+    StatementProviderAuthorizationPreview,
 )
 from fiscal_api.api.p27_confirmation_schemas import (
     StatementImportConfirmReceipt,
@@ -291,3 +293,36 @@ async def abandon_statement_import(
     service: StatementImportServiceDependency,
 ) -> StatementImportResponse:
     return await service.abandon(statement_import_id, request)
+
+
+@router.get(
+    "/{statement_import_id}/provider-authorization",
+    response_model=StatementProviderAuthorizationPreview,
+)
+async def provider_authorization(
+    statement_import_id: UUID, response: Response, service: StatementImportServiceDependency
+) -> StatementProviderAuthorizationPreview:
+    response.headers["Cache-Control"] = "no-store"
+    return await service.provider_authorization(statement_import_id)
+
+
+@router.get("/{statement_import_id}/recovery", response_model=StatementImportRecovery)
+async def recovery(
+    statement_import_id: UUID, response: Response, service: StatementImportServiceDependency
+) -> StatementImportRecovery:
+    response.headers["Cache-Control"] = "no-store"
+    return await service.recovery(statement_import_id)
+
+
+@router.get(
+    "/{statement_import_id}/provider-attempts/by-idempotency/{key}",
+    response_model=StatementImportProviderAttemptResponse,
+)
+async def provider_receipt(
+    statement_import_id: UUID,
+    key: UUID,
+    response: Response,
+    service: StatementImportServiceDependency,
+) -> StatementImportProviderAttemptResponse:
+    response.headers["Cache-Control"] = "no-store"
+    return await service.provider_receipt(statement_import_id, key)

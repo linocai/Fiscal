@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import Field, StrictInt, field_validator, model_validator
 
@@ -38,8 +40,9 @@ def _empty_uncertain_fields() -> list[StatementProviderUncertainField]:
 
 class StatementProviderAuthorization(P24Model):
     confirmed: Literal[True]
-    provider: Literal["synthetic_statement"]
-    provider_model: Literal["synthetic-statement-v1"]
+    provider: Literal["synthetic_statement", "openai_compatible"]
+    provider_model: str = Field(min_length=1, max_length=200)
+    configuration_revision: str | None = Field(default=None, max_length=128)
     prompt_version: Literal["statement-p26-v1"]
     schema_version: StatementProviderSchemaVersion
     evidence_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -94,11 +97,22 @@ class StatementProviderCandidate(P24Model):
         default_factory=_empty_source_rows, max_length=100
     )
 
+    @field_validator("transaction_date", "posted_date", mode="before")
+    @classmethod
+    def exact_date(cls, value: object) -> object:
+        if value is None or type(value) is date:
+            return value
+        if not isinstance(value, str) or re.fullmatch(r"\d{4}-\d{2}-\d{2}", value) is None:
+            raise ValueError("statement dates must use YYYY-MM-DD")
+        return value
+
     @field_validator("raw_amount")
     @classmethod
     def cny_decimal(cls, value: str | None) -> str | None:
         if value is None:
             return None
+        if re.fullmatch(r"[+-]?\d+(?:\.\d{1,2})?", value) is None:
+            raise ValueError("raw_amount must use plain decimal notation")
         try:
             amount = Decimal(value)
         except InvalidOperation as error:
@@ -131,6 +145,7 @@ class StatementProviderResult(P24Model):
 
 class StatementImportProviderAttemptResponse(StatementImportResponse):
     provider_attempt_id: str
+    provider_snapshot_id: UUID | None = None
     attempt_id: str
     provider: str
     provider_model: str
@@ -142,3 +157,34 @@ class StatementImportProviderAttemptResponse(StatementImportResponse):
     # Provider parsing is request-bound.  A disconnect/cancellation is never
     # advertised as a detached background task that will continue off-device.
     execution_scope: Literal["request_bound"] = "request_bound"
+
+
+class StatementProviderAuthorizationPreview(P24Model):
+    batch_version: int
+    configured: bool
+    provider: str | None = None
+    provider_model: str | None = None
+    prompt_version: str | None = None
+    schema_version: str | None = None
+    configuration_revision: str | None = None
+    evidence_sha256: str | None = None
+    page_numbers: list[int]
+    row_count: int
+    redaction_count: int
+    redaction_version: str = "statement-redaction-v1"
+    description: str
+
+
+class StatementImportRecovery(P24Model):
+    batch: StatementImportResponse
+    next_action: str
+    evidence_sha256: str | None = None
+    row_count: int
+    active_attempt_id: UUID | None = None
+    provider_attempt_id: UUID | None = None
+    provider_status: str | None = None
+    provider_snapshot_id: UUID | None = None
+    validation_run_id: UUID | None = None
+    has_confirmed_rows: bool
+    confirmation_status: str | None = None
+    failure_reason: str | None = None

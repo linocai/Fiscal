@@ -52,6 +52,18 @@ struct F3B2Tests {
         #expect(cancel.principalRefundMinor == 274_916 && cancel.cancelledPeriods.last?.sequence == 7)
     }
 
+    @MainActor @Test("replacement carries the exact reviewed fingerprint")
+    func replacementFingerprint() async throws {
+        let transport = F3B2Transport(mode: .normal)
+        let model = V15InstallmentModel(services: V15F3B2Fixtures.services(transport: transport), now: { fixedNow })
+        await model.load(); await model.requestPlanPreview()
+        let fingerprint = try #require(model.planPreview?.previewFingerprint)
+        await model.commitPlanUpdate()
+        let wire = try #require(await transport.recordedWires().last { $0.method == "PUT" })
+        let body = try V15FixtureCodec.decoder.decode(V15InstallmentReplacementRequest.self, from: Data(wire.body.utf8))
+        #expect(body.previewFingerprint == fingerprint)
+    }
+
     @MainActor @Test("list detail purchase and liabilities are server facts")
     func loadFacts() async {
         let model = V15InstallmentModel(services: V15F3B2Fixtures.services(), now: { fixedNow })

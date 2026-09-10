@@ -788,10 +788,11 @@ private actor AuditInstallmentRepository: InstallmentRepository {
     let current = installmentPlanJSON(planID: id, accountID: firstAccountID)
     let proposed = installmentPreviewJSON(planID: id, accountID: firstAccountID)
     let json =
-      #"{"current_plan":\#(current),"proposed_plan":\#(proposed),"locked_periods":[],"future_periods":[],"affected_cycles":[],"warnings":[]}"#
+      #"{"preview_fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","current_plan":\#(current),"proposed_plan":\#(proposed),"locked_periods":[],"future_periods":[],"affected_cycles":[],"warnings":[]}"#
     return try fiscalDecoder().decode(InstallmentPlanChangePreview.self, from: Data(json.utf8))
   }
   func update(id: UUID, request: InstallmentReplacementRequest) async throws -> InstallmentPlanDTO {
+    #expect(request.previewFingerprint == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
     updateCalls += 1
     return try plan(firstAccountID, id)
   }

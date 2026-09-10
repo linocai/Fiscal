@@ -398,13 +398,45 @@ class CashFlowService:
         await self.session.commit()
         return await self._manual_response(item, self._today())
 
+    async def validate_restore(self, transaction_id: UUID) -> CashFlowItem | None:
+        origins = await self.repository.settlement_origins(transaction_id)
+        if len(origins) > 1:
+            conflict(
+                "cash_flow_settlement_ambiguous", "The settlement has multiple historical sources"
+            )
+        if not origins:
+            transaction = await TransactionRepository(self.session).get(transaction_id)
+            if transaction is not None and transaction.source == "cash_flow":
+                conflict("cash_flow_settlement_ambiguous", "The settlement source is missing")
+            return None
+        item = origins[0]
+        if item.status == CashFlowStatus.CANCELLED.value:
+            conflict(
+                "cash_flow_not_confirmed",
+                "Confirm the cancelled item before restoring its settlement",
+            )
+        if item.linked_transaction_id is not None and item.linked_transaction_id != transaction_id:
+            current = await TransactionRepository(self.session).get(item.linked_transaction_id)
+            if current is not None and current.voided_at is None:
+                conflict(
+                    "cash_flow_settlement_superseded",
+                    "Another active settlement exists",
+                    details={"item_id": str(item.id), "transaction_id": str(current.id)},
+                )
+        return item
+
     async def sync_linked_transaction(self, transaction_id: UUID, *, voided: bool) -> None:
-        item = await self.repository.by_linked_transaction(transaction_id, for_update=True)
+        item = (
+            await self.repository.by_linked_transaction(transaction_id, for_update=True)
+            if voided
+            else await self.validate_restore(transaction_id)
+        )
         if item is None:
             return
         desired = CashFlowStatus.CONFIRMED if voided else CashFlowStatus.SETTLED
-        if item.status == desired.value:
+        if item.status == desired.value and item.linked_transaction_id == transaction_id:
             return
+        item.linked_transaction_id = transaction_id
         item.status = desired.value
         item.settled_at = None if voided else utc_now()
         self._touch(

@@ -198,6 +198,9 @@ def test_d3_restore_of_legacy_enabled_archive_cannot_resurrect_auto_execute(
     assert TEST_DATABASE_URL is not None
     monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
     get_settings.cache_clear()
-    command.upgrade(config(), "20260830_0037")
+    # This test injects legacy enabled flags into an authenticated current-schema
+    # archive. Current ORM export requires current head; cross-schema 0038
+    # restore/upgrade is covered by test_v221_archive_compat_postgres separately.
+    command.upgrade(config(), "head")
     assert asyncio.run(restore_legacy_enabled_archive()) == (False, [False])
     get_settings.cache_clear()

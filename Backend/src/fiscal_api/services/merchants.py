@@ -173,7 +173,9 @@ class MerchantService:
             if request.expected_mapping_version is not None:
                 conflict("merchant_mapping_not_found", "The mapping no longer exists")
             mapping = TransactionMerchantMapping(
-                transaction_id=transaction_id, merchant_id=merchant.id
+                transaction_id=transaction_id,
+                merchant_id=merchant.id,
+                version=transaction.merchant_mapping_generation + 1,
             )
             self.repository.add(mapping)
         else:
@@ -191,11 +193,12 @@ class MerchantService:
             )
             if mapping.merchant_id != merchant.id:
                 mapping.merchant_id = merchant.id
-                mapping.version += 1
+                mapping.version = transaction.merchant_mapping_generation + 1
                 mapping.confirmed_at = utc_now()
                 action = "corrected"
             else:
                 action = "confirmed"
+        transaction.merchant_mapping_generation = mapping.version
         await self.session.flush()
         receipt = MerchantMappingReceipt(
             action=action,
@@ -266,6 +269,7 @@ class MerchantService:
             resource_id=str(mapping.id),
             reload_path=f"/api/v1/transactions/{transaction_id}/merchant-mapping",
         )
+        transaction.merchant_mapping_generation += 1
         await self.session.delete(mapping)
         receipt = MerchantMappingReceipt(
             action="released",

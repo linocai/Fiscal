@@ -104,6 +104,7 @@ public struct V151IOSWorkspace: View {
             .accessibilityIdentifier("v152.ios.record")
         }
         .tabBarMinimizeBehavior(.never)
+        .onChange(of: services.confirmedWriteRevision) { _, _ in refreshRootFacts() }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .topLeading) {
             Text("V151 iOS workspace")
@@ -1288,7 +1289,7 @@ private struct V151IOSLedger: View {
                 else if selectedID == transaction.id { V15Palette.surfaceRaised.color }
             }
             .opacity(transaction.voidedAt == nil ? 1 : 0.72)
-        }.buttonStyle(.plain)
+        }.buttonStyle(.plain).accessibilityIdentifier("v221.ios.transaction.\(transaction.id)")
     }
 
     private var detailSheet: some View {
@@ -1347,8 +1348,8 @@ private struct V151IOSLedger: View {
             if let categoryCommitNotice {
                 V15ServerFactState(title: "分类已保存", detail: categoryCommitNotice)
             }
-            if transaction.categoryID == nil {
-                V15ActionButton("设置分类") {
+            if transaction.voidedAt == nil && ["expense", "income", "credit_purchase"].contains(transaction.kind) {
+                V15ActionButton(transaction.categoryID == nil ? "设置分类" : "修改分类") {
                     categoryID = transaction.categoryID
                     categoryPreviewed = false
                     categoryCommitNotice = nil
@@ -1854,6 +1855,7 @@ private struct V151IOSPendingSyncQueue: View {
                     V15SuccessReceiptState(title: "同步已完成", detail: receipt)
                     V15ActionButton("收起结果", kind: .secondary) { services.pendingWrites.dismissReceipt() }
                 }
+                if let failure = services.pendingWrites.storageFailure { Text(failure.message).foregroundStyle(V15Palette.outflow.color) }
                 if services.pendingWrites.items.isEmpty {
                     V15EmptyState(title: "没有待同步项目", explanation: "离线记账和离线分类决定会出现在这里。")
                 } else {
@@ -1893,7 +1895,15 @@ private struct V151IOSPendingSyncQueue: View {
                         Task { await services.pendingWrites.replay(using: services) }
                     }
                 }
-                V15ActionButton("移除", kind: .secondary) { services.pendingWrites.remove(item.id) }
+                if item.status == .outcomeUnknown {
+                    V15ActionButton("读取原操作回执", kind: .secondary) { Task { _ = await services.pendingWrites.recover(item.id, using: services) } }
+                    if item.kind == .transactionCreate || item.kind == .repayment {
+                        V15ActionButton("按原请求安全重试", kind: .secondary) { Task { _ = await services.pendingWrites.replayUnknown(item.id, using: services) } }
+                    }
+                }
+                if item.status != .outcomeUnknown && item.status != .syncing {
+                    V15ActionButton("移除", kind: .secondary) { services.pendingWrites.remove(item.id) }
+                }
             }
         }
         .padding(.vertical, 14)
@@ -1919,7 +1929,7 @@ private struct V151IOSPendingSyncQueue: View {
         }
     }
 
-    private func kindLabel(_ value: V15PendingWriteStore.Kind) -> String { value == .transactionCreate ? "新建账目" : "分类决定" }
+    private func kindLabel(_ value: V15PendingWriteStore.Kind) -> String { switch value { case .transactionCreate: "新建账目"; case .categoryReplace: "分类决定"; case .repayment: "还款"; case .statementProviderAttempt: "账单解析"; case .statementConfirmation: "账单确认" } }
     private func statusLabel(_ item: V15PendingWriteStore.Item) -> String {
         let value: String
         switch item.status { case .queued: value = "排队中"; case .syncing: value = "同步中"; case .requiresDecision: value = "需要重新决定"; case .outcomeUnknown: value = "结果不明"; case .failed: value = "同步失败" }

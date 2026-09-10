@@ -553,12 +553,15 @@ public final class V15InstallmentModel {
     public func requestPlanPreview() async {
         guard let plan = selectedPlan else { return }
         guard planPreviewDisabledReason == nil, let request = replacementRequest(recordIssues: true) else { return }
-        let generation = next(&planGeneration, for: plan.id); let payload = identity(request)
+        let generation = next(&planGeneration, for: plan.id)
         mutate(plan.id) { $0.planPhase = .previewing; $0.planPreview = nil; $0.planPreviewIdentity = nil; $0.planPreparedRequest = nil }
         do {
             let preview = try await services.installments.previewPlan(planID: plan.id, request: request)
             guard isCurrent(generation, in: planGeneration, planID: plan.id) else { return }
-            mutate(plan.id) { $0.planPreview = preview; $0.planPreviewIdentity = payload; $0.planPreparedRequest = request; $0.planPhase = .previewed }
+            guard let fingerprint = preview.previewFingerprint, !fingerprint.isEmpty else { throw V15Failure(kind: .conflict, code: "installment_preview_required", message: "服务需更新，请重新取得可验证的分期预览。") }
+            var prepared = request; prepared.previewFingerprint = fingerprint
+            let payload = identity(prepared)
+            mutate(plan.id) { $0.planPreview = preview; $0.planPreviewIdentity = payload; $0.planPreparedRequest = prepared; $0.planPhase = .previewed }
         } catch let failure as V15Failure {
             guard isCurrent(generation, in: planGeneration, planID: plan.id) else { return }
             mutate(plan.id) { $0.planPhase = failure.kind == .conflict && failure.conflict != nil ? .conflict(failure.conflict!) : .failed(failure) }; fieldIssues = failure.fieldIssues

@@ -11,6 +11,8 @@ from fiscal_api.api.p24_schemas import P24Model
 
 class StatementImportFinalCreateDraftPut(P24Model):
     expected_version: Annotated[int, Field(ge=0)]
+    expected_batch_version: Annotated[int, Field(ge=1)] | None = None
+    expected_row_version: Annotated[int, Field(ge=1)] | None = None
     transaction: TransactionDraft
 
 

@@ -76,6 +76,31 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         XCTAssertTrue(V15RootSmokeSupport.terminateRootSmokeApp())
     }
 
+    func testV221BootstrapRetryReleasesFormalWorkspace() {
+        let app = launchApp(service: uniqueKeychainService(), reviewScenario: "bootstrap-retry")
+        XCTAssertTrue(app.buttons["重试"].firstMatch.waitForExistence(timeout: 8))
+        app.buttons["重试"].firstMatch.click()
+        XCTAssertTrue(app.descendants(matching: .any)["v151.mac.workspace"].waitForExistence(timeout: 8))
+    }
+
+    func testV221TimelineCanReachMoreThanFourMonthsAgo() {
+        let app = launchApp(service: uniqueKeychainService(), formalFixture: true)
+        XCTAssertTrue(app.descendants(matching: .any)["v151.mac.workspace"].waitForExistence(timeout: 8))
+        app.descendants(matching: .any)["v151.mac.module.timeline"].firstMatch.click()
+        let previous = app.buttons["v221.mac.ledger.previous-month"]
+        XCTAssertTrue(previous.waitForExistence(timeout: 8))
+        for _ in 0..<5 { previous.click() }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        let date = calendar.date(byAdding: .month, value: -5, to: Date())!
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "zh_Hans_CN"); formatter.timeZone = calendar.timeZone; formatter.dateFormat = "yyyy 年 M 月"
+        // macOS MenuButton exposes its visible text as AXTitle, not AXLabel.
+        let month = app.descendants(matching: .any).matching(identifier: "v221.mac.ledger.month")
+        XCTAssertTrue(month.matching(NSPredicate(format: "title == %@", formatter.string(from: date))).firstMatch.waitForExistence(timeout: 5))
+        app.descendants(matching: .any)["v221.mac.ledger.month"].firstMatch.click()
+        app.menuItems["全部时间"].firstMatch.click()
+        XCTAssertTrue(month.matching(NSPredicate(format: "title == %@", "全部时间")).firstMatch.waitForExistence(timeout: 5))
+    }
+
     func testColdLaunchUsesFormalV15BootstrapWithoutGalleryRoute() {
         let app = launchApp(service: uniqueKeychainService())
         defer { _ = V15RootSmokeSupport.terminateRootSmokeApp() }

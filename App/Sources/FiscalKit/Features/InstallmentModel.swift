@@ -127,7 +127,9 @@ public final class InstallmentModel {
     public func update(_ request: InstallmentReplacementRequest) async -> InstallmentPlanDTO? {
         guard let id = selectedPlan?.id else { return nil }
         guard previewedChangeRequest == request, changePreview != nil else { invalidateChangePreview(message: "输入已变化，请重新预览。"); return nil }
-        guard let plan: InstallmentPlanDTO = await mutate({ try await repository.update(id: id, request: request) }) else { return nil }
+        guard let fingerprint = changePreview?.previewFingerprint, !fingerprint.isEmpty else { invalidateChangePreview(message: "服务需更新，请重新取得可验证的分期预览。"); return nil }
+        var prepared = request; prepared.previewFingerprint = fingerprint
+        guard let plan: InstallmentPlanDTO = await mutate({ try await repository.update(id: id, request: prepared) }) else { return nil }
         store(plan); clearPreviews(); await refreshAfterMutation(accountID: plan.creditAccountID); return plan
     }
 

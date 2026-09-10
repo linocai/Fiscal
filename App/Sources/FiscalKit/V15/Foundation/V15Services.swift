@@ -1,3 +1,4 @@
+import Observation
 import Foundation
 
 public enum V15ReadCachePolicy: Sendable, Equatable {
@@ -15,13 +16,14 @@ struct V15Request: Sendable, Equatable {
     let headers: [String: String]
     let readCachePolicy: V15ReadCachePolicy
     init(path: String, method: String = "GET", query: [URLQueryItem] = [], headers: [String: String] = [:], readCachePolicy: V15ReadCachePolicy = .standard) {
-        self.path = path; self.method = method; self.query = query; self.headers = headers; self.readCachePolicy = readCachePolicy
+        self.path = path; self.method = method; self.query = query; var effectiveHeaders = headers; if path.hasPrefix("reports/v2/") { effectiveHeaders["X-Fiscal-Report-Balance-Semantics"] = "as-of-v1" }; self.headers = effectiveHeaders; self.readCachePolicy = readCachePolicy
     }
 }
 
 /// The clean-room boundary. V15 feature code depends on this protocol, never on
 /// legacy repositories or their DTOs.
 protocol V15Transporting: Sendable {
+    func invalidateReadCacheAfterRecoveredWrite() async
     func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response
     func sendNoContent(_ request: V15Request, body: JSONValue?) async throws
     func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data
@@ -30,6 +32,7 @@ protocol V15Transporting: Sendable {
 }
 
 extension V15Transporting {
+    func invalidateReadCacheAfterRecoveredWrite() async {}
     func sendNoContent(_ request: V15Request, body: JSONValue?) async throws {
         let _: JSONValue = try await send(request, body: body)
     }
@@ -102,6 +105,7 @@ enum V15BodyEncoder {
 actor V15APITransportAdapter: V15Transporting {
     private let transport: APITransport
     init(transport: APITransport) { self.transport = transport }
+    func invalidateReadCacheAfterRecoveredWrite() async { await transport.invalidateReadCacheAfterRecoveredWrite() }
     func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
         do {
             if let body {
@@ -156,15 +160,15 @@ public enum V15ErrorMapper {
         case .invalidResponse:
             return .init(kind: .decoding, code: "invalid_response", message: "收到的数据无法读取。")
         case .rateLimited:
-            return .init(kind: .transport, code: "rate_limited", message: error.displayMessage)
+            return .init(kind: .transport, code: "rate_limited", message: error.displayMessage, isDefinitiveRejection: true)
         case .unauthorized(let detail):
-            return .init(kind: .transport, code: detail?.code, message: detail?.message ?? error.displayMessage)
+            return .init(kind: .transport, code: detail?.code, message: detail?.message ?? error.displayMessage, isDefinitiveRejection: true)
         case .domain(let status, let detail):
             let issues = fieldIssues(from: detail.details, fallbackMessage: detail.message)
             if status == 409 {
-                return .init(kind: .conflict, code: detail.code, message: detail.message, fieldIssues: issues, conflict: conflict(from: detail.details, message: detail.message))
+                return .init(kind: .conflict, code: detail.code, message: detail.message, fieldIssues: issues, conflict: conflict(from: detail.details, message: detail.message), isDefinitiveRejection: true)
             }
-            return .init(kind: .transport, code: detail.code, message: detail.message, fieldIssues: issues)
+            return .init(kind: .transport, code: detail.code, message: detail.message, fieldIssues: issues, isDefinitiveRejection: (400..<500).contains(status))
         }
     }
 
@@ -230,7 +234,10 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
     public init(data: Data, filename: String) { self.data = data; self.filename = filename }
 }
 
-@MainActor public final class V15Services {
+@MainActor @Observable public final class V15Services {
+    private let transport: any V15Transporting
+    public private(set) var confirmedWriteRevision: UInt64 = 0
+    public func notifyConfirmedWrite() { confirmedWriteRevision &+= 1 }
     public let session: V15SessionService
     public let system: V15SystemService
     public let masterData: V15MasterDataReadService
@@ -255,6 +262,7 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
     /// Production injects `V15APITransportAdapter(APITransport(...))`. Fixture
     /// and offline implementations use exactly the same feature-facing surface.
     init(transport: any V15Transporting, revisionStore: DataRevisionStore? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, saveAccessKey: (@Sendable (String) async throws -> Void)? = nil, pendingWrites: V15PendingWriteStore = .init()) {
+        self.transport = transport
         self.revisionStore = revisionStore
         self.offlineSnapshotProvider = offlineSnapshotProvider
         self.pendingWrites = pendingWrites
@@ -304,6 +312,7 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
     /// or domain presentation type crosses this boundary.
     public convenience init(
         baseURL: URL,
+        profileID: String = "primary",
         session: URLSession = .shared,
         accessKeyStore: AccessKeyStore = .init(),
         responseCache: HTTPResponseCache = .shared,
@@ -318,8 +327,16 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
             transport: V15APITransportAdapter(transport: api),
             revisionStore: revisionStore,
             saveAccessKey: { key in try await accessKeyStore.save(key) },
-            pendingWrites: V15PendingWriteStore(defaults: .standard)
+            pendingWrites: V15PendingWriteStore(defaults: .standard, scope: baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "|" + profileID)
         )
+    }
+
+    public func refreshAfterRecoveredWrite() async {
+        await transport.invalidateReadCacheAfterRecoveredWrite()
+        notifyConfirmedWrite()
+        guard let revisionStore else { return }
+        let baseline = revisionStore.currentRevision
+        if let response = try? await system.dataRevision() { revisionStore.observeServer(revision: response.revision, pollBaseline: baseline) }
     }
 
     public var offlineSnapshotAt: Date? { offlineSnapshotProvider?() ?? revisionStore?.offlineSnapshotAt }
@@ -406,6 +423,9 @@ public struct V15LedgerCreateService: Sendable {
     public func create(_ request: V15TransactionCreateRequest, idempotencyKey: UUID) async throws -> V15Transaction {
         try await writable()
         return try await transport.send(.init(path: "transactions", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(request))
+    }
+    public func receipt(idempotencyKey: UUID) async throws -> V15Transaction {
+        try await transport.send(.init(path: "transactions/by-idempotency/\(idempotencyKey)", readCachePolicy: .reloadIgnoringCache), body: nil)
     }
     public func list(_ filter: V15LedgerFilter) async throws -> V15Page<V15Transaction> {
         guard (1...100).contains(filter.limit) else { throw V15Failure(kind: .decoding, code: "invalid_limit", message: "账目列表每页数量须在 1 到 100 之间。") }
@@ -721,6 +741,9 @@ public struct V15StatementImportService: Sendable {
     public func abandon(importID: UUID, expectedVersion: Int) async throws -> V15StatementImport {
         try await writable(); return try await transport.send(.init(path: "statement-imports/\(importID)/abandon", method: "POST"), body: try V15BodyEncoder.encode(V15StatementImportVersionRequest(expectedVersion: expectedVersion)))
     }
+    public func providerAuthorization(importID: UUID, readCachePolicy: V15ReadCachePolicy = .reloadIgnoringCache) async throws -> V15StatementProviderAuthorizationPreview { try await transport.send(.init(path: "statement-imports/\(importID)/provider-authorization", readCachePolicy: .reloadIgnoringCache), body: nil) }
+    public func recovery(importID: UUID, readCachePolicy: V15ReadCachePolicy = .reloadIgnoringCache) async throws -> V15StatementRecovery { try await transport.send(.init(path: "statement-imports/\(importID)/recovery", readCachePolicy: .reloadIgnoringCache), body: nil) }
+    public func providerAttemptReceipt(importID: UUID, idempotencyKey: UUID, readCachePolicy: V15ReadCachePolicy = .reloadIgnoringCache) async throws -> V15StatementProviderAttempt { try await transport.send(.init(path: "statement-imports/\(importID)/provider-attempts/by-idempotency/\(idempotencyKey)", readCachePolicy: .reloadIgnoringCache), body: nil) }
     public func providerAttempt(importID: UUID, request: V15StatementProviderAttemptCreate, idempotencyKey: UUID) async throws -> V15StatementProviderAttempt { try await writable(); return try await transport.send(.init(path: "statement-imports/\(importID)/provider-attempts", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(request)) }
     public func validationRun(importID: UUID, request: V15StatementValidationRunCreate) async throws -> V15StatementReview {
         try await writable(); return try await transport.send(.init(path: "statement-imports/\(importID)/validation-runs", method: "POST"), body: try V15BodyEncoder.encode(request))

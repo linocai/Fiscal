@@ -68,7 +68,15 @@ class OpenAICompatibleProvider:
         return True
 
     async def parse(self, request: AIParseRequest) -> AIProviderResult:
-        payload = self._payload(request)
+        started = perf_counter()
+        decoded = await self.request_json(self._payload(request))
+        try:
+            return AIProviderResult.model_validate(decoded)
+        except ValidationError:
+            await self._raise_invalid_response(started=started, upstream_status_code=200)
+
+    async def request_json(self, payload: dict[str, object]) -> object:
+        """Shared bounded, redacted-log transport for isolated parser contracts."""
         headers = {"Authorization": f"Bearer {self.api_key}"}
         started = perf_counter()
         try:
@@ -151,7 +159,7 @@ class OpenAICompatibleProvider:
             if not isinstance(raw, str):
                 raise TypeError
             decoded = json.loads(raw)
-            return AIProviderResult.model_validate(decoded)
+            return decoded
         except (
             KeyError,
             IndexError,

@@ -235,6 +235,9 @@ async def test_preview_is_read_only_and_update_replaces_schedule(
     preview = await InstallmentService(session).preview_update(plan.id, replacement)
     assert preview.proposed_plan.installment_count == 7
     assert preview.proposed_plan.periods[-1].scheduled_cycle_id is None
+    replacement = replacement.model_copy(
+        update={"preview_fingerprint": preview.preview_fingerprint}
+    )
     updated = await InstallmentService(session).update(plan.id, replacement)
     assert updated.installment_count == 7
     assert updated.title == "MacBook Pro"
@@ -614,6 +617,9 @@ async def test_existing_plan_options_locked_suffix_edit_and_settlement_preview(
     )
     preview = await service.preview_update(plan.id, replacement)
     assert preview.proposed_plan.locked_count == 1
+    replacement = replacement.model_copy(
+        update={"preview_fingerprint": preview.preview_fingerprint}
+    )
     updated = await service.update(plan.id, replacement)
     assert updated.periods[0].id == first.id
     assert updated.installment_count == 7
@@ -794,3 +800,131 @@ async def test_over_sixty_month_purchase_keeps_future_options_and_settlement_pre
     )
     assert preview.amount_minor > 0
     assert preview.proposed_plan.start_statement_date == date(2027, 8, 10)
+
+
+async def test_replacement_after_statement_rollover_preserves_locked_prefix(
+    session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    account, purchase, plan = await seeded_plan(session)
+    first = plan.periods[0]
+    rollover = first.effective_statement_date.replace(day=first.effective_statement_date.day + 1)
+    monkeypatch.setattr(InstallmentService, "_today", staticmethod(lambda: rollover))
+    replacement = InstallmentReplacement(
+        expected_version=plan.version,
+        purchase=InstallmentPurchaseReplacement(
+            amount_minor=plan.principal_minor,
+            occurred_at=purchase.occurred_at,
+            title="After statement rollover",
+            note=None,
+            account_id=account.id,
+            category_id=purchase.category_id,
+        ),
+        installment_count=7,
+        total_fee_minor=plan.fee_minor,
+        fee_category_id=plan.fee_category_id,
+        fee_occurred_at=plan.fee_occurred_at,
+        start_statement_date=plan.start_statement_date,
+    )
+    service = InstallmentService(session)
+    preview = await service.preview_update(plan.id, replacement)
+    assert preview.proposed_plan.locked_count == 1
+    replacement = replacement.model_copy(
+        update={"preview_fingerprint": preview.preview_fingerprint}
+    )
+    updated = await service.update(plan.id, replacement)
+    assert updated.periods[0].id == first.id
+    assert updated.periods[0].principal_minor == first.principal_minor
+    assert updated.periods[0].fee_minor == first.fee_minor
+    assert updated.installment_count == 7
+    assert all(period.effective_statement_date >= rollover for period in updated.periods[1:])
+
+
+async def test_credit_cycles_expand_each_plan_once_and_batch_prefix_events(
+    session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sqlalchemy import event
+
+    from fiscal_api.repositories.credit import CreditRepository
+
+    account, _purchase, plan = await seeded_plan(session)
+    original = InstallmentService.response
+    expanded = []
+
+    async def counting_response(service, model):
+        expanded.append(model.id)
+        return await original(service, model)
+
+    monkeypatch.setattr(InstallmentService, "response", counting_response)
+    page = await CreditService(session).list_cycles(account.id, cursor=None, limit=50)
+    assert len(page.items) >= len(plan.periods)
+    assert expanded.count(plan.id) == 1
+    repository = CreditRepository(session)
+    statements = []
+
+    def record(_connection, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement)
+
+    bind = session.get_bind()
+    event.listen(bind, "before_cursor_execute", record)
+    try:
+        first = await repository.cycle_events_many([plan.periods[0].effective_cycle_id])
+        one_count = len(statements)
+        statements.clear()
+        all_events = await repository.cycle_events_many(
+            [period.effective_cycle_id for period in plan.periods]
+        )
+        assert len(statements) == one_count == 3
+        assert (
+            first[plan.periods[0].effective_cycle_id]
+            == all_events[plan.periods[0].effective_cycle_id]
+        )
+    finally:
+        event.remove(bind, "before_cursor_execute", record)
+
+
+async def test_replacement_preview_rejects_midnight_reallocation(
+    session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    account, purchase, plan = await seeded_plan(session)
+    first = plan.periods[0]
+    business_date = first.effective_statement_date
+    monkeypatch.setattr(InstallmentService, "_today", staticmethod(lambda: business_date))
+    request = InstallmentReplacement(
+        expected_version=plan.version,
+        purchase=InstallmentPurchaseReplacement(
+            amount_minor=plan.principal_minor,
+            occurred_at=purchase.occurred_at,
+            title="Preview before midnight",
+            note=None,
+            account_id=account.id,
+            category_id=purchase.category_id,
+        ),
+        installment_count=7,
+        total_fee_minor=plan.fee_minor,
+        fee_category_id=plan.fee_category_id,
+        fee_occurred_at=plan.fee_occurred_at,
+        start_statement_date=plan.start_statement_date,
+    )
+    service = InstallmentService(session)
+    preview = await service.preview_update(plan.id, request)
+    assert preview.proposed_plan.locked_count == 0
+    request = request.model_copy(update={"preview_fingerprint": preview.preview_fingerprint})
+    from datetime import timedelta
+
+    business_date += timedelta(days=1)
+    fresh = await service.preview_update(plan.id, request)
+    assert fresh.proposed_plan.locked_count == 1
+    assert fresh.preview_fingerprint != preview.preview_fingerprint
+    with pytest.raises(APIError) as stale:
+        await service.update(plan.id, request)
+    assert stale.value.code == "installment_preview_stale"
+    current = await service.get(plan.id)
+    assert current.version == plan.version
+    assert current.periods[0].principal_minor == first.principal_minor
+    renewed = request.model_copy(update={"preview_fingerprint": fresh.preview_fingerprint})
+    updated = await service.update(plan.id, renewed)
+    assert updated.periods[0].id == first.id
+    assert updated.periods[0].principal_minor == first.principal_minor

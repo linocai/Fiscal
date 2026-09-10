@@ -113,7 +113,12 @@ public struct V15StatementWorkbenchPage: Codable, Sendable, Equatable { public l
 public struct V15StatementDraftResolutionPut: Codable, Sendable, Equatable { public let expectedBatchVersion, expectedRowVersion, expectedResolutionVersion: Int; public let resolution: V15StatementResolution; public let matchedTransactionID: UUID?; public let ignoredReason: String?
     enum CodingKeys: String, CodingKey { case expectedBatchVersion = "expected_batch_version", expectedRowVersion = "expected_row_version", expectedResolutionVersion = "expected_resolution_version", resolution, matchedTransactionID = "matched_transaction_id", ignoredReason = "ignored_reason" }
 }
-public struct V15StatementFinalCreateDraftPut: Codable, Sendable, Equatable { public let expectedVersion: Int; public let transaction: V15TransactionCreateRequest; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", transaction } }
+public struct V15StatementFinalCreateDraftPut: Codable, Sendable, Equatable {
+    public let expectedVersion: Int; public let transaction: V15TransactionCreateRequest
+    public let expectedBatchVersion: Int?; public let expectedRowVersion: Int?
+    public init(expectedVersion: Int, transaction: V15TransactionCreateRequest, expectedBatchVersion: Int? = nil, expectedRowVersion: Int? = nil) { self.expectedVersion = expectedVersion; self.transaction = transaction; self.expectedBatchVersion = expectedBatchVersion; self.expectedRowVersion = expectedRowVersion }
+    enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", transaction, expectedBatchVersion = "expected_batch_version", expectedRowVersion = "expected_row_version" }
+}
 public struct V15StatementFinalCreateDraft: Codable, Sendable, Equatable { public let id, statementImportRowID, draftResolutionID: UUID; public let transaction: V15TransactionCreateRequest; public let version: Int; enum CodingKeys: String, CodingKey { case id, transaction, version, statementImportRowID = "statement_import_row_id", draftResolutionID = "draft_resolution_id" } }
 
 public struct V15StatementConfirmRow: Codable, Sendable, Equatable { public let rowID: UUID; public let expectedRowVersion, expectedDraftVersion: Int; public let expectedFinalCreateDraftVersion: Int?; enum CodingKeys: String, CodingKey { case rowID = "row_id", expectedRowVersion = "expected_row_version", expectedDraftVersion = "expected_draft_version", expectedFinalCreateDraftVersion = "expected_final_create_draft_version" } }

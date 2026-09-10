@@ -2,7 +2,7 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query, Response
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from fiscal_api.api.dependencies import ReportingServiceDependency
@@ -33,10 +33,48 @@ from fiscal_api.core.security import require_authenticated
 from fiscal_api.db.models import TransactionSource
 from fiscal_api.services.report_exports import report_csv, report_export_filename, report_pdf
 
+BALANCE_SEMANTICS_HEADER = "X-Fiscal-Report-Balance-Semantics"
+
+
+async def report_balance_semantics(
+    request: Request, response: Response, service: ReportingServiceDependency
+) -> None:
+    service.balance_as_of_semantics = (
+        "/reports/v2/" in request.url.path
+        and request.headers.get(BALANCE_SEMANTICS_HEADER) == "as-of-v1"
+    )
+    response.headers["Vary"] = BALANCE_SEMANTICS_HEADER
+    if service.balance_as_of_semantics:
+        response.headers[BALANCE_SEMANTICS_HEADER] = "as-of-v1"
+
+
+def _v2_response(report: PeriodReportV2, service: ReportingServiceDependency) -> JSONResponse:
+    content = report.model_dump(mode="json")
+    headers = {"Vary": BALANCE_SEMANTICS_HEADER}
+    if service.balance_as_of_semantics:
+        headers[BALANCE_SEMANTICS_HEADER] = "as-of-v1"
+    else:
+        for key in (
+            "credit_debt_at_period_end_status",
+            "unknown_balance_account_ids",
+            "balance_unavailable_reason",
+        ):
+            content["summary"].pop(key, None)
+        for row in content["accounts"]:
+            for key in (
+                "opening_balance_status",
+                "closing_balance_status",
+                "balance_as_of_date",
+                "balance_unavailable_reason",
+            ):
+                row.pop(key, None)
+    return JSONResponse(content=content, headers=headers)
+
+
 router = APIRouter(
     prefix="/reports",
     tags=["reports"],
-    dependencies=[Depends(require_authenticated)],
+    dependencies=[Depends(require_authenticated), Depends(report_balance_semantics)],
 )
 
 
@@ -160,8 +198,8 @@ async def monthly_report_v2(
         ),
     ],
     service: ReportingServiceDependency,
-) -> PeriodReportV2:
-    return await service.monthly_report_v2(period=period)
+) -> JSONResponse:
+    return _v2_response(await service.monthly_report_v2(period=period), service)
 
 
 @router.get("/v2/yearly/{period}", response_model=PeriodReportV2)
@@ -173,8 +211,8 @@ async def yearly_report_v2(
         ),
     ],
     service: ReportingServiceDependency,
-) -> PeriodReportV2:
-    return await service.yearly_report_v2(period=period)
+) -> JSONResponse:
+    return _v2_response(await service.yearly_report_v2(period=period), service)
 
 
 @router.get("/v2/monthly/{period}/export.csv", response_class=Response)
@@ -194,6 +232,7 @@ async def export_monthly_report_v2_csv(
         report_export_filename(report, "csv"),
         "text/csv; charset=utf-8",
         data_revision=report.meta.data_revision,
+        balance_semantics=service.balance_as_of_semantics,
     )
 
 
@@ -211,6 +250,7 @@ async def export_monthly_report_v2_pdf(
         report_export_filename(report, "pdf"),
         "application/pdf",
         data_revision=report.meta.data_revision,
+        balance_semantics=service.balance_as_of_semantics,
     )
 
 
@@ -228,6 +268,7 @@ async def export_yearly_report_v2_csv(
         report_export_filename(report, "csv"),
         "text/csv; charset=utf-8",
         data_revision=report.meta.data_revision,
+        balance_semantics=service.balance_as_of_semantics,
     )
 
 
@@ -245,6 +286,7 @@ async def export_yearly_report_v2_pdf(
         report_export_filename(report, "pdf"),
         "application/pdf",
         data_revision=report.meta.data_revision,
+        balance_semantics=service.balance_as_of_semantics,
     )
 
 
@@ -268,6 +310,7 @@ async def export_monthly_report_csv(
         report_export_filename(report, "csv"),
         "text/csv; charset=utf-8",
         data_revision=report.meta.data_revision,
+        balance_semantics=service.balance_as_of_semantics,
     )
 
 
@@ -291,6 +334,7 @@ async def export_monthly_report_pdf(
         report_export_filename(report, "pdf"),
         "application/pdf",
         data_revision=report.meta.data_revision,
+        balance_semantics=service.balance_as_of_semantics,
     )
 
 
@@ -313,6 +357,7 @@ async def export_yearly_report_csv(
         report_export_filename(report, "csv"),
         "text/csv; charset=utf-8",
         data_revision=report.meta.data_revision,
+        balance_semantics=service.balance_as_of_semantics,
     )
 
 
@@ -335,6 +380,7 @@ async def export_yearly_report_pdf(
         report_export_filename(report, "pdf"),
         "application/pdf",
         data_revision=report.meta.data_revision,
+        balance_semantics=service.balance_as_of_semantics,
     )
 
 
@@ -427,7 +473,12 @@ async def drill_down(
 
 
 def _report_file_response(
-    content: bytes, filename: str, media_type: str, *, data_revision: int
+    content: bytes,
+    filename: str,
+    media_type: str,
+    *,
+    data_revision: int,
+    balance_semantics: bool = False,
 ) -> Response:
     return Response(
         content=content,
@@ -437,5 +488,7 @@ def _report_file_response(
             "Cache-Control": "no-store",
             "X-Content-Type-Options": "nosniff",
             DATA_REVISION_HEADER: str(data_revision),
+            "Vary": BALANCE_SEMANTICS_HEADER,
+            **({BALANCE_SEMANTICS_HEADER: "as-of-v1"} if balance_semantics else {}),
         },
     )

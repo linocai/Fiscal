@@ -710,3 +710,103 @@ def test_p31_merchant_identifier_normalization_has_stable_bounds_errors() -> Non
         assert client.get(f"/api/v1/merchants/{created.json()['id']}", headers=auth).json() == (
             before_update.json()
         )
+
+
+def test_mapping_release_recreate_never_accepts_old_version():
+    app, auth = _app()
+    with TestClient(app) as client:
+        account = _account(client, auth)
+        transaction = _expense(client, auth, str(account["id"]))
+        merchant = client.post(
+            "/api/v1/merchants", headers=auth, json={"name": "ABA merchant", "aliases": []}
+        ).json()
+        path = f"/api/v1/transactions/{transaction['id']}/merchant-mapping"
+        original_key = str(uuid4())
+        payload = {"merchant_id": merchant["id"]}
+        first = client.put(path, headers={**auth, "Idempotency-Key": original_key}, json=payload)
+        assert first.status_code == 200, first.text
+        version = first.json()["mapping"]["mapping_version"]
+        release = client.request(
+            "DELETE",
+            path,
+            headers={**auth, "Idempotency-Key": str(uuid4())},
+            json={"expected_mapping_version": version},
+        )
+        assert release.status_code == 200, release.text
+        recreated = client.put(
+            path, headers={**auth, "Idempotency-Key": str(uuid4())}, json=payload
+        )
+        assert recreated.status_code == 200, recreated.text
+        assert recreated.json()["mapping"]["mapping_version"] > version
+        stale = client.request(
+            "DELETE",
+            path,
+            headers={**auth, "Idempotency-Key": str(uuid4())},
+            json={"expected_mapping_version": version},
+        )
+        assert stale.status_code == 409, stale.text
+        replay = client.put(path, headers={**auth, "Idempotency-Key": original_key}, json=payload)
+        assert replay.json() == first.json()
+
+
+def test_creation_receipt_is_original_snapshot_and_no_store():
+    app, auth = _app()
+    with TestClient(app) as client:
+        account = _account(client, auth)
+        key = str(uuid4())
+        created = client.post(
+            "/api/v1/transactions",
+            headers={**auth, "Idempotency-Key": key},
+            json={
+                "kind": "expense",
+                "amount_minor": 123,
+                "occurred_at": "2026-08-14T10:00:00+08:00",
+                "title": "Original",
+                "account_id": account["id"],
+            },
+        )
+        assert created.status_code == 201, created.text
+        voided = client.post(
+            f"/api/v1/transactions/{created.json()['id']}/void",
+            headers=auth,
+            json={"expected_version": 1},
+        )
+        assert voided.status_code == 200, voided.text
+        receipt = client.get(f"/api/v1/transactions/by-idempotency/{key}", headers=auth)
+        assert receipt.status_code == 200, receipt.text
+        assert receipt.headers["cache-control"] == "no-store"
+        assert receipt.json() == created.json()
+        missing = client.get(f"/api/v1/transactions/by-idempotency/{uuid4()}", headers=auth)
+        assert missing.status_code == 404
+        assert missing.json()["error"]["code"] == "transaction_operation_not_found"
+
+
+def test_legacy_merge_advances_transaction_version_and_revision():
+    app, auth = _app()
+    with TestClient(app) as client:
+        account = _account(client, auth)
+        source = _category(client, auth, "source")
+        target = _category(client, auth, "target")
+        transaction = _expense(client, auth, str(account["id"]), category_id=str(source["id"]))
+        merged = client.post(
+            f"/api/v1/categories/{source['id']}/merge",
+            headers=auth,
+            json={
+                "target_id": target["id"],
+                "source_expected_version": source["version"],
+                "target_expected_version": target["version"],
+            },
+        )
+        assert merged.status_code == 200, merged.text
+        actual = client.get(f"/api/v1/transactions/{transaction['id']}", headers=auth).json()
+        assert actual["category_id"] == target["id"]
+        assert actual["version"] == transaction["version"] + 1
+        history = client.get(f"/api/v1/transactions/{transaction['id']}/revisions", headers=auth)
+        assert history.status_code == 200, history.text
+        assert any(row["version"] == actual["version"] for row in history.json()["items"])
+        stale = client.post(
+            f"/api/v1/transactions/{transaction['id']}/void",
+            headers=auth,
+            json={"expected_version": transaction["version"]},
+        )
+        assert stale.status_code == 409, stale.text

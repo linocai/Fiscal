@@ -282,6 +282,7 @@ async def validate_credit_invariants(
             continue
         cycles = await repository.cycles(account_id)
         amounts = await repository.amounts([item.id for item in cycles])
+        cycle_events = await repository.cycle_events_many([item.id for item in cycles])
         for cycle in cycles:
             purchase, repaid = amounts.get(cycle.id, (0, 0))
             opening = account.opening_balance_minor if cycle.is_opening_cycle else 0
@@ -293,7 +294,7 @@ async def validate_credit_invariants(
                     "The credit cycle would become overpaid",
                 )
             cycle_debt = opening
-            for _occurred_at, delta in await repository.cycle_events(cycle.id):
+            for _occurred_at, delta in cycle_events.get(cycle.id, []):
                 cycle_debt = checked_int64(delta + cycle_debt, label="credit cycle prefix")
                 if cycle_debt < 0:
                     conflict(
@@ -910,10 +911,7 @@ class CreditService:
         page = cycles[:limit]
         amounts = await self.repository.amounts([item.id for item in page])
         response = CreditCyclePage(
-            items=[
-                await self._cycle_response(item, account, amounts.get(item.id, (0, 0)))
-                for item in page
-            ],
+            items=await self._cycle_responses(page, account, amounts),
             next_cursor=self._encode_cursor(page[-1]) if has_more and page else None,
         )
         return response
@@ -940,10 +938,14 @@ class CreditService:
         cycles = await self._cycles_with_projection(account)
         current = project_current_cycle(account, today=self._today(), cycles=cycles)
         amounts = await self.repository.amounts([item.id for item in cycles])
-        responses = [
-            await self._cycle_response(item, account, amounts.get(item.id, (0, 0)))
-            for item in cycles
-        ]
+        from fiscal_api.services.installments import InstallmentService
+
+        plan_page = await InstallmentService(self.session).list(
+            account_id=account.id, status=None, cursor=None, limit=100
+        )
+        responses = await self._cycle_responses(
+            cycles, account, amounts, {plan.id: plan for plan in plan_page.items}
+        )
         impacts = await self.repository.account_impacts([account.id])
         debt = checked_int64(
             account.opening_balance_minor - impacts.get(account.id, 0),
@@ -960,11 +962,6 @@ class CreditService:
         current_response = next(item for item in responses if item.id == current.id)
         unresolved = account.opening_balance_minor > 0 and (
             account.opening_balance_as_of_date is None or account.opening_due_date is None
-        )
-        from fiscal_api.services.installments import InstallmentService
-
-        plan_page = await InstallmentService(self.session).list(
-            account_id=account.id, status=None, cursor=None, limit=100
         )
         active_plans = [
             item
@@ -1018,8 +1015,39 @@ class CreditService:
             not_found("credit_account_not_found", "The credit account does not exist")
         return account
 
+    async def _cycle_responses(
+        self,
+        cycles: list[CreditCycle],
+        account: Account,
+        amounts: dict[UUID, tuple[int, int]],
+        known_plans: dict[UUID, Any] | None = None,
+    ) -> list[CreditCycleResponse]:
+        from fiscal_api.repositories.installments import InstallmentRepository
+        from fiscal_api.services.installments import InstallmentService
+
+        repository = InstallmentRepository(self.session)
+        ids = [cycle.id for cycle in cycles]
+        allocations = await repository.active_period_totals(ids)
+        models = await repository.period_plans_for_cycles(ids)
+        service = InstallmentService(self.session)
+        known_plans = known_plans or {}
+        plans = [
+            known_plans[plan.id] if plan.id in known_plans else await service.response(plan)
+            for plan in models
+        ]
+        return [
+            await self._cycle_response(
+                cycle, account, amounts.get(cycle.id, (0, 0)), (allocations, plans)
+            )
+            for cycle in cycles
+        ]
+
     async def _cycle_response(
-        self, cycle: CreditCycle, account: Account, amounts: tuple[int, int]
+        self,
+        cycle: CreditCycle,
+        account: Account,
+        amounts: tuple[int, int],
+        installment_context: tuple[dict[UUID, tuple[int, int]], list[Any]] | None = None,
     ) -> CreditCycleResponse:
         purchase, repaid = amounts
         opening = account.opening_balance_minor if cycle.is_opening_cycle else 0
@@ -1038,20 +1066,13 @@ class CreditService:
             status = CreditCycleStatus.PARTIAL
         else:
             status = CreditCycleStatus.UNPAID
-        from fiscal_api.repositories.installments import InstallmentRepository
-        from fiscal_api.services.installments import InstallmentService
-
-        installment_repository = InstallmentRepository(self.session)
-        allocation = (await installment_repository.active_period_totals([cycle.id])).get(
-            cycle.id, (0, 0)
-        )
-        plan_models = await installment_repository.period_plans_for_cycle(cycle.id)
-        plan_responses = [
-            await InstallmentService(self.session).response(item) for item in plan_models
-        ]
+        if installment_context is None:
+            return (await self._cycle_responses([cycle], account, {cycle.id: amounts}))[0]
+        allocations, plans = installment_context
+        allocation = allocations.get(cycle.id, (0, 0))
         installment_periods = [
             period
-            for plan in plan_responses
+            for plan in plans
             for period in plan.periods
             if period.effective_cycle_id == cycle.id
         ]

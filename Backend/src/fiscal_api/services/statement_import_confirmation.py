@@ -52,6 +52,8 @@ class StatementImportConfirmationService:
         )
         if batch is None:
             not_found("statement_import_not_found", "Statement import was not found")
+        if batch.status not in {"review_required", "ready_to_confirm", "partially_confirmed"}:
+            conflict("statement_import_confirmation_invalid", "The import is not editable")
         check_version(batch.version, request.expected_batch_version)
         rows = list(
             (

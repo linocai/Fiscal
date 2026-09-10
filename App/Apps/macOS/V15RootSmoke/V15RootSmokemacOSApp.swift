@@ -6,6 +6,7 @@ import SwiftUI
 @main
 struct V15RootSmokemacOSApp: App {
     private static let keychainServicePrefix = "com.linotsai.fiscal.v15-root-smoke.macos.access."
+    private let bootstrapFixtureServices: V15Services?
     private let services: V15Services
     private let accessKeyStore: AccessKeyStore
     private let offlineSnapshots: OfflineSnapshotStore
@@ -16,6 +17,7 @@ struct V15RootSmokemacOSApp: App {
 
     init() {
         let environment = ProcessInfo.processInfo.environment
+        bootstrapFixtureServices = environment["FISCAL_ROOT_SMOKE_REVIEW_SCENARIO"] == "bootstrap-retry" ? V15F2BFixtures.services(route: "today-root-workspace", reviewScenario: "bootstrap-retry") : nil
         // Keep the production-shaped loopback URL so a forced transport
         // failure uses the same encrypted offline-snapshot cache key as the
         // preceding online launch.
@@ -48,6 +50,7 @@ struct V15RootSmokemacOSApp: App {
         let revisionStore = DataRevisionStore()
         services = V15Services(
             baseURL: baseURL,
+            profileID: keychainService,
             session: session,
             accessKeyStore: accessKeyStore,
             offlineSnapshots: offlineSnapshots,
@@ -59,6 +62,8 @@ struct V15RootSmokemacOSApp: App {
         WindowGroup {
             if cleanupOnly {
                 V15RootSmokeCleanupView(accessKeyStore: accessKeyStore, offlineSnapshots: offlineSnapshots)
+            } else if let bootstrapFixtureServices {
+                V15MacLiveAppShell(services: bootstrapFixtureServices)
             } else if formalFixture {
                 // Only this isolated QA host can inject deterministic facts
                 // into the same workspace that the shipping app presents.

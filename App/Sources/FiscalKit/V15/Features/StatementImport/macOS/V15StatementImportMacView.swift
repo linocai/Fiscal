@@ -10,6 +10,7 @@ public struct V15StatementImportMacView: View {
     @State private var importer = false
     @State private var selectedID: UUID?
     @State private var confirmation = false
+    @State private var finalDraftRow: V15StatementWorkbenchRow?
     private let initialGalleryScenario: String?
 
     public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialGalleryScenario: String? = nil) {
@@ -45,7 +46,9 @@ public struct V15StatementImportMacView: View {
         .sheet(isPresented: $confirmation, onDismiss: { model.dismissPreview() }) {
             confirmationSheet.frame(minWidth: 560, minHeight: 500)
         }
+        .sheet(item: $finalDraftRow) { row in V15StatementFinalDraftEditor(model: model, row: row) }
         .task {
+            if initialGalleryScenario == nil { await model.resumePendingImport() }
             if model.batch == nil, let initialGalleryScenario {
                 await model.prepareSyntheticGallery(initialGalleryScenario)
                 selectedID = model.workbench?.rows.first?.id
@@ -129,11 +132,16 @@ public struct V15StatementImportMacView: View {
             V15LoadingSkeleton()
         case .awaitingProviderConsent:
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
+                if let info = model.providerAuthorizationPreview {
+                    Text(info.description)
+                    Text("服务：\(info.provider ?? "未配置") · 模型：\(info.providerModel ?? "—")")
+                    Text("\(info.pageNumbers.count) 页 · \(info.rowCount) 行 · \(info.redactionCount) 处脱敏")
+                }
                 Toggle("仅发送脱敏内容", isOn: $model.providerAuthorized)
                     .accessibilityIdentifier("v15.f3g.mac.provider-consent")
                 Text("授权仅用于这次账单解析，离开或取消后不会在后台继续。").font(V15Typography.secondary)
                 Button("开始解析") { model.requestProviderAttempt() }
-                    .disabled(!model.providerAuthorized || !model.writeReasons.isEmpty)
+                    .disabled(!model.providerAuthorized || model.providerAuthorizationPreview?.configured != true || !model.writeReasons.isEmpty)
             }
         case .providerResponseUnknown:
             VStack(alignment: .leading, spacing: V15Spacing.sm) {
@@ -453,7 +461,7 @@ public struct V15StatementImportMacView: View {
             if !row.candidates.isEmpty {
                 VStack(alignment: .leading, spacing: 7) {
                     Text("可能匹配 · 不能证明重复").font(V15Typography.label)
-                    ForEach(row.candidates) { candidate in
+                    ForEach(model.existingMatchCandidates(for: row)) { candidate in
                         HStack {
                             Text(candidate.transactionDate ?? "日期未知").font(V15Typography.secondary)
                             Spacer()
@@ -464,7 +472,13 @@ public struct V15StatementImportMacView: View {
             }
             V22FormSection("处理这笔明细") {
                 resolutionButton("新建交易", resolution: .createNew, row: row)
-                resolutionButton("匹配已有", resolution: .matchExisting, row: row, disabled: row.candidates.allSatisfy { $0.transactionID == nil })
+                if row.draft?.resolution == .createNew && !row.isConfirmed {
+                    Button("编辑新交易草稿") { finalDraftRow = row }
+                        .disabled(!model.writeReasons.isEmpty)
+                        .accessibilityIdentifier("v221.statement.final-draft.\(row.id)")
+                }
+                V15StatementMatchChooser(model: model, row: row)
+                resolutionButton("匹配已有", resolution: .matchExisting, row: row, disabled: model.selectedMatchTransactionID(for: row) == nil)
                 resolutionButton("非交易行", resolution: .ignoreNonTransaction, row: row)
                 resolutionButton("有意忽略", resolution: .ignoreIntentional, row: row)
                 resolutionButton("待定", resolution: .unresolved, row: row)
@@ -492,7 +506,7 @@ public struct V15StatementImportMacView: View {
             .overlay { RoundedRectangle(cornerRadius: V15Radius.control).stroke(selected ? V15Palette.teal.color : V15Palette.hairline.color) }
         }
         .buttonStyle(.plain)
-        .disabled(disabled || !model.writeReasons.isEmpty)
+        .disabled(row.isConfirmed || disabled || !model.writeReasons.isEmpty)
         .accessibilityIdentifier("v15.f3g.mac.resolve-\(resolution.rawValue).\(row.id)")
     }
 
@@ -514,6 +528,7 @@ public struct V15StatementImportMacView: View {
         if case .responseUnknown = model.phase {
             Text("确认结果未知；不会重发。 ").font(V15Typography.secondary)
             Button("检查确认结果") { model.requestReceiptReadback() }.accessibilityIdentifier("v15.f3g.mac.readback")
+                Button("用原请求恢复确认") { model.requestConfirmationRecovery() }.disabled(model.isOffline || model.isConfirmationInFlight)
         }
     }
 
@@ -530,26 +545,26 @@ public struct V15StatementImportMacView: View {
     }
 
     @ViewBuilder private var confirmationContent: some View {
-        if model.isPreviewLoading {
+        if case .responseUnknown = model.phase {
+            Text("确认结果未知").font(V15Typography.cardTitle).accessibilityIdentifier("v15.f3g.mac.sheet-response-unknown")
+            Text("检查确认结果不会重复导入。")
+        } else if model.isConfirmationInFlight {
+            V15LoadingSkeleton(layout: .decisionCard).accessibilityIdentifier("v15.f3g.mac.confirming")
+            Text("正在确认，请勿重复操作。").font(V15Typography.secondary)
+        } else if model.isPreviewLoading {
             V15LoadingSkeleton()
             Text("正在准备确认预览…").accessibilityIdentifier("v15.f3g.mac.preview-loading")
             Text("尚未创建流水。 ").font(V15Typography.secondary)
+        } else if let receipt = model.receipt {
+            Label("确认完成", systemImage: "checkmark.circle.fill").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.teal.color)
+            Text("\(receipt.status) · 新建 \(receipt.createdCount) · 匹配 \(receipt.matchedCount) · 跳过 \(receipt.skippedCount)")
+                .accessibilityIdentifier("v15.f3g.mac.sheet-receipt")
         } else if let failure = model.previewFailure {
             Text(failure.kind == .conflict ? "确认预览已过期" : "确认预览暂不可用")
                 .font(V15Typography.cardTitle)
                 .accessibilityIdentifier("v15.f3g.mac.preview-failure")
             Text(failure.message)
             Button("重试获取预览") { model.requestPreview() }.accessibilityIdentifier("v15.f3g.mac.preview-retry")
-        } else if model.isConfirmationInFlight {
-            V15LoadingSkeleton(layout: .decisionCard).accessibilityIdentifier("v15.f3g.mac.confirming")
-            Text("正在确认，请勿重复操作。").font(V15Typography.secondary)
-        } else if let receipt = model.receipt {
-            Label("确认完成", systemImage: "checkmark.circle.fill").font(V15Typography.surfaceTitle).foregroundStyle(V15Palette.teal.color)
-            Text("\(receipt.status) · 新建 \(receipt.createdCount) · 匹配 \(receipt.matchedCount) · 跳过 \(receipt.skippedCount)")
-                .accessibilityIdentifier("v15.f3g.mac.sheet-receipt")
-        } else if case .responseUnknown = model.phase {
-            Text("确认结果未知").font(V15Typography.cardTitle).accessibilityIdentifier("v15.f3g.mac.sheet-response-unknown")
-            Text("检查确认结果不会重复导入。")
         } else if let preview = model.preview {
             Text("确认 \(preview.counts.selected) 行").font(V15Typography.cardTitle)
             HStack(spacing: 12) {

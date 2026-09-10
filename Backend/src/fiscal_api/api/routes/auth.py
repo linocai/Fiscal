@@ -39,6 +39,7 @@ async def create_session(
     payload: SessionRequest,
     service: AccessServiceDependency,
 ) -> AccessKeyResponse:
+    await rate_limiter(request).check_passphrase_attempt(client_source(request))
     credential = await service.get_credential()
     if credential is None:
         raise APIError(
@@ -46,8 +47,7 @@ async def create_session(
             code="passphrase_not_set",
             message="The access passphrase has not been set",
         )
-    if not service.verify_passphrase(credential, payload.passphrase):
-        await rate_limiter(request).check_failed_auth(client_source(request))
+    if not await service.verify_passphrase(credential, payload.passphrase):
         raise APIError(
             status_code=status.HTTP_401_UNAUTHORIZED,
             code="invalid_passphrase",
@@ -66,6 +66,7 @@ async def change_passphrase(
     _principal: AuthenticatedDependency,
     service: AccessServiceDependency,
 ) -> AccessKeyResponse:
+    await rate_limiter(request).check_passphrase_attempt(client_source(request))
     credential = await service.get_credential()
     if credential is None:
         raise APIError(
@@ -73,8 +74,7 @@ async def change_passphrase(
             code="passphrase_not_set",
             message="The access passphrase has not been set",
         )
-    if not service.verify_passphrase(credential, payload.old_passphrase):
-        await rate_limiter(request).check_failed_auth(client_source(request))
+    if not await service.verify_passphrase(credential, payload.old_passphrase):
         raise APIError(
             status_code=status.HTTP_401_UNAUTHORIZED,
             code="invalid_passphrase",

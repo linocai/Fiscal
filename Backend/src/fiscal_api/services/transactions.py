@@ -216,6 +216,15 @@ class TransactionService:
             await self.session.flush()
         return response
 
+    async def by_idempotency_key(self, key: UUID) -> TransactionResponse:
+        transaction = await self.repository.get_by_idempotency_key(key)
+        if transaction is None:
+            not_found("transaction_operation_not_found", "No durable creation receipt is available")
+        snapshot = await self.repository.created_snapshot(transaction.id)
+        if snapshot is None:
+            conflict("transaction_receipt_unavailable", "The creation receipt is unavailable")
+        return TransactionResponse.model_validate(snapshot)
+
     async def get(self, transaction_id: UUID) -> TransactionResponse:
         transaction = await self._required(transaction_id)
         return await self.response_with_relation(transaction, list(transaction.postings))
@@ -621,6 +630,9 @@ class TransactionService:
         )
         if transaction.voided_at is None:
             return self._response(transaction, list(transaction.postings))
+        from fiscal_api.services.cash_flow import CashFlowService
+
+        await CashFlowService(self.session).validate_restore(transaction.id)
         await self._validate_stored_references(transaction)
         transaction.voided_at = None
         transaction.version += 1
@@ -709,15 +721,15 @@ class TransactionService:
         repayment_error: bool,
     ) -> None:
         impacts = await self.repository.balance_impacts(list(account_ids))
-        accounts = [await self.repository.account(account_id) for account_id in account_ids]
+        accounts = list((await self.repository.accounts_by_ids(account_ids)).values())
+        if len(accounts) != len(account_ids):
+            raise RuntimeError("transaction account is missing")
         summary_rows = await self.repository.summary(
             occurred_from=None,
             occurred_to_exclusive=None,
         )
         try:
             for account in accounts:
-                if account is None:
-                    raise RuntimeError("transaction account is missing")
                 impact = impacts.get(account.id, 0)
                 balance = (
                     account.opening_balance_minor - impact
@@ -738,7 +750,21 @@ class TransactionService:
                     and balance > account.credit_limit_minor
                 ):
                     conflict("credit_limit_exceeded", "The credit purchase exceeds the limit")
-            self._summary_response(summary_rows)
+            # The global and per-category int64 invariants require a ledger-wide SQL
+            # aggregate, but do not require materializing response DTOs/history objects.
+            category_totals: dict[tuple[str, UUID], int] = {}
+            for kind, category_id, _name, amount in summary_rows:
+                direction = "income" if kind == "income" else "expense"
+                key = (direction, category_id)
+                category_totals[key] = checked_int64(
+                    category_totals.get(key, 0) + (amount if direction == "income" else -amount),
+                    label="category summary amount",
+                )
+            income = checked_int64(sum(v for (k, _), v in category_totals.items() if k == "income"))
+            expense = checked_int64(
+                sum(v for (k, _), v in category_totals.items() if k == "expense")
+            )
+            checked_int64(income - expense, label="net summary")
             await validate_credit_invariants(
                 self.credit_repository,
                 credit_accounts,

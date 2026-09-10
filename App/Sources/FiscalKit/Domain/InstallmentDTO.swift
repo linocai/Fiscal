@@ -322,6 +322,7 @@ public struct InstallmentCreateRequest: Codable, Sendable, Equatable {
 }
 
 public struct InstallmentReplacementRequest: Codable, Sendable, Equatable {
+    public var previewFingerprint: String? = nil
     public var expectedVersion: Int
     public var purchase: InstallmentPurchaseReplacement
     public var installmentCount: Int
@@ -330,7 +331,7 @@ public struct InstallmentReplacementRequest: Codable, Sendable, Equatable {
     public var feeOccurredAt: Date?
     public var startStatementDate: String
     enum CodingKeys: String, CodingKey {
-        case purchase; case expectedVersion = "expected_version"; case installmentCount = "installment_count"; case totalFeeMinor = "total_fee_minor"
+        case previewFingerprint = "preview_fingerprint"; case purchase; case expectedVersion = "expected_version"; case installmentCount = "installment_count"; case totalFeeMinor = "total_fee_minor"
         case feeCategoryID = "fee_category_id"; case feeOccurredAt = "fee_occurred_at"; case startStatementDate = "start_statement_date"
     }
 }
@@ -352,6 +353,7 @@ public struct InstallmentWarning: Codable, Sendable, Equatable, Identifiable {
 }
 
 public struct InstallmentPlanChangePreview: Codable, Sendable, Equatable {
+    public let previewFingerprint: String?
     public let currentPlan: InstallmentPlanDTO
     public let proposedPlan: InstallmentPlanPreview
     public let lockedPeriods: [InstallmentPeriodDTO]
@@ -359,7 +361,7 @@ public struct InstallmentPlanChangePreview: Codable, Sendable, Equatable {
     public let affectedCycles: [InstallmentAffectedCycle]
     public let warnings: [InstallmentWarning]
     enum CodingKeys: String, CodingKey {
-        case warnings; case currentPlan = "current_plan"; case proposedPlan = "proposed_plan"; case lockedPeriods = "locked_periods"; case futurePeriods = "future_periods"; case affectedCycles = "affected_cycles"
+        case previewFingerprint = "preview_fingerprint"; case warnings; case currentPlan = "current_plan"; case proposedPlan = "proposed_plan"; case lockedPeriods = "locked_periods"; case futurePeriods = "future_periods"; case affectedCycles = "affected_cycles"
     }
 }
 

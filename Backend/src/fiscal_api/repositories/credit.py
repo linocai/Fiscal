@@ -219,12 +219,29 @@ class CreditRepository:
         )
         return [(occurred_at, int(delta)) for occurred_at, delta in rows]
 
+    async def cycles_by_ids(self, cycle_ids: set[UUID]) -> dict[UUID, CreditCycle]:
+        if not cycle_ids:
+            return {}
+        rows = await self.session.scalars(select(CreditCycle).where(CreditCycle.id.in_(cycle_ids)))
+        return {cycle.id: cycle for cycle in rows}
+
     async def cycle_events(self, cycle_id: UUID) -> list[tuple[datetime, int]]:
+        return (await self.cycle_events_many([cycle_id])).get(cycle_id, [])
+
+    async def cycle_events_many(
+        self, cycle_ids: list[UUID]
+    ) -> dict[UUID, list[tuple[datetime, int]]]:
+        if not cycle_ids:
+            return {}
         rows = await self.session.execute(
-            select(LedgerTransaction.occurred_at, func.sum(-Posting.amount_minor))
+            select(
+                LedgerTransaction.credit_cycle_id,
+                LedgerTransaction.occurred_at,
+                func.sum(-Posting.amount_minor),
+            )
             .join(Posting, Posting.transaction_id == LedgerTransaction.id)
             .where(
-                LedgerTransaction.credit_cycle_id == cycle_id,
+                LedgerTransaction.credit_cycle_id.in_(cycle_ids),
                 LedgerTransaction.kind.in_(["credit_purchase", "repayment"]),
                 LedgerTransaction.voided_at.is_(None),
                 Posting.role.in_(["account", "destination"]),
@@ -233,36 +250,43 @@ class CreditRepository:
                     ~exists().where(InstallmentLedgerLink.transaction_id == LedgerTransaction.id),
                 ),
             )
-            .group_by(LedgerTransaction.occurred_at)
+            .group_by(LedgerTransaction.credit_cycle_id, LedgerTransaction.occurred_at)
             .order_by(LedgerTransaction.occurred_at)
         )
-        events = [(occurred_at, int(delta)) for occurred_at, delta in rows]
+        events: dict[UUID, list[tuple[datetime, int]]] = {}
+        for cycle_id, occurred_at, delta in rows:
+            events.setdefault(cycle_id, []).append((occurred_at, int(delta)))
         allocation_rows = await self.session.execute(
             select(
+                InstallmentPeriod.effective_cycle_id,
                 LedgerTransaction.occurred_at,
                 func.sum(InstallmentPeriod.principal_minor),
             )
             .join(InstallmentPlan, InstallmentPlan.purchase_transaction_id == LedgerTransaction.id)
             .join(InstallmentPeriod, InstallmentPeriod.plan_id == InstallmentPlan.id)
             .where(
-                InstallmentPeriod.effective_cycle_id == cycle_id,
+                InstallmentPeriod.effective_cycle_id.in_(cycle_ids),
                 InstallmentPeriod.cancelled_at.is_(None),
             )
-            .group_by(LedgerTransaction.occurred_at)
+            .group_by(InstallmentPeriod.effective_cycle_id, LedgerTransaction.occurred_at)
         )
         fee_rows = await self.session.execute(
-            select(LedgerTransaction.occurred_at, func.sum(InstallmentPeriod.fee_minor))
+            select(
+                InstallmentPeriod.effective_cycle_id,
+                LedgerTransaction.occurred_at,
+                func.sum(InstallmentPeriod.fee_minor),
+            )
             .join(InstallmentPlan, InstallmentPlan.fee_transaction_id == LedgerTransaction.id)
             .join(InstallmentPeriod, InstallmentPeriod.plan_id == InstallmentPlan.id)
             .where(
-                InstallmentPeriod.effective_cycle_id == cycle_id,
+                InstallmentPeriod.effective_cycle_id.in_(cycle_ids),
                 InstallmentPeriod.cancelled_at.is_(None),
             )
-            .group_by(LedgerTransaction.occurred_at)
+            .group_by(InstallmentPeriod.effective_cycle_id, LedgerTransaction.occurred_at)
         )
-        events.extend((occurred, int(amount)) for occurred, amount in allocation_rows)
-        events.extend((occurred, int(amount)) for occurred, amount in fee_rows)
-        return sorted(events, key=lambda item: item[0])
+        for cycle_id, occurred, amount in [*allocation_rows, *fee_rows]:
+            events.setdefault(cycle_id, []).append((occurred, int(amount)))
+        return {key: sorted(values, key=lambda item: item[0]) for key, values in events.items()}
 
     async def cycle_has_any_transaction(self, cycle_id: UUID) -> bool:
         return (

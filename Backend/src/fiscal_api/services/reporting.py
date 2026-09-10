@@ -114,7 +114,11 @@ from fiscal_api.db.models import (
     TransactionSource,
 )
 from fiscal_api.repositories.cash_flow import CashFlowRepository
-from fiscal_api.repositories.reporting import ReimbursementFact, ReportingRepository
+from fiscal_api.repositories.reporting import (
+    ReimbursementFact,
+    ReportingRepository,
+    uuid_membership,
+)
 from fiscal_api.services.common import INT64_MIN, checked_int64, conflict, invalid
 
 SPENDING_KINDS = {"expense", "credit_purchase", "installment_fee"}
@@ -171,6 +175,7 @@ class ReportingService:
     def __init__(self, session: AsyncSession, *, facts_today: date | None = None) -> None:
         self.session = session
         self.repository = ReportingRepository(session)
+        self.balance_as_of_semantics = False
         self._facts_today = facts_today
 
     async def spending(self, *, date_from: date | None, date_to: date | None) -> SpendingReport:
@@ -1372,6 +1377,7 @@ class ReportingService:
             limit=limit,
         )
         category_by_id = await self.repository.categories()
+        accounts = await self.repository.accounts()
         merchant_by_transaction = await self._merchant_by_transaction({item.id for item in page})
         facts = await self._facts_for_transactions(
             [item for item in page[:limit] if item.kind in SPENDING_KINDS]
@@ -1381,6 +1387,8 @@ class ReportingService:
             self._period_drill_down_item(
                 transaction,
                 categories=category_by_id,
+                accounts=accounts,
+                selected_account_id=account_id,
                 merchant=merchant_by_transaction.get(transaction.id),
                 spending=spending_by_id.get(transaction.id),
             )
@@ -1485,6 +1493,7 @@ class ReportingService:
                 transaction,
                 categories=categories,
                 accounts=accounts,
+                selected_account_id=account_id,
                 merchant=merchants.get(transaction.id),
                 spending=spending_by_id.get(transaction.id),
             )
@@ -1559,6 +1568,7 @@ class ReportingService:
             await self._restart_facts_read_boundary()
             revision_after = await self._data_revision()
             if revision_after == revision_before:
+                self._require_available_legacy_balances(report)
                 return report
             if expected_data_revision is not None:
                 self._period_report_changed(
@@ -1602,6 +1612,7 @@ class ReportingService:
             await self._restart_facts_read_boundary()
             revision_after = await self._data_revision()
             if revision_after == revision_before:
+                self._require_available_legacy_balances(report)
                 return report
             if expected_data_revision is not None:
                 self._period_report_changed(
@@ -1716,9 +1727,28 @@ class ReportingService:
         )
         closing_impacts = await self.repository.period_account_impacts(occurred_before=occurred_to)
         account_rows = self._period_account_rows(
-            accounts, transactions, opening_impacts, closing_impacts
+            accounts, transactions, opening_impacts, closing_impacts, start=start, end=end
         )
-        credit_debt = self._period_credit_debt(accounts, closing_impacts)
+        unknown_credit = [
+            row.account_id
+            for row in account_rows
+            if row.account_kind == AccountKind.CREDIT and row.closing_balance_minor is None
+        ]
+        credit_debt = (
+            None
+            if unknown_credit
+            else self._checked_sum(
+                row.closing_balance_minor
+                for row in account_rows
+                if row.account_kind == AccountKind.CREDIT and row.closing_balance_minor is not None
+            )
+        )
+        if any(
+            row.closing_balance_minor is not None and row.closing_balance_minor < 0
+            for row in account_rows
+            if row.account_kind == AccountKind.CREDIT
+        ):
+            invalid("invalid_reporting_projection", "Credit debt cannot be negative")
         reimbursement = await self._period_reimbursement_outstanding(occurred_to)
         counts = await self.repository.facts_completeness_counts()
         merchant_by_transaction = await self._merchant_by_transaction(
@@ -1745,6 +1775,9 @@ class ReportingService:
             internal_transfer_inflow_minor=cash["internal_transfer_inflow_minor"],
             internal_transfer_outflow_minor=cash["internal_transfer_outflow_minor"],
             credit_debt_at_period_end_minor=credit_debt,
+            credit_debt_at_period_end_status="unknown" if unknown_credit else "known",
+            unknown_balance_account_ids=unknown_credit,
+            balance_unavailable_reason="historical_basis_unavailable" if unknown_credit else None,
             reimbursement_outstanding_at_period_end_minor=reimbursement,
         )
         meta = self._period_report_meta(
@@ -1876,21 +1909,6 @@ class ReportingService:
                     total = checked_int64(total + posting.amount_minor, label="period income")
         return total
 
-    @staticmethod
-    def _period_credit_debt(accounts: dict[UUID, Account], impacts: dict[UUID, int]) -> int:
-        total = 0
-        for account in accounts.values():
-            if account.kind != AccountKind.CREDIT.value:
-                continue
-            debt = checked_int64(
-                account.opening_balance_minor - impacts.get(account.id, 0),
-                label="period credit debt",
-            )
-            if debt < 0:
-                invalid("invalid_reporting_projection", "Credit debt cannot be negative")
-            total = checked_int64(total + debt, label="period total credit debt")
-        return total
-
     async def _period_reimbursement_outstanding(self, recorded_before: datetime) -> int:
         """Rebuild period-end outstanding from immutable formal revisions.
 
@@ -2018,6 +2036,9 @@ class ReportingService:
         transactions: list[LedgerTransaction],
         opening_impacts: dict[UUID, int],
         closing_impacts: dict[UUID, int],
+        *,
+        start: date,
+        end: date,
     ) -> list[ReportAccountBalance]:
         activity: dict[UUID, list[int]] = defaultdict(lambda: [0, 0, 0, 0])
         for transaction in transactions:
@@ -2074,8 +2095,21 @@ class ReportingService:
                     account_id=account.id,
                     account_name=account.name,
                     account_kind=AccountKind(account.kind),
-                    opening_balance_minor=opening,
-                    closing_balance_minor=closing,
+                    opening_balance_minor=opening
+                    if cls._balance_reason(account, start) is None
+                    else None,
+                    closing_balance_minor=closing
+                    if cls._balance_reason(account, end) is None
+                    else None,
+                    opening_balance_status="known"
+                    if cls._balance_reason(account, start) is None
+                    else "unknown",
+                    closing_balance_status="known"
+                    if cls._balance_reason(account, end) is None
+                    else "unknown",
+                    balance_as_of_date=account.opening_balance_as_of_date,
+                    balance_unavailable_reason=cls._balance_reason(account, start)
+                    or cls._balance_reason(account, end),
                     period_inflow_minor=amounts[0],
                     period_outflow_minor=amounts[1],
                     internal_transfer_inflow_minor=amounts[2],
@@ -2083,6 +2117,33 @@ class ReportingService:
                 )
             )
         return rows
+
+    @staticmethod
+    def _balance_reason(account: Account, as_of: date) -> str | None:
+        if account.opening_balance_as_of_date is not None:
+            if as_of < account.opening_balance_as_of_date:
+                return "before_opening_as_of"
+        elif account.kind == "credit" and account.opening_balance_minor != 0:
+            return "opening_as_of_missing"
+        return None
+
+    def _require_available_legacy_balances(self, report: PeriodReport | PeriodReportV2) -> None:
+        if self.balance_as_of_semantics:
+            return
+        unknown = [
+            str(row.account_id)
+            for row in report.accounts
+            if row.opening_balance_minor is None or row.closing_balance_minor is None
+        ]
+        if unknown:
+            conflict(
+                "historical_balance_unavailable",
+                "Historical balance basis is unavailable; update the client to view details",
+                details={
+                    "unknown_balance_account_ids": unknown,
+                    "balance_unavailable_reason": "historical_basis_unavailable",
+                },
+            )
 
     @staticmethod
     def _period_category_rows(
@@ -2190,7 +2251,7 @@ class ReportingService:
         rows = await self.session.execute(
             select(TransactionMerchantMapping.transaction_id, Merchant)
             .join(Merchant, Merchant.id == TransactionMerchantMapping.merchant_id)
-            .where(TransactionMerchantMapping.transaction_id.in_(transaction_ids))
+            .where(uuid_membership(TransactionMerchantMapping.transaction_id, transaction_ids))
         )
         return {transaction_id: merchant for transaction_id, merchant in rows.tuples()}
 
@@ -2200,13 +2261,22 @@ class ReportingService:
         transaction: LedgerTransaction,
         *,
         categories: dict[UUID, Category],
+        accounts: dict[UUID, Account],
+        selected_account_id: UUID | None = None,
         merchant: Merchant | None,
         spending: _SpendingFact | None,
     ) -> PeriodReportDrillDownItem:
         external_cash = 0
-        if transaction.kind != TransactionKind.TRANSFER.value:
+        if transaction.kind != TransactionKind.TRANSFER.value and transaction.voided_at is None:
             external_cash = checked_int64(
-                sum(posting.amount_minor for posting in transaction.postings),
+                sum(
+                    posting.amount_minor
+                    for posting in transaction.postings
+                    if posting.account_id in accounts
+                    and accounts[posting.account_id].kind in {"cash", "debit"}
+                    and (selected_account_id is None or posting.account_id == selected_account_id)
+                    and transaction.category_id not in cls._excluded_category_ids(categories)
+                ),
                 label="period drill-down transaction amount",
             )
         return PeriodReportDrillDownItem(
@@ -2236,6 +2306,7 @@ class ReportingService:
         *,
         categories: dict[UUID, Category],
         accounts: dict[UUID, Account],
+        selected_account_id: UUID | None = None,
         merchant: Merchant | None,
         spending: _SpendingFact | None,
     ) -> PeriodReportDrillDownItemV2:
@@ -2261,9 +2332,16 @@ class ReportingService:
         )
         category = categories.get(transaction.category_id) if transaction.category_id else None
         external_cash = 0
-        if transaction.kind != TransactionKind.TRANSFER.value:
+        if transaction.kind != TransactionKind.TRANSFER.value and transaction.voided_at is None:
             external_cash = checked_int64(
-                sum(posting.amount_minor for posting in transaction.postings),
+                sum(
+                    posting.amount_minor
+                    for posting in transaction.postings
+                    if posting.account_id in accounts
+                    and accounts[posting.account_id].kind in {"cash", "debit"}
+                    and (selected_account_id is None or posting.account_id == selected_account_id)
+                    and transaction.category_id not in cls._excluded_category_ids(categories)
+                ),
                 label="period drill-down transaction amount",
             )
         amounts = cls._sum_spending([spending] if spending is not None else [])

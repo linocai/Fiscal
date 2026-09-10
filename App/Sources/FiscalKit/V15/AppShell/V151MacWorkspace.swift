@@ -164,6 +164,7 @@ public struct V151MacWorkspace: View {
     @State private var batchWorking = false
     @State private var batchResult: V15LedgerModel.BatchCategoryResult?
     @State private var selectedMonth = Date()
+    @State private var allLedgerTime = false
     /// The only owner of the ledger's account filter.  It intentionally remains
     /// active while a transaction is selected or the account inspector closes.
     @State private var accountContext = V151MacLedgerAccountContext()
@@ -207,6 +208,7 @@ public struct V151MacWorkspace: View {
         .background(V15Palette.canvas.color.ignoresSafeArea())
         .tint(V15Palette.teal.color)
         .task { await loadInitialFacts() }
+        .onChange(of: services.confirmedWriteRevision) { _, _ in Task { await refreshAfterConfirmedRecord() } }
         .sheet(isPresented: $categoryPresented) { categorySheet }
         .overlay { if destination == .timeline { keyboardCommands } }
         .accessibilityElement(children: .contain)
@@ -433,13 +435,18 @@ public struct V151MacWorkspace: View {
         HStack(spacing: 10) {
             Text("财务时间线").font(.system(size: 15, weight: .semibold))
                 .accessibilityIdentifier("v151.mac.ledger.title")
+            Button { shiftLedgerMonth(-1) } label: { Image(systemName: "chevron.left") }.help("上一个月").accessibilityIdentifier("v221.mac.ledger.previous-month")
+            DatePicker("查询月份", selection: Binding(get: { selectedMonth }, set: { applyMonth(monthParser.string(from: $0)) }), displayedComponents: .date).labelsHidden().environment(\.timeZone, ShanghaiBusinessDate.timeZone)
+            Button { shiftLedgerMonth(1) } label: { Image(systemName: "chevron.right") }.help("下一个月").accessibilityIdentifier("v221.mac.ledger.next-month")
             Menu(periodLabel) {
+                Button("全部时间") { applyAllLedgerTime() }.accessibilityIdentifier("v221.mac.ledger.all-time")
                 ForEach(monthChoices, id: \.self) { month in
                     Button(month) { applyMonth(month) }
                 }
             }
             .font(.system(size: 13, weight: .semibold))
             .menuStyle(.borderlessButton)
+            .accessibilityIdentifier("v221.mac.ledger.month")
             Spacer(minLength: 8)
             if let query = ledger.filter.query {
                 Text("搜索：\(query)")
@@ -1539,6 +1546,7 @@ public struct V151MacWorkspace: View {
         batchWorking = false
         batchResult = nil
         selectedMonth = date
+        allLedgerTime = false
         ledger.setIncludeVoided(false)
         ledger.setClassification("all")
         applyLedgerMonthRange(date)
@@ -1546,6 +1554,7 @@ public struct V151MacWorkspace: View {
     }
 
     private func applyLedgerMonthRange(_ date: Date) {
+        guard !allLedgerTime else { return }
         guard let range = V151MacBusinessDateRange.monthDateRange(containing: date) else { return }
         ledger.setDateFrom(range.from)
         ledger.setDateTo(range.to)
@@ -1734,7 +1743,18 @@ public struct V151MacWorkspace: View {
         .allowsHitTesting(false)
     }
 
-    private var periodLabel: String { monthParser.string(from: selectedMonth) }
+    private func shiftLedgerMonth(_ offset: Int) {
+        guard let date = shanghaiCalendar.date(byAdding: .month, value: offset, to: selectedMonth) else { return }
+        applyMonth(monthParser.string(from: date))
+    }
+    private func applyAllLedgerTime() {
+        selectedID = nil; selectedIDs.removeAll(); ledger.clearSelection()
+        batchCategoryID = nil; batchPreviewed = false; batchWorking = false; batchResult = nil
+        allLedgerTime = true
+        ledger.setDateFrom(""); ledger.setDateTo("")
+        Task { await ledger.load() }
+    }
+    private var periodLabel: String { allLedgerTime ? "全部时间" : monthParser.string(from: selectedMonth) }
     private var monthChoices: [String] { (0..<4).compactMap { offset in shanghaiCalendar.date(byAdding: .month, value: -offset, to: Date()).map { monthParser.string(from: $0) } } }
 
     private var shanghaiCalendar: Calendar { var value = Calendar(identifier: .gregorian); value.locale = Locale(identifier: "zh_Hans_CN"); value.timeZone = TimeZone(identifier: "Asia/Shanghai")!; return value }
@@ -2245,6 +2265,7 @@ private struct V151MacPendingSyncHub: View {
                     }
                     .accessibilityIdentifier("v151.mac.pending-sync.replay-all")
                 }
+                if let failure = services.pendingWrites.storageFailure { Text(failure.message).foregroundStyle(V15Palette.outflow.color) }
                 if services.pendingWrites.items.isEmpty {
                     V15EmptyState(title: "没有待同步项目", explanation: "离线记账和离线分类决定会出现在这里。")
                         .v15MacPanel()
@@ -2299,7 +2320,7 @@ private struct V151MacPendingSyncHub: View {
                 }
             }
             if item.status == .requiresDecision || item.status == .outcomeUnknown {
-                Text("这项更改不会自动重试。请移除后回到原记录重新操作，或在流水中检查最新状态。")
+                Text("原请求已保留。请读取回执核对；未确认结果前不要另建相同账目。")
                     .font(V15Typography.secondary)
                     .foregroundStyle(V15Palette.ink.color.opacity(0.62))
                     .fixedSize(horizontal: false, vertical: true)
@@ -2312,7 +2333,15 @@ private struct V151MacPendingSyncHub: View {
                     }
                     .accessibilityIdentifier(item.status == .queued ? "v151.mac.pending-sync.sync.\(item.id)" : "v151.mac.pending-sync.retry.\(item.id)")
                 }
-                V15ActionButton("移除", kind: .secondary) { services.pendingWrites.remove(item.id) }
+                if item.status == .outcomeUnknown {
+                    V15ActionButton("读取原操作回执", kind: .secondary) { Task { _ = await services.pendingWrites.recover(item.id, using: services) } }
+                    if item.kind == .transactionCreate || item.kind == .repayment {
+                        V15ActionButton("按原请求安全重试", kind: .secondary) { Task { _ = await services.pendingWrites.replayUnknown(item.id, using: services) } }
+                    }
+                }
+                if item.status != .outcomeUnknown && item.status != .syncing {
+                    V15ActionButton("移除", kind: .secondary) { services.pendingWrites.remove(item.id) }
+                }
             }
         }
         .padding(14)
@@ -2328,7 +2357,7 @@ private struct V151MacPendingSyncHub: View {
         }
     }
 
-    private func kindLabel(_ value: V15PendingWriteStore.Kind) -> String { value == .transactionCreate ? "新建账目" : "分类决定" }
+    private func kindLabel(_ value: V15PendingWriteStore.Kind) -> String { switch value { case .transactionCreate: "新建账目"; case .categoryReplace: "分类决定"; case .repayment: "还款"; case .statementProviderAttempt: "账单解析"; case .statementConfirmation: "账单确认" } }
     private func statusLabel(_ item: V15PendingWriteStore.Item) -> String {
         let value: String
         switch item.status { case .queued: value = "排队中"; case .syncing: value = "同步中"; case .requiresDecision: value = "需要重新决定"; case .outcomeUnknown: value = "结果不明"; case .failed: value = "同步失败" }

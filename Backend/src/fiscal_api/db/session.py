@@ -1,7 +1,8 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
 from typing import cast
 
-from sqlalchemy import event, update
+from sqlalchemy import event, text, update
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -131,3 +132,16 @@ async def session_scope(
 ) -> AsyncIterator[AsyncSession]:
     async with factory() as session:
         yield session
+
+
+@asynccontextmanager
+async def independent_read_snapshot(session: AsyncSession) -> AsyncGenerator[AsyncSession]:
+    """Read one committed snapshot without touching the caller/auth transaction."""
+    bind = session.bind
+    engine = bind if isinstance(bind, AsyncEngine) else bind.engine
+    async with engine.connect() as connection:
+        connection = await connection.execution_options(isolation_level="REPEATABLE READ")
+        async with connection.begin():
+            await connection.execute(text("SET TRANSACTION READ ONLY"))
+            async with AsyncSession(bind=connection, expire_on_commit=False) as snapshot:
+                yield snapshot

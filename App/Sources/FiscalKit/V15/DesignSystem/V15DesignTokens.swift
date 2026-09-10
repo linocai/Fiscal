@@ -357,14 +357,16 @@ enum V15OverviewAmountGate {
 public struct V15MoneyText: View {
     private let presentation: V15MoneyPresentation
     private let font: Font
+    private let unavailable: Bool
 
-    public init(minorUnits: Int64, direction: V15MoneyDirection, includeCurrency: Bool = true, font: Font = V15Typography.money) {
-        presentation = .init(minorUnits: minorUnits, direction: direction, includeCurrency: includeCurrency)
+    public init(minorUnits: Int64?, direction: V15MoneyDirection, includeCurrency: Bool = true, font: Font = V15Typography.money) {
+        unavailable = minorUnits == nil
+        presentation = .init(minorUnits: minorUnits ?? 0, direction: direction, includeCurrency: includeCurrency)
         self.font = font
     }
 
     public var body: some View {
-        Text(presentation.text)
+        Text(unavailable ? "未知" : presentation.text)
             .font(font)
             .monospacedDigit()
             .foregroundStyle(color)
@@ -375,7 +377,7 @@ public struct V15MoneyText: View {
 #else
             .fixedSize(horizontal: true, vertical: false)
 #endif
-            .accessibilityLabel(accessibilityText)
+            .accessibilityLabel(unavailable ? "余额未知，历史基准不可用" : accessibilityText)
     }
 
     private var color: Color {

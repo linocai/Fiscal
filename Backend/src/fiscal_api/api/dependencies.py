@@ -27,8 +27,8 @@ from fiscal_api.services.statement_import_confirmation_preview import (
 )
 from fiscal_api.services.statement_import_final_drafts import StatementImportFinalDraftService
 from fiscal_api.services.statement_import_provider import (
+    OpenAICompatibleStatementImportProvider,
     StatementImportProvider,
-    SyntheticStatementImportProvider,
 )
 from fiscal_api.services.statement_import_review import StatementImportReviewService
 from fiscal_api.services.statement_import_workbench import StatementImportWorkbenchService
@@ -161,13 +161,47 @@ def get_action_preview_service(session: SessionDependency) -> ActionPreviewServi
     return ActionPreviewService(session)
 
 
-def get_statement_import_provider() -> StatementImportProvider:
-    return SyntheticStatementImportProvider()
+async def get_statement_import_provider(
+    session: SessionDependency,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> StatementImportProvider | None:
+    import hashlib
+
+    from sqlalchemy import select
+
+    from fiscal_api.db.models.ai import AISettings
+    from fiscal_api.services.ai_provider import OpenAICompatibleProvider
+
+    stored = await session.scalar(select(AISettings))
+    fallback = build_ai_provider(settings)
+    service = AIService(
+        session,
+        fallback,
+        runtime_settings=settings,
+        credential_cipher=(
+            ProviderCredentialCipher.from_settings(settings)
+            if settings.token_pepper is not None
+            else None
+        ),
+    )
+    resolved = service.provider_for(stored) if stored is not None else fallback
+    if not isinstance(resolved, OpenAICompatibleProvider):
+        return None
+    # Opaque configuration binding includes credential changes without exposing secrets.
+    revision = hashlib.sha256(
+        (
+            f"{stored.version if stored else 0}:{resolved.base_url}:"
+            f"{resolved.model_id}:{resolved.api_key}"
+        ).encode()
+    ).hexdigest()
+    return OpenAICompatibleStatementImportProvider(
+        resolved, revision, stored.version if stored else 0
+    )
 
 
 def get_statement_import_service(
     session: SessionDependency,
-    provider: Annotated[StatementImportProvider, Depends(get_statement_import_provider)],
+    provider: Annotated[StatementImportProvider | None, Depends(get_statement_import_provider)],
 ) -> StatementImportService:
     return StatementImportService(session, provider)
 

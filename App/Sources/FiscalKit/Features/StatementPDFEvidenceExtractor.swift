@@ -483,18 +483,25 @@ public enum StatementImportEvidenceRedactor {
   private static let labelledSensitiveField = try! NSRegularExpression(
     pattern: "(?i)(?:\\b(?:card(?:\\s*(?:number|no\\.?))?|account(?:\\s*(?:number|no\\.?))?|customer(?:\\s*(?:number|no\\.?))?|name|address)\\b|卡号|账号|客户号|姓名|地址|持卡人)\\s*(?:[:：#]|\\s)\\s*[^\\n]+")
   private static let accountOrCardNumber = try! NSRegularExpression(
-    pattern: "(?<!\\d)(?:\\d[ -]?){9,18}\\d(?!\\d)")
+    pattern: "(?<![\\d.])(?:\\d{10,19}|\\d{4}(?:[ -]\\d{4}){2,3})(?![\\d.])")
+
+  private static let email = try! NSRegularExpression(pattern: "\\b[^\\s@]+@[^\\s@]+\\.[^\\s@]+\\b")
+  private static let identity = try! NSRegularExpression(pattern: "(?<![0-9A-Za-z])\\d{17}[0-9Xx](?![0-9A-Za-z])")
 
   public static func redact(_ source: String) -> (text: String, fieldCount: Int) {
     let labelled = replace(labelledSensitiveField, in: source, with: "[REDACTED]")
     let numbered = replace(accountOrCardNumber, in: labelled.text, with: "[REDACTED]")
-    return (numbered.text, labelled.count + numbered.count)
+    let identified = replace(identity, in: numbered.text, with: "[REDACTED]")
+    let mailed = replace(email, in: identified.text, with: "[REDACTED]")
+    return (mailed.text, labelled.count + numbered.count + identified.count + mailed.count)
   }
 
   public static func containsProhibitedSensitiveValue(_ text: String) -> Bool {
     let range = NSRange(text.startIndex..., in: text)
     return labelledSensitiveField.firstMatch(in: text, range: range) != nil
       || accountOrCardNumber.firstMatch(in: text, range: range) != nil
+      || identity.firstMatch(in: text, range: range) != nil
+      || email.firstMatch(in: text, range: range) != nil
   }
 
   private static func replace(

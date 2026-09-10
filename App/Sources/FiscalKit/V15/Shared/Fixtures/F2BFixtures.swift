@@ -45,6 +45,7 @@ actor V15F2BFixtureTransport: V15Transporting {
     private let route: V15F2BFixtures.Route
     private let accountOverflow: Bool
     private var factsReads = 0
+    private var authReads = 0
     private var accountReads = 0
     private var transactionReads = 0
     private var cycleReads = 0
@@ -65,6 +66,11 @@ actor V15F2BFixtureTransport: V15Transporting {
         }
         let data: Data
         switch request.path {
+        case "auth/status":
+            authReads += 1
+            if reviewScenario == "bootstrap-retry", authReads == 1 { throw V15Failure(kind: .transport, message: "测试首次连接失败。") }
+            data = V15F1AFixtures.auth
+        case "system/status": data = V15F1AFixtures.system
         case "accounts":
             accountReads += 1
             if reviewScenario == "accounts-error", accountReads <= 4 {

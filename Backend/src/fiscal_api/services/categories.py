@@ -307,10 +307,7 @@ class CategoryService:
                 "Merge requires two roots or two children",
             )
         source_children = await self.repository.children(source.id)
-        ledger = TransactionRepository(self.session)
-        reassigned = await ledger.reassign_category(source.id, target.id)
-        source.usage_count -= reassigned
-        target.usage_count += reassigned
+        await self._move_transactions(source.id, target.id)
         if source.parent_id is None and target.parent_id is None:
             target_by_name = {
                 child.name.casefold(): child
@@ -319,9 +316,7 @@ class CategoryService:
             for child in source_children:
                 matching = target_by_name.get(child.name.casefold())
                 if child.archived_at is None and matching is not None:
-                    child_reassigned = await ledger.reassign_category(child.id, matching.id)
-                    child.usage_count -= child_reassigned
-                    matching.usage_count += child_reassigned
+                    await self._move_transactions(child.id, matching.id)
                     child.archived_at = utc_now()
                     self._touch(child)
                     continue

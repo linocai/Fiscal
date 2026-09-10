@@ -42,7 +42,7 @@ class StatementImportFinalDraftService:
         )
         if batch is None:
             not_found("statement_import_not_found", "Statement import was not found")
-        if batch.status not in {"review_required", "ready_to_confirm"}:
+        if batch.status not in {"review_required", "ready_to_confirm", "partially_confirmed"}:
             conflict("statement_import_final_draft_invalid", "The import is not editable")
         row = await self.session.scalar(
             select(StatementImportRow)
@@ -53,6 +53,12 @@ class StatementImportFinalDraftService:
         )
         if row is None:
             not_found("statement_import_row_not_found", "Statement import row was not found")
+        if row.confirmed_at is not None:
+            conflict("statement_import_row_confirmed", "Confirmed rows are immutable")
+        if request.expected_batch_version is not None:
+            check_version(batch.version, request.expected_batch_version)
+        if request.expected_row_version is not None:
+            check_version(row.version, request.expected_row_version)
         resolution = await self.session.scalar(
             select(StatementImportDraftResolution)
             .where(StatementImportDraftResolution.statement_import_row_id == row.id)
@@ -84,6 +90,7 @@ class StatementImportFinalDraftService:
                 resolution.id,
                 item.version + 1,
             )
+        batch.version += 1
         await self.session.commit()
         return self._response(item)
 

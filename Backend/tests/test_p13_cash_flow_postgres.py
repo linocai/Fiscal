@@ -380,3 +380,83 @@ async def test_credit_system_item_is_read_only_and_requires_a_real_repayment(
     assert caught.value.code == "cash_flow_credit_projection_read_only"
     assert any(value.id == item.id for value in (await service.active()).items)
     assert await session.scalar(select(func.count()).select_from(LedgerTransaction)) == 0
+
+
+async def test_restore_old_cash_flow_settlement_rejects_superseding_posting(
+    session: AsyncSession,
+) -> None:
+    account, category = await seed(session)
+    service, ledger = CashFlowService(session), TransactionService(session)
+    created = await service.create(
+        CashFlowDraft(
+            title="Restore settlement",
+            direction=CashFlowDirection.INFLOW,
+            planned_amount_minor=1000,
+            expected_date=date(2026, 7, 21),
+            account_id=account.id,
+            category_id=category.id,
+        ),
+        uuid4(),
+    )
+    item = created.items[0]
+    assert item.manual_item_id is not None
+    item_id = item.manual_item_id
+    confirmed = await service.confirm(item_id, item.version)
+
+    async def settle(version: int):
+        return await service.settle(
+            item_id,
+            CashFlowSettlementDraft(
+                expected_version=version,
+                actual_amount_minor=1000,
+                occurred_at=datetime(2026, 7, 21, 9, tzinfo=UTC),
+                account_id=account.id,
+                category_id=category.id,
+            ),
+            uuid4(),
+        )
+
+    first = await settle(confirmed.version)
+    assert first.linked_transaction_id is not None
+    first_id = first.linked_transaction_id
+    voided = await ledger.void(first_id, 1)
+    current = await service.repository.get(item_id)
+    assert current is not None
+    second = await settle(current.version)
+    assert second.linked_transaction_id is not None
+    second_id = second.linked_transaction_id
+    with pytest.raises(APIError) as error:
+        await ledger.restore(first_id, voided.version)
+    assert error.value.code == "cash_flow_settlement_superseded"
+    await session.rollback()
+    assert (
+        await session.scalar(
+            select(func.count())
+            .select_from(LedgerTransaction)
+            .where(LedgerTransaction.voided_at.is_(None))
+        )
+        == 1
+    )
+    await ledger.void(second_id, 1)
+    restored = await ledger.restore(first_id, voided.version)
+    assert restored.voided_at is None
+    current = await service.repository.get(item_id)
+    assert current is not None
+    assert current.linked_transaction_id == first_id
+    assert current.status == "settled"
+    assert (
+        await session.scalar(
+            select(func.count())
+            .select_from(LedgerTransaction)
+            .where(LedgerTransaction.voided_at.is_(None))
+        )
+        == 1
+    )
+
+    voided_again = await ledger.void(first_id, restored.version)
+    current = await service.repository.get(item_id)
+    assert current is not None
+    await service.cancel(item_id, current.version, CashFlowMutationScope.OCCURRENCE)
+    with pytest.raises(APIError) as cancelled_error:
+        await ledger.restore(first_id, voided_again.version)
+    assert cancelled_error.value.code == "cash_flow_not_confirmed"

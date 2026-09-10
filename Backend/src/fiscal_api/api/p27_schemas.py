@@ -56,7 +56,7 @@ class StatementImportDraftResolutionResponse(P24Model):
 class StatementImportReviewResponse(P24Model):
     batch_id: UUID
     batch_version: int
-    status: Literal["review_required"]
+    status: str
     validation_run_id: UUID
     provider_snapshot_id: UUID
     checks: list[StatementImportValidationCheckResponse]

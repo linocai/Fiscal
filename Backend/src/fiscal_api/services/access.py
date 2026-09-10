@@ -1,5 +1,10 @@
+import asyncio
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import timedelta
+from functools import partial
+from threading import BoundedSemaphore
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status as http_status
@@ -19,6 +24,27 @@ from fiscal_api.core.principal import AuthenticatedPrincipal
 from fiscal_api.core.time import utc_now
 from fiscal_api.db.models.access import AccessCredential, AccessKey
 from fiscal_api.repositories.access import AccessRepository
+
+_KDF_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="fiscal-kdf")
+_KDF_CAPACITY = BoundedSemaphore(4)
+
+
+async def _run_kdf[T](function: Callable[..., T], *args: object) -> T:
+    # Nonblocking admission bounds running AND queued work across cancellation/loops.
+    if not _KDF_CAPACITY.acquire(blocking=False):
+        raise APIError(
+            status_code=429,
+            code="rate_limit_exceeded",
+            message="Passphrase verification is busy",
+            headers={"Retry-After": "1"},
+        )
+    try:
+        future = _KDF_EXECUTOR.submit(partial(function, *args))
+    except BaseException:
+        _KDF_CAPACITY.release()
+        raise
+    future.add_done_callback(lambda _: _KDF_CAPACITY.release())
+    return await asyncio.wrap_future(future)
 
 
 @dataclass(frozen=True)
@@ -41,8 +67,9 @@ class AccessService:
     async def get_credential(self) -> AccessCredential | None:
         return await self.repository.get_credential()
 
-    def verify_passphrase(self, credential: AccessCredential, passphrase: str) -> bool:
-        return verify_passphrase(
+    async def verify_passphrase(self, credential: AccessCredential, passphrase: str) -> bool:
+        return await _run_kdf(
+            verify_passphrase,
             passphrase,
             credential.passphrase_salt,
             credential.kdf_iterations,
@@ -105,7 +132,7 @@ class AccessService:
         iterations = self.settings.passphrase_kdf_iterations
         now = utc_now()
         credential = AccessCredential(
-            passphrase_hash=derive_passphrase_hash(passphrase, salt, iterations),
+            passphrase_hash=await _run_kdf(derive_passphrase_hash, passphrase, salt, iterations),
             passphrase_salt=salt,
             kdf_iterations=iterations,
             credential_generation=1,
@@ -133,7 +160,9 @@ class AccessService:
         salt = generate_salt()
         iterations = self.settings.passphrase_kdf_iterations
         now = utc_now()
-        credential.passphrase_hash = derive_passphrase_hash(new_passphrase, salt, iterations)
+        credential.passphrase_hash = await _run_kdf(
+            derive_passphrase_hash, new_passphrase, salt, iterations
+        )
         credential.passphrase_salt = salt
         credential.kdf_iterations = iterations
         credential.credential_generation += 1

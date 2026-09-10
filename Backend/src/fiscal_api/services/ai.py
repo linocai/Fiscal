@@ -377,7 +377,7 @@ class AIService:
             )
 
         normalized = unicodedata.normalize("NFKC", request.text)
-        provider = self._provider_for(settings)
+        provider = self.provider_for(settings)
         proposal = AIProposal(
             source=request.source,
             raw_input=request.text,
@@ -583,7 +583,7 @@ class AIService:
         proposal.status = AIProposalStatus.PROCESSING.value
         proposal.error_code = None
         proposal.error_message = None
-        provider = self._provider_for(await self.repository.settings())
+        provider = self.provider_for(await self.repository.settings())
         proposal.provider = provider.provider_id
         proposal.provider_model = provider.model_id
         self._touch(proposal)
@@ -1172,7 +1172,7 @@ class AIService:
         )
         return bool(stored or self.provider.configured)
 
-    def _provider_for(self, settings: AISettings) -> AIProvider:
+    def provider_for(self, settings: AISettings) -> AIProvider:
         if (
             settings.provider_kind == "openai_compatible"
             and settings.provider_base_url is not None

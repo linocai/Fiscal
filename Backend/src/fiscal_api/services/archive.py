@@ -17,6 +17,7 @@ import json
 import secrets
 import zlib
 from collections.abc import Mapping
+from copy import deepcopy
 from datetime import date, datetime
 from enum import Enum
 from typing import Any, cast
@@ -28,10 +29,12 @@ from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from sqlalchemy import MetaData, Table, delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
+from fiscal_api.core.mapping_generation import backfill_mapping_generations
 from fiscal_api.core.time import BUSINESS_TIMEZONE, utc_now
 from fiscal_api.db import models as _models
 from fiscal_api.db.base import Base
 from fiscal_api.db.models.revision import DataRevision
+from fiscal_api.db.session import independent_read_snapshot
 
 assert (
     _models.__all__
@@ -40,6 +43,8 @@ assert (
 ARCHIVE_MAGIC = b"FISCAL-ARCHIVE-V1\n"
 ARCHIVE_SCHEMA = "fiscal-archive-v1"
 API_SCHEMA = "fiscal-api-v1"
+CURRENT_DATABASE_REVISION = "20260910_0039"
+LEGACY_DATABASE_REVISION = "20260831_0038"
 KDF_N = 2**15
 KDF_R = 8
 KDF_P = 1
@@ -154,32 +159,33 @@ class ArchiveService:
     async def export(
         self, *, password: str, include_ai_raw: bool
     ) -> tuple[bytes, dict[str, object]]:
-        tables = _archive_tables(Base.metadata)
-        entities: dict[str, list[dict[str, object]]] = {}
-        for table in tables:
-            rows = (await self.session.execute(select(table))).mappings().all()
-            encoded_rows: list[dict[str, object]] = []
-            for row in rows:
-                values = _retire_ai_auto_execute(
-                    table.name,
-                    {key: _json_value(value) for key, value in dict(row).items()},
-                )
-                if table.name == "ai_settings":
-                    for column in _AI_SECRET_COLUMNS:
-                        values[column] = None
-                if table.name == "ai_proposals" and not include_ai_raw:
-                    values["raw_input"] = _AI_REDACTED_RAW_INPUT
-                for table_name, column_name in _EXCLUDED_FOREIGN_KEY_COLUMNS:
-                    if table.name == table_name:
-                        values[column_name] = None
-                encoded_rows.append(values)
-            entities[table.name] = encoded_rows
-        revision = await self.session.scalar(
-            select(DataRevision.revision).where(DataRevision.id == 1)
-        )
-        db_revision = await self.session.scalar(text("SELECT version_num FROM alembic_version"))
-        if revision is None or db_revision is None:
-            raise RuntimeError("archive requires an upgraded Fiscal database")
+        async with independent_read_snapshot(self.session) as snapshot:
+            tables = _archive_tables(Base.metadata)
+            entities: dict[str, list[dict[str, object]]] = {}
+            for table in tables:
+                rows = (await snapshot.execute(select(table))).mappings().all()
+                encoded_rows: list[dict[str, object]] = []
+                for row in rows:
+                    values = _retire_ai_auto_execute(
+                        table.name,
+                        {key: _json_value(value) for key, value in dict(row).items()},
+                    )
+                    if table.name == "ai_settings":
+                        for column in _AI_SECRET_COLUMNS:
+                            values[column] = None
+                    if table.name == "ai_proposals" and not include_ai_raw:
+                        values["raw_input"] = _AI_REDACTED_RAW_INPUT
+                    for table_name, column_name in _EXCLUDED_FOREIGN_KEY_COLUMNS:
+                        if table.name == table_name:
+                            values[column_name] = None
+                    encoded_rows.append(values)
+                entities[table.name] = encoded_rows
+            revision = await snapshot.scalar(
+                select(DataRevision.revision).where(DataRevision.id == 1)
+            )
+            db_revision = await snapshot.scalar(text("SELECT version_num FROM alembic_version"))
+            if revision is None or db_revision is None:
+                raise RuntimeError("archive requires an upgraded Fiscal database")
         payload: dict[str, object] = {"entities": entities, "data_revision": revision}
         payload_bytes = _canonical_json(payload)
         manifest: dict[str, object] = {
@@ -195,6 +201,8 @@ class ArchiveService:
             "includes_ai_raw": include_ai_raw,
             "requires_ai_provider_reconfiguration": True,
         }
+        self._validate_payload(manifest, payload)
+        self._validate_relationships(payload)
         return self._seal(password=password, manifest=manifest, payload=payload_bytes), manifest
 
     @staticmethod
@@ -290,6 +298,16 @@ class ArchiveService:
 
     @staticmethod
     def _validate_payload(manifest: Mapping[str, object], payload: Mapping[str, object]) -> None:
+        revision = manifest.get("database_revision")
+        if revision not in {CURRENT_DATABASE_REVISION, LEGACY_DATABASE_REVISION}:
+            raise ArchiveCompatibilityError(
+                f"unsupported archive database revision {revision!r}; set FISCAL_DATABASE_URL "
+                "to an isolated empty target and use source tools matching that revision: "
+                f"uv run alembic upgrade {revision}; then uv run python -m "
+                "fiscal_api.cli.archive <original.far> --dry-run, then --apply "
+                "--confirm-empty-target; upgrade the restored isolated database with "
+                "the current source: uv run alembic upgrade head"
+            )
         entities = payload.get("entities")
         if not isinstance(entities, dict) or not isinstance(manifest.get("entity_counts"), dict):
             raise ArchiveError("archive payload shape is invalid")
@@ -306,6 +324,8 @@ class ArchiveService:
             if not isinstance(expected, int) or not isinstance(rows, list) or len(rows) != expected:
                 raise ArchiveError("archive entity counts do not match manifest")
             columns = {column.name for column in Base.metadata.tables[table_name].columns}
+            if revision == LEGACY_DATABASE_REVISION and table_name == "transactions":
+                columns.remove("merchant_mapping_generation")
             for row in rows:
                 if not isinstance(row, dict) or set(row) != columns:
                     raise ArchiveError("archive row fields do not match the schema")
@@ -313,16 +333,53 @@ class ArchiveService:
             raise ArchiveError("archive revision does not match manifest")
 
     @staticmethod
+    def adapt_to_current(
+        manifest: Mapping[str, object], payload: Mapping[str, object]
+    ) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
+        """Validate source first; adapt copies only, preserving authenticated originals."""
+        ArchiveService._validate_payload(manifest, payload)
+        ArchiveService._validate_relationships(payload)
+        converted_manifest = deepcopy(dict(manifest))
+        converted_payload = deepcopy(dict(payload))
+        source = manifest["database_revision"]
+        added: list[str] = []
+        if source == LEGACY_DATABASE_REVISION:
+            entities = _json_object(converted_payload["entities"], error="invalid entities")
+            backfill_mapping_generations(
+                entities["transactions"],
+                entities["transaction_merchant_mappings"],
+                entities["merchant_operations"],
+            )
+            added = ["transactions.merchant_mapping_generation"]
+            converted_manifest["database_revision"] = CURRENT_DATABASE_REVISION
+            converted_manifest["payload_sha256"] = hashlib.sha256(
+                _canonical_json(converted_payload)
+            ).hexdigest()
+        ArchiveService._validate_payload(converted_manifest, converted_payload)
+        ArchiveService._validate_relationships(converted_payload)
+        return (
+            converted_manifest,
+            converted_payload,
+            {
+                "source_database_revision": source,
+                "target_database_revision": CURRENT_DATABASE_REVISION,
+                "added_fields": added,
+                "mapping_versions_rebased": source == LEGACY_DATABASE_REVISION,
+                "original_archive_unchanged": True,
+            },
+        )
+
+    @staticmethod
     def dry_run_report(
         manifest: Mapping[str, object], payload: Mapping[str, object]
     ) -> dict[str, object]:
-        ArchiveService._validate_payload(manifest, payload)
-        ArchiveService._validate_relationships(payload)
+        manifest, payload, conversion = ArchiveService.adapt_to_current(manifest, payload)
         entities = _json_object(payload["entities"], error="archive entities are invalid")
         transactions = entities.get("transactions", [])
         postings = entities.get("postings", [])
         return {
             "database_revision": manifest["database_revision"],
+            "conversion": conversion,
             "data_revision": manifest["data_revision"],
             "entity_counts": manifest["entity_counts"],
             "transaction_count": len(transactions) if isinstance(transactions, list) else 0,
@@ -373,8 +430,7 @@ class ArchiveService:
         payload: Mapping[str, object],
     ) -> None:
         """Restore only after a completed dry run and only into an empty data target."""
-        ArchiveService._validate_payload(manifest, payload)
-        ArchiveService._validate_relationships(payload)
+        manifest, payload, _conversion = ArchiveService.adapt_to_current(manifest, payload)
         target_revision = await connection.scalar(text("SELECT version_num FROM alembic_version"))
         if target_revision != manifest["database_revision"]:
             raise ArchiveCompatibilityError(

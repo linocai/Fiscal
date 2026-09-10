@@ -35,8 +35,9 @@ public struct V15Conflict: Sendable, Equatable {
 
 public struct V15Failure: Error, Sendable, Equatable {
     public enum Kind: Sendable, Equatable { case transport, decoding, offlineReadOnly, responseUnknown, conflict, cancelled }
+    public let isDefinitiveRejection: Bool
     public let kind: Kind; public let code: String?; public let message: String; public let fieldIssues: [V15FieldIssue]; public let conflict: V15Conflict?
-    public init(kind: Kind, code: String? = nil, message: String, fieldIssues: [V15FieldIssue] = [], conflict: V15Conflict? = nil) { self.kind = kind; self.code = code; self.message = message; self.fieldIssues = fieldIssues; self.conflict = conflict }
+    public init(kind: Kind, code: String? = nil, message: String, fieldIssues: [V15FieldIssue] = [], conflict: V15Conflict? = nil, isDefinitiveRejection: Bool = false) { self.isDefinitiveRejection = isDefinitiveRejection; self.kind = kind; self.code = code; self.message = message; self.fieldIssues = fieldIssues; self.conflict = conflict }
 }
 
 public enum V15AsyncPhase<Value: Sendable>: Sendable {

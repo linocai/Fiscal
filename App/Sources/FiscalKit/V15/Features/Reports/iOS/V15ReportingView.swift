@@ -186,6 +186,7 @@ public struct V15ReportingView: View {
                 ("净收支", report.summary.netIncomeExpenseMinor, .balance),
                 ("期末信用欠款", report.summary.creditDebtAtPeriodEndMinor, .outflow)
             ])
+            if report.summary.creditDebtAtPeriodEndMinor == nil { Text("部分账户缺少历史余额基准，期末欠款未知；收支数据仍可查看。").font(V15Typography.secondary) }
             reportCard("数据完整性") {
                 completenessGrid(report.completeness)
                 Text("这些记录仍需处理，但已经计入总额。")
@@ -194,7 +195,7 @@ public struct V15ReportingView: View {
             }
             reportCard("期末账户余额") {
                 ForEach(Array(report.accounts.enumerated()), id: \.offset) { indexed in
-                    aggregateRow(title: indexed.element.accountName, detail: "\(accountKindLabel(indexed.element.accountKind)) · 期末余额", amount: indexed.element.closingBalanceMinor, capability: indexed.element.drillCapability, id: "overview.account.\(indexed.offset)")
+                    aggregateRow(title: indexed.element.accountName, detail: "\(accountKindLabel(indexed.element.accountKind)) · 期末余额", amount: indexed.element.closingBalanceMinor, capability: indexed.element.drillCapability, id: "overview.account.\(indexed.offset)", direction: .balance)
                 }
             }
         }
@@ -284,7 +285,7 @@ public struct V15ReportingView: View {
                         .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 } else {
                     ForEach(Array(creditAccounts.enumerated()), id: \.offset) { indexed in
-                        aggregateRow(title: indexed.element.accountName, detail: "信用账户 · 期末余额", amount: indexed.element.closingBalanceMinor, capability: indexed.element.drillCapability, id: "debt.account.\(indexed.offset)")
+                        aggregateRow(title: indexed.element.accountName, detail: "信用账户 · 期末余额", amount: indexed.element.closingBalanceMinor, capability: indexed.element.drillCapability, id: "debt.account.\(indexed.offset)", direction: .balance)
                     }
                 }
             }
@@ -413,7 +414,7 @@ public struct V15ReportingView: View {
         }
     }
 
-    private func metricGrid(_ values: [(String, Int64, V15MoneyDirection)]) -> some View {
+    private func metricGrid(_ values: [(String, Int64?, V15MoneyDirection)]) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: V15Spacing.xs)], spacing: V15Spacing.xs) {
             ForEach(Array(values.enumerated()), id: \.offset) { indexed in
                 V22Metric(indexed.element.0, minorUnits: indexed.element.1, direction: indexed.element.2)
@@ -472,7 +473,7 @@ public struct V15ReportingView: View {
         }
     }
 
-    private func aggregateRow(title: String, detail: String, amount: Int64?, capability: V15ReportDrillCapability, id: String) -> some View {
+    private func aggregateRow(title: String, detail: String, amount: Int64?, capability: V15ReportDrillCapability, id: String, direction: V15MoneyDirection = .neutral) -> some View {
         VStack(alignment: .leading, spacing: V15Spacing.xxs) {
             Button {
                 guard let owner = model.beginDrill(capability: capability, label: title) else { return }
@@ -484,7 +485,7 @@ public struct V15ReportingView: View {
                         Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: V15Spacing.sm)
-                    if let amount { V15MoneyText(minorUnits: amount, direction: .neutral) }
+                    V15MoneyText(minorUnits: amount, direction: direction)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -585,9 +586,14 @@ public struct V15ReportingView: View {
                         V15MoneyText(minorUnits: item.netConsumptionMinor, direction: .neutral)
                     }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: V15Spacing.xs)], spacing: V15Spacing.xs) {
-                        drillMeasure("总消费", item.grossConsumptionMinor)
-                        drillMeasure("商户退款", item.merchantRefundMinor)
-                        drillMeasure("净消费", item.netConsumptionMinor)
+                        if model.lens == .cashFlow {
+                            Text(kindLabel(item.kind)).font(V15Typography.secondary)
+                            drillMeasure("外部现金影响", item.externalCashAmountMinor, direction: .balance)
+                        } else {
+                            drillMeasure("总消费", item.grossConsumptionMinor)
+                            drillMeasure("商户退款", item.merchantRefundMinor)
+                            drillMeasure("净消费", item.netConsumptionMinor)
+                        }
                     }
                 }
                 .padding(.vertical, V15Spacing.md)
@@ -605,10 +611,10 @@ public struct V15ReportingView: View {
         }
     }
 
-    private func drillMeasure(_ title: String, _ amount: Int64) -> some View {
+    private func drillMeasure(_ title: String, _ amount: Int64, direction: V15MoneyDirection = .neutral) -> some View {
         VStack(alignment: .leading, spacing: V15Spacing.xxs) {
             Text(title).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.58))
-            V15MoneyText(minorUnits: amount, direction: .neutral, includeCurrency: false, font: V15Typography.money)
+            V15MoneyText(minorUnits: amount, direction: direction, includeCurrency: false, font: V15Typography.money)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

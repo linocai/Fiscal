@@ -28,7 +28,7 @@ public struct V15RecordView: View {
                 NavigationStack {
                     V15RecordEditor(model: model, onCommitted: onCommitted)
                         .toolbar {
-                            ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } }
+                            ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.dismiss(); dismiss() } }
                         }
                 }
             } else {
@@ -72,7 +72,7 @@ private struct V15RecordEditor: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.section) {
                     V22PageHeader("记一笔", symbol: "plus.circle.fill", subtitle: "先输入金额，再补充必要信息")
-                    iOSForm
+                    iOSForm.disabled(model.hasUnresolvedSubmission)
                     repaymentPreviewState
                     submissionState
                 }.padding(V15IOSLayout.contentPadding)
@@ -92,8 +92,8 @@ private struct V15RecordEditor: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.md) {
                     V22PageHeader("记一笔", symbol: "plus.circle.fill", subtitle: "先输入金额，再补充必要信息")
-                    form
-                    references
+                    form.disabled(model.hasUnresolvedSubmission)
+                    references.disabled(model.hasUnresolvedSubmission)
                     repaymentPreviewState
                     submissionState
                     primaryAction
@@ -103,13 +103,17 @@ private struct V15RecordEditor: View {
 #endif
         }
         .task { await model.loadReferences() }
+        .onDisappear { model.dismiss() }
         .task(id: model.kind) { await model.loadCategories() }
         .task(id: model.destinationAccountID) { if model.kind == .repayment { await model.loadCreditCycles() } }
         .accessibilityIdentifier("v15.f1a.record.editor")
     }
 
+    private var isSubmitting: Bool { if case .submitting = model.submission { true } else { false } }
     @ViewBuilder private var primaryAction: some View {
-        if model.kind == .repayment, !repaymentPreviewIsReady {
+        if model.hasUnresolvedSubmission {
+            V15ActionButton("恢复原请求", symbol: "arrow.clockwise", action: submit).disabled(isSubmitting)
+        } else if model.kind == .repayment, !repaymentPreviewIsReady {
             V15ActionButton("查看还款影响", symbol: "eye", disabledReasons: displayedDisabledReasons, unavailableAccessibilityHint: neutralUnavailableHint) { Task { await model.previewRepayment() } }
                 .disabled(!disabledReasons.isEmpty)
                 .accessibilityIdentifier("v15.f1a.record.preview")

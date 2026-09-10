@@ -254,6 +254,11 @@ class InstallmentRepository:
         return {cycle_id: (int(principal), int(fee)) for cycle_id, principal, fee in rows}
 
     async def period_plans_for_cycle(self, cycle_id: UUID) -> list[InstallmentPlan]:
+        return await self.period_plans_for_cycles([cycle_id])
+
+    async def period_plans_for_cycles(self, cycle_ids: list[UUID]) -> list[InstallmentPlan]:
+        if not cycle_ids:
+            return []
         return list(
             (
                 await self.session.scalars(
@@ -261,7 +266,7 @@ class InstallmentRepository:
                     .where(
                         exists().where(
                             InstallmentPeriod.plan_id == InstallmentPlan.id,
-                            InstallmentPeriod.effective_cycle_id == cycle_id,
+                            InstallmentPeriod.effective_cycle_id.in_(cycle_ids),
                         )
                     )
                     .options(selectinload(InstallmentPlan.periods))

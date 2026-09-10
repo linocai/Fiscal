@@ -23,6 +23,80 @@ struct F3GTests {
         return model
     }
 
+    @Test("provider candidate first never hides the sole existing transaction; multiple matches require selection")
+    @MainActor func explicitMatchSelection() async throws {
+        let singleTransport = F3GTransport(mode: .normal)
+        let single = await ready(singleTransport)
+        let row = try #require(single.workbench?.rows.first)
+        #expect(row.candidates.first?.candidateKind == "provider_candidate")
+        #expect(single.selectedMatchTransactionID(for: row) == V15F3GFixtures.matchedTransactionID)
+        await single.resolve(row: row, as: .matchExisting)
+        let wire = try #require(await singleTransport.recordedWrites().last { $0.request.path.hasSuffix("draft-resolution") })
+        #expect(wire.body.contains(V15F3GFixtures.matchedTransactionID.uuidString))
+        let multipleTransport = F3GTransport(mode: .multipleMatches)
+        let multiple = await ready(multipleTransport)
+        let multipleRow = try #require(multiple.workbench?.rows.first)
+        #expect(multiple.existingMatchCandidates(for: multipleRow).count == 2)
+        #expect(multiple.selectedMatchTransactionID(for: multipleRow) == nil)
+        await multiple.resolve(row: multipleRow, as: .matchExisting)
+        #expect(await multipleTransport.recordedWrites().filter { $0.request.path.hasSuffix("draft-resolution") }.isEmpty)
+        let chosen = UUID(uuidString: "00000000-0000-0000-0000-000000007321")!
+        multiple.selectMatchTransaction(chosen, for: multipleRow)
+        await multiple.resolve(row: multipleRow, as: .matchExisting)
+        let selectedWire = try #require(await multipleTransport.recordedWrites().last { $0.request.path.hasSuffix("draft-resolution") })
+        #expect(selectedWire.body.contains(chosen.uuidString))
+    }
+
+    @Test("definitive confirm rejection releases journal and allows a fresh preview, including receipt404 then replay409")
+    @MainActor func confirmationRejectionRecovery() async throws {
+        for mode in [F3GTransport.Mode.confirmConflict, .confirmationRejectedAfterUnknown] {
+            let transport = F3GTransport(mode: mode)
+            let model = await ready(transport)
+            await model.previewConfirmation(); await model.confirm()
+            if mode == .confirmationRejectedAfterUnknown {
+                #expect(model.phase == .responseUnknown)
+                await model.readConfirmationReceipt()
+                #expect(model.phase == .responseUnknown)
+                await model.recoverOriginalConfirmation()
+                let calls = await transport.recordedWrites().filter { $0.request.path.hasSuffix("/confirm") }
+                #expect(calls.count == 2)
+                #expect(calls.first?.body == calls.last?.body)
+                #expect(calls.first?.request.headers["Idempotency-Key"] == calls.last?.request.headers["Idempotency-Key"])
+            }
+            #expect(model.phase == .ready)
+            #expect(model.preview == nil)
+            #expect(model.previewFailure?.code == "resource_version_conflict")
+            await model.previewConfirmation()
+            #expect(model.preview != nil)
+        }
+    }
+
+    @Test("unknown confirmation retains its key after receipt404 and gateway401 or429, until the original receipt arrives")
+    @MainActor func confirmationGatewayRejectionDoesNotSettleUnknown() async throws {
+        for mode in [F3GTransport.Mode.confirmationRecoveryUnauthorized, .confirmationRecoveryRateLimited] {
+            let transport = F3GTransport(mode: mode)
+            let model = await ready(transport)
+            await model.previewConfirmation(); await model.confirm()
+            #expect(model.phase == .responseUnknown)
+            await model.recoverOriginalConfirmation()
+            #expect(model.phase == .responseUnknown)
+            #expect(!model.writeReasons.isEmpty)
+            let beforePreview = await transport.recordedWrites().count
+            model.requestPreview(); model.requestConfirm()
+            await model.previewConfirmation(); await model.confirm()
+            #expect(model.phase == .responseUnknown)
+            #expect(await transport.recordedWrites().count == beforePreview)
+            let calls = await transport.recordedWrites().filter { $0.request.path.hasSuffix("/confirm") }
+            #expect(calls.count == 2)
+            #expect(calls.first?.body == calls.last?.body)
+            #expect(calls.first?.request.headers["Idempotency-Key"] == calls.last?.request.headers["Idempotency-Key"])
+            await model.readConfirmationReceipt()
+            #expect(model.receipt?.replay == true)
+            #expect(model.previewFailure == nil)
+            #expect(await transport.recordedWrites().filter { $0.request.path.hasSuffix("/confirm") }.count == 2)
+        }
+    }
+
     @Test("register wire is metadata-only and masked evidence has no raw document surface")
     @MainActor func metadataOnly() async throws {
         let transport = F3GTransport(mode: .normal); let model = await ready(transport)
@@ -79,6 +153,22 @@ struct F3GTests {
         let after = await transport.recordedWrites().filter { $0.request.path.hasSuffix("/confirm") }
         #expect(before.count == 1); #expect(after.count == 1)
         #expect(model.receipt?.replay == true)
+    }
+
+    @Test("missing receipt keeps unknown; explicit recovery reuses saved confirmation key and body")
+    @MainActor func originalConfirmationReplay() async throws {
+        let transport = F3GTransport(mode: .confirmationNotArrived)
+        let model = await ready(transport)
+        await model.previewConfirmation(); await model.confirm()
+        await model.readConfirmationReceipt()
+        #expect(model.phase == .responseUnknown)
+        #expect(await transport.recordedWrites().filter { $0.request.path.hasSuffix("/confirm") }.count == 1)
+        await model.recoverOriginalConfirmation()
+        let calls = await transport.recordedWrites().filter { $0.request.path.hasSuffix("/confirm") }
+        #expect(calls.count == 2)
+        #expect(calls.first?.body == calls.last?.body)
+        #expect(calls.first?.request.headers["Idempotency-Key"] == calls.last?.request.headers["Idempotency-Key"])
+        #expect(model.receipt != nil)
     }
 
     @Test("offline has zero mutation wires and unknown resolution remains display-only")

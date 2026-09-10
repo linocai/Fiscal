@@ -1,7 +1,7 @@
 from datetime import date
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -125,6 +125,26 @@ class CashFlowRepository:
         if for_update:
             statement = statement.with_for_update()
         return list((await self.session.scalars(statement)).all())
+
+    async def settlement_origins(self, transaction_id: UUID) -> list[CashFlowItem]:
+        historical_ids = select(CashFlowItemRevision.item_id).where(
+            CashFlowItemRevision.snapshot["linked_transaction_id"].astext == str(transaction_id)
+        )
+        return list(
+            (
+                await self.session.scalars(
+                    select(CashFlowItem)
+                    .where(
+                        or_(
+                            CashFlowItem.linked_transaction_id == transaction_id,
+                            CashFlowItem.id.in_(historical_ids),
+                        )
+                    )
+                    .order_by(CashFlowItem.id)
+                    .with_for_update()
+                )
+            ).all()
+        )
 
     async def by_linked_transaction(
         self, transaction_id: UUID, *, for_update: bool = False

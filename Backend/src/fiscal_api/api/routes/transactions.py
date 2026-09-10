@@ -41,6 +41,7 @@ from fiscal_api.api.p36_schemas import (
     RepaymentPreview,
     RepaymentPreviewRequest,
 )
+from fiscal_api.core.errors import APIError
 from fiscal_api.core.security import require_authenticated
 from fiscal_api.db.models import TransactionKind, TransactionSource
 
@@ -107,6 +108,18 @@ async def create_transaction(
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
 ) -> TransactionResponse:
     return await service.create(draft, idempotency_key)
+
+
+@router.get("/by-idempotency/{key}", response_model=TransactionResponse)
+async def transaction_creation_receipt(
+    key: UUID, service: TransactionServiceDependency, response: Response
+) -> TransactionResponse:
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return await service.by_idempotency_key(key)
+    except APIError as error:
+        error.headers["Cache-Control"] = "no-store"
+        raise
 
 
 @router.get("/summary", response_model=TransactionSummary)

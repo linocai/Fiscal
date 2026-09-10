@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from os import environ
 from uuid import UUID, uuid4
 
@@ -410,7 +410,13 @@ def test_p33_due_day_only_updates_existing_cycle_and_future_event() -> None:
         ] == [(prior_cycle_id, "2026-09-25", 12_345)]
 
 
-def test_p33_stable_dependency_order_allows_reloaded_multisource_commit() -> None:
+def test_p33_stable_dependency_order_allows_reloaded_multisource_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # This ordering regression needs an open September statement, not wall-clock expiry.
+    monkeypatch.setattr(
+        "fiscal_api.services.credit.utc_now", lambda: datetime(2026, 9, 1, tzinfo=UTC)
+    )
     app, auth = _app()
     with TestClient(app) as client:
         account = _credit_account(client, auth)

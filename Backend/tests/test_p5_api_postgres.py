@@ -148,14 +148,16 @@ def test_all_installment_http_gates() -> None:
             "fee_occurred_at": plan["fee_occurred_at"],
             "start_statement_date": plan["start_statement_date"],
         }
-        assert (
-            client.post(
-                f"/api/v1/installment-plans/{plan_id}/preview",
-                headers=auth,
-                json=replacement,
-            ).status_code
-            == 200
+        preview = client.post(
+            f"/api/v1/installment-plans/{plan_id}/preview", headers=auth, json=replacement
         )
+        assert preview.status_code == 200, preview.text
+        legacy_commit = client.put(
+            f"/api/v1/installment-plans/{plan_id}", headers=auth, json=replacement
+        )
+        assert legacy_commit.status_code == 409
+        assert legacy_commit.json()["error"]["code"] == "installment_preview_required"
+        replacement["preview_fingerprint"] = preview.json()["preview_fingerprint"]
         updated = client.put(f"/api/v1/installment-plans/{plan_id}", headers=auth, json=replacement)
         assert updated.status_code == 200, updated.text
         plan = updated.json()

@@ -3,6 +3,11 @@
 Passwords are read from standard input. The target database is read from the
 normal Fiscal environment, never an argv value. ``--apply`` refuses any target
 that contains Fiscal data; cutover remains an operator action outside this CLI.
+
+0038 archives are validated against their original schema and adapted to 0039
+in memory. Dry-run prints the source/target revisions and changed fields. The
+original authenticated archive is never rewritten. Apply requires a pristine
+current-head database; older unsupported revisions require their source tools.
 """
 
 import argparse
@@ -17,7 +22,9 @@ from fiscal_api.services.archive import ArchiveError, ArchiveService
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Inspect or restore a Fiscal Archive v1 file")
+    parser = argparse.ArgumentParser(
+        description="Inspect or restore Fiscal Archive v1 (0038 or current 0039 schema)"
+    )
     parser.add_argument("archive", type=Path)
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--dry-run", action="store_true")

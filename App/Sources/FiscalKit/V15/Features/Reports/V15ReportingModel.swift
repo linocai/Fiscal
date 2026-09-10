@@ -49,6 +49,9 @@ public final class V15ReportingModel {
     private let services: V15Services
     private let offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)?
     private var generation: UInt64 = 0
+    private var reportGeneration: UInt64 = 0
+    private var drillRequestGeneration: UInt64 = 0
+    private var pageRequestGeneration: UInt64 = 0
     private var nextCursor: String?
     private var needsFreshReload = false
     private var exportGeneration: UInt64 = 0
@@ -214,6 +217,7 @@ public final class V15ReportingModel {
         guard case .enabled(let filter) = capability else { if case .disabled(let reason) = capability { disabledReason = reason }; return nil }
         guard let report else { return nil }
         disabledReason = nil; selectedDrillLabel = label; drillItems = []; nextCursor = nil; drillFailure = nil; drillPhase = .idle; pageFailure = nil; pagePhase = .idle
+        generation &+= 1
         let newOwner = ReportOwner(period: selectedPeriod, revision: report.meta.dataRevision, filter: filter, generation: generation)
         owner = newOwner; drillCapability = capability
         return newOwner
@@ -248,38 +252,50 @@ public final class V15ReportingModel {
     private func reload(fresh: Bool) async {
         invalidateExport(removeFile: true)
         generation &+= 1
-        let current = generation
+        reportGeneration &+= 1
+        let current = reportGeneration
         needsFreshReload = false; report = nil; drillItems = []; nextCursor = nil; selectedDrillLabel = nil; drillCapability = nil; disabledReason = nil; drillFailure = nil; drillPhase = .idle; pageFailure = nil; pagePhase = .idle
-        owner = .init(period: selectedPeriod, revision: nil, filter: nil, generation: current)
+        owner = .init(period: selectedPeriod, revision: nil, filter: nil, generation: generation)
         phase = .loading
         do {
             let result: V15PeriodReport
             switch selectedPeriod { case .month(let month): result = try await services.reports.monthly(month, readCachePolicy: fresh ? .reloadIgnoringCache : .standard); case .year(let year): result = try await services.reports.yearly(year, readCachePolicy: fresh ? .reloadIgnoringCache : .standard) }
-            guard current == generation, valid(result, for: selectedPeriod) else { if current == generation { phase = .failed(.init(kind: .decoding, code: "invalid_period_report", message: "报表内容与当前期间不一致，请重新读取。")) }; return }
-            report = result; owner = .init(period: selectedPeriod, revision: result.meta.dataRevision, filter: nil, generation: current)
+            guard current == reportGeneration, valid(result, for: selectedPeriod) else { if current == reportGeneration { phase = .failed(.init(kind: .decoding, code: "invalid_period_report", message: "报表内容与当前期间不一致，请重新读取。")) }; return }
+            report = result; owner = .init(period: selectedPeriod, revision: result.meta.dataRevision, filter: nil, generation: generation)
             if fresh { exportReloadGate = nil; exportPhase = .idle }
             phase = rowsAreEmpty(result) ? .empty : .loaded
         } catch let failure as V15Failure {
-            guard current == generation else { return }
-            if failure.kind == .conflict { takeConflict(failure, current) } else { phase = failure.kind == .cancelled ? .idle : .failed(failure) }
-        } catch { guard current == generation else { return }; phase = .failed(.init(kind: .transport, message: "报表读取失败。")) }
+            guard current == reportGeneration else { return }
+            if failure.kind == .conflict { takeConflict(failure, generation) } else { phase = failure.kind == .cancelled ? .idle : .failed(failure) }
+        } catch is CancellationError { guard current == reportGeneration else { return }; phase = .idle
+        } catch { guard current == reportGeneration else { return }; phase = .failed(.init(kind: .transport, message: "报表读取失败。")) }
     }
 
     private func readDrill(cursor: String?, appending: Bool, owner captured: ReportOwner) async {
         guard let revision = captured.revision, let filter = captured.filter else { return }
+        let requestToken: UInt64
+        if appending { pageRequestGeneration &+= 1; requestToken = pageRequestGeneration }
+        else { drillRequestGeneration &+= 1; requestToken = drillRequestGeneration }
         do {
             let page = try await services.reports.periodDrillDown(period: captured.period, expectedRevision: revision, filter: filter, cursor: cursor, limit: 50)
-            guard captured == owner, captured.generation == generation, page.meta.dataRevision == revision, page.dimension == .ledger, pageMatches(page, filter: filter) else { if captured == owner { takeConflict(.init(kind: .conflict, code: "period_report_changed", message: "报表数据已经更新。"), captured.generation) }; return }
+            guard isCurrentDrill(captured, token: requestToken, appending: appending), page.meta.dataRevision == revision, page.dimension == .ledger, pageMatches(page, filter: filter) else { if isCurrentDrill(captured, token: requestToken, appending: appending) { takeConflict(.init(kind: .conflict, code: "period_report_changed", message: "报表数据已经更新。"), captured.generation) }; return }
             drillItems = appending ? drillItems + page.items : page.items
             nextCursor = page.nextCursor
             if appending { pagePhase = .idle; pageFailure = nil }
             else { drillPhase = .idle; drillFailure = nil }
         } catch let failure as V15Failure {
-            guard captured == owner, captured.generation == generation else { return }
+            guard isCurrentDrill(captured, token: requestToken, appending: appending) else { return }
             if failure.kind == .conflict { takeConflict(failure, captured.generation) }
             else if appending { pagePhase = failure.kind == .cancelled ? .idle : .failed(failure); pageFailure = failure.kind == .cancelled ? nil : failure }
             else { drillPhase = failure.kind == .cancelled ? .idle : .failed(failure); drillFailure = failure.kind == .cancelled ? nil : failure; drillItems = [] }
-        } catch { guard captured == owner, captured.generation == generation else { return }; let failure = V15Failure(kind: .transport, message: appending ? "下一页报表明细读取失败。" : "报表明细读取失败。"); if appending { pagePhase = .failed(failure); pageFailure = failure } else { drillPhase = .failed(failure); drillFailure = failure; drillItems = [] } }
+        } catch is CancellationError {
+            guard isCurrentDrill(captured, token: requestToken, appending: appending) else { return }
+            if appending { pagePhase = .idle; pageFailure = nil } else { drillPhase = .idle; drillFailure = nil }
+        } catch { guard isCurrentDrill(captured, token: requestToken, appending: appending) else { return }; let failure = V15Failure(kind: .transport, message: appending ? "下一页报表明细读取失败。" : "报表明细读取失败。"); if appending { pagePhase = .failed(failure); pageFailure = failure } else { drillPhase = .failed(failure); drillFailure = failure; drillItems = [] } }
+    }
+
+    private func isCurrentDrill(_ captured: ReportOwner, token: UInt64, appending: Bool) -> Bool {
+        captured == owner && captured.generation == generation && token == (appending ? pageRequestGeneration : drillRequestGeneration)
     }
 
     private func takeConflict(_ failure: V15Failure, _ current: UInt64) {
@@ -287,7 +303,14 @@ public final class V15ReportingModel {
         needsFreshReload = true; report = nil; drillItems = []; nextCursor = nil; drillFailure = nil; drillPhase = .idle; pageFailure = nil; pagePhase = .idle; selectedDrillLabel = nil; drillCapability = nil
         owner = .init(period: selectedPeriod, revision: nil, filter: nil, generation: current); phase = .requiresReload(failure)
     }
-    private func valid(_ report: V15PeriodReport, for period: V15ReportPeriod) -> Bool { report.meta.periodKind == period.kind && report.meta.period == period.rawValue && report.meta.timezone == "Asia/Shanghai" && report.meta.currency == "CNY" && report.meta.reportSchemaVersion == "2" && report.meta.dataRevision >= 0 }
+    private func valid(_ report: V15PeriodReport, for period: V15ReportPeriod) -> Bool { validBalances(report) && report.meta.periodKind == period.kind && report.meta.period == period.rawValue && report.meta.timezone == "Asia/Shanghai" && report.meta.currency == "CNY" && report.meta.reportSchemaVersion == "2" && report.meta.dataRevision >= 0 }
+    private func validBalances(_ report: V15PeriodReport) -> Bool {
+        func valid(_ value: Int64?, _ status: String?) -> Bool {
+            switch status { case "known", nil: return value != nil; case "unknown": return value == nil; default: return false }
+        }
+        return valid(report.summary.creditDebtAtPeriodEndMinor, report.summary.creditDebtAtPeriodEndStatus)
+            && report.accounts.allSatisfy { valid($0.openingBalanceMinor, $0.openingBalanceStatus) && valid($0.closingBalanceMinor, $0.closingBalanceStatus) }
+    }
     private func invalidateDrillForPresentationChange() {
         invalidateExport(removeFile: true)
         generation &+= 1

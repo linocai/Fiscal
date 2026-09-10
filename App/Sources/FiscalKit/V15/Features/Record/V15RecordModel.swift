@@ -28,20 +28,19 @@ public final class V15RecordModel {
     public private(set) var fieldIssues: [V15FieldIssue] = []
     public private(set) var localIssues: [V15FieldIssue] = []
 
+    private var isPresented = true
+    private var activeJournalID: UUID?
+    private var activeJournalKind: V15PendingWriteStore.Kind?
+    public var hasUnresolvedSubmission: Bool { activeJournalID != nil }
     private var accountsGeneration: UInt64 = 0
     private var categoriesGeneration: UInt64 = 0
     private var creditCyclesGeneration: UInt64 = 0
-    private var submitGeneration: UInt64 = 0
     private var previewGeneration: UInt64 = 0
     private var draftRevision: UInt64 = 0
-    private var activePayloadIdentity: String?
     private var previewPayloadIdentity: String?
     private var isReconcilingReferences = false
     private var isResettingDraft = false
-    private let idempotency = V15IdempotencyOwner()
     private let services: V15Services
-    private let createScope = "transaction-create"
-    private let repaymentScope = "repayment-commit"
 
     public init(services: V15Services, occurredOn: Date = Date()) {
         self.services = services
@@ -52,6 +51,7 @@ public final class V15RecordModel {
     public var isOffline: Bool { services.offlineSnapshotAt != nil }
 
     public func loadReferences() async {
+        isPresented = true
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.loadAccounts() }
             group.addTask { await self.loadCategories() }
@@ -135,101 +135,101 @@ public final class V15RecordModel {
     }
 
     public func submit() async -> CommitOutcome? {
-        switch submission {
-        case .submitting, .queued, .success, .conflict: return nil
-        case .idle, .failed: break
-        }
-        validate(); guard localIssues.isEmpty else { return nil }
-        guard let request = request(), let identity = payloadIdentity(for: request) else { validate(); return nil }
-        if isOffline {
-            guard kind != .repayment else {
-                submission = .failed(.init(kind: .offlineReadOnly, code: "preview_requires_network", message: "需要联网：还款前必须先读取最新账期。"))
+        if case .submitting = submission { return nil }
+        if let id = activeJournalID {
+            if let item = services.pendingWrites.item(id) { return await sendJournalItem(item, receiptFirst: true) }
+            // Another window may have completed this operation. A missing local
+            // item never authorizes a new write from the same draft.
+            submission = .submitting
+            do {
+                let transaction: V15Transaction
+                if activeJournalKind == .repayment { transaction = try decodeTransaction(from: await services.actions.receipt(idempotencyKey: id)) }
+                else { transaction = try await services.ledger.receipt(idempotencyKey: id) }
+                return try finish(transaction, id: id)
+            } catch {
+                submission = .failed((error as? V15Failure) ?? .init(kind: .responseUnknown, message: "原请求结果尚未确认，请稍后恢复。"))
                 return nil
             }
-            let id = services.pendingWrites.enqueueCreate(request)
-            submission = .queued(id)
-            resetDraftForNextEntry()
-            return .queued(id)
         }
-        if kind == .repayment {
-            guard case .ready(let preview) = repaymentPreviewPhase, previewPayloadIdentity == identity else {
-                repaymentPreviewPhase = .failed(.init(kind: .conflict, code: "repayment_preview_required", message: "输入已变化，请重新查看还款影响。"))
-                return nil
+        switch submission { case .queued, .success, .conflict: return nil; default: break }
+        validate(); guard localIssues.isEmpty, let request = request(), let identity = payloadIdentity(for: request) else { return nil }
+        do {
+            try services.pendingWrites.ensureStorage()
+            if isOffline {
+                guard kind != .repayment else { throw V15Failure(kind: .offlineReadOnly, code: "preview_requires_network", message: "还款需要联网预览。") }
+                let id = services.pendingWrites.enqueueCreate(request)
+                try services.pendingWrites.ensureStorage()
+                submission = .queued(id); resetDraftForNextEntry(); return .queued(id)
             }
-            return await commitRepayment(preview: preview, identity: identity)
-        }
-        submitGeneration &+= 1; let current = submitGeneration; submission = .submitting; fieldIssues = []
-        activePayloadIdentity = identity
-        let key = idempotency.key(for: createScope, payloadIdentity: identity)
-        do {
-            let created = try await services.ledger.create(request, idempotencyKey: key)
-            guard current == submitGeneration else { return nil }
-            releaseActiveKey()
-            submission = .success(created)
-            resetDraftForNextEntry()
-            return .confirmed(created)
-        } catch is CancellationError {
-            guard current == submitGeneration else { return nil }; submission = .idle
-        } catch let failure as V15Failure {
-            guard current == submitGeneration else { return nil }
-            if releasesKey(after: failure) { releaseActiveKey() }
-            if failure.kind == .conflict, let conflict = failure.conflict { submission = .conflict(conflict) }
-            else { fieldIssues = failure.fieldIssues; submission = .failed(failure) }
+            let key = UUID()
+            let id: UUID
+            if kind == .repayment {
+                guard case .ready(let preview) = repaymentPreviewPhase, previewPayloadIdentity == identity else {
+                    repaymentPreviewPhase = .failed(.init(kind: .conflict, code: "repayment_preview_required", message: "输入已变化，请重新查看还款影响。")); return nil
+                }
+                id = try services.pendingWrites.prepare(kind: .repayment, title: request.title, request: V15JournalRepayment(previewToken: preview.meta.previewToken), idempotencyKey: key)
+            } else { id = try services.pendingWrites.prepare(kind: .transactionCreate, title: request.title, request: request, idempotencyKey: key) }
+            activeJournalID = id
+            activeJournalKind = kind == .repayment ? .repayment : .transactionCreate
+            guard let item = services.pendingWrites.item(id) else { return nil }
+            return await sendJournalItem(item, receiptFirst: false)
         } catch {
-            // A non-classified transport exception has unknown server outcome.
-            // Keep its payload-bound key so explicit retry cannot duplicate it.
-            guard current == submitGeneration else { return nil }
-            submission = .failed(.init(kind: .responseUnknown, code: "response_unknown", message: "连接中断，暂时无法确认是否保存成功。安全检查不会重复记账。"))
-        }
-        return nil
-    }
-
-    private func commitRepayment(preview: V15RepaymentPreview, identity: String) async -> CommitOutcome? {
-        submitGeneration &+= 1; let current = submitGeneration
-        submission = .submitting; fieldIssues = []; activePayloadIdentity = identity
-        let key = idempotency.key(for: repaymentScope, payloadIdentity: identity)
-        do {
-            let receipt = try await services.actions.commitRepayment(previewToken: preview.meta.previewToken, idempotencyKey: key)
-            guard current == submitGeneration else { return nil }
-            let transaction = try decodeTransaction(from: receipt)
-            releaseActiveKey(scope: repaymentScope)
-            submission = .success(transaction)
-            resetDraftForNextEntry()
-            return .confirmed(transaction)
-        } catch let failure as V15Failure {
-            guard current == submitGeneration else { return nil }
-            if failure.kind == .conflict {
-                repaymentPreviewPhase = .idle; previewPayloadIdentity = nil
-                if let conflict = failure.conflict { submission = .conflict(conflict) }
-                else { submission = .failed(failure) }
-                releaseActiveKey(scope: repaymentScope)
-            } else if V15LedgerCreateService.outcomeMayBeUnknown(failure) {
-                return await reconcileRepaymentReceipt(key: key, generation: current)
-            } else {
-                releaseActiveKey(scope: repaymentScope)
-                submission = .failed(failure)
-            }
-        } catch {
-            guard current == submitGeneration else { return nil }
-            return await reconcileRepaymentReceipt(key: key, generation: current)
-        }
-        return nil
-    }
-
-    private func reconcileRepaymentReceipt(key: UUID, generation: UInt64) async -> CommitOutcome? {
-        do {
-            let receipt = try await services.actions.receipt(idempotencyKey: key)
-            guard generation == submitGeneration else { return nil }
-            let transaction = try decodeTransaction(from: receipt)
-            releaseActiveKey(scope: repaymentScope)
-            submission = .success(transaction)
-            resetDraftForNextEntry()
-            return .confirmed(transaction)
-        } catch {
-            guard generation == submitGeneration else { return nil }
-            submission = .failed(.init(kind: .responseUnknown, code: "response_unknown", message: "结果暂时不明，请稍后读取最新账目；不会自动重复还款。"))
+            submission = .failed((error as? V15Failure) ?? .init(kind: .transport, code: "write_journal_unavailable", message: "无法安全保存请求，本次没有发送。"))
             return nil
         }
+    }
+
+    private func sendJournalItem(_ item: V15PendingWriteStore.Item, receiptFirst: Bool) async -> CommitOutcome? {
+        guard !isOffline else { submission = .failed(.init(kind: .offlineReadOnly, code: "recovery_requires_network", message: "原请求已保留，请联网后恢复。")); return nil }
+        submission = .submitting; fieldIssues = []
+        let id = item.id
+        if receiptFirst {
+            do {
+                let transaction: V15Transaction
+                if item.kind == .repayment { transaction = try decodeTransaction(from: await services.actions.receipt(idempotencyKey: id)) }
+                else { transaction = try await services.ledger.receipt(idempotencyKey: id) }
+                return try finish(transaction, id: id)
+            } catch {
+                // A lookup failure is not proof of non-execution. This explicit
+                // retry may replay only the exact original payload and key.
+            }
+        }
+        do {
+            try services.pendingWrites.markInFlight(id)
+            guard let payload = item.payload else { throw V15Failure(kind: .decoding, code: "pending_write_invalid", message: "原请求无法读取。") }
+            let transaction: V15Transaction
+            if item.kind == .repayment {
+                let original = try V15BodyEncoder.decode(V15JournalRepayment.self, from: payload)
+                transaction = try decodeTransaction(from: await services.actions.commitRepayment(previewToken: original.previewToken, idempotencyKey: id))
+            } else {
+                let original = try V15BodyEncoder.decode(V15TransactionCreateRequest.self, from: payload)
+                transaction = try await services.ledger.create(original, idempotencyKey: id)
+            }
+            return try finish(transaction, id: id)
+        } catch {
+            let failure = (error as? V15Failure) ?? .init(kind: .responseUnknown, code: "response_unknown", message: "连接中断，原请求已保留，可安全恢复。")
+            let unknown = receiptFirst || !(error is V15Failure) || V15LedgerCreateService.outcomeMayBeUnknown(failure)
+            if unknown { services.pendingWrites.markUnknown(id) }
+            else {
+                do { try services.pendingWrites.complete(id) } catch { services.pendingWrites.markUnknown(id) }
+            }
+            guard activeJournalID == id else { return nil }
+            if !unknown && services.pendingWrites.item(id) == nil { activeJournalID = nil }
+            fieldIssues = failure.fieldIssues
+            if failure.kind == .conflict, let conflict = failure.conflict { submission = .conflict(conflict) }
+            else { submission = .failed(failure) }
+            return nil
+        }
+    }
+
+    private func finish(_ transaction: V15Transaction, id: UUID) throws -> CommitOutcome? {
+        try services.pendingWrites.complete(id)
+        services.notifyConfirmedWrite()
+        let ownsDraft = activeJournalID == id
+        if ownsDraft {
+            activeJournalID = nil; submission = .success(transaction); resetDraftForNextEntry()
+        }
+        return ownsDraft && isPresented ? .confirmed(transaction) : nil
     }
 
     private func decodeTransaction(from receipt: V15ActionCommitReceipt) throws -> V15Transaction {
@@ -240,10 +240,13 @@ public final class V15RecordModel {
     /// A 409 never replays blindly. Reload the authoritative references, then
     /// puts the user back in the decision state with the same visible inputs.
     public func reloadAfterConflict() async { submission = .idle; await loadReferences(); if kind == .repayment { await loadCreditCycles() } }
-    public func dismiss() { submitGeneration &+= 1; previewGeneration &+= 1; releaseActiveKey(); releaseActiveKey(scope: repaymentScope); repaymentPreviewPhase = .idle; previewPayloadIdentity = nil; submission = .idle; fieldIssues = [] }
+    public func dismiss() { isPresented = false; previewGeneration &+= 1; repaymentPreviewPhase = .idle; previewPayloadIdentity = nil; fieldIssues = [] }
 
     public func newEntry() {
         dismiss()
+        activeJournalID = nil
+        isPresented = true
+        submission = .idle
         resetDraftForNextEntry()
     }
 
@@ -253,7 +256,9 @@ public final class V15RecordModel {
 
     private func inputChanged() {
         guard !isResettingDraft else { return }
-        draftRevision &+= 1; submitGeneration &+= 1; releaseActiveKey(); fieldIssues = []
+        // Programmatic edits cannot release a submitted request or its lock.
+        guard activeJournalID == nil else { validate(); return }
+        draftRevision &+= 1; fieldIssues = []
         previewGeneration &+= 1; repaymentPreviewPhase = .idle; previewPayloadIdentity = nil
         if case .idle = submission {} else { submission = .idle }
         validate()
@@ -363,24 +368,6 @@ public final class V15RecordModel {
         // Revision preserves the invariant that editing then restoring text is
         // still a new user decision and must receive a fresh create key.
         return "\(draftRevision):\(data.base64EncodedString())"
-    }
-
-    private func releaseActiveKey(scope: String? = nil) {
-        guard let activePayloadIdentity else { return }
-        if let scope { idempotency.abandon(scope: scope, payloadIdentity: activePayloadIdentity) }
-        else {
-            idempotency.abandon(scope: createScope, payloadIdentity: activePayloadIdentity)
-            idempotency.abandon(scope: repaymentScope, payloadIdentity: activePayloadIdentity)
-        }
-        self.activePayloadIdentity = nil
-    }
-
-    private func releasesKey(after failure: V15Failure) -> Bool {
-        switch failure.kind {
-        case .conflict, .offlineReadOnly: true
-        case .transport: failure.code != nil // HTTP response was received (validation/auth/rate limit).
-        case .responseUnknown, .decoding, .cancelled: false
-        }
     }
 
     private func validate() {

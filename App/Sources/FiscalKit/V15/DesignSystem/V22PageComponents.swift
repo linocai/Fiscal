@@ -105,10 +105,10 @@ public struct V22FlowProgress: View {
 
 public struct V22Metric: View {
     private let title: String
-    private let minorUnits: Int64
+    private let minorUnits: Int64?
     private let direction: V15MoneyDirection
 
-    public init(_ title: String, minorUnits: Int64, direction: V15MoneyDirection = .balance) {
+    public init(_ title: String, minorUnits: Int64?, direction: V15MoneyDirection = .balance) {
         self.title = title
         self.minorUnits = minorUnits
         self.direction = direction

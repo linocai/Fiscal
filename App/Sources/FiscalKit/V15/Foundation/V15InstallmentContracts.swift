@@ -201,10 +201,11 @@ public struct V15InstallmentPurchaseReplacement: Codable, Sendable, Equatable {
 }
 
 public struct V15InstallmentReplacementRequest: Codable, Sendable, Equatable {
+    public var previewFingerprint: String?
     public let expectedVersion: Int; public let purchase: V15InstallmentPurchaseReplacement; public let installmentCount: Int
     public let totalFeeMinor: V15MinorUnits; public let feeCategoryID: UUID?; public let feeOccurredAt: Date?; public let startStatementDate: String
-    public init(expectedVersion: Int, purchase: V15InstallmentPurchaseReplacement, installmentCount: Int, totalFeeMinor: V15MinorUnits, feeCategoryID: UUID? = nil, feeOccurredAt: Date? = nil, startStatementDate: String) { self.expectedVersion = expectedVersion; self.purchase = purchase; self.installmentCount = installmentCount; self.totalFeeMinor = totalFeeMinor; self.feeCategoryID = feeCategoryID; self.feeOccurredAt = feeOccurredAt; self.startStatementDate = startStatementDate }
-    enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", purchase, installmentCount = "installment_count", totalFeeMinor = "total_fee_minor", feeCategoryID = "fee_category_id", feeOccurredAt = "fee_occurred_at", startStatementDate = "start_statement_date" }
+    public init(expectedVersion: Int, purchase: V15InstallmentPurchaseReplacement, installmentCount: Int, totalFeeMinor: V15MinorUnits, feeCategoryID: UUID? = nil, feeOccurredAt: Date? = nil, startStatementDate: String, previewFingerprint: String? = nil) { self.previewFingerprint = previewFingerprint; self.expectedVersion = expectedVersion; self.purchase = purchase; self.installmentCount = installmentCount; self.totalFeeMinor = totalFeeMinor; self.feeCategoryID = feeCategoryID; self.feeOccurredAt = feeOccurredAt; self.startStatementDate = startStatementDate }
+    enum CodingKeys: String, CodingKey { case previewFingerprint = "preview_fingerprint"; case expectedVersion = "expected_version", purchase, installmentCount = "installment_count", totalFeeMinor = "total_fee_minor", feeCategoryID = "fee_category_id", feeOccurredAt = "fee_occurred_at", startStatementDate = "start_statement_date" }
 }
 
 public struct V15InstallmentPlanPreview: Codable, Sendable, Equatable {
@@ -224,9 +225,10 @@ public struct V15InstallmentAffectedCycle: Codable, Sendable, Equatable, Identif
 public struct V15InstallmentWarning: Codable, Sendable, Equatable, Identifiable { public var id: String { "\(code)-\(message)" }; public let code: String; public let message: String }
 
 public struct V15InstallmentPlanChangePreview: Codable, Sendable, Equatable {
+    public let previewFingerprint: String?
     public let currentPlan: V15InstallmentPlan; public let proposedPlan: V15InstallmentPlanPreview; public let lockedPeriods: [V15InstallmentPeriod]
     public let futurePeriods: [V15InstallmentPeriodPreview]; public let affectedCycles: [V15InstallmentAffectedCycle]; public let warnings: [V15InstallmentWarning]
-    enum CodingKeys: String, CodingKey { case currentPlan = "current_plan", proposedPlan = "proposed_plan", lockedPeriods = "locked_periods", futurePeriods = "future_periods", affectedCycles = "affected_cycles", warnings }
+    enum CodingKeys: String, CodingKey { case previewFingerprint = "preview_fingerprint"; case currentPlan = "current_plan", proposedPlan = "proposed_plan", lockedPeriods = "locked_periods", futurePeriods = "future_periods", affectedCycles = "affected_cycles", warnings }
 }
 
 public struct V15InstallmentSettlementPreview: Codable, Sendable, Equatable {

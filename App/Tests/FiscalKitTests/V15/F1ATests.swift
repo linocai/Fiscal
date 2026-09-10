@@ -177,7 +177,7 @@ struct F1ATests {
         }
     }
 
-    @Test("response-unknown retains only its payload key; edits and deterministic outcomes rotate it")
+    @Test("response-unknown retains original key despite edits; resolved outcomes permit a new entry")
     @MainActor func payloadBoundIdempotency() async throws {
         let outcomes: [F1AControlledTransport.CreateOutcome] = [.responseUnknown, .success, .responseUnknown, .success, .validation, .success, .conflict, .success, .success, .success]
         let transport = F1AControlledTransport(outcomes: outcomes)
@@ -186,28 +186,34 @@ struct F1ATests {
         configureValidExpense(model)
 
         await model.submit(); let unknownKey = try #require(await transport.createKeys().last)
+        model.note = "unknown后编辑仍属于原请求"
         await model.submit(); let retryKey = try #require(await transport.createKeys().last)
         #expect(unknownKey == retryKey)
 
+        model.newEntry()
         configureValidExpense(model, title: "编辑后新请求")
         await model.submit(); let editedUnknownKey = try #require(await transport.createKeys().last)
         #expect(editedUnknownKey != unknownKey)
         await model.submit(); let editedRetryKey = try #require(await transport.createKeys().last)
         #expect(editedRetryKey == editedUnknownKey)
 
+        model.newEntry()
         configureValidExpense(model, title: "422 后新请求")
         await model.submit(); let validationKey = try #require(await transport.createKeys().last)
         await model.submit(); let validationRetryKey = try #require(await transport.createKeys().last)
         #expect(validationRetryKey != validationKey)
 
+        model.newEntry()
         configureValidExpense(model, title: "409 后新请求")
         await model.submit(); let conflictKey = try #require(await transport.createKeys().last)
         await model.reloadAfterConflict()
         await model.submit(); let conflictRetryKey = try #require(await transport.createKeys().last)
         #expect(conflictRetryKey != conflictKey)
 
+        model.newEntry()
         configureValidExpense(model, title: "成功后下一笔")
         await model.submit(); let successKey = try #require(await transport.createKeys().last)
+        model.newEntry()
         configureValidExpense(model, title: "下一笔")
         await model.submit(); let nextKey = try #require(await transport.createKeys().last)
         #expect(nextKey != successKey)
@@ -218,6 +224,7 @@ struct F1ATests {
         let transport = F1AControlledTransport(createDelayMilliseconds: 80)
         let model = V15RecordModel(services: V15Services(transport: transport))
         await model.loadReferences()
+        model.newEntry()
         configureValidExpense(model, title: "只应保存一次")
 
         let first = Task { @MainActor in await model.submit() }

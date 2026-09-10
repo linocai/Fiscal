@@ -70,6 +70,7 @@ class LedgerTransaction(Base):
             name="valid_source",
         ),
         CheckConstraint("version >= 1", name="version_positive"),
+        CheckConstraint("merchant_mapping_generation >= 0", name="mapping_generation_nonnegative"),
         CheckConstraint("char_length(title) BETWEEN 1 AND 120", name="title_length"),
         CheckConstraint("note IS NULL OR char_length(note) <= 500", name="note_length"),
         UniqueConstraint("idempotency_key", name="uq_transactions_idempotency_key"),
@@ -97,6 +98,9 @@ class LedgerTransaction(Base):
     idempotency_key: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    merchant_mapping_generation: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now

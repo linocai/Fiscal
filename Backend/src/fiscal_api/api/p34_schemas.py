@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, Self
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from fiscal_api.api.p3_schemas import APIModel
 from fiscal_api.api.p7_schemas import DebtCycleRow, DebtInstallmentGroup, KnownFutureEvent
@@ -55,20 +55,50 @@ class ReportSummary(APIModel):
     cash_net_minor: int
     internal_transfer_inflow_minor: int
     internal_transfer_outflow_minor: int
-    credit_debt_at_period_end_minor: int
+    credit_debt_at_period_end_minor: int | None
+    credit_debt_at_period_end_status: Literal["known", "unknown"] = "known"
+    unknown_balance_account_ids: list[UUID] = Field(default_factory=lambda: list[UUID]())
+    balance_unavailable_reason: str | None = None
     reimbursement_outstanding_at_period_end_minor: int
+
+    @model_validator(mode="after")
+    def validate_balance_knowledge(self) -> Self:
+        unknown = self.credit_debt_at_period_end_status == "unknown"
+        if unknown != (self.credit_debt_at_period_end_minor is None):
+            raise ValueError("debt balance value and knowledge status disagree")
+        if unknown != bool(self.unknown_balance_account_ids):
+            raise ValueError("unknown debt requires its account IDs")
+        if unknown != (self.balance_unavailable_reason is not None):
+            raise ValueError("balance reason must describe an unknown debt")
+        return self
 
 
 class ReportAccountBalance(APIModel):
     account_id: UUID
     account_name: str
     account_kind: AccountKind
-    opening_balance_minor: int
-    closing_balance_minor: int
+    opening_balance_minor: int | None
+    closing_balance_minor: int | None
+    opening_balance_status: Literal["known", "unknown"] = "known"
+    closing_balance_status: Literal["known", "unknown"] = "known"
+    balance_as_of_date: date | None = None
+    balance_unavailable_reason: str | None = None
     period_inflow_minor: int
     period_outflow_minor: int
     internal_transfer_inflow_minor: int
     internal_transfer_outflow_minor: int
+
+    @model_validator(mode="after")
+    def validate_balance_knowledge(self) -> Self:
+        opening_unknown = self.opening_balance_status == "unknown"
+        closing_unknown = self.closing_balance_status == "unknown"
+        if opening_unknown != (self.opening_balance_minor is None):
+            raise ValueError("opening balance value and knowledge status disagree")
+        if closing_unknown != (self.closing_balance_minor is None):
+            raise ValueError("closing balance value and knowledge status disagree")
+        if (opening_unknown or closing_unknown) != (self.balance_unavailable_reason is not None):
+            raise ValueError("balance reason must describe an unknown balance")
+        return self
 
 
 class ReportCategoryTotal(APIModel):

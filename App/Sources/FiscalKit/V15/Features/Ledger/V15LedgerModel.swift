@@ -216,6 +216,7 @@ public final class V15LedgerModel {
                 amountMinor: selected.amountMinor,
                 request: request
             )
+            if let failure = services.pendingWrites.storageFailure { mutation = .failed(failure); return }
             mutation = .reconciled("已加入待同步；同步前仍显示上次保存的分类。")
             return
         }
@@ -294,6 +295,7 @@ public final class V15LedgerModel {
                     amountMinor: transaction.amountMinor,
                     request: request
                 )
+                if services.pendingWrites.storageFailure != nil { break }
                 succeeded.append(transaction.id)
                 continue
             }

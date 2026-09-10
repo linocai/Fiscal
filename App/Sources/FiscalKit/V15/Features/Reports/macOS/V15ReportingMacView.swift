@@ -5,6 +5,7 @@ import AppKit
 
 public struct V15ReportingMacView: View {
     @State private var model: V15ReportingModel
+    private let services: V15Services
     private let artifactSaver: any V15ReportArtifactSaving
 
     public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialLens: V15ReportingModel.Lens = .overview) {
@@ -16,6 +17,7 @@ public struct V15ReportingMacView: View {
         model.selectLens(initialLens)
         _model = State(initialValue: model)
         self.artifactSaver = artifactSaver
+        self.services = services
     }
 
     public var body: some View {
@@ -34,6 +36,7 @@ public struct V15ReportingMacView: View {
             exportPanel.frame(width: 460).padding(24).background(V15Palette.paper.color)
         }
         .task { await model.load() }
+        .onChange(of: services.confirmedWriteRevision) { _, _ in Task { await model.load() } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f4a.reports.macos")
     }
@@ -181,7 +184,8 @@ public struct V15ReportingMacView: View {
                 ("期末信用欠款", report.summary.creditDebtAtPeriodEndMinor, .outflow)
             ])
             HStack(alignment: .top, spacing: 18) {
-                reportCard("数据完整性") {
+                if report.summary.creditDebtAtPeriodEndMinor == nil { Text("部分账户缺少历史余额基准，期末欠款未知；收支数据仍可查看。").font(V15Typography.secondary) }
+            reportCard("数据完整性") {
                     completenessRows(report.completeness)
                     Text("这些记录仍需处理，但已经计入总额。")
                         .font(V15Typography.secondary)
@@ -189,7 +193,7 @@ public struct V15ReportingMacView: View {
                 }
                 reportCard("期末账户余额") {
                     ForEach(Array(report.accounts.enumerated()), id: \.offset) { indexed in
-                        aggregateRow(title: indexed.element.accountName, detail: "\(accountKindLabel(indexed.element.accountKind)) · 期末余额", amount: indexed.element.closingBalanceMinor, capability: indexed.element.drillCapability, id: "overview.account.\(indexed.offset)")
+                        aggregateRow(title: indexed.element.accountName, detail: "\(accountKindLabel(indexed.element.accountKind)) · 期末余额", amount: indexed.element.closingBalanceMinor, capability: indexed.element.drillCapability, id: "overview.account.\(indexed.offset)", direction: .balance)
                     }
                 }
             }
@@ -280,7 +284,7 @@ public struct V15ReportingMacView: View {
                             .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     } else {
                         ForEach(Array(creditAccounts.enumerated()), id: \.offset) { indexed in
-                            aggregateRow(title: indexed.element.accountName, detail: "信用账户 · 期末余额", amount: indexed.element.closingBalanceMinor, capability: indexed.element.drillCapability, id: "debt.account.\(indexed.offset)")
+                            aggregateRow(title: indexed.element.accountName, detail: "信用账户 · 期末余额", amount: indexed.element.closingBalanceMinor, capability: indexed.element.drillCapability, id: "debt.account.\(indexed.offset)", direction: .balance)
                         }
                     }
                 }
@@ -413,7 +417,7 @@ public struct V15ReportingMacView: View {
         }
     }
 
-    private func metricGrid(_ values: [(String, Int64, V15MoneyDirection)]) -> some View {
+    private func metricGrid(_ values: [(String, Int64?, V15MoneyDirection)]) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 12)], spacing: 12) {
             ForEach(Array(values.enumerated()), id: \.offset) { indexed in
                 V22Metric(indexed.element.0, minorUnits: indexed.element.1, direction: indexed.element.2)
@@ -483,7 +487,7 @@ public struct V15ReportingMacView: View {
         }
     }
 
-    private func aggregateRow(title: String, detail: String, amount: Int64?, capability: V15ReportDrillCapability, id: String) -> some View {
+    private func aggregateRow(title: String, detail: String, amount: Int64?, capability: V15ReportDrillCapability, id: String, direction: V15MoneyDirection = .neutral) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Button {
                 guard let owner = model.beginDrill(capability: capability, label: title) else { return }
@@ -495,7 +499,7 @@ public struct V15ReportingMacView: View {
                         Text(detail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     }
                     Spacer(minLength: 10)
-                    if let amount { V15MoneyText(minorUnits: amount, direction: .neutral) }
+                    V15MoneyText(minorUnits: amount, direction: direction)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -595,9 +599,14 @@ public struct V15ReportingMacView: View {
             tableHeader("摘要", width: 250, alignment: .leading)
             tableHeader("分类", width: 130, alignment: .leading)
             tableHeader("来源", width: 130, alignment: .leading)
-            tableHeader("总消费", width: 120, alignment: .trailing)
-            tableHeader("商户退款", width: 120, alignment: .trailing)
-            tableHeader("净消费", width: 120, alignment: .trailing)
+            if model.lens == .cashFlow {
+                tableHeader("类型", width: 120, alignment: .trailing)
+                tableHeader("外部现金影响", width: 240, alignment: .trailing)
+            } else {
+                tableHeader("总消费", width: 120, alignment: .trailing)
+                tableHeader("商户退款", width: 120, alignment: .trailing)
+                tableHeader("净消费", width: 120, alignment: .trailing)
+            }
         }
         .padding(.horizontal, 10)
         .frame(height: 38)
@@ -614,9 +623,14 @@ public struct V15ReportingMacView: View {
             Text(item.merchantName ?? kindLabel(item.kind)).font(V15Typography.body).frame(width: 250, alignment: .leading)
             Text(item.categoryName ?? "未分类").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).frame(width: 130, alignment: .leading)
             Text(sourceLabel(item.source)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).frame(width: 130, alignment: .leading)
+            if model.lens == .cashFlow {
+                Text(kindLabel(item.kind)).font(V15Typography.secondary).frame(width: 120, alignment: .trailing)
+                V15MoneyText(minorUnits: item.externalCashAmountMinor, direction: .balance, includeCurrency: false).frame(width: 240, alignment: .trailing)
+            } else {
             V15MoneyText(minorUnits: item.grossConsumptionMinor, direction: .neutral, includeCurrency: false).frame(width: 120, alignment: .trailing)
             V15MoneyText(minorUnits: item.merchantRefundMinor, direction: .neutral, includeCurrency: false).frame(width: 120, alignment: .trailing)
             V15MoneyText(minorUnits: item.netConsumptionMinor, direction: .neutral, includeCurrency: false).frame(width: 120, alignment: .trailing)
+            }
         }
         .padding(.horizontal, 10)
         .frame(minHeight: 42)

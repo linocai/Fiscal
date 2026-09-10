@@ -25,6 +25,11 @@ class RateLimiter:
         self._buckets: OrderedDict[str, _Bucket] = OrderedDict()
         self._lock = asyncio.Lock()
 
+    async def check_passphrase_attempt(self, source: str) -> None:
+        await self._consume(
+            f"passphrase:{source}", self._settings.rate_limit_failed_auth_per_minute
+        )
+
     async def check_failed_auth(self, source: str) -> None:
         await self._consume(f"failed:{source}", self._settings.rate_limit_failed_auth_per_minute)
 

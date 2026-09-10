@@ -7,6 +7,7 @@ import SwiftUI
 @main
 struct V15RootSmokeiOSApp: App {
     private static let keychainServicePrefix = "com.linotsai.fiscal.v15-root-smoke.ios.access."
+    private let bootstrapFixtureServices: V15Services?
     private let services: V15Services
     private let accessKeyStore: AccessKeyStore
     private let offlineSnapshots: OfflineSnapshotStore
@@ -17,6 +18,7 @@ struct V15RootSmokeiOSApp: App {
 
     init() {
         let environment = ProcessInfo.processInfo.environment
+        bootstrapFixtureServices = environment["FISCAL_ROOT_SMOKE_REVIEW_SCENARIO"] == "bootstrap-retry" ? V15F2BFixtures.services(route: "today-root-workspace", reviewScenario: "bootstrap-retry") : nil
         let baseURL = APIConfiguration.baseURL()
         let session: URLSession
         if environment["FISCAL_ROOT_SMOKE_FORCE_TRANSPORT_ERROR"] == "1" {
@@ -53,6 +55,7 @@ struct V15RootSmokeiOSApp: App {
         let revisionStore = DataRevisionStore()
         services = V15Services(
             baseURL: baseURL,
+            profileID: keychainService,
             session: session,
             accessKeyStore: accessKeyStore,
             offlineSnapshots: offlineSnapshots,
@@ -64,6 +67,8 @@ struct V15RootSmokeiOSApp: App {
         WindowGroup {
             if cleanupOnly {
                 V15RootSmokeCleanupView(accessKeyStore: accessKeyStore, offlineSnapshots: offlineSnapshots)
+            } else if let bootstrapFixtureServices {
+                V15IOSLiveAppShell(services: bootstrapFixtureServices)
             } else if formalFixture {
                 // Test-only host: this is the actual formal workspace, fed by
                 // deterministic read-only facts rather than the Gallery shell.

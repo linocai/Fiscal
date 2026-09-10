@@ -502,6 +502,7 @@ class InstallmentService:
     async def preview_update(
         self, plan_id: UUID, request: InstallmentReplacement
     ) -> InstallmentPlanChangePreview:
+        business_date = self._today()
         plan = await self.repository.plan(plan_id)
         if plan is None:
             not_found("installment_plan_not_found", "The installment plan does not exist")
@@ -560,7 +561,12 @@ class InstallmentService:
             account.due_day,
             CreditCycleMode(account.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF.value),
         ).statement_date
-        if natural_statement < self._today() or request.start_statement_date < natural_statement:
+        purchase_changed = request.purchase.account_id != plan.credit_account_id or ensure_utc(
+            request.purchase.occurred_at
+        ) != ensure_utc(purchase.occurred_at)
+        if (
+            purchase_changed and natural_statement < self._today()
+        ) or request.start_statement_date < natural_statement:
             invalid("purchase_not_eligible", "Replacement purchase cycle must remain open")
         if request.total_fee_minor:
             assert request.fee_category_id is not None and request.fee_occurred_at is not None
@@ -592,6 +598,16 @@ class InstallmentService:
                 request.start_statement_date, index, account.statement_day
             )
             existing = await self.repository.cycle_by_statement(account.id, statement)
+            if statement < self._today():
+                conflict(
+                    "installment_period_locked", "Replacement suffix must remain in open periods"
+                )
+            if existing is not None:
+                _charges, repayments = (await self.credit_repository.amounts([existing.id])).get(
+                    existing.id, (0, 0)
+                )
+                if repayments:
+                    conflict("installment_period_locked", "Replacement suffix has repayments")
             principal_minor = principal_split[index - len(locked)]
             fee_minor = fee_split[index - len(locked)]
             if principal_minor + fee_minor == 0:
@@ -643,7 +659,7 @@ class InstallmentService:
             periods=previews,
         )
         affected = self._affected_cycles(current.periods, previews)
-        return InstallmentPlanChangePreview(
+        result = InstallmentPlanChangePreview(
             current_plan=current,
             proposed_plan=proposed,
             locked_periods=locked,
@@ -652,11 +668,34 @@ class InstallmentService:
             warnings=[],
         )
 
+        if self._today() != business_date:
+            conflict("installment_preview_stale", "The business date changed; preview again")
+        canonical = json.dumps(
+            {
+                "business_date": business_date.isoformat(),
+                "plan_id": str(plan_id),
+                "request": request.model_dump(mode="json", exclude={"preview_fingerprint"}),
+                "preview": result.model_dump(mode="json", exclude={"preview_fingerprint"}),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return result.model_copy(
+            update={"preview_fingerprint": hashlib.sha256(canonical.encode()).hexdigest()}
+        )
+
     async def update(
         self, plan_id: UUID, request: InstallmentReplacement
     ) -> InstallmentPlanResponse:
         await acquire_mutation_lock(self.session)
+        if request.preview_fingerprint is None:
+            conflict(
+                "installment_preview_required",
+                "A confirmed replacement preview is required; update the client and preview again",
+            )
         preview = await self.preview_update(plan_id, request)
+        if request.preview_fingerprint != preview.preview_fingerprint:
+            conflict("installment_preview_stale", "The replacement preview changed; preview again")
         plan = await self._required_plan(plan_id, request.expected_version)
         purchase = await self.repository.transaction(plan.purchase_transaction_id)
         if purchase is None:
@@ -1531,26 +1570,26 @@ class InstallmentService:
             if plan.fee_transaction_id
             else None
         )
-        cycles = {
-            period.effective_cycle_id: await self.credit_repository.cycle(period.effective_cycle_id)
-            for period in plan.periods
-        }
+        cycles = await self.credit_repository.cycles_by_ids(
+            {
+                cycle_id
+                for period in plan.periods
+                for cycle_id in (period.effective_cycle_id, period.scheduled_cycle_id)
+            }
+        )
         amounts = await self.credit_repository.amounts(list(cycles))
         periods: list[InstallmentPeriodResponse] = []
         locked_count = cycle_settled = 0
         for period in plan.periods:
-            cycle = cycles[period.effective_cycle_id]
-            scheduled = await self.credit_repository.cycle(period.scheduled_cycle_id)
+            cycle = cycles.get(period.effective_cycle_id)
+            scheduled = cycles.get(period.scheduled_cycle_id)
             if cycle is None or scheduled is None:
                 raise RuntimeError("installment cycle missing")
             purchase_minor, repaid = amounts.get(cycle.id, (0, 0))
             opening = 0
             remaining = purchase_minor + opening - repaid
             status = self._cycle_status(cycle, remaining, repaid)
-            locked = (
-                cycle.statement_date < self._today()
-                or await self.repository.cycle_has_repayment(cycle.id)
-            )
+            locked = cycle.statement_date < self._today() or repaid > 0
             locked_count += int(locked)
             cycle_settled += int(status is CreditCycleStatus.SETTLED)
             period_status = self._period_status(period, cycle, status)

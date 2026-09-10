@@ -84,8 +84,18 @@ def report_csv(report: PeriodReport | PeriodReportV2) -> bytes:
         ("生成时间", _visible_datetime(meta.generated_at)),
     ):
         writer.writerow(["报表信息", label, "", "", "", _safe_csv_text(value)])
-    for key, value in report.summary.model_dump().items():
-        writer.writerow(["汇总", SUMMARY_LABELS[key], "", _yuan_number(value), "", ""])
+    for key in SUMMARY_LABELS:
+        value = getattr(report.summary, key)
+        writer.writerow(
+            [
+                "汇总",
+                SUMMARY_LABELS[key],
+                "",
+                _yuan_number(value),
+                "",
+                report.summary.balance_unavailable_reason if value is None else "",
+            ]
+        )
     for account in report.accounts:
         for key, value in (
             ("opening_balance_minor", account.opening_balance_minor),
@@ -102,7 +112,7 @@ def report_csv(report: PeriodReport | PeriodReportV2) -> bytes:
                     _safe_csv_text(account.account_name),
                     _yuan_number(value),
                     "",
-                    "",
+                    account.balance_unavailable_reason if value is None else "",
                 ]
             )
     for category in report.categories:
@@ -219,10 +229,12 @@ def report_pdf(report: PeriodReport | PeriodReportV2) -> bytes:
     """
     lines = ["汇总（元）"]
     lines.extend(
-        f"{SUMMARY_LABELS[key]}：{_yuan_text(value)}"
-        for key, value in report.summary.model_dump().items()
+        f"{SUMMARY_LABELS[key]}：{_yuan_text(getattr(report.summary, key))}"
+        for key in SUMMARY_LABELS
     )
     lines.append("")
+    if report.summary.balance_unavailable_reason:
+        lines.append(f"余额未知：{report.summary.balance_unavailable_reason}")
     lines.append("分类")
     lines.extend(
         (
@@ -239,6 +251,11 @@ def report_pdf(report: PeriodReport | PeriodReportV2) -> bytes:
             f"期末 {_yuan_text(row.closing_balance_minor)}，"
             f"流入 {_yuan_text(row.period_inflow_minor)}，"
             f"流出 {_yuan_text(row.period_outflow_minor)}"
+            + (
+                f"（余额未知：{row.balance_unavailable_reason}）"
+                if row.balance_unavailable_reason
+                else ""
+            )
         )
         for row in report.accounts
     )
@@ -304,13 +321,17 @@ def report_export_filename(report: PeriodReport | PeriodReportV2, extension: str
     return f"Fiscal-report-{report.meta.period}.{extension}"
 
 
-def _yuan_number(value: int) -> str:
+def _yuan_number(value: int | None) -> str:
+    if value is None:
+        return ""
     sign = "-" if value < 0 else ""
     major, minor = divmod(abs(value), 100)
     return f"{sign}{major}.{minor:02d}"
 
 
-def _yuan_text(value: int) -> str:
+def _yuan_text(value: int | None) -> str:
+    if value is None:
+        return "未知"
     sign = "-" if value < 0 else ""
     major, minor = divmod(abs(value), 100)
     return f"{sign}¥{major:,}.{minor:02d}"

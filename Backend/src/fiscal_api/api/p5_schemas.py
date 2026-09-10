@@ -192,6 +192,7 @@ class InstallmentPurchaseReplacement(APIModel):
 
 
 class InstallmentReplacement(APIModel):
+    preview_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     expected_version: StrictInt = Field(ge=1)
     purchase: InstallmentPurchaseReplacement
     installment_count: StrictInt = Field(ge=2, le=60)
@@ -307,6 +308,7 @@ class InstallmentWarning(APIModel):
 
 
 class InstallmentPlanChangePreview(APIModel):
+    preview_fingerprint: str | None = None
     current_plan: InstallmentPlanResponse
     proposed_plan: InstallmentPlanPreview
     locked_periods: list[InstallmentPeriodResponse]

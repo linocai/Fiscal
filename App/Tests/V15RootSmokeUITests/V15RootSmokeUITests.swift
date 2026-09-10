@@ -58,6 +58,26 @@ final class V15RootSmokeUITests: XCTestCase {
         cleanup.terminate()
     }
 
+    func testV221BootstrapRetryReleasesFormalWorkspace() {
+        let app = launchApp(service: uniqueKeychainService(), reviewScenario: "bootstrap-retry")
+        XCTAssertTrue(app.buttons["重试"].firstMatch.waitForExistence(timeout: 8))
+        app.buttons["重试"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.workspace-marker"].waitForExistence(timeout: 8))
+    }
+
+    func testV221ClassifiedTransactionOffersCategoryCorrection() {
+        let app = launchApp(service: uniqueKeychainService(), formalFixture: true)
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.workspace-marker"].waitForExistence(timeout: 8))
+        rootTab("交易", in: app).tap()
+        let row = app.buttons["v221.ios.transaction.00000000-0000-0000-0000-00000000B101"]
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); reveal(row, in: app); row.tap()
+        let change = app.buttons["修改分类"]
+        XCTAssertTrue(change.waitForExistence(timeout: 8)); reveal(change, in: app); change.tap()
+        let preview = app.buttons["查看分类影响"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 5))
+        XCTAssertTrue(preview.isEnabled, "当前分类应预填，可进入既有预览流程")
+    }
+
     func testColdLaunchUsesFormalV15BootstrapWithoutGalleryRoute() {
         let app = launchApp(service: uniqueKeychainService())
 

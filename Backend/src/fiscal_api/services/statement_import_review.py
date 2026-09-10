@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import Date, Numeric, cast, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fiscal_api.api.p26_schemas import StatementProviderResult
@@ -16,6 +18,7 @@ from fiscal_api.api.p27_schemas import (
     StatementImportValidationRunCreate,
 )
 from fiscal_api.db.models.ledger import LedgerTransaction, Posting
+from fiscal_api.db.models.revision import DataRevision
 from fiscal_api.db.models.statement_import import (
     StatementImport,
     StatementImportProviderAttempt,
@@ -41,8 +44,8 @@ class StatementImportReviewService:
     async def start_run(
         self, batch_id: UUID, request: StatementImportValidationRunCreate
     ) -> StatementImportReviewResponse:
-        await acquire_mutation_lock(self.session)
-        batch = await self._batch(batch_id, lock=True)
+        revision = await self.session.scalar(select(DataRevision.revision))
+        batch = await self._batch(batch_id)
         check_version(batch.version, request.expected_batch_version)
         if batch.status != "review_required":
             conflict("statement_import_review_invalid", "The import is not ready for review")
@@ -69,6 +72,19 @@ class StatementImportReviewService:
                 )
             ).all()
         )
+        matches = await self._matching_transactions(result)
+        await self.session.commit()
+        await acquire_mutation_lock(self.session)
+        await self.session.refresh(batch, with_for_update=True)
+        check_version(batch.version, request.expected_batch_version)
+        if revision != await self.session.scalar(select(DataRevision.revision)):
+            conflict(
+                "statement_import_matching_stale",
+                "Ledger changed while preparing matches; retry validation",
+            )
+        if batch.status != "review_required":
+            conflict("statement_import_review_invalid", "The import is not ready for review")
+        await self._snapshot(batch_id, request.provider_snapshot_id)
         run = StatementImportValidationRun(
             statement_import_id=batch.id,
             provider_snapshot_id=snapshot.id,
@@ -80,7 +96,7 @@ class StatementImportReviewService:
         await self.session.flush()
         row_ids = [str(ref.statement_import_row_id) for ref in refs]
         self.session.add_all(self._checks(run.id, batch, refs, result, row_ids))
-        await self._candidates(run.id, refs, result)
+        await self._candidates(run.id, refs, result, matches)
         batch.version += 1
         await self.session.commit()
         return await self._review(batch, run, replay=False)
@@ -103,7 +119,7 @@ class StatementImportReviewService:
         await acquire_mutation_lock(self.session)
         batch = await self._batch(batch_id, lock=True)
         check_version(batch.version, request.expected_batch_version)
-        if batch.status != "review_required":
+        if batch.status not in {"review_required", "ready_to_confirm", "partially_confirmed"}:
             conflict("statement_import_review_invalid", "The import is not ready for review")
         row = await self.session.scalar(
             select(StatementImportRow)
@@ -114,6 +130,8 @@ class StatementImportReviewService:
         )
         if row is None:
             not_found("statement_import_row_not_found", "Statement import row was not found")
+        if row.confirmed_at is not None:
+            conflict("statement_import_row_confirmed", "Confirmed rows are immutable")
         check_version(row.version, request.expected_row_version)
         run = await self.session.scalar(
             select(StatementImportValidationRun)
@@ -254,26 +272,59 @@ class StatementImportReviewService:
             ),
         ]
 
+    async def _matching_transactions(
+        self, result: StatementProviderResult
+    ) -> dict[tuple[object, int], list[UUID]]:
+        pairs = sorted(
+            {
+                (candidate.transaction_date, amount)
+                for candidate in result.candidates
+                if candidate.transaction_date is not None
+                and (amount := self._minor(candidate.raw_amount)) is not None
+            }
+        )
+        matches: dict[tuple[object, int], list[UUID]] = {}
+        business_date = cast(func.timezone("Asia/Shanghai", LedgerTransaction.occurred_at), Date)
+        # Two parameters per pair; conservative bounded batches stay far below PG bind limits.
+        for offset in range(0, len(pairs), 1000):
+            chunk = pairs[offset : offset + 1000]
+            start = datetime.combine(chunk[0][0], time.min, ZoneInfo("Asia/Shanghai"))
+            end = datetime.combine(
+                chunk[-1][0] + timedelta(days=1), time.min, ZoneInfo("Asia/Shanghai")
+            )
+            rows = (
+                await self.session.execute(
+                    select(
+                        LedgerTransaction.id,
+                        business_date,
+                        func.abs(cast(Posting.amount_minor, Numeric)),
+                    )
+                    .join(Posting, Posting.transaction_id == LedgerTransaction.id)
+                    .where(
+                        LedgerTransaction.occurred_at >= start,
+                        LedgerTransaction.occurred_at < end,
+                        tuple_(business_date, func.abs(cast(Posting.amount_minor, Numeric))).in_(
+                            chunk
+                        ),
+                    )
+                    .distinct()
+                )
+            ).all()
+            for transaction_id, day, amount in rows:
+                matches.setdefault((day, int(amount)), []).append(transaction_id)
+        for ids in matches.values():
+            ids.sort(key=str)
+        return matches
+
     async def _candidates(
         self,
         run_id: UUID,
         refs: list[StatementImportProviderSnapshotSourceRef],
         result: StatementProviderResult,
+        matches: dict[tuple[object, int], list[UUID]],
     ) -> None:
         by_index = {index: candidate for index, candidate in enumerate(result.candidates)}
         records: list[StatementImportReviewCandidate] = []
-        transactions = list((await self.session.scalars(select(LedgerTransaction))).all())
-        posting_amounts = {
-            transaction.id: [
-                abs(posting.amount_minor)
-                for posting in (
-                    await self.session.scalars(
-                        select(Posting).where(Posting.transaction_id == transaction.id)
-                    )
-                ).all()
-            ]
-            for transaction in transactions
-        }
         for ref in refs:
             candidate = by_index.get(ref.candidate_index)
             if candidate is None:
@@ -290,22 +341,18 @@ class StatementImportReviewService:
                 )
             )
             if candidate.transaction_date is not None and amount is not None:
-                for transaction in transactions:
-                    if (
-                        transaction.occurred_at.date() == candidate.transaction_date
-                        and amount in posting_amounts[transaction.id]
-                    ):
-                        records.append(
-                            StatementImportReviewCandidate(
-                                validation_run_id=run_id,
-                                statement_import_row_id=ref.statement_import_row_id,
-                                candidate_kind="existing_transaction",
-                                provider_candidate_index=ref.candidate_index,
-                                transaction_id=transaction.id,
-                                transaction_date=candidate.transaction_date,
-                                amount_minor=amount,
-                            )
+                for transaction_id in matches.get((candidate.transaction_date, amount), []):
+                    records.append(
+                        StatementImportReviewCandidate(
+                            validation_run_id=run_id,
+                            statement_import_row_id=ref.statement_import_row_id,
+                            candidate_kind="existing_transaction",
+                            provider_candidate_index=ref.candidate_index,
+                            transaction_id=transaction_id,
+                            transaction_date=candidate.transaction_date,
+                            amount_minor=amount,
                         )
+                    )
         self.session.add_all(records)
 
     async def _validate_draft(
@@ -385,7 +432,7 @@ class StatementImportReviewService:
         return StatementImportReviewResponse(
             batch_id=batch.id,
             batch_version=batch.version,
-            status="review_required",
+            status=batch.status,
             validation_run_id=run.id,
             provider_snapshot_id=run.provider_snapshot_id,
             checks=[

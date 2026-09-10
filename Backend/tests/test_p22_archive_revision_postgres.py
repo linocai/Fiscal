@@ -127,7 +127,7 @@ def test_p22_archive_crypto_contract_runs_without_postgres() -> None:
         "exported_at": "2026-08-11T00:00:00+00:00",
         "business_timezone": "Asia/Shanghai",
         "currency": "CNY",
-        "database_revision": "20260811_0022",
+        "database_revision": "20260910_0039",
         "data_revision": 0,
         "entity_counts": {name: 0 for name in entities},
         "payload_sha256": hashlib.sha256(canonical).hexdigest(),

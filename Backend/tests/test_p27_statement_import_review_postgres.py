@@ -420,7 +420,8 @@ def test_p27_confirm_create_new_uses_saved_final_draft(
                 "expected_resolution_version": 0,
                 "resolution": "create_new",
             },
-        ).json()
+        )
+        assert resolution.status_code == 200, resolution.text
         final = client.put(
             f"/api/v1/statement-imports/{batch['id']}/rows/{row_id}/final-create-draft",
             headers=auth,
@@ -438,7 +439,9 @@ def test_p27_confirm_create_new_uses_saved_final_draft(
         assert final.status_code == 200, final.text
         key = str(uuid4())
         payload = {
-            "expected_batch_version": resolution["batch_version"],
+            "expected_batch_version": client.get(
+                f"/api/v1/statement-imports/{batch['id']}", headers=auth
+            ).json()["version"],
             "rows": [
                 {
                     "row_id": row_id,
