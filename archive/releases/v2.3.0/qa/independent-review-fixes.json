@@ -174,5 +174,7 @@
   "real_http_json_sha256": {
     "payoff_completed": "6ff8cecac431bbe8fa8652c9dfa400315ff41527e55f5fcb9c469e3c68fa37c7",
     "payoff_reversed": "ca3778524bd9c3cdffbc18d9a0b9e1b6840e67e952e0af40c0e1b84b0847e52f"
-  }
+  },
+  "reviewed_final_target": "92a630778ae2c0e5cd231232499dd054d6b5c86e",
+  "qa_supplement_review": "passed_no_findings"
 }
