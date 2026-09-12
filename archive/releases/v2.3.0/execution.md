@@ -277,3 +277,21 @@ App 定位均相对 `App/Sources/FiscalKit/`。完整审查覆盖 B01–B07 代�
 
 
 继续复查 `4d2b675` → `0c438dcfd6239133123c83dc0f9c0aa27616b695` 时，R1 的两条 P1 路径已关闭，另确认提交途中 cash→debit 会因 PATCH 不支持 kind 而假成功（`new_draft_kind-before.json`）。补充在双端共享账户类型控件保存期间禁用，并由模型拒绝现有账户与草稿类型不一致的保存；新增延迟创建、拒绝不支持的 PATCH、重新选择账户后正常改名的回归。当前验证中。
+
+
+### 最终修复门禁与独立结论
+
+独立 reviewer 对累计修复 `3f79bdb61466bed59cfc63ec89296466d7ad2ea1` → `3e8e842e61cbbe536b7a792bd97a5e071f44c1b6` 复查通过：**R1–R5 及两项追加边界全部关闭，无新的可报告问题**。六个预存用户 scheme 不在审查/提交范围，原字节保持。后续仅补隔离 Mac QA 回执入口与验收记录，不改变已审产品代码。
+
+| 最终门禁 | 结果 | 本机日志（`build/v2.3.0-43/repair/`） |
+|---|---|---|
+| Backend 全量与静态 | 469 passed；Ruff/270文件格式通过，Pyright 0错误/0警告 | `backend-full-1.log`、`backend-static-2.log` |
+| FiscalKit 全量 | **460 tests / 44 suites passed**；主数据专项最终8个函数/60参数场景，真实HTTP契约2项 | `client-full-4.log` / `.xcresult` |
+| macOS 正式 App target | FiscalmacOS Debug 实际编译、嵌入/签名验证通过（随全量test构建） | `client-full-4.log` |
+| iOS 正式 App target | FiscaliOS Release，generic Simulator arm64/x86_64构建通过 | `ios-app-final-2.log` |
+| Mac 真实回执显示 | 隔离QA host通过只读transport接入原始PostgreSQL HTTP JSON，实际View显示 **¥0.00 → ¥200.00**；可访问值、完整窗口位置与截图核对通过 | `mac-real-receipt-3.log` / `.xcresult` |
+| 产物与保护 | 双端2.3.0（43）；6个用户scheme原字节保持；311个Backend跟踪文件与已验证hash一致 | `built-product-versions.json`、`backend-verified-hashes.json` |
+
+本轮长流程Mac“填写→结清→撤销”的UI重跑未获得稳定通过：记录出现桌面空间切换/窗口快照失效，未找到相应App崩溃报告；滚动试验未作为通过证据，完整原流程断言保留。真实回执显示改用直接加载真实HTTP回执单独验收，未删改金额断言。业务提交/撤销由真实隔离数据库HTTP回归覆盖；不宣称已完成真实后端驱动整套App的端到端写入。首次QA桥接构建的内部协议可见性已限定到Debug隔离host，正式App排除该目录；只读fixture没有写路由。
+
+[精简修复证据](qa/independent-review-fixes.json) 保存原probe前后输出、最终门禁、固定审查范围和原始回执hash；[真实回执截图](screenshots/mac-real-api-reversed-receipt.png)只包含合成数据窗口。既有§10/§11保留首次实施与发现历史，当前以本节最终结果为准。尚未发布、未推送标签、未改生产财务数据或替换已安装App。

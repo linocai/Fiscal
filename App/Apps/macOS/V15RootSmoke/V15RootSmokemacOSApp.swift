@@ -1,4 +1,8 @@
+#if DEBUG
+@testable import FiscalKit
+#else
 import FiscalKit
+#endif
 import SwiftUI
 
 /// Isolated local-network launch target for the formal V15 composition.  It
@@ -14,9 +18,11 @@ struct V15RootSmokemacOSApp: App {
     private let formalFixture: Bool
     private let accountOverflow: Bool
     private let preferredScheme: ColorScheme?
+    private let receiptJSON: Data?
 
     init() {
         let environment = ProcessInfo.processInfo.environment
+        receiptJSON = environment["FISCAL_ROOT_SMOKE_RECEIPT_JSON"].flatMap { Data(base64Encoded: $0) }
         bootstrapFixtureServices = environment["FISCAL_ROOT_SMOKE_REVIEW_SCENARIO"] == "bootstrap-retry" ? V15F2BFixtures.services(route: "today-root-workspace", reviewScenario: "bootstrap-retry") : nil
         // Keep the production-shaped loopback URL so a forced transport
         // failure uses the same encrypted offline-snapshot cache key as the
@@ -62,6 +68,8 @@ struct V15RootSmokemacOSApp: App {
         WindowGroup {
             if cleanupOnly {
                 V15RootSmokeCleanupView(accessKeyStore: accessKeyStore, offlineSnapshots: offlineSnapshots)
+            } else if let receiptJSON {
+                V230ReceiptContractView(data: receiptJSON)
             } else if let bootstrapFixtureServices {
                 V15MacLiveAppShell(services: bootstrapFixtureServices)
             } else if formalFixture && ProcessInfo.processInfo.environment["FISCAL_ROOT_SMOKE_UI_ROUTE"] == "payoff" {
@@ -79,6 +87,35 @@ struct V15RootSmokemacOSApp: App {
         .defaultSize(width: Double(ProcessInfo.processInfo.environment["FISCAL_ROOT_SMOKE_WINDOW_WIDTH"] ?? "1280") ?? 1280, height: 820)
     }
 }
+
+/// Only the isolated QA host reads this real HTTP response; it has no write route.
+private struct V230ReceiptContractView: View {
+    let data: Data
+    var body: some View {
+#if DEBUG
+        if let receipt = try? V15FixtureCodec.decoder.decode(V15CreditPayoffReceipt.self, from: data) {
+            V15CreditPayoffView(services: V15Services(transport: V230ReceiptContractTransport(data: data)), accountID: receipt.accountID, accountName: "隔离接口回执验收", operationID: receipt.operationID)
+        } else { Text("回执验收数据无效") }
+#else
+        Text("回执契约验收仅用于 Debug 测试")
+#endif
+    }
+}
+#if DEBUG
+private struct V230ReceiptContractTransport: V15Transporting {
+    let data: Data
+    func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
+        guard request.method == "GET" else { throw CocoaError(.fileReadNoPermission) }
+        let payload: Data
+        if request.path == "accounts" { payload = Data("[]".utf8) }
+        else if request.path.hasSuffix("/payoffs") { payload = Data("[".utf8) + data + Data("]".utf8) }
+        else if request.path.hasPrefix("credit-payoffs/") { payload = data }
+        else { throw CocoaError(.fileReadNoSuchFile) }
+        return try V15FixtureCodec.decoder.decode(Response.self, from: payload)
+    }
+    func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data { throw CocoaError(.fileReadUnsupportedScheme) }
+}
+#endif
 
 /// Keeps the loopback cache key intact while deterministically failing requests.
 private final class V15RootSmokemacOSFailingURLProtocol: URLProtocol {

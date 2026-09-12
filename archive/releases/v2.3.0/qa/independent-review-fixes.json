@@ -1,0 +1,178 @@
+{
+  "version": "2.3.0",
+  "build": 43,
+  "review_base": "3f79bdb61466bed59cfc63ec89296466d7ad2ea1",
+  "reviewed_product_target": "3e8e842e61cbbe536b7a792bd97a5e071f44c1b6",
+  "findings": {
+    "R1": "fixed_and_independently_rechecked",
+    "R2": "fixed_and_independently_rechecked",
+    "R3": "fixed_and_independently_rechecked",
+    "R4": "fixed_and_independently_rechecked",
+    "R5": "fixed_and_independently_rechecked"
+  },
+  "additional_boundaries": [
+    "same-create-draft identity survives edits; next write is PATCH",
+    "immutable account type blocked during save and by model validation"
+  ],
+  "backend": {
+    "passed": 469,
+    "log": "build/v2.3.0-43/repair/backend-full-1.log",
+    "ruff": "passed",
+    "format_files": 270,
+    "pyright_errors": 0,
+    "pyright_log": "build/v2.3.0-43/repair/backend-static-2.log"
+  },
+  "client": {
+    "passed": 460,
+    "suites": 44,
+    "master_data_cases": 60,
+    "log": "build/v2.3.0-43/repair/client-full-4.log"
+  },
+  "macos_app": {
+    "result": "passed",
+    "configuration": "Debug",
+    "log": "build/v2.3.0-43/repair/client-full-4.log"
+  },
+  "ios_app": {
+    "result": "passed",
+    "configuration": "Release generic iOS Simulator arm64/x86_64",
+    "log": "build/v2.3.0-43/repair/ios-app-final-2.log"
+  },
+  "mac_real_http_receipt_ui": {
+    "result": "passed",
+    "display": "¥0.00 → ¥200.00",
+    "screenshot": "archive/releases/v2.3.0/screenshots/mac-real-api-reversed-receipt.png",
+    "log": "build/v2.3.0-43/repair/mac-real-receipt-3.log"
+  },
+  "limitations": [
+    "Long Mac create-payoff/reverse UI scenario did not obtain a stable pass during this repair turn; recordings show desktop-space changes. No App crash report found. Real receipt display passed independently; database write/reverse covered by actual HTTP tests.",
+    "No live backend-driven complete App workflow, production writes, deployment or device installation in this turn."
+  ],
+  "production_financial_writes": false,
+  "installed_app_replaced": false,
+  "release_requested": false,
+  "probes": {
+    "master_switch_race": {
+      "account_a": "00000000-0000-0000-0000-000000000101",
+      "account_b": "00000000-0000-0000-0000-000000000102",
+      "after_a_reply": {
+        "draft_name": "B intended edit",
+        "draft_opening_yuan": "25",
+        "selected_id": "00000000-0000-0000-0000-000000000102"
+      },
+      "final_receipt": "账户“B intended edit”已保存",
+      "patches": [
+        {
+          "name": "A submitted edit",
+          "opening_minor": "0",
+          "path": "accounts/00000000-0000-0000-0000-000000000101"
+        },
+        {
+          "name": "B intended edit",
+          "opening_minor": "2500",
+          "path": "accounts/00000000-0000-0000-0000-000000000102"
+        }
+      ]
+    },
+    "master_unknown": {
+      "patch_count": 1,
+      "receipt": "暂时无法确认本次更改；已保留输入，没有重复保存。",
+      "receipt_status": "unknown",
+      "requested_limit_minor": 200000,
+      "server_limit_minor": 100000
+    },
+    "new_draft_identity-before": {
+      "after_create_reply": {
+        "draft_name": "New account edited",
+        "draft_opening_yuan": "125",
+        "selected_id": "nil"
+      },
+      "final_receipt": "账户“New account edited”已保存",
+      "writes": [
+        {
+          "method": "POST",
+          "name": "New account",
+          "opening_minor": "10000",
+          "path": "accounts"
+        },
+        {
+          "method": "POST",
+          "name": "New account edited",
+          "opening_minor": "12500",
+          "path": "accounts"
+        }
+      ]
+    },
+    "new_draft_identity-after": {
+      "after_create_reply": {
+        "draft_name": "New account edited",
+        "draft_opening_yuan": "125",
+        "selected_id": "6C8DB7A1-21F2-49BE-AABA-DCAE10A220A4"
+      },
+      "final_receipt": "账户“New account edited”已保存",
+      "writes": [
+        {
+          "method": "POST",
+          "name": "New account",
+          "opening_minor": "10000",
+          "path": "accounts"
+        },
+        {
+          "method": "PATCH",
+          "name": "New account edited",
+          "opening_minor": "12500",
+          "path": "accounts/6C8DB7A1-21F2-49BE-AABA-DCAE10A220A4"
+        }
+      ]
+    },
+    "new_draft_kind-before": {
+      "after_create_reply": {
+        "draft_name": "New account",
+        "draft_opening_yuan": "100",
+        "selected_id": "FC149C68-58B1-440D-B17E-E802CBB94B19"
+      },
+      "draft_kind": "debit",
+      "final_receipt": "账户“New account”已保存",
+      "server_kind": "cash",
+      "writes": [
+        {
+          "kind": "cash",
+          "method": "POST",
+          "name": "New account",
+          "opening_minor": "10000",
+          "path": "accounts"
+        },
+        {
+          "kind": "omitted",
+          "method": "PATCH",
+          "name": "New account",
+          "opening_minor": "10000",
+          "path": "accounts/FC149C68-58B1-440D-B17E-E802CBB94B19"
+        }
+      ]
+    },
+    "new_draft_kind-after": {
+      "after_create_reply": {
+        "draft_name": "New account",
+        "draft_opening_yuan": "100",
+        "selected_id": "C51A7857-61CC-4553-95A9-360B8A9B7B97"
+      },
+      "draft_kind": "debit",
+      "final_receipt": "",
+      "server_kind": "cash",
+      "writes": [
+        {
+          "kind": "cash",
+          "method": "POST",
+          "name": "New account",
+          "opening_minor": "10000",
+          "path": "accounts"
+        }
+      ]
+    }
+  },
+  "real_http_json_sha256": {
+    "payoff_completed": "6ff8cecac431bbe8fa8652c9dfa400315ff41527e55f5fcb9c469e3c68fa37c7",
+    "payoff_reversed": "ca3778524bd9c3cdffbc18d9a0b9e1b6840e67e952e0af40c0e1b84b0847e52f"
+  }
+}

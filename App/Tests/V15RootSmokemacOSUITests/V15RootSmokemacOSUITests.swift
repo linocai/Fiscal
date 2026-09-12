@@ -40,7 +40,7 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         "\(keychainServicePrefix)\(UUID().uuidString.lowercased())"
     }
 
-    private func launchApp(service: String, reviewScenario: String = "", accessKey: String? = nil, cleanupOnly: Bool = false, forceTransportError: Bool = false, formalFixture: Bool = false, scheme: String? = nil, accountOverflow: Bool = false, windowWidth: Int? = nil, uiRoute: String? = nil) -> XCUIApplication {
+    private func launchApp(service: String, reviewScenario: String = "", accessKey: String? = nil, cleanupOnly: Bool = false, forceTransportError: Bool = false, formalFixture: Bool = false, scheme: String? = nil, accountOverflow: Bool = false, windowWidth: Int? = nil, uiRoute: String? = nil, receiptJSON: Data? = nil) -> XCUIApplication {
         // XCTest's `XCUIApplication().terminate()` does not reliably end a
         // retained macOS process between test methods. Kill the exact app
         // bundle and wait for it to leave the process table before setting this
@@ -49,6 +49,7 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         XCTAssertTrue(V15RootSmokeSupport.terminateRootSmokeApp(), "Root smoke app must exit before changing its launch environment.")
         let app = XCUIApplication()
         app.launchEnvironment["FISCAL_ROOT_SMOKE_UI_ROUTE"] = uiRoute
+        app.launchEnvironment["FISCAL_ROOT_SMOKE_RECEIPT_JSON"] = receiptJSON?.base64EncodedString()
         app.launchEnvironment["FISCAL_ROOT_SMOKE_REVIEW_SCENARIO"] = reviewScenario
         // A test cold launch must not ask AppKit to restore a prior V15 shell
         // (or cleanup) window whose SwiftUI content type no longer matches.
@@ -94,6 +95,20 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         capture.name = "v230-mac-forecast-source-detail"; capture.lifetime = .keepAlways; add(capture)
     }
 
+    func testV230RealReversedReceiptDisplaysActualDebtTransition() throws {
+        // Byte-for-byte PostgreSQL HTTP response shared with the client contract test.
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "FiscalKitTests/V15/ContractFixtures/payoff_reversed.json")
+        let app = launchApp(service: uniqueKeychainService(), receiptJSON: try Data(contentsOf: fixture))
+        XCTAssertTrue(app.staticTexts["整组结清已撤销"].waitForExistence(timeout: 8))
+        let change = app.descendants(matching: .any)["v230.payoff.receipt.debt-change"].firstMatch
+        XCTAssertTrue(change.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(change.frame))
+        XCTAssertEqual(change.value as? String, "¥0.00 → ¥200.00")
+        let capture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        capture.name = "v230-mac-real-api-reversed-receipt"; capture.lifetime = .keepAlways; add(capture)
+    }
+
     func testV230PayoffValidationPreviewCommitAndReverse() {
         let app = launchApp(service: uniqueKeychainService(), reviewScenario: "v230", formalFixture: true, uiRoute: "payoff")
         let payoffTitle = app.staticTexts["全额结清"]
@@ -105,30 +120,27 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         actual.click(); actual.typeText("1280")
         app.checkBoxes["v230.payoff.bank-confirmed"].click()
         let preview = app.buttons["v230.payoff.preview"]
-        for _ in 0..<8 where !preview.isHittable { app.scrollViews.firstMatch.scroll(byDeltaX: 0, deltaY: -450) }
+        for _ in 0..<8 where !preview.isHittable { app.scrollViews.firstMatch.swipeUp() }
         XCTAssertTrue(preview.isHittable); preview.click()
         let commit = app.buttons["v230.payoff.commit"]
         XCTAssertTrue(commit.waitForExistence(timeout: 5))
-        for _ in 0..<10 where !commit.isHittable { app.scrollViews.firstMatch.scroll(byDeltaX: 0, deltaY: -450) }
+        for _ in 0..<10 where !commit.isHittable { app.scrollViews.firstMatch.swipeUp() }
         XCTAssertTrue(commit.isEnabled); XCTAssertTrue(commit.isHittable)
         let previewCapture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
         previewCapture.name = "v230-mac-payoff-preview"; previewCapture.lifetime = .keepAlways; add(previewCapture)
-        XCTAssertTrue(app.windows.firstMatch.frame.contains(commit.frame))
-        commit.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        commit.click()
         XCTAssertTrue(app.descendants(matching: .any)["v230.payoff.receipt"].firstMatch.waitForExistence(timeout: 8))
         let reverse = app.buttons["v230.payoff.reverse.preview"]
-        for _ in 0..<8 where !reverse.isHittable { app.scrollViews.firstMatch.scroll(byDeltaX: 0, deltaY: 450) }
+        for _ in 0..<8 where !reverse.isHittable { app.scrollViews.firstMatch.swipeDown() }
         XCTAssertTrue(reverse.isHittable); reverse.click()
         let confirmReverse = app.buttons["v230.payoff.reverse.commit"]
         XCTAssertTrue(confirmReverse.waitForExistence(timeout: 5))
-        for _ in 0..<8 where !confirmReverse.isHittable { app.scrollViews.firstMatch.scroll(byDeltaX: 0, deltaY: -450) }
-        XCTAssertTrue(confirmReverse.isEnabled)
-        XCTAssertTrue(app.windows.firstMatch.frame.contains(confirmReverse.frame))
-        confirmReverse.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        for _ in 0..<8 where !confirmReverse.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(confirmReverse.isEnabled); confirmReverse.click()
         XCTAssertTrue(app.staticTexts["整组结清已撤销"].waitForExistence(timeout: 5))
         let change = app.descendants(matching: .any)["v230.payoff.receipt.debt-change"].firstMatch
         XCTAssertTrue(change.waitForExistence(timeout: 5))
-        for _ in 0..<8 where !change.isHittable { app.scrollViews.firstMatch.scroll(byDeltaX: 0, deltaY: 450) }
+        for _ in 0..<8 where !change.isHittable { app.scrollViews.firstMatch.swipeDown() }
         XCTAssertTrue(change.isHittable)
         XCTAssertEqual(change.value as? String, "¥0.00 → ¥1,280.00")
         let receiptCapture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
