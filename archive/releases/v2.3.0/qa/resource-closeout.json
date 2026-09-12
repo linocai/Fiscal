@@ -1,0 +1,18 @@
+{
+  "checked_at": "2026-09-12T12:15:37.695046+00:00",
+  "removed_rebuildable_local_paths": [
+    "build/release-v2.3.0-43/source",
+    "build/release-v2.3.0-43/staging",
+    "build/release-v2.3.0-43/release.bundle"
+  ],
+  "user_schemes_unchanged": true,
+  "no_new_simulators_or_global_clean": true,
+  "preserved": [
+    "signed packages and dSYMs",
+    "iOS Release-iphoneos App",
+    "installed Mac App and prior App backup",
+    "production pre/post independent backups",
+    "release logs and QA state"
+  ],
+  "temporary_remote_cleanup": "verified complete; removed only tagged deploy-source and transfer bundle"
+}

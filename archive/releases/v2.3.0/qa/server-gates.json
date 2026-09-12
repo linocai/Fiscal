@@ -1,0 +1,11 @@
+{
+  "result": "passed",
+  "passed": 177,
+  "skipped": 292,
+  "warnings": 1,
+  "database_tests_policy": "No production database access; all 469 tests passed with isolated PostgreSQL before release.",
+  "ruff": "passed",
+  "format_files": 270,
+  "pyright_errors": 0,
+  "log": "build/release-v2.3.0-43/logs/production-apply.log"
+}

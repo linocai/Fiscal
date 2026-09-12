@@ -1,0 +1,98 @@
+{
+  "checked_at": "2026-09-12T12:12:29.987460+00:00",
+  "current": "/opt/fiscal/releases/fa4181f02025",
+  "release": {
+    "revision": "fa4181f02025da25b15053eee12075ffe1a84bd4",
+    "alembic_head": "20260912_0040",
+    "created_at": "2026-09-12T12:12:06Z"
+  },
+  "pre_backup": {
+    "result": "verified",
+    "created_at": "2026-09-12T12:11:11Z",
+    "created_epoch": 1789215071,
+    "duration_seconds": 0,
+    "size_bytes": 425046,
+    "file": "fiscal-20260912T121111Z.dump",
+    "path": "/var/lib/fiscal/backups/releases/v2.3.0-build43/pre/fiscal-20260912T121111Z.dump",
+    "sha256": "45a572410e449ddcecf8e8af9fc8f4ed6f33089c7ff9992a5eccba3111140d47"
+  },
+  "post_backup": {
+    "result": "verified",
+    "created_at": "2026-09-12T12:12:08Z",
+    "created_epoch": 1789215128,
+    "duration_seconds": 1,
+    "size_bytes": 438753,
+    "file": "fiscal-20260912T121207Z.dump",
+    "path": "/var/lib/fiscal/backups/releases/v2.3.0-build43/post/fiscal-20260912T121207Z.dump",
+    "sha256": "800f6f09dd39987f9b1a3343f6902a1cb8234b6025bca1e4dd5b3a6b746f2101"
+  },
+  "ledger_before": {
+    "accounts_hash": "acae9798a8bda586b6967bc3967fe7a3",
+    "postings_hash": "24ff64a01a42f76ca48bbc760c1ede3c",
+    "accounts_count": 7,
+    "postings_count": 271,
+    "transactions_hash": "1187ad91612d9ee57555c8fa1bb11b05",
+    "transactions_count": 244,
+    "cash_flow_items_hash": "2c271230523e602324f95982e0ab37f3",
+    "cash_flow_items_count": 61,
+    "cash_flow_revisions_hash": "13bb1660cf1962b648fc60dfae7aab7c",
+    "cash_flow_revisions_count": 154
+  },
+  "ledger_after": {
+    "accounts_hash": "acae9798a8bda586b6967bc3967fe7a3",
+    "postings_hash": "24ff64a01a42f76ca48bbc760c1ede3c",
+    "accounts_count": 7,
+    "postings_count": 271,
+    "transactions_hash": "1187ad91612d9ee57555c8fa1bb11b05",
+    "transactions_count": 244,
+    "cash_flow_items_hash": "2c271230523e602324f95982e0ab37f3",
+    "cash_flow_items_count": 61,
+    "cash_flow_revisions_hash": "13bb1660cf1962b648fc60dfae7aab7c",
+    "cash_flow_revisions_count": 154
+  },
+  "ledger_fingerprints_unchanged": true,
+  "backfill_verification": {
+    "link_count": 3,
+    "candidate_count": 3,
+    "difference_count": 0,
+    "new_payoff_links": 0,
+    "new_payoff_operations": 0
+  },
+  "restore_verification": {
+    "result": "verified",
+    "checked_at": "2026-09-12T12:12:13Z",
+    "checked_epoch": 1789215133,
+    "duration_seconds": 2,
+    "backup_file": "fiscal-20260912T121207Z.dump"
+  },
+  "alembic_head": "20260912_0040",
+  "units": {
+    "fiscal-api.service": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-backup.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-restore-verify.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-health-check.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-disk-check.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    }
+  },
+  "readiness": {
+    "code": 200,
+    "body": {
+      "status": "ready",
+      "database": "ready"
+    }
+  }
+}

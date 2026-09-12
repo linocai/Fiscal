@@ -1,0 +1,22 @@
+{
+  "installed": "/Applications/Fiscal.app",
+  "version": "2.3.0",
+  "build": "43",
+  "mac_executable_sha256": "51ec5adf68990340067385f4579f894d20095994b7b9d5a7905b8cc579523d6c",
+  "backup": "/Applications/Fiscal-v2.2.1-build42-backup-20260912-201236.app",
+  "backup_executable_sha256": "69534bdff1b77a2a661d9064b230018248b6cf2362965daf64ed19c40d42eb97",
+  "ios_delivery": "Xcode device build ready; no IPA",
+  "installed_at": "2026-09-12T20:12:38.061602+08:00",
+  "launch_and_live_read": {
+    "state": "passed",
+    "single_instance": true,
+    "process_path": "/Applications/Fiscal.app/Contents/MacOS/Fiscal",
+    "overview_forecast_and_incoming_outgoing_visible": true,
+    "transaction_account_buttons_visible": true,
+    "account_switch_and_restore_passed": true,
+    "returned_to_overview": true,
+    "financial_writes": false,
+    "private_ui_screenshots_archived": false,
+    "checked_at": "2026-09-12T12:15:14.822132+00:00"
+  }
+}

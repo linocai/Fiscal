@@ -1,0 +1,66 @@
+{
+  "checked_at": "2026-09-12T12:12:28.721891+00:00",
+  "/health/live": 200,
+  "/health/ready": 403,
+  "/accounts": 401,
+  "operations_status": {
+    "service_version": "0.1.0",
+    "release_revision": "fa4181f02025da25b15053eee12075ffe1a84bd4",
+    "database": "ready",
+    "alembic_revision": "20260912_0040",
+    "release_alembic_revision": "20260912_0040",
+    "schema_state": "current",
+    "backup": {
+      "state": "verified",
+      "created_at": "2026-09-12T12:12:08Z",
+      "age_hours": 0,
+      "duration_seconds": 1,
+      "size_bytes": 438753
+    },
+    "restore": {
+      "state": "verified",
+      "checked_at": "2026-09-12T12:12:13Z",
+      "age_hours": 0,
+      "duration_seconds": 2
+    },
+    "disk": {
+      "state": "healthy",
+      "checked_at": "2026-09-12T12:12:14Z",
+      "used_percent": 70,
+      "warning_percent": 75,
+      "failure_percent": 85
+    }
+  },
+  "reports": [
+    {
+      "period": "2026-09",
+      "current_capability_code": 200,
+      "as_of_header_verified": true,
+      "balance_status_shape_verified": true,
+      "legacy_code": 200
+    },
+    {
+      "period": "2026-04",
+      "current_capability_code": 200,
+      "as_of_header_verified": true,
+      "balance_status_shape_verified": true,
+      "legacy_code": 409
+    }
+  ],
+  "missing_transaction_receipt": {
+    "status": 404,
+    "no_store": true
+  },
+  "disposable_forecast": {
+    "code": 200,
+    "window_days": 30,
+    "shanghai_dates_verified": true,
+    "formula_verified": true,
+    "disclosures_shape_verified": true
+  },
+  "credit_accounts": {
+    "code": 200,
+    "all_account_summaries_valid": true,
+    "all_payoff_history_reads_passed": true
+  }
+}
