@@ -271,3 +271,6 @@ App 定位均相对 `App/Sources/FiscalKit/`。完整审查覆盖 B01–B07 代�
 日志位于 `build/v2.3.0-43/repair/`。后端针对性 26 项、全量 **469 项**通过；Ruff 与 270 文件格式检查通过；Pyright 指定项目 `.venv/bin/python` 后 0 errors / 0 warnings（首次未指定环境的依赖解析错误不计为通过）。两个原始独立复现 Swift probe 已重新链接修复框架：迟到 A 响应后保持 B 的选择/草稿且二次 PATCH 为 B；未生效额度修改显示 unknown。
 
 当前下一步：完成修复后客户端全量、双端 App 构建和实际回执界面验收，再对固定修复提交交原独立 reviewer 复查。正式通过结论在本节后续结果中记录。
+
+
+复查固定 `3f79bdb` → `4d2b67570aaa6befeba22be4d9a07a300901bb58` 时，独立 reviewer 确认 R2–R5 可关闭，但 R1 新建期间仅修改字段会丢失已创建身份。独立 probe 已确认原补丁连续两次 POST（期初 10000/12500 分）。补充区分 editorSessionGeneration 与字段 generation：同一会话成功绑定服务器 ID并保留新输入，显式切对象/新建草稿仍隔离；新增三类对象 POST→PATCH 回归。补充后 **FiscalKit 459 tests / 44 suites 全量通过**（`client-full-3.log`），原 probe 为一次 POST 后同 ID 的 PATCH（`new_draft_identity-after.json`）；独立 reviewer 将对新固定提交复查此项。

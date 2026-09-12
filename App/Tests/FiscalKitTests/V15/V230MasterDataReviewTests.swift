@@ -28,6 +28,33 @@ struct V230MasterDataReviewTests {
         #expect(paths.last?.lowercased() == "\(kind)/\(targetID.uuidString.lowercased())")
     }
 
+    @Test(arguments: ["accounts", "categories", "merchants"])
+    @MainActor func editingInFlightCreateBindsIdentityAndNextSavePatches(kind: String) async throws {
+        let transport = MasterReviewTransport(delayed: true)
+        let model = V15MasterDataModel(services: V15Services(transport: transport))
+        #expect(await model.load()); select(model, kind: kind, index: 0); model.beginNewDraft()
+        setName(model, kind: kind, name: "submitted creation")
+        if kind == "accounts" { model.openingBalance = "10" }
+        let saving = Task { await save(model, kind: kind) }
+        await transport.waitUntilStarted()
+        setName(model, kind: kind, name: "newer input")
+        if kind == "accounts" { model.openingBalance = "25" }
+        await transport.release(); await saving.value
+        let createdID = try #require(selectedID(model, kind: kind))
+        #expect(name(model, kind: kind) == "newer input")
+        #expect(model.receiptStatus != .success && model.receipt == nil)
+        if kind == "accounts" {
+            #expect(model.openingBalance == "25")
+            #expect(model.selectedAccount?.openingBalanceMinor == 1000)
+        }
+        await save(model, kind: kind)
+        #expect(await transport.writeMethods == ["POST", "PATCH"])
+        #expect(await transport.writePaths == [kind, "\(kind)/\(createdID.uuidString)"])
+        #expect(selectedID(model, kind: kind) == createdID)
+        #expect(model.receiptStatus == .success)
+        if kind == "accounts" { #expect(model.selectedAccount?.openingBalanceMinor == 2500) }
+    }
+
     @Test(arguments: ["accounts", "categories", "merchants"], [false, true])
     @MainActor func lateCreateOrUpdateCannotSelectOverNewDraft(kind: String, creating: Bool) async {
         let transport = MasterReviewTransport(delayed: true)
@@ -151,6 +178,7 @@ private actor MasterReviewTransport: V15Transporting {
     private var waiter: CheckedContinuation<Void, Never>?
     private var started = false
     private(set) var writePaths: [String] = []
+    private(set) var writeMethods: [String] = []
 
     init(outcome: String = "success", delayed: Bool = false, ignoredField: String? = nil, staleVersion: Bool = false, readFailed: Bool = false, archived: Bool = false) {
         self.outcome = outcome; self.delayed = delayed; self.ignoredField = ignoredField
@@ -185,6 +213,7 @@ private actor MasterReviewTransport: V15Transporting {
         let response: Any
         if request.method != "GET" {
             writePaths.append(request.path)
+            writeMethods.append(request.method)
             let first = writePaths.count == 1
             if first && delayed {
                 started = true

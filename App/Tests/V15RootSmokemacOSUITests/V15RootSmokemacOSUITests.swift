@@ -113,7 +113,8 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         XCTAssertTrue(commit.isEnabled); XCTAssertTrue(commit.isHittable)
         let previewCapture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
         previewCapture.name = "v230-mac-payoff-preview"; previewCapture.lifetime = .keepAlways; add(previewCapture)
-        commit.click()
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(commit.frame))
+        commit.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
         XCTAssertTrue(app.descendants(matching: .any)["v230.payoff.receipt"].firstMatch.waitForExistence(timeout: 8))
         let reverse = app.buttons["v230.payoff.reverse.preview"]
         for _ in 0..<8 where !reverse.isHittable { app.scrollViews.firstMatch.swipeDown() }
@@ -121,7 +122,9 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         let confirmReverse = app.buttons["v230.payoff.reverse.commit"]
         XCTAssertTrue(confirmReverse.waitForExistence(timeout: 5))
         for _ in 0..<8 where !confirmReverse.isHittable { app.scrollViews.firstMatch.swipeUp() }
-        XCTAssertTrue(confirmReverse.isEnabled); confirmReverse.click()
+        XCTAssertTrue(confirmReverse.isEnabled)
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(confirmReverse.frame))
+        confirmReverse.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
         XCTAssertTrue(app.staticTexts["整组结清已撤销"].waitForExistence(timeout: 5))
         let change = app.descendants(matching: .any)["v230.payoff.receipt.debt-change"].firstMatch
         XCTAssertTrue(change.waitForExistence(timeout: 5))

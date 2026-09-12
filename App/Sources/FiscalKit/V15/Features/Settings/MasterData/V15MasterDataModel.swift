@@ -41,6 +41,9 @@ import Foundation
     public var splitChildNames: [String] = ["子分类一", "子分类二"]
     public var splitAssignments: [UUID: String] = [:]
     private let services: V15Services
+    // A field edit invalidates feedback, while only a different editor session
+    // prevents a successful create from attaching its server-assigned identity.
+    private var editorSessionGeneration: UInt64 = 0
     private var editorGeneration: UInt64 = 0
     private var generation: UInt64 = 0
     private var merchantPageGeneration: UInt64 = 0
@@ -326,14 +329,17 @@ import Foundation
     public func commitSplit() async -> Bool { guard canWrite("无法提交拆分"), !transformRequiresRepreview else { if transformRequiresRepreview { transformMessage = "此预览已失效，请重新读取预览后再提交。" }; return false }; guard let root = selectedCategory, let preview = splitPreview else { return false }; let assignments = preview.requiredTransactionIDs.compactMap { id in splitAssignments[id].map { name in V15CategorySplitAssignment(transactionID: id, childName: name) } }; guard assignments.count == preview.requiredTransactionIDs.count else { transformFieldIssues = [.init(code: "split_assignment_required", message: "请逐笔指定归位子分类。", fieldPath: "assignments")]; return false }; let identity = "\(preview.previewToken)|\(assignments)"; do { let result = try await services.categories.commitSplit(rootID: root.id, request: .init(previewToken: preview.previewToken, assignments: assignments), idempotencyKey: idempotency.key(for: "split", payloadIdentity: identity)); idempotency.succeeded(scope: "split", payloadIdentity: identity); transformReceipt = result; transformMessage = "拆分已原子提交：重归类 \(result.reclassifiedTransactionCount) 笔。"; _ = await load(); return true } catch let failure as V15Failure where failure.kind == .conflict { await recoverTransformConflict(failure); return false } catch let failure as V15Failure { recordTransformFailure(failure); return false } catch { recordTransformFailure(.init(kind: .transport, message: "拆分未完成，请重新决定。")); return false } }
     private func mutate(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15AccountResponse) -> Bool, _ operation: () async throws -> V15AccountResponse) async {
         let context = editorGeneration
+        let session = editorSessionGeneration
         let previous = id.flatMap { target in accounts.first { $0.id == target } }
         do {
             let value = try await operation()
             accounts.removeAll { $0.id == value.id }; accounts.append(value)
             services.notifyConfirmedWrite()
             let refreshed = await load(preservingConflict: true)
-            guard context == editorGeneration else { return }
+            guard session == editorSessionGeneration else { return }
+            let inputUnchanged = context == editorGeneration
             selectedAccountID = value.id
+            guard inputUnchanged else { return }
             receiptStatus = .success
             receipt = "账户“\(value.name)”已保存" + (refreshed ? "" : "；列表刷新失败，可稍后刷新，无需重新保存。")
         } catch let failure as V15Failure where failure.kind == .conflict {
@@ -357,14 +363,17 @@ import Foundation
     }
     private func mutateCategory(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15CategoryResponse) -> Bool, _ operation: () async throws -> V15CategoryResponse) async {
         let context = editorGeneration
+        let session = editorSessionGeneration
         let previous = id.flatMap { target in flatten(categories).first { $0.id == target } }
         do {
             let value = try await operation()
             replaceCategory(value)
             services.notifyConfirmedWrite()
             let refreshed = await load(preservingConflict: true)
-            guard context == editorGeneration else { return }
+            guard session == editorSessionGeneration else { return }
+            let inputUnchanged = context == editorGeneration
             selectedCategoryID = value.id
+            guard inputUnchanged else { return }
             receiptStatus = .success
             receipt = "分类“\(value.name)”已保存" + (refreshed ? "" : "；列表刷新失败，可稍后刷新，无需重新保存。")
         } catch let failure as V15Failure where failure.kind == .conflict {
@@ -388,14 +397,17 @@ import Foundation
     }
     private func mutateMerchant(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15Merchant) -> Bool, _ operation: () async throws -> V15Merchant) async {
         let context = editorGeneration
+        let session = editorSessionGeneration
         let previous = id.flatMap { target in merchants.first { $0.id == target } }
         do {
             let value = try await operation()
             merchants.removeAll { $0.id == value.id }; merchants.append(value)
             services.notifyConfirmedWrite()
             let refreshed = await load(preservingConflict: true)
-            guard context == editorGeneration else { return }
+            guard session == editorSessionGeneration else { return }
+            let inputUnchanged = context == editorGeneration
             selectedMerchantID = value.id
+            guard inputUnchanged else { return }
             receiptStatus = .success
             receipt = "商户“\(value.name)”已保存" + (refreshed ? "" : "；列表刷新失败，可稍后刷新，无需重新保存。")
         } catch let failure as V15Failure where failure.kind == .conflict {
@@ -531,7 +543,7 @@ import Foundation
     private func identity(_ fields: [String]) -> String { fields.map { "\($0.utf8.count):\($0)" }.joined(separator: "|") }
     private func canWrite(_ action: String) -> Bool { if isSaving { return false }; if isOffline { receiptStatus = .failure; receipt = "离线时只可查看，\(action)。"; return false }; if writesRequireExplicitReload { receiptStatus = unknownCreateLock == nil ? .conflict : .unknown; receipt = unknownCreateLock == nil ? "数据更新后刷新未完成，\(action)；请先刷新再决定。" : "新建结果尚未确认且刷新失败，\(action)；请先刷新再决定。"; return false }; return true }
     private func draftInputChanged() { editorGeneration &+= 1; fieldIssues = []; receipt = nil; receiptStatus = .informational }
-    private func editorContextChanged() { editorGeneration &+= 1; receiptStatus = .informational; fieldIssues = []; receipt = nil; if !writesRequireExplicitReload { conflict = nil; conflictChanges = [] } }
+    private func editorContextChanged() { editorSessionGeneration &+= 1; editorGeneration &+= 1; receiptStatus = .informational; fieldIssues = []; receipt = nil; if !writesRequireExplicitReload { conflict = nil; conflictChanges = [] } }
     private func beginEditorMutation() { receiptStatus = .informational; fieldIssues = []; receipt = nil; if !writesRequireExplicitReload { conflict = nil; conflictChanges = [] } }
 
     nonisolated static func fieldIssues(_ issues: [V15FieldIssue], matchingAny paths: [String]) -> [V15FieldIssue] {
