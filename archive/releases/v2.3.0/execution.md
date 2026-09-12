@@ -1,6 +1,6 @@
 # Fiscal 2.3.0（43）执行记录
 
-> 2026-09-12 立项并完成｜状态：B01–B07 实现与本地验证通过，尚未发布｜主入口：[PROJECT_PLAN.md](../../../PROJECT_PLAN.md)
+> 2026-09-12 立项并完成｜状态：独立复审完成，R1–R5 待修复，尚未发布｜主入口：[PROJECT_PLAN.md](../../../PROJECT_PLAN.md)
 
 ## 1. 需求映射与范围
 
@@ -231,6 +231,24 @@ UI 使用隔离 RootSmoke bundle 与合成 fixture，截图和点击验证真实
 
 ### 接班与发布边界
 
-本轮无剩余施工项。用户六个 scheme 的原有未提交修改必须继续保留，版本实现提交应排除这些文件。资源/原字节与最初 Backlog 快照位于 `build/v2.3.0-43/preflight/`。所有本轮 PostgreSQL 测试使用 `fiscal_v230_43_tests_20260912` 串行执行；Apple 构建串行、`-jobs 2 -parallel-testing-enabled NO`，复用既有 DerivedData 与主模拟器。
+实施交接时 B01–B07 均已实现；后续独立复审的待修复项见 §11。用户六个 scheme 的原有未提交修改必须继续保留，版本实现提交应排除这些文件。资源/原字节与最初 Backlog 快照位于 `build/v2.3.0-43/preflight/`。所有本轮 PostgreSQL 测试使用 `fiscal_v230_43_tests_20260912` 串行执行；Apple 构建串行、`-jobs 2 -parallel-testing-enabled NO`，复用既有 DerivedData 与主模拟器。
 
-金额和迁移实现与本地验证完成后，主会话已建议发布前独立复审；本轮未调用 reviewer，不沿用旧版结论。下一次如用户要求复审，先看主 Plan、基线至本版提交的累计差异及本节；如请求一条龙发布，先核对生产实际 revision 和 0040 依赖，按既有发布路径备份、迁移、验证后协调双端更新。当前尚未部署、推送发布标签或替换 `/Applications/Fiscal.app`，用户取消的真实借款未录入。
+金额和迁移实现与本地验证完成后，主会话建议独立复审；随后用户已要求并完成本版复审，见 §11。后续修复须逐项复查；如请求一条龙发布，先核对生产实际 revision 和 0040 依赖，按既有发布路径备份、迁移、验证后协调双端更新。当前尚未部署、推送发布标签或替换 `/Applications/Fiscal.app`，用户取消的真实借款未录入。
+
+## 11. 2026-09-12 独立复审：1 个 P1、4 个 P2 待修复
+
+用户在实施提交完成后明确要求“做一次独立复审”。由未参与方案/实施的独立 reviewer 执行，主会话负责版本证据核对及指定边界复现；本轮未修业务代码、未发布。审查固定范围为已发布源码 `60efa4b3c7e932967e1754ad9fd42b5cbf8a5882` 至 `22c3cb68d4560a7c05c83fc8f52b90f2d875265f`。部署源码至实施基线 `0dab1386` 仅文档不同，业务累计差异完整包含。六个预存用户 scheme 改动排除且原字节保留。
+
+| ID | 严重度 | 定位（目标提交行号） | 已确认触发/影响 | 修复及复查要求 |
+|---|---|---|---|---|
+| R1 | **P1** | `V15/Features/Settings/MasterData/V15MasterDataModel.swift:338`；同类类别344、商户269 | 保存A挂起时Mac列表仍允许切到B；A成功回包无上下文守卫地把选择切回A，字段却是B草稿。再次保存把B名称和期初金额写入A，可能改变错误账户的余额。 | 捕获编辑会话/generation，迟到响应仅更新对应记录，不抢当前选择或草稿；账户/分类/商户横向修复。复查延迟成功/失败、切换及二次保存的目标ID。 |
+| R2 | P2 | `V15/Features/Settings/MasterData/V15MasterDataModel.swift:238,340` | 未知PATCH结果回读只对比名称/期初金额/周期模式，漏额度、账期日与期初日期。请求额度200000分、服务仍100000分，却显示“已确认保存成功”。 | 对本次提交的全部字段及相应版本进行确认；证据不足保持结果未知。逐一覆盖被遗漏字段。 |
+| R3 | P2 | `Backend/src/fiscal_api/services/reporting.py:727–730` | 旧固定信用账户有欠款但两期初日期NULL：债务接口能标记配置缺失，disposable只按额度为空识别未排期，漏掉此类欠款提醒。现金1000000分、欠款500000分时三项caveat均0。 | 披露无周期覆盖的旧欠款/配置缺口，预测明确说明尚未纳入；不补造到期日，也不把全部负债直接扣入30日数字。 |
+| R4 | P2 | `Backend/src/fiscal_api/services/credit_payoffs.py:502–506` | 三期中首期8/22正常还清，9/1提前结清剩余两期时，首期也被写入9/1 settled_early_at，状态由cycle_settled变settled_early，改写已完成历史。 | 提交前确定实际仍有余额的期，仅标记本次提前关闭的期；已还清期及撤销后的历史应保持。 |
+| R5 | P2 | `V15/Features/Credit/V15CreditPayoffView.swift:143` 与 `Backend/src/fiscal_api/services/credit_payoffs.py:664–670` | 真实API撤销回执把after改为原欠款却保留before；共享UI再交换二者。实际欠款0→20000分，回执显示20000→20000。余额恢复正确，回执展示错误；fixture仍保留D→0，掩盖契约差异。 | 统一永久撤销回执前后值语义，使用真实API JSON验证双端展示；不要仅修改fixture让测试自洽。 |
+
+App 定位均相对 `App/Sources/FiscalKit/`。完整审查覆盖 B01–B07 代码、测试、工程变更及直接调用边界，包括资金写入/失败回滚、迁移/归档、幂等恢复和双端状态。没有以风格偏好列问题。
+
+验证：两个临时 Swift probe 直接链接目标已构建 FiscalKit.framework；隔离 PostgreSQL/真实 HTTP 三个缺陷断言按预期失败，另一个候选通过并排除（全部正常还清的计划仍保持 completed，不被后续结清改写）。[精简复现证据](qa/independent-review-reproductions.json) 保存实际请求/输出及框架哈希；临时脚本/原日志在 `build/v2.3.0-43/review/`。以上仅合成数据，无生产财务写入。
+
+既有459后端、450客户端、8项UI及双端构建记录已核对，本轮没有重复全套；这些通过结果不能覆盖本次新增边界。UI原有证据使用FixtureTransport，尚无真实后端驱动实际App的完整结清/部分收付/恢复验收。本次复审已完成，**R1–R5均未修复，不能作为发布通过结论**；后续修复应保留当前固定审查范围，并对修复及影响范围重新复审。

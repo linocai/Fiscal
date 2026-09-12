@@ -1,0 +1,217 @@
+{
+  "review_target": "22c3cb68d4560a7c05c83fc8f52b90f2d875265f",
+  "review_base": "60efa4b3c7e932967e1754ad9fd42b5cbf8a5882",
+  "reviewer": "independent review_v230, no implementation participation",
+  "scope": "Read-only business-source review; temporary probes only; synthetic local data",
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "P1",
+      "probe": "master_switch_race",
+      "observed": {
+        "account_a": "00000000-0000-0000-0000-000000000101",
+        "account_b": "00000000-0000-0000-0000-000000000102",
+        "after_a_reply": {
+          "draft_name": "B intended edit",
+          "draft_opening_yuan": "25",
+          "selected_id": "00000000-0000-0000-0000-000000000101"
+        },
+        "final_receipt": "账户“B intended edit”已保存",
+        "patches": [
+          {
+            "name": "A submitted edit",
+            "opening_minor": "0",
+            "path": "accounts/00000000-0000-0000-0000-000000000101"
+          },
+          {
+            "name": "B intended edit",
+            "opening_minor": "2500",
+            "path": "accounts/00000000-0000-0000-0000-000000000101"
+          }
+        ]
+      }
+    },
+    {
+      "id": "R2",
+      "severity": "P2",
+      "probe": "master_unknown",
+      "observed": {
+        "patch_count": 1,
+        "receipt": "已确认“信用账户”保存成功，没有重复保存。",
+        "receipt_status": "success",
+        "requested_limit_minor": 200000,
+        "server_limit_minor": 100000
+      }
+    },
+    {
+      "id": "R3",
+      "severity": "P2",
+      "probe": "legacy_forecast_probe",
+      "observed": {
+        "debt_report": {
+          "accounts": [
+            {
+              "account_id": "a1b23862-3806-45a9-a2e5-314840419f30",
+              "account_name": "Synthetic debt",
+              "available_credit_minor": 500000,
+              "credit_limit_minor": 1000000,
+              "current_debt_minor": 500000,
+              "has_overdue_cycle": false,
+              "institution": null,
+              "last_four": null,
+              "next_due_cycle": null,
+              "opening_configuration_required": true,
+              "over_limit_minor": 0,
+              "overdue_minor": 0
+            }
+          ],
+          "as_of": "2026-07-15",
+          "currency": "CNY",
+          "current_credit_debt_minor": 500000,
+          "cycles": [],
+          "installments": [],
+          "overdue_minor": 0,
+          "timezone": "Asia/Shanghai",
+          "total_available_credit_minor": 500000
+        },
+        "disposable": {
+          "current_cash_minor": 1000000,
+          "date_from": "2026-07-15",
+          "date_to": "2026-08-13",
+          "expected_inflow_minor": 0,
+          "expected_outflow_minor": 0,
+          "overdue_outflow_minor": 0,
+          "projected_balance_minor": 1000000,
+          "undated_inflow_minor": 0,
+          "unscheduled_credit_debt_minor": 0
+        },
+        "facts_completeness": {
+          "failed_import_count": 0,
+          "last_reconciled_at": null,
+          "open_reconciliation_difference_count": 0,
+          "scope": {
+            "deep_link": "fiscal://reports/facts/completeness_issues",
+            "expected_data_revision": 2,
+            "read_path": "/api/v1/reports/facts/drill-down?scope=completeness_issues&expected_data_revision=2",
+            "schema_version": "1",
+            "scope_type": "completeness_issues"
+          },
+          "uncategorized_transaction_amount_minor": 0,
+          "uncategorized_transaction_count": 0,
+          "unresolved_import_count": 0
+        },
+        "facts_credit": {
+          "current_debt_minor": 500000,
+          "scope": {
+            "deep_link": "fiscal://reports/facts/credit_cycles",
+            "expected_data_revision": 2,
+            "read_path": "/api/v1/reports/facts/drill-down?scope=credit_cycles&expected_data_revision=2",
+            "schema_version": "1",
+            "scope_type": "credit_cycles"
+          }
+        }
+      }
+    },
+    {
+      "id": "R4",
+      "severity": "P2",
+      "probe": "payoff_history_probe",
+      "observed": {
+        "after_status": "settled_early",
+        "before_status": "active",
+        "case": "partial regular repayment before payoff",
+        "first_period_after": {
+          "amount_due_minor": 10000,
+          "cancelled_at": null,
+          "created_at": "2026-09-12T10:50:13.998239Z",
+          "cycle_status": "settled",
+          "due_date": "2026-08-22",
+          "effective_cycle_id": "b5ac49b2-a5bf-57c4-ac32-5b5eaf4a7060",
+          "effective_statement_date": "2026-08-10",
+          "fee_minor": 0,
+          "id": "f3033288-3fee-48e7-9aa4-418514a03896",
+          "locked": true,
+          "plan_id": "271e5c82-6e2b-4c9b-80f6-998adf1b51e9",
+          "principal_minor": 10000,
+          "scheduled_cycle_id": "b5ac49b2-a5bf-57c4-ac32-5b5eaf4a7060",
+          "scheduled_statement_date": "2026-08-10",
+          "sequence": 1,
+          "settled_early_at": "2026-09-01T04:00:00Z",
+          "status": "settled_early",
+          "updated_at": "2026-09-12T10:50:14.093866Z",
+          "version": 2
+        },
+        "first_period_before": {
+          "amount_due_minor": 10000,
+          "cancelled_at": null,
+          "created_at": "2026-09-12T10:50:13.998239Z",
+          "cycle_status": "settled",
+          "due_date": "2026-08-22",
+          "effective_cycle_id": "b5ac49b2-a5bf-57c4-ac32-5b5eaf4a7060",
+          "effective_statement_date": "2026-08-10",
+          "fee_minor": 0,
+          "id": "f3033288-3fee-48e7-9aa4-418514a03896",
+          "locked": true,
+          "plan_id": "271e5c82-6e2b-4c9b-80f6-998adf1b51e9",
+          "principal_minor": 10000,
+          "scheduled_cycle_id": "b5ac49b2-a5bf-57c4-ac32-5b5eaf4a7060",
+          "scheduled_statement_date": "2026-08-10",
+          "sequence": 1,
+          "settled_early_at": null,
+          "status": "cycle_settled",
+          "updated_at": "2026-09-12T10:50:13.998240Z",
+          "version": 1
+        },
+        "payoff_amount": 20000
+      }
+    },
+    {
+      "id": "R5",
+      "severity": "P2",
+      "probe": "reverse_receipt_probe",
+      "observed": {
+        "actual_after_minor": 20000,
+        "actual_before_minor": 0,
+        "displayed_after_minor": 20000,
+        "displayed_before_minor": 20000,
+        "server_receipt": {
+          "account_id": "98b69f20-373f-41fd-8882-2536128b9479",
+          "actual_amount_minor": 20000,
+          "allocations": [
+            {
+              "cycle_id": null,
+              "fee_minor": 0,
+              "installment_plan_ids": [],
+              "principal_minor": 20000,
+              "remaining_minor": 20000,
+              "repaid_minor": 20000,
+              "waived_fee_minor": 0,
+              "waived_principal_minor": 0
+            }
+          ],
+          "data_revision": 5,
+          "debt_after_minor": 20000,
+          "debt_before_minor": 20000,
+          "occurred_at": "2026-09-01T12:00:00+08:00",
+          "operation_id": "45e316ad-7334-4da6-8103-544ca14d9dba",
+          "payment_account_id": "d732aa4d-1c1d-4844-b542-d21c5ba84f77",
+          "reversed_at": "2026-09-12T10:55:27.125930Z",
+          "status": "reversed",
+          "transaction_ids": [
+            "0c8d8b07-0f0e-4753-86bd-af11531f7183"
+          ]
+        }
+      }
+    }
+  ],
+  "excluded_candidate": "A fully repaid installment plan retained completed status and was not included in later payoff closing_plan_ids.",
+  "validation_notes": {
+    "swift_probes": 2,
+    "postgres_confirmed_failure_cases": 3,
+    "postgres_excluded_candidate_pass": 1,
+    "failures": "Expected assertions failed and reproduced findings; not passing regression tests",
+    "production_writes": false,
+    "full_suite_rerun": false
+  },
+  "swift_probe_linked_framework_sha256": "94fee9ba50cd9f5ef15583086e9652ed4d7265b923c7f289575d8464138abec1"
+}
