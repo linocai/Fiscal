@@ -65,6 +65,11 @@ class CreditPayoffPreview(APIModel):
 
 
 class CreditPayoffReceipt(APIModel):
+    """Debt fields describe the status action: completed D→0, reversed 0→D.
+
+    Amount, transactions and allocations retain the original payoff details.
+    """
+
     operation_id: UUID
     account_id: UUID
     payment_account_id: UUID

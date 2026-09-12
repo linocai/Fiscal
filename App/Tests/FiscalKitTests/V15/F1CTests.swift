@@ -387,7 +387,7 @@ actor F1CUnknownMerchantTransport: V15Transporting {
         case ("categories", "GET"): data = V15F1CFixtures.categories
         case ("merchants", "GET"): data = V15F1CFixtures.merchantPage
         case ("merchants/\(V15F1CFixtures.merchantID)", "PATCH"): patches += 1; throw V15Failure(kind: .responseUnknown, message: "lost")
-        case ("merchants/\(V15F1CFixtures.merchantID)", "GET"): gets += 1; data = Data(V15F1CFixtures.merchant.utf8)
+        case ("merchants/\(V15F1CFixtures.merchantID)", "GET"): gets += 1; data = Data(V15F1CFixtures.merchant.replacingOccurrences(of: "\"version\":2", with: "\"version\":3").utf8)
         default: throw V15Failure(kind: .transport, code: "unexpected", message: request.path)
         }
         return try V15FixtureCodec.decoder.decode(Response.self, from: data)

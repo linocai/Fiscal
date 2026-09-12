@@ -81,6 +81,7 @@ struct V230ClientTests {
         let model = await payoffModel(services: services)
         await model.previewPayoff(); await model.commit(); await model.previewReverse(); await model.reverse()
         #expect(model.receipt?.status == "reversed" && model.operations.count == 1)
+        #expect(model.receipt?.debtBeforeMinor == 0 && model.receipt?.debtAfterMinor == 128000)
         #expect(try await services.credit.account(id: V230Fixtures.accountID).currentDebtMinor == 128000)
     }
     @Test @MainActor func strictAccountDatesAndZeroLimitAreLocallyRejected() async {

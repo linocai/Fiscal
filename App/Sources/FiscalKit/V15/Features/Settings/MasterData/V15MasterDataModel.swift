@@ -22,11 +22,11 @@ import Foundation
     public private(set) var writesRequireExplicitReload = false
     public private(set) var offlineSnapshotAt: Date?
     public var selectedSection: Section = .accounts { didSet { if selectedSection != oldValue { editorContextChanged() } } }
-    public var selectedAccountID: UUID?
-    public var selectedCategoryID: UUID?
-    public var selectedMerchantID: UUID?
-    public var accountName = "" { didSet { draftInputChanged() } }; public var accountKind: V15AccountKind = .cash; public var openingBalance = "0" { didSet { draftInputChanged() } }; public var creditLimit = "" { didSet { draftInputChanged() } }; public var statementDay = "" { didSet { draftInputChanged() } }; public var dueDay = "" { didSet { draftInputChanged() } }; public var cycleMode = "statement_day_cutoff" { didSet { if oldValue != cycleMode && cycleMode == "on_demand" { creditLimit = ""; statementDay = ""; dueDay = ""; openingDueDate = "" }; draftInputChanged() } }; public var openingBalanceAsOfDate = "" { didSet { draftInputChanged() } }; public var openingDueDate = "" { didSet { draftInputChanged() } }
-    public var categoryName = "" { didSet { draftInputChanged() } }; public var categoryDirection: V15CategoryDirection = .expense; public var categoryIcon = "tag" { didSet { draftInputChanged() } }; public var categoryColor = "#008C8A" { didSet { draftInputChanged() } }
+    public var selectedAccountID: UUID? { didSet { if oldValue != selectedAccountID { editorContextChanged() } } }
+    public var selectedCategoryID: UUID? { didSet { if oldValue != selectedCategoryID { editorContextChanged() } } }
+    public var selectedMerchantID: UUID? { didSet { if oldValue != selectedMerchantID { editorContextChanged() } } }
+    public var accountName = "" { didSet { draftInputChanged() } }; public var accountKind: V15AccountKind = .cash { didSet { draftInputChanged() } }; public var openingBalance = "0" { didSet { draftInputChanged() } }; public var creditLimit = "" { didSet { draftInputChanged() } }; public var statementDay = "" { didSet { draftInputChanged() } }; public var dueDay = "" { didSet { draftInputChanged() } }; public var cycleMode = "statement_day_cutoff" { didSet { if oldValue != cycleMode && cycleMode == "on_demand" { creditLimit = ""; statementDay = ""; dueDay = ""; openingDueDate = "" }; draftInputChanged() } }; public var openingBalanceAsOfDate = "" { didSet { draftInputChanged() } }; public var openingDueDate = "" { didSet { draftInputChanged() } }
+    public var categoryName = "" { didSet { draftInputChanged() } }; public var categoryDirection: V15CategoryDirection = .expense { didSet { draftInputChanged() } }; public var categoryIcon = "tag" { didSet { draftInputChanged() } }; public var categoryColor = "#008C8A" { didSet { draftInputChanged() } }
     public var merchantName = "" { didSet { draftInputChanged() } }; public var merchantAliases = "" { didSet { draftInputChanged() } }; public var merchantSearch = ""; public private(set) var committedMerchantSearch = ""
     public var mappingTransactionID = ""; public private(set) var mapping: V15MerchantMapping?
     public var fieldIssues: [V15FieldIssue] = []
@@ -41,6 +41,7 @@ import Foundation
     public var splitChildNames: [String] = ["子分类一", "子分类二"]
     public var splitAssignments: [UUID: String] = [:]
     private let services: V15Services
+    private var editorGeneration: UInt64 = 0
     private var generation: UInt64 = 0
     private var merchantPageGeneration: UInt64 = 0
     private var previewGeneration: UInt64 = 0
@@ -235,7 +236,11 @@ import Foundation
         let createIdentity = account == nil ? accountCreateIdentity(name: name, kind: kind, opening: minor, credit: credit, statement: statement, due: due, mode: mode, asOf: asOf, dueDate: dueDate) : nil
         guard canSubmitCreate(section: .accounts, identity: createIdentity) else { return }
         isSaving = true; defer { isSaving = false }
-        await mutate(id: account?.id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == name && $0.openingBalanceMinor == minor && $0.cycleMode == mode }) { [self] in
+        await mutate(id: account?.id, unknownCreateIdentity: createIdentity, confirmed: {
+            $0.name == name && $0.kind == kind && $0.openingBalanceMinor == minor
+                && $0.creditLimitMinor == credit && $0.statementDay == statement && $0.dueDay == due
+                && $0.cycleMode == mode && $0.openingBalanceAsOfDate == asOf && $0.openingDueDate == dueDate
+        }) { [self] in
             if let account {
                 return try await services.masterData.patchAccount(id: account.id, patch: .init(expectedVersion: account.version, name: name, openingBalanceMinor: minor, creditLimitMinor: credit, statementDay: statement, dueDay: due, cycleMode: mode, openingBalanceAsOfDate: asOf.map(V15NullablePatchValue.value) ?? .null, openingDueDate: dueDate.map(V15NullablePatchValue.value) ?? .null))
             }
@@ -243,9 +248,9 @@ import Foundation
         }
     }
 
-    public func archiveOrRestoreAccount() async { guard canWrite("无法更改") else { return }; beginEditorMutation(); guard let account = selectedAccount else { return }; let archiving = account.archivedAt == nil; await mutate(id: account.id, confirmed: { archiving ? $0.archivedAt != nil : $0.archivedAt == nil }) { [self] in archiving ? try await services.masterData.archiveAccount(id: account.id, expectedVersion: account.version) : try await services.masterData.restoreAccount(id: account.id, expectedVersion: account.version) } }
+    public func archiveOrRestoreAccount() async { guard canWrite("无法更改") else { return }; beginEditorMutation(); guard let account = selectedAccount else { return }; let archiving = account.archivedAt == nil; isSaving = true; defer { isSaving = false }; await mutate(id: account.id, confirmed: { archiving ? $0.archivedAt != nil : $0.archivedAt == nil }) { [self] in archiving ? try await services.masterData.archiveAccount(id: account.id, expectedVersion: account.version) : try await services.masterData.restoreAccount(id: account.id, expectedVersion: account.version) } }
     public func saveCategory() async { guard canWrite("无法保存") else { return }; beginEditorMutation(); guard selectedCategory?.archivedAt == nil else { receiptStatus = .validation; receipt = "归档分类只能恢复，不能编辑。"; return }; guard !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, categoryColor.range(of: "^#[0-9A-Fa-f]{6}$", options: .regularExpression) != nil else { receiptStatus = .validation; fieldIssues = [.init(code: "category_required", message: "请填写分类名称和六位颜色值。", fieldPath: "category")]; return }; let category = selectedCategory; let name = categoryName; let direction = categoryDirection.rawValue; let icon = categoryIcon; let color = categoryColor; let createIdentity = category == nil ? identity(["category", name, direction, icon, color]) : nil; guard canSubmitCreate(section: .categories, identity: createIdentity) else { return }; isSaving = true; defer { isSaving = false }; await mutateCategory(id: category?.id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == name && $0.direction == direction && $0.icon == icon && $0.colorHex.uppercased() == color.uppercased() }) { [self] in if let category { return try await services.masterData.patchCategory(id: category.id, patch: .init(expectedVersion: category.version, name: name, direction: direction, icon: icon, colorHex: color)) } else { return try await services.masterData.createCategory(.init(name: name, direction: direction, icon: icon, colorHex: color)) } } }
-    public func archiveOrRestoreCategory() async { guard canWrite("无法更改") else { return }; beginEditorMutation(); guard let category = selectedCategory else { return }; let archiving = category.archivedAt == nil; await mutateCategory(id: category.id, confirmed: { archiving ? $0.archivedAt != nil : $0.archivedAt == nil }) { [self] in archiving ? try await services.masterData.archiveCategory(id: category.id, expectedVersion: category.version) : try await services.masterData.restoreCategory(id: category.id, expectedVersion: category.version) } }
+    public func archiveOrRestoreCategory() async { guard canWrite("无法更改") else { return }; beginEditorMutation(); guard let category = selectedCategory else { return }; let archiving = category.archivedAt == nil; isSaving = true; defer { isSaving = false }; await mutateCategory(id: category.id, confirmed: { archiving ? $0.archivedAt != nil : $0.archivedAt == nil }) { [self] in archiving ? try await services.masterData.archiveCategory(id: category.id, expectedVersion: category.version) : try await services.masterData.restoreCategory(id: category.id, expectedVersion: category.version) } }
     public func saveMerchant() async {
         guard canWrite("无法保存") else { return }
         beginEditorMutation()
@@ -259,26 +264,12 @@ import Foundation
         let createIdentity = merchant == nil ? identity(["merchant", expectedName] + aliases) : nil
         guard canSubmitCreate(section: .merchants, identity: createIdentity) else { return }
         isSaving = true; defer { isSaving = false }
-        do {
-            let value: V15Merchant
+        await mutateMerchant(id: id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == expectedName && $0.aliases == aliases }) {
             if let merchant {
-                value = try await services.merchants.patch(id: merchant.id, patch: .init(expectedVersion: merchant.version, name: expectedName, aliases: aliases))
-            } else {
-                value = try await services.merchants.create(.init(name: expectedName, aliases: aliases))
+                return try await services.merchants.patch(id: merchant.id, patch: .init(expectedVersion: merchant.version, name: expectedName, aliases: aliases))
             }
-            merchants.removeAll { $0.id == value.id }; merchants.append(value); selectedMerchantID = value.id; services.notifyConfirmedWrite(); receiptStatus = .success
-            receiptStatus = .success; receipt = "商户“\(value.name)”已保存"
-            if merchant == nil { unknownCreateLock = nil }
-            if !(await load()) { receipt = (receipt ?? "已保存") + "；列表刷新失败，可稍后刷新，无需重新保存。" }
-        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) {
-            if let id, let read = try? await services.merchants.get(id: id), read.name == expectedName, read.aliases == aliases {
-                receiptStatus = .success; receipt = "已确认商户“\(read.name)”保存成功，没有重复保存。"
-            } else {
-                if let createIdentity { await lockUnknownCreate(section: .merchants, identity: createIdentity); return }
-                else { receiptStatus = .unknown; receipt = "暂时无法确认保存结果；系统没有重复保存。" }
-            }
-            await load()
-        } catch { apply(error) }
+            return try await services.merchants.create(.init(name: expectedName, aliases: aliases))
+        }
     }
     public func submitMerchantSearch() async { guard merchantSearch == committedMerchantSearch else { merchantPageGeneration &+= 1; merchantCursor = nil; merchantPageError = nil; isLoadingMerchants = false; committedMerchantSearch = merchantSearch; await load(); return }; await load() }
     public func loadNextMerchants() async { guard merchantSearch == committedMerchantSearch, let cursor = merchantCursor, !isLoadingMerchants else { return }; merchantPageGeneration &+= 1; let current = merchantPageGeneration; isLoadingMerchants = true; merchantPageError = nil; do { let page = try await services.merchants.list(query: committedMerchantSearch, cursor: cursor, limit: 50); guard current == merchantPageGeneration else { return }; merchants += page.items.filter { item in !merchants.contains(where: { $0.id == item.id }) }; merchantCursor = page.nextCursor } catch let failure as V15Failure { guard current == merchantPageGeneration else { return }; merchantPageError = failure } catch is CancellationError { guard current == merchantPageGeneration else { return }; merchantPageError = nil } catch { guard current == merchantPageGeneration else { return }; merchantPageError = .init(kind: .transport, message: "下一页商户读取失败。") }; guard current == merchantPageGeneration else { return }; isLoadingMerchants = false }
@@ -334,27 +325,125 @@ import Foundation
     }
     public func commitSplit() async -> Bool { guard canWrite("无法提交拆分"), !transformRequiresRepreview else { if transformRequiresRepreview { transformMessage = "此预览已失效，请重新读取预览后再提交。" }; return false }; guard let root = selectedCategory, let preview = splitPreview else { return false }; let assignments = preview.requiredTransactionIDs.compactMap { id in splitAssignments[id].map { name in V15CategorySplitAssignment(transactionID: id, childName: name) } }; guard assignments.count == preview.requiredTransactionIDs.count else { transformFieldIssues = [.init(code: "split_assignment_required", message: "请逐笔指定归位子分类。", fieldPath: "assignments")]; return false }; let identity = "\(preview.previewToken)|\(assignments)"; do { let result = try await services.categories.commitSplit(rootID: root.id, request: .init(previewToken: preview.previewToken, assignments: assignments), idempotencyKey: idempotency.key(for: "split", payloadIdentity: identity)); idempotency.succeeded(scope: "split", payloadIdentity: identity); transformReceipt = result; transformMessage = "拆分已原子提交：重归类 \(result.reclassifiedTransactionCount) 笔。"; _ = await load(); return true } catch let failure as V15Failure where failure.kind == .conflict { await recoverTransformConflict(failure); return false } catch let failure as V15Failure { recordTransformFailure(failure); return false } catch { recordTransformFailure(.init(kind: .transport, message: "拆分未完成，请重新决定。")); return false } }
     private func mutate(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15AccountResponse) -> Bool, _ operation: () async throws -> V15AccountResponse) async {
+        let context = editorGeneration
         let previous = id.flatMap { target in accounts.first { $0.id == target } }
-        do { let account = try await operation(); accounts.removeAll { $0.id == account.id }; accounts.append(account); selectedAccountID = account.id; services.notifyConfirmedWrite(); receiptStatus = .success; receipt = "账户“\(account.name)”已保存"; if id == nil { unknownCreateLock = nil }; if !(await load()) { receipt = (receipt ?? "已保存") + "；列表刷新失败，可稍后刷新，无需重新保存。" }
-        } catch let failure as V15Failure where failure.kind == .conflict { await recoverMutationConflict(failure, previousAccount: previous)
-        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let account = try? await services.masterData.account(id: id), confirmed(account) { receiptStatus = .success; receipt = "已确认“\(account.name)”保存成功，没有重复保存。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .accounts, identity: unknownCreateIdentity) } else { _ = await load(); receiptStatus = .unknown; receipt = "暂时无法确认本次更改；已刷新数据，没有重复保存。" } } catch { apply(error) }
+        do {
+            let value = try await operation()
+            accounts.removeAll { $0.id == value.id }; accounts.append(value)
+            services.notifyConfirmedWrite()
+            let refreshed = await load(preservingConflict: true)
+            guard context == editorGeneration else { return }
+            selectedAccountID = value.id
+            receiptStatus = .success
+            receipt = "账户“\(value.name)”已保存" + (refreshed ? "" : "；列表刷新失败，可稍后刷新，无需重新保存。")
+        } catch let failure as V15Failure where failure.kind == .conflict {
+            await recoverMutationConflict(failure, previousAccount: previous, context: context)
+        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) {
+            if let id, let value = try? await services.masterData.account(id: id, readCachePolicy: .reloadIgnoringCache), value.id == id,
+               let previous, value.version > previous.version, confirmed(value) {
+                accounts.removeAll { $0.id == value.id }; accounts.append(value)
+                await services.refreshAfterRecoveredWrite()
+                _ = await load(preservingConflict: true)
+                guard context == editorGeneration else { return }
+                receiptStatus = .success; receipt = "已确认“\(value.name)”保存成功，没有重复保存。"
+            } else if let unknownCreateIdentity {
+                await lockUnknownCreate(section: .accounts, identity: unknownCreateIdentity, context: context)
+            } else {
+                _ = await load(preservingConflict: true)
+                guard context == editorGeneration else { return }
+                receiptStatus = .unknown; receipt = "暂时无法确认本次更改；已保留输入，没有重复保存。"
+            }
+        } catch { if context == editorGeneration { apply(error) } }
     }
     private func mutateCategory(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15CategoryResponse) -> Bool, _ operation: () async throws -> V15CategoryResponse) async {
+        let context = editorGeneration
         let previous = id.flatMap { target in flatten(categories).first { $0.id == target } }
-        do { let category = try await operation(); categories.removeAll { $0.id == category.id }; categories.append(category); selectedCategoryID = category.id; services.notifyConfirmedWrite(); receiptStatus = .success; receipt = "分类“\(category.name)”已保存"; if id == nil { unknownCreateLock = nil }; if !(await load()) { receipt = (receipt ?? "已保存") + "；列表刷新失败，可稍后刷新，无需重新保存。" }
-        } catch let failure as V15Failure where failure.kind == .conflict { await recoverMutationConflict(failure, previousCategory: previous)
-        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let category = try? await services.masterData.category(id: id), confirmed(category) { receiptStatus = .success; receipt = "已确认“\(category.name)”保存成功，没有重复保存。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .categories, identity: unknownCreateIdentity) } else { _ = await load(); receiptStatus = .unknown; receipt = "暂时无法确认本次更改；已刷新数据，没有重复保存。" } } catch { apply(error) }
+        do {
+            let value = try await operation()
+            replaceCategory(value)
+            services.notifyConfirmedWrite()
+            let refreshed = await load(preservingConflict: true)
+            guard context == editorGeneration else { return }
+            selectedCategoryID = value.id
+            receiptStatus = .success
+            receipt = "分类“\(value.name)”已保存" + (refreshed ? "" : "；列表刷新失败，可稍后刷新，无需重新保存。")
+        } catch let failure as V15Failure where failure.kind == .conflict {
+            await recoverMutationConflict(failure, previousCategory: previous, context: context)
+        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) {
+            if let id, let value = try? await services.masterData.category(id: id), value.id == id,
+               let previous, value.version > previous.version, confirmed(value) {
+                replaceCategory(value)
+                await services.refreshAfterRecoveredWrite()
+                _ = await load(preservingConflict: true)
+                guard context == editorGeneration else { return }
+                receiptStatus = .success; receipt = "已确认“\(value.name)”保存成功，没有重复保存。"
+            } else if let unknownCreateIdentity {
+                await lockUnknownCreate(section: .categories, identity: unknownCreateIdentity, context: context)
+            } else {
+                _ = await load(preservingConflict: true)
+                guard context == editorGeneration else { return }
+                receiptStatus = .unknown; receipt = "暂时无法确认本次更改；已保留输入，没有重复保存。"
+            }
+        } catch { if context == editorGeneration { apply(error) } }
+    }
+    private func mutateMerchant(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15Merchant) -> Bool, _ operation: () async throws -> V15Merchant) async {
+        let context = editorGeneration
+        let previous = id.flatMap { target in merchants.first { $0.id == target } }
+        do {
+            let value = try await operation()
+            merchants.removeAll { $0.id == value.id }; merchants.append(value)
+            services.notifyConfirmedWrite()
+            let refreshed = await load(preservingConflict: true)
+            guard context == editorGeneration else { return }
+            selectedMerchantID = value.id
+            receiptStatus = .success
+            receipt = "商户“\(value.name)”已保存" + (refreshed ? "" : "；列表刷新失败，可稍后刷新，无需重新保存。")
+        } catch let failure as V15Failure where failure.kind == .conflict {
+            await recoverMutationConflict(failure, context: context)
+        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) {
+            if let id, let value = try? await services.merchants.get(id: id), value.id == id,
+               let previous, value.version > previous.version, confirmed(value) {
+                merchants.removeAll { $0.id == value.id }; merchants.append(value)
+                await services.refreshAfterRecoveredWrite()
+                _ = await load(preservingConflict: true)
+                guard context == editorGeneration else { return }
+                receiptStatus = .success; receipt = "已确认商户“\(value.name)”保存成功，没有重复保存。"
+            } else if let unknownCreateIdentity {
+                await lockUnknownCreate(section: .merchants, identity: unknownCreateIdentity, context: context)
+            } else {
+                _ = await load(preservingConflict: true)
+                guard context == editorGeneration else { return }
+                receiptStatus = .unknown; receipt = "暂时无法确认本次更改；已保留输入，没有重复保存。"
+            }
+        } catch { if context == editorGeneration { apply(error) } }
+    }
+    private func replaceCategory(_ value: V15CategoryResponse) {
+        func replacing(_ items: [V15CategoryResponse]) -> [V15CategoryResponse] {
+            items.map { item in
+                if item.id == value.id { return value }
+                return .init(id: item.id, name: item.name, direction: item.direction, parentID: item.parentID,
+                             icon: item.icon, colorHex: item.colorHex, aliases: item.aliases, examples: item.examples,
+                             isBalanceAdjustment: item.isBalanceAdjustment, sortOrder: item.sortOrder,
+                             archivedAt: item.archivedAt, usageCount: item.usageCount, version: item.version,
+                             createdAt: item.createdAt, updatedAt: item.updatedAt, children: replacing(item.children))
+            }
+        }
+        if flatten(categories).contains(where: { $0.id == value.id }) { categories = replacing(categories) }
+        else if value.parentID == nil { categories.append(value) }
     }
     private func reloadOnConflict(_ error: Error) async { if let failure = error as? V15Failure, failure.kind == .conflict { await recoverMutationConflict(failure) } else { apply(error) } }
     public func resolveConflictByReload() async {
         guard conflict != nil else { return }
         if await load() { receipt = "已读取最新数据；现在可以重新决定。" }
     }
-    private func recoverMutationConflict(_ failure: V15Failure, previousAccount: V15AccountResponse? = nil, previousCategory: V15CategoryResponse? = nil) async {
+    private func recoverMutationConflict(_ failure: V15Failure, previousAccount: V15AccountResponse? = nil, previousCategory: V15CategoryResponse? = nil, context: UInt64? = nil) async {
+        let context = context ?? editorGeneration
+        let refreshed = await load(preservingConflict: true)
+        guard context == editorGeneration else { return }
         receiptStatus = .conflict
         conflict = failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: failure.message)
         fieldIssues = failure.fieldIssues; writesRequireExplicitReload = true
-        if await load(preservingConflict: true) {
+        if refreshed {
             if let previousAccount, let latest = accounts.first(where: { $0.id == previousAccount.id }) { conflictChanges = accountChanges(previous: previousAccount, current: latest) }
             if let previousCategory, let latest = flatten(categories).first(where: { $0.id == previousCategory.id }) { conflictChanges = categoryChanges(previous: previousCategory, current: latest) }
             receipt = "数据已经更新；已读取最新内容。请比较差异后再继续。"
@@ -410,10 +499,11 @@ import Foundation
             receipt = "重新读取失败；新建结果仍未确认，请稍后重试。"
         }
     }
-    private func lockUnknownCreate(section: Section, identity: String) async {
-        receiptStatus = .unknown
+    private func lockUnknownCreate(section: Section, identity: String, context: UInt64) async {
         unknownCreateLock = .init(section: section, payloadIdentity: identity)
-        let refreshed = await load()
+        let refreshed = await load(preservingConflict: true)
+        guard context == editorGeneration else { return }
+        receiptStatus = .unknown
         if refreshed { receipt = "新建结果暂时不明；已刷新列表但仍无法确认，继续保留重复创建保护。请核对现有记录。" }
         else { writesRequireExplicitReload = true; receipt = "新建结果暂时不明且刷新失败；请稍后再试。" }
     }
@@ -440,8 +530,8 @@ import Foundation
     private func accountCreateIdentity(name: String, kind: V15AccountKind, opening: Int64, credit: Int64?, statement: Int?, due: Int?, mode: String?, asOf: String?, dueDate: String?) -> String { identity(["account", name, kind.rawValue, String(opening), credit.map(String.init) ?? "∅", statement.map(String.init) ?? "∅", due.map(String.init) ?? "∅", mode ?? "∅", asOf ?? "∅", dueDate ?? "∅"]) }
     private func identity(_ fields: [String]) -> String { fields.map { "\($0.utf8.count):\($0)" }.joined(separator: "|") }
     private func canWrite(_ action: String) -> Bool { if isSaving { return false }; if isOffline { receiptStatus = .failure; receipt = "离线时只可查看，\(action)。"; return false }; if writesRequireExplicitReload { receiptStatus = unknownCreateLock == nil ? .conflict : .unknown; receipt = unknownCreateLock == nil ? "数据更新后刷新未完成，\(action)；请先刷新再决定。" : "新建结果尚未确认且刷新失败，\(action)；请先刷新再决定。"; return false }; return true }
-    private func draftInputChanged() { fieldIssues = []; receipt = nil; receiptStatus = .informational }
-    private func editorContextChanged() { fieldIssues = []; receipt = nil; if !writesRequireExplicitReload { conflict = nil; conflictChanges = [] } }
+    private func draftInputChanged() { editorGeneration &+= 1; fieldIssues = []; receipt = nil; receiptStatus = .informational }
+    private func editorContextChanged() { editorGeneration &+= 1; receiptStatus = .informational; fieldIssues = []; receipt = nil; if !writesRequireExplicitReload { conflict = nil; conflictChanges = [] } }
     private func beginEditorMutation() { receiptStatus = .informational; fieldIssues = []; receipt = nil; if !writesRequireExplicitReload { conflict = nil; conflictChanges = [] } }
 
     nonisolated static func fieldIssues(_ issues: [V15FieldIssue], matchingAny paths: [String]) -> [V15FieldIssue] {

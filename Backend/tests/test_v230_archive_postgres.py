@@ -21,7 +21,10 @@ URL = environ.get("FISCAL_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(URL is None, reason="requires isolated PostgreSQL")
 
 
-def test_native_0040_payoff_archive_restore_replays_without_preview(monkeypatch):
+@pytest.mark.parametrize("reversed_before_export", [False, True])
+def test_native_0040_payoff_archive_restore_replays_without_preview(
+    monkeypatch, reversed_before_export
+):
     async def ready():
         return None
 
@@ -30,6 +33,21 @@ def test_native_0040_payoff_archive_restore_replays_without_preview(monkeypatch)
         cash, credit = setup(api)
         borrow(api, cash, credit)
         _, receipt, commit, key = payoff(api, credit, request(cash))
+        reverse_key, reverse_body = uuid4(), {}
+        if reversed_before_export:
+            preview = api.post(
+                f"/api/v1/credit-payoffs/{receipt['operation_id']}/reverse-preview", headers=AUTH
+            )
+            assert preview.status_code == 200, preview.text
+            reverse_body = {"preview_token": preview.json()["preview_token"]}
+            reversed_response = api.post(
+                f"/api/v1/credit-payoffs/{receipt['operation_id']}/reverse",
+                headers={**AUTH, "Idempotency-Key": str(reverse_key)},
+                json=reverse_body,
+            )
+            assert reversed_response.status_code == 200, reversed_response.text
+            receipt = reversed_response.json()
+            assert (receipt["debt_before_minor"], receipt["debt_after_minor"]) == (0, 10000)
     password = uuid4().hex
 
     async def export():
@@ -80,7 +98,23 @@ def test_native_0040_payoff_archive_restore_replays_without_preview(monkeypatch)
         )
         assert result.status_code == 200, result.text
         assert result.json() == receipt
-        assert summary(api, credit)["current_debt_minor"] == 0
+        assert summary(api, credit)["current_debt_minor"] == (
+            10000 if reversed_before_export else 0
+        )
+        path = f"/api/v1/credit-payoffs/{receipt['operation_id']}"
+        assert api.get(path, headers=AUTH).json() == receipt
+        assert api.get(f"/api/v1/credit-accounts/{credit['id']}/payoffs", headers=AUTH).json() == [
+            receipt
+        ]
+        if reversed_before_export:
+            replay = api.post(
+                path + "/reverse",
+                headers={**AUTH, "Idempotency-Key": str(reverse_key)},
+                json=reverse_body,
+            )
+            assert replay.status_code == 200, replay.text
+            assert replay.json() == receipt
+            return
         reverse = api.post(
             f"/api/v1/credit-payoffs/{receipt['operation_id']}/reverse-preview", headers=AUTH
         )

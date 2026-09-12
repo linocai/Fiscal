@@ -283,7 +283,15 @@ class CreditPayoffService:
             waived_fee_minor=request.waived_fee_minor,
             allocations=allocations,
             closing_installment_plan_ids=[
-                p.id for p in plans if p.lifecycle in {"active", "partially_cancelled"}
+                p.id
+                for p in plans
+                if p.lifecycle in {"active", "partially_cancelled"}
+                and any(
+                    x.cancelled_at is None
+                    and x.settled_early_at is None
+                    and x.effective_cycle_id in {item.cycle_id for item in allocations}
+                    for x in p.periods
+                )
             ],
             warnings=[] if request.bank_confirmed_settled else ["请确认银行已全额结清"],
             executable=request.bank_confirmed_settled,
@@ -440,6 +448,19 @@ class CreditPayoffService:
         if not request.bank_confirmed_settled:
             invalid("payoff_bank_confirmation_required", "请确认银行已全额结清")
         plans = await self._plans(account_id)
+        # Repayments belong to a cycle, not an individual installment. Capture
+        # the unpaid cycles before writing payoff postings; afterwards every
+        # cycle is settled and its prior state can no longer be inferred.
+        closing_cycle_ids = {item.cycle_id for item in proposal["allocations"]}
+        closing_period_ids = {
+            period.id
+            for plan in plans
+            if plan.id in proposal["closing_installment_plan_ids"]
+            for period in plan.periods
+            if period.cancelled_at is None
+            and period.settled_early_at is None
+            and period.effective_cycle_id in closing_cycle_ids
+        }
         snapshots = [
             {
                 "id": str(p.id),
@@ -452,6 +473,7 @@ class CreditPayoffService:
                         else None,
                     }
                     for x in p.periods
+                    if x.id in closing_period_ids
                 ],
             }
             for p in plans
@@ -500,7 +522,7 @@ class CreditPayoffService:
                 plan.version += 1
                 plan.updated_at = utc_now()
                 for period in plan.periods:
-                    if period.cancelled_at is None and period.settled_early_at is None:
+                    if period.id in closing_period_ids:
                         period.settled_early_at = ensure_utc(request.occurred_at)
                         period.version += 1
                         period.updated_at = utc_now()
@@ -611,6 +633,15 @@ class CreditPayoffService:
             operation.account_id,
             operation.payment_account_id,
         )
+        account = await self.session.get(Account, operation.account_id)
+        if account is None:
+            raise RuntimeError("payoff account missing")
+        impacts_before = await self.credit.account_impacts([operation.account_id])
+        debt_before = checked_int64(
+            account.opening_balance_minor - impacts_before.get(operation.account_id, 0)
+        )
+        if debt_before != 0:
+            raise RuntimeError("payoff reversal must start from settled debt")
         rows = list(
             (
                 await self.session.scalars(
@@ -656,6 +687,12 @@ class CreditPayoffService:
                 period.updated_at = utc_now()
         await self.session.flush()
         await validate_credit_invariants(self.credit, {operation.account_id})
+        impacts_after = await self.credit.account_impacts([operation.account_id])
+        debt_after = checked_int64(
+            account.opening_balance_minor - impacts_after.get(operation.account_id, 0)
+        )
+        if debt_after != operation.receipt["debt_before_minor"]:
+            raise RuntimeError("payoff reversal did not restore original debt")
         await self._plan_revisions(plans, restored, "reopened")
         operation.status = "reversed"
         operation.reversed_at = utc_now()
@@ -666,7 +703,8 @@ class CreditPayoffService:
                 "status": "reversed",
                 "reversed_at": operation.reversed_at,
                 "data_revision": (await self._revision()) + 1,
-                "debt_after_minor": operation.receipt["debt_before_minor"],
+                "debt_before_minor": debt_before,
+                "debt_after_minor": debt_after,
             }
         )
         operation.receipt = receipt.model_dump(mode="json")

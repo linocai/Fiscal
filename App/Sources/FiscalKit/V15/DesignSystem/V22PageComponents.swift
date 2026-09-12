@@ -478,7 +478,7 @@ public struct V23DisposableCard: View {
                 Text("点击预计入账或流出查看逐项明细；只计尚未完成的金额。")
                     .font(V15Typography.label).foregroundStyle(ink.opacity(0.62))
                 if value.undatedInflowMinor != 0 { caveat("未安排日期的待入账", value.undatedInflowMinor) }
-                if value.unscheduledCreditDebtMinor != 0 { caveat("未安排还款的信用欠款", value.unscheduledCreditDebtMinor) }
+                if value.unscheduledCreditDebtMinor != 0 { caveat("尚未确定还款日期的信用欠款", value.unscheduledCreditDebtMinor) }
                 if value.overdueOutflowMinor != 0 { caveat("窗口前逾期未处理流出", value.overdueOutflowMinor) }
             } else {
                 Text(model.facts?.disposable == nil ? "此指标需新版服务" : "预计金额暂不可用")

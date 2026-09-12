@@ -1,0 +1,27 @@
+{
+  "operation_id": "3dd68d37-575c-419f-a21b-ee5f37390022",
+  "account_id": "94c4ee4b-ef59-4648-9f2b-96e0c579349b",
+  "payment_account_id": "33df7512-6c29-4e33-a867-cb7d05ccf086",
+  "occurred_at": "2026-09-01T12:00:00+08:00",
+  "status": "completed",
+  "data_revision": 4,
+  "actual_amount_minor": 20000,
+  "debt_before_minor": 20000,
+  "debt_after_minor": 0,
+  "transaction_ids": [
+    "448cc5cb-344a-4e69-8a81-630d6e9081f8"
+  ],
+  "allocations": [
+    {
+      "cycle_id": null,
+      "remaining_minor": 20000,
+      "principal_minor": 20000,
+      "fee_minor": 0,
+      "repaid_minor": 20000,
+      "waived_principal_minor": 0,
+      "waived_fee_minor": 0,
+      "installment_plan_ids": []
+    }
+  ],
+  "reversed_at": null
+}

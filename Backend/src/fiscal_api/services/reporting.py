@@ -716,6 +716,14 @@ class ReportingService:
                 manual_overdue.append(
                     (await CashFlowRepository(self.session).settlement_totals(item))[1]
                 )
+        # A legacy fixed-cycle opening balance can lack its confirmation/due dates.
+        # Count debt not covered by any known cycle, including on-demand debt.
+        # Subtract cycles outside this window too: those debts already have dates.
+        unscheduled_by_account = {a.account_id: a.current_debt_minor for a in debt.accounts}
+        for cycle in debt.cycles:
+            unscheduled_by_account[cycle.account_id] = max(
+                unscheduled_by_account.get(cycle.account_id, 0) - cycle.remaining_minor, 0
+            )
         disposable = DisposableFacts(
             date_from=window_start,
             date_to=rolling_end,
@@ -724,9 +732,7 @@ class ReportingService:
             expected_outflow_minor=outflow,
             projected_balance_minor=checked_int64(checked_int64(current_cash + inflow) - outflow),
             undated_inflow_minor=undated,
-            unscheduled_credit_debt_minor=self._checked_sum(
-                a.current_debt_minor for a in debt.accounts if a.credit_limit_minor is None
-            ),
+            unscheduled_credit_debt_minor=self._checked_sum(unscheduled_by_account.values()),
             overdue_outflow_minor=self._checked_sum([debt.overdue_minor, *manual_overdue]),
         )
         completeness, _ = await self._completeness_facts()

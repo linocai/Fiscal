@@ -123,6 +123,13 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         for _ in 0..<8 where !confirmReverse.isHittable { app.scrollViews.firstMatch.swipeUp() }
         XCTAssertTrue(confirmReverse.isEnabled); confirmReverse.click()
         XCTAssertTrue(app.staticTexts["整组结清已撤销"].waitForExistence(timeout: 5))
+        let change = app.descendants(matching: .any)["v230.payoff.receipt.debt-change"].firstMatch
+        XCTAssertTrue(change.waitForExistence(timeout: 5))
+        for _ in 0..<8 where !change.isHittable { app.scrollViews.firstMatch.swipeDown() }
+        XCTAssertTrue(change.isHittable)
+        XCTAssertEqual(change.value as? String, "¥0.00 → ¥1,280.00")
+        let receiptCapture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        receiptCapture.name = "v230-mac-reversed-receipt-fixed"; receiptCapture.lifetime = .keepAlways; add(receiptCapture)
     }
 
     func testV230PayoffUnknownResponseRecoversOriginalRequest() {

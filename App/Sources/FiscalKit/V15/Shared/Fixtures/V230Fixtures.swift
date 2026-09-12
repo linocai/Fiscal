@@ -56,7 +56,7 @@ actor V230FixtureTransport: V15Transporting {
         }
         if path.hasSuffix("/payoff"), let body {
             let key = request.headers["Idempotency-Key"] ?? ""
-            if let receipt = commits[key] { return try encode(receipt) }
+            if let receipt = commits[key] { return try encode(records[receipt.operationID] ?? receipt) }
             let input = try V15BodyEncoder.decode(V15CreditPayoffCommitRequest.self, from: body)
             guard let original = previews[input.previewToken], debt > 0 else { throw V15Failure(kind: .conflict, message: "预览已失效，请重新核对。", isDefinitiveRejection: true) }
             revision += 1
@@ -70,9 +70,11 @@ actor V230FixtureTransport: V15Transporting {
             if path.hasSuffix("/reverse-preview") { return try encode(V15CreditPayoffReversePreview(operationID: operationID, previewToken: UUID(), previewExpiresAt: Date().addingTimeInterval(600), dataRevision: revision, executable: original.status != "reversed", warnings: ["仅恢复记账，不执行银行退款。 "])) }
             if path.hasSuffix("/reverse") {
                 let key = request.headers["Idempotency-Key"] ?? ""
-                if let saved = commits[key] { return try encode(saved) }
+                if let saved = commits[key] { return try encode(records[saved.operationID] ?? saved) }
+                guard original.status != "reversed" else { throw V15Failure(kind: .conflict, code: "payoff_already_reversed", message: "此结清已撤销", isDefinitiveRejection: true) }
+                let debtBeforeReverse = debt
                 revision += 1; debt = original.debtBeforeMinor; cash += original.actualAmountMinor
-                let reversed = V15CreditPayoffReceipt(operationID: operationID, accountID: id, paymentAccountID: original.paymentAccountID, occurredAt: original.occurredAt, status: "reversed", dataRevision: revision, actualAmountMinor: original.actualAmountMinor, debtBeforeMinor: original.debtBeforeMinor, debtAfterMinor: original.debtAfterMinor, transactionIDs: original.transactionIDs, allocations: original.allocations, reversedAt: Date())
+                let reversed = V15CreditPayoffReceipt(operationID: operationID, accountID: id, paymentAccountID: original.paymentAccountID, occurredAt: original.occurredAt, status: "reversed", dataRevision: revision, actualAmountMinor: original.actualAmountMinor, debtBeforeMinor: debtBeforeReverse, debtAfterMinor: debt, transactionIDs: original.transactionIDs, allocations: original.allocations, reversedAt: Date())
                 records[operationID] = reversed; commits[key] = reversed; return try encode(reversed)
             }
             return try encode(original)

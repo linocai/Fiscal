@@ -140,7 +140,10 @@ public struct V15CreditPayoffView: View {
     private func receiptSection(_ value: V15CreditPayoffReceipt) -> some View {
         V22FormSection(value.status == "reversed" ? "整组结清已撤销" : "全额结清已完成") {
             Text("\(value.status == "reversed" ? "原结清实扣" : "银行实扣") \(money(value.actualAmountMinor))").font(V15Typography.cardTitle)
-            amountRow("信用欠款", before: value.status == "reversed" ? value.debtAfterMinor : value.debtBeforeMinor, after: value.status == "reversed" ? value.debtBeforeMinor : value.debtAfterMinor)
+            amountRow("信用欠款", before: value.debtBeforeMinor, after: value.debtAfterMinor)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("v230.payoff.receipt.debt-change")
+                .accessibilityValue("\(money(value.debtBeforeMinor)) → \(money(value.debtAfterMinor))")
             DisclosureGroup("查看内部账目与分摊（\(value.transactionIDs.count) 笔）") {
                 allocations(value.allocations)
                 ForEach(value.transactionIDs, id: \.self) { Text("账目 \($0.uuidString)").font(V15Typography.label).textSelection(.enabled) }
