@@ -62,7 +62,8 @@ public struct V15Facts: Codable, Sendable {
     public let completeness: Completeness
     public let future: FutureTotals
     public let knownFutureEvents: [V15FutureEvent]
-    enum CodingKeys: String, CodingKey { case meta, window, cash, credit, reimbursements, completeness, future; case knownFutureEvents = "known_future_events" }
+    public var disposable: V15Disposable? = nil
+    enum CodingKeys: String, CodingKey { case meta, window, cash, credit, reimbursements, completeness, future, disposable; case knownFutureEvents = "known_future_events" }
 }
 
 public enum V15FactDrillDownItem: Decodable, Sendable, Equatable {
@@ -238,10 +239,10 @@ public enum V15ReportAccountKind: Sendable, Equatable, Codable { case cash, debi
     public var rawValue: String { switch self { case .cash: "cash"; case .debit: "debit"; case .credit: "credit"; case .unknown(let raw): raw } }
     public var isKnown: Bool { if case .unknown = self { false } else { true } }
 }
-public enum V15ReportTransactionKind: Sendable, Equatable, Codable { case income, expense, transfer, creditPurchase, repayment, installmentFee, installmentRefund, reimbursementReceipt, unknown(String)
-    public init(from decoder: Decoder) throws { switch try decoder.singleValueContainer().decode(String.self) { case "income": self = .income; case "expense": self = .expense; case "transfer": self = .transfer; case "credit_purchase": self = .creditPurchase; case "repayment": self = .repayment; case "installment_fee": self = .installmentFee; case "installment_refund": self = .installmentRefund; case "reimbursement_receipt": self = .reimbursementReceipt; case let raw: self = .unknown(raw) } }
+public enum V15ReportTransactionKind: Sendable, Equatable, Codable { case income, expense, transfer, creditPurchase, repayment, borrowing, creditPrincipalWaiver, creditFeeRefund, creditSettlementFee, installmentFee, installmentRefund, reimbursementReceipt, unknown(String)
+    public init(from decoder: Decoder) throws { switch try decoder.singleValueContainer().decode(String.self) { case "income": self = .income; case "expense": self = .expense; case "transfer": self = .transfer; case "credit_purchase": self = .creditPurchase; case "repayment": self = .repayment; case "borrowing": self = .borrowing; case "credit_principal_waiver": self = .creditPrincipalWaiver; case "credit_fee_refund": self = .creditFeeRefund; case "credit_settlement_fee": self = .creditSettlementFee; case "installment_fee": self = .installmentFee; case "installment_refund": self = .installmentRefund; case "reimbursement_receipt": self = .reimbursementReceipt; case let raw: self = .unknown(raw) } }
     public func encode(to encoder: Encoder) throws { var container = encoder.singleValueContainer(); try container.encode(rawValue) }
-    public var rawValue: String { switch self { case .income: "income"; case .expense: "expense"; case .transfer: "transfer"; case .creditPurchase: "credit_purchase"; case .repayment: "repayment"; case .installmentFee: "installment_fee"; case .installmentRefund: "installment_refund"; case .reimbursementReceipt: "reimbursement_receipt"; case .unknown(let raw): raw } }
+    public var rawValue: String { switch self { case .income: "income"; case .expense: "expense"; case .transfer: "transfer"; case .creditPurchase: "credit_purchase"; case .repayment: "repayment"; case .borrowing: "borrowing"; case .creditPrincipalWaiver: "credit_principal_waiver"; case .creditFeeRefund: "credit_fee_refund"; case .creditSettlementFee: "credit_settlement_fee"; case .installmentFee: "installment_fee"; case .installmentRefund: "installment_refund"; case .reimbursementReceipt: "reimbursement_receipt"; case .unknown(let raw): raw } }
 }
 public enum V15ReportTransactionSource: Sendable, Equatable, Hashable, Codable { case manual, system, aiText, ocr, legacyImport, cashFlow, statementImport, unknown(String)
     public init(from decoder: Decoder) throws { switch try decoder.singleValueContainer().decode(String.self) { case "manual": self = .manual; case "system": self = .system; case "ai_text": self = .aiText; case "ocr": self = .ocr; case "legacy_import": self = .legacyImport; case "cash_flow": self = .cashFlow; case "statement_import": self = .statementImport; case let raw: self = .unknown(raw) } }
@@ -358,7 +359,7 @@ public struct V15RepaymentPreview: Codable, Sendable, Equatable {
     public let creditAccountName: String
     public let creditDebtBeforeMinor: V15MinorUnits
     public let creditDebtAfterMinor: V15MinorUnits
-    public let creditCycleID: UUID
+    public let creditCycleID: UUID?
     public let cycleRemainingBeforeMinor: V15MinorUnits
     public let cycleRemainingAfterMinor: V15MinorUnits
     enum CodingKeys: String, CodingKey {
@@ -430,6 +431,7 @@ public struct V15ActionCommitReceipt: Codable, Sendable {
 public enum V15CreditCycleMode: String, Codable, Sendable, Equatable, CaseIterable {
     case statementDayCutoff = "statement_day_cutoff"
     case previousCalendarMonth = "previous_calendar_month"
+    case onDemand = "on_demand"
     case unknown
     public init(from decoder: Decoder) throws { self = Self(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown }
 }
@@ -601,7 +603,7 @@ public struct V15AccountDraft: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey { case name, kind, institution; case lastFour = "last_four", openingBalanceMinor = "opening_balance_minor", creditLimitMinor = "credit_limit_minor", statementDay = "statement_day", dueDay = "due_day", cycleMode = "cycle_mode", openingBalanceAsOfDate = "opening_balance_as_of_date", openingDueDate = "opening_due_date" }
 }
 public enum V15NullablePatchValue<Value: Encodable & Sendable>: Sendable { case omitted, value(Value), null }
-public struct V15AccountPatch: Encodable, Sendable { public let expectedVersion: Int; public let name: String?; public let institution: String?; public let openingBalanceMinor: V15MinorUnits?; public let creditLimitMinor: V15MinorUnits?; public let statementDay: Int?; public let dueDay: Int?; public let cycleMode: String?; public let openingBalanceAsOfDate: V15NullablePatchValue<String>; public let openingDueDate: V15NullablePatchValue<String>; public init(expectedVersion: Int, name: String? = nil, institution: String? = nil, openingBalanceMinor: V15MinorUnits? = nil, creditLimitMinor: V15MinorUnits? = nil, statementDay: Int? = nil, dueDay: Int? = nil, cycleMode: String? = nil, openingBalanceAsOfDate: V15NullablePatchValue<String> = .omitted, openingDueDate: V15NullablePatchValue<String> = .omitted) { self.expectedVersion = expectedVersion; self.name = name; self.institution = institution; self.openingBalanceMinor = openingBalanceMinor; self.creditLimitMinor = creditLimitMinor; self.statementDay = statementDay; self.dueDay = dueDay; self.cycleMode = cycleMode; self.openingBalanceAsOfDate = openingBalanceAsOfDate; self.openingDueDate = openingDueDate }; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", name, institution; case openingBalanceMinor = "opening_balance_minor", creditLimitMinor = "credit_limit_minor", statementDay = "statement_day", dueDay = "due_day", cycleMode = "cycle_mode", openingBalanceAsOfDate = "opening_balance_as_of_date", openingDueDate = "opening_due_date" }; public func encode(to encoder: Encoder) throws { var c = encoder.container(keyedBy: CodingKeys.self); try c.encode(expectedVersion, forKey: .expectedVersion); try c.encodeIfPresent(name, forKey: .name); try c.encodeIfPresent(institution, forKey: .institution); try c.encodeIfPresent(openingBalanceMinor, forKey: .openingBalanceMinor); try c.encodeIfPresent(creditLimitMinor, forKey: .creditLimitMinor); try c.encodeIfPresent(statementDay, forKey: .statementDay); try c.encodeIfPresent(dueDay, forKey: .dueDay); try c.encodeIfPresent(cycleMode, forKey: .cycleMode); try encode(openingBalanceAsOfDate, key: .openingBalanceAsOfDate, container: &c); try encode(openingDueDate, key: .openingDueDate, container: &c) }; private func encode(_ value: V15NullablePatchValue<String>, key: CodingKeys, container: inout KeyedEncodingContainer<CodingKeys>) throws { switch value { case .omitted: break; case .value(let value): try container.encode(value, forKey: key); case .null: try container.encodeNil(forKey: key) } } }
+public struct V15AccountPatch: Encodable, Sendable { public let expectedVersion: Int; public let name: String?; public let institution: String?; public let openingBalanceMinor: V15MinorUnits?; public let creditLimitMinor: V15MinorUnits?; public let statementDay: Int?; public let dueDay: Int?; public let cycleMode: String?; public let openingBalanceAsOfDate: V15NullablePatchValue<String>; public let openingDueDate: V15NullablePatchValue<String>; public init(expectedVersion: Int, name: String? = nil, institution: String? = nil, openingBalanceMinor: V15MinorUnits? = nil, creditLimitMinor: V15MinorUnits? = nil, statementDay: Int? = nil, dueDay: Int? = nil, cycleMode: String? = nil, openingBalanceAsOfDate: V15NullablePatchValue<String> = .omitted, openingDueDate: V15NullablePatchValue<String> = .omitted) { self.expectedVersion = expectedVersion; self.name = name; self.institution = institution; self.openingBalanceMinor = openingBalanceMinor; self.creditLimitMinor = creditLimitMinor; self.statementDay = statementDay; self.dueDay = dueDay; self.cycleMode = cycleMode; self.openingBalanceAsOfDate = openingBalanceAsOfDate; self.openingDueDate = openingDueDate }; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", name, institution; case openingBalanceMinor = "opening_balance_minor", creditLimitMinor = "credit_limit_minor", statementDay = "statement_day", dueDay = "due_day", cycleMode = "cycle_mode", openingBalanceAsOfDate = "opening_balance_as_of_date", openingDueDate = "opening_due_date" }; public func encode(to encoder: Encoder) throws { var c = encoder.container(keyedBy: CodingKeys.self); try c.encode(expectedVersion, forKey: .expectedVersion); try c.encodeIfPresent(name, forKey: .name); try c.encodeIfPresent(institution, forKey: .institution); try c.encodeIfPresent(openingBalanceMinor, forKey: .openingBalanceMinor); if cycleMode == "on_demand" { try c.encodeNil(forKey: .creditLimitMinor); try c.encodeNil(forKey: .statementDay); try c.encodeNil(forKey: .dueDay) } else { try c.encodeIfPresent(creditLimitMinor, forKey: .creditLimitMinor); try c.encodeIfPresent(statementDay, forKey: .statementDay); try c.encodeIfPresent(dueDay, forKey: .dueDay) }; try c.encodeIfPresent(cycleMode, forKey: .cycleMode); try encode(openingBalanceAsOfDate, key: .openingBalanceAsOfDate, container: &c); try encode(openingDueDate, key: .openingDueDate, container: &c) }; private func encode(_ value: V15NullablePatchValue<String>, key: CodingKeys, container: inout KeyedEncodingContainer<CodingKeys>) throws { switch value { case .omitted: break; case .value(let value): try container.encode(value, forKey: key); case .null: try container.encodeNil(forKey: key) } } }
 public struct V15AccountOrderState: Codable, Sendable, Equatable { public let items: [V15AccountResponse]; public let listRevision: String; enum CodingKeys: String, CodingKey { case items; case listRevision = "list_revision" } }
 public struct V15OrderRequest: Codable, Sendable, Equatable { public let orderedIDs: [UUID]; public let expectedListRevision: String; public init(orderedIDs: [UUID], expectedListRevision: String) { self.orderedIDs = orderedIDs; self.expectedListRevision = expectedListRevision }; enum CodingKeys: String, CodingKey { case orderedIDs = "ordered_ids", expectedListRevision = "expected_list_revision" } }
 
@@ -617,18 +619,19 @@ public struct V15MerchantMappingRequest: Codable, Sendable, Equatable { public l
 public struct V15MerchantMappingReleaseRequest: Codable, Sendable, Equatable { public let expectedMappingVersion: Int; public init(expectedMappingVersion: Int) { self.expectedMappingVersion = expectedMappingVersion }; enum CodingKeys: String, CodingKey { case expectedMappingVersion = "expected_mapping_version" } }
 public struct V15MerchantMappingReceipt: Codable, Sendable, Equatable { public let action: String; public let mapping: V15MerchantMapping?; public let transactionVersion: Int; enum CodingKeys: String, CodingKey { case action, mapping; case transactionVersion = "transaction_version" } }
 
-public enum V15ManualTransactionKind: String, Codable, CaseIterable, Sendable, Equatable, Identifiable { case expense, income, transfer, creditPurchase = "credit_purchase", repayment
+public enum V15ManualTransactionKind: String, Codable, CaseIterable, Sendable, Equatable, Identifiable { case expense, income, transfer, creditPurchase = "credit_purchase", repayment, borrowing
     public var id: String { rawValue }
-    public var displayName: String { switch self { case .expense: "支出"; case .income: "收入"; case .transfer: "转账"; case .creditPurchase: "信用卡消费"; case .repayment: "还款" } }
+    public var displayName: String { switch self { case .expense: "支出"; case .income: "收入"; case .transfer: "转账"; case .creditPurchase: "信用卡消费"; case .borrowing: "借入"; case .repayment: "还款" } }
 }
 
 /// Read filters mirror every backend `TransactionKind`; they are deliberately
 /// separate from the narrower kinds permitted by manual create/replace.
 public enum V15LedgerReadKind: String, Codable, CaseIterable, Sendable, Equatable, Identifiable {
-    case income, expense, transfer, creditPurchase = "credit_purchase", repayment
+    case income, expense, transfer, creditPurchase = "credit_purchase", repayment, borrowing
+    case creditPrincipalWaiver = "credit_principal_waiver", creditFeeRefund = "credit_fee_refund", creditSettlementFee = "credit_settlement_fee"
     case installmentFee = "installment_fee", installmentRefund = "installment_refund", reimbursementReceipt = "reimbursement_receipt"
     public var id: String { rawValue }
-    public var displayName: String { switch self { case .income: "收入"; case .expense: "支出"; case .transfer: "转账"; case .creditPurchase: "信用卡消费"; case .repayment: "还款"; case .installmentFee: "分期手续费"; case .installmentRefund: "分期退款"; case .reimbursementReceipt: "报销回款" } }
+    public var displayName: String { switch self { case .income: "收入"; case .expense: "支出"; case .transfer: "转账"; case .creditPurchase: "信用卡消费"; case .borrowing: "借入"; case .repayment: "还款"; case .creditPrincipalWaiver: "本金减免"; case .creditFeeRefund: "费用减免"; case .creditSettlementFee: "结清手续费"; case .installmentFee: "分期手续费"; case .installmentRefund: "分期退款"; case .reimbursementReceipt: "报销回款" } }
 }
 
 /// Read filters mirror every backend `TransactionSource`, including facts
@@ -758,9 +761,9 @@ public struct V15CreditCyclePage: Codable, Sendable, Equatable {
 public struct V15CreditAccountSummary: Codable, Sendable, Equatable, Identifiable {
     public var id: UUID { accountID }
     public let accountID: UUID; public let name: String; public let institution: String?; public let lastFour: String?
-    public let creditLimitMinor: V15MinorUnits; public let currentDebtMinor: V15MinorUnits; public let availableCreditMinor: V15MinorUnits; public let overLimitMinor: V15MinorUnits
-    public let openingConfigurationRequired: Bool; public let statementDay: Int; public let dueDay: Int; public let cycleMode: V15CreditCycleMode
-    public let currentCycle: V15CreditCycle; public let nextDueCycle: V15CreditCycle?; public let hasOverdueCycle: Bool
+    public let creditLimitMinor: V15MinorUnits?; public let currentDebtMinor: V15MinorUnits; public let availableCreditMinor: V15MinorUnits?; public let overLimitMinor: V15MinorUnits?
+    public let openingConfigurationRequired: Bool; public let statementDay: Int?; public let dueDay: Int?; public let cycleMode: V15CreditCycleMode
+    public let currentCycle: V15CreditCycle?; public let nextDueCycle: V15CreditCycle?; public let hasOverdueCycle: Bool
     public let activeInstallmentCount: Int; public let futureScheduledGrossMinor: V15MinorUnits
     /// This is a read-only P33 teaser. Installment lifecycle mutations remain
     /// owned by F3-B2; retaining it here prevents silently dropping a server
@@ -791,3 +794,18 @@ public struct V15ReimbursementClaim: Codable, Sendable, Equatable { public let i
 public struct V15ReimbursementClaimPreview: Codable, Sendable { public let previewToken: UUID; public let inputDigest: String; public let claimVersion: Int; public let receiptVersion: Int?; public let current: V15ReimbursementClaim; public let proposed: V15ReimbursementClaim; public let releasedMinor: V15MinorUnits; public let newlyClaimedMinor: V15MinorUnits; public let warnings: [String]; enum CodingKeys: String, CodingKey { case previewToken = "preview_token", inputDigest = "input_digest", claimVersion = "claim_version", receiptVersion = "receipt_version", current, proposed, releasedMinor = "released_minor", newlyClaimedMinor = "newly_claimed_minor", warnings } }
 public struct V15ReimbursementCancelPreview: Codable, Sendable { public let previewToken: UUID; public let inputDigest: String; public let claimVersion: Int; public let receiptVersion: Int?; public let current: V15ReimbursementClaim; public let proposedStatus: String; public let releasedMinor: V15MinorUnits; public let retainedReceivedMinor: V15MinorUnits; enum CodingKeys: String, CodingKey { case previewToken = "preview_token", inputDigest = "input_digest", claimVersion = "claim_version", receiptVersion = "receipt_version", current, proposedStatus = "proposed_status", releasedMinor = "released_minor", retainedReceivedMinor = "retained_received_minor" } }
 public struct V15ReimbursementReceiptPreview: Codable, Sendable { public let previewToken: UUID; public let inputDigest: String; public let claimVersion: Int; public let receiptVersion: Int?; public let claimBefore: V15ReimbursementClaim; public let claimAfter: V15ReimbursementClaim; public let partyID: UUID; public let amountMinor: V15MinorUnits; public let partyReceivedBeforeMinor: V15MinorUnits; public let partyReceivedAfterMinor: V15MinorUnits; public let claimReceivedBeforeMinor: V15MinorUnits; public let claimReceivedAfterMinor: V15MinorUnits; public let persistedAllocations: [V15ReimbursementReceiptAllocation]; enum CodingKeys: String, CodingKey { case previewToken = "preview_token", inputDigest = "input_digest", claimVersion = "claim_version", receiptVersion = "receipt_version", claimBefore = "claim_before", claimAfter = "claim_after", partyID = "party_id", amountMinor = "amount_minor", partyReceivedBeforeMinor = "party_received_before_minor", partyReceivedAfterMinor = "party_received_after_minor", claimReceivedBeforeMinor = "claim_received_before_minor", claimReceivedAfterMinor = "claim_received_after_minor", persistedAllocations = "persisted_allocations" } }
+
+/// Missing on older servers stays unavailable; no fallback formula is valid.
+public struct V15Disposable: Codable, Sendable, Equatable {
+    public let dateFrom: String; public let dateTo: String
+    public let currentCashMinor: Int64; public let expectedInflowMinor: Int64; public let expectedOutflowMinor: Int64; public let projectedBalanceMinor: Int64
+    public let undatedInflowMinor: Int64; public let unscheduledCreditDebtMinor: Int64; public let overdueOutflowMinor: Int64
+    public var isConsistent: Bool {
+        let (sum, addOverflow) = currentCashMinor.addingReportingOverflow(expectedInflowMinor)
+        let (result, subOverflow) = sum.subtractingReportingOverflow(expectedOutflowMinor)
+        return !addOverflow && !subOverflow && result == projectedBalanceMinor
+    }
+    enum CodingKeys: String, CodingKey {
+        case dateFrom = "date_from", dateTo = "date_to", currentCashMinor = "current_cash_minor", expectedInflowMinor = "expected_inflow_minor", expectedOutflowMinor = "expected_outflow_minor", projectedBalanceMinor = "projected_balance_minor", undatedInflowMinor = "undated_inflow_minor", unscheduledCreditDebtMinor = "unscheduled_credit_debt_minor", overdueOutflowMinor = "overdue_outflow_minor"
+    }
+}

@@ -63,7 +63,7 @@ public struct FutureCashFlowItem: Codable, Sendable, Equatable, Identifiable {
   public let note: String?
   public let direction: FutureCashFlowDirection
   public let plannedAmountMinor: Int64
-  public let expectedDate: String
+  public let expectedDate: String?
   public let accountID: UUID?
   public let destinationAccountID: UUID?
   public let categoryID: UUID?
@@ -71,6 +71,9 @@ public struct FutureCashFlowItem: Codable, Sendable, Equatable, Identifiable {
   public let source: String
   public let version: Int
   public let linkedTransactionID: UUID?
+  public var settledAmountMinor: Int64? = nil
+  public var remainingAmountMinor: Int64? = nil
+  public var settlementTransactionIDs: [UUID]? = nil
   public let actualAmountMinor: Int64?
   public let actualDate: String?
   public let isOverdue: Bool
@@ -86,6 +89,8 @@ public struct FutureCashFlowItem: Codable, Sendable, Equatable, Identifiable {
     case plannedAmountMinor = "planned_amount_minor"; case expectedDate = "expected_date"
     case accountID = "account_id"; case destinationAccountID = "destination_account_id"
     case categoryID = "category_id"; case linkedTransactionID = "linked_transaction_id"
+    case settledAmountMinor = "settled_amount_minor"; case remainingAmountMinor = "remaining_amount_minor"
+    case settlementTransactionIDs = "settlement_transaction_ids"
     case actualAmountMinor = "actual_amount_minor"; case actualDate = "actual_date"
     case isOverdue = "is_overdue"; case createdAt = "created_at"; case updatedAt = "updated_at"
   }
@@ -161,9 +166,10 @@ public struct FutureCashFlowVersionRequest: Codable, Sendable {
   }
 }
 
-public struct FutureCashFlowSettlement: Codable, Sendable {
+public struct FutureCashFlowSettlement: Codable, Sendable, Equatable {
   public let expectedVersion: Int
   public let actualAmountMinor: Int64
+  public let completeRemaining: Bool
   public let occurredAt: Date
   public let accountID: UUID
   public let destinationAccountID: UUID?
@@ -172,14 +178,16 @@ public struct FutureCashFlowSettlement: Codable, Sendable {
   public let note: String?
   enum CodingKeys: String, CodingKey {
     case expectedVersion = "expected_version"; case actualAmountMinor = "actual_amount_minor"
+    case completeRemaining = "complete_remaining"
     case occurredAt = "occurred_at"; case accountID = "account_id"
     case destinationAccountID = "destination_account_id"; case categoryID = "category_id"
     case title, note
   }
   public init(
     version: Int, amountMinor: Int64, occurredAt: Date, accountID: UUID,
-    destinationAccountID: UUID?, categoryID: UUID?, title: String? = nil, note: String? = nil
+    destinationAccountID: UUID?, categoryID: UUID?, title: String? = nil, note: String? = nil, completeRemaining: Bool = false
   ) {
+    self.completeRemaining = completeRemaining
     expectedVersion = version; actualAmountMinor = amountMinor; self.occurredAt = occurredAt
     self.accountID = accountID; self.destinationAccountID = destinationAccountID
     self.categoryID = categoryID; self.title = title; self.note = note

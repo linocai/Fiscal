@@ -20,6 +20,7 @@ from fiscal_api.db.models.cash_flow import (
     CashFlowRecurrence,
     CashFlowRevisionEvent,
     CashFlowSeries,
+    CashFlowSettlementLink,
     CashFlowSource,
     CashFlowStatus,
     CashFlowSystemOverride,
@@ -35,6 +36,7 @@ from fiscal_api.db.models.credit import (
     CreditScheduleChangeOperation,
     CreditScheduleChangePreview,
 )
+from fiscal_api.db.models.credit_payoff import CreditPayoffLink, CreditPayoffOperation
 from fiscal_api.db.models.installment import (
     InstallmentLedgerLink,
     InstallmentLedgerRole,
@@ -130,6 +132,7 @@ __all__ = [
     "CashFlowRecurrence",
     "CashFlowRevisionEvent",
     "CashFlowSeries",
+    "CashFlowSettlementLink",
     "CashFlowSource",
     "CashFlowStatus",
     "CashFlowSystemOverride",
@@ -140,6 +143,8 @@ __all__ = [
     "CreditCycle",
     "CreditCycleMode",
     "CreditCycleStatus",
+    "CreditPayoffLink",
+    "CreditPayoffOperation",
     "CreditScheduleChangeOperation",
     "CreditScheduleChangePreview",
     "DataRevision",

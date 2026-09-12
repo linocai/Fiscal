@@ -210,7 +210,7 @@ async def test_cycle_local_chronology_overpayment_and_open_cycle_schedule_change
             ),
             uuid4(),
         )
-    assert_error(backdated, "repayment_exceeds_cycle_remaining")
+    assert_error(backdated, "credit_liability_predates_repayment")
 
     with pytest.raises(APIError) as overpayment:
         await ledger.create(

@@ -101,6 +101,7 @@ public final class V15CreditModel {
     /// server succeeds, before the post-commit fact refresh finishes, so this
     /// gate must inspect the phase as well as any retained unknown attempt.
     public var scheduleCommandDisabledReason: V15DisabledReason? {
+        if selectedAccount?.cycleMode == .onDemand { return .init(code: "on_demand_no_schedule", message: "随借随还不设置账期。", fieldPath: nil) }
         if isCommitting {
             return .init(code: "schedule_command_in_flight", message: "账期变更正在提交/刷新结果，请稍候；此时不能重新预览或重复提交。", fieldPath: nil)
         }
@@ -388,7 +389,7 @@ public final class V15CreditModel {
             guard isCurrentReadback(current, accountID: accountID, attempt: attempt) else { return }
             let cyclePage = try await services.credit.cycles(accountID: attempt.accountID, cursor: nil, readCachePolicy: .reloadIgnoringCache)
             guard isCurrentReadback(current, accountID: accountID, attempt: attempt) else { return }
-            let ids = Array(Set([account.currentCycle.id, account.nextDueCycle?.id].compactMap { $0 }))
+            let ids = Array(Set([account.currentCycle?.id, account.nextDueCycle?.id].compactMap { $0 }))
             let details = try await withThrowingTaskGroup(of: V15CreditCycle.self, returning: [V15CreditCycle].self) { group in
                 for id in ids { group.addTask { try await self.services.credit.cycle(id: id, readCachePolicy: .reloadIgnoringCache) } }
                 var values: [V15CreditCycle] = []
@@ -461,7 +462,7 @@ public final class V15CreditModel {
     }
     private func currentRequestIdentity(account: V15CreditAccountSummary) -> String { requestIdentity(.init(expectedVersion: selectedAccountVersion ?? -1, cycleMode: cycleMode.rawValue, statementDay: Int(statementDayText) ?? 0, dueDay: Int(dueDayText) ?? 0)) }
     private func requestIdentity(_ request: V15CreditScheduleChangeRequest) -> String { "\(request.expectedVersion)|\(request.cycleMode)|\(request.statementDay)|\(request.dueDay)" }
-    private func applyDraft(from account: V15CreditAccountSummary) { isApplyingDraft = true; cycleMode = account.cycleMode; statementDayText = String(account.statementDay); dueDayText = String(account.dueDay); isApplyingDraft = false; validateScheduleInput() }
+    private func applyDraft(from account: V15CreditAccountSummary) { isApplyingDraft = true; cycleMode = account.cycleMode; statementDayText = account.statementDay.map(String.init) ?? ""; dueDayText = account.dueDay.map(String.init) ?? ""; isApplyingDraft = false; validateScheduleInput() }
     private func finishScheduleSuccess(_ result: V15CreditSchedulePreview, attempt: UnknownScheduleAttempt) {
         idempotency.succeeded(scope: "credit-schedule:\(attempt.accountID.uuidString)", payloadIdentity: attempt.payloadIdentity)
         mutateScheduleState(for: attempt.accountID) { state in

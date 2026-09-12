@@ -5,6 +5,41 @@ final class V15RootSmokeUITests: XCTestCase {
     private let qaOnlyPassphrase = "f5b-root-smoke-qa-only"
     private let keychainServicePrefix = "com.linotsai.fiscal.v15-root-smoke.ios.access."
 
+    func testV230ForecastAndSources() {
+        let app = launchApp(service: uniqueKeychainService(), reviewScenario: "v230", formalFixture: true)
+        let inflow = app.buttons["v230.overview.disposable.inflow"]
+        XCTAssertTrue(inflow.waitForExistence(timeout: 8))
+        let overview = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        overview.name = "v230-ios-forecast-overview"; overview.lifetime = .keepAlways; add(overview)
+        XCTAssertTrue(inflow.isHittable); inflow.tap()
+        XCTAssertTrue(app.staticTexts["工资到账"].waitForExistence(timeout: 5))
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "v230-ios-forecast-sources"; capture.lifetime = .keepAlways; add(capture)
+    }
+
+    func testV230PayoffSheetKeepsValidationVisible() {
+        let app = launchApp(service: uniqueKeychainService(), reviewScenario: "v230", formalFixture: true, uiRoute: "payoff")
+        let preview = app.buttons["v230.payoff.preview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 8))
+        for _ in 0..<10 where !preview.isHittable { app.swipeUp() }
+        XCTAssertTrue(preview.isHittable); preview.tap()
+        let issue = app.staticTexts["请选择实际付款的现金或借记账户。"]
+        XCTAssertTrue(issue.waitForExistence(timeout: 5))
+        XCTAssertTrue(issue.isHittable)
+        let readable = NSPredicate { _, _ in
+            let frame = issue.frame
+            let window = app.windows.firstMatch.frame
+            let toolbarBottom = app.navigationBars.firstMatch.exists ? app.navigationBars.firstMatch.frame.maxY : window.minY + 60
+            return frame.height > 0 && frame.minY >= toolbarBottom + 8 && frame.maxY <= window.maxY - 48
+                && frame.minX >= window.minX && frame.maxX <= window.maxX
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: readable, object: nil)], timeout: 5), .completed,
+                       "校验说明应完整显示在导航栏和底部安全区之间")
+        XCTAssertFalse(app.staticTexts["全额结清已完成"].exists)
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "v230-ios-payoff-validation"; capture.lifetime = .keepAlways; add(capture)
+    }
+
     private func rootTab(_ title: String, in app: XCUIApplication) -> XCUIElement {
         app.tabBars.buttons[title]
     }
@@ -24,8 +59,9 @@ final class V15RootSmokeUITests: XCTestCase {
         "\(keychainServicePrefix)\(UUID().uuidString.lowercased())"
     }
 
-    private func launchApp(service: String, reviewScenario: String = "", accessKey: String? = nil, cleanupOnly: Bool = false, forceTransportError: Bool = false, formalFixture: Bool = false, formalBoundary: Bool = false, scheme: String? = nil, extraArguments: [String] = []) -> XCUIApplication {
+    private func launchApp(service: String, reviewScenario: String = "", accessKey: String? = nil, cleanupOnly: Bool = false, forceTransportError: Bool = false, formalFixture: Bool = false, formalBoundary: Bool = false, scheme: String? = nil, extraArguments: [String] = [], uiRoute: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
+        app.launchEnvironment["FISCAL_ROOT_SMOKE_UI_ROUTE"] = uiRoute
         app.launchEnvironment["FISCAL_ROOT_SMOKE_REVIEW_SCENARIO"] = reviewScenario
         app.launchEnvironment["FISCAL_ROOT_SMOKE_KEYCHAIN_SERVICE"] = service
         if let accessKey {

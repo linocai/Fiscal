@@ -744,6 +744,9 @@ class AIService:
         active_categories = {item.id: item for item in categories}
         kind = result.kind
         if kind in {
+            TransactionKind.CREDIT_PRINCIPAL_WAIVER,
+            TransactionKind.CREDIT_FEE_REFUND,
+            TransactionKind.CREDIT_SETTLEMENT_FEE,
             TransactionKind.INSTALLMENT_FEE,
             TransactionKind.INSTALLMENT_REFUND,
             TransactionKind.REIMBURSEMENT_RECEIPT,
@@ -788,9 +791,17 @@ class AIService:
             if category is not None and category.direction != "expense":
                 category_id = None
                 reasons.append("category_direction_mismatch")
-        elif kind is TransactionKind.TRANSFER or kind is TransactionKind.REPAYMENT:
+        elif kind in {
+            TransactionKind.TRANSFER,
+            TransactionKind.REPAYMENT,
+            TransactionKind.BORROWING,
+        }:
             account = active_accounts.get(account_id) if account_id is not None else None
-            if account is not None and account.kind not in {"cash", "debit"}:
+            allowed_source = {"credit"} if kind is TransactionKind.BORROWING else {"cash", "debit"}
+            if account is not None and (
+                account.kind not in allowed_source
+                or (kind is TransactionKind.BORROWING and account.cycle_mode != "on_demand")
+            ):
                 account_id = None
                 reasons.append("account_kind_mismatch")
             destination = (

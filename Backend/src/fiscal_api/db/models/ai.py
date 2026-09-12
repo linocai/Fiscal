@@ -107,7 +107,8 @@ class AIProposal(Base):
             name="valid_status",
         ),
         CheckConstraint(
-            "kind IS NULL OR kind IN ('income','expense','transfer','credit_purchase','repayment')",
+            "kind IS NULL OR kind IN ('income','expense','transfer',"
+            "'credit_purchase','repayment','borrowing')",
             name="valid_kind",
         ),
         CheckConstraint("char_length(raw_input) BETWEEN 1 AND 2000", name="raw_input_length"),

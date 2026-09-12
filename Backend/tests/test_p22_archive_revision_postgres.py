@@ -8,6 +8,7 @@ import io
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from os import environ
 from pathlib import Path
 from uuid import uuid4
@@ -28,7 +29,7 @@ from fiscal_api.db.models.ai import AIProposal, AISettings
 from fiscal_api.db.session import create_engine, create_session_factory
 from fiscal_api.main import create_app
 from fiscal_api.services.access import AccessService
-from fiscal_api.services.archive import ArchiveError, ArchiveService
+from fiscal_api.services.archive import CURRENT_DATABASE_REVISION, ArchiveError, ArchiveService
 
 TEST_DATABASE_URL = environ.get("FISCAL_TEST_DATABASE_URL")
 
@@ -127,7 +128,7 @@ def test_p22_archive_crypto_contract_runs_without_postgres() -> None:
         "exported_at": "2026-08-11T00:00:00+00:00",
         "business_timezone": "Asia/Shanghai",
         "currency": "CNY",
-        "database_revision": "20260910_0039",
+        "database_revision": CURRENT_DATABASE_REVISION,
         "data_revision": 0,
         "entity_counts": {name: 0 for name in entities},
         "payload_sha256": hashlib.sha256(canonical).hexdigest(),
@@ -524,7 +525,13 @@ def test_p36_real_auth_reports_rotation_without_mislabeling_unknown_keys() -> No
 
 
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="requires PostgreSQL")
-def test_p22_credit_get_projection_is_read_only_and_transaction_materializes_once() -> None:
+def test_p22_credit_get_projection_is_read_only_and_transaction_materializes_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The projected cycle must use the same business date as the dated posting fixture.
+    monkeypatch.setattr(
+        "fiscal_api.services.credit.utc_now", lambda: datetime(2026, 8, 11, 4, tzinfo=UTC)
+    )
     auth = {"Authorization": "Bearer p22-token"}
 
     async def cycle_ids() -> list[str]:

@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -217,4 +218,27 @@ class CashFlowSystemOverride(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class CashFlowSettlementLink(Base):
+    __tablename__ = "cash_flow_settlement_links"
+    __table_args__ = (
+        UniqueConstraint("transaction_id", name="uq_cash_flow_settlement_links_transaction_id"),
+        UniqueConstraint("idempotency_key", name="uq_cash_flow_settlement_links_idempotency_key"),
+        Index("ix_cash_flow_settlement_links_item_id", "item_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    item_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("cash_flow_items.id", ondelete="RESTRICT"), nullable=False
+    )
+    transaction_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("transactions.id", ondelete="RESTRICT"), nullable=False
+    )
+    closes_remainder: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    idempotency_key: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
     )

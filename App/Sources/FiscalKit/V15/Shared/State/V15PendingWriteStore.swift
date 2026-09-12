@@ -17,6 +17,7 @@ public final class V15PendingWriteStore {
         case transactionCreate
         case categoryReplace
         case repayment
+        case creditPayoff, creditPayoffReverse
         case statementProviderAttempt
         case statementConfirmation
     }
@@ -209,7 +210,7 @@ public final class V15PendingWriteStore {
                 guard let payload = item.payload else { throw invalidPayload() }
                 let request = try V15BodyEncoder.decode(V15JournalRepayment.self, from: payload)
                 _ = try await services.actions.commitRepayment(previewToken: request.previewToken, idempotencyKey: item.id)
-            case .statementProviderAttempt, .statementConfirmation:
+            case .creditPayoff, .creditPayoffReverse, .statementProviderAttempt, .statementConfirmation:
                 markUnknown(id, message: "请回到账单导入继续恢复此操作。")
                 return false
             }
@@ -261,7 +262,7 @@ public final class V15PendingWriteStore {
             case .transactionCreate: _ = try await services.ledger.receipt(idempotencyKey: item.id)
             case .repayment: _ = try await services.actions.receipt(idempotencyKey: item.id)
             case .categoryReplace: await reconcileUnknown(item, services: services); return self.item(id) == nil
-            case .statementProviderAttempt, .statementConfirmation: return false
+            case .creditPayoff, .creditPayoffReverse, .statementProviderAttempt, .statementConfirmation: return false
             }
             try complete(id)
             await services.refreshAfterRecoveredWrite()

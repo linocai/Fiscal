@@ -76,6 +76,7 @@ def test_future_events_contract_is_windowed_and_server_clocked(client: TestClien
         "window_days",
         "account_id",
         "cursor",
+        "expected_data_revision",
         "limit",
     ]
 

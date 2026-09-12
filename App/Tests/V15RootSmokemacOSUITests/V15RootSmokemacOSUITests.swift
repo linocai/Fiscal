@@ -40,7 +40,7 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         "\(keychainServicePrefix)\(UUID().uuidString.lowercased())"
     }
 
-    private func launchApp(service: String, reviewScenario: String = "", accessKey: String? = nil, cleanupOnly: Bool = false, forceTransportError: Bool = false, formalFixture: Bool = false, scheme: String? = nil, accountOverflow: Bool = false, windowWidth: Int? = nil) -> XCUIApplication {
+    private func launchApp(service: String, reviewScenario: String = "", accessKey: String? = nil, cleanupOnly: Bool = false, forceTransportError: Bool = false, formalFixture: Bool = false, scheme: String? = nil, accountOverflow: Bool = false, windowWidth: Int? = nil, uiRoute: String? = nil) -> XCUIApplication {
         // XCTest's `XCUIApplication().terminate()` does not reliably end a
         // retained macOS process between test methods. Kill the exact app
         // bundle and wait for it to leave the process table before setting this
@@ -48,6 +48,7 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         // assertions can exercise the preceding authenticated shell.
         XCTAssertTrue(V15RootSmokeSupport.terminateRootSmokeApp(), "Root smoke app must exit before changing its launch environment.")
         let app = XCUIApplication()
+        app.launchEnvironment["FISCAL_ROOT_SMOKE_UI_ROUTE"] = uiRoute
         app.launchEnvironment["FISCAL_ROOT_SMOKE_REVIEW_SCENARIO"] = reviewScenario
         // A test cold launch must not ask AppKit to restore a prior V15 shell
         // (or cleanup) window whose SwiftUI content type no longer matches.
@@ -76,6 +77,122 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         XCTAssertTrue(V15RootSmokeSupport.terminateRootSmokeApp())
     }
 
+    func testV230ForecastSourcesVisible() {
+        let app = launchApp(service: uniqueKeychainService(), reviewScenario: "v230", formalFixture: true)
+        let value = app.descendants(matching: .any)["v230.overview.disposable.amount"].firstMatch
+        XCTAssertTrue(value.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.windows.firstMatch.frame.intersects(value.frame))
+        let overview = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        overview.name = "v230-mac-forecast-overview"; overview.lifetime = .keepAlways; add(overview)
+        let inflow = app.buttons["v230.overview.disposable.inflow"]
+        XCTAssertTrue(inflow.isHittable); inflow.click()
+        let detailTitle = app.staticTexts["30 日预计入账"]
+        XCTAssertTrue(detailTitle.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(detailTitle.frame))
+        XCTAssertTrue(app.staticTexts["工资到账"].waitForExistence(timeout: 5))
+        let capture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        capture.name = "v230-mac-forecast-source-detail"; capture.lifetime = .keepAlways; add(capture)
+    }
+
+    func testV230PayoffValidationPreviewCommitAndReverse() {
+        let app = launchApp(service: uniqueKeychainService(), reviewScenario: "v230", formalFixture: true, uiRoute: "payoff")
+        let payoffTitle = app.staticTexts["全额结清"]
+        XCTAssertTrue(payoffTitle.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(payoffTitle.frame))
+        let payment = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "v230.payoff.payment-account.option.")).firstMatch
+        XCTAssertTrue(payment.waitForExistence(timeout: 5)); payment.click()
+        let actual = app.textFields["v230.payoff.actual"]
+        actual.click(); actual.typeText("1280")
+        app.checkBoxes["v230.payoff.bank-confirmed"].click()
+        let preview = app.buttons["v230.payoff.preview"]
+        for _ in 0..<8 where !preview.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(preview.isHittable); preview.click()
+        let commit = app.buttons["v230.payoff.commit"]
+        XCTAssertTrue(commit.waitForExistence(timeout: 5))
+        for _ in 0..<10 where !commit.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(commit.isEnabled); XCTAssertTrue(commit.isHittable)
+        let previewCapture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        previewCapture.name = "v230-mac-payoff-preview"; previewCapture.lifetime = .keepAlways; add(previewCapture)
+        commit.click()
+        XCTAssertTrue(app.descendants(matching: .any)["v230.payoff.receipt"].firstMatch.waitForExistence(timeout: 8))
+        let reverse = app.buttons["v230.payoff.reverse.preview"]
+        for _ in 0..<8 where !reverse.isHittable { app.scrollViews.firstMatch.swipeDown() }
+        XCTAssertTrue(reverse.isHittable); reverse.click()
+        let confirmReverse = app.buttons["v230.payoff.reverse.commit"]
+        XCTAssertTrue(confirmReverse.waitForExistence(timeout: 5))
+        for _ in 0..<8 where !confirmReverse.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(confirmReverse.isEnabled); confirmReverse.click()
+        XCTAssertTrue(app.staticTexts["整组结清已撤销"].waitForExistence(timeout: 5))
+    }
+
+    func testV230PayoffUnknownResponseRecoversOriginalRequest() {
+        let app = launchApp(service: uniqueKeychainService(), reviewScenario: "v230-payoff-unknown", formalFixture: true, uiRoute: "payoff")
+        let payment = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "v230.payoff.payment-account.option.")).firstMatch
+        XCTAssertTrue(payment.waitForExistence(timeout: 8)); payment.click()
+        let actual = app.textFields["v230.payoff.actual"]
+        actual.click(); actual.typeText("1280")
+        app.checkBoxes["v230.payoff.bank-confirmed"].click()
+        let preview = app.buttons["v230.payoff.preview"]
+        for _ in 0..<10 where !preview.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        preview.click()
+        let commit = app.buttons["v230.payoff.commit"]
+        XCTAssertTrue(commit.waitForExistence(timeout: 5))
+        for _ in 0..<10 where !commit.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        commit.click()
+        let recover = app.buttons["v230.payoff.recover"]
+        XCTAssertTrue(recover.waitForExistence(timeout: 8))
+        for _ in 0..<8 where !recover.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(recover.isHittable)
+        XCTAssertFalse(app.buttons["v230.payoff.commit"].exists)
+        recover.click()
+        XCTAssertTrue(app.descendants(matching: .any)["v230.payoff.receipt"].firstMatch.waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["v230.payoff.recover"].exists)
+    }
+
+    func testV230NarrowAccountOverflowKeepsSelectionVisible() {
+        let app = launchApp(service: uniqueKeychainService(), reviewScenario: "v230-many-accounts", formalFixture: true, scheme: "dark", accountOverflow: true, windowWidth: 1000)
+        let timeline = app.buttons["v151.mac.module.timeline"]
+        XCTAssertTrue(timeline.waitForExistence(timeout: 8)); timeline.click()
+        let scroll = app.scrollViews["v230.account-switcher.scroll"]
+        XCTAssertTrue(scroll.waitForExistence(timeout: 8))
+        let choices = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "v151.mac.account.scope."))
+        let target = choices.element(boundBy: max(choices.count - 1, 0))
+        for _ in 0..<12 where !target.isHittable { scroll.swipeUp() }
+        XCTAssertTrue(target.isHittable); target.click()
+        XCTAssertEqual(target.value as? String, "已选择")
+        XCTAssertTrue(scroll.frame.intersects(target.frame))
+        XCTAssertLessThan(scroll.frame.height, app.windows.firstMatch.frame.height / 2)
+        let capture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        capture.name = "v230-mac-narrow-account-overflow"; capture.lifetime = .keepAlways; add(capture)
+    }
+
+    func testV230VisibleRecordChoicesAndAccountSwitching() {
+        let app = launchApp(service: uniqueKeychainService(), formalFixture: true, scheme: "light", windowWidth: 1120)
+        let timeline = app.buttons["v151.mac.module.timeline"]
+        XCTAssertTrue(timeline.waitForExistence(timeout: 8)); timeline.click()
+        let all = app.buttons["v151.mac.account.scope.all"]
+        XCTAssertTrue(all.waitForExistence(timeout: 8))
+        XCTAssertTrue(all.isHittable)
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(all.frame))
+        let choices = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "v151.mac.account.scope."))
+        let account = choices.allElementsBoundByIndex.first { $0.identifier != "v151.mac.account.scope.all" && $0.isHittable }
+        XCTAssertNotNil(account)
+        account?.click()
+        XCTAssertEqual(account?.value as? String, "已选择")
+        all.click()
+        XCTAssertEqual(all.value as? String, "已选择")
+        let accountCapture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        accountCapture.name = "v230-mac-visible-account-switcher"; accountCapture.lifetime = .keepAlways; add(accountCapture)
+        app.buttons["记一笔"].firstMatch.click()
+        let expense = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "v15.f1a.record.kind.option.", "支出")).firstMatch
+        XCTAssertTrue(expense.waitForExistence(timeout: 5)); XCTAssertTrue(expense.isHittable)
+        let transfer = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "v15.f1a.record.kind.option.", "转账")).firstMatch
+        XCTAssertTrue(transfer.isHittable); transfer.click()
+        XCTAssertEqual(transfer.value as? String, "已选择")
+        let capture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        capture.name = "v230-mac-record-visible-options"; capture.lifetime = .keepAlways; add(capture)
+    }
+
     func testV221BootstrapRetryReleasesFormalWorkspace() {
         let app = launchApp(service: uniqueKeychainService(), reviewScenario: "bootstrap-retry")
         XCTAssertTrue(app.buttons["重试"].firstMatch.waitForExistence(timeout: 8))
@@ -93,12 +210,16 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
         let date = calendar.date(byAdding: .month, value: -5, to: Date())!
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "zh_Hans_CN"); formatter.timeZone = calendar.timeZone; formatter.dateFormat = "yyyy 年 M 月"
-        // macOS MenuButton exposes its visible text as AXTitle, not AXLabel.
-        let month = app.descendants(matching: .any).matching(identifier: "v221.mac.ledger.month")
-        XCTAssertTrue(month.matching(NSPredicate(format: "title == %@", formatter.string(from: date))).firstMatch.waitForExistence(timeout: 5))
-        app.descendants(matching: .any)["v221.mac.ledger.month"].firstMatch.click()
-        app.menuItems["全部时间"].firstMatch.click()
-        XCTAssertTrue(month.matching(NSPredicate(format: "title == %@", "全部时间")).firstMatch.waitForExistence(timeout: 5))
+        let month = app.buttons["v221.mac.ledger.month"]
+        XCTAssertTrue(month.waitForExistence(timeout: 5))
+        XCTAssertEqual(month.value as? String, formatter.string(from: date))
+        let allTime = app.buttons["v221.mac.ledger.all-time"]
+        XCTAssertTrue(allTime.isHittable); allTime.click()
+        XCTAssertEqual(allTime.value as? String, "已选择")
+        allTime.click()
+        XCTAssertEqual(allTime.value as? String, "未选择")
+        XCTAssertEqual(month.value as? String, formatter.string(from: date))
+
     }
 
     func testColdLaunchUsesFormalV15BootstrapWithoutGalleryRoute() {
@@ -295,7 +416,7 @@ final class V15RootSmokemacOSUITests: XCTestCase {
 
     func testMutableModuleReturnRefreshesOverviewAndAccounts() {
         let app = launchApp(service: uniqueKeychainService(), reviewScenario: "refresh", formalFixture: true)
-        let net = app.staticTexts["v220.mac.overview.net"]
+        let net = app.descendants(matching: .any)["v220.mac.overview.net"].firstMatch
         XCTAssertTrue(net.waitForExistence(timeout: 8))
         XCTAssertTrue((net.value as? String ?? "").contains("1,932.17"))
         app.buttons["v151.mac.module.accounts"].click()

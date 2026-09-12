@@ -76,9 +76,73 @@ struct P16TransactionTests {
       TransactionEditorModel.validateReferences(
         repayment, accounts: accounts, categories: categories) != nil)
     repayment.destinationAccountID = credit.id
+    repayment.creditCycleID = UUID()
     #expect(
       TransactionEditorModel.validateReferences(
         repayment, accounts: accounts, categories: categories) == nil)
+  }
+
+  @Test("On-demand borrowing and repayment preserve financial roles and wire fields") @MainActor
+  func onDemandDraftSemantics() throws {
+    let cash = account(kind: .debit)
+    var loan = account(kind: .credit)
+    loan.cycleMode = .onDemand
+    var draft = TransactionDraft()
+    draft.kind = .borrowing
+    draft.title = "测试借入"
+    draft.amountMinor = 12_345
+    draft.accountID = loan.id
+    draft.destinationAccountID = cash.id
+    #expect(TransactionEditorModel.validate(draft) == nil)
+    #expect(TransactionEditorModel.validateReferences(draft, accounts: [loan, cash], categories: []) == nil)
+    let encoded = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(draft)) as? [String: Any])
+    #expect(encoded["kind"] as? String == "borrowing")
+    #expect(encoded["destination_account_id"] as? String == cash.id.uuidString)
+    #expect(encoded["credit_cycle_id"] is NSNull)
+
+    draft.kind = .repayment; draft.accountID = cash.id; draft.destinationAccountID = loan.id
+    #expect(TransactionEditorModel.validate(draft) == nil)
+    #expect(TransactionEditorModel.validateReferences(draft, accounts: [loan, cash], categories: []) == nil)
+    draft.creditCycleID = UUID()
+    #expect(TransactionEditorModel.validateReferences(draft, accounts: [loan, cash], categories: []) != nil)
+
+    let editor = TransactionEditorModel()
+    editor.changeKind(.borrowing); editor.draft.accountID = loan.id; editor.draft.destinationAccountID = cash.id
+    editor.changeKind(.creditPurchase)
+    #expect(editor.draft.accountID == nil)
+    #expect(editor.draft.destinationAccountID == nil)
+    for kind in [TransactionKind.creditPrincipalWaiver, .creditFeeRefund, .creditSettlementFee] {
+      draft.kind = kind
+      #expect(!TransactionKind.allCases.contains(kind))
+      #expect(TransactionEditorModel.validate(draft) != nil)
+    }
+  }
+
+  @Test("On-demand opening debt needs a real confirmation date without billing fields") @MainActor
+  func onDemandOpeningValidation() {
+    var draft = AccountDraft()
+    draft.kind = .credit; draft.cycleMode = .onDemand; draft.name = "合成借款"
+    draft.openingBalanceMinor = 12_345
+    #expect(AccountsModel.validate(draft) != nil)
+    draft.openingBalanceAsOfDate = "2026-02-30"
+    #expect(AccountsModel.validate(draft) != nil)
+    draft.openingBalanceAsOfDate = "2026-02-28"
+    #expect(AccountsModel.validate(draft) == nil)
+    draft.openingDueDate = "2026-03-01"
+    #expect(AccountsModel.validate(draft) != nil)
+    draft.openingDueDate = nil; draft.creditLimitMinor = 0
+    #expect(AccountsModel.validate(draft) != nil)
+  }
+
+  @Test("Credit summary decodes an on-demand account with no invented cycle or limit")
+  func onDemandSummaryDecodesNulls() throws {
+    let payload = Data(#"{"account_id":"00000000-0000-0000-0000-000000002343","name":"合成借款","institution":null,"last_four":null,"credit_limit_minor":null,"statement_day":null,"due_day":null,"cycle_mode":"on_demand","current_debt_minor":12345,"available_credit_minor":null,"over_limit_minor":null,"opening_configuration_required":false,"current_cycle":null,"next_due_cycle":null,"has_overdue_cycle":false,"active_installment_count":0,"future_scheduled_gross_minor":0,"next_installment":null}"#.utf8)
+    let summary = try JSONDecoder().decode(CreditAccountSummaryDTO.self, from: payload)
+    #expect(summary.cycleMode == .onDemand)
+    #expect(summary.creditLimitMinor == nil)
+    #expect(summary.availableCreditMinor == nil)
+    #expect(summary.currentCycle == nil)
+    #expect(summary.currentDebtMinor == 12_345)
   }
 
   private func account(kind: AccountKind) -> AccountDTO {

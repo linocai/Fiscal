@@ -145,6 +145,21 @@ class AccountService:
             or (cycle_mode.value if isinstance(cycle_mode, CreditCycleMode) else cycle_mode)
             != account.cycle_mode
         )
+        mode_changes = cycle_mode != account.cycle_mode and (
+            cycle_mode == CreditCycleMode.ON_DEMAND or account.cycle_mode == "on_demand"
+        )
+        if mode_changes:
+            cycles = await self.credit_repository.cycles(account.id)
+            if (
+                account.opening_balance_minor
+                or account.usage_count
+                or await self.credit_repository.schedule_is_used(account.id)
+                or any([await self.credit_repository.cycle_is_referenced(c.id) for c in cycles])
+            ):
+                conflict("credit_mode_locked", "账户已有财务历史, 不能切换随借随还模式")
+            for cycle in cycles:
+                await self.credit_repository.delete_cycle(cycle)
+            await self.session.flush()
         self._validate_configuration(
             kind=kind,
             opening=opening,
@@ -353,7 +368,19 @@ class AccountService:
         checked_int64(opening, label="account opening balance")
         if limit is not None:
             checked_int64(limit, label="credit limit")
-        if kind is AccountKind.CREDIT:
+        if kind is AccountKind.CREDIT and cycle_mode == CreditCycleMode.ON_DEMAND:
+            valid = (
+                opening >= 0
+                and limit is None
+                and statement_day is None
+                and due_day is None
+                and opening_due is None
+                and (
+                    (opening == 0 and opening_as_of is None)
+                    or (opening > 0 and opening_as_of is not None and opening_as_of <= today)
+                )
+            )
+        elif kind is AccountKind.CREDIT:
             valid = (
                 limit is not None
                 and limit > 0

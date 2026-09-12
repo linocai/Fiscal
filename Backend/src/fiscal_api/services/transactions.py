@@ -181,6 +181,7 @@ class TransactionService:
             return TransactionResponse.model_validate(snapshot)
 
         postings, category, cycle_id = await self._validated_postings(draft)
+        await self._check_repayment_amount(draft)
         transaction = LedgerTransaction(
             kind=draft.kind.value,
             occurred_at=ensure_utc(draft.occurred_at),
@@ -509,6 +510,9 @@ class TransactionService:
         await acquire_mutation_lock(self.session)
         transaction = await self._required(transaction_id, for_update=True)
         await self._assert_generic_mutation_allowed(transaction, draft=draft)
+        from fiscal_api.services.cash_flow import CashFlowService
+
+        await CashFlowService(self.session).validate_linked_transaction_edit(transaction.id, draft)
         check_version(
             transaction.version,
             expected_version,
@@ -567,6 +571,7 @@ class TransactionService:
         )
         response = await self.response_with_relation(transaction, postings)
         self._add_revision(transaction, RevisionEvent.UPDATED, response)
+        await CashFlowService(self.session).sync_linked_transaction_edit(transaction.id)
         await self.session.commit()
         return response
 
@@ -788,6 +793,35 @@ class TransactionService:
             repayment_error=False,
         )
 
+    async def _check_repayment_amount(self, draft: TransactionDraft) -> None:
+        if draft.kind is not TransactionKind.REPAYMENT or draft.destination_account_id is None:
+            return
+        account = await self.credit_repository.account(draft.destination_account_id)
+        if account is None:
+            return
+        if draft.credit_cycle_id is not None:
+            cycle = await self.credit_repository.cycle(draft.credit_cycle_id)
+            amounts = await self.credit_repository.amounts([draft.credit_cycle_id])
+            purchase, paid = amounts.get(draft.credit_cycle_id, (0, 0))
+            remaining = (
+                (account.opening_balance_minor if cycle and cycle.is_opening_cycle else 0)
+                + purchase
+                - paid
+            )
+        else:
+            impacts = await self.credit_repository.account_impacts([account.id])
+            remaining = account.opening_balance_minor - impacts.get(account.id, 0)
+        if draft.amount_minor > remaining:
+            conflict(
+                "repayment_exceeds_cycle_remaining",
+                "输入金额超过剩余应还, 请修改金额",
+                details={
+                    "remaining_minor": remaining,
+                    "input_minor": draft.amount_minor,
+                    "difference_minor": draft.amount_minor - remaining,
+                },
+            )
+
     async def _validated_postings(
         self,
         draft: TransactionDraft,
@@ -848,6 +882,8 @@ class TransactionService:
                 allow_archived=draft.account_id == retain_accounts.get("account"),
                 allowed_kinds={AccountKind.CREDIT},
             )
+            if account.cycle_mode == "on_demand":
+                invalid("on_demand_purchase_not_allowed", "随借随还账户请使用借入或还款")
             category = (
                 await self._validated_category(
                     draft.category_id,
@@ -884,7 +920,6 @@ class TransactionService:
                 draft.account_id is None
                 or draft.destination_account_id is None
                 or draft.category_id is not None
-                or draft.credit_cycle_id is None
             ):
                 invalid(
                     "invalid_transaction_configuration",
@@ -900,14 +935,18 @@ class TransactionService:
                 allow_archived=draft.destination_account_id == retain_accounts.get("destination"),
                 allowed_kinds={AccountKind.CREDIT},
             )
-            cycle = await self.credit_repository.cycle(draft.credit_cycle_id)
-            if cycle is None:
-                not_found("credit_cycle_not_found", "The credit cycle does not exist")
-            if cycle.account_id != destination.id:
-                conflict(
-                    "credit_cycle_account_mismatch",
-                    "The credit cycle belongs to another account",
-                )
+            cycle = None
+            if destination.cycle_mode == "on_demand":
+                if draft.credit_cycle_id is not None:
+                    invalid("on_demand_cycle_not_allowed", "随借随还账户没有账期")
+            else:
+                if draft.credit_cycle_id is None:
+                    invalid("credit_cycle_required", "请选择还款账期")
+                cycle = await self.credit_repository.cycle(draft.credit_cycle_id)
+                if cycle is None:
+                    not_found("credit_cycle_not_found", "The credit cycle does not exist")
+                if cycle.account_id != destination.id:
+                    conflict("credit_cycle_account_mismatch", "账期不属于所选信用账户")
             return (
                 [
                     Posting(
@@ -924,7 +963,45 @@ class TransactionService:
                     ),
                 ],
                 None,
-                cycle.id,
+                cycle.id if cycle else None,
+            )
+        if draft.kind is TransactionKind.BORROWING:
+            if (
+                draft.account_id is None
+                or draft.destination_account_id is None
+                or draft.category_id is not None
+                or draft.credit_cycle_id is not None
+            ):
+                invalid("invalid_transaction_configuration", "借入需要信用来源账户和资金收款账户")
+            source = await self._validated_account(
+                draft.account_id,
+                allow_archived=draft.account_id == retain_accounts.get("account"),
+                allowed_kinds={AccountKind.CREDIT},
+            )
+            destination = await self._validated_account(
+                draft.destination_account_id,
+                allow_archived=draft.destination_account_id == retain_accounts.get("destination"),
+                allowed_kinds={AccountKind.CASH, AccountKind.DEBIT},
+            )
+            if source.cycle_mode != "on_demand":
+                invalid("borrowing_requires_on_demand", "借入只适用于随借随还信用账户")
+            return (
+                [
+                    Posting(
+                        account_id=source.id,
+                        role="source",
+                        amount_minor=-draft.amount_minor,
+                        position=0,
+                    ),
+                    Posting(
+                        account_id=destination.id,
+                        role="destination",
+                        amount_minor=draft.amount_minor,
+                        position=1,
+                    ),
+                ],
+                None,
+                None,
             )
         if (
             draft.account_id is None
@@ -1012,6 +1089,7 @@ class TransactionService:
             allowed = (
                 {AccountKind.CREDIT}
                 if kind is TransactionKind.CREDIT_PURCHASE
+                or (kind is TransactionKind.BORROWING and posting.role == "source")
                 or (
                     kind is TransactionKind.REPAYMENT
                     and posting.role == PostingRole.DESTINATION.value

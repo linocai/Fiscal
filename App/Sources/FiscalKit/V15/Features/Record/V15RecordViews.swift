@@ -6,7 +6,7 @@ public struct V15RecordView: View {
     private let presentsEditorDirectly: Bool
     private let onCommitted: (V15RecordModel.CommitOutcome) -> Void
     @Environment(\.dismiss) private var dismiss
-    public init(services: V15Services, prefilled: Bool = false, repaymentPrefilled: Bool = false, occurredOn: Date = Date(), presentsEditorDirectly: Bool = false, onCommitted: @escaping (V15RecordModel.CommitOutcome) -> Void = { _ in }) {
+    public init(services: V15Services, prefilled: Bool = false, repaymentPrefilled: Bool = false, occurredOn: Date = Date(), initialKind: V15ManualTransactionKind? = nil, initialCreditAccountID: UUID? = nil, presentsEditorDirectly: Bool = false, onCommitted: @escaping (V15RecordModel.CommitOutcome) -> Void = { _ in }) {
         let record = V15RecordModel(services: services, occurredOn: occurredOn)
         if prefilled { record.title = "午餐"; record.amountText = "12.80"; record.accountID = V15F1AFixtures.accountID; record.categoryID = V15F1AFixtures.categoryID }
         if repaymentPrefilled {
@@ -16,6 +16,11 @@ public struct V15RecordView: View {
             record.accountID = V15F1AFixtures.accountID
             record.destinationAccountID = V15F1AFixtures.creditID
             record.creditCycleID = V15F1AFixtures.creditCycleID
+        }
+        if let initialKind {
+            record.kind = initialKind
+            if initialKind == .borrowing { record.accountID = initialCreditAccountID; record.title = "借入" }
+            if initialKind == .repayment { record.destinationAccountID = initialCreditAccountID; record.title = "还款" }
         }
         _model = State(initialValue: record)
         self.presentsEditorDirectly = presentsEditorDirectly
@@ -126,7 +131,7 @@ private struct V15RecordEditor: View {
 
     private var form: some View {
         V15Section("内容") {
-            V15PickerRow("类型", selection: $model.kind) { ForEach(V15ManualTransactionKind.allCases) { Text($0.displayName).tag($0) } }
+            V23ChoiceGroup("类型", selection: $model.kind, choices: V15ManualTransactionKind.allCases.map { V23Choice($0, $0.displayName, symbol: kindSymbol($0)) }, identifier: "v15.f1a.record.kind")
                 .accessibilityIdentifier("v15.f1a.record.kind")
             V15AmountInput(text: $model.amountText, issues: issues("amount_minor"), automaticallyFocus: true, accessibilityIdentifier: "v15.f1a.record.amount")
             V15Field("名称", text: $model.title, prompt: "例如 午餐", issues: issues("title"))
@@ -189,7 +194,7 @@ private struct V15RecordEditor: View {
                 HStack(spacing: V15Spacing.sm) { sourceAccountMenu; categoryMenu }
                 VStack(alignment: .leading, spacing: V15Spacing.sm) { sourceAccountMenu; categoryMenu }
             }
-        case .transfer:
+        case .transfer, .borrowing:
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: V15Spacing.sm) { sourceAccountMenu; destinationAccountMenu }
                 VStack(alignment: .leading, spacing: V15Spacing.sm) { sourceAccountMenu; destinationAccountMenu }
@@ -200,7 +205,8 @@ private struct V15RecordEditor: View {
                     HStack(spacing: V15Spacing.sm) { sourceAccountMenu; destinationAccountMenu }
                     VStack(alignment: .leading, spacing: V15Spacing.sm) { sourceAccountMenu; destinationAccountMenu }
                 }
-                creditCycleMenu
+                if !model.isOnDemandRepayment { creditCycleMenu }
+                repaymentRemaining
             }
         }
     }
@@ -210,7 +216,7 @@ private struct V15RecordEditor: View {
             Button("请选择") { model.accountID = nil }
             ForEach(accounts(for: model.kind)) { account in Button(account.name) { model.accountID = account.id } }
         } label: {
-            V15RecordSelectionPill(label: selectedAccountName ?? "账户", symbol: "wallet.bifold", selected: model.accountID != nil)
+            V15RecordSelectionPill(label: selectedAccountName ?? sourceAccountTitle, symbol: "wallet.bifold", selected: model.accountID != nil)
         }
         .accessibilityIdentifier("v15.f1a.record.account")
         .accessibilityLabel("账户：\(selectedAccountName ?? "未选择")")
@@ -222,7 +228,7 @@ private struct V15RecordEditor: View {
             Button("请选择") { model.destinationAccountID = nil }
             ForEach(destinationAccounts(for: model.kind)) { account in Button(account.name) { model.destinationAccountID = account.id } }
         } label: {
-            V15RecordSelectionPill(label: selectedDestinationAccountName ?? "目标账户", symbol: "arrow.right.circle", selected: model.destinationAccountID != nil)
+            V15RecordSelectionPill(label: selectedDestinationAccountName ?? destinationAccountTitle, symbol: "arrow.right.circle", selected: model.destinationAccountID != nil)
         }
         .accessibilityIdentifier("v15.f1a.record.destination")
         .accessibilityLabel("目标账户：\(selectedDestinationAccountName ?? "未选择")")
@@ -293,6 +299,10 @@ private struct V15RecordEditor: View {
         .accessibilityIdentifier("v15.f1a.record.note-toggle")
     }
     private var businessDateField: some View {
+#if os(macOS)
+        V23BusinessDatePicker(selection: $model.occurredOn)
+            .accessibilityIdentifier("v15.f1a.record.date")
+#else
         HStack(spacing: V15Spacing.xs) {
             Text("日期").font(V15Typography.secondary.weight(.medium)).foregroundStyle(V15Palette.ink.color.opacity(0.72)).fixedSize()
             DatePicker("", selection: $model.occurredOn, displayedComponents: .date)
@@ -308,27 +318,25 @@ private struct V15RecordEditor: View {
         }
         .fixedSize(horizontal: true, vertical: false)
         .layoutPriority(1)
+#endif
     }
     @ViewBuilder private var references: some View {
         V15Section("账户与分类") {
             referenceState
-            Picker("账户", selection: $model.accountID) {
-                Text("请选择").tag(Optional<UUID>.none)
-                ForEach(accounts(for: model.kind)) { Text($0.name).tag(Optional($0.id)) }
-            }.pickerStyle(.menu).accessibilityIdentifier("v15.f1a.record.account")
-            if model.kind == .transfer || model.kind == .repayment {
-                Picker("目标账户", selection: $model.destinationAccountID) {
-                    Text("请选择").tag(Optional<UUID>.none)
-                    ForEach(destinationAccounts(for: model.kind)) { Text($0.name).tag(Optional($0.id)) }
-                }.pickerStyle(.menu).accessibilityIdentifier("v15.f1a.record.destination")
+            V23ChoiceGroup(sourceAccountTitle, selection: $model.accountID,
+                choices: accounts(for: model.kind).map { V23Choice(Optional($0.id), $0.name, symbol: $0.kind == .credit ? "creditcard" : "wallet.bifold") }, identifier: "v15.f1a.record.account")
+            if model.kind == .transfer || model.kind == .repayment || model.kind == .borrowing {
+                V23ChoiceGroup(destinationAccountTitle, selection: $model.destinationAccountID,
+                    choices: destinationAccounts(for: model.kind).map { V23Choice(Optional($0.id), $0.name, symbol: "arrow.right.circle") }, identifier: "v15.f1a.record.destination")
             }
             if model.kind == .expense || model.kind == .income || model.kind == .creditPurchase {
-                Picker("分类（可选）", selection: $model.categoryID) {
-                    Text("不分类").tag(Optional<UUID>.none)
-                    ForEach(model.categories) { Text($0.name).tag(Optional($0.id)) }
-                }.pickerStyle(.menu).accessibilityIdentifier("v15.f1a.record.category")
+                V23ChoiceGroup("分类（可选）", selection: $model.categoryID,
+                    choices: [V23Choice(Optional<UUID>.none, "不分类")] + model.categories.map { V23Choice(Optional($0.id), $0.name, symbol: "tag") }, identifier: "v15.f1a.record.category")
             }
-            if model.kind == .repayment { creditCyclePicker }
+            if model.kind == .repayment {
+                if !model.isOnDemandRepayment { creditCyclePicker }
+                repaymentRemaining
+            }
         }
     }
     @ViewBuilder private var referenceState: some View {
@@ -357,6 +365,8 @@ private struct V15RecordEditor: View {
         case .failed(let failure):
             if V15StateVisualSpec.resolve(failure).semantic == .outcomeUnknown {
                 V15OutcomeUnknownState(message: failure.message, actionTitle: "安全检查保存结果", action: submit)
+            } else if !failure.fieldIssues.isEmpty || failure.isDefinitiveRejection {
+                validationNotice(failure.message)
             } else {
                 V15ServiceErrorState(message: failure.message, retry: submit)
             }
@@ -368,23 +378,44 @@ private struct V15RecordEditor: View {
             switch model.repaymentPreviewPhase {
             case .idle: EmptyView()
             case .loading: V15LoadingSkeleton(layout: .decisionCard)
-            case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.previewRepayment() } }
+            case .failed(let failure):
+                if !failure.fieldIssues.isEmpty || failure.isDefinitiveRejection { validationNotice(failure.message) }
+                else { V15ServiceErrorState(message: failure.message) { Task { await model.previewRepayment() } } }
             case .ready(let preview):
                 V15PreviewState {
                     VStack(alignment: .leading, spacing: V15Spacing.xs) {
                         Text("请确认这次还款的实际影响").font(V15Typography.body.weight(.semibold))
                         Text("付款账户：\(preview.paymentAccountName) · \(money(preview.paymentBalanceBeforeMinor)) → \(money(preview.paymentBalanceAfterMinor))")
                         Text("信用账户：\(preview.creditAccountName) · 欠款 \(money(preview.creditDebtBeforeMinor)) → \(money(preview.creditDebtAfterMinor))")
-                        Text("所选账期待还：\(money(preview.cycleRemainingBeforeMinor)) → \(money(preview.cycleRemainingAfterMinor))")
+                        Text("\(model.isOnDemandRepayment ? "账户待还" : "所选账期待还")：\(money(preview.cycleRemainingBeforeMinor)) → \(money(preview.cycleRemainingAfterMinor))")
                     }.font(V15Typography.secondary)
                 }
             }
         }
     }
+    private func validationNotice(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("请修改金额或核对账户", systemImage: "exclamationmark.circle").font(V15Typography.body.weight(.semibold))
+            Text(message).font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
+        }.foregroundStyle(V15Palette.danger.color).padding(14).v22FormSurface()
+            .accessibilityIdentifier("v230.record.validation")
+    }
+    @ViewBuilder private var repaymentRemaining: some View {
+        if let remaining = model.repaymentRemainingMinor {
+            Label("剩余应还 \(money(remaining))", systemImage: "creditcard")
+                .font(V15Typography.body.weight(.semibold))
+                .foregroundStyle(V15Palette.teal.color)
+                .accessibilityIdentifier("v230.record.repayment-remaining")
+        }
+        if model.isOnDemandRepayment {
+            Text("随借随还 · 无固定账期，按账户剩余欠款偿还。")
+                .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.64))
+        }
+    }
     private var repaymentPreviewIsReady: Bool { if case .ready = model.repaymentPreviewPhase { true } else { false } }
     private func money(_ value: Int64) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral).text }
     private func accounts(for kind: V15ManualTransactionKind) -> [V15AccountResponse] {
-        switch kind { case .creditPurchase: model.accounts.filter { $0.kind == .credit }; case .transfer, .repayment: model.accounts.filter { $0.kind == .cash || $0.kind == .debit }; case .expense, .income: model.accounts.filter { $0.kind == .cash || $0.kind == .debit } }
+        switch kind { case .borrowing: model.accounts.filter { $0.kind == .credit && $0.cycleMode == "on_demand" }; case .creditPurchase: model.accounts.filter { $0.kind == .credit && $0.cycleMode != "on_demand" }; case .transfer, .repayment: model.accounts.filter { $0.kind == .cash || $0.kind == .debit }; case .expense, .income: model.accounts.filter { $0.kind == .cash || $0.kind == .debit } }
     }
     private func destinationAccounts(for kind: V15ManualTransactionKind) -> [V15AccountResponse] { kind == .repayment ? model.accounts.filter { $0.kind == .credit } : model.accounts.filter { $0.kind == .cash || $0.kind == .debit } }
     @ViewBuilder private var creditCyclePicker: some View {
@@ -393,16 +424,14 @@ private struct V15RecordEditor: View {
         case .empty: V15EmptyState(title: "没有可还款账期", explanation: "所选信用账户当前没有可用账期。")
         case .failed(let message): V15ServiceErrorState(message: message, retry: { Task { await model.retryCreditCycles() } })
         default:
-            V15PickerRow("信用账期", selection: $model.creditCycleID) {
-                Text("请选择").tag(Optional<UUID>.none)
-                ForEach(model.creditCycles) { cycle in Text(cycleLabel(cycle)).tag(Optional(cycle.id)) }
-            }
-            .accessibilityIdentifier("v15.f1a.record.credit-cycle")
+            V23ChoiceGroup("信用账期", selection: $model.creditCycleID, choices: model.creditCycles.map { V23Choice(Optional($0.id), cycleLabel($0), symbol: "calendar") }, identifier: "v15.f1a.record.credit-cycle")
             .accessibilityValue(model.creditCycleID.flatMap { selectedID in model.creditCycles.first(where: { $0.id == selectedID }).map(cycleLabel) } ?? "未选择信用账期")
             V15FieldIssues(issues: issues("credit_cycle_id"))
         }
     }
     private func cycleLabel(_ cycle: V15CreditCycle) -> String { "\(cycle.periodStart) 至 \(cycle.periodEnd) · 还款日 \(cycle.dueDate)" }
+    private var sourceAccountTitle: String { model.kind == .borrowing ? "借款信用账户" : model.kind == .repayment ? "付款账户" : "账户" }
+    private var destinationAccountTitle: String { model.kind == .borrowing ? "实际收款账户" : model.kind == .repayment ? "偿还的信用账户" : "转入账户" }
     private var selectedAccountName: String? { model.accounts.first(where: { $0.id == model.accountID })?.name }
     private var selectedDestinationAccountName: String? { model.accounts.first(where: { $0.id == model.destinationAccountID })?.name }
     private var selectedCategoryName: String? { model.categories.first(where: { $0.id == model.categoryID })?.name }
@@ -414,6 +443,7 @@ private struct V15RecordEditor: View {
         case .transfer: "arrow.left.arrow.right"
         case .creditPurchase: "creditcard"
         case .repayment: "arrow.uturn.backward.circle"
+        case .borrowing: "arrow.down.left.circle"
         }
     }
     private var datePickerDynamicTypeSize: DynamicTypeSize { dynamicTypeSize.isAccessibilitySize ? .accessibility1 : dynamicTypeSize }
@@ -453,7 +483,7 @@ private struct V15RecordEditor: View {
     private var displayedDisabledReasons: [V15DisabledReason] { hasStartedEntry ? disabledReasons : disabledReasons.filter { $0.fieldPath == nil } }
     private var neutralUnavailableHint: String? {
         guard !disabledReasons.isEmpty, displayedDisabledReasons.isEmpty else { return nil }
-        return model.kind == .repayment ? "填写金额、名称、账户和信用账期后，可先查看还款影响。" : "填写金额、名称和账户后可保存账目。"
+        return model.kind == .repayment ? (model.isOnDemandRepayment ? "填写金额、名称和付款账户后，可先查看还款影响。" : "填写金额、名称、账户和信用账期后，可先查看还款影响。") : "填写金额、名称和账户后可保存账目。"
     }
     private var isCompletedDraft: Bool {
         switch model.submission {

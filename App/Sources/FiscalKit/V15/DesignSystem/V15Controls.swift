@@ -524,3 +524,161 @@ public struct V15InspectorAction: View {
         }
     }
 }
+
+/// Visible choices retain their natural width and wrap as the window narrows.
+public struct V23Choice<Value: Hashable>: Identifiable {
+    public var id: Value { value }
+    public let value: Value
+    public let title: String
+    public let symbol: String?
+    public init(_ value: Value, _ title: String, symbol: String? = nil) {
+        self.value = value; self.title = title; self.symbol = symbol
+    }
+}
+
+public struct V23ChoiceGroup<Value: Hashable>: View {
+    private let title: String
+    @Binding private var selection: Value
+    private let choices: [V23Choice<Value>]
+    private let identifier: String
+    public init(_ title: String, selection: Binding<Value>, choices: [V23Choice<Value>], identifier: String) {
+        self.title = title; _selection = selection; self.choices = choices; self.identifier = identifier
+    }
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !title.isEmpty {
+                Text(title).font(V15Typography.secondary.weight(.semibold))
+                    .foregroundStyle(V15Palette.ink.color.opacity(0.68))
+            }
+            V23WrappingLayout {
+                ForEach(choices) { choice in
+                    V23ChoiceButton(choice.title, symbol: choice.symbol, selected: selection == choice.value) {
+                        selection = choice.value
+                    }
+                    .accessibilityIdentifier("\(identifier).option.\(String(describing: choice.value))")
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+public struct V23ChoiceButton: View {
+    let title: String
+    let symbol: String?
+    let selected: Bool
+    let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hovering = false
+    @FocusState private var focused: Bool
+    public init(_ title: String, symbol: String? = nil, selected: Bool = false, action: @escaping () -> Void) {
+        self.title = title; self.symbol = symbol; self.selected = selected; self.action = action
+    }
+    public var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if let symbol { Image(systemName: symbol).accessibilityHidden(true) }
+                Text(title).fixedSize(horizontal: false, vertical: true)
+                if selected { Image(systemName: "checkmark").font(.caption.weight(.bold)).accessibilityHidden(true) }
+            }
+            .font(V15Typography.body.weight(selected ? .semibold : .medium))
+            .foregroundStyle(selected ? V15Palette.teal.color : V15Palette.ink.color.opacity(0.82))
+            .padding(.horizontal, 15).padding(.vertical, 11)
+            .frame(minHeight: 44)
+            .background(selected || hovering ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: 14))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(focused ? V15Palette.teal.color : selected ? V15Palette.teal.color.opacity(0.48) : V15Palette.hairline.color, lineWidth: focused ? 2 : 1)
+            }
+            .opacity(isEnabled ? 1 : 0.42)
+            .contentShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .focused($focused)
+        .onHover { hovering = $0 && isEnabled }
+        .accessibilityLabel(title)
+        .accessibilityValue(selected ? "已选择" : "未选择")
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+}
+
+public struct V23WrappingLayout: Layout {
+    public var spacing: CGFloat = 9
+    public init(spacing: CGFloat = 9) { self.spacing = spacing }
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(proposal: proposal, subviews: subviews).size
+    }
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrange(proposal: ProposedViewSize(width: bounds.width, height: nil), subviews: subviews)
+        for (index, position) in result.positions.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), anchor: .topLeading, proposal: result.proposals[index])
+        }
+    }
+    private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint], proposals: [ProposedViewSize]) {
+        let width = max(proposal.width ?? 720, 1)
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
+        var positions: [CGPoint] = [], proposals: [ProposedViewSize] = []
+        for view in subviews {
+            let natural = view.sizeThatFits(.unspecified)
+            let childProposal = ProposedViewSize(width: min(natural.width, width), height: nil)
+            let size = view.sizeThatFits(childProposal)
+            if x > 0 && x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            positions.append(CGPoint(x: x, y: y)); proposals.append(childProposal)
+            x += size.width + spacing; rowHeight = max(rowHeight, size.height)
+        }
+        return (CGSize(width: width, height: y + rowHeight), positions, proposals)
+    }
+}
+
+public struct V23BusinessDatePicker: View {
+    private let title: String
+    private let dateFormat: String
+    @Binding private var selection: Date
+    @State private var presented = false
+    public init(_ title: String = "日期", selection: Binding<Date>, dateFormat: String = "yyyy年M月d日") { self.title = title; _selection = selection; self.dateFormat = dateFormat }
+    public var body: some View {
+#if os(macOS)
+        V23ChoiceButton("\(title) · \(label)", symbol: "calendar") { presented = true }
+            .popover(isPresented: $presented) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(title).font(V15Typography.cardTitle)
+                    DatePicker(title, selection: $selection, displayedComponents: .date)
+                        .datePickerStyle(.graphical).labelsHidden()
+                        .environment(\.locale, Locale(identifier: "zh_CN"))
+                        .environment(\.timeZone, ShanghaiBusinessDate.timeZone)
+                    V15ActionButton("完成", symbol: "checkmark") { presented = false }
+                }.padding(20).v22PageCanvas()
+            }
+#else
+        DatePicker(title, selection: $selection, displayedComponents: .date)
+            .environment(\.locale, Locale(identifier: "zh_CN"))
+            .environment(\.timeZone, ShanghaiBusinessDate.timeZone)
+#endif
+    }
+    private var label: String {
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = ShanghaiBusinessDate.timeZone; formatter.dateFormat = dateFormat
+        return formatter.string(from: selection)
+    }
+}
+
+/// Desktop exposes each option; the compact phone presentation remains a menu.
+struct V23PlatformChoicePicker<Value: Hashable>: View {
+    let title: String
+    @Binding var selection: Value
+    let choices: [V23Choice<Value>]
+    let identifier: String
+    init(_ title: String, selection: Binding<Value>, choices: [V23Choice<Value>], identifier: String) {
+        self.title = title; _selection = selection; self.choices = choices; self.identifier = identifier
+    }
+    var body: some View {
+#if os(macOS)
+        V23ChoiceGroup(title, selection: $selection, choices: choices, identifier: identifier)
+#else
+        Picker(title, selection: $selection) { ForEach(choices) { Text($0.title).tag($0.value) } }
+            .pickerStyle(.menu).accessibilityIdentifier(identifier)
+#endif
+    }
+}

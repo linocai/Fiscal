@@ -12,6 +12,10 @@ import Foundation
     public private(set) var merchantCursor: String?
     public private(set) var merchantPageError: V15Failure?
     public private(set) var isLoadingMerchants = false
+    public enum ReceiptStatus: Equatable { case success, validation, failure, conflict, unknown, informational }
+    public private(set) var receiptStatus: ReceiptStatus = .informational
+    public var receiptTitle: String { switch receiptStatus { case .success: "已保存"; case .validation: "请检查输入"; case .failure: "未能保存"; case .conflict: "数据已更新"; case .unknown: "结果待确认"; case .informational: "提示" } }
+    public private(set) var isSaving = false
     public private(set) var receipt: String?
     public private(set) var conflict: V15Conflict?
     public private(set) var conflictChanges: [V15ConflictChange] = []
@@ -21,9 +25,9 @@ import Foundation
     public var selectedAccountID: UUID?
     public var selectedCategoryID: UUID?
     public var selectedMerchantID: UUID?
-    public var accountName = ""; public var accountKind: V15AccountKind = .cash; public var openingBalance = "0"; public var creditLimit = ""; public var statementDay = ""; public var dueDay = ""; public var cycleMode = "statement_day_cutoff"; public var openingBalanceAsOfDate = ""; public var openingDueDate = ""
-    public var categoryName = ""; public var categoryDirection: V15CategoryDirection = .expense; public var categoryIcon = "tag"; public var categoryColor = "#008C8A"
-    public var merchantName = ""; public var merchantAliases = ""; public var merchantSearch = ""; public private(set) var committedMerchantSearch = ""
+    public var accountName = "" { didSet { draftInputChanged() } }; public var accountKind: V15AccountKind = .cash; public var openingBalance = "0" { didSet { draftInputChanged() } }; public var creditLimit = "" { didSet { draftInputChanged() } }; public var statementDay = "" { didSet { draftInputChanged() } }; public var dueDay = "" { didSet { draftInputChanged() } }; public var cycleMode = "statement_day_cutoff" { didSet { if oldValue != cycleMode && cycleMode == "on_demand" { creditLimit = ""; statementDay = ""; dueDay = ""; openingDueDate = "" }; draftInputChanged() } }; public var openingBalanceAsOfDate = "" { didSet { draftInputChanged() } }; public var openingDueDate = "" { didSet { draftInputChanged() } }
+    public var categoryName = "" { didSet { draftInputChanged() } }; public var categoryDirection: V15CategoryDirection = .expense; public var categoryIcon = "tag" { didSet { draftInputChanged() } }; public var categoryColor = "#008C8A" { didSet { draftInputChanged() } }
+    public var merchantName = "" { didSet { draftInputChanged() } }; public var merchantAliases = "" { didSet { draftInputChanged() } }; public var merchantSearch = ""; public private(set) var committedMerchantSearch = ""
     public var mappingTransactionID = ""; public private(set) var mapping: V15MerchantMapping?
     public var fieldIssues: [V15FieldIssue] = []
     public var transformPreview: V15CategoryMergePreview?
@@ -49,6 +53,7 @@ import Foundation
     public init(services: V15Services, offlineSnapshotAt: Date? = nil) { self.services = services; self.offlineSnapshotAt = offlineSnapshotAt }
     public var isOffline: Bool { offlineSnapshotAt != nil }
     public var writeDisabledReason: V15DisabledReason? {
+        if isSaving { return .init(code: "saving", message: "正在保存，请稍候。", fieldPath: nil) }
         if isOffline { return .init(code: "offline_read_only", message: "离线时只可查看，无法提交更改。", fieldPath: nil) }
         if writesRequireExplicitReload { return unknownCreateLock == nil ? .init(code: "reload_required_after_conflict", message: "上次数据更新后还没有成功重新读取；请先刷新。", fieldPath: nil) : .init(code: "reload_required_after_unknown_create", message: "新建结果暂时不明且重新读取失败；请先刷新。", fieldPath: nil) }
         return nil
@@ -56,10 +61,10 @@ import Foundation
     public var saveDisabledReason: V15DisabledReason? {
         if let reason = writeDisabledReason { return reason }
         if let reason = draftSaveDisabledReason { return reason }
-        guard let lock = unknownCreateLock, lock.section == selectedSection, !lock.explicitlyReloaded,
-              currentCreatePayloadIdentity == lock.payloadIdentity else { return nil }
-        return .init(code: "create_response_unknown", message: "上次新建结果尚未确认。为避免重复保存，请先刷新列表确认；也可以修改内容后重新提交。", fieldPath: nil)
+        guard unknownCreateLock != nil, currentCreatePayloadIdentity != nil else { return nil }
+        return .init(code: "create_response_unknown", message: "上次新建结果尚未确认，请核对原记录；修改输入或刷新不能解除重复创建保护。", fieldPath: nil)
     }
+
     public var archiveDisabledReason: V15DisabledReason? {
         if let reason = writeDisabledReason { return reason }
         switch selectedSection {
@@ -72,7 +77,7 @@ import Foundation
         }
     }
     public var unknownCreateReloadReason: V15DisabledReason? {
-        guard let lock = unknownCreateLock, !lock.explicitlyReloaded else { return nil }
+        guard let lock = unknownCreateLock else { return nil }
         let sameDraft = lock.section == selectedSection && currentCreatePayloadIdentity == lock.payloadIdentity
         return .init(code: "create_response_unknown", message: sameDraft ? "上次新建结果暂时不明；请检查最新状态。" : "仍有一项新建结果暂时不明；请检查最新状态后再继续。", fieldPath: nil)
     }
@@ -102,21 +107,28 @@ import Foundation
         }
 
         let isCredit = accountKind == .credit
-        let credit = isCredit ? CNYAmountParser.minorUnits(creditLimit) : nil
-        let statement = isCredit ? Int(statementDay) : nil
-        let due = isCredit ? Int(dueDay) : nil
-        let allowedModes = ["statement_day_cutoff", "previous_calendar_month"]
-        if isCredit && (credit == nil || !(1...28).contains(statement ?? 0) || !(1...28).contains(due ?? 0) || !allowedModes.contains(cycleMode)) {
-            return .init(code: "credit_fields_required", message: "请填写有效的信用额度、账单日和还款日（1–28）。", fieldPath: "account.credit")
+        let credit = isCredit && cycleMode != "on_demand" ? CNYAmountParser.minorUnits(creditLimit) : nil
+        let statement = isCredit && cycleMode != "on_demand" ? Int(statementDay) : nil
+        let due = isCredit && cycleMode != "on_demand" ? Int(dueDay) : nil
+        let allowedModes = ["statement_day_cutoff", "previous_calendar_month", "on_demand"]
+        if isCredit && opening < 0 { return .init(code: "credit_opening_negative", message: "期初欠款不能为负数。", fieldPath: "account.opening_balance") }
+        if isCredit && !allowedModes.contains(cycleMode) { return .init(code: "cycle_mode_invalid", message: "请选择信用账户模式。", fieldPath: "account.credit") }
+        if isCredit && cycleMode != "on_demand" {
+            if (credit ?? 0) <= 0 { return .init(code: "credit_limit_invalid", message: "信用额度须大于零。", fieldPath: "account.credit_limit") }
+            if !(1...28).contains(statement ?? 0) || !(1...28).contains(due ?? 0) { return .init(code: "credit_days_invalid", message: "账单日和还款日须为 1–28。", fieldPath: "account.credit") }
         }
-        if isCredit && opening > 0 && (!Self.isBusinessDate(openingBalanceAsOfDate) || !Self.isBusinessDate(openingDueDate)) {
-            return .init(code: "credit_opening_dates_required", message: "正期初余额需要两项 YYYY-MM-DD 日期。", fieldPath: "account.opening_dates")
+        if isCredit && cycleMode == "on_demand" && (!creditLimit.isEmpty || !statementDay.isEmpty || !dueDay.isEmpty || !openingDueDate.isEmpty) {
+            return .init(code: "on_demand_fields_forbidden", message: "随借随还不填写额度、账单日或还款日。", fieldPath: "account.credit")
+        }
+        if isCredit && opening > 0 {
+            if !Self.isBusinessDate(openingBalanceAsOfDate) { return .init(code: "opening_date_invalid", message: "请填写真实的余额确认日期 YYYY-MM-DD。", fieldPath: "account.opening_dates") }
+            if cycleMode != "on_demand" && (!Self.isBusinessDate(openingDueDate) || openingDueDate < openingBalanceAsOfDate) { return .init(code: "opening_due_invalid", message: "首次还款日须为有效日期，且不得早于确认日。", fieldPath: "account.opening_dates") }
         }
 
         guard let account = selectedAccount else { return nil }
         let mode = isCredit ? cycleMode : nil
         let asOf = isCredit && opening > 0 ? openingBalanceAsOfDate : nil
-        let dueDate = isCredit && opening > 0 ? openingDueDate : nil
+        let dueDate = isCredit && cycleMode != "on_demand" && opening > 0 ? openingDueDate : nil
         let unchanged = account.name == accountName
             && account.kind == accountKind
             && account.openingBalanceMinor == opening
@@ -168,7 +180,9 @@ import Foundation
     }
 
     private static func isBusinessDate(_ value: String) -> Bool {
-        value.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil
+        guard value.range(of: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", options: .regularExpression) != nil else { return false }
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.calendar = Calendar(identifier: .gregorian); formatter.timeZone = ShanghaiBusinessDate.timeZone; formatter.dateFormat = "yyyy-MM-dd"; formatter.isLenient = false
+        guard let date = formatter.date(from: value) else { return false }; return formatter.string(from: date) == value
     }
     public func accountLabel(_ account: V15AccountResponse) -> String {
         let count = accounts.filter { $0.name.caseInsensitiveCompare(account.name) == .orderedSame }.count
@@ -206,22 +220,45 @@ import Foundation
             selectedMerchantID = nil; merchantName = ""; merchantAliases = ""
         }
     }
-    public func saveAccount() async { guard canWrite("无法保存") else { return }; beginEditorMutation(); guard selectedAccount?.archivedAt == nil else { receipt = "归档账户只能恢复，不能编辑。"; return }; guard let minor = CNYAmountParser.minorUnits(openingBalance), !accountName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { fieldIssues = [.init(code: "account_required", message: "请填写账户昵称和有效的期初余额。", fieldPath: "account")]; return }; let kind = accountKind; let isCredit = kind == .credit; let credit = isCredit && !creditLimit.isEmpty ? CNYAmountParser.minorUnits(creditLimit) : nil; let statement = isCredit ? Int(statementDay) : nil; let due = isCredit ? Int(dueDay) : nil; let mode = isCredit ? cycleMode : nil; let name = accountName; let allowedModes = ["statement_day_cutoff", "previous_calendar_month"]; let datesValid = openingBalanceAsOfDate.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil && openingDueDate.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil; if isCredit && (credit == nil || statement == nil || due == nil || mode.map(allowedModes.contains) != true || (minor > 0 && !datesValid)) { fieldIssues = [.init(code: "credit_required", message: "信用账户需填写额度、账单日、还款日；正期初还需填写两项上海业务日期。", fieldPath: "credit")]; return }; let asOf = isCredit && minor > 0 ? openingBalanceAsOfDate : nil; let dueDate = isCredit && minor > 0 ? openingDueDate : nil; let account = selectedAccount; let createIdentity = account == nil ? accountCreateIdentity(name: name, kind: kind, opening: minor, credit: credit, statement: statement, due: due, mode: mode, asOf: asOf, dueDate: dueDate) : nil; guard canSubmitCreate(section: .accounts, identity: createIdentity) else { return }; let clearOpeningDates = account?.openingBalanceMinor ?? 0 > 0 && minor == 0; await mutate(id: account?.id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == name && $0.kind == kind && $0.openingBalanceMinor == minor && $0.creditLimitMinor == credit && $0.statementDay == statement && $0.dueDay == due && $0.cycleMode == mode && $0.openingBalanceAsOfDate == asOf && $0.openingDueDate == dueDate }) { [self] in if let account { return try await services.masterData.patchAccount(id: account.id, patch: .init(expectedVersion: account.version, name: name, openingBalanceMinor: minor, creditLimitMinor: credit, statementDay: statement, dueDay: due, cycleMode: mode, openingBalanceAsOfDate: clearOpeningDates ? .null : (asOf.map(V15NullablePatchValue.value) ?? .omitted), openingDueDate: clearOpeningDates ? .null : (dueDate.map(V15NullablePatchValue.value) ?? .omitted))) } else { return try await services.masterData.createAccount(.init(name: name, kind: kind, openingBalanceMinor: minor, creditLimitMinor: credit, statementDay: statement, dueDay: due, cycleMode: mode, openingBalanceAsOfDate: asOf, openingDueDate: dueDate)) } } }
+    public func saveAccount() async {
+        guard canWrite("无法保存") else { return }
+        beginEditorMutation()
+        if let reason = accountDraftDisabledReason { receiptStatus = .validation; fieldIssues = [.init(code: reason.code, message: reason.message, fieldPath: reason.fieldPath)]; return }
+        guard let minor = CNYAmountParser.minorUnits(openingBalance) else { return }
+        let fixed = accountKind == .credit && cycleMode != "on_demand"
+        let credit = fixed ? CNYAmountParser.minorUnits(creditLimit) : nil
+        let statement = fixed ? Int(statementDay) : nil; let due = fixed ? Int(dueDay) : nil
+        let mode = accountKind == .credit ? cycleMode : nil
+        let asOf = accountKind == .credit && minor > 0 ? openingBalanceAsOfDate : nil
+        let dueDate = fixed && minor > 0 ? openingDueDate : nil
+        let account = selectedAccount; let name = accountName; let kind = accountKind
+        let createIdentity = account == nil ? accountCreateIdentity(name: name, kind: kind, opening: minor, credit: credit, statement: statement, due: due, mode: mode, asOf: asOf, dueDate: dueDate) : nil
+        guard canSubmitCreate(section: .accounts, identity: createIdentity) else { return }
+        isSaving = true; defer { isSaving = false }
+        await mutate(id: account?.id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == name && $0.openingBalanceMinor == minor && $0.cycleMode == mode }) { [self] in
+            if let account {
+                return try await services.masterData.patchAccount(id: account.id, patch: .init(expectedVersion: account.version, name: name, openingBalanceMinor: minor, creditLimitMinor: credit, statementDay: statement, dueDay: due, cycleMode: mode, openingBalanceAsOfDate: asOf.map(V15NullablePatchValue.value) ?? .null, openingDueDate: dueDate.map(V15NullablePatchValue.value) ?? .null))
+            }
+            return try await services.masterData.createAccount(.init(name: name, kind: kind, openingBalanceMinor: minor, creditLimitMinor: credit, statementDay: statement, dueDay: due, cycleMode: mode, openingBalanceAsOfDate: asOf, openingDueDate: dueDate))
+        }
+    }
+
     public func archiveOrRestoreAccount() async { guard canWrite("无法更改") else { return }; beginEditorMutation(); guard let account = selectedAccount else { return }; let archiving = account.archivedAt == nil; await mutate(id: account.id, confirmed: { archiving ? $0.archivedAt != nil : $0.archivedAt == nil }) { [self] in archiving ? try await services.masterData.archiveAccount(id: account.id, expectedVersion: account.version) : try await services.masterData.restoreAccount(id: account.id, expectedVersion: account.version) } }
-    public func saveCategory() async { guard canWrite("无法保存") else { return }; beginEditorMutation(); guard selectedCategory?.archivedAt == nil else { receipt = "归档分类只能恢复，不能编辑。"; return }; guard !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, categoryColor.range(of: "^#[0-9A-Fa-f]{6}$", options: .regularExpression) != nil else { fieldIssues = [.init(code: "category_required", message: "请填写分类名称和六位颜色值。", fieldPath: "category")]; return }; let category = selectedCategory; let name = categoryName; let direction = categoryDirection.rawValue; let icon = categoryIcon; let color = categoryColor; let createIdentity = category == nil ? identity(["category", name, direction, icon, color]) : nil; guard canSubmitCreate(section: .categories, identity: createIdentity) else { return }; await mutateCategory(id: category?.id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == name && $0.direction == direction && $0.icon == icon && $0.colorHex.uppercased() == color.uppercased() }) { [self] in if let category { return try await services.masterData.patchCategory(id: category.id, patch: .init(expectedVersion: category.version, name: name, direction: direction, icon: icon, colorHex: color)) } else { return try await services.masterData.createCategory(.init(name: name, direction: direction, icon: icon, colorHex: color)) } } }
+    public func saveCategory() async { guard canWrite("无法保存") else { return }; beginEditorMutation(); guard selectedCategory?.archivedAt == nil else { receiptStatus = .validation; receipt = "归档分类只能恢复，不能编辑。"; return }; guard !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, categoryColor.range(of: "^#[0-9A-Fa-f]{6}$", options: .regularExpression) != nil else { receiptStatus = .validation; fieldIssues = [.init(code: "category_required", message: "请填写分类名称和六位颜色值。", fieldPath: "category")]; return }; let category = selectedCategory; let name = categoryName; let direction = categoryDirection.rawValue; let icon = categoryIcon; let color = categoryColor; let createIdentity = category == nil ? identity(["category", name, direction, icon, color]) : nil; guard canSubmitCreate(section: .categories, identity: createIdentity) else { return }; isSaving = true; defer { isSaving = false }; await mutateCategory(id: category?.id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == name && $0.direction == direction && $0.icon == icon && $0.colorHex.uppercased() == color.uppercased() }) { [self] in if let category { return try await services.masterData.patchCategory(id: category.id, patch: .init(expectedVersion: category.version, name: name, direction: direction, icon: icon, colorHex: color)) } else { return try await services.masterData.createCategory(.init(name: name, direction: direction, icon: icon, colorHex: color)) } } }
     public func archiveOrRestoreCategory() async { guard canWrite("无法更改") else { return }; beginEditorMutation(); guard let category = selectedCategory else { return }; let archiving = category.archivedAt == nil; await mutateCategory(id: category.id, confirmed: { archiving ? $0.archivedAt != nil : $0.archivedAt == nil }) { [self] in archiving ? try await services.masterData.archiveCategory(id: category.id, expectedVersion: category.version) : try await services.masterData.restoreCategory(id: category.id, expectedVersion: category.version) } }
     public func saveMerchant() async {
         guard canWrite("无法保存") else { return }
         beginEditorMutation()
         let aliases = merchantAliases.split(separator: "、").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         let expectedName = merchantName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !expectedName.isEmpty else { fieldIssues = [.init(code: "merchant_required", message: "请填写商户名称。", fieldPath: "merchant")]; return }
+        guard !expectedName.isEmpty else { receiptStatus = .validation; fieldIssues = [.init(code: "merchant_required", message: "请填写商户名称。", fieldPath: "merchant")]; return }
         // Capture the selected record before awaiting so an inspector selection change
         // cannot make the request and its readback predicate describe different input.
         let merchant = selectedMerchant
         let id = merchant?.id
         let createIdentity = merchant == nil ? identity(["merchant", expectedName] + aliases) : nil
         guard canSubmitCreate(section: .merchants, identity: createIdentity) else { return }
+        isSaving = true; defer { isSaving = false }
         do {
             let value: V15Merchant
             if let merchant {
@@ -229,26 +266,27 @@ import Foundation
             } else {
                 value = try await services.merchants.create(.init(name: expectedName, aliases: aliases))
             }
-            receipt = "商户“\(value.name)”已保存"
+            merchants.removeAll { $0.id == value.id }; merchants.append(value); selectedMerchantID = value.id; services.notifyConfirmedWrite(); receiptStatus = .success
+            receiptStatus = .success; receipt = "商户“\(value.name)”已保存"
             if merchant == nil { unknownCreateLock = nil }
-            await load()
+            if !(await load()) { receipt = (receipt ?? "已保存") + "；列表刷新失败，可稍后刷新，无需重新保存。" }
         } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) {
             if let id, let read = try? await services.merchants.get(id: id), read.name == expectedName, read.aliases == aliases {
-                receipt = "已确认商户“\(read.name)”保存成功，没有重复保存。"
+                receiptStatus = .success; receipt = "已确认商户“\(read.name)”保存成功，没有重复保存。"
             } else {
                 if let createIdentity { await lockUnknownCreate(section: .merchants, identity: createIdentity); return }
-                else { receipt = "暂时无法确认保存结果；系统没有重复保存。" }
+                else { receiptStatus = .unknown; receipt = "暂时无法确认保存结果；系统没有重复保存。" }
             }
             await load()
         } catch { apply(error) }
     }
     public func submitMerchantSearch() async { guard merchantSearch == committedMerchantSearch else { merchantPageGeneration &+= 1; merchantCursor = nil; merchantPageError = nil; isLoadingMerchants = false; committedMerchantSearch = merchantSearch; await load(); return }; await load() }
     public func loadNextMerchants() async { guard merchantSearch == committedMerchantSearch, let cursor = merchantCursor, !isLoadingMerchants else { return }; merchantPageGeneration &+= 1; let current = merchantPageGeneration; isLoadingMerchants = true; merchantPageError = nil; do { let page = try await services.merchants.list(query: committedMerchantSearch, cursor: cursor, limit: 50); guard current == merchantPageGeneration else { return }; merchants += page.items.filter { item in !merchants.contains(where: { $0.id == item.id }) }; merchantCursor = page.nextCursor } catch let failure as V15Failure { guard current == merchantPageGeneration else { return }; merchantPageError = failure } catch is CancellationError { guard current == merchantPageGeneration else { return }; merchantPageError = nil } catch { guard current == merchantPageGeneration else { return }; merchantPageError = .init(kind: .transport, message: "下一页商户读取失败。") }; guard current == merchantPageGeneration else { return }; isLoadingMerchants = false }
-    public func loadMapping() async { guard let id = UUID(uuidString: mappingTransactionID) else { fieldIssues = [.init(code: "transaction_id_invalid", message: "无法识别这笔交易。", fieldPath: "transaction_id")]; return }; do { mapping = try await services.merchants.mapping(transactionID: id); receipt = mapping == nil ? "这笔交易尚未关联商户。" : "已关联商户：\(mapping!.merchant.name)。" } catch { apply(error) } }
-    public func confirmMapping() async { guard canWrite("无法提交更改") else { return }; guard let transactionID = UUID(uuidString: mappingTransactionID), let merchant = selectedMerchant else { fieldIssues = [.init(code: "mapping_required", message: "请选择要关联的商户。", fieldPath: "mapping")]; return }; let version = mapping?.mappingVersion; let identity = "confirm|\(transactionID)|\(merchant.id)|\(version.map(String.init) ?? "new")"; let key = idempotency.key(for: "merchant-mapping", payloadIdentity: identity); do { let result = try await services.merchants.confirmMapping(transactionID: transactionID, request: .init(merchantID: merchant.id, expectedMappingVersion: version), idempotencyKey: key); mapping = result.mapping; receipt = "商户关联已保存。"; idempotency.succeeded(scope: "merchant-mapping", payloadIdentity: identity) } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let read = try? await services.merchants.mapping(transactionID: transactionID), read.merchant.id == merchant.id { mapping = read; receipt = "已确认商户关联保存成功，没有重复保存。"; idempotency.succeeded(scope: "merchant-mapping", payloadIdentity: identity) } else { receipt = "暂时无法确认商户关联结果；系统没有重复保存。" } } catch { apply(error) } }
-    public func releaseMapping() async { guard canWrite("无法提交更改") else { return }; guard let transactionID = UUID(uuidString: mappingTransactionID), let mapping else { return }; let identity = "release|\(transactionID)|\(mapping.mappingVersion)"; let key = idempotency.key(for: "merchant-release", payloadIdentity: identity); do { let result = try await services.merchants.releaseMapping(transactionID: transactionID, request: .init(expectedMappingVersion: mapping.mappingVersion), idempotencyKey: key); self.mapping = result.mapping; receipt = "商户关联已解除。"; idempotency.succeeded(scope: "merchant-release", payloadIdentity: identity) } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { do { let read = try await services.merchants.mapping(transactionID: transactionID); if read == nil { self.mapping = nil; receipt = "已确认商户关联解除成功，没有重复操作。"; idempotency.succeeded(scope: "merchant-release", payloadIdentity: identity) } else { receipt = "暂时无法确认解除结果；系统没有重复操作。" } } catch { receipt = "暂时无法确认解除结果，请稍后检查。" } } catch { apply(error) } }
-    public func reorderAccounts(moving id: UUID, after target: UUID?) async { guard canWrite("无法提交更改") else { return }; guard selectedAccount?.archivedAt == nil, let revision = accountRevision else { receipt = "归档账户只能恢复，不能排序。"; return }; var ids = accounts.filter { $0.archivedAt == nil }.sorted { $0.sortOrder < $1.sortOrder }.map(\.id); ids.removeAll { $0 == id }; if let target, let index = ids.firstIndex(of: target) { ids.insert(id, at: index + 1) } else { ids.insert(id, at: 0) }; do { _ = try await services.masterData.reorderAccounts(.init(orderedIDs: ids, expectedListRevision: revision)); receipt = "账户排序已保存。"; _ = await load() } catch { await reloadOnConflict(error) } }
-    public func reorderCategories(moving id: UUID, after target: UUID?) async { guard canWrite("无法提交更改") else { return }; guard let category = selectedCategory ?? flatten(categories).first(where: { $0.id == id }) else { return }; guard category.archivedAt == nil else { receipt = "归档分类只能恢复，不能排序。"; return }; let key = category.direction + ":" + (category.parentID?.uuidString ?? "root"); do { let state = try await services.masterData.categoryOrderState(direction: V15CategoryDirection(rawValue: category.direction) ?? .unknown, parentID: category.parentID); categoryRevisions[key] = state.listRevision; var ids = state.items.map(\.id); ids.removeAll { $0 == id }; if let target, let index = ids.firstIndex(of: target) { ids.insert(id, at: index + 1) } else { ids.insert(id, at: 0) }; _ = try await services.masterData.reorderCategories(parentID: category.parentID, request: .init(orderedIDs: ids, expectedListRevision: state.listRevision)); receipt = "分类排序已保存。"; _ = await load() } catch { await reloadOnConflict(error) } }
+    public func loadMapping() async { receiptStatus = .informational; guard let id = UUID(uuidString: mappingTransactionID) else { receiptStatus = .validation; fieldIssues = [.init(code: "transaction_id_invalid", message: "无法识别这笔交易。", fieldPath: "transaction_id")]; return }; do { mapping = try await services.merchants.mapping(transactionID: id); receipt = mapping == nil ? "这笔交易尚未关联商户。" : "已关联商户：\(mapping!.merchant.name)。" } catch { apply(error) } }
+    public func confirmMapping() async { guard canWrite("无法提交更改") else { return }; beginEditorMutation(); guard let transactionID = UUID(uuidString: mappingTransactionID), let merchant = selectedMerchant else { receiptStatus = .validation; fieldIssues = [.init(code: "mapping_required", message: "请选择要关联的商户。", fieldPath: "mapping")]; return }; let version = mapping?.mappingVersion; let identity = "confirm|\(transactionID)|\(merchant.id)|\(version.map(String.init) ?? "new")"; let key = idempotency.key(for: "merchant-mapping", payloadIdentity: identity); do { let result = try await services.merchants.confirmMapping(transactionID: transactionID, request: .init(merchantID: merchant.id, expectedMappingVersion: version), idempotencyKey: key); mapping = result.mapping; receiptStatus = .success; receipt = "商户关联已保存。"; idempotency.succeeded(scope: "merchant-mapping", payloadIdentity: identity) } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let read = try? await services.merchants.mapping(transactionID: transactionID), read.merchant.id == merchant.id { mapping = read; receiptStatus = .success; receipt = "已确认商户关联保存成功，没有重复保存。"; idempotency.succeeded(scope: "merchant-mapping", payloadIdentity: identity) } else { receiptStatus = .unknown; receipt = "暂时无法确认商户关联结果；系统没有重复保存。" } } catch { apply(error) } }
+    public func releaseMapping() async { guard canWrite("无法提交更改") else { return }; beginEditorMutation(); guard let transactionID = UUID(uuidString: mappingTransactionID), let mapping else { return }; let identity = "release|\(transactionID)|\(mapping.mappingVersion)"; let key = idempotency.key(for: "merchant-release", payloadIdentity: identity); do { let result = try await services.merchants.releaseMapping(transactionID: transactionID, request: .init(expectedMappingVersion: mapping.mappingVersion), idempotencyKey: key); self.mapping = result.mapping; receiptStatus = .success; receipt = "商户关联已解除。"; idempotency.succeeded(scope: "merchant-release", payloadIdentity: identity) } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { do { let read = try await services.merchants.mapping(transactionID: transactionID); if read == nil { self.mapping = nil; receiptStatus = .success; receipt = "已确认商户关联解除成功，没有重复操作。"; idempotency.succeeded(scope: "merchant-release", payloadIdentity: identity) } else { receiptStatus = .unknown; receipt = "暂时无法确认解除结果；系统没有重复操作。" } } catch { receiptStatus = .unknown; receipt = "暂时无法确认解除结果，请稍后检查。" } } catch { apply(error) } }
+    public func reorderAccounts(moving id: UUID, after target: UUID?) async { guard canWrite("无法提交更改") else { return }; beginEditorMutation(); guard selectedAccount?.archivedAt == nil, let revision = accountRevision else { receiptStatus = .validation; receipt = "归档账户只能恢复，不能排序。"; return }; var ids = accounts.filter { $0.archivedAt == nil }.sorted { $0.sortOrder < $1.sortOrder }.map(\.id); ids.removeAll { $0 == id }; if let target, let index = ids.firstIndex(of: target) { ids.insert(id, at: index + 1) } else { ids.insert(id, at: 0) }; do { _ = try await services.masterData.reorderAccounts(.init(orderedIDs: ids, expectedListRevision: revision)); receiptStatus = .success; receipt = "账户排序已保存。"; _ = await load() } catch { await reloadOnConflict(error) } }
+    public func reorderCategories(moving id: UUID, after target: UUID?) async { guard canWrite("无法提交更改") else { return }; beginEditorMutation(); guard let category = selectedCategory ?? flatten(categories).first(where: { $0.id == id }) else { return }; guard category.archivedAt == nil else { receiptStatus = .validation; receipt = "归档分类只能恢复，不能排序。"; return }; let key = category.direction + ":" + (category.parentID?.uuidString ?? "root"); do { let state = try await services.masterData.categoryOrderState(direction: V15CategoryDirection(rawValue: category.direction) ?? .unknown, parentID: category.parentID); categoryRevisions[key] = state.listRevision; var ids = state.items.map(\.id); ids.removeAll { $0 == id }; if let target, let index = ids.firstIndex(of: target) { ids.insert(id, at: index + 1) } else { ids.insert(id, at: 0) }; _ = try await services.masterData.reorderCategories(parentID: category.parentID, request: .init(orderedIDs: ids, expectedListRevision: state.listRevision)); receiptStatus = .success; receipt = "分类排序已保存。"; _ = await load() } catch { await reloadOnConflict(error) } }
     public func beginTransformFlow() { invalidatePreview(); transformMessage = nil; transformFailure = nil; transformFieldIssues = []; transformRequiresRepreview = false }
     public func previewMerge(targetID: UUID) async {
         guard let source = selectedCategory, let target = flatten(categories).first(where: { $0.id == targetID }) else { return }
@@ -297,15 +335,15 @@ import Foundation
     public func commitSplit() async -> Bool { guard canWrite("无法提交拆分"), !transformRequiresRepreview else { if transformRequiresRepreview { transformMessage = "此预览已失效，请重新读取预览后再提交。" }; return false }; guard let root = selectedCategory, let preview = splitPreview else { return false }; let assignments = preview.requiredTransactionIDs.compactMap { id in splitAssignments[id].map { name in V15CategorySplitAssignment(transactionID: id, childName: name) } }; guard assignments.count == preview.requiredTransactionIDs.count else { transformFieldIssues = [.init(code: "split_assignment_required", message: "请逐笔指定归位子分类。", fieldPath: "assignments")]; return false }; let identity = "\(preview.previewToken)|\(assignments)"; do { let result = try await services.categories.commitSplit(rootID: root.id, request: .init(previewToken: preview.previewToken, assignments: assignments), idempotencyKey: idempotency.key(for: "split", payloadIdentity: identity)); idempotency.succeeded(scope: "split", payloadIdentity: identity); transformReceipt = result; transformMessage = "拆分已原子提交：重归类 \(result.reclassifiedTransactionCount) 笔。"; _ = await load(); return true } catch let failure as V15Failure where failure.kind == .conflict { await recoverTransformConflict(failure); return false } catch let failure as V15Failure { recordTransformFailure(failure); return false } catch { recordTransformFailure(.init(kind: .transport, message: "拆分未完成，请重新决定。")); return false } }
     private func mutate(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15AccountResponse) -> Bool, _ operation: () async throws -> V15AccountResponse) async {
         let previous = id.flatMap { target in accounts.first { $0.id == target } }
-        do { let account = try await operation(); receipt = "账户“\(account.name)”已保存"; if id == nil { unknownCreateLock = nil }; _ = await load()
+        do { let account = try await operation(); accounts.removeAll { $0.id == account.id }; accounts.append(account); selectedAccountID = account.id; services.notifyConfirmedWrite(); receiptStatus = .success; receipt = "账户“\(account.name)”已保存"; if id == nil { unknownCreateLock = nil }; if !(await load()) { receipt = (receipt ?? "已保存") + "；列表刷新失败，可稍后刷新，无需重新保存。" }
         } catch let failure as V15Failure where failure.kind == .conflict { await recoverMutationConflict(failure, previousAccount: previous)
-        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let account = try? await services.masterData.account(id: id), confirmed(account) { receipt = "已确认“\(account.name)”保存成功，没有重复保存。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .accounts, identity: unknownCreateIdentity) } else { _ = await load(); receipt = "暂时无法确认本次更改；已刷新数据，没有重复保存。" } } catch { apply(error) }
+        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let account = try? await services.masterData.account(id: id), confirmed(account) { receiptStatus = .success; receipt = "已确认“\(account.name)”保存成功，没有重复保存。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .accounts, identity: unknownCreateIdentity) } else { _ = await load(); receiptStatus = .unknown; receipt = "暂时无法确认本次更改；已刷新数据，没有重复保存。" } } catch { apply(error) }
     }
     private func mutateCategory(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15CategoryResponse) -> Bool, _ operation: () async throws -> V15CategoryResponse) async {
         let previous = id.flatMap { target in flatten(categories).first { $0.id == target } }
-        do { let category = try await operation(); receipt = "分类“\(category.name)”已保存"; if id == nil { unknownCreateLock = nil }; _ = await load()
+        do { let category = try await operation(); categories.removeAll { $0.id == category.id }; categories.append(category); selectedCategoryID = category.id; services.notifyConfirmedWrite(); receiptStatus = .success; receipt = "分类“\(category.name)”已保存"; if id == nil { unknownCreateLock = nil }; if !(await load()) { receipt = (receipt ?? "已保存") + "；列表刷新失败，可稍后刷新，无需重新保存。" }
         } catch let failure as V15Failure where failure.kind == .conflict { await recoverMutationConflict(failure, previousCategory: previous)
-        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let category = try? await services.masterData.category(id: id), confirmed(category) { receipt = "已确认“\(category.name)”保存成功，没有重复保存。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .categories, identity: unknownCreateIdentity) } else { _ = await load(); receipt = "暂时无法确认本次更改；已刷新数据，没有重复保存。" } } catch { apply(error) }
+        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let id, let category = try? await services.masterData.category(id: id), confirmed(category) { receiptStatus = .success; receipt = "已确认“\(category.name)”保存成功，没有重复保存。"; _ = await load() } else if let unknownCreateIdentity { await lockUnknownCreate(section: .categories, identity: unknownCreateIdentity) } else { _ = await load(); receiptStatus = .unknown; receipt = "暂时无法确认本次更改；已刷新数据，没有重复保存。" } } catch { apply(error) }
     }
     private func reloadOnConflict(_ error: Error) async { if let failure = error as? V15Failure, failure.kind == .conflict { await recoverMutationConflict(failure) } else { apply(error) } }
     public func resolveConflictByReload() async {
@@ -313,6 +351,7 @@ import Foundation
         if await load() { receipt = "已读取最新数据；现在可以重新决定。" }
     }
     private func recoverMutationConflict(_ failure: V15Failure, previousAccount: V15AccountResponse? = nil, previousCategory: V15CategoryResponse? = nil) async {
+        receiptStatus = .conflict
         conflict = failure.conflict ?? .init(reloadPath: nil, latestRevision: nil, message: failure.message)
         fieldIssues = failure.fieldIssues; writesRequireExplicitReload = true
         if await load(preservingConflict: true) {
@@ -360,27 +399,29 @@ import Foundation
     }
     private func recordTransformFailure(_ failure: V15Failure) { transformFailure = failure; transformFieldIssues = failure.fieldIssues; transformMessage = failure.message }
     public func clearCreditFieldsIfNeeded() { guard accountKind != .credit else { return }; creditLimit = ""; statementDay = ""; dueDay = ""; cycleMode = "statement_day_cutoff"; openingBalanceAsOfDate = ""; openingDueDate = "" }
-    public func reloadAfterUnknownCreate() async {
+    public func reloadAfterUnknownCreate() async { receiptStatus = .unknown;
         guard let lock = unknownCreateLock else { return }
         writesRequireExplicitReload = true
         if await load() {
             unknownCreateLock = .init(section: lock.section, payloadIdentity: lock.payloadIdentity, explicitlyReloaded: true)
-            receipt = "已重新读取最新数据；结果仍未确认。请重新决定后再提交，系统不会假定已经创建。"
+            receipt = "已重新读取最新数据；结果仍未确认，已保留重复创建保护。可以选择已核对的现有记录继续编辑。"
         } else {
             writesRequireExplicitReload = true
             receipt = "重新读取失败；新建结果仍未确认，请稍后重试。"
         }
     }
     private func lockUnknownCreate(section: Section, identity: String) async {
+        receiptStatus = .unknown
         unknownCreateLock = .init(section: section, payloadIdentity: identity)
         let refreshed = await load()
-        if refreshed { receipt = "新建结果暂时不明；已刷新列表但仍无法确认。为避免重复保存，请修改内容或稍后再次检查。" }
+        if refreshed { receipt = "新建结果暂时不明；已刷新列表但仍无法确认，继续保留重复创建保护。请核对现有记录。" }
         else { writesRequireExplicitReload = true; receipt = "新建结果暂时不明且刷新失败；请稍后再试。" }
     }
     private func canSubmitCreate(section: Section, identity: String?) -> Bool {
         guard let identity else { return true }
-        guard let lock = unknownCreateLock, lock.section == section, lock.payloadIdentity == identity, !lock.explicitlyReloaded else { return true }
-        receipt = "上次新建结果尚未确认。为避免重复保存，请先刷新列表确认；也可以修改内容后重新提交。"
+        guard unknownCreateLock != nil else { return true }
+        receiptStatus = .unknown
+        receipt = "上次新建结果尚未确认，修改内容也不会解除重复创建保护，请核对现有记录。"
         return false
     }
     private var currentCreatePayloadIdentity: String? {
@@ -388,7 +429,7 @@ import Foundation
         case .accounts:
             guard selectedAccount == nil, let opening = CNYAmountParser.minorUnits(openingBalance) else { return nil }
             let isCredit = accountKind == .credit; let credit = isCredit && !creditLimit.isEmpty ? CNYAmountParser.minorUnits(creditLimit) : nil
-            let statement = isCredit ? Int(statementDay) : nil; let due = isCredit ? Int(dueDay) : nil; let mode = isCredit ? cycleMode : nil
+            let statement = isCredit && cycleMode != "on_demand" ? Int(statementDay) : nil; let due = isCredit && cycleMode != "on_demand" ? Int(dueDay) : nil; let mode = isCredit ? cycleMode : nil
             return accountCreateIdentity(name: accountName, kind: accountKind, opening: opening, credit: credit, statement: statement, due: due, mode: mode, asOf: isCredit && opening > 0 ? openingBalanceAsOfDate : nil, dueDate: isCredit && opening > 0 ? openingDueDate : nil)
         case .categories: return selectedCategory == nil ? identity(["category", categoryName, categoryDirection.rawValue, categoryIcon, categoryColor]) : nil
         case .merchants:
@@ -398,9 +439,10 @@ import Foundation
     }
     private func accountCreateIdentity(name: String, kind: V15AccountKind, opening: Int64, credit: Int64?, statement: Int?, due: Int?, mode: String?, asOf: String?, dueDate: String?) -> String { identity(["account", name, kind.rawValue, String(opening), credit.map(String.init) ?? "∅", statement.map(String.init) ?? "∅", due.map(String.init) ?? "∅", mode ?? "∅", asOf ?? "∅", dueDate ?? "∅"]) }
     private func identity(_ fields: [String]) -> String { fields.map { "\($0.utf8.count):\($0)" }.joined(separator: "|") }
-    private func canWrite(_ action: String) -> Bool { if isOffline { receipt = "离线时只可查看，\(action)。"; return false }; if writesRequireExplicitReload { receipt = unknownCreateLock == nil ? "数据更新后刷新未完成，\(action)；请先刷新再决定。" : "新建结果尚未确认且刷新失败，\(action)；请先刷新再决定。"; return false }; return true }
+    private func canWrite(_ action: String) -> Bool { if isSaving { return false }; if isOffline { receiptStatus = .failure; receipt = "离线时只可查看，\(action)。"; return false }; if writesRequireExplicitReload { receiptStatus = unknownCreateLock == nil ? .conflict : .unknown; receipt = unknownCreateLock == nil ? "数据更新后刷新未完成，\(action)；请先刷新再决定。" : "新建结果尚未确认且刷新失败，\(action)；请先刷新再决定。"; return false }; return true }
+    private func draftInputChanged() { fieldIssues = []; receipt = nil; receiptStatus = .informational }
     private func editorContextChanged() { fieldIssues = []; receipt = nil; if !writesRequireExplicitReload { conflict = nil; conflictChanges = [] } }
-    private func beginEditorMutation() { fieldIssues = []; receipt = nil; if !writesRequireExplicitReload { conflict = nil; conflictChanges = [] } }
+    private func beginEditorMutation() { receiptStatus = .informational; fieldIssues = []; receipt = nil; if !writesRequireExplicitReload { conflict = nil; conflictChanges = [] } }
 
     nonisolated static func fieldIssues(_ issues: [V15FieldIssue], matchingAny paths: [String]) -> [V15FieldIssue] {
         let normalizedPaths = paths.map(normalizedFieldPath)
@@ -425,7 +467,7 @@ import Foundation
     }
 
     public static func reorderHint(canMove: Bool, down: Bool) -> String { if canMove { return down ? "⌘⌥↓ 下移一位" : "⌘⌥↑ 上移一位" }; return down ? "已到末位，不能下移。" : "已到首位，不能上移。" }
-    private func apply(_ error: Error) { if let failure = error as? V15Failure { fieldIssues = failure.fieldIssues; conflict = failure.conflict; receipt = failure.kind == .conflict ? "数据已经更新；请重新读取后再决定。" : failure.message } else { receipt = "操作未完成，请重新读取后再决定。" } }
+    private func apply(_ error: Error) { receiptStatus = .failure; if let failure = error as? V15Failure { receiptStatus = failure.kind == .conflict ? .conflict : (failure.fieldIssues.isEmpty ? .failure : .validation); fieldIssues = failure.fieldIssues; conflict = failure.conflict; receipt = failure.kind == .conflict ? "数据已经更新；请重新读取后再决定。" : failure.message } else { receipt = "操作未完成，请重新读取后再决定。" } }
     private func flatten(_ items: [V15CategoryResponse]) -> [V15CategoryResponse] { items + items.flatMap { flatten($0.children) } }
 }
 

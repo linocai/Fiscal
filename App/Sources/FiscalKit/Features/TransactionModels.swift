@@ -299,23 +299,22 @@ public final class TransactionEditorModel {
         // stale value (which a constrained Picker renders as blank) can never survive a kind switch
         // and be written with the wrong direction or account type.
         if Self.categoryDirection(kind) != Self.categoryDirection(previous) { draft.categoryID = nil }
-        if Self.requiresCreditAccount(kind) != Self.requiresCreditAccount(previous) { draft.accountID = nil }
+        if Self.requiresCreditAccount(kind) != Self.requiresCreditAccount(previous)
+            || (kind == .borrowing) != (previous == .borrowing) { draft.accountID = nil }
         if Self.destinationRole(kind) != Self.destinationRole(previous) { draft.destinationAccountID = nil }
         if kind != .repayment { draft.creditCycleID = nil }
-        if case .installmentFee = kind { draft.accountID = nil }
-        if case .installmentRefund = kind { draft.accountID = nil }
-        if case .reimbursementReceipt = kind { draft.accountID = nil }
+        if kind.isSystemGenerated { draft.accountID = nil }
     }
     /// The category direction each kind requires, or nil when the kind carries no category.
     static func categoryDirection(_ kind: TransactionKind) -> CategoryDirection? {
         switch kind { case .income: .income; case .expense, .creditPurchase: .expense; default: nil }
     }
-    /// Credit purchases post to a credit account; every other kind uses a non-credit account.
-    static func requiresCreditAccount(_ kind: TransactionKind) -> Bool { kind == .creditPurchase }
+    /// Purchases and borrowing have a credit source; borrowing additionally requires on-demand mode.
+    static func requiresCreditAccount(_ kind: TransactionKind) -> Bool { kind == .creditPurchase || kind == .borrowing }
     /// The destination-account role: transfers name a non-credit target, repayments a credit
     /// target, and these are not interchangeable; every other kind has no destination.
     static func destinationRole(_ kind: TransactionKind) -> Int {
-        switch kind { case .transfer: 1; case .repayment: 2; default: 0 }
+        switch kind { case .transfer, .borrowing: 1; case .repayment: 2; default: 0 }
     }
     public func rotateCreateKey() { if editing == nil { idempotencyKey = UUID() } }
     public func restoreCreateKey(_ key: UUID) { if editing == nil { idempotencyKey = key } }
@@ -330,7 +329,9 @@ public final class TransactionEditorModel {
         let retainedAccount = draft.accountID.flatMap { id in
             validAccounts.contains(where: {
                 $0.id == id && $0.archivedAt == nil
-                    && (retainedKind == .creditPurchase ? $0.kind == .credit : ($0.kind == .cash || $0.kind == .debit))
+                    && (Self.requiresCreditAccount(retainedKind) ? $0.kind == .credit : ($0.kind == .cash || $0.kind == .debit))
+                    && (retainedKind != .borrowing || $0.cycleMode == .onDemand)
+                    && (retainedKind != .creditPurchase || $0.cycleMode != .onDemand)
             }) ? id : nil
         }
         draft = TransactionDraft()
@@ -352,9 +353,15 @@ public final class TransactionEditorModel {
             if source == destination { return "转出和转入账户不能相同。" }
         case .creditPurchase: if draft.accountID == nil || draft.categoryID == nil { return "请选择信用账户和支出分类。" }
         case .repayment:
-            guard let source = draft.accountID, let destination = draft.destinationAccountID, draft.creditCycleID != nil else { return "请选择付款账户、信用账户和目标账期。" }
+            guard let source = draft.accountID, let destination = draft.destinationAccountID else { return "请选择付款账户和信用账户。" }
             if source == destination { return "付款账户和信用账户不能相同。" }
-        case .installmentFee, .installmentRefund, .reimbursementReceipt: return "系统流水不能手工创建或编辑。"
+        case .borrowing:
+            guard let source = draft.accountID, let destination = draft.destinationAccountID else { return "请选择随借随还信用账户和收款账户。" }
+            if source == destination { return "借款账户和收款账户不能相同。" }
+            if draft.creditCycleID != nil || draft.categoryID != nil { return "借入不需要账期或收支分类。" }
+        case .installmentFee, .installmentRefund, .reimbursementReceipt,
+             .creditPrincipalWaiver, .creditFeeRefund, .creditSettlementFee:
+            return "系统流水不能手工创建或编辑。"
         }
         return nil
     }
@@ -384,6 +391,9 @@ public final class TransactionEditorModel {
             if let account = account(draft.accountID), account.kind != .credit {
                 return "信用消费必须选择信用账户。"
             }
+            if account(draft.accountID)?.cycleMode == .onDemand {
+                return "随借随还账户请使用“借入”。"
+            }
         case .transfer:
             if account(draft.accountID)?.kind == .credit || account(draft.destinationAccountID)?.kind == .credit {
                 return "转账的转出和转入账户都不能是信用账户。"
@@ -395,7 +405,23 @@ public final class TransactionEditorModel {
             if let destination = account(draft.destinationAccountID), destination.kind != .credit {
                 return "还款的目标账户必须是信用账户。"
             }
-        case .installmentFee, .installmentRefund, .reimbursementReceipt: break
+            if let destination = account(draft.destinationAccountID) {
+                if destination.cycleMode == .onDemand, draft.creditCycleID != nil {
+                    return "随借随还账户不使用信用账期。"
+                }
+                if destination.cycleMode != .onDemand, draft.creditCycleID == nil {
+                    return "请选择目标信用账期。"
+                }
+            }
+        case .borrowing:
+            if let source = account(draft.accountID), source.kind != .credit || source.cycleMode != .onDemand {
+                return "借入必须选择随借随还信用账户。"
+            }
+            if account(draft.destinationAccountID)?.kind == .credit {
+                return "借入资金的收款账户必须是现金或储蓄账户。"
+            }
+        case .installmentFee, .installmentRefund, .reimbursementReceipt,
+             .creditPrincipalWaiver, .creditFeeRefund, .creditSettlementFee: break
         }
         return nil
     }

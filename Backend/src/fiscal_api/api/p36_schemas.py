@@ -39,7 +39,7 @@ class RepaymentPreview(APIModel):
     credit_account_name: str
     credit_debt_before_minor: int = Field(ge=0)
     credit_debt_after_minor: int = Field(ge=0)
-    credit_cycle_id: UUID
+    credit_cycle_id: UUID | None
     cycle_remaining_before_minor: int = Field(ge=0)
     cycle_remaining_after_minor: int = Field(ge=0)
 

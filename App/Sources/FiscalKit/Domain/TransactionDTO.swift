@@ -3,14 +3,18 @@ import Foundation
 public enum TransactionKind: String, Codable, Sendable, CaseIterable, Identifiable {
     case expense, income, transfer
     case creditPurchase = "credit_purchase"
-    case repayment
+    case repayment, borrowing
+    case creditPrincipalWaiver = "credit_principal_waiver"
+    case creditFeeRefund = "credit_fee_refund"
+    case creditSettlementFee = "credit_settlement_fee"
     case installmentFee = "installment_fee"
     case installmentRefund = "installment_refund"
     case reimbursementReceipt = "reimbursement_receipt"
-    public static let allCases: [TransactionKind] = [.expense, .income, .transfer, .creditPurchase, .repayment]
+    public static let allCases: [TransactionKind] = [.expense, .income, .transfer, .creditPurchase, .repayment, .borrowing]
     public var id: Self { self }
-    public var title: String { switch self { case .expense: "支出"; case .income: "收入"; case .transfer: "转账"; case .creditPurchase: "信用消费"; case .repayment: "还款"; case .installmentFee: "分期手续费"; case .installmentRefund: "分期退款"; case .reimbursementReceipt: "报销回款" } }
-    public var symbol: String { switch self { case .expense: "arrow.up.right"; case .income: "arrow.down.left"; case .transfer: "arrow.left.arrow.right"; case .creditPurchase: "creditcard.fill"; case .repayment: "arrow.uturn.backward"; case .installmentFee: "percent"; case .installmentRefund: "arrow.uturn.left.circle"; case .reimbursementReceipt: "arrow.uturn.backward.circle.fill" } }
+    public var isSystemGenerated: Bool { !Self.allCases.contains(self) }
+    public var title: String { switch self { case .expense: "支出"; case .income: "收入"; case .transfer: "转账"; case .creditPurchase: "信用消费"; case .repayment: "还款"; case .borrowing: "借入"; case .creditPrincipalWaiver: "本金减免"; case .creditFeeRefund: "费用减免"; case .creditSettlementFee: "结清手续费"; case .installmentFee: "分期手续费"; case .installmentRefund: "分期退款"; case .reimbursementReceipt: "报销回款" } }
+    public var symbol: String { switch self { case .expense: "arrow.up.right"; case .income: "arrow.down.left"; case .transfer: "arrow.left.arrow.right"; case .creditPurchase: "creditcard.fill"; case .repayment: "arrow.uturn.backward"; case .borrowing: "arrow.down.left.circle"; case .creditPrincipalWaiver: "minus.circle"; case .creditFeeRefund: "arrow.uturn.left.circle"; case .creditSettlementFee: "percent"; case .installmentFee: "percent"; case .installmentRefund: "arrow.uturn.left.circle"; case .reimbursementReceipt: "arrow.uturn.backward.circle.fill" } }
 }
 
 public enum PostingRole: String, Codable, Sendable { case account, source, destination }
@@ -78,7 +82,7 @@ public struct TransactionDTO: Codable, Sendable, Equatable, Identifiable {
         createdAt = try values.decode(Date.self, forKey: .createdAt); updatedAt = try values.decode(Date.self, forKey: .updatedAt)
     }
 
-    public var isUserEditable: Bool { source == "manual" || source == "ai_text" || source == "ocr" }
+    public var isUserEditable: Bool { !kind.isSystemGenerated && (source == "manual" || source == "ai_text" || source == "ocr") }
 }
 
 public struct TransactionPage: Codable, Sendable, Equatable {
@@ -153,7 +157,7 @@ public struct TransactionDraft: Codable, Sendable, Equatable {
         try c.encode(amountMinor, forKey: .amountMinor)
         try c.encode(kind == .expense || kind == .income || kind == .creditPurchase ? categoryID : nil, forKey: .categoryID)
         try c.encode(accountID, forKey: .accountID)
-        try c.encode(kind == .transfer || kind == .repayment ? destinationAccountID : nil, forKey: .destinationAccountID)
+        try c.encode(kind == .transfer || kind == .repayment || kind == .borrowing ? destinationAccountID : nil, forKey: .destinationAccountID)
         try c.encode(kind == .repayment ? creditCycleID : nil, forKey: .creditCycleID)
     }
     public init(from decoder: Decoder) throws {

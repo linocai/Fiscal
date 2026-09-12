@@ -16,6 +16,7 @@ public final class FutureCashFlowModel {
   private let repository: any FutureCashFlowRepository
   private var activeGeneration = 0
   private var historyGeneration = 0
+  private var settlementRequests: [UUID: (request: FutureCashFlowSettlement, key: UUID)] = [:]
 
   public init(repository: any FutureCashFlowRepository, now: Date = Date()) {
     self.repository = repository
@@ -110,18 +111,21 @@ public final class FutureCashFlowModel {
 
   public func settle(
     _ item: FutureCashFlowItem, amountMinor: Int64, occurredAt: Date,
-    accountID: UUID, destinationAccountID: UUID?, categoryID: UUID?
+    accountID: UUID, destinationAccountID: UUID?, categoryID: UUID?, completeRemaining: Bool = false
   ) async -> Bool {
-    guard let id = item.manualItemID else { return false }
-    return await mutate {
+    guard !isMutating, let id = item.manualItemID else { return false }
+    let request = FutureCashFlowSettlement(
+      version: item.version, amountMinor: amountMinor, occurredAt: occurredAt,
+      accountID: accountID, destinationAccountID: destinationAccountID,
+      categoryID: categoryID, completeRemaining: completeRemaining)
+    let key = settlementRequests[id].flatMap { $0.request == request ? $0.key : nil } ?? UUID()
+    settlementRequests[id] = (request, key)
+    let succeeded = await mutate {
       _ = try await self.repository.settle(
-        id: id,
-        request: FutureCashFlowSettlement(
-          version: item.version, amountMinor: amountMinor, occurredAt: occurredAt,
-          accountID: accountID, destinationAccountID: destinationAccountID,
-          categoryID: categoryID),
-        idempotencyKey: UUID())
+        id: id, request: request, idempotencyKey: key)
     }
+    if succeeded { settlementRequests[id] = nil }
+    return succeeded
   }
 
   public func clearMessage() { message = nil }

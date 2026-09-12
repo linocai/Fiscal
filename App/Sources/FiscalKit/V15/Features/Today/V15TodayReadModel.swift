@@ -64,7 +64,48 @@ public final class V15TodayReadModel {
     public var hasNextPage: Bool { nextCursor != nil }
     public var isLoadingNextPage: Bool { if case .loading = nextPagePhase { return true }; return false }
 
+    public private(set) var disposableEvents: [V15FutureEvent] = []
+    public private(set) var disposableEventsPhase: ScopePhase = .idle
+    public private(set) var disposableDirection: V15FutureEventDirection?
+    private var disposableCursor: String?
+    private var disposableGeneration: UInt64 = 0
+    public var hasNextDisposablePage: Bool { disposableCursor != nil }
+    public func openDisposableEvents(direction: V15FutureEventDirection) async {
+        closeDisposableEvents(); disposableDirection = direction
+        await readDisposablePage()
+    }
+    public func loadNextDisposableEvents() async { guard disposableCursor != nil else { return }; await readDisposablePage() }
+    public func closeDisposableEvents() { disposableGeneration &+= 1; disposableCursor = nil; disposableEvents = []; disposableDirection = nil; disposableEventsPhase = .idle }
+    private func readDisposablePage() async {
+        if case .loading = disposableEventsPhase { return }
+        guard let facts, let disposable = facts.disposable, disposable.isConsistent, let direction = disposableDirection else { return }
+        let current = disposableGeneration; disposableEventsPhase = .loading
+        do {
+            let page = try await services.reports.futureEvents(windowDays: 30, expectedDataRevision: facts.meta.dataRevision, cursor: disposableCursor)
+            guard current == disposableGeneration else { return }
+            guard page.meta.dataRevision == facts.meta.dataRevision, page.window.dateFrom == disposable.dateFrom, page.window.dateTo == disposable.dateTo else { throw V15Failure(kind: .conflict, message: "预测数据已更新，请刷新总览。") }
+            disposableEvents += page.items.filter { $0.direction == direction && $0.date >= disposable.dateFrom && $0.date <= disposable.dateTo && !disposableEvents.contains($0) }
+            disposableCursor = page.nextCursor
+            if disposableCursor == nil {
+                var total: Int64 = 0
+                for event in disposableEvents {
+                    let (sum, overflow) = total.addingReportingOverflow(event.amountMinor)
+                    guard !overflow else { throw V15Failure(kind: .decoding, message: "预测明细金额超出范围，请刷新核对。") }; total = sum
+                }
+                let expected = direction == .inflow ? disposable.expectedInflowMinor : disposable.expectedOutflowMinor
+                guard total == expected else { throw V15Failure(kind: .conflict, message: "预测明细与总览金额不一致，请刷新核对。") }
+            }
+            disposableEventsPhase = disposableEvents.isEmpty && disposableCursor == nil ? .empty : .loaded
+        } catch {
+            guard current == disposableGeneration else { return }
+            let value = (error as? V15Failure) ?? .init(kind: .transport, message: "预测明细读取失败。")
+            if value.kind == .conflict { disposableEvents = []; disposableCursor = nil; disposableEventsPhase = .requiresFactsReload(value) }
+            else { disposableEventsPhase = .failed(value) }
+        }
+    }
+
     public func refresh(windowDays: Int = 30) async {
+        closeDisposableEvents()
         factsGeneration &+= 1
         let currentFacts = factsGeneration
         let requiresFreshFacts = requiresFactsReload

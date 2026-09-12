@@ -43,7 +43,9 @@ assert (
 ARCHIVE_MAGIC = b"FISCAL-ARCHIVE-V1\n"
 ARCHIVE_SCHEMA = "fiscal-archive-v1"
 API_SCHEMA = "fiscal-api-v1"
-CURRENT_DATABASE_REVISION = "20260910_0039"
+CURRENT_DATABASE_REVISION = "20260912_0040"
+PREVIOUS_DATABASE_REVISION = "20260910_0039"
+_V40_TABLES = {"credit_payoff_operations", "credit_payoff_links", "cash_flow_settlement_links"}
 LEGACY_DATABASE_REVISION = "20260831_0038"
 KDF_N = 2**15
 KDF_R = 8
@@ -89,6 +91,37 @@ _CANONICAL_AI_SETTINGS_SEED = {
     "provider_key_version": None,
     "version": 1,
 }
+
+
+def _legacy_cash_flow_links(entities: dict[str, Any]) -> list[dict[str, Any]]:
+    """Retain current and superseded settlement ownership from formal snapshots."""
+    items = {str(item["id"]): item for item in entities["cash_flow_items"]}
+    transactions = {str(item["id"]) for item in entities["transactions"]}
+    owners: dict[str, str] = {}
+    evidence = [(str(item["id"]), item["linked_transaction_id"]) for item in items.values()]
+    for revision in entities["cash_flow_item_revisions"]:
+        snapshot = revision.get("snapshot")
+        if isinstance(snapshot, dict) and str(revision["item_id"]) in items:
+            evidence.append((str(revision["item_id"]), snapshot.get("linked_transaction_id")))
+    for item_id, transaction_id in evidence:
+        if transaction_id is None or str(transaction_id) not in transactions:
+            continue
+        key = str(transaction_id)
+        if key in owners and owners[key] != item_id:
+            raise ArchiveError("legacy cash-flow settlement has ambiguous ownership")
+        owners[key] = item_id
+    return [
+        {
+            "id": transaction_id,
+            "item_id": item_id,
+            "transaction_id": transaction_id,
+            "closes_remainder": True,
+            "idempotency_key": None,
+            "request_hash": None,
+            "created_at": items[item_id]["created_at"],
+        }
+        for transaction_id, item_id in sorted(owners.items())
+    ]
 
 
 class ArchiveError(ValueError):
@@ -299,7 +332,11 @@ class ArchiveService:
     @staticmethod
     def _validate_payload(manifest: Mapping[str, object], payload: Mapping[str, object]) -> None:
         revision = manifest.get("database_revision")
-        if revision not in {CURRENT_DATABASE_REVISION, LEGACY_DATABASE_REVISION}:
+        if revision not in {
+            CURRENT_DATABASE_REVISION,
+            PREVIOUS_DATABASE_REVISION,
+            LEGACY_DATABASE_REVISION,
+        }:
             raise ArchiveCompatibilityError(
                 f"unsupported archive database revision {revision!r}; set FISCAL_DATABASE_URL "
                 "to an isolated empty target and use source tools matching that revision: "
@@ -312,6 +349,8 @@ class ArchiveService:
         if not isinstance(entities, dict) or not isinstance(manifest.get("entity_counts"), dict):
             raise ArchiveError("archive payload shape is invalid")
         allowed = {table.name for table in _archive_tables(Base.metadata)}
+        if revision != CURRENT_DATABASE_REVISION:
+            allowed -= _V40_TABLES
         if set(entities) != allowed:
             raise ArchiveCompatibilityError(
                 "archive entity set is not supported by this Fiscal version"
@@ -355,6 +394,19 @@ class ArchiveService:
             converted_manifest["payload_sha256"] = hashlib.sha256(
                 _canonical_json(converted_payload)
             ).hexdigest()
+        if source in {LEGACY_DATABASE_REVISION, PREVIOUS_DATABASE_REVISION}:
+            entities = _json_object(converted_payload["entities"], error="invalid entities")
+            for name in _V40_TABLES:
+                entities[name] = []
+            entities["cash_flow_settlement_links"] = _legacy_cash_flow_links(entities)
+            converted_manifest["database_revision"] = CURRENT_DATABASE_REVISION
+            converted_manifest["entity_counts"] = {
+                name: len(cast(list[object], rows)) for name, rows in entities.items()
+            }
+            converted_manifest["payload_sha256"] = hashlib.sha256(
+                _canonical_json(converted_payload)
+            ).hexdigest()
+            added.extend(sorted(_V40_TABLES))
         ArchiveService._validate_payload(converted_manifest, converted_payload)
         ArchiveService._validate_relationships(converted_payload)
         return (
@@ -406,6 +458,8 @@ class ArchiveService:
     def _validate_relationships(payload: Mapping[str, object]) -> None:
         entities = _json_object(payload["entities"], error="archive entities are invalid")
         for table in _archive_tables(Base.metadata):
+            if table.name not in entities:
+                continue
             rows = cast(list[dict[str, Any]], entities[table.name])
             primary_keys = tuple(column.name for column in table.primary_key.columns)
             seen = {tuple(str(row[key]) for key in primary_keys) for row in rows}

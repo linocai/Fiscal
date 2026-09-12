@@ -12,6 +12,10 @@ struct V15StatementFinalDraftEditor: View {
     @State private var accountID: UUID?
     @State private var destinationID: UUID?
     @State private var categoryID: UUID?
+    @State private var creditCycleID: UUID?
+    @State private var creditCycles: [V15CreditCycle] = []
+    @State private var cyclesLoading = false
+    @State private var cyclesGeneration = 0
     @State private var amount = ""
     @State private var title = ""
     @State private var date = Date()
@@ -21,9 +25,14 @@ struct V15StatementFinalDraftEditor: View {
     @State private var version = 0
     @State private var loadedRowVersion: Int?
     @State private var loadedBatchVersion: Int?
-    private var sources: [V15AccountResponse] { accounts.filter { kind == .creditPurchase ? $0.kind == .credit : $0.kind == .cash || $0.kind == .debit } }
+    private var sources: [V15AccountResponse] { accounts.filter { account in
+        if kind == .borrowing { return account.kind == .credit && account.cycleMode == "on_demand" }
+        if kind == .creditPurchase { return account.kind == .credit && account.cycleMode != "on_demand" }
+        return account.kind == .cash || account.kind == .debit
+    } }
     private var destinations: [V15AccountResponse] { accounts.filter { $0.id != accountID && (kind == .repayment ? $0.kind == .credit : $0.kind == .cash || $0.kind == .debit) } }
-    private var needsDestination: Bool { kind == .transfer || kind == .repayment }
+    private var needsDestination: Bool { kind == .transfer || kind == .repayment || kind == .borrowing }
+    private var needsCycle: Bool { kind == .repayment && accounts.first(where: { $0.id == destinationID })?.cycleMode != "on_demand" }
     private var needsCategory: Bool { kind == .expense || kind == .income || kind == .creditPurchase }
     private var availableCategories: [V15CategoryResponse] { categories.filter { $0.direction == (kind == .income ? "income" : "expense") && $0.children.isEmpty && !$0.isBalanceAdjustment } }
     private var valid: Bool {
@@ -31,41 +40,37 @@ struct V15StatementFinalDraftEditor: View {
               !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               sources.contains(where: { $0.id == accountID }) else { return false }
         return (!needsDestination || destinations.contains(where: { $0.id == destinationID }))
+            && (!needsCycle || (!cyclesLoading && creditCycles.contains(where: { $0.id == creditCycleID })))
             && (!needsCategory || availableCategories.contains(where: { $0.id == categoryID }))
     }
     var body: some View {
         NavigationStack {
             Form {
                 Text(row.evidenceTextMasked ?? "原始证据不可用")
-                Picker("类型", selection: Binding(get: { kind }, set: { kind = $0; accountID = nil; destinationID = nil; categoryID = nil })) { ForEach(V15ManualTransactionKind.allCases) { Text($0.displayName).tag($0) } }
+                V23PlatformChoicePicker("类型", selection: Binding(get: { kind }, set: { kind = $0; accountID = nil; destinationID = nil; categoryID = nil; creditCycleID = nil }), choices: V15ManualTransactionKind.allCases.map { V23Choice($0, $0.displayName) }, identifier: "v230.statement.kind")
                 TextField("标题", text: $title)
                 TextField("金额（元）", text: $amount)
-                DatePicker("交易日期", selection: $date, displayedComponents: .date)
-                Picker("账户", selection: $accountID) {
-                    Text("请选择").tag(UUID?.none)
-                    ForEach(sources) { Text($0.name).tag(Optional($0.id)) }
-                }
+                V23BusinessDatePicker("交易日期", selection: $date)
+                V23PlatformChoicePicker("账户", selection: $accountID, choices: [V23Choice(UUID?.none, "请选择")] + sources.map { V23Choice(Optional($0.id), $0.name) }, identifier: "v230.statement.source")
                 if needsDestination {
-                    Picker("目标账户", selection: $destinationID) {
-                        Text("请选择").tag(UUID?.none)
-                        ForEach(destinations) { Text($0.name).tag(Optional($0.id)) }
-                    }
+                    V23PlatformChoicePicker("目标账户", selection: $destinationID, choices: [V23Choice(UUID?.none, "请选择")] + destinations.map { V23Choice(Optional($0.id), $0.name) }, identifier: "v230.statement.destination")
+                }
+                if needsCycle {
+                    V23PlatformChoicePicker("还款账期", selection: $creditCycleID, choices: [V23Choice(UUID?.none, cyclesLoading ? "正在读取…" : "请选择")] + creditCycles.map { V23Choice(Optional($0.id), "\($0.periodStart) 至 \($0.periodEnd) · 还款日 \($0.dueDate)") }, identifier: "v230.statement.credit-cycle").disabled(cyclesLoading)
                 }
                 if needsCategory {
-                    Picker("分类", selection: $categoryID) {
-                        Text("请选择").tag(UUID?.none)
-                        ForEach(availableCategories) { Text($0.name).tag(Optional($0.id)) }
-                    }
+                    V23PlatformChoicePicker("分类", selection: $categoryID, choices: [V23Choice(UUID?.none, "请选择")] + availableCategories.map { V23Choice(Optional($0.id), $0.name) }, identifier: "v230.statement.category")
                 }
                 if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("v221.statement.final-draft-error") }
                 Text("保存仅更新此行草稿；返回复核后仍须预览并确认入账。")
-                Button(saving ? "正在保存…" : "保存草稿") { Task { await save() } }
+                V15ActionButton(saving ? "正在保存…" : "保存草稿", symbol: "checkmark") { Task { await save() } }
                     .disabled(loading || saving || !valid)
             }
             .environment(\.timeZone, TimeZone(identifier: "Asia/Shanghai")!)
             .navigationTitle("新建交易草稿")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() }.disabled(saving) } }
             .task { await load() }
+            .task(id: destinationID) { await loadCycles() }
             .onChange(of: accountID) { _, _ in if accountID == destinationID { destinationID = nil } }
             .onDisappear { model.finalDraftEditorDismissed() }
         }
@@ -84,7 +89,7 @@ struct V15StatementFinalDraftEditor: View {
                 version = draft.version; kind = draft.transaction.kind
                 title = draft.transaction.title; date = draft.transaction.occurredAt
                 amount = "\(draft.transaction.amountMinor / 100).\(String(format: "%02lld", draft.transaction.amountMinor % 100))"
-                accountID = draft.transaction.accountID; destinationID = draft.transaction.destinationAccountID; categoryID = draft.transaction.categoryID
+                accountID = draft.transaction.accountID; destinationID = draft.transaction.destinationAccountID; categoryID = draft.transaction.categoryID; creditCycleID = draft.transaction.creditCycleID
             } else {
                 title = "账单交易"
                 if let candidate = row.candidates.first(where: { $0.candidateKind == "provider_candidate" }) {
@@ -98,11 +103,27 @@ struct V15StatementFinalDraftEditor: View {
         } catch { self.error = "草稿或账户资料读取失败，请关闭后重试。" }
         loading = false
     }
+    private func loadCycles() async {
+        cyclesGeneration += 1; let generation = cyclesGeneration
+        creditCycles = []
+        guard needsCycle, let destinationID else { creditCycleID = nil; cyclesLoading = false; return }
+        cyclesLoading = true
+        do {
+            let result = try await model.finalDraftCreditCycles(accountID: destinationID)
+            guard generation == cyclesGeneration, !Task.isCancelled else { return }
+            creditCycles = result
+            if !result.contains(where: { $0.id == creditCycleID }) { creditCycleID = nil }
+            cyclesLoading = false
+        } catch {
+            guard generation == cyclesGeneration, !Task.isCancelled else { return }
+            self.error = "还款账期读取失败，请重新选择信用账户。"; cyclesLoading = false
+        }
+    }
     private func save() async {
         guard valid, let minor = CNYAmountParser.minorUnits(amount), let batchVersion = loadedBatchVersion, let rowVersion = loadedRowVersion else { return }
         saving = true; error = nil
         do {
-            let request = V15TransactionCreateRequest(kind: kind, amountMinor: minor, occurredAt: date, title: title.trimmingCharacters(in: .whitespacesAndNewlines), accountID: accountID, categoryID: needsCategory ? categoryID : nil, destinationAccountID: needsDestination ? destinationID : nil)
+            let request = V15TransactionCreateRequest(kind: kind, amountMinor: minor, occurredAt: date, title: title.trimmingCharacters(in: .whitespacesAndNewlines), accountID: accountID, categoryID: needsCategory ? categoryID : nil, destinationAccountID: needsDestination ? destinationID : nil, creditCycleID: needsCycle ? creditCycleID : nil)
             try await model.saveFinalDraft(row: row, request: .init(expectedVersion: version, transaction: request, expectedBatchVersion: batchVersion, expectedRowVersion: rowVersion))
             dismiss()
         } catch let failure as V15Failure { error = failure.message }

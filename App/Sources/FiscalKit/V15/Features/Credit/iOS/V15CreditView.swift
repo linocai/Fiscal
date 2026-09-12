@@ -1,6 +1,9 @@
 import SwiftUI
 
 public struct V15CreditView: View {
+    private let services: V15Services
+    @State private var showsPayoff = false
+    @State private var recordKind: V15ManualTransactionKind?
     @State private var model: V15CreditModel
     private let initialGalleryScenario: String?
     private let fixtureReconnectAction: (() -> Void)?
@@ -8,7 +11,7 @@ public struct V15CreditView: View {
     private let initialAccountID: UUID?
     @State private var initialContextFailure: V15Failure?
     public init(services: V15Services, offlineSnapshotAt: Date? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, initialGalleryScenario: String? = nil, fixtureReconnectAction: (() -> Void)? = nil, initialCycle: V15CreditCycle? = nil, initialAccountID: UUID? = nil) {
-        _model = State(initialValue: .init(services: services, offlineSnapshotAt: offlineSnapshotAt, offlineSnapshotProvider: offlineSnapshotProvider))
+        self.services = services; _model = State(initialValue: .init(services: services, offlineSnapshotAt: offlineSnapshotAt, offlineSnapshotProvider: offlineSnapshotProvider))
         _initialContextFailure = State(initialValue: nil)
         self.initialGalleryScenario = initialGalleryScenario
         self.fixtureReconnectAction = fixtureReconnectAction
@@ -34,6 +37,14 @@ public struct V15CreditView: View {
             .task { await loadInitialState() }
             .sheet(isPresented: Binding(get: { model.scheduleSheetVisible }, set: { if !$0 { model.dismissScheduleSheet() } })) {
                 scheduleSheet
+            }
+        }
+        .sheet(isPresented: $showsPayoff, onDismiss: { Task { await model.reloadSelectedAccount() } }) {
+            if let account = model.selectedAccount { V15CreditPayoffView(services: services, accountID: account.id, accountName: account.name) }
+        }
+        .sheet(item: $recordKind) { kind in
+            V15RecordView(services: services, initialKind: kind, initialCreditAccountID: model.selectedAccount?.id, presentsEditorDirectly: true) { _ in
+                Task { await model.reloadSelectedAccount() }
             }
         }
         .overlay {
@@ -122,6 +133,7 @@ public struct V15CreditView: View {
             V15EmptyState(title: "目前没有信用账户", explanation: "到账户页添加信用账户后，这里会显示账单。")
         case .loaded:
             if let account = model.selectedAccount { accountSummary(account) }
+            if model.selectedAccount?.cycleMode != .onDemand {
             V15Section("账期", detail: "点击查看详情") {
                 ForEach(model.cycles) { cycle in
                     Button { Task { await model.selectCycle(cycle) } } label: { cycleRow(cycle) }
@@ -138,16 +150,17 @@ public struct V15CreditView: View {
                 }
             }
             cycleInspector
+            }
         }
     }
 
     private func accountSummary(_ account: V15CreditAccountSummary) -> some View {
-        V15Section("信用概览", detail: "账单日 \(account.statementDay) · 还款日 \(account.dueDay)") {
+        V15Section("信用概览", detail: account.cycleMode == .onDemand ? "随借随还 · 不设额度或固定还款日" : "账单日 \(account.statementDay.map(String.init) ?? "—") · 还款日 \(account.dueDay.map(String.init) ?? "—")") {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 135), spacing: V15Spacing.sm)], alignment: .leading, spacing: V15Spacing.sm) {
-                creditMetric("信用额度", account.creditLimitMinor, .neutral)
+                if account.cycleMode != .onDemand { creditMetric("信用额度", account.creditLimitMinor, .neutral) }
                 creditMetric("当前欠款", account.currentDebtMinor, .outflow)
-                creditMetric("可用额度", account.availableCreditMinor, .balance)
-                creditMetric("超额", account.overLimitMinor, account.overLimitMinor > 0 ? .outflow : .neutral)
+                if account.cycleMode != .onDemand { creditMetric("可用额度", account.availableCreditMinor, .balance) }
+                if account.cycleMode != .onDemand { creditMetric("超额", account.overLimitMinor, (account.overLimitMinor ?? 0) > 0 ? .outflow : .neutral) }
             }
             Text(account.hasOverdueCycle ? "含逾期账期" : "无逾期账期").font(V15Typography.label).foregroundStyle(account.hasOverdueCycle ? V15Palette.warning.color : V15Palette.positive.color)
             if account.activeInstallmentCount > 0 || account.futureScheduledGrossMinor > 0 {
@@ -155,13 +168,19 @@ public struct V15CreditView: View {
                     VStack(alignment: .leading, spacing: V15Spacing.xxs) {
                         Text("未来计划分期").font(V15Typography.body.weight(.semibold))
                         HStack { Text("\(account.activeInstallmentCount) 个进行中计划").font(V15Typography.secondary); Spacer(); V15MoneyText(minorUnits: account.futureScheduledGrossMinor, direction: .outflow) }
-                        Text("未来计划总额不计入上面的当前欠款；已出账期数只由对应账期体现。")
+                        Text("未来分期安排与账户欠款可能覆盖同一笔本金；全额结清预览会统一核对剩余金额。")
                             .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .accessibilityIdentifier("v15.f3b1.future-installments")
             }
-            Button("调整账期") { model.openScheduleSheet() }.disabled(model.isOffline).accessibilityIdentifier("v15.f3b1.schedule.open")
+            V15ActionButton("全额结清与回执", symbol: "checkmark.seal", kind: .secondary) { showsPayoff = true }
+                .disabled(model.isOffline).accessibilityIdentifier("v230.credit.payoff")
+            if account.cycleMode == .onDemand {
+                onDemandActions
+            } else {
+                Button("调整账期") { model.openScheduleSheet() }.disabled(model.isOffline).accessibilityIdentifier("v15.f3b1.schedule.open")
+            }
             if model.isOffline { Text("离线时不能修改账期。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
         }
     }
@@ -204,7 +223,18 @@ public struct V15CreditView: View {
         }
     }
 
-    private func creditMetric(_ title: String, _ value: V15MinorUnits, _ direction: V15MoneyDirection) -> some View {
+    private var onDemandActions: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("不设额度 · 无固定还款日").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.64))
+            V15AdaptiveStack(spacing: 10) {
+                V15ActionButton("记录借入", symbol: "arrow.down.left.circle", kind: .secondary) { recordKind = .borrowing }
+                    .accessibilityIdentifier("v230.credit.borrow")
+                V15ActionButton("记录还款", symbol: "arrow.up.right.circle") { recordKind = .repayment }
+                    .accessibilityIdentifier("v230.credit.repay")
+            }.disabled(model.isOffline)
+        }
+    }
+    private func creditMetric(_ title: String, _ value: V15MinorUnits?, _ direction: V15MoneyDirection) -> some View {
         V22Metric(title, minorUnits: value, direction: direction)
     }
     private func cycleStatusLabel(_ value: V15CreditCycleStatus) -> String { switch value { case .open: "开放"; case .unpaid: "未还"; case .partial: "部分已还"; case .overdue: "已逾期"; case .settled: "已结清"; case .unknown: "未知状态" } }

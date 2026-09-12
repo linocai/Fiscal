@@ -18,6 +18,7 @@ from fiscal_api.api.p13_schemas import (
     CashFlowCreateResponse,
     CashFlowCreditCyclePart,
     CashFlowDraft,
+    CashFlowExistingSettlementDraft,
     CashFlowHistoryResponse,
     CashFlowItemResponse,
     CashFlowMutationScope,
@@ -41,6 +42,7 @@ from fiscal_api.db.models import (
     Category,
     TransactionKind,
 )
+from fiscal_api.db.models.cash_flow import CashFlowSettlementLink
 from fiscal_api.repositories.cash_flow import CashFlowRepository
 from fiscal_api.repositories.reporting import ReimbursementFact, ReportingRepository
 from fiscal_api.repositories.transactions import TransactionRepository
@@ -71,16 +73,27 @@ class CashFlowService:
             for item in await self.repository.active(account_id)
         ]
         items.extend(await self._system_items(today, account_id=account_id))
-        items.sort(key=lambda item: (not item.is_overdue, item.expected_date, item.title, item.id))
+        items.sort(
+            key=lambda item: (
+                not item.is_overdue,
+                item.expected_date or date.max,
+                item.title,
+                item.id,
+            )
+        )
         window_end = today + timedelta(days=29)
-        in_window = [item for item in items if today <= item.expected_date <= window_end]
+        in_window = [
+            item
+            for item in items
+            if item.expected_date is not None and today <= item.expected_date <= window_end
+        ]
         inflow = self._sum(
-            item.planned_amount_minor
+            item.remaining_amount_minor
             for item in in_window
             if item.direction is CashFlowDirection.INFLOW
         )
         outflow = self._sum(
-            item.planned_amount_minor
+            item.remaining_amount_minor
             for item in in_window
             if item.direction is CashFlowDirection.OUTFLOW
         )
@@ -116,7 +129,7 @@ class CashFlowService:
             )
             for item in await self.repository.system_history(start, end)
         )
-        items.sort(key=lambda item: (item.expected_date, item.id), reverse=True)
+        items.sort(key=lambda item: (item.expected_date or date.max, item.id), reverse=True)
         return CashFlowHistoryResponse(month=month_value, items=items)
 
     async def get(self, item_id: UUID) -> CashFlowItemResponse:
@@ -231,6 +244,26 @@ class CashFlowService:
             )
         await self._validate_references(request)
         targets = await self._targets(item, request.scope)
+        for target in targets:
+            if request.scope is CashFlowMutationScope.THIS_AND_FUTURE and target.status in {
+                "settled",
+                "cancelled",
+            }:
+                continue
+            settled, _remaining, _ids = await self.repository.settlement_totals(target)
+            if await self.repository.settlement_links(target.id) and (
+                (
+                    request.planned_amount_minor != target.planned_amount_minor
+                    and request.planned_amount_minor < settled
+                )
+                or request.direction.value != target.direction
+                or request.account_id != target.account_id
+                or request.destination_account_id != target.destination_account_id
+            ):
+                conflict(
+                    "cash_flow_settlement_identity_locked",
+                    "Plan changes cannot invalidate completed settlements",
+                )
         if request.scope is CashFlowMutationScope.THIS_AND_FUTURE and item.series_id is not None:
             for target in targets:
                 if target.status in {CashFlowStatus.SETTLED.value, CashFlowStatus.CANCELLED.value}:
@@ -238,9 +271,18 @@ class CashFlowService:
                 month_offset = self._month_offset(item.expected_date, target.expected_date)
                 shifted_date = self._add_months(request.expected_date, month_offset)
                 self._apply_draft(target, request, expected_date=shifted_date)
+                if await self.repository.settlement_links(target.id):
+                    _total, remaining, _ids = await self.repository.settlement_totals(target)
+                    target.status = "settled" if remaining == 0 else "confirmed"
+                    target.settled_at = utc_now() if remaining == 0 else None
                 self._touch(target, CashFlowRevisionEvent.UPDATED)
         else:
             self._apply_draft(item, request)
+            if await self.repository.settlement_links(item.id):
+                _total, remaining, _ids = await self.repository.settlement_totals(item)
+                if item.status != CashFlowStatus.CANCELLED.value:
+                    item.status = "settled" if remaining == 0 else "confirmed"
+                    item.settled_at = (item.settled_at or utc_now()) if remaining == 0 else None
             self._touch(item, CashFlowRevisionEvent.UPDATED)
         await self.session.commit()
         return CashFlowCreateResponse(
@@ -278,6 +320,15 @@ class CashFlowService:
         if base is None and override is None:
             not_found("cash_flow_system_item_not_found", "The system cash flow item was not found")
 
+        if (
+            request.status is CashFlowStatus.COMPLETED
+            and base is not None
+            and base.planned_amount_minor > 0
+        ):
+            conflict(
+                "cash_flow_source_outstanding",
+                "Record the actual receipt before completing this source",
+            )
         completed_at = utc_now() if request.status is CashFlowStatus.COMPLETED else None
         if override is None:
             assert base is not None
@@ -358,10 +409,10 @@ class CashFlowService:
     ) -> CashFlowItemResponse:
         await acquire_mutation_lock(self.session)
         item = await self._required(item_id, for_update=True)
-        if item.status == CashFlowStatus.SETTLED.value:
-            if item.linked_transaction_id is None:
-                raise RuntimeError("settled cash flow is missing its ledger transaction")
-            return await self._manual_response(item, self._today())
+        request_hash = self._settlement_hash(item_id, request)
+        replay = await self._settlement_replay(idempotency_key, request_hash)
+        if replay is not None:
+            return replay
         check_version(item.version, request.expected_version)
         if item.status != CashFlowStatus.CONFIRMED.value:
             conflict("cash_flow_not_confirmed", "Only confirmed cash flow items can be settled")
@@ -390,59 +441,171 @@ class CashFlowService:
             idempotency_key,
             commit=False,
         )
-        item.status = CashFlowStatus.SETTLED.value
+        await self._validate_settlement_transaction(item, transaction.id)
+        self.session.add(
+            CashFlowSettlementLink(
+                item_id=item.id,
+                transaction_id=transaction.id,
+                closes_remainder=request.complete_remaining,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+            )
+        )
         item.linked_transaction_id = transaction.id
-        item.settled_at = utc_now()
         item.cancelled_at = None
-        self._touch(item, CashFlowRevisionEvent.SETTLED)
+        await self.session.flush()
+        await self._recompute_settlement(item)
         await self.session.commit()
         return await self._manual_response(item, self._today())
 
-    async def validate_restore(self, transaction_id: UUID) -> CashFlowItem | None:
-        origins = await self.repository.settlement_origins(transaction_id)
-        if len(origins) > 1:
-            conflict(
-                "cash_flow_settlement_ambiguous", "The settlement has multiple historical sources"
-            )
-        if not origins:
-            transaction = await TransactionRepository(self.session).get(transaction_id)
-            if transaction is not None and transaction.source == "cash_flow":
-                conflict("cash_flow_settlement_ambiguous", "The settlement source is missing")
+    @staticmethod
+    def _settlement_hash(
+        item_id: UUID, request: CashFlowSettlementDraft | CashFlowExistingSettlementDraft
+    ) -> str:
+        return hashlib.sha256((str(item_id) + request.model_dump_json()).encode()).hexdigest()
+
+    async def _settlement_replay(self, key: UUID, request_hash: str) -> CashFlowItemResponse | None:
+        link = await self.repository.settlement_by_key(key)
+        if link is None:
             return None
-        item = origins[0]
-        if item.status == CashFlowStatus.CANCELLED.value:
+        self._assert_idempotent(link.request_hash or "", request_hash)
+        return await self.get(link.item_id)
+
+    async def settle_existing(
+        self, item_id: UUID, request: CashFlowExistingSettlementDraft, idempotency_key: UUID
+    ) -> CashFlowItemResponse:
+        await acquire_mutation_lock(self.session)
+        request_hash = self._settlement_hash(item_id, request)
+        replay = await self._settlement_replay(idempotency_key, request_hash)
+        if replay is not None:
+            return replay
+        item = await self._required(item_id, for_update=True)
+        check_version(item.version, request.expected_version)
+        if item.status != CashFlowStatus.CONFIRMED.value:
+            conflict("cash_flow_not_confirmed", "Only confirmed cash flow items can be settled")
+        transaction = await TransactionRepository(self.session).get(
+            request.transaction_id, for_update=True
+        )
+        if transaction is None:
+            not_found("transaction_not_found", "Transaction was not found")
+        check_version(transaction.version, request.transaction_expected_version)
+        await self._validate_settlement_transaction(item, transaction.id)
+        self.session.add(
+            CashFlowSettlementLink(
+                item_id=item.id,
+                transaction_id=transaction.id,
+                closes_remainder=request.complete_remaining,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+            )
+        )
+        item.linked_transaction_id = transaction.id
+        await self.session.flush()
+        await self._recompute_settlement(item)
+        await self.session.commit()
+        return await self._manual_response(item, self._today())
+
+    async def _validate_settlement_transaction(
+        self, item: CashFlowItem, transaction_id: UUID
+    ) -> None:
+        transaction = await TransactionRepository(self.session).get(transaction_id)
+        assert transaction is not None
+        if transaction.voided_at is not None:
+            conflict("cash_flow_transaction_voided", "A voided transaction cannot settle a plan")
+        if await self.repository.by_linked_transaction(transaction_id) is not None:
+            conflict("cash_flow_transaction_claimed", "This transaction already settles a plan")
+        postings = sorted(transaction.postings, key=lambda p: p.position)
+        expected_kind = {"inflow": "income", "outflow": "expense", "transfer": "transfer"}[
+            item.direction
+        ]
+        if transaction.kind != expected_kind or transaction.source == "system":
+            conflict(
+                "cash_flow_settlement_source_invalid",
+                "Use the original system source for this transaction",
+            )
+        if item.account_id is not None and postings[0].account_id != item.account_id:
+            conflict(
+                "cash_flow_settlement_account_mismatch", "Settlement account differs from the plan"
+            )
+        if item.direction == "transfer" and postings[1].account_id != item.destination_account_id:
+            conflict("cash_flow_settlement_account_mismatch", "Destination differs from the plan")
+        for posting in postings:
+            account = await self.session.get(Account, posting.account_id)
+            if account is None or account.kind not in {"cash", "debit"}:
+                conflict(
+                    "cash_flow_settlement_account_invalid",
+                    "Settlement requires cash or debit accounts",
+                )
+
+    async def validate_restore(self, transaction_id: UUID) -> CashFlowItem | None:
+        item = await self.repository.by_linked_transaction(transaction_id, for_update=True)
+        if item is not None and item.status == CashFlowStatus.CANCELLED.value:
             conflict(
                 "cash_flow_not_confirmed",
                 "Confirm the cancelled item before restoring its settlement",
             )
-        if item.linked_transaction_id is not None and item.linked_transaction_id != transaction_id:
-            current = await TransactionRepository(self.session).get(item.linked_transaction_id)
-            if current is not None and current.voided_at is None:
-                conflict(
-                    "cash_flow_settlement_superseded",
-                    "Another active settlement exists",
-                    details={"item_id": str(item.id), "transaction_id": str(current.id)},
-                )
+        if item is not None:
+            links = await self.repository.settlement_links(item.id)
+            restoring = next(
+                (link for link in links if link.transaction_id == transaction_id), None
+            )
+            if restoring is not None and restoring.closes_remainder:
+                _total, _remaining, active_ids = await self.repository.settlement_totals(item)
+                if any(
+                    link.closes_remainder
+                    and link.transaction_id in active_ids
+                    and link.transaction_id != transaction_id
+                    for link in links
+                ):
+                    conflict(
+                        "cash_flow_settlement_superseded", "Another completed settlement exists"
+                    )
         return item
 
-    async def sync_linked_transaction(self, transaction_id: UUID, *, voided: bool) -> None:
-        item = (
-            await self.repository.by_linked_transaction(transaction_id, for_update=True)
-            if voided
-            else await self.validate_restore(transaction_id)
-        )
-        if item is None:
+    async def _recompute_settlement(self, item: CashFlowItem) -> None:
+        _total, remaining, _ids = await self.repository.settlement_totals(item)
+        if item.status == CashFlowStatus.CANCELLED.value:
+            self._touch(item, CashFlowRevisionEvent.UPDATED)
             return
-        desired = CashFlowStatus.CONFIRMED if voided else CashFlowStatus.SETTLED
-        if item.status == desired.value and item.linked_transaction_id == transaction_id:
-            return
-        item.linked_transaction_id = transaction_id
-        item.status = desired.value
-        item.settled_at = None if voided else utc_now()
+        item.status = "settled" if remaining == 0 else "confirmed"
+        item.settled_at = utc_now() if remaining == 0 else None
         self._touch(
             item,
-            CashFlowRevisionEvent.REOPENED if voided else CashFlowRevisionEvent.SETTLED,
+            CashFlowRevisionEvent.SETTLED if remaining == 0 else CashFlowRevisionEvent.REOPENED,
         )
+
+    async def sync_linked_transaction(self, transaction_id: UUID, *, voided: bool) -> None:
+        item = await self.repository.by_linked_transaction(transaction_id, for_update=True)
+        if item is not None:
+            if not voided:
+                # The legacy pointer follows the restored/current settlement;
+                # authoritative cumulative amounts remain in the links.
+                item.linked_transaction_id = transaction_id
+            await self.session.flush()
+            await self._recompute_settlement(item)
+
+    async def validate_linked_transaction_edit(
+        self, transaction_id: UUID, draft: TransactionDraft
+    ) -> None:
+        item = await self.repository.by_linked_transaction(transaction_id)
+        if item is None:
+            return
+        transaction = await TransactionRepository(self.session).get(transaction_id)
+        assert transaction is not None
+        postings = sorted(transaction.postings, key=lambda p: p.position)
+        if (
+            draft.kind.value != transaction.kind
+            or draft.account_id != postings[0].account_id
+            or draft.destination_account_id
+            != (postings[1].account_id if len(postings) > 1 else None)
+        ):
+            conflict(
+                "cash_flow_settlement_identity_locked",
+                "Linked settlement direction and accounts cannot change",
+            )
+
+    async def sync_linked_transaction_edit(self, transaction_id: UUID) -> None:
+        await self.sync_linked_transaction(transaction_id, voided=False)
 
     async def _system_items(
         self, today: date, *, account_id: UUID | None
@@ -457,8 +620,6 @@ class CashFlowService:
             assert item.system_kind is not None and item.system_reference_id is not None
             override = overrides.get((item.system_kind.value, item.system_reference_id))
             if override is not None:
-                if override.status == CashFlowStatus.COMPLETED.value:
-                    continue
                 result.append(
                     self._system_override_response(
                         override, today, planned_amount_minor=item.planned_amount_minor
@@ -500,6 +661,7 @@ class CashFlowService:
                     title=f"{first.account_name} 账单应还",
                     direction=CashFlowDirection.OUTFLOW,
                     planned_amount_minor=amount,
+                    remaining_amount_minor=amount,
                     expected_date=due_date,
                     account_id=credit_account_id,
                     status=CashFlowStatus.CONFIRMED,
@@ -527,7 +689,7 @@ class CashFlowService:
         }
         for fact_value, amount in party_values.values():
             fact = fact_value
-            expected = fact.expected_date or today
+            expected = fact.expected_date
             result.append(
                 CashFlowItemResponse(
                     id=f"reimbursement:{fact.party_id}",
@@ -536,11 +698,12 @@ class CashFlowService:
                     title=f"{fact.party_name} 报销待到账",
                     direction=CashFlowDirection.INFLOW,
                     planned_amount_minor=amount,
+                    remaining_amount_minor=amount,
                     expected_date=expected,
                     status=CashFlowStatus.CONFIRMED,
                     source="system",
                     version=1,
-                    is_overdue=expected < today,
+                    is_overdue=expected is not None and expected < today,
                     actions=[CashFlowAction.MARK_RECEIVED],
                 )
             )
@@ -570,7 +733,9 @@ class CashFlowService:
         item: CashFlowSystemOverride, today: date, *, planned_amount_minor: int
     ) -> CashFlowItemResponse:
         kind = CashFlowSystemKind(item.system_kind)
-        status = CashFlowStatus(item.status)
+        status = (
+            CashFlowStatus.CONFIRMED if planned_amount_minor > 0 else CashFlowStatus(item.status)
+        )
         domain_action = (
             CashFlowAction.CONFIRM_REPAYMENT
             if kind is CashFlowSystemKind.CREDIT_CYCLE
@@ -587,6 +752,7 @@ class CashFlowService:
             note=item.note,
             direction=CashFlowDirection(item.direction),
             planned_amount_minor=planned_amount_minor,
+            remaining_amount_minor=planned_amount_minor,
             expected_date=item.expected_date,
             account_id=item.account_id,
             status=status,
@@ -607,6 +773,7 @@ class CashFlowService:
                 primary = min(transaction.postings, key=lambda posting: posting.position)
                 actual_amount = abs(primary.amount_minor)
                 actual_date = transaction.occurred_at.astimezone(BUSINESS_TIMEZONE).date()
+        settled, remaining, transaction_ids = await self.repository.settlement_totals(item)
         status = CashFlowStatus(item.status)
         actions: list[CashFlowAction] = []
         if status is CashFlowStatus.EXPECTED:
@@ -631,6 +798,9 @@ class CashFlowService:
             source=CashFlowSource(item.source),
             version=item.version,
             linked_transaction_id=item.linked_transaction_id,
+            settled_amount_minor=settled,
+            remaining_amount_minor=remaining,
+            settlement_transaction_ids=transaction_ids,
             actual_amount_minor=actual_amount,
             actual_date=actual_date,
             is_overdue=status in {CashFlowStatus.EXPECTED, CashFlowStatus.CONFIRMED}
@@ -667,6 +837,10 @@ class CashFlowService:
                 account.archived_at is not None for account in accounts
             ):
                 invalid("invalid_cash_flow_account", "Cash flow accounts must be active")
+            if any(account.kind not in {"cash", "debit"} for account in accounts):
+                invalid(
+                    "invalid_cash_flow_account", "Manual cash flow requires cash or debit accounts"
+                )
         if draft.category_id is not None:
             category = await self.session.get(Category, draft.category_id)
             expected_direction = (

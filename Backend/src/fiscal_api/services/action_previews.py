@@ -19,7 +19,7 @@ from fiscal_api.api.p36_schemas import (
     PreviewMeta,
     RepaymentPreview,
 )
-from fiscal_api.core.time import utc_now
+from fiscal_api.core.time import BUSINESS_TIMEZONE, ensure_utc, utc_now
 from fiscal_api.db.models import (
     AccountKind,
     ActionOperation,
@@ -54,7 +54,6 @@ class ActionPreviewService:
         if (
             draft.account_id is None
             or draft.destination_account_id is None
-            or draft.credit_cycle_id is None
             or draft.category_id is not None
         ):
             invalid(
@@ -74,11 +73,20 @@ class ActionPreviewService:
             conflict("account_archived", "A repayment account is archived")
 
         credit = CreditRepository(self.session)
-        cycle = await credit.cycle(draft.credit_cycle_id)
-        if cycle is None:
-            not_found("credit_cycle_not_found", "The credit cycle does not exist")
-        if cycle.account_id != destination.id:
-            conflict("credit_cycle_account_mismatch", "The credit cycle belongs to another account")
+        cycle = None
+        if destination.cycle_mode == "on_demand":
+            if draft.credit_cycle_id is not None:
+                invalid("on_demand_cycle_not_allowed", "随借随还账户没有账期")
+        else:
+            if draft.credit_cycle_id is None:
+                invalid("credit_cycle_required", "请选择还款账期")
+            cycle = await credit.cycle(draft.credit_cycle_id)
+            if cycle is None:
+                not_found("credit_cycle_not_found", "The credit cycle does not exist")
+            if cycle.account_id != destination.id:
+                conflict(
+                    "credit_cycle_account_mismatch", "The credit cycle belongs to another account"
+                )
         impacts = await accounts.balance_impacts([source.id, destination.id])
         source_before = checked_int64(
             source.opening_balance_minor + impacts.get(source.id, 0), label="payment balance"
@@ -90,15 +98,40 @@ class ActionPreviewService:
             ),
             0,
         )
-        amounts = await credit.amounts([cycle.id])
-        purchase, repaid = amounts.get(cycle.id, (0, 0))
-        opening = destination.opening_balance_minor if cycle.is_opening_cycle else 0
-        remaining = checked_int64(opening + purchase - repaid, label="credit cycle remaining")
+        remaining = debt_before
+        if cycle is not None:
+            amounts = await credit.amounts([cycle.id])
+            purchase, repaid = amounts.get(cycle.id, (0, 0))
+            opening = destination.opening_balance_minor if cycle.is_opening_cycle else 0
+            remaining = checked_int64(opening + purchase - repaid, label="credit cycle remaining")
         if draft.amount_minor > remaining:
             conflict(
                 "repayment_exceeds_cycle_remaining",
-                "The repayment exceeds the selected credit cycle remaining amount",
+                "输入金额超过剩余应还, 请修改金额",
+                details={
+                    "remaining_minor": remaining,
+                    "input_minor": draft.amount_minor,
+                    "difference_minor": draft.amount_minor - remaining,
+                },
             )
+        occurred = ensure_utc(draft.occurred_at)
+        if (
+            destination.opening_balance_as_of_date is not None
+            and occurred.astimezone(BUSINESS_TIMEZONE).date()
+            < destination.opening_balance_as_of_date
+        ):
+            conflict("credit_liability_predates_repayment", "还款不能早于期初欠款确认日")
+        available_at_time = destination.opening_balance_minor
+        events = (
+            await credit.credit_events(destination.id)
+            if cycle is None
+            else await credit.cycle_events(cycle.id)
+        )
+        if cycle is not None and not cycle.is_opening_cycle:
+            available_at_time = 0
+        available_at_time += sum(delta for when, delta in events if ensure_utc(when) <= occurred)
+        if available_at_time < draft.amount_minor:
+            conflict("credit_liability_predates_repayment", "还款时间不能早于负债发生时间")
         if draft.amount_minor > source_before:
             conflict("insufficient_account_balance", "The payment account balance is insufficient")
 
@@ -121,7 +154,7 @@ class ActionPreviewService:
             credit_account_name=destination.name,
             credit_debt_before_minor=debt_before,
             credit_debt_after_minor=max(debt_before - draft.amount_minor, 0),
-            credit_cycle_id=cycle.id,
+            credit_cycle_id=cycle.id if cycle else None,
             cycle_remaining_before_minor=remaining,
             cycle_remaining_after_minor=remaining - draft.amount_minor,
         )

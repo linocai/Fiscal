@@ -849,7 +849,7 @@ async def test_repayment_requires_human_cycle_edit_then_executes_as_ai_text(
     assert pending.status == "pending" and pending.credit_cycle_id is None
     with pytest.raises(APIError) as incomplete:
         await service.execute(pending.id, pending.version)
-    assert incomplete.value.code == "invalid_transaction_configuration"
+    assert incomplete.value.code == "credit_cycle_required"
     preserved = await service.get(pending.id)
     assert preserved.status == "pending" and preserved.transaction_id is None
     edited = await service.edit(

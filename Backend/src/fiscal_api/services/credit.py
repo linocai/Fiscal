@@ -160,6 +160,8 @@ def project_current_cycle(
     for cycle in cycles:
         if not cycle.is_opening_cycle and cycle.period_start <= today <= cycle.period_end:
             return cycle
+    if account.cycle_mode == CreditCycleMode.ON_DEMAND:
+        conflict("on_demand_schedule_not_applicable", "随借随还账户不使用账期或分期")
     if account.statement_day is None or account.due_day is None:
         raise RuntimeError("credit account schedule is missing")
     mode = CreditCycleMode(account.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF.value)
@@ -189,6 +191,8 @@ async def ensure_regular_cycle(
     for cycle in normal:
         if cycle.period_start <= business_date <= cycle.period_end:
             return cycle
+    if account.cycle_mode == CreditCycleMode.ON_DEMAND:
+        conflict("on_demand_schedule_not_applicable", "随借随还账户不使用账期或分期")
     if account.statement_day is None or account.due_day is None:
         raise RuntimeError("credit account schedule is missing")
     mode = CreditCycleMode(account.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF.value)
@@ -199,6 +203,8 @@ async def ensure_regular_cycle(
 async def ensure_cycle_for_statement(
     repository: CreditRepository, account: Account, statement_date: date
 ) -> CreditCycle:
+    if account.cycle_mode == CreditCycleMode.ON_DEMAND:
+        conflict("on_demand_schedule_not_applicable", "随借随还账户不使用账期或分期")
     if account.statement_day is None or account.due_day is None:
         raise RuntimeError("credit account schedule is missing")
     mode = CreditCycleMode(account.cycle_mode or CreditCycleMode.STATEMENT_DAY_CUTOFF.value)
@@ -241,6 +247,8 @@ async def ensure_cycle_for_statement(
 
 
 async def sync_opening_cycle(repository: CreditRepository, account: Account) -> CreditCycle | None:
+    if account.cycle_mode == CreditCycleMode.ON_DEMAND:
+        return None
     cycle = await repository.opening_cycle(account.id)
     if account.opening_balance_minor == 0:
         if cycle is not None and not await repository.cycle_has_any_transaction(cycle.id):
@@ -298,10 +306,8 @@ async def validate_credit_invariants(
                 cycle_debt = checked_int64(delta + cycle_debt, label="credit cycle prefix")
                 if cycle_debt < 0:
                     conflict(
-                        "repayment_exceeds_cycle_remaining"
-                        if repayment_error
-                        else "credit_cycle_overpaid",
-                        "A repayment cannot predate its target cycle liability",
+                        "credit_liability_predates_repayment",
+                        "还款时间不能早于对应负债发生时间",
                     )
 
         debt = account.opening_balance_minor
@@ -318,8 +324,8 @@ async def validate_credit_invariants(
             debt = checked_int64(debt + delta, label="credit chronological debt")
             if debt < 0:
                 conflict(
-                    "repayment_exceeds_cycle_remaining",
-                    "A repayment cannot predate the liability it repays",
+                    "credit_liability_predates_repayment",
+                    "还款时间不能早于负债发生时间",
                 )
 
 
@@ -461,6 +467,10 @@ class CreditService:
         for_update: bool,
     ) -> ScheduleChangePlan:
         account = await self.repository.account(account_id, for_update=for_update)
+        if (
+            account is not None and account.cycle_mode == CreditCycleMode.ON_DEMAND
+        ) or request.cycle_mode == CreditCycleMode.ON_DEMAND:
+            conflict("on_demand_schedule_not_applicable", "随借随还模式不能通过账期设置变更")
         if account is None or account.kind != AccountKind.CREDIT.value:
             not_found("credit_account_not_found", "The credit account does not exist")
         if not for_update:
@@ -923,6 +933,8 @@ class CreditService:
         else:
             account = None
             for candidate in await self.repository.active_accounts():
+                if candidate.cycle_mode == CreditCycleMode.ON_DEMAND:
+                    continue
                 cycles = await self.repository.cycles(candidate.id)
                 projected = project_current_cycle(candidate, today=self._today(), cycles=cycles)
                 if projected.id == cycle_id:
@@ -935,6 +947,27 @@ class CreditService:
         return await self._cycle_response(cycle, account, amounts.get(cycle.id, (0, 0)))
 
     async def _account_response(self, account: Account) -> CreditAccountSummary:
+        if account.cycle_mode == CreditCycleMode.ON_DEMAND:
+            impacts = await self.repository.account_impacts([account.id])
+            return CreditAccountSummary(
+                account_id=account.id,
+                name=account.name,
+                institution=account.institution,
+                last_four=account.last_four,
+                credit_limit_minor=None,
+                current_debt_minor=checked_int64(
+                    account.opening_balance_minor - impacts.get(account.id, 0)
+                ),
+                available_credit_minor=None,
+                over_limit_minor=None,
+                opening_configuration_required=False,
+                statement_day=None,
+                due_day=None,
+                cycle_mode=CreditCycleMode.ON_DEMAND,
+                current_cycle=None,
+                next_due_cycle=None,
+                has_overdue_cycle=False,
+            )
         cycles = await self._cycles_with_projection(account)
         current = project_current_cycle(account, today=self._today(), cycles=cycles)
         amounts = await self.repository.amounts([item.id for item in cycles])
@@ -1003,6 +1036,8 @@ class CreditService:
         )
 
     async def _cycles_with_projection(self, account: Account) -> list[CreditCycle]:
+        if account.cycle_mode == CreditCycleMode.ON_DEMAND:
+            return []
         cycles = await self.repository.cycles(account.id)
         projected = project_current_cycle(account, today=self._today(), cycles=cycles)
         if not any(item.id == projected.id for item in cycles):

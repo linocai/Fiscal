@@ -93,23 +93,37 @@ public final class AccountsModel {
         if !draft.lastFour.isEmpty && (draft.lastFour.count != 4 || draft.lastFour.contains(where: { !$0.isASCII || !$0.isNumber })) { return "尾号必须是 4 位数字。" }
         if draft.institution.count > 80 { return "机构名称不能超过 80 个字符。" }
         if draft.kind == .credit {
-            guard let limit = draft.creditLimitMinor, limit > 0 else { return "信用账户必须填写正数额度。" }
-            guard let statement = draft.statementDay, (1...28).contains(statement), let due = draft.dueDay, (1...28).contains(due) else { return "账单日和还款日必须在 1–28 日。" }
+            if draft.cycleMode == .onDemand {
+                guard draft.creditLimitMinor == nil, draft.statementDay == nil,
+                      draft.dueDay == nil, draft.openingDueDate == nil else {
+                    return "随借随还账户不设置额度、账单日或到期日。"
+                }
+            } else {
+                guard let limit = draft.creditLimitMinor, limit > 0 else { return "信用账户必须填写正数额度。" }
+                guard let statement = draft.statementDay, (1...28).contains(statement), let due = draft.dueDay, (1...28).contains(due) else { return "账单日和还款日必须在 1–28 日。" }
+            }
             if draft.openingBalanceMinor < 0 { return "信用期初欠款不能为负数。" }
             if draft.openingBalanceMinor > 0 {
-                guard let asOf = draft.openingBalanceAsOfDate, let due = draft.openingDueDate else { return "正数期初欠款需要确认余额日期和到期日。" }
-                guard let asOfDate = shanghaiDate(asOf), shanghaiDate(due) != nil else { return "期初日期必须使用 yyyy-MM-dd 格式。" }
-                if due < asOf { return "期初到期日不能早于余额日期。" }
+                guard let asOf = draft.openingBalanceAsOfDate,
+                      let asOfDate = shanghaiDate(asOf) else { return "请填写有效的期初余额确认日期（yyyy-MM-dd）。" }
+                if draft.cycleMode != .onDemand {
+                    guard let due = draft.openingDueDate, shanghaiDate(due) != nil else { return "请填写有效的期初到期日（yyyy-MM-dd）。" }
+                    if due < asOf { return "期初到期日不能早于余额日期。" }
+                }
                 var calendar = Calendar(identifier: .gregorian)
                 calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
                 if asOfDate > calendar.startOfDay(for: Date()) { return "期初余额日期不能晚于今天。" }
             } else if draft.openingBalanceAsOfDate != nil || draft.openingDueDate != nil { return "期初欠款为零时不应填写期初日期。" }
+        } else if draft.creditLimitMinor != nil || draft.statementDay != nil || draft.dueDay != nil
+            || draft.openingBalanceAsOfDate != nil || draft.openingDueDate != nil {
+            return "现金与储蓄账户不填写信用额度、账期或期初到期日期。"
         }
         return nil
     }
 
     private func scheduleRequest(draft: AccountDraft, account: AccountDTO) -> CreditScheduleChangeRequest? {
-        guard let statementDay = draft.statementDay, let dueDay = draft.dueDay else { return nil }
+        guard draft.cycleMode != .onDemand, account.cycleMode != .onDemand,
+              let statementDay = draft.statementDay, let dueDay = draft.dueDay else { return nil }
         return CreditScheduleChangeRequest(
             expectedVersion: account.version, cycleMode: draft.cycleMode,
             statementDay: statementDay, dueDay: dueDay)

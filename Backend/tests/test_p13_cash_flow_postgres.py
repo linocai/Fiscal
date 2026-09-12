@@ -283,26 +283,28 @@ async def test_reimbursement_override_never_freezes_current_fact_amount(
     )
     assert legacy_read.planned_amount_minor == 20_000
 
-    completed = await cash_flow.update_system(
-        CashFlowSystemKind.REIMBURSEMENT,
-        party.id,
-        CashFlowSystemReplace(
-            title="更清晰的报销标题",
-            planned_amount_minor=8_888,
-            expected_date=date(2026, 8, 23),
-            status=CashFlowStatus.COMPLETED,
-            expected_version=legacy_read.version,
-        ),
+    with pytest.raises(APIError) as error:
+        await cash_flow.update_system(
+            CashFlowSystemKind.REIMBURSEMENT,
+            party.id,
+            CashFlowSystemReplace(
+                title="更清晰的报销标题",
+                planned_amount_minor=8_888,
+                expected_date=date(2026, 8, 23),
+                status=CashFlowStatus.COMPLETED,
+                expected_version=legacy_read.version,
+            ),
+        )
+    assert error.value.code == "cash_flow_source_outstanding"
+    # Even an old completed override cannot hide real remaining money.
+    stored.status = "completed"
+    await session.commit()
+    still_active = next(
+        item for item in (await cash_flow.active()).items if item.system_reference_id == party.id
     )
-    assert completed.planned_amount_minor == 20_000
-    history_item = next(
-        item
-        for item in (await cash_flow.history("2026-08")).items
-        if item.system_reference_id == party.id
-    )
-    assert history_item.planned_amount_minor == 20_000
-    await session.refresh(stored)
-    assert stored.planned_amount_minor is None
+    assert still_active.planned_amount_minor == 20_000
+    assert still_active.remaining_amount_minor == 20_000
+    assert still_active.status is CashFlowStatus.CONFIRMED
 
 
 async def test_void_and_restore_keep_cash_flow_and_ledger_in_sync(session: AsyncSession) -> None:

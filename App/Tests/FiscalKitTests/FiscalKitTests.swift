@@ -579,8 +579,9 @@ struct FiscalKitP4Tests {
     draft.statementDay = 10
     draft.dueDay = 22
     draft.openingBalanceMinor = 5_000
-    #expect(AccountsModel.validate(draft) == "正数期初欠款需要确认余额日期和到期日。")
+    #expect(AccountsModel.validate(draft) == "请填写有效的期初余额确认日期（yyyy-MM-dd）。")
     draft.openingBalanceAsOfDate = "2026-07-10"
+    #expect(AccountsModel.validate(draft) == "请填写有效的期初到期日（yyyy-MM-dd）。")
     draft.openingDueDate = "2026-07-09"
     #expect(AccountsModel.validate(draft) == "期初到期日不能早于余额日期。")
     draft.openingDueDate = "2026-07-22"

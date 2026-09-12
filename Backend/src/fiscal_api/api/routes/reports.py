@@ -151,6 +151,7 @@ async def future_events(
     window_days: Annotated[int, Query(ge=7, le=90)] = 30,
     account_id: UUID | None = None,
     cursor: str | None = None,
+    expected_data_revision: Annotated[int | None, Query(ge=0)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> KnownFutureEventPage:
     return await service.future_events(
@@ -158,6 +159,7 @@ async def future_events(
         account_id=account_id,
         cursor=cursor,
         limit=limit,
+        expected_data_revision=expected_data_revision,
     )
 
 

@@ -32,6 +32,7 @@ from fiscal_api.api.p7_schemas import (
     DebtCycleRow,
     DebtInstallmentGroup,
     DebtReport,
+    DisposableFacts,
     FactsDrillDownItem,
     FactsDrillDownPage,
     FactsDrillDownScope,
@@ -121,7 +122,13 @@ from fiscal_api.repositories.reporting import (
 )
 from fiscal_api.services.common import INT64_MIN, checked_int64, conflict, invalid
 
-SPENDING_KINDS = {"expense", "credit_purchase", "installment_fee"}
+SPENDING_KINDS = {
+    "expense",
+    "credit_purchase",
+    "installment_fee",
+    "credit_settlement_fee",
+    "credit_fee_refund",
+}
 MONTH_PATTERN = re.compile(r"^(\d{4})-(\d{2})$")
 # Asia/Shanghai uses a positive historical offset for 0001-01-01. Converting
 # that business boundary to UTC underflows Python's datetime range, so public
@@ -168,6 +175,7 @@ class _FactsSnapshot(TypedDict):
     reimbursements: ReimbursementFacts
     completeness: CompletenessFacts
     future: KnownFutureTotals
+    disposable: DisposableFacts
     known_future_events: list[KnownFutureEvent]
 
 
@@ -250,20 +258,24 @@ class ReportingService:
         account_rows: list[DebtAccountRow] = []
         total_debt = total_available = overdue_total = 0
         for account in sorted(credit_accounts, key=lambda item: (item.sort_order, item.id)):
-            if account.credit_limit_minor is None:
-                continue
             raw_debt = checked_int64(
                 account.opening_balance_minor - impacts.get(account.id, 0),
                 label="credit account debt",
             )
             debt = max(raw_debt, 0)
-            available = max(account.credit_limit_minor - debt, 0)
+            available = (
+                max(account.credit_limit_minor - debt, 0)
+                if account.credit_limit_minor is not None
+                else None
+            )
             rows = cycles_by_account.get(account.id, [])
             overdue = self._checked_sum(row.remaining_minor for row in rows if row.is_overdue)
             remaining = [row for row in rows if row.remaining_minor > 0]
             next_due = min(remaining, key=lambda row: (row.due_date, row.cycle_id), default=None)
-            unresolved = account.opening_balance_minor > 0 and (
-                account.opening_balance_as_of_date is None or account.opening_due_date is None
+            unresolved = (
+                account.credit_limit_minor is not None
+                and account.opening_balance_minor > 0
+                and (account.opening_balance_as_of_date is None or account.opening_due_date is None)
             )
             account_rows.append(
                 DebtAccountRow(
@@ -274,7 +286,9 @@ class ReportingService:
                     credit_limit_minor=account.credit_limit_minor,
                     current_debt_minor=debt,
                     available_credit_minor=available,
-                    over_limit_minor=max(debt - account.credit_limit_minor, 0),
+                    over_limit_minor=max(debt - account.credit_limit_minor, 0)
+                    if account.credit_limit_minor is not None
+                    else None,
                     overdue_minor=overdue,
                     opening_configuration_required=unresolved,
                     has_overdue_cycle=overdue > 0,
@@ -282,7 +296,9 @@ class ReportingService:
                 )
             )
             total_debt = checked_int64(total_debt + debt, label="current credit debt")
-            total_available = checked_int64(total_available + available, label="available credit")
+            total_available = checked_int64(
+                total_available + (available or 0), label="available credit"
+            )
             overdue_total = checked_int64(overdue_total + overdue, label="overdue debt")
         installments = await self._installment_groups(day, cycle_rows)
         return DebtReport(
@@ -351,6 +367,7 @@ class ReportingService:
                         }
                     ),
                     future=snapshot["future"],
+                    disposable=snapshot["disposable"],
                     known_future_events=snapshot["known_future_events"],
                 )
             # The retry needs a new database transaction and fresh ORM state.
@@ -369,6 +386,7 @@ class ReportingService:
         account_id: UUID | None,
         cursor: str | None,
         limit: int,
+        expected_data_revision: int | None = None,
     ) -> KnownFutureEventPage:
         """Return a revision-bound page for the v1.5 timeline.
 
@@ -384,6 +402,8 @@ class ReportingService:
         window = FactsWindow(date_from=today, date_to=today + timedelta(days=window_days - 1))
         for _ in range(2):
             revision_before = await self._data_revision()
+            if expected_data_revision is not None and expected_data_revision != revision_before:
+                self._future_events_scope_changed(expected_data_revision, revision_before)
             decoded_cursor = self._decode_future_events_cursor(
                 cursor,
                 window=window,
@@ -470,7 +490,7 @@ class ReportingService:
                 source_id=item.id,
                 date=item.expected_date,
                 direction=KnownFutureDirection(item.direction),
-                amount_minor=item.planned_amount_minor,
+                amount_minor=(await CashFlowRepository(self.session).settlement_totals(item))[1],
                 certainty=(
                     KnownFutureCertainty.CONFIRMED
                     if item.status == CashFlowStatus.CONFIRMED.value
@@ -662,6 +682,53 @@ class ReportingService:
             window_end=window_end,
         )
         future = self._known_future_totals(events, current_cash)
+        rolling_end = window_start + timedelta(days=29)
+        rolling_events = (
+            events
+            if window_end == rolling_end
+            else await self._known_future_events(
+                debt=debt, window_start=window_start, window_end=rolling_end
+            )
+        )
+        inflow = self._checked_sum(
+            e.amount_minor for e in rolling_events if e.direction == KnownFutureDirection.INFLOW
+        )
+        outflow = self._checked_sum(
+            e.amount_minor for e in rolling_events if e.direction == KnownFutureDirection.OUTFLOW
+        )
+        overrides = {
+            o.system_reference_id: o
+            for o in await CashFlowRepository(self.session).system_overrides()
+            if o.system_kind == "reimbursement"
+        }
+        undated = self._checked_sum(
+            max(f.allocated_minor - f.received_minor, 0)
+            for f in await self.repository.reimbursement_facts()
+            if f.claim_voided_at is None
+            and f.cancelled_at is None
+            and f.submitted_at is not None
+            and f.expected_date is None
+            and f.party_id not in overrides
+        )
+        manual_overdue: list[int] = []
+        for item in await CashFlowRepository(self.session).active():
+            if item.direction == "outflow" and item.expected_date < window_start:
+                manual_overdue.append(
+                    (await CashFlowRepository(self.session).settlement_totals(item))[1]
+                )
+        disposable = DisposableFacts(
+            date_from=window_start,
+            date_to=rolling_end,
+            current_cash_minor=current_cash,
+            expected_inflow_minor=inflow,
+            expected_outflow_minor=outflow,
+            projected_balance_minor=checked_int64(checked_int64(current_cash + inflow) - outflow),
+            undated_inflow_minor=undated,
+            unscheduled_credit_debt_minor=self._checked_sum(
+                a.current_debt_minor for a in debt.accounts if a.credit_limit_minor is None
+            ),
+            overdue_outflow_minor=self._checked_sum([debt.overdue_minor, *manual_overdue]),
+        )
         completeness, _ = await self._completeness_facts()
         return {
             "cash": CashFacts(current_balance_minor=current_cash),
@@ -669,6 +736,7 @@ class ReportingService:
             "reimbursements": ReimbursementFacts(outstanding_minor=reimbursement_outstanding),
             "completeness": completeness,
             "future": future,
+            "disposable": disposable,
             "known_future_events": events,
         }
 
@@ -698,6 +766,11 @@ class ReportingService:
                 )
             )
 
+        overrides = {
+            o.system_reference_id: o
+            for o in await CashFlowRepository(self.session).system_overrides()
+            if o.system_kind == "reimbursement"
+        }
         party_values: dict[UUID, tuple[ReimbursementFact, int]] = {}
         for fact in await self.repository.reimbursement_facts():
             if (
@@ -710,7 +783,7 @@ class ReportingService:
                 fact.allocated_minor - fact.received_minor,
                 label="reimbursement future outstanding",
             )
-            if outstanding <= 0 or fact.expected_date is None:
+            if outstanding <= 0:
                 continue
             current = party_values.get(fact.party_id)
             party_values[fact.party_id] = (
@@ -723,14 +796,18 @@ class ReportingService:
                 ),
             )
         for fact, outstanding in party_values.values():
-            assert fact.expected_date is not None
-            if not window_start <= fact.expected_date <= window_end:
+            expected_date = (
+                overrides[fact.party_id].expected_date
+                if fact.party_id in overrides
+                else fact.expected_date
+            )
+            if expected_date is None or not window_start <= expected_date <= window_end:
                 continue
             events.append(
                 KnownFutureEvent(
                     source_type=KnownFutureSourceType.REIMBURSEMENT_PARTY,
                     source_id=fact.party_id,
-                    date=fact.expected_date,
+                    date=expected_date,
                     direction=KnownFutureDirection.INFLOW,
                     amount_minor=outstanding,
                     certainty=KnownFutureCertainty.EXPECTED,
@@ -765,7 +842,9 @@ class ReportingService:
                     source_id=item.id,
                     date=item.expected_date,
                     direction=direction,
-                    amount_minor=item.planned_amount_minor,
+                    amount_minor=(await CashFlowRepository(self.session).settlement_totals(item))[
+                        1
+                    ],
                     certainty=certainty,
                     title=item.title,
                     deep_link=f"fiscal://cash-flow/items/{item.id}",
@@ -2523,8 +2602,13 @@ class ReportingService:
         for transaction in transactions:
             gross = self._canonical_spending(transaction)
             refund = refunds.get(transaction.id, 0)
+            if transaction.kind == "credit_fee_refund":
+                refund = checked_int64(-gross, label="credit fee refund")
+                gross = 0
             expected, received = reimbursements.get(transaction.id, (0, 0))
-            if refund > gross or expected > gross - refund or received > gross - refund:
+            if transaction.kind != "credit_fee_refund" and (
+                refund > gross or expected > gross - refund or received > gross - refund
+            ):
                 invalid("invalid_reporting_projection", "Spending adjustments exceed consumption")
             result.append(
                 _SpendingFact(
@@ -2819,6 +2903,8 @@ class ReportingService:
         total = 0
         for posting in transaction.postings:
             total = checked_int64(total + posting.amount_minor, label="spending posting sum")
+        if transaction.kind == "credit_fee_refund":
+            return checked_int64(-total, label="fee refund consumption")
         if total >= 0:
             invalid("invalid_reporting_projection", "A spending transaction has no outflow")
         return ReportingService._magnitude(total)

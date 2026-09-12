@@ -432,21 +432,10 @@ public struct V151MacWorkspace: View {
     }
 
     private var spineToolbar: some View {
+        VStack(alignment: .leading, spacing: 10) {
         HStack(spacing: 10) {
             Text("财务时间线").font(.system(size: 15, weight: .semibold))
                 .accessibilityIdentifier("v151.mac.ledger.title")
-            Button { shiftLedgerMonth(-1) } label: { Image(systemName: "chevron.left") }.help("上一个月").accessibilityIdentifier("v221.mac.ledger.previous-month")
-            DatePicker("查询月份", selection: Binding(get: { selectedMonth }, set: { applyMonth(monthParser.string(from: $0)) }), displayedComponents: .date).labelsHidden().environment(\.timeZone, ShanghaiBusinessDate.timeZone)
-            Button { shiftLedgerMonth(1) } label: { Image(systemName: "chevron.right") }.help("下一个月").accessibilityIdentifier("v221.mac.ledger.next-month")
-            Menu(periodLabel) {
-                Button("全部时间") { applyAllLedgerTime() }.accessibilityIdentifier("v221.mac.ledger.all-time")
-                ForEach(monthChoices, id: \.self) { month in
-                    Button(month) { applyMonth(month) }
-                }
-            }
-            .font(.system(size: 13, weight: .semibold))
-            .menuStyle(.borderlessButton)
-            .accessibilityIdentifier("v221.mac.ledger.month")
             Spacer(minLength: 8)
             if let query = ledger.filter.query {
                 Text("搜索：\(query)")
@@ -470,7 +459,22 @@ public struct V151MacWorkspace: View {
                 .buttonStyle(V22MacWorkspaceButtonStyle(primary: true))
                 .keyboardShortcut("n", modifiers: .command)
         }
-        .padding(.horizontal, V15MacLayout.contentPadding).frame(minHeight: V15MacLayout.toolbarHeight)
+        HStack(spacing: 10) {
+            V23ChoiceButton("上月", symbol: "chevron.left") { shiftLedgerMonth(-1) }.help("上一个月").accessibilityIdentifier("v221.mac.ledger.previous-month")
+            V23BusinessDatePicker("查询月份", selection: Binding(get: { selectedMonth }, set: { applyMonth(monthParser.string(from: $0)) }), dateFormat: "yyyy年M月")
+                .accessibilityIdentifier("v221.mac.ledger.month")
+                .accessibilityValue(monthParser.string(from: selectedMonth))
+            V23ChoiceButton("下月", symbol: "chevron.right") { shiftLedgerMonth(1) }.help("下一个月").accessibilityIdentifier("v221.mac.ledger.next-month")
+            V23ChoiceButton("全部时间", symbol: "calendar.badge.clock", selected: allLedgerTime) {
+                if allLedgerTime { applyMonth(monthParser.string(from: selectedMonth)) }
+                else { applyAllLedgerTime() }
+            }
+            .accessibilityHint(allLedgerTime ? "再次点击返回所选月份" : "显示所有日期的账目")
+            .accessibilityIdentifier("v221.mac.ledger.all-time")
+            Spacer(minLength: 0)
+        }
+        }
+        .padding(.horizontal, V15MacLayout.contentPadding).padding(.vertical, 10)
     }
 
     @ViewBuilder private var accountBalanceBoard: some View {
@@ -493,26 +497,23 @@ public struct V151MacWorkspace: View {
                 .padding(.vertical, 10)
                 .accessibilityIdentifier("v151.mac.account.scope.empty")
         case .loaded:
-            HStack(spacing: 12) {
-                Menu {
-                    Button("全部账户") { selectAllAccounts() }
-                        .accessibilityIdentifier("v151.mac.account.scope.all")
-                    Divider()
-                    ForEach(ledger.accounts) { account in
-                        Button("\(account.name) · \(V151MacAccountBalanceSemantics.kindLabel(account.kind))") {
-                            selectAccount(account.id)
-                        }
-                        .accessibilityIdentifier("v151.mac.account.scope.\(account.id)")
-                    }
-                } label: {
-                    Label(filteredAccount?.name ?? "全部账户", systemImage: "line.3.horizontal.decrease.circle")
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("切换账户").font(V15Typography.secondary.weight(.semibold))
+                    Spacer()
+                    Text(accountScopeDetail).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
                 }
-                .menuStyle(.borderlessButton)
-                .accessibilityIdentifier("v151.mac.account.scope")
-                .accessibilityValue(filteredAccount?.name ?? "全部账户")
-
+                if ledger.accounts.count > 6 {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            visibleAccountChoices
+                        }.frame(maxHeight: 170)
+                        .accessibilityIdentifier("v230.account-switcher.scroll")
+                        .onAppear { if let id = filteredAccount?.id { proxy.scrollTo(id, anchor: .center) } }
+                        .onChange(of: filteredAccount?.id) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
+                    }
+                } else { visibleAccountChoices }
+                HStack(spacing: 12) {
                 if let value = facts.facts {
                     accountSummaryRow("资产", minorUnits: value.cash.currentBalanceMinor, direction: .balance)
                     Divider().frame(height: 18)
@@ -528,11 +529,24 @@ public struct V151MacWorkspace: View {
                     .foregroundStyle(V15Palette.ink.color.opacity(0.56))
                     .lineLimit(1)
             }
+                }
             .padding(.horizontal, V15MacLayout.contentPadding)
             .padding(.vertical, 10)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("v151.mac.account.scope.summary")
         }
+    }
+
+    private var visibleAccountChoices: some View {
+        V23WrappingLayout {
+            V23ChoiceButton("全部账户", symbol: "square.grid.2x2", selected: filteredAccount == nil) { selectAllAccounts() }
+                .accessibilityIdentifier("v151.mac.account.scope.all")
+            ForEach(ledger.accounts) { account in
+                V23ChoiceButton(account.name, symbol: account.kind == .credit ? "creditcard" : "building.columns", selected: filteredAccount?.id == account.id) { selectAccount(account.id) }
+                    .id(account.id)
+                    .accessibilityIdentifier("v151.mac.account.scope.\(account.id)")
+            }
+        }.accessibilityElement(children: .contain).accessibilityIdentifier("v151.mac.account.scope")
     }
 
     private func accountSummaryRow(_ label: String, minorUnits: Int64, direction: V15MoneyDirection) -> some View {
@@ -656,7 +670,8 @@ public struct V151MacWorkspace: View {
                 Text(event.date)
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(V15Palette.ink.color.opacity(0.56))
-                    .frame(width: 72, alignment: .leading)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(event.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
                     Text(knownFutureSourceLabel(event.sourceType))
@@ -956,9 +971,9 @@ public struct V151MacWorkspace: View {
                 if let date = account.openingBalanceAsOfDate { fieldRow("期初日期", value: date, emphasized: false) }
                 fieldRow("关联使用", value: "\(account.usageCount) 项", emphasized: false, last: account.kind != .credit)
                 if account.kind == .credit {
-                    fieldRow("信用额度", value: account.creditLimitMinor.map { V15MoneyPresentation(minorUnits: $0, direction: .neutral).text } ?? "未设置", emphasized: false)
-                    fieldRow("账单日", value: account.statementDay.map { "每月 \($0) 日" } ?? "未设置", emphasized: false)
-                    fieldRow("还款日", value: account.dueDay.map { "每月 \($0) 日" } ?? "未设置", emphasized: false, last: true)
+                    fieldRow("信用额度", value: account.creditLimitMinor.map { V15MoneyPresentation(minorUnits: $0, direction: .neutral).text } ?? (account.cycleMode == "on_demand" ? "不设额度" : "未设置"), emphasized: false)
+                    fieldRow("账单日", value: account.statementDay.map { "每月 \($0) 日" } ?? (account.cycleMode == "on_demand" ? "无固定账单日" : "未设置"), emphasized: false)
+                    fieldRow("还款日", value: account.dueDay.map { "每月 \($0) 日" } ?? (account.cycleMode == "on_demand" ? "无固定还款日" : "未设置"), emphasized: false, last: true)
                 }
             }
             .background(V15Palette.paper.color, in: RoundedRectangle(cornerRadius: 7))
@@ -975,10 +990,10 @@ public struct V151MacWorkspace: View {
                         clearAccountDetailSelection()
                     }
                     if account.kind == .credit {
-                        V15ActionButton("进入信用账期", kind: .secondary) { openCredit(accountID: account.id, from: .timeline) }
+                        V15ActionButton(account.cycleMode == "on_demand" ? "借入、还款与全额结清" : "进入信用账期", kind: .secondary) { openCredit(accountID: account.id, from: .timeline) }
                             .accessibilityIdentifier("v151.mac.account.open-credit.\(account.id)")
-                        V15ActionButton("查看分期", kind: .secondary) { openInstallments(accountID: account.id, from: .timeline) }
-                            .accessibilityIdentifier("v151.mac.account.open-installments.\(account.id)")
+                        if account.cycleMode != "on_demand" { V15ActionButton("查看分期", kind: .secondary) { openInstallments(accountID: account.id, from: .timeline) }
+                            .accessibilityIdentifier("v151.mac.account.open-installments.\(account.id)") }
                     }
                     V15ActionButton("打开设置", kind: .secondary) { destination = .settings }
                 }
@@ -1754,8 +1769,6 @@ public struct V151MacWorkspace: View {
         ledger.setDateFrom(""); ledger.setDateTo("")
         Task { await ledger.load() }
     }
-    private var periodLabel: String { allLedgerTime ? "全部时间" : monthParser.string(from: selectedMonth) }
-    private var monthChoices: [String] { (0..<4).compactMap { offset in shanghaiCalendar.date(byAdding: .month, value: -offset, to: Date()).map { monthParser.string(from: $0) } } }
 
     private var shanghaiCalendar: Calendar { var value = Calendar(identifier: .gregorian); value.locale = Locale(identifier: "zh_Hans_CN"); value.timeZone = TimeZone(identifier: "Asia/Shanghai")!; return value }
     private var shanghaiBusinessDate: String { let value = DateFormatter(); value.locale = Locale(identifier: "zh_Hans_CN"); value.timeZone = TimeZone(identifier: "Asia/Shanghai"); value.dateFormat = "yyyy-MM-dd"; return value.string(from: Date()) }
@@ -1900,14 +1913,17 @@ private struct V152MacOverview: View {
 
     private func content(_ snapshot: V15Facts) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .center, spacing: 24) {
-                netWorthCard(snapshot).frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 12) {
-                    miniMetric("现金与储蓄", snapshot.cash.currentBalanceMinor, .balance)
-                    creditMetric(snapshot.credit.currentDebtMinor)
-                    miniMetric("待收报销", snapshot.reimbursements.outstandingMinor, .balance)
+            V23DisposableCard(model: facts, dark: true)
+            HStack(alignment: .top, spacing: 24) {
+                creditMetric(snapshot.credit.currentDebtMinor)
+                miniMetric("待收报销总额", snapshot.reimbursements.outstandingMinor, .balance)
+                if case .amount(let value) = net(cash: snapshot.cash.currentBalanceMinor, debt: snapshot.credit.currentDebtMinor) {
+                    miniMetric("账户净额", value, .balance)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("账户净额")
+                        .accessibilityValue(V15MoneyPresentation(minorUnits: value, direction: .balance).text)
+                        .accessibilityIdentifier("v220.mac.overview.net")
                 }
-                .frame(width: 240, alignment: .leading)
             }
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 18) {
@@ -1960,32 +1976,6 @@ private struct V152MacOverview: View {
         let period = V22ReportCalendar.currentMonth()
         if report.selectedPeriod != period { await report.selectPeriod(period) }
         else { await report.load() }
-    }
-
-    private func netWorthCard(_ snapshot: V15Facts) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("账户净额")
-                .font(V15Typography.label)
-                .foregroundStyle(Color.white.opacity(0.70))
-            switch net(cash: snapshot.cash.currentBalanceMinor, debt: snapshot.credit.currentDebtMinor) {
-            case .amount(let value):
-                V152SignedMoneyText(minorUnits: value).foregroundStyle(Color.white)
-                    .accessibilityIdentifier("v220.mac.overview.net")
-            case .unavailable:
-                Text("暂无法汇总")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.white)
-                Text("请查看现金与信用账户明细。")
-                    .font(V15Typography.secondary)
-                    .foregroundStyle(Color.white.opacity(0.74))
-            }
-            Text("现金与储蓄余额 − 当前信用欠款")
-                .font(V15Typography.secondary)
-                .foregroundStyle(Color.white.opacity(0.70))
-        }
-        .padding(22)
-        .frame(maxWidth: .infinity, minHeight: 148, alignment: .topLeading)
-        .background(V15Palette.sidebarDeep.color, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private func miniMetric(_ title: String, _ amount: Int64, _ direction: V15MoneyDirection) -> some View {
@@ -2121,39 +2111,13 @@ private struct V152MacOverview: View {
 
     private func transactionDirection(_ transaction: V15Transaction) -> V15MoneyDirection {
         switch transaction.kind {
-        case "income", "reimbursement_receipt": .inflow
-        case "transfer": .neutral
+        case "income", "reimbursement_receipt", "borrowing": .inflow
+        case "transfer", "credit_principal_waiver", "credit_fee_refund": .neutral
         default: .outflow
         }
     }
 }
 
-
-private struct V152SignedMoneyText: View {
-    let minorUnits: Int64
-    var body: some View {
-        let absolute = minorUnits == Int64.min ? UInt64(Int64.max) + 1 : UInt64(Swift.abs(minorUnits))
-        let whole = absolute / 100
-        let fraction = absolute % 100
-        let sign = minorUnits < 0 ? "−" : ""
-        Text("\(sign)¥\(grouped(whole)).\(String(format: "%02llu", fraction))")
-            .font(.system(size: 38, weight: .bold, design: .monospaced))
-            .monospacedDigit()
-            .lineLimit(1)
-            .minimumScaleFactor(0.55)
-            .accessibilityLabel("账户净额 \(sign)\(grouped(whole)).\(String(format: "%02llu", fraction)) 元")
-    }
-
-    private func grouped(_ value: UInt64) -> String {
-        let digits = String(value)
-        var result = ""
-        for (index, digit) in digits.reversed().enumerated() {
-            if index > 0 && index.isMultiple(of: 3) { result.insert(",", at: result.startIndex) }
-            result.insert(digit, at: result.startIndex)
-        }
-        return result
-    }
-}
 
 private struct V152MacAccountsHub: View {
     let ledger: V15LedgerModel
@@ -2254,6 +2218,7 @@ private struct V152MacAccountsHub: View {
 
 private struct V151MacPendingSyncHub: View {
     let services: V15Services
+    @State private var payoffAccountID: UUID?
 
     var body: some View {
         ScrollView {
@@ -2279,6 +2244,9 @@ private struct V151MacPendingSyncHub: View {
             .frame(maxWidth: 760, alignment: .leading)
         }
         .v15MacWorkspaceCanvas()
+        .sheet(isPresented: Binding(get: { payoffAccountID != nil }, set: { if !$0 { payoffAccountID = nil } })) {
+            if let payoffAccountID { V15CreditPayoffView(services: services, accountID: payoffAccountID, accountName: "恢复原账户结清") }
+        }
         .accessibilityIdentifier("v151.mac.pending-sync")
     }
 
@@ -2333,7 +2301,9 @@ private struct V151MacPendingSyncHub: View {
                     }
                     .accessibilityIdentifier(item.status == .queued ? "v151.mac.pending-sync.sync.\(item.id)" : "v151.mac.pending-sync.retry.\(item.id)")
                 }
-                if item.status == .outcomeUnknown {
+                if (item.kind == .creditPayoff || item.kind == .creditPayoffReverse), let accountID = item.resourceID {
+                    V15ActionButton("打开账户结清恢复", symbol: "arrow.clockwise", kind: .secondary) { payoffAccountID = accountID }
+                } else if item.status == .outcomeUnknown {
                     V15ActionButton("读取原操作回执", kind: .secondary) { Task { _ = await services.pendingWrites.recover(item.id, using: services) } }
                     if item.kind == .transactionCreate || item.kind == .repayment {
                         V15ActionButton("按原请求安全重试", kind: .secondary) { Task { _ = await services.pendingWrites.replayUnknown(item.id, using: services) } }
@@ -2357,7 +2327,7 @@ private struct V151MacPendingSyncHub: View {
         }
     }
 
-    private func kindLabel(_ value: V15PendingWriteStore.Kind) -> String { switch value { case .transactionCreate: "新建账目"; case .categoryReplace: "分类决定"; case .repayment: "还款"; case .statementProviderAttempt: "账单解析"; case .statementConfirmation: "账单确认" } }
+    private func kindLabel(_ value: V15PendingWriteStore.Kind) -> String { switch value { case .transactionCreate: "新建账目"; case .categoryReplace: "分类决定"; case .repayment: "还款"; case .creditPayoff: "全额结清"; case .creditPayoffReverse: "撤销整组结清"; case .statementProviderAttempt: "账单解析"; case .statementConfirmation: "账单确认" } }
     private func statusLabel(_ item: V15PendingWriteStore.Item) -> String {
         let value: String
         switch item.status { case .queued: value = "排队中"; case .syncing: value = "同步中"; case .requiresDecision: value = "需要重新决定"; case .outcomeUnknown: value = "结果不明"; case .failed: value = "同步失败" }

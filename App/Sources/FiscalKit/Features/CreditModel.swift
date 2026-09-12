@@ -32,11 +32,13 @@ public final class CreditModel {
 
     public func loadAccount(_ id: UUID) async {
         generation += 1; let current = generation; phase = .loading; message = nil
+        if selectedAccount?.accountID != id { clearCycleSelection() }
         do {
             async let summary = repository.account(id: id)
             async let page = repository.cycles(accountID: id, cursor: nil, limit: 20)
             let (loadedSummary, loadedPage) = try await (summary, page); guard current == generation else { return }
             selectedAccount = loadedSummary; cycles = loadedPage.items; nextCycleCursor = loadedPage.nextCursor; phase = .loaded
+            if loadedSummary.cycleMode == .onDemand { clearCycleSelection() }
         } catch is CancellationError { if current == generation { phase = .idle } } catch { guard current == generation else { return }; apply(error, preserving: selectedAccount?.accountID == id) }
     }
 
@@ -73,6 +75,9 @@ public final class CreditModel {
     public func cycleSummary(id: UUID) async throws -> CreditCycleDTO { try await repository.cycle(id: id) }
     public func refreshCurrentSelection() async {
         await loadAccounts(); if let id = selectedAccount?.accountID { await loadAccount(id) }; if let id = selectedCycle?.id { await loadCycle(id) }
+    }
+    private func clearCycleSelection() {
+        selectedCycle = nil; cycleTransactions = []; nextTransactionCursor = nil
     }
     private func apply(_ error: Error, preserving: Bool) { let text = display(error); message = text; if preserving { refreshMessage = text; phase = .loaded; return }; guard let api = error as? FiscalAPIError else { phase = .failed; return }; switch api { case .unauthorized: phase = .unauthorized; case .transport: phase = .offline; default: phase = .failed } }
     private func display(_ error: Error) -> String { (error as? FiscalAPIError)?.displayMessage ?? error.localizedDescription }

@@ -737,6 +737,7 @@ public struct V15ReportingMacView: View {
         switch kind {
         case .income: "收入"; case .expense: "支出"; case .transfer: "转账"; case .creditPurchase: "信用消费"
         case .repayment: "还款"; case .installmentFee: "分期手续费"; case .installmentRefund: "分期退款"
+        case .borrowing: "借入"; case .creditPrincipalWaiver: "本金减免"; case .creditFeeRefund: "费用减免"; case .creditSettlementFee: "结清手续费"
         case .reimbursementReceipt: "报销收款"; case .unknown: "其他类型"
         }
     }

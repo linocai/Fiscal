@@ -64,6 +64,9 @@ struct V15RootSmokemacOSApp: App {
                 V15RootSmokeCleanupView(accessKeyStore: accessKeyStore, offlineSnapshots: offlineSnapshots)
             } else if let bootstrapFixtureServices {
                 V15MacLiveAppShell(services: bootstrapFixtureServices)
+            } else if formalFixture && ProcessInfo.processInfo.environment["FISCAL_ROOT_SMOKE_UI_ROUTE"] == "payoff" {
+                V15CreditPayoffView(services: V230Fixtures.services(scenario: ProcessInfo.processInfo.environment["FISCAL_ROOT_SMOKE_REVIEW_SCENARIO"] ?? "v230"), accountID: V230Fixtures.accountID, accountName: "随借随还示例")
+                    .preferredColorScheme(preferredScheme)
             } else if formalFixture {
                 // Only this isolated QA host can inject deterministic facts
                 // into the same workspace that the shipping app presents.

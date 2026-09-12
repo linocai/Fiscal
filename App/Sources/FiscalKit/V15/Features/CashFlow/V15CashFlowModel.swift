@@ -66,6 +66,7 @@ public final class V15CashFlowModel {
     public var selectedDestinationAccountID: UUID? { didSet { editorInputChanged() } }
     public var selectedCategoryID: UUID? { didSet { editorInputChanged() } }
     public var mutationScope: V15CashFlowMutationScope = .occurrence { didSet { editorInputChanged() } }
+    public var settleCompleteRemaining = false { didSet { settleInputChanged() } }
     public var settleAmountText = "" { didSet { settleInputChanged() } }
     public var settleDateText = "" { didSet { settleInputChanged() } }
     public var settleTitle = "" { didSet { settleInputChanged() } }
@@ -86,7 +87,7 @@ public final class V15CashFlowModel {
     private var applyingDraft = false
 
     private struct StableAttempt: Sendable, Equatable {
-        enum Intent: Sendable, Equatable { case create(V15CashFlowDraft); case settle(UUID, V15CashFlowSettlementDraft) }
+        enum Intent: Sendable, Equatable { case create(V15CashFlowDraft); case settle(UUID, V15CashFlowSettlementDraft); case settleExisting(UUID, V15CashFlowSettleExistingRequest) }
         let operationID: UUID; let owner: String; let intent: Intent; let key: UUID
     }
     private struct DirectAttempt: Sendable, Equatable {
@@ -230,14 +231,14 @@ public final class V15CashFlowModel {
     public func openEdit(_ item: V15CashFlowItem) {
         guard stableAttempt == nil, directAttempt == nil, factRefreshGate == nil else { return }
         adoptSelection(item); editorSession = UUID(); applyingDraft = true
-        title = item.title; note = item.note ?? ""; direction = item.direction; amountText = Self.amountText(item.plannedAmountMinor); expectedDateText = item.expectedDate; recurrenceEnabled = false; recurrenceEndDateText = ""; selectedAccountID = item.accountID; selectedDestinationAccountID = item.destinationAccountID; selectedCategoryID = item.categoryID; mutationScope = .occurrence
+        title = item.title; note = item.note ?? ""; direction = item.direction; amountText = Self.amountText(item.plannedAmountMinor); expectedDateText = item.expectedDate ?? ""; recurrenceEnabled = false; recurrenceEndDateText = ""; selectedAccountID = item.accountID; selectedDestinationAccountID = item.destinationAccountID; selectedCategoryID = item.categoryID; mutationScope = .occurrence
         applyingDraft = false; editorMode = item.isSystem ? .systemEdit(item.id) : .edit(item.id); mutationPhase = .idle; serverIssues = []; resultItems = []
     }
 
     public func openSettle(_ item: V15CashFlowItem) {
         guard stableAttempt == nil, directAttempt == nil, factRefreshGate == nil else { return }
         adoptSelection(item); editorSession = UUID(); applyingDraft = true
-        settleAmountText = Self.amountText(item.plannedAmountMinor); settleDateText = ShanghaiBusinessDate.string(for: now()); settleTitle = item.title; settleNote = item.note ?? ""; settleAccountID = item.accountID.flatMap { id in cashAccounts.contains(where: { $0.id == id }) ? id : nil } ?? cashAccounts.first?.id; settleDestinationAccountID = item.destinationAccountID; settleCategoryID = item.categoryID
+        settleCompleteRemaining = false; settleAmountText = Self.amountText(item.effectiveRemainingMinor); settleDateText = ShanghaiBusinessDate.string(for: now()); settleTitle = item.title; settleNote = item.note ?? ""; settleAccountID = item.accountID.flatMap { id in cashAccounts.contains(where: { $0.id == id }) ? id : nil } ?? cashAccounts.first?.id; settleDestinationAccountID = item.destinationAccountID; settleCategoryID = item.categoryID
         applyingDraft = false; editorMode = .settle(item.id); mutationPhase = .idle; serverIssues = []; resultItems = []
     }
 
@@ -251,6 +252,28 @@ public final class V15CashFlowModel {
         await performStable(attempt)
     }
 
+    public func settleExisting(transaction: V15Transaction, completeRemaining: Bool = false) async {
+        guard baseWriteReasons().isEmpty, let item = selectedItem, let id = item.manualItemID, item.allows(.settle), transaction.voidedAt == nil else { return }
+        let expectedKind = item.direction == .inflow ? "income" : item.direction == .outflow ? "expense" : "transfer"
+        guard transaction.kind == expectedKind, (item.accountID == nil || transaction.accountID == item.accountID), (item.destinationAccountID == nil || transaction.destinationAccountID == item.destinationAccountID) else {
+            serverIssues = [.init(code: "settlement_transaction_mismatch", message: "账目方向或资金账户不匹配，请核对所选账目。", fieldPath: "transaction_id")]; return
+        }
+        let request = V15CashFlowSettleExistingRequest(expectedVersion: item.version, transactionID: transaction.id, transactionExpectedVersion: transaction.version, completeRemaining: completeRemaining)
+        let attempt = StableAttempt(operationID: UUID(), owner: item.id, intent: .settleExisting(id, request), key: UUID())
+        stableAttempt = attempt; mutationPhase = .loading; resultItems = []
+        await performStable(attempt)
+    }
+    public func settlementCandidates() async throws -> [V15Transaction] {
+        guard let item = selectedItem else { return [] }
+        let kind = item.direction == .inflow ? "income" : item.direction == .outflow ? "expense" : "transfer"
+        var values: [V15Transaction] = []; var cursor: String?
+        repeat {
+            let page = try await services.ledger.list(.init(cursor: cursor, limit: 100, kind: kind, accountID: item.accountID))
+            values += page.items.filter { $0.voidedAt == nil && $0.kind == kind && (item.accountID == nil || $0.accountID == item.accountID) && (item.destinationAccountID == nil || $0.destinationAccountID == item.destinationAccountID) }
+            cursor = page.nextCursor
+        } while cursor != nil
+        return values
+    }
     public func settle() async {
         let built = makeSettlement(recording: true)
         guard settleReasons.isEmpty, let item = selectedItem, let id = item.manualItemID, let request = built.value, !isOffline else { return }
@@ -384,6 +407,7 @@ public final class V15CashFlowModel {
             let ownerID: UUID?
             switch attempt.intent {
             case .create(let request): returned = try await services.cashFlow.create(request, idempotencyKey: attempt.key).items; ownerID = returned.first?.manualItemID
+            case .settleExisting(let id, let request): let item = try await services.cashFlow.settleExisting(itemID: id, request: request, idempotencyKey: attempt.key); returned = [item]; ownerID = id
             case .settle(let id, let request): let item = try await services.cashFlow.settle(itemID: id, request: request, idempotencyKey: attempt.key); returned = [item]; ownerID = id
             }
             guard stableAttempt == attempt else { return }
@@ -584,7 +608,7 @@ public final class V15CashFlowModel {
     private func selectionStillOwned(by attempt: StableAttempt) -> Bool {
         switch attempt.intent {
         case .create: editorMode == .create && attempt.owner == "create:\(editorSession.uuidString)"
-        case .settle: selectedItem?.id == attempt.owner
+        case .settle, .settleExisting: selectedItem?.id == attempt.owner
         }
     }
 
@@ -644,7 +668,7 @@ public final class V15CashFlowModel {
         if settleNote.count > 500 { issues.append(.init(code: "note_too_long", message: "备注最多 500 个字符。", fieldPath: "note")) }
         if recording { serverIssues = [] }
         guard issues.isEmpty else { return (nil, issues) }
-        return (.init(expectedVersion: item.version, actualAmountMinor: amount, occurredAt: occurredAt, accountID: accountID, destinationAccountID: item.direction == .transfer ? settleDestinationAccountID : nil, categoryID: item.direction == .transfer ? nil : settleCategoryID, title: cleanTitle.nilIfEmpty, note: settleNote.nilIfEmpty), issues)
+        return (.init(expectedVersion: item.version, actualAmountMinor: amount, occurredAt: occurredAt, accountID: accountID, destinationAccountID: item.direction == .transfer ? settleDestinationAccountID : nil, categoryID: item.direction == .transfer ? nil : settleCategoryID, title: cleanTitle.nilIfEmpty, note: settleNote.nilIfEmpty, completeRemaining: settleCompleteRemaining), issues)
     }
 
     private func baseWriteReasons() -> [V15DisabledReason] {

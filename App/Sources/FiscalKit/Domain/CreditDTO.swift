@@ -65,13 +65,13 @@ public struct CreditAccountSummaryDTO: Codable, Sendable, Equatable, Identifiabl
     public let name: String
     public let institution: String?
     public let lastFour: String?
-    public let creditLimitMinor: Int64
-    public let statementDay: Int
-    public let dueDay: Int
+    public let creditLimitMinor: Int64?
+    public let statementDay: Int?
+    public let dueDay: Int?
     public let cycleMode: CreditCycleMode
     public let currentDebtMinor: Int64
-    public let availableCreditMinor: Int64
-    public let overLimitMinor: Int64
+    public let availableCreditMinor: Int64?
+    public let overLimitMinor: Int64?
     public let openingConfigurationRequired: Bool
     public let currentCycle: CreditCycleDTO?
     public let nextDueCycle: CreditCycleDTO?
@@ -93,9 +93,9 @@ public struct CreditAccountSummaryDTO: Codable, Sendable, Equatable, Identifiabl
         let values = try decoder.container(keyedBy: CodingKeys.self)
         accountID = try values.decode(UUID.self, forKey: .accountID); name = try values.decode(String.self, forKey: .name)
         institution = try values.decodeIfPresent(String.self, forKey: .institution); lastFour = try values.decodeIfPresent(String.self, forKey: .lastFour)
-        creditLimitMinor = try values.decode(Int64.self, forKey: .creditLimitMinor); statementDay = try values.decode(Int.self, forKey: .statementDay); dueDay = try values.decode(Int.self, forKey: .dueDay)
+        creditLimitMinor = try values.decodeIfPresent(Int64.self, forKey: .creditLimitMinor); statementDay = try values.decodeIfPresent(Int.self, forKey: .statementDay); dueDay = try values.decodeIfPresent(Int.self, forKey: .dueDay)
         cycleMode = try values.decodeIfPresent(CreditCycleMode.self, forKey: .cycleMode) ?? .statementDayCutoff
-        currentDebtMinor = try values.decode(Int64.self, forKey: .currentDebtMinor); availableCreditMinor = try values.decode(Int64.self, forKey: .availableCreditMinor); overLimitMinor = try values.decode(Int64.self, forKey: .overLimitMinor)
+        currentDebtMinor = try values.decode(Int64.self, forKey: .currentDebtMinor); availableCreditMinor = try values.decodeIfPresent(Int64.self, forKey: .availableCreditMinor); overLimitMinor = try values.decodeIfPresent(Int64.self, forKey: .overLimitMinor)
         openingConfigurationRequired = try values.decode(Bool.self, forKey: .openingConfigurationRequired)
         currentCycle = try values.decode(Optional<CreditCycleDTO>.self, forKey: .currentCycle); nextDueCycle = try values.decode(Optional<CreditCycleDTO>.self, forKey: .nextDueCycle)
         hasOverdueCycle = try values.decode(Bool.self, forKey: .hasOverdueCycle)

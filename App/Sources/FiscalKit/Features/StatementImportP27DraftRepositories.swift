@@ -58,7 +58,17 @@ public struct RemoteStatementImportDraftResolutionRepository: StatementImportDra
 public struct StatementImportFinalCreateDraftRequest: Codable, Sendable, Equatable {
   public let expectedVersion: Int
   public let transaction: TransactionDraft
-  enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", transaction }
+  public let expectedBatchVersion: Int?
+  public let expectedRowVersion: Int?
+  public init(expectedVersion: Int, transaction: TransactionDraft, expectedBatchVersion: Int? = nil, expectedRowVersion: Int? = nil) {
+    self.expectedVersion = expectedVersion; self.transaction = transaction
+    self.expectedBatchVersion = expectedBatchVersion; self.expectedRowVersion = expectedRowVersion
+  }
+  enum CodingKeys: String, CodingKey {
+    case expectedVersion = "expected_version", transaction
+    case expectedBatchVersion = "expected_batch_version"
+    case expectedRowVersion = "expected_row_version"
+  }
 }
 
 public struct StatementImportFinalCreateDraftDTO: Codable, Sendable, Equatable {
@@ -91,6 +101,7 @@ public struct RemoteStatementImportFinalCreateDraftRepository: StatementImportFi
     return try await transport.request(
       "statement-imports/\(batchID)/rows/\(rowID)/final-create-draft", method: "PUT",
       body: StatementImportFinalCreateDraftRequest(
-        expectedVersion: row.finalCreateDraftVersion ?? 0, transaction: transaction))
+        expectedVersion: row.finalCreateDraftVersion ?? 0, transaction: transaction,
+        expectedBatchVersion: fresh.batchVersion, expectedRowVersion: row.rowVersion))
   }
 }

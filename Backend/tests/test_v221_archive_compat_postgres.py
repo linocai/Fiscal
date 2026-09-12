@@ -19,7 +19,11 @@ from alembic.config import Config
 from sqlalchemy import text
 
 from fiscal_api.db.session import create_engine
-from fiscal_api.services.archive import ArchiveCompatibilityError, ArchiveService
+from fiscal_api.services.archive import (
+    CURRENT_DATABASE_REVISION,
+    ArchiveCompatibilityError,
+    ArchiveService,
+)
 
 URL = environ.get("FISCAL_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(URL is None, reason="requires isolated PostgreSQL")
@@ -122,7 +126,12 @@ asyncio.run(main())
     source_snapshot = json.dumps([manifest, payload], sort_keys=True)
     report = ArchiveService.dry_run_report(manifest, payload)
     assert report["conversion"]["source_database_revision"] == "20260831_0038"
-    assert report["conversion"]["added_fields"] == ["transactions.merchant_mapping_generation"]
+    assert report["conversion"]["added_fields"] == [
+        "transactions.merchant_mapping_generation",
+        "cash_flow_settlement_links",
+        "credit_payoff_links",
+        "credit_payoff_operations",
+    ]
     assert json.dumps([manifest, payload], sort_keys=True) == source_snapshot
 
     # Emergency path: unmodified baseline CLI restores its own original archive,
@@ -140,7 +149,7 @@ asyncio.run(main())
         )
     command.upgrade(config, "head")
     native = asyncio.run(_fingerprint())
-    assert native["revision"] == "20260910_0039"
+    assert native["revision"] == CURRENT_DATABASE_REVISION
     assert native["generation"] == native["mapping"] == 8
     assert native["balance"] == 123
 

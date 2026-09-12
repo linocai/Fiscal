@@ -575,13 +575,17 @@ public final class V15AIProposalModel {
             if categoryID != nil { issues.append(.init(code: "category_not_allowed", message: "转账不能保留分类。", fieldPath: "draft.category_id")) }
             if creditCycleID != nil { issues.append(.init(code: "credit_cycle_not_allowed", message: "转账不能保留信用账期。", fieldPath: "draft.credit_cycle_id")) }
         case .creditPurchase:
-            if accountID == nil || !credit.contains(where: { $0.id == accountID }) { issues.append(.init(code: "credit_account_required", message: "请选择信用账户。", fieldPath: "draft.account_id")) }
+            if accountID == nil || !credit.contains(where: { $0.id == accountID && $0.cycleMode != "on_demand" }) { issues.append(.init(code: "credit_account_required", message: "请选择信用账户。", fieldPath: "draft.account_id")) }
             if destinationAccountID != nil { issues.append(.init(code: "destination_not_allowed", message: "信用消费不能保留目标账户。", fieldPath: "draft.destination_account_id")) }
             if creditCycleID != nil { issues.append(.init(code: "credit_cycle_not_allowed", message: "信用消费不能保留信用账期。", fieldPath: "draft.credit_cycle_id")) }
+        case .borrowing:
+            if !credit.contains(where: { $0.id == accountID && $0.cycleMode == "on_demand" }) { issues.append(.init(code: "on_demand_required", message: "借入来源须为随借随还账户。", fieldPath: "draft.account_id")) }
+            if !cash.contains(where: { $0.id == destinationAccountID }) { issues.append(.init(code: "cash_destination_required", message: "请选择实际收款账户。", fieldPath: "draft.destination_account_id")) }
+            if categoryID != nil || creditCycleID != nil { issues.append(.init(code: "borrowing_references_invalid", message: "借入不使用分类或账期。", fieldPath: "draft.credit_cycle_id")) }
         case .repayment:
             if accountID == nil || !cash.contains(where: { $0.id == accountID }) { issues.append(.init(code: "repayment_source_required", message: "请选择还款来源账户。", fieldPath: "draft.account_id")) }
             if destinationAccountID == nil || !credit.contains(where: { $0.id == destinationAccountID }) { issues.append(.init(code: "repayment_destination_required", message: "请选择信用还款账户。", fieldPath: "draft.destination_account_id")) }
-            if creditCycleID == nil { issues.append(.init(code: "credit_cycle_required", message: "还款必须保留或选择账期。", fieldPath: "draft.credit_cycle_id")) }
+            if creditCycleID == nil && !credit.contains(where: { $0.id == destinationAccountID && $0.cycleMode == "on_demand" }) { issues.append(.init(code: "credit_cycle_required", message: "还款必须保留或选择账期。", fieldPath: "draft.credit_cycle_id")) }
             if categoryID != nil { issues.append(.init(code: "category_not_allowed", message: "还款不能保留分类。", fieldPath: "draft.category_id")) }
         }
         if kind == .expense || kind == .creditPurchase, categoryID != nil, !expenseCategories.contains(where: { $0.id == categoryID }) { issues.append(.init(code: "expense_category_mismatch", message: "请选择支出分类。", fieldPath: "draft.category_id")) }
@@ -590,6 +594,7 @@ public final class V15AIProposalModel {
             if !allowedSource(accountID, for: .transfer) { issues.append(.init(code: "transfer_source_invalid", message: "请选择现金或借记转出账户。", fieldPath: "draft.account_id")) }
             if !allowedDestination(destinationAccountID, for: .transfer, sourceID: accountID) { issues.append(.init(code: "transfer_destination_invalid", message: "请选择现金或借记转入账户。", fieldPath: "draft.destination_account_id")) }
         }
+        if kind == .repayment, credit.contains(where: { $0.id == destinationAccountID && $0.cycleMode == "on_demand" }), creditCycleID != nil { issues.append(.init(code: "credit_cycle_not_allowed", message: "随借随还不使用账期。", fieldPath: "draft.credit_cycle_id")) }
         if kind == .repayment, let cycleID = creditCycleID, let destinationAccountID, !creditCycles.contains(where: { $0.id == cycleID && $0.accountID == destinationAccountID }) { issues.append(.init(code: "credit_cycle_account_mismatch", message: "账期必须属于目标信用账户。", fieldPath: "draft.credit_cycle_id")) }
         guard issues.isEmpty, let amount else { return (nil, issues) }
         let wire = V15TransactionCreateRequest(kind: kind, amountMinor: amount, occurredAt: occurredAt, title: trimmedTitle, note: trimmedNote, accountID: accountID, categoryID: categoryID, destinationAccountID: destinationAccountID, creditCycleID: creditCycleID)
@@ -736,11 +741,11 @@ public final class V15AIProposalModel {
     }
     private func allowedSource(_ id: UUID?, for kind: V15ManualTransactionKind) -> Bool {
         guard let id else { return true }; guard let account = activeAccounts.first(where: { $0.id == id }) else { return false }
-        switch kind { case .expense, .income, .transfer, .repayment: return account.kind == .cash || account.kind == .debit; case .creditPurchase: return account.kind == .credit }
+        switch kind { case .expense, .income, .transfer, .repayment: return account.kind == .cash || account.kind == .debit; case .creditPurchase: return account.kind == .credit && account.cycleMode != "on_demand"; case .borrowing: return account.kind == .credit && account.cycleMode == "on_demand" }
     }
     private func allowedDestination(_ id: UUID?, for kind: V15ManualTransactionKind, sourceID: UUID?) -> Bool {
         guard let id else { return true }; guard let account = activeAccounts.first(where: { $0.id == id }) else { return false }
-        switch kind { case .transfer: return (account.kind == .cash || account.kind == .debit) && id != sourceID; case .repayment: return account.kind == .credit; case .expense, .income, .creditPurchase: return false }
+        switch kind { case .transfer, .borrowing: return (account.kind == .cash || account.kind == .debit) && id != sourceID; case .repayment: return account.kind == .credit; case .expense, .income, .creditPurchase: return false }
     }
     private func editorFingerprint() -> String? {
         guard case .reviewing = editorMode, let target = selectedProposal?.target, let draft = makeDraft().value?.wireDraft else { return nil }

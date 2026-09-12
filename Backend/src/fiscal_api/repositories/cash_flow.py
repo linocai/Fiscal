@@ -1,7 +1,7 @@
 from datetime import date
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -10,7 +10,11 @@ from fiscal_api.db.models import (
     CashFlowItemRevision,
     CashFlowSeries,
     CashFlowSystemOverride,
+    LedgerTransaction,
+    Posting,
 )
+from fiscal_api.db.models.cash_flow import CashFlowSettlementLink
+from fiscal_api.services.common import checked_int64
 
 
 class CashFlowRepository:
@@ -126,22 +130,56 @@ class CashFlowRepository:
             statement = statement.with_for_update()
         return list((await self.session.scalars(statement)).all())
 
-    async def settlement_origins(self, transaction_id: UUID) -> list[CashFlowItem]:
-        historical_ids = select(CashFlowItemRevision.item_id).where(
-            CashFlowItemRevision.snapshot["linked_transaction_id"].astext == str(transaction_id)
+    async def settlement_links(self, item_id: UUID) -> list[CashFlowSettlementLink]:
+        return list(
+            (
+                await self.session.scalars(
+                    select(CashFlowSettlementLink)
+                    .where(CashFlowSettlementLink.item_id == item_id)
+                    .order_by(CashFlowSettlementLink.created_at, CashFlowSettlementLink.id)
+                )
+            ).all()
         )
+
+    async def settlement_by_key(self, key: UUID) -> CashFlowSettlementLink | None:
+        return await self.session.scalar(
+            select(CashFlowSettlementLink).where(CashFlowSettlementLink.idempotency_key == key)
+        )
+
+    async def settlement_totals(self, item: CashFlowItem) -> tuple[int, int, list[UUID]]:
+        rows = (
+            await self.session.execute(
+                select(CashFlowSettlementLink, Posting.amount_minor)
+                .join(
+                    LedgerTransaction, LedgerTransaction.id == CashFlowSettlementLink.transaction_id
+                )
+                .join(
+                    Posting,
+                    (Posting.transaction_id == LedgerTransaction.id) & (Posting.position == 0),
+                )
+                .where(
+                    CashFlowSettlementLink.item_id == item.id, LedgerTransaction.voided_at.is_(None)
+                )
+            )
+        ).all()
+        total = 0
+        for _link, amount in rows:
+            total = checked_int64(total + abs(amount), label="cash flow settlements")
+        remaining = (
+            0
+            if any(link.closes_remainder for link, _amount in rows)
+            else max(item.planned_amount_minor - total, 0)
+        )
+        return total, remaining, [link.transaction_id for link, _amount in rows]
+
+    async def settlement_origins(self, transaction_id: UUID) -> list[CashFlowItem]:
         return list(
             (
                 await self.session.scalars(
                     select(CashFlowItem)
-                    .where(
-                        or_(
-                            CashFlowItem.linked_transaction_id == transaction_id,
-                            CashFlowItem.id.in_(historical_ids),
-                        )
-                    )
-                    .order_by(CashFlowItem.id)
-                    .with_for_update()
+                    .join(CashFlowSettlementLink, CashFlowSettlementLink.item_id == CashFlowItem.id)
+                    .where(CashFlowSettlementLink.transaction_id == transaction_id)
+                    .with_for_update(of=CashFlowItem)
                 )
             ).all()
         )
@@ -149,7 +187,5 @@ class CashFlowRepository:
     async def by_linked_transaction(
         self, transaction_id: UUID, *, for_update: bool = False
     ) -> CashFlowItem | None:
-        statement = select(CashFlowItem).where(CashFlowItem.linked_transaction_id == transaction_id)
-        if for_update:
-            statement = statement.with_for_update()
-        return await self.session.scalar(statement)
+        items = await self.settlement_origins(transaction_id)
+        return items[0] if items else None

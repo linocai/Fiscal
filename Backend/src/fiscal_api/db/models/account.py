@@ -18,6 +18,7 @@ class AccountKind(StrEnum):
 class CreditCycleMode(StrEnum):
     STATEMENT_DAY_CUTOFF = "statement_day_cutoff"
     PREVIOUS_CALENDAR_MONTH = "previous_calendar_month"
+    ON_DEMAND = "on_demand"
 
 
 class Account(MutableResourceMixin, Base):
@@ -39,6 +40,11 @@ class Account(MutableResourceMixin, Base):
             "AND ((opening_balance_as_of_date IS NULL AND opening_due_date IS NULL) "
             "OR (opening_balance_as_of_date IS NOT NULL AND opening_due_date IS NOT NULL "
             "AND opening_due_date >= opening_balance_as_of_date))))) "
+            "OR (kind = 'credit' AND cycle_mode = 'on_demand' "
+            "AND credit_limit_minor IS NULL AND statement_day IS NULL AND due_day IS NULL "
+            "AND opening_due_date IS NULL AND opening_balance_minor >= 0 "
+            "AND ((opening_balance_minor = 0 AND opening_balance_as_of_date IS NULL) "
+            "OR (opening_balance_minor > 0 AND opening_balance_as_of_date IS NOT NULL))) "
             "OR (kind IN ('cash', 'debit') AND credit_limit_minor IS NULL "
             "AND statement_day IS NULL AND due_day IS NULL AND cycle_mode IS NULL "
             "AND opening_balance_as_of_date IS NULL AND opening_due_date IS NULL)",

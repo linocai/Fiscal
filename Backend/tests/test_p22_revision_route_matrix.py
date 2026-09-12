@@ -17,6 +17,8 @@ READ_ONLY_POSTS = {
     "/api/v1/auth/passphrase/change",
     "/api/v1/archives/export",
     "/api/v1/credit-accounts/{account_id}/schedule-change-preview",
+    "/api/v1/credit-accounts/{account_id}/payoff-preview",
+    "/api/v1/credit-payoffs/{operation_id}/reverse-preview",
     "/api/v1/installment-purchases/preview",
     "/api/v1/installment-plans/{plan_id}/preview",
     "/api/v1/installment-plans/{plan_id}/settlement-preview",

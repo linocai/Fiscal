@@ -13,6 +13,7 @@ from fiscal_api.api.p13_schemas import (
     CashFlowActiveResponse,
     CashFlowCreateResponse,
     CashFlowDraft,
+    CashFlowExistingSettlementDraft,
     CashFlowHistoryResponse,
     CashFlowItemResponse,
     CashFlowReplace,
@@ -150,3 +151,23 @@ async def settle(
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
 ) -> CashFlowItemResponse:
     return await service.settle(item_id, request, idempotency_key)
+
+
+@router.post(
+    "/cash-flow/items/{item_id}/settle-existing",
+    response_model=CashFlowItemResponse,
+    dependencies=[formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports")],
+    include_in_schema=False,
+)
+@router.post(
+    "/cash-flow-items/{item_id}/settle-existing",
+    response_model=CashFlowItemResponse,
+    dependencies=[formal_mutation("cash_flow", "ledger", "accounts", "credit", "reports")],
+)
+async def settle_existing(
+    item_id: UUID,
+    request: CashFlowExistingSettlementDraft,
+    service: CashFlowServiceDependency,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+) -> CashFlowItemResponse:
+    return await service.settle_existing(item_id, request, idempotency_key)

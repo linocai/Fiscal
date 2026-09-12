@@ -97,3 +97,12 @@ public struct V15PreviewSession: Sendable, Equatable {
     private func scopedIdentity(_ scope: String, _ payloadIdentity: String) -> String { "\(scope)\u{0}\(payloadIdentity)" }
     private func removeAll(in scope: String) { keys.keys.filter { $0 == scope || $0.hasPrefix(scope + "\u{0}") }.forEach { keys.removeValue(forKey: $0) } }
 }
+
+public enum V15RepaymentAmountMessage {
+    public static func amount(_ value: Int64) -> String { NSDecimalNumber(decimal: Decimal(value) / 100).stringValue }
+    public static func exceeded(remaining: Int64, input: Int64) -> String {
+        let (difference, overflow) = input.subtractingReportingOverflow(remaining)
+        guard !overflow else { return "金额超出可处理范围，请核对剩余应还与输入金额。" }
+        return "剩余应还 ¥\(amount(remaining))，输入 ¥\(amount(input))，超出 ¥\(amount(difference))"
+    }
+}

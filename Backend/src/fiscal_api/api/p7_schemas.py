@@ -180,10 +180,10 @@ class DebtAccountRow(APIModel):
     account_name: str
     institution: str | None
     last_four: str | None
-    credit_limit_minor: int
+    credit_limit_minor: int | None
     current_debt_minor: int
-    available_credit_minor: int
-    over_limit_minor: int
+    available_credit_minor: int | None
+    over_limit_minor: int | None
     overdue_minor: int
     opening_configuration_required: bool
     has_overdue_cycle: bool
@@ -432,6 +432,18 @@ class KnownFutureEventPage(APIModel):
     next_cursor: str | None
 
 
+class DisposableFacts(APIModel):
+    date_from: date
+    date_to: date
+    current_cash_minor: int
+    expected_inflow_minor: int
+    expected_outflow_minor: int
+    projected_balance_minor: int
+    undated_inflow_minor: int
+    unscheduled_credit_debt_minor: int
+    overdue_outflow_minor: int
+
+
 class ReportFacts(APIModel):
     meta: FactsMeta
     window: FactsWindow
@@ -440,6 +452,7 @@ class ReportFacts(APIModel):
     reimbursements: ReimbursementFacts
     completeness: CompletenessFacts
     future: KnownFutureTotals
+    disposable: DisposableFacts
     known_future_events: list[KnownFutureEvent] = Field(
         default_factory=lambda: list[KnownFutureEvent]()
     )

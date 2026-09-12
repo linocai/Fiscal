@@ -264,7 +264,7 @@ import Testing
     }
     @Test("account and category conflicts retain field comparisons until explicit reload and never replay") @MainActor func mutationConflictTakeover() async {
         let transport = F1CConflictTransport(); let model = V15MasterDataModel(services: V15Services(transport: transport))
-        await model.load(); model.selectAccount(model.visibleAccounts.first); await model.saveAccount()
+        await model.load(); model.selectAccount(model.visibleAccounts.first); model.accountName = "编辑中的账户"; await model.saveAccount()
         #expect(model.writesRequireExplicitReload && model.conflict != nil && !model.conflictChanges.isEmpty)
         await model.archiveOrRestoreAccount()
         #expect((await transport.mutationPaths()).filter { $0.contains("accounts/") }.count == 1)
@@ -278,7 +278,7 @@ import Testing
         #expect(await transport.reloadCount() >= 4)
 
         let failing = F1CConflictTransport(failReload: true); let blocked = V15MasterDataModel(services: V15Services(transport: failing))
-        await blocked.load(); blocked.selectAccount(blocked.visibleAccounts.first); await blocked.saveAccount()
+        await blocked.load(); blocked.selectAccount(blocked.visibleAccounts.first); blocked.accountName = "编辑中的账户"; await blocked.saveAccount()
         #expect(blocked.writesRequireExplicitReload && blocked.receipt?.contains("重新读取失败") == true)
         await blocked.saveAccount()
         #expect((await failing.mutationPaths()).count == 1)
@@ -310,29 +310,29 @@ import Testing
         #expect(V15MasterDataModel.reorderHint(canMove: false, down: false).contains("首位"))
         #expect(V15MasterDataModel.reorderHint(canMove: false, down: true).contains("末位"))
     }
-    @Test("unknown account, category, and merchant creates lock the same payload but allow a changed intent") @MainActor func unknownCreateLocksEachEntity() async {
+    @Test("unknown account, category, and merchant creates remain locked after editing until identity is confirmed") @MainActor func unknownCreateLocksEachEntity() async {
         let accountTransport = F1CUnknownCreateTransport(entity: .account); let account = V15MasterDataModel(services: V15Services(transport: accountTransport))
         await account.load(); account.selectedSection = .accounts; account.accountName = "新账户"; await account.saveAccount(); await account.saveAccount()
         #expect(await accountTransport.createCount() == 1 && account.saveDisabledReason?.code == "create_response_unknown")
-        account.accountName = "新账户二"; await account.saveAccount(); #expect(await accountTransport.createCount() == 2)
+        account.accountName = "新账户二"; await account.saveAccount(); #expect(await accountTransport.createCount() == 1)
 
         let categoryTransport = F1CUnknownCreateTransport(entity: .category); let category = V15MasterDataModel(services: V15Services(transport: categoryTransport))
         await category.load(); category.selectedSection = .categories; category.categoryName = "新分类"; await category.saveCategory(); await category.saveCategory()
         #expect(await categoryTransport.createCount() == 1 && category.saveDisabledReason?.code == "create_response_unknown")
-        category.categoryColor = "#113355"; await category.saveCategory(); #expect(await categoryTransport.createCount() == 2)
+        category.categoryColor = "#113355"; await category.saveCategory(); #expect(await categoryTransport.createCount() == 1)
 
         let merchantTransport = F1CUnknownCreateTransport(entity: .merchant); let merchant = V15MasterDataModel(services: V15Services(transport: merchantTransport))
         await merchant.load(); merchant.selectedSection = .merchants; merchant.merchantName = "新商户"; merchant.merchantAliases = "甲、乙"; await merchant.saveMerchant(); await merchant.saveMerchant()
         #expect(await merchantTransport.createCount() == 1 && merchant.saveDisabledReason?.code == "create_response_unknown")
-        merchant.merchantAliases = "甲、乙、丙"; await merchant.saveMerchant(); #expect(await merchantTransport.createCount() == 2)
+        merchant.merchantAliases = "甲、乙、丙"; await merchant.saveMerchant(); #expect(await merchantTransport.createCount() == 1)
     }
-    @Test("unknown create only unlocks the same payload after an explicit successful reload") @MainActor func unknownCreateExplicitReload() async {
+    @Test("unknown create remains locked after a list reload without identity proof") @MainActor func unknownCreateExplicitReload() async {
         let transport = F1CUnknownCreateTransport(entity: .account); let model = V15MasterDataModel(services: V15Services(transport: transport))
         await model.load(); model.accountName = "待确认账户"; await model.saveAccount(); await model.saveAccount()
         #expect(await transport.createCount() == 1 && model.unknownCreateReloadReason != nil)
         await model.reloadAfterUnknownCreate()
-        #expect(model.saveDisabledReason == nil && model.receipt?.contains("重新读取") == true)
-        await model.saveAccount(); #expect(await transport.createCount() == 2)
+        #expect(model.saveDisabledReason?.code == "create_response_unknown" && model.receipt?.contains("重新读取") == true)
+        await model.saveAccount(); #expect(await transport.createCount() == 1)
     }
     @Test("failed unknown-create reload keeps every write locked") @MainActor func unknownCreateReloadFailureLocksWrites() async {
         let transport = F1CUnknownCreateTransport(entity: .category, failReloadAfterCreate: true); let model = V15MasterDataModel(services: V15Services(transport: transport))
@@ -345,7 +345,7 @@ import Testing
         let transport = F1CAccountCreateBodyTransport(); let model = V15MasterDataModel(services: V15Services(transport: transport))
         await model.load(); model.accountName = "切换账户"; model.accountKind = .credit; model.creditLimit = "1000"; model.statementDay = "5"; model.dueDay = "20"; model.cycleMode = "statement_day_cutoff"; model.openingBalance = "10"; model.openingBalanceAsOfDate = "2026-08-01"; model.openingDueDate = "2026-08-20"
         model.accountKind = .cash; await model.saveAccount()
-        model.accountKind = .credit; model.creditLimit = "1000"; model.statementDay = "5"; model.dueDay = "20"; model.cycleMode = "previous_calendar_month"; model.accountKind = .debit; await model.saveAccount()
+        model.beginNewDraft(); model.accountName = "第二个切换账户"; model.accountKind = .credit; model.creditLimit = "1000"; model.statementDay = "5"; model.dueDay = "20"; model.cycleMode = "previous_calendar_month"; model.accountKind = .debit; await model.saveAccount()
         let bodies = await transport.createBodies()
         #expect(bodies.count == 2)
         for (index, body) in bodies.enumerated() { guard case .object(let value) = body else { Issue.record("expected account body"); continue }; #expect(value["kind"] == .string(index == 0 ? "cash" : "debit")); #expect(value["credit_limit_minor"] == nil && value["statement_day"] == nil && value["due_day"] == nil && value["cycle_mode"] == nil && value["opening_balance_as_of_date"] == nil && value["opening_due_date"] == nil) }

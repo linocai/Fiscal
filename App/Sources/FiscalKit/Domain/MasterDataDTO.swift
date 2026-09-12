@@ -3,18 +3,20 @@ import Foundation
 public enum AccountKind: String, Codable, Sendable, CaseIterable, Identifiable {
     case cash, debit, credit
     public var id: Self { self }
-    public var title: String { switch self { case .cash: "现金"; case .debit: "储蓄卡"; case .credit: "信用卡" } }
+    public var title: String { switch self { case .cash: "现金"; case .debit: "储蓄卡"; case .credit: "信用账户" } }
     public var symbol: String { switch self { case .cash: "banknote"; case .debit: "creditcard"; case .credit: "creditcard.fill" } }
 }
 
 public enum CreditCycleMode: String, Codable, Sendable, CaseIterable, Identifiable {
     case statementDayCutoff = "statement_day_cutoff"
     case previousCalendarMonth = "previous_calendar_month"
+    case onDemand = "on_demand"
     public var id: Self { self }
     public var title: String {
         switch self {
         case .statementDayCutoff: "账单日截止"
         case .previousCalendarMonth: "上个自然月"
+        case .onDemand: "随借随还"
         }
     }
 }

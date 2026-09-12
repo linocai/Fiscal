@@ -67,7 +67,7 @@ public struct V15CashFlowItem: Codable, Sendable, Equatable, Identifiable {
     public let note: String?
     public let direction: V15CashFlowDirection
     public let plannedAmountMinor: V15MinorUnits
-    public let expectedDate: String
+    public let expectedDate: String?
     public let accountID: UUID?
     public let destinationAccountID: UUID?
     public let categoryID: UUID?
@@ -83,11 +83,16 @@ public struct V15CashFlowItem: Codable, Sendable, Equatable, Identifiable {
     public let createdAt: Date?
     public let updatedAt: Date?
 
+    public var settledAmountMinor: Int64? = nil
+    public var remainingAmountMinor: Int64? = nil
+    public var settlementTransactionIDs: [UUID]? = nil
+    public var effectiveRemainingMinor: Int64 { remainingAmountMinor ?? (status == .settled || status == .completed ? 0 : plannedAmountMinor) }
     public var isSystem: Bool { systemKind != nil }
     public var isDisplayOnly: Bool { !status.isKnown || !direction.isActionable }
     public func allows(_ action: V15CashFlowAction) -> Bool { actions.contains(action) && !isDisplayOnly }
 
     enum CodingKeys: String, CodingKey {
+        case settledAmountMinor = "settled_amount_minor", remainingAmountMinor = "remaining_amount_minor", settlementTransactionIDs = "settlement_transaction_ids"
         case id, title, note, direction, status, source, version, actions
         case manualItemID = "manual_item_id", systemKind = "system_kind", systemReferenceID = "system_reference_id", seriesID = "series_id"
         case plannedAmountMinor = "planned_amount_minor", expectedDate = "expected_date", accountID = "account_id", destinationAccountID = "destination_account_id", categoryID = "category_id"
@@ -134,9 +139,10 @@ public struct V15CashFlowReplace: Codable, Sendable, Equatable {
 public struct V15CashFlowVersionRequest: Codable, Sendable, Equatable { public let expectedVersion: Int; public let scope: V15CashFlowMutationScope; public init(expectedVersion: Int, scope: V15CashFlowMutationScope = .occurrence) { self.expectedVersion = expectedVersion; self.scope = scope }; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", scope } }
 
 public struct V15CashFlowSettlementDraft: Codable, Sendable, Equatable {
+    public var completeRemaining: Bool? = nil
     public let expectedVersion: Int; public let actualAmountMinor: V15MinorUnits; public let occurredAt: Date; public let accountID: UUID; public let destinationAccountID: UUID?; public let categoryID: UUID?; public let title: String?; public let note: String?
-    public init(expectedVersion: Int, actualAmountMinor: V15MinorUnits, occurredAt: Date, accountID: UUID, destinationAccountID: UUID? = nil, categoryID: UUID? = nil, title: String? = nil, note: String? = nil) { self.expectedVersion = expectedVersion; self.actualAmountMinor = actualAmountMinor; self.occurredAt = occurredAt; self.accountID = accountID; self.destinationAccountID = destinationAccountID; self.categoryID = categoryID; self.title = title; self.note = note }
-    enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", actualAmountMinor = "actual_amount_minor", occurredAt = "occurred_at", accountID = "account_id", destinationAccountID = "destination_account_id", categoryID = "category_id", title, note }
+    public init(expectedVersion: Int, actualAmountMinor: V15MinorUnits, occurredAt: Date, accountID: UUID, destinationAccountID: UUID? = nil, categoryID: UUID? = nil, title: String? = nil, note: String? = nil, completeRemaining: Bool = false) { self.completeRemaining = completeRemaining; self.expectedVersion = expectedVersion; self.actualAmountMinor = actualAmountMinor; self.occurredAt = occurredAt; self.accountID = accountID; self.destinationAccountID = destinationAccountID; self.categoryID = categoryID; self.title = title; self.note = note }
+    enum CodingKeys: String, CodingKey { case completeRemaining = "complete_remaining", expectedVersion = "expected_version", actualAmountMinor = "actual_amount_minor", occurredAt = "occurred_at", accountID = "account_id", destinationAccountID = "destination_account_id", categoryID = "category_id", title, note }
 }
 
 public struct V15CashFlowSystemReplace: Codable, Sendable, Equatable {
@@ -160,5 +166,12 @@ public struct V15CashFlowService: Sendable {
     public func updateSystem(kind: V15CashFlowSystemKind, referenceID: UUID, request: V15CashFlowSystemReplace) async throws -> V15CashFlowItem { try await writable(); return try await transport.send(.init(path: "cash-flow-system-items/\(kind.rawValue)/\(referenceID)", method: "PUT"), body: try V15BodyEncoder.encode(request)) }
     public func confirm(itemID: UUID, request: V15CashFlowVersionRequest) async throws -> V15CashFlowItem { try await writable(); return try await transport.send(.init(path: "cash-flow-items/\(itemID)/confirm", method: "POST"), body: try V15BodyEncoder.encode(request)) }
     public func cancel(itemID: UUID, request: V15CashFlowVersionRequest) async throws -> V15CashFlowCreateResponse { try await writable(); return try await transport.send(.init(path: "cash-flow-items/\(itemID)/cancel", method: "POST"), body: try V15BodyEncoder.encode(request)) }
+    public func settleExisting(itemID: UUID, request: V15CashFlowSettleExistingRequest, idempotencyKey: UUID) async throws -> V15CashFlowItem { try await writable(); return try await transport.send(.init(path: "cash-flow-items/\(itemID)/settle-existing", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(request)) }
     public func settle(itemID: UUID, request: V15CashFlowSettlementDraft, idempotencyKey: UUID) async throws -> V15CashFlowItem { try await writable(); return try await transport.send(.init(path: "cash-flow-items/\(itemID)/settle", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(request)) }
+}
+
+public struct V15CashFlowSettleExistingRequest: Codable, Sendable, Equatable {
+    public let expectedVersion: Int; public let transactionID: UUID; public let transactionExpectedVersion: Int; public let completeRemaining: Bool
+    public init(expectedVersion: Int, transactionID: UUID, transactionExpectedVersion: Int, completeRemaining: Bool) { self.expectedVersion = expectedVersion; self.transactionID = transactionID; self.transactionExpectedVersion = transactionExpectedVersion; self.completeRemaining = completeRemaining }
+    enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", transactionID = "transaction_id", transactionExpectedVersion = "transaction_expected_version", completeRemaining = "complete_remaining" }
 }

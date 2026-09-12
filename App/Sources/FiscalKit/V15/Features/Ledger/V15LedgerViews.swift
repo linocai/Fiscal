@@ -154,7 +154,7 @@ private struct V15LedgerDetail: View {
     @ViewBuilder private var provenance: some View { if let provenance = model.provenance { Text("来源：\(sourceLabel(provenance.source))").font(V15Typography.secondary); if !provenance.links.isEmpty { Text("已关联 \(provenance.links.count) 条相关记录").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).accessibilityIdentifier("v15.f1b.provenance.links") } } else { Text("正在读取来源信息。").font(V15Typography.secondary) } }
     @ViewBuilder private var mutationState: some View { switch model.mutation { case .idle: EmptyView(); case .working: V15LoadingSkeleton(); case .reconciled(let message): V15ServerFactState(title: "数据已更新", detail: message); case .conflict(let conflict): V15ConflictState(conflict: conflict, changes: model.mutationConflictChanges, reload: { Task { await model.retryDetail() } }); case .failed(let failure): V15ServiceErrorState(message: failure.message, retry: { Task { await model.retryLastMutation() } }) } }
     private func sourceLabel(_ source: String) -> String { switch source { case "manual": "手工录入"; case "statement_import": "账单导入"; case "reimbursement": "报销"; case "installment": "分期"; default: "其他" } }
-    private func transactionKindLabel(_ kind: String) -> String { switch kind { case "income": "收入"; case "expense": "支出"; case "transfer": "转账"; case "repayment": "还款"; case "reimbursement_receipt": "报销到账"; default: "账目" } }
+    private func transactionKindLabel(_ kind: String) -> String { switch kind { case "income": "收入"; case "expense": "支出"; case "transfer": "转账"; case "repayment": "还款"; case "borrowing": "借入"; case "credit_principal_waiver": "本金减免"; case "credit_fee_refund": "费用减免"; case "credit_settlement_fee": "结清手续费"; case "reimbursement_receipt": "报销到账"; default: "账目" } }
     private var detailBackground: Color {
 #if os(iOS)
         .clear
@@ -166,6 +166,6 @@ private struct V15LedgerDetail: View {
 }
 
 private func postingRole(_ role: String) -> String { switch role { case "debit": "借方"; case "credit": "贷方"; default: "分录" } }
-private func direction(_ transaction: V15Transaction) -> V15MoneyDirection { switch transaction.kind { case "income", "reimbursement_receipt": .inflow; case "transfer": .neutral; default: .outflow } }
+private func direction(_ transaction: V15Transaction) -> V15MoneyDirection { switch transaction.kind { case "income", "reimbursement_receipt", "borrowing": .inflow; case "transfer", "credit_principal_waiver", "credit_fee_refund": .neutral; default: .outflow } }
 private func transactionDetail(_ transaction: V15Transaction, presentation: V15AccountTransactionPresentation) -> String { "\(transaction.businessDate) · \(presentation.accountPath)\(presentation.accountEffect.map { " · \($0)" } ?? "") · \(transactionSourceLabel(transaction.source))\(transaction.voidedAt == nil ? "" : " · 已作废")" }
 private func transactionSourceLabel(_ source: String) -> String { switch source { case "manual": "手工录入"; case "statement_import": "账单导入"; case "reimbursement": "报销"; case "installment": "分期"; case "cash_flow": "现金流"; case "ai_text": "AI 文本"; case "ocr": "OCR"; default: "其他来源" } }

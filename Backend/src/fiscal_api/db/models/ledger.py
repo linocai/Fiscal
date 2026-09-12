@@ -28,6 +28,10 @@ class TransactionKind(StrEnum):
     TRANSFER = "transfer"
     CREDIT_PURCHASE = "credit_purchase"
     REPAYMENT = "repayment"
+    BORROWING = "borrowing"
+    CREDIT_PRINCIPAL_WAIVER = "credit_principal_waiver"
+    CREDIT_FEE_REFUND = "credit_fee_refund"
+    CREDIT_SETTLEMENT_FEE = "credit_settlement_fee"
     INSTALLMENT_FEE = "installment_fee"
     INSTALLMENT_REFUND = "installment_refund"
     REIMBURSEMENT_RECEIPT = "reimbursement_receipt"
@@ -61,7 +65,8 @@ class LedgerTransaction(Base):
     __table_args__ = (
         CheckConstraint(
             "kind IN ('income', 'expense', 'transfer', 'credit_purchase', 'repayment', "
-            "'installment_fee', 'installment_refund', 'reimbursement_receipt')",
+            "'installment_fee', 'installment_refund', 'reimbursement_receipt', 'borrowing', "
+            "'credit_principal_waiver', 'credit_fee_refund', 'credit_settlement_fee')",
             name="valid_kind",
         ),
         CheckConstraint(

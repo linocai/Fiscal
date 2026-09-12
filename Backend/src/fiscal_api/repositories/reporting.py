@@ -28,6 +28,7 @@ from sqlalchemy.sql.elements import ColumnElement, SQLColumnExpression
 from fiscal_api.db.models import (
     Account,
     CashFlowItem,
+    CashFlowSystemOverride,
     Category,
     CreditCycle,
     InstallmentLedgerLink,
@@ -492,8 +493,10 @@ class ReportingRepository:
                     func.sum(
                         case(
                             (
-                                (LedgerTransaction.kind == "repayment")
-                                & (Posting.role == "destination"),
+                                LedgerTransaction.kind.in_(
+                                    ["repayment", "credit_principal_waiver", "credit_fee_refund"]
+                                )
+                                & Posting.role.in_(["destination", "account"]),
                                 Posting.amount_minor,
                             ),
                             else_=0,
@@ -612,22 +615,30 @@ class ReportingRepository:
         # allocation / receipt aggregates.  In particular, the global cursor
         # tuple is applied to the party key itself, so a candidate cannot move
         # across pages just because its outstanding amount is later calculated.
+        effective_date = func.coalesce(
+            CashFlowSystemOverride.expected_date, ReimbursementParty.expected_date
+        )
         candidates = (
             select(
                 ReimbursementClaim.id.label("claim_id"),
                 ReimbursementParty.id.label("party_id"),
                 ReimbursementParty.name.label("party_name"),
-                ReimbursementParty.expected_date.label("expected_date"),
+                effective_date.label("expected_date"),
             )
             .select_from(ReimbursementParty)
             .join(ReimbursementClaim, ReimbursementClaim.id == ReimbursementParty.claim_id)
+            .outerjoin(
+                CashFlowSystemOverride,
+                (CashFlowSystemOverride.system_reference_id == ReimbursementParty.id)
+                & (CashFlowSystemOverride.system_kind == "reimbursement"),
+            )
             .where(
                 ReimbursementClaim.voided_at.is_(None),
                 ReimbursementClaim.cancelled_at.is_(None),
                 ReimbursementClaim.submitted_at.is_not(None),
-                ReimbursementParty.expected_date.between(date_from, date_to),
+                effective_date.between(date_from, date_to),
                 _future_after(
-                    date_column=cast(ColumnElement[date], ReimbursementParty.expected_date),
+                    date_column=cast(ColumnElement[date], effective_date),
                     direction_column=literal("inflow"),
                     source_type="reimbursement_party",
                     source_id_column=sql_cast(ReimbursementParty.id, String),
@@ -941,7 +952,9 @@ class ReportingRepository:
             select(func.count(LedgerTransaction.id)).where(
                 LedgerTransaction.voided_at.is_(None),
                 LedgerTransaction.category_id.is_(None),
-                LedgerTransaction.kind.in_(("expense", "credit_purchase", "installment_fee")),
+                LedgerTransaction.kind.in_(
+                    ("expense", "credit_purchase", "installment_fee", "credit_settlement_fee")
+                ),
             )
         )
         uncategorized_amount = await self.session.scalar(
@@ -950,7 +963,9 @@ class ReportingRepository:
             .where(
                 LedgerTransaction.voided_at.is_(None),
                 LedgerTransaction.category_id.is_(None),
-                LedgerTransaction.kind.in_(("expense", "credit_purchase", "installment_fee")),
+                LedgerTransaction.kind.in_(
+                    ("expense", "credit_purchase", "installment_fee", "credit_settlement_fee")
+                ),
                 Posting.role.in_(("account", "source")),
             )
         )

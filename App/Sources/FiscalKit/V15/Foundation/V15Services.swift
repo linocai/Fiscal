@@ -164,6 +164,15 @@ public enum V15ErrorMapper {
         case .unauthorized(let detail):
             return .init(kind: .transport, code: detail?.code, message: detail?.message ?? error.displayMessage, isDefinitiveRejection: true)
         case .domain(let status, let detail):
+            if detail.code == "repayment_exceeds_cycle_remaining", case .object(let values)? = detail.details,
+               let remaining = values["remaining_minor"]?.int64Value, let input = values["input_minor"]?.int64Value {
+                let message = V15RepaymentAmountMessage.exceeded(remaining: remaining, input: input)
+                return .init(kind: .transport, code: detail.code, message: message, fieldIssues: [.init(code: detail.code, message: message, fieldPath: "amount_minor")], isDefinitiveRejection: true)
+            }
+            if detail.code == "credit_liability_predates_repayment" {
+                let message = "还款日期早于欠款发生日期，请核对借入与还款时间。"
+                return .init(kind: .transport, code: detail.code, message: message, fieldIssues: [.init(code: detail.code, message: message, fieldPath: "occurred_at")], isDefinitiveRejection: true)
+            }
             let issues = fieldIssues(from: detail.details, fallbackMessage: detail.message)
             if status == 409 {
                 return .init(kind: .conflict, code: detail.code, message: detail.message, fieldIssues: issues, conflict: conflict(from: detail.details, message: detail.message), isDefinitiveRejection: true)
@@ -247,6 +256,7 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
     public let archives: V15ArchiveService
     public let merchants: V15MerchantService
     public let categories: V15CategoryTransformService
+    public let payoff: V15CreditPayoffService
     public let credit: V15CreditService
     public let reimbursements: V15ReimbursementService
     public let installments: V15InstallmentService
@@ -282,6 +292,9 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
         })
         categories = .init(transport: transport, writable: { [weak revisionStore] in
             guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
+        })
+        payoff = .init(transport: transport, writable: { [weak revisionStore] in
+            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, message: "全额结清需要联网核对。") }
         })
         credit = .init(transport: transport, writable: { [weak revisionStore] in
             guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
@@ -523,11 +536,12 @@ public struct V15ReportsService: Sendable {
         if let cursor { query.append(.init(name: "cursor", value: cursor)) }
         return try await transport.send(.init(path: "reports/facts/drill-down", query: query), body: nil)
     }
-    public func futureEvents(windowDays: Int, accountID: UUID? = nil, cursor: String? = nil, limit: Int = 50, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15FutureEvents {
+    public func futureEvents(windowDays: Int, accountID: UUID? = nil, expectedDataRevision: Int64? = nil, cursor: String? = nil, limit: Int = 50, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15FutureEvents {
         guard [7, 30, 60, 90].contains(windowDays) else { throw V15Failure(kind: .decoding, code: "invalid_future_events_window", message: "未来时间线窗口只能是 7、30、60 或 90 天。") }
         guard (1...100).contains(limit) else { throw V15Failure(kind: .decoding, code: "invalid_future_events_limit", message: "未来时间线每页数量须在 1 到 100 之间。") }
         var query = [URLQueryItem(name: "window_days", value: String(windowDays)), .init(name: "limit", value: String(limit))]
         if let accountID { query.append(.init(name: "account_id", value: accountID.uuidString)) }; if let cursor { query.append(.init(name: "cursor", value: cursor)) }
+        if let expectedDataRevision { query.append(.init(name: "expected_data_revision", value: String(expectedDataRevision))) }
         return try await transport.send(.init(path: "reports/future-events", query: query, readCachePolicy: readCachePolicy), body: nil)
     }
     public func monthly(_ period: V15ReportMonth, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15PeriodReport { try await transport.send(.init(path: "reports/v2/monthly/\(period.rawValue)", readCachePolicy: readCachePolicy), body: nil) }
@@ -790,3 +804,5 @@ public struct V15DeepLinkReadService: Sendable {
     public func migrationRun(_ id: UUID) async throws -> V15JSONRecord { try await transport.send(.init(path: "migrations/runs/\(id)"), body: nil) }
     public func transactionCapabilities(_ id: UUID) async throws -> V15VersionedCapabilityResource { try await transport.send(.init(path: "transactions/\(id)"), body: nil) }
 }
+
+private extension JSONValue { var int64Value: Int64? { if case .integer(let value) = self { return value }; return nil } }

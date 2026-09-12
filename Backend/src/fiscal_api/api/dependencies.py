@@ -16,6 +16,7 @@ from fiscal_api.services.ai_provider import AIProvider, build_ai_provider
 from fiscal_api.services.cash_flow import CashFlowService
 from fiscal_api.services.categories import CategoryService
 from fiscal_api.services.credit import CreditService
+from fiscal_api.services.credit_payoffs import CreditPayoffService
 from fiscal_api.services.installments import InstallmentService
 from fiscal_api.services.merchants import MerchantService
 from fiscal_api.services.migrations import MigrationRunService
@@ -283,3 +284,10 @@ StatementImportConfirmationPreviewServiceDependency = Annotated[
     StatementImportConfirmationPreviewService,
     Depends(get_statement_import_confirmation_preview_service),
 ]
+
+
+def get_credit_payoff_service(session: SessionDependency) -> CreditPayoffService:
+    return CreditPayoffService(session)
+
+
+CreditPayoffServiceDependency = Annotated[CreditPayoffService, Depends(get_credit_payoff_service)]

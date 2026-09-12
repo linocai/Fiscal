@@ -84,7 +84,7 @@ public struct V15CashFlowMacView: View {
             let items = section == .active ? model.active?.items ?? [] : model.history?.items ?? []
             LazyVStack(spacing: 0) {
                 ForEach(items) { item in
-                    V15LedgerRow(title: item.title, detail: "\(item.expectedDate) · \(item.status.displayName) · \(sourceLabel(item))", amountMinor: item.plannedAmountMinor, direction: item.direction == .inflow ? .inflow : item.direction == .outflow ? .outflow : .neutral, marker: item.isDisplayOnly || item.status == .expected ? .provisional : .decision) { Task { await model.selectItem(item, from: section == .active ? .active : .history) } }
+                    V15LedgerRow(title: item.title, detail: "\(item.expectedDate ?? "未安排日期") · \(item.status.displayName) · \(sourceLabel(item))", amountMinor: item.effectiveRemainingMinor, direction: item.direction == .inflow ? .inflow : item.direction == .outflow ? .outflow : .neutral, marker: item.isDisplayOnly || item.status == .expected ? .provisional : .decision) { Task { await model.selectItem(item, from: section == .active ? .active : .history) } }
                         .background(model.selectedItem?.id == item.id ? V15Palette.selected.color : Color.clear)
                         .disabled(model.selectionLocked)
                         .accessibilityIdentifier("v15.f3d.mac.item.\(item.id)")
@@ -132,9 +132,9 @@ public struct V15CashFlowMacView: View {
                 if item.isSystem { Text(sourceLabel(item)).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
             }
             Text(item.title).font(V15Typography.cardTitle).foregroundStyle(V15Palette.ink.color).fixedSize(horizontal: false, vertical: true)
-            Text("\(item.expectedDate) · \(item.direction.displayName) · \(item.status.displayName)").font(V15Typography.secondary)
+            Text("\(item.expectedDate ?? "未安排日期") · \(item.direction.displayName) · \(item.status.displayName)").font(V15Typography.secondary)
             HStack(alignment: .top, spacing: V15Spacing.sm) {
-                cashFlowFact("计划金额", value: item.plannedAmountMinor, date: item.expectedDate, provisional: true)
+                cashFlowFact("计划金额", value: item.plannedAmountMinor, date: item.expectedDate ?? "未安排日期", provisional: true)
                 if let actual = item.actualAmountMinor { cashFlowFact("实际入账", value: actual, date: item.actualDate ?? "日期未提供", provisional: false) }
                 else { cashFlowUnavailableFact("实际入账", detail: item.isSystem ? "回来源流程确认" : "尚未结算") }
             }.accessibilityIdentifier("v15.f3d.mac.plan-actual")
@@ -173,7 +173,7 @@ public struct V15CashFlowMacView: View {
             switch model.editorMode {
             case .create, .edit:
                 V22FormSection("收支安排") {
-                    Picker("方向", selection: $model.direction) { ForEach([V15CashFlowDirection.inflow, .outflow, .transfer]) { Text($0.displayName).tag($0) } }.pickerStyle(.segmented)
+                    V23ChoiceGroup("方向", selection: $model.direction, choices: [V15CashFlowDirection.inflow, .outflow, .transfer].map { V23Choice($0, $0.displayName) }, identifier: "v230.cash-flow.direction")
                     V15AmountInput(text: $model.amountText, issues: visibleEditorIssues("planned_amount_minor"))
                     V15Field("事项名称", text: $model.title, issues: visibleEditorIssues("title"))
                 }
@@ -195,13 +195,7 @@ public struct V15CashFlowMacView: View {
                 if case .create = model.editorMode { V15ActionButton("创建", disabledReasons: displayReasons(model.createReasons)) { Task { await model.create() } }.disabled(!model.createReasons.isEmpty).accessibilityIdentifier("v15.f3d.mac.create.submit") }
                 else { V15ActionButton("保存修改", disabledReasons: displayReasons(model.updateReasons)) { Task { await model.update() } }.disabled(!model.updateReasons.isEmpty).accessibilityIdentifier("v15.f3d.mac.update.submit") }
             case .settle:
-                Text("填写真实发生金额与日期；计划金额不会自动记为已入账。") .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
-                V22FormSection("本次实际入账") {
-                V15AmountInput(text: $model.settleAmountText, issues: fieldIssues(model.settleIssues, "actual_amount_minor")); V15Field("发生日期", text: $model.settleDateText, prompt: "YYYY-MM-DD"); accountControls(source: $model.settleAccountID, destination: $model.settleDestinationAccountID, transfer: model.selectedItem?.direction == .transfer)
-                if model.selectedItem?.direction != .transfer { categoryControl(selection: $model.settleCategoryID, categories: model.selectedItem?.direction == .inflow ? model.incomeCategories : model.expenseCategories) }
-                V15Field("入账标题", text: $model.settleTitle); V15Field("备注", text: $model.settleNote, axis: .vertical)
-                }
-                V15ActionButton("确认入账", disabledReasons: model.settleReasons) { Task { await model.settle() } }.accessibilityIdentifier("v15.f3d.mac.settle.submit")
+                V23CashFlowSettlementEditor(model: model)
             case .systemEdit:
                 Text("这里只能修改标题、备注与预计日期；实际到账请到报销页面登记。") .font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
                 V15Field("显示标题", text: $model.title); V15Field("预计日期", text: $model.expectedDateText, prompt: "YYYY-MM-DD"); V15Field("显示备注", text: $model.note, axis: .vertical)
@@ -225,8 +219,15 @@ public struct V15CashFlowMacView: View {
         if model.hasUnknownDirectAttempt { V15ActionButton("检查最新状态", kind: .secondary) { Task { await model.readBackUnknownDirect() } }.accessibilityIdentifier("v15.f3d.mac.unknown.readback"); V15ActionButton("核对后继续", kind: .quiet, disabledReason: model.canAbandonUnknownDirect ? nil : .init(code: "fresh_readback_required", message: "请先检查最新状态。", fieldPath: nil)) { model.abandonUnknownDirect() }.accessibilityIdentifier("v15.f3d.mac.unknown.abandon") }
     }
 
-    private func accountControls(source: Binding<UUID?>, destination: Binding<UUID?>, transfer: Bool) -> some View { VStack(alignment: .leading) { V15PickerRow(transfer ? "来源账户" : "计划账户", selection: source) { Text("未指定").tag(UUID?.none); ForEach(model.cashAccounts) { Text($0.name).tag(UUID?.some($0.id)) } }; if transfer { V15PickerRow("目标账户", selection: destination) { Text("请选择").tag(UUID?.none); ForEach(model.cashAccounts) { Text($0.name).tag(UUID?.some($0.id)) } } } } }
-    private func categoryControl(selection: Binding<UUID?>, categories: [V15CategoryResponse]) -> some View { V15PickerRow("分类", selection: selection) { Text("未分类").tag(UUID?.none); ForEach(categories) { Text($0.name).tag(UUID?.some($0.id)) } } }
+    private func accountControls(source: Binding<UUID?>, destination: Binding<UUID?>, transfer: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            V23ChoiceGroup(transfer ? "来源账户" : "计划账户", selection: source, choices: [V23Choice(UUID?.none, "未指定")] + model.cashAccounts.map { V23Choice(Optional($0.id), $0.name, symbol: "wallet.bifold") }, identifier: "v230.cash-flow.source")
+            if transfer { V23ChoiceGroup("目标账户", selection: destination, choices: model.cashAccounts.map { V23Choice(Optional($0.id), $0.name, symbol: "arrow.right.circle") }, identifier: "v230.cash-flow.destination") }
+        }
+    }
+    private func categoryControl(selection: Binding<UUID?>, categories: [V15CategoryResponse]) -> some View {
+        V23ChoiceGroup("分类", selection: selection, choices: [V23Choice(UUID?.none, "未分类")] + categories.map { V23Choice(Optional($0.id), $0.name, symbol: "tag") }, identifier: "v230.cash-flow.category")
+    }
     private func fieldIssues(_ values: [V15FieldIssue], _ path: String) -> [V15FieldIssue] { values.filter { $0.fieldPath == path || $0.fieldPath?.hasPrefix(path + ".") == true } }
     private func visibleEditorIssues(_ path: String) -> [V15FieldIssue] {
         if path == "title", model.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return [] }

@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query
 
 from fiscal_api.api.dependencies import (
+    CreditPayoffServiceDependency,
     CreditServiceDependency,
     TransactionServiceDependency,
     formal_mutation,
@@ -16,6 +17,14 @@ from fiscal_api.api.p4_schemas import (
     CreditScheduleChangeCommitRequest,
     CreditScheduleChangeRequest,
     CreditScheduleChangeResult,
+)
+from fiscal_api.api.p40_schemas import (
+    CreditPayoffCommitRequest,
+    CreditPayoffPreview,
+    CreditPayoffReceipt,
+    CreditPayoffRequest,
+    CreditPayoffReversePreview,
+    CreditPayoffReverseRequest,
 )
 from fiscal_api.core.security import require_authenticated
 
@@ -88,3 +97,61 @@ async def list_credit_cycle_transactions(
 ) -> TransactionPage:
     await credit_service.get_cycle(cycle_id)
     return await transaction_service.list_cycle(cycle_id, cursor=cursor, limit=limit)
+
+
+@router.post("/credit-accounts/{account_id}/payoff-preview", response_model=CreditPayoffPreview)
+async def payoff_preview(
+    account_id: UUID, request: CreditPayoffRequest, service: CreditPayoffServiceDependency
+) -> CreditPayoffPreview:
+    return await service.preview(account_id, request)
+
+
+@router.post(
+    "/credit-accounts/{account_id}/payoff",
+    response_model=CreditPayoffReceipt,
+    dependencies=[formal_mutation("ledger", "credit")],
+)
+async def payoff_commit(
+    account_id: UUID,
+    request: CreditPayoffCommitRequest,
+    service: CreditPayoffServiceDependency,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+) -> CreditPayoffReceipt:
+    return await service.commit(account_id, request, idempotency_key)
+
+
+@router.get("/credit-payoffs/{operation_id}", response_model=CreditPayoffReceipt)
+async def payoff_receipt(
+    operation_id: UUID, service: CreditPayoffServiceDependency
+) -> CreditPayoffReceipt:
+    return await service.get(operation_id)
+
+
+@router.post(
+    "/credit-payoffs/{operation_id}/reverse-preview", response_model=CreditPayoffReversePreview
+)
+async def payoff_reverse_preview(
+    operation_id: UUID, service: CreditPayoffServiceDependency
+) -> CreditPayoffReversePreview:
+    return await service.reverse_preview(operation_id)
+
+
+@router.post(
+    "/credit-payoffs/{operation_id}/reverse",
+    response_model=CreditPayoffReceipt,
+    dependencies=[formal_mutation("ledger", "credit")],
+)
+async def payoff_reverse(
+    operation_id: UUID,
+    request: CreditPayoffReverseRequest,
+    service: CreditPayoffServiceDependency,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+) -> CreditPayoffReceipt:
+    return await service.reverse(operation_id, request, idempotency_key)
+
+
+@router.get("/credit-accounts/{account_id}/payoffs", response_model=list[CreditPayoffReceipt])
+async def list_payoffs(
+    account_id: UUID, service: CreditPayoffServiceDependency
+) -> list[CreditPayoffReceipt]:
+    return await service.list(account_id)

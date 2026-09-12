@@ -528,6 +528,13 @@ public final class V15StatementImportModel {
             phase = .failed(.init(kind: .responseUnknown, code: "resolution_response_unknown", message: "行处理方案结果未知；只能读取完整复核行恢复，绝不会重复提交。"))
         }
     }
+    public func finalDraftCreditCycles(accountID: UUID) async throws -> [V15CreditCycle] {
+        let account = try await services.masterData.account(id: accountID)
+        guard account.cycleMode != "on_demand" else { return [] }
+        var values: [V15CreditCycle] = []; var cursor: String?
+        repeat { let page = try await services.credit.cycles(accountID: accountID, cursor: cursor); values += page.items.filter { $0.remainingMinor > 0 }; cursor = page.nextCursor } while cursor != nil
+        return values
+    }
     public func finalDraftContext(row: V15StatementWorkbenchRow) async throws -> (accounts: [V15AccountResponse], categories: [V15CategoryResponse], draft: V15StatementFinalCreateDraft?) {
         guard let batch, !row.isConfirmed else { throw V15Failure(kind: .conflict, message: "此行已冻结。") }
         let accounts = try await services.masterData.accounts(includeArchived: false)

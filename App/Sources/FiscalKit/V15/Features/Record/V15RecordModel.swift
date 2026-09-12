@@ -47,6 +47,15 @@ public final class V15RecordModel {
         self.occurredOn = occurredOn
         validate()
     }
+    public var isOnDemandRepayment: Bool { kind == .repayment && accounts.first(where: { $0.id == destinationAccountID })?.cycleMode == "on_demand" }
+    public var repaymentRemainingMinor: Int64? {
+        guard kind == .repayment else { return nil }
+        if isOnDemandRepayment {
+            guard let balance = accounts.first(where: { $0.id == destinationAccountID })?.currentBalanceMinor else { return nil }
+            return max(balance, 0)
+        }
+        return creditCycles.first(where: { $0.id == creditCycleID })?.remainingMinor
+    }
     public var allIssues: [V15FieldIssue] { localIssues + fieldIssues }
     public var isOffline: Bool { services.offlineSnapshotAt != nil }
 
@@ -98,6 +107,7 @@ public final class V15RecordModel {
         guard kind == .repayment, let accountID = accountID ?? destinationAccountID, destinationAccountID == accountID else {
             creditCycles = []; creditCyclePhase = .idle; validate(); return
         }
+        if isOnDemandRepayment { creditCycles = []; creditCycleID = nil; creditCyclePhase = .loaded; validate(); return }
         creditCyclePhase = .loading
         do {
             let page = try await services.creditCycles.list(accountID: accountID)
@@ -251,7 +261,7 @@ public final class V15RecordModel {
     }
 
     private var categoryDirection: V15CategoryDirection? {
-        switch kind { case .income: .income; case .expense, .creditPurchase: .expense; case .transfer, .repayment: nil }
+        switch kind { case .income: .income; case .expense, .creditPurchase: .expense; case .transfer, .repayment, .borrowing: nil }
     }
 
     private func inputChanged() {
@@ -324,7 +334,8 @@ public final class V15RecordModel {
         guard let account = accounts.first(where: { $0.id == id }) else { return false }
         switch kind {
         case .expense, .income, .transfer, .repayment: return account.kind == .cash || account.kind == .debit
-        case .creditPurchase: return account.kind == .credit
+        case .creditPurchase: return account.kind == .credit && account.cycleMode != "on_demand"
+        case .borrowing: return account.kind == .credit && account.cycleMode == "on_demand"
         }
     }
 
@@ -332,7 +343,7 @@ public final class V15RecordModel {
         guard let id else { return true }
         guard let account = accounts.first(where: { $0.id == id }) else { return false }
         switch kind {
-        case .transfer: return (account.kind == .cash || account.kind == .debit) && id != sourceID
+        case .transfer, .borrowing: return (account.kind == .cash || account.kind == .debit) && id != sourceID
         case .repayment: return account.kind == .credit
         case .expense, .income, .creditPurchase: return false
         }
@@ -352,7 +363,7 @@ public final class V15RecordModel {
     }
 
     private func categoryDirection(for kind: V15ManualTransactionKind) -> V15CategoryDirection? {
-        switch kind { case .income: .income; case .expense, .creditPurchase: .expense; case .transfer, .repayment: nil }
+        switch kind { case .income: .income; case .expense, .creditPurchase: .expense; case .transfer, .repayment, .borrowing: nil }
     }
 
     private func flatten(_ source: [V15CategoryResponse]) -> [V15CategoryResponse] { source + source.flatMap { flatten($0.children) } }
@@ -387,7 +398,7 @@ public final class V15RecordModel {
             if creditCycleID != nil { issues.append(.init(code: "credit_cycle_not_allowed", message: "此类型不使用信用账期。", fieldPath: "credit_cycle_id")) }
             validateCategory(category, expected: categoryDirection, issues: &issues)
         case .creditPurchase:
-            if selected?.kind != .credit { issues.append(.init(code: "credit_account_required", message: "信用卡消费需要选择信用账户。", fieldPath: "account_id")) }
+            if selected?.kind != .credit || selected?.cycleMode == "on_demand" { issues.append(.init(code: "credit_account_required", message: "信用卡消费需要选择信用账户。", fieldPath: "account_id")) }
             if destinationAccountID != nil { issues.append(.init(code: "destination_not_allowed", message: "信用卡消费不使用目标账户。", fieldPath: "destination_account_id")) }
             if creditCycleID != nil { issues.append(.init(code: "credit_cycle_server_owned", message: "信用卡消费账期会按消费日期自动确定。", fieldPath: "credit_cycle_id")) }
             validateCategory(category, expected: .expense, issues: &issues)
@@ -396,13 +407,23 @@ public final class V15RecordModel {
             if destination?.kind != .cash && destination?.kind != .debit { issues.append(.init(code: "destination_account_type", message: "转入账户必须是现金或借记账户。", fieldPath: "destination_account_id")) }
             if accountID != nil && accountID == destinationAccountID { issues.append(.init(code: "transfer_same_account", message: "转出与转入账户不能相同。", fieldPath: "destination_account_id")) }
             validateNoCategoryOrCycle(&issues)
+        case .borrowing:
+            if selected?.kind != .credit || selected?.cycleMode != "on_demand" { issues.append(.init(code: "on_demand_required", message: "借入来源必须是随借随还信用账户。", fieldPath: "account_id")) }
+            if destination?.kind != .cash && destination?.kind != .debit { issues.append(.init(code: "borrowing_destination_type", message: "请选择实际收到借款的现金或借记账户。", fieldPath: "destination_account_id")) }
+            if accountID == destinationAccountID { issues.append(.init(code: "same_account", message: "借款与收款账户不能相同。", fieldPath: "destination_account_id")) }
+            validateNoCategoryOrCycle(&issues)
         case .repayment:
             if selected?.kind != .cash && selected?.kind != .debit { issues.append(.init(code: "repayment_source_type", message: "还款账户必须是现金或借记账户。", fieldPath: "account_id")) }
             if destination?.kind != .credit { issues.append(.init(code: "repayment_destination_type", message: "还款目标必须是信用账户。", fieldPath: "destination_account_id")) }
-            if creditCyclePhase == .loading { issues.append(.init(code: "credit_cycles_loading", message: "正在加载可用信用账期。", fieldPath: "credit_cycle_id")) }
+            if isOnDemandRepayment {
+                if creditCycleID != nil { issues.append(.init(code: "credit_cycle_not_allowed", message: "随借随还不选择账期。", fieldPath: "credit_cycle_id")) }
+            } else if creditCyclePhase == .loading { issues.append(.init(code: "credit_cycles_loading", message: "正在加载可用信用账期。", fieldPath: "credit_cycle_id")) }
             else if creditCycleID == nil { issues.append(.init(code: "credit_cycle_required", message: "请选择可用的信用账期。", fieldPath: "credit_cycle_id")) }
             else if creditCycles.first(where: { $0.id == creditCycleID && $0.accountID == destinationAccountID }) == nil { issues.append(.init(code: "credit_cycle_unavailable", message: "所选信用账期不可用，请重新选择。", fieldPath: "credit_cycle_id")) }
-            validateNoCategoryOrCycle(&issues, allowsCycle: true)
+            if let remaining = repaymentRemainingMinor, amount > remaining {
+                issues.append(.init(code: "repayment_exceeds_remaining", message: V15RepaymentAmountMessage.exceeded(remaining: remaining, input: amount), fieldPath: "amount_minor"))
+            }
+            validateNoCategoryOrCycle(&issues, allowsCycle: !isOnDemandRepayment)
         }
         if isOffline && kind == .repayment {
             issues.append(.init(code: "preview_requires_network", message: "需要联网：还款前必须先读取最新账期。", fieldPath: nil))

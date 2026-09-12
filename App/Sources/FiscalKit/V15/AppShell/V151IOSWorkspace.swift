@@ -198,29 +198,21 @@ private struct V151IOSTodayDashboard: View {
                 .v15PlatformHitArea()
                 .accessibilityIdentifier("v151.ios.today.settings")
             }
-            Text("账户净额").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.52))
             if let facts = model.facts {
-                switch net(cash: facts.cash.currentBalanceMinor, debt: facts.credit.currentDebtMinor) {
-                case .amount(let value):
-                    V152IOSNetMoneyText(minorUnits: value)
-                        .accessibilityIdentifier("v151.ios.today.account-value")
-                        .accessibilityLabel("账户净额 \(V15MoneyPresentation(minorUnits: value, direction: .balance).text)")
-                case .unavailable:
-                    Text("暂无法汇总")
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                        .foregroundStyle(V15Palette.ink.color)
-                        .accessibilityIdentifier("v151.ios.today.account-value")
-                    Text("请查看现金与信用账户明细。")
-                        .font(V15Typography.secondary)
-                        .foregroundStyle(V15Palette.ink.color.opacity(0.58))
-                }
-                Text("现金与储蓄余额 − 当前信用欠款")
-                    .font(V15Typography.label)
-                    .foregroundStyle(V15Palette.ink.color.opacity(0.54))
+                V23DisposableCard(model: model)
                 V15AdaptiveStack(spacing: 12) {
                     metric("现金与储蓄", facts.cash.currentBalanceMinor, .balance)
                     creditMetric(facts.credit.currentDebtMinor)
                     metric("未收报销", facts.reimbursements.outstandingMinor, .balance)
+                }
+                switch net(cash: facts.cash.currentBalanceMinor, debt: facts.credit.currentDebtMinor) {
+                case .amount(let value):
+                    Text("账户净额 \(V15MoneyPresentation(minorUnits: value, direction: .balance).text)")
+                        .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.60))
+                        .accessibilityIdentifier("v151.ios.today.account-value")
+                case .unavailable:
+                    Text("暂无法汇总").font(V15Typography.secondary)
+                        .accessibilityIdentifier("v151.ios.today.account-value")
                 }
                 Button { openTodayDestination(.reports) } label: {
                     Label("财务分析", systemImage: "chart.bar.xaxis")
@@ -958,7 +950,7 @@ private struct V151IOSCashFlowInlineDecision: View {
                 if let item {
                     Text("确认现金流").font(.title3.weight(.semibold))
                     HStack { Text(item.title); Spacer(); V15MoneyText(minorUnits: item.plannedAmountMinor, direction: .neutral, font: V15Typography.money) }
-                    Text("预期 \(item.expectedDate) · \(item.status.displayName)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                    Text("预期 \(item.expectedDate ?? "未安排日期") · \(item.status.displayName)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
                     if case .previewed = phase {
                         V15PreviewState { Text("\(preview?.itemBefore.status.displayName ?? item.status.displayName) → 已确认。确认只改变这一次事项，不会创建入账交易。").font(V15Typography.secondary) }
                         V15ActionButton("确认本次", disabledReason: confirmReason(item)) { Task { await confirm(item) } }
@@ -1033,36 +1025,11 @@ private struct V151IOSCashFlowInlineDecision: View {
             conflictChanges = [
                 .init(field: "状态", previousValue: before.status.displayName, currentValue: fresh.status.displayName),
                 .init(field: "计划金额", previousValue: V15MoneyPresentation(minorUnits: before.plannedAmountMinor, direction: .neutral).text, currentValue: V15MoneyPresentation(minorUnits: fresh.plannedAmountMinor, direction: .neutral).text),
-                .init(field: "预计日期", previousValue: before.expectedDate, currentValue: fresh.expectedDate)
+                .init(field: "预计日期", previousValue: before.expectedDate ?? "未安排日期", currentValue: fresh.expectedDate ?? "未安排日期")
             ]
         } catch {
             conflictExplanation = "暂时无法取得最新现金流信息，请稍后再试。"
         }
-    }
-}
-
-private struct V152IOSNetMoneyText: View {
-    let minorUnits: Int64
-    var body: some View {
-        let absolute = minorUnits == Int64.min ? UInt64(Int64.max) + 1 : UInt64(Swift.abs(minorUnits))
-        let whole = absolute / 100
-        let fraction = absolute % 100
-        let sign = minorUnits < 0 ? "−" : ""
-        Text("\(sign)¥\(grouped(whole)).\(String(format: "%02llu", fraction))")
-            .font(.system(.title, design: .monospaced, weight: .bold))
-            .monospacedDigit()
-            .lineLimit(1)
-            .minimumScaleFactor(0.58)
-    }
-
-    private func grouped(_ value: UInt64) -> String {
-        let digits = String(value)
-        var result = ""
-        for (index, digit) in digits.reversed().enumerated() {
-            if index > 0 && index.isMultiple(of: 3) { result.insert(",", at: result.startIndex) }
-            result.insert(digit, at: result.startIndex)
-        }
-        return result
     }
 }
 
@@ -1549,7 +1516,7 @@ private struct V151IOSLedger: View {
     private struct SelectedAccountID: Identifiable { let id: UUID }
     private struct LedgerRefreshOwner: Hashable { let focusRequest: V152LedgerFocusRequest?; let revision: UInt64 }
     private func shortDate(_ value: String) -> String { value.count >= 5 ? String(value.suffix(5)) : value }
-    private func direction(_ transaction: V15Transaction) -> V15MoneyDirection { switch transaction.kind { case "income", "reimbursement_receipt": .inflow; case "transfer": .neutral; default: .outflow } }
+    private func direction(_ transaction: V15Transaction) -> V15MoneyDirection { switch transaction.kind { case "income", "reimbursement_receipt", "borrowing": .inflow; case "transfer", "credit_principal_waiver", "credit_fee_refund": .neutral; default: .outflow } }
     private func transactionKindLabel(_ value: String) -> String { V15LedgerReadKind(rawValue: value)?.displayName ?? "账目" }
     private func sourceLabel(_ value: String) -> String { V15LedgerReadSource(rawValue: value)?.displayName ?? "其他来源" }
 }
@@ -1816,13 +1783,13 @@ private struct V151IOSAccountDetail: View {
             }
             if account.kind == .credit {
                 V15Section("信用约束") {
-                    accountRow("信用额度", account.creditLimitMinor.map { V15MoneyPresentation(minorUnits: $0, direction: .neutral).text } ?? "未设置")
-                    accountRow("账单日", account.statementDay.map { "每月 \($0) 日" } ?? "未设置")
-                    accountRow("还款日", account.dueDay.map { "每月 \($0) 日" } ?? "未设置")
+                    accountRow("信用额度", account.creditLimitMinor.map { V15MoneyPresentation(minorUnits: $0, direction: .neutral).text } ?? (account.cycleMode == "on_demand" ? "不设额度" : "未设置"))
+                    accountRow("账单日", account.statementDay.map { "每月 \($0) 日" } ?? (account.cycleMode == "on_demand" ? "无固定账单日" : "未设置"))
+                    accountRow("还款日", account.dueDay.map { "每月 \($0) 日" } ?? (account.cycleMode == "on_demand" ? "无固定还款日" : "未设置"))
                 }
                 V15AdaptiveStack {
-                    V15ActionButton("查看信用账期", kind: .secondary) { contextDestination = .credit(accountID: account.id) }
-                    V15ActionButton("分期计划", kind: .secondary) { contextDestination = .installments(accountID: account.id, planID: nil, purchaseTransactionID: nil) }
+                    V15ActionButton(account.cycleMode == "on_demand" ? "借入、还款与全额结清" : "查看信用账期", kind: .secondary) { contextDestination = .credit(accountID: account.id) }
+                    if account.cycleMode != "on_demand" { V15ActionButton("分期计划", kind: .secondary) { contextDestination = .installments(accountID: account.id, planID: nil, purchaseTransactionID: nil) } }
                 }
             }
             V15ActionButton("账户与分类设置", kind: .secondary) { contextDestination = .settings }
@@ -1842,6 +1809,7 @@ private struct V151IOSAccountDetail: View {
 
 private struct V151IOSPendingSyncQueue: View {
     let services: V15Services
+    @State private var payoffAccountID: UUID?
 
     var body: some View {
         ScrollView {
@@ -1868,6 +1836,9 @@ private struct V151IOSPendingSyncQueue: View {
             .padding(20)
         }
         .v15IOSScreenCanvas()
+        .sheet(isPresented: Binding(get: { payoffAccountID != nil }, set: { if !$0 { payoffAccountID = nil } })) {
+            if let payoffAccountID { V15CreditPayoffView(services: services, accountID: payoffAccountID, accountName: "恢复原账户结清") }
+        }
         .navigationTitle("待同步")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("v151.ios.pending-sync")
@@ -1885,7 +1856,7 @@ private struct V151IOSPendingSyncQueue: View {
                 if let amount = item.amountMinor { V15MoneyText(minorUnits: amount, direction: .neutral, includeCurrency: false, font: .subheadline.weight(.semibold).monospacedDigit()) }
             }
             if item.status == .requiresDecision || item.status == .outcomeUnknown {
-                Text("这项更改不会自动重试。请移除后回到原记录重新操作，或在账目中检查最新状态。")
+                Text("这项更改不会自动重试。请回到原记录核对或安全恢复原请求，未确认结果前不要另建相同账目。")
                     .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
             }
             V15AdaptiveStack(spacing: 8) {
@@ -1895,7 +1866,9 @@ private struct V151IOSPendingSyncQueue: View {
                         Task { await services.pendingWrites.replay(using: services) }
                     }
                 }
-                if item.status == .outcomeUnknown {
+                if (item.kind == .creditPayoff || item.kind == .creditPayoffReverse), let accountID = item.resourceID {
+                    V15ActionButton("打开账户结清恢复", symbol: "arrow.clockwise", kind: .secondary) { payoffAccountID = accountID }
+                } else if item.status == .outcomeUnknown {
                     V15ActionButton("读取原操作回执", kind: .secondary) { Task { _ = await services.pendingWrites.recover(item.id, using: services) } }
                     if item.kind == .transactionCreate || item.kind == .repayment {
                         V15ActionButton("按原请求安全重试", kind: .secondary) { Task { _ = await services.pendingWrites.replayUnknown(item.id, using: services) } }
@@ -1929,7 +1902,7 @@ private struct V151IOSPendingSyncQueue: View {
         }
     }
 
-    private func kindLabel(_ value: V15PendingWriteStore.Kind) -> String { switch value { case .transactionCreate: "新建账目"; case .categoryReplace: "分类决定"; case .repayment: "还款"; case .statementProviderAttempt: "账单解析"; case .statementConfirmation: "账单确认" } }
+    private func kindLabel(_ value: V15PendingWriteStore.Kind) -> String { switch value { case .transactionCreate: "新建账目"; case .categoryReplace: "分类决定"; case .repayment: "还款"; case .creditPayoff: "全额结清"; case .creditPayoffReverse: "撤销整组结清"; case .statementProviderAttempt: "账单解析"; case .statementConfirmation: "账单确认" } }
     private func statusLabel(_ item: V15PendingWriteStore.Item) -> String {
         let value: String
         switch item.status { case .queued: value = "排队中"; case .syncing: value = "同步中"; case .requiresDecision: value = "需要重新决定"; case .outcomeUnknown: value = "结果不明"; case .failed: value = "同步失败" }

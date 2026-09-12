@@ -127,8 +127,16 @@ class CreditRepository:
                     func.sum(
                         case(
                             (
-                                (LedgerTransaction.kind == "repayment")
-                                & (Posting.role == "destination"),
+                                (
+                                    LedgerTransaction.kind.in_(
+                                        [
+                                            "repayment",
+                                            "credit_principal_waiver",
+                                            "credit_fee_refund",
+                                        ]
+                                    )
+                                )
+                                & (Posting.role.in_(["destination", "account"])),
                                 Posting.amount_minor,
                             ),
                             else_=0,
@@ -192,7 +200,15 @@ class CreditRepository:
             .join(LedgerTransaction, LedgerTransaction.id == Posting.transaction_id)
             .where(
                 Posting.account_id == account_id,
-                LedgerTransaction.kind.in_(["credit_purchase", "repayment"]),
+                LedgerTransaction.kind.in_(
+                    [
+                        "credit_purchase",
+                        "repayment",
+                        "borrowing",
+                        "credit_principal_waiver",
+                        "credit_fee_refund",
+                    ]
+                ),
             )
             .limit(1)
         )
@@ -242,7 +258,15 @@ class CreditRepository:
             .join(Posting, Posting.transaction_id == LedgerTransaction.id)
             .where(
                 LedgerTransaction.credit_cycle_id.in_(cycle_ids),
-                LedgerTransaction.kind.in_(["credit_purchase", "repayment"]),
+                LedgerTransaction.kind.in_(
+                    [
+                        "credit_purchase",
+                        "repayment",
+                        "borrowing",
+                        "credit_principal_waiver",
+                        "credit_fee_refund",
+                    ]
+                ),
                 LedgerTransaction.voided_at.is_(None),
                 Posting.role.in_(["account", "destination"]),
                 or_(
@@ -286,7 +310,15 @@ class CreditRepository:
         )
         for cycle_id, occurred, amount in [*allocation_rows, *fee_rows]:
             events.setdefault(cycle_id, []).append((occurred, int(amount)))
-        return {key: sorted(values, key=lambda item: item[0]) for key, values in events.items()}
+        # Allocation principal/fees and ledger repayments may share one instant.
+        # They form a single chronological boundary, not an arbitrary SQL row order.
+        grouped: dict[UUID, list[tuple[datetime, int]]] = {}
+        for key, values in events.items():
+            by_time: dict[datetime, int] = {}
+            for occurred, amount in values:
+                by_time[occurred] = by_time.get(occurred, 0) + amount
+            grouped[key] = sorted(by_time.items())
+        return grouped
 
     async def cycle_has_any_transaction(self, cycle_id: UUID) -> bool:
         return (

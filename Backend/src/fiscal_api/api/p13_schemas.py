@@ -100,6 +100,7 @@ class CashFlowVersionRequest(APIModel):
 
 
 class CashFlowSettlementDraft(APIModel):
+    complete_remaining: bool = True
     expected_version: StrictInt = Field(ge=1)
     actual_amount_minor: PositiveMinorUnits
     occurred_at: datetime
@@ -125,6 +126,13 @@ class CashFlowSettlementDraft(APIModel):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("occurred_at must include a timezone")
         return value
+
+
+class CashFlowExistingSettlementDraft(APIModel):
+    expected_version: StrictInt = Field(ge=1)
+    transaction_id: UUID
+    transaction_expected_version: StrictInt = Field(ge=1)
+    complete_remaining: bool = True
 
 
 class CashFlowSystemReplace(APIModel):
@@ -174,7 +182,7 @@ class CashFlowItemResponse(APIModel):
     note: str | None = None
     direction: CashFlowDirection
     planned_amount_minor: int
-    expected_date: date
+    expected_date: date | None
     account_id: UUID | None = None
     destination_account_id: UUID | None = None
     category_id: UUID | None = None
@@ -182,6 +190,9 @@ class CashFlowItemResponse(APIModel):
     source: CashFlowSource | str
     version: int
     linked_transaction_id: UUID | None = None
+    settled_amount_minor: int = 0
+    remaining_amount_minor: int = 0
+    settlement_transaction_ids: list[UUID] = Field(default_factory=lambda: list[UUID]())
     actual_amount_minor: int | None = None
     actual_date: date | None = None
     is_overdue: bool

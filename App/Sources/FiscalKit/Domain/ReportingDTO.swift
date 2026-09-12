@@ -343,10 +343,10 @@ public struct DebtAccountRow: Codable, Sendable, Equatable, Identifiable {
   public let accountName: String
   public let institution: String?
   public let lastFour: String?
-  public let creditLimitMinor: Int64
+  public let creditLimitMinor: Int64?
   public let currentDebtMinor: Int64
-  public let availableCreditMinor: Int64
-  public let overLimitMinor: Int64
+  public let availableCreditMinor: Int64?
+  public let overLimitMinor: Int64?
   public let overdueMinor: Int64
   public let openingConfigurationRequired: Bool
   public let hasOverdueCycle: Bool

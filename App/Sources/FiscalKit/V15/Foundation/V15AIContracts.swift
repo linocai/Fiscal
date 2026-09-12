@@ -271,7 +271,7 @@ public struct V15AICashFlowReviewDraft: Sendable, Equatable {
         destinationAccountID = wireDraft.destinationAccountID
         categoryID = wireDraft.categoryID
         direction = switch wireDraft.kind {
-        case .income: .inflow
+        case .income, .borrowing: .inflow
         case .expense: .outflow
         case .transfer: .transfer
         case .creditPurchase, .repayment: .outflow

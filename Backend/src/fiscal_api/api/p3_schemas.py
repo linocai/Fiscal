@@ -64,6 +64,9 @@ class TransactionDraft(APIModel):
     @classmethod
     def manual_kinds_only(cls, value: TransactionKind) -> TransactionKind:
         if value in {
+            TransactionKind.CREDIT_PRINCIPAL_WAIVER,
+            TransactionKind.CREDIT_FEE_REFUND,
+            TransactionKind.CREDIT_SETTLEMENT_FEE,
             TransactionKind.INSTALLMENT_FEE,
             TransactionKind.INSTALLMENT_REFUND,
             TransactionKind.REIMBURSEMENT_RECEIPT,

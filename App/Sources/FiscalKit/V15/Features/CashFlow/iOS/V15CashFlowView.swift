@@ -111,7 +111,7 @@ public struct V15CashFlowView: View {
         V15Section(title, detail: "\(items.count) 项") {
             VStack(spacing: 0) {
                 ForEach(items) { item in
-                    V15LedgerRow(title: item.title, detail: "\(item.expectedDate) · \(item.status.displayName) · \(sourceLabel(item))", amountMinor: item.plannedAmountMinor, direction: moneyDirection(item), marker: item.isDisplayOnly ? .provisional : item.status == .expected ? .provisional : .decision) { Task { await model.selectItem(item, from: list) } }
+                    V15LedgerRow(title: item.title, detail: "\(item.expectedDate ?? "未安排日期") · \(item.status.displayName) · \(sourceLabel(item))", amountMinor: item.effectiveRemainingMinor, direction: moneyDirection(item), marker: item.isDisplayOnly ? .provisional : item.status == .expected ? .provisional : .decision) { Task { await model.selectItem(item, from: list) } }
                         .disabled(model.selectionLocked)
                         .accessibilityIdentifier("v15.f3d.item.\(item.id)")
                     Divider()
@@ -130,9 +130,9 @@ public struct V15CashFlowView: View {
             }
             V15AdaptiveStack(horizontalAlignment: .firstTextBaseline) { Text(item.title).font(V15Typography.cardTitle); Spacer(); Text(item.status.displayName).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)) }
                 .accessibilityIdentifier("v15.f3d.detail")
-            Text("\(item.expectedDate) · \(item.direction.displayName) · \(item.status.displayName)").font(V15Typography.secondary)
+            Text("\(item.expectedDate ?? "未安排日期") · \(item.direction.displayName) · \(item.status.displayName)").font(V15Typography.secondary)
             V15AdaptiveStack(spacing: V15Spacing.sm) {
-                cashFlowFact("计划金额", value: item.plannedAmountMinor, date: item.expectedDate, provisional: true)
+                cashFlowFact("计划金额", value: item.plannedAmountMinor, date: item.expectedDate ?? "未安排日期", provisional: true)
                 if let actual = item.actualAmountMinor { cashFlowFact("实际入账", value: actual, date: item.actualDate ?? "日期未提供", provisional: false) }
                 else { cashFlowUnavailableFact("实际入账", detail: item.isSystem ? "回来源流程确认" : "尚未结算") }
             }
@@ -247,16 +247,7 @@ public struct V15CashFlowView: View {
 
     private var settlementEditor: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
-            Text("计划金额不会自动成为实际金额；请填写本次真实入账金额。") .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-            V22FormSection("本次实际入账") {
-            V15AmountInput(text: $model.settleAmountText, issues: issues(model.settleIssues, "actual_amount_minor"), accessibilityIdentifier: "v15.f3d.settle.amount")
-            V15Field("发生日期", text: $model.settleDateText, prompt: "YYYY-MM-DD", issues: issues(model.settleIssues, "occurred_at")).accessibilityIdentifier("v15.f3d.settle.date")
-            accountPickers(source: $model.settleAccountID, destination: $model.settleDestinationAccountID, transfer: model.selectedItem?.direction == .transfer)
-            if model.selectedItem?.direction != .transfer { categoryPicker(selection: $model.settleCategoryID, categories: model.selectedItem?.direction == .inflow ? model.incomeCategories : model.expenseCategories) }
-            V15Field("入账标题", text: $model.settleTitle)
-            V15Field("备注", text: $model.settleNote, axis: .vertical)
-            }
-            V15ActionButton("确认入账", disabledReasons: model.settleReasons) { Task { await model.settle() } }.accessibilityIdentifier("v15.f3d.settle.submit")
+            V23CashFlowSettlementEditor(model: model)
             recoveryActions
         }
     }

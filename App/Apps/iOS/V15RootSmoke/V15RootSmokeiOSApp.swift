@@ -69,6 +69,9 @@ struct V15RootSmokeiOSApp: App {
                 V15RootSmokeCleanupView(accessKeyStore: accessKeyStore, offlineSnapshots: offlineSnapshots)
             } else if let bootstrapFixtureServices {
                 V15IOSLiveAppShell(services: bootstrapFixtureServices)
+            } else if formalFixture && ProcessInfo.processInfo.environment["FISCAL_ROOT_SMOKE_UI_ROUTE"] == "payoff" {
+                V15CreditPayoffView(services: V230Fixtures.services(scenario: ProcessInfo.processInfo.environment["FISCAL_ROOT_SMOKE_REVIEW_SCENARIO"] ?? "v230"), accountID: V230Fixtures.accountID, accountName: "随借随还示例")
+                    .preferredColorScheme(preferredScheme)
             } else if formalFixture {
                 // Test-only host: this is the actual formal workspace, fed by
                 // deterministic read-only facts rather than the Gallery shell.

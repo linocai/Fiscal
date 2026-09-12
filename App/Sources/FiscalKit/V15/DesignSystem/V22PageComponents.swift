@@ -443,3 +443,132 @@ extension View {
             }
     }
 }
+
+/// One revision owns both the forecast total and its paginated source detail.
+public struct V23DisposableCard: View {
+    @Bindable var model: V15TodayReadModel
+    private let dark: Bool
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var detailDirection: V15FutureEventDirection?
+    public init(model: V15TodayReadModel, dark: Bool = false) { self.model = model; self.dark = dark }
+    private var ink: Color { dark ? .white : V15Palette.ink.color }
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("未来 30 天预计可支配余额")
+                .font(V15Typography.body.weight(.semibold)).foregroundStyle(ink.opacity(0.80))
+            if let value = model.facts?.disposable, value.isConsistent {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(money(value.projectedBalanceMinor))
+                        .font(.system(size: 38, weight: .bold, design: .rounded)).monospacedDigit()
+                        .fixedSize().foregroundStyle(ink)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("未来30天预计可支配余额")
+                .accessibilityValue(money(value.projectedBalanceMinor))
+                .accessibilityIdentifier("v230.overview.disposable.amount")
+                Text("\(value.dateFrom) 至 \(value.dateTo) · 上海日期")
+                    .font(V15Typography.label).foregroundStyle(ink.opacity(0.65))
+                V15AdaptiveStack(spacing: 12) {
+                    component("现金与储蓄", amount: value.currentCashMinor, symbol: "wallet.bifold")
+                    Button { detailDirection = .inflow } label: { component("＋ 预计入账", amount: value.expectedInflowMinor, symbol: "arrow.down.left.circle") }
+                        .buttonStyle(.plain).accessibilityIdentifier("v230.overview.disposable.inflow")
+                    Button { detailDirection = .outflow } label: { component("− 预计流出", amount: value.expectedOutflowMinor, symbol: "arrow.up.right.circle") }
+                        .buttonStyle(.plain).accessibilityIdentifier("v230.overview.disposable.outflow")
+                }
+                Text("点击预计入账或流出查看逐项明细；只计尚未完成的金额。")
+                    .font(V15Typography.label).foregroundStyle(ink.opacity(0.62))
+                if value.undatedInflowMinor != 0 { caveat("未安排日期的待入账", value.undatedInflowMinor) }
+                if value.unscheduledCreditDebtMinor != 0 { caveat("未安排还款的信用欠款", value.unscheduledCreditDebtMinor) }
+                if value.overdueOutflowMinor != 0 { caveat("窗口前逾期未处理流出", value.overdueOutflowMinor) }
+            } else {
+                Text(model.facts?.disposable == nil ? "此指标需新版服务" : "预计金额暂不可用")
+                    .font(.title2.weight(.semibold)).foregroundStyle(ink)
+                Text("请更新服务或重新读取后查看。")
+                    .font(V15Typography.secondary).foregroundStyle(ink.opacity(0.68))
+            }
+            if model.isOffline { Text("上次快照 · 离线期间可能已有变化").font(V15Typography.label).foregroundStyle(ink.opacity(0.7)) }
+        }
+        .padding(22).frame(maxWidth: .infinity, alignment: .leading)
+        .background(dark ? V15Palette.sidebarDeep.color : V15Palette.selected.color, in: RoundedRectangle(cornerRadius: 22))
+        .sheet(isPresented: Binding(get: { detailDirection != nil }, set: { if !$0 { detailDirection = nil; model.closeDisposableEvents() } })) {
+            if let detailDirection { V23DisposableDetails(model: model, direction: detailDirection) }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("v230.overview.disposable")
+        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await model.refresh() } } }
+        .task {
+            while !Task.isCancelled {
+                var calendar = Calendar(identifier: .gregorian); calendar.timeZone = ShanghaiBusinessDate.timeZone
+                let now = Date()
+                guard let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) else { return }
+                do { try await Task.sleep(for: .seconds(max(midnight.timeIntervalSince(now), 1))) } catch { return }
+                guard !Task.isCancelled else { return }
+                await model.refresh()
+            }
+        }
+
+    }
+    private func component(_ title: String, amount: Int64, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: symbol).font(V15Typography.label).foregroundStyle(ink.opacity(0.72))
+            Text(money(amount)).font(V15Typography.money.weight(.semibold)).monospacedDigit().foregroundStyle(ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }.frame(maxWidth: .infinity, minHeight: 56, alignment: .leading).contentShape(Rectangle())
+    }
+    private func caveat(_ title: String, _ amount: Int64) -> some View {
+        Text("\(title)：\(money(amount))（未计入以上预测）")
+            .font(V15Typography.label).foregroundStyle(ink.opacity(0.72)).fixedSize(horizontal: false, vertical: true)
+    }
+    private func money(_ amount: Int64) -> String { V15MoneyPresentation(minorUnits: amount, direction: .balance).text }
+}
+
+private struct V23DisposableDetails: View {
+    @Bindable var model: V15TodayReadModel
+    let direction: V15FutureEventDirection
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    V22PageHeader(direction == .inflow ? "30 日预计入账" : "30 日预计流出", symbol: direction == .inflow ? "arrow.down.left.circle" : "arrow.up.right.circle")
+                    if let value = model.facts?.disposable {
+                        Text("\(value.dateFrom) 至 \(value.dateTo) · 仅含剩余金额").font(V15Typography.secondary)
+                    }
+                    switch model.disposableEventsPhase {
+                    case .idle: V15ActionButton("读取当前快照明细", symbol: "arrow.clockwise", kind: .secondary) { Task { await model.openDisposableEvents(direction: direction) } }
+                    case .loading: V15LoadingSkeleton()
+                    case .empty:
+                        if model.hasNextDisposablePage { V15ActionButton("继续读取此方向的事项", kind: .secondary) { Task { await model.loadNextDisposableEvents() } } }
+                        else { V15EmptyState(title: "这个窗口没有剩余事项", explanation: "无预计日期的事项另外列示，不编造到账或还款日期。") }
+                    case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.openDisposableEvents(direction: direction) } }
+                    case .requiresFactsReload(let failure):
+                        V15ServiceErrorState(message: failure.message) { Task { await model.refresh(); await model.openDisposableEvents(direction: direction) } }
+                    case .loaded:
+                        ForEach(model.disposableEvents) { event in
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(event.title).font(V15Typography.body.weight(.semibold))
+                                    Text("\(event.date) · \(certainty(event.certainty))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
+                                }
+                                Spacer(minLength: 8)
+                                V15MoneyText(minorUnits: event.amountMinor, direction: direction == .inflow ? .inflow : .outflow)
+                            }.padding(.vertical, 10)
+                            Divider()
+                        }
+                        if model.hasNextDisposablePage { V15ActionButton("读取更多事项", kind: .secondary) { Task { await model.loadNextDisposableEvents() } } }
+                    }
+                }.padding(22)
+            }.v22PageCanvas()
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { model.closeDisposableEvents(); dismiss() } } }
+        }
+#if os(macOS)
+        .frame(minWidth: 560, idealWidth: 680, minHeight: 480)
+#endif
+        .task { await model.openDisposableEvents(direction: direction) }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("v230.overview.disposable.details")
+    }
+    private func certainty(_ value: V15FutureEventCertainty) -> String {
+        switch value { case .exactDue: "固定到期"; case .confirmed: "已确认"; case .expected: "预计"; case .scheduled: "已安排" }
+    }
+}

@@ -44,15 +44,15 @@ class CreditAccountSummary(APIModel):
     name: str
     institution: str | None
     last_four: str | None
-    credit_limit_minor: int
+    credit_limit_minor: int | None
     current_debt_minor: int
-    available_credit_minor: int
-    over_limit_minor: int
+    available_credit_minor: int | None
+    over_limit_minor: int | None
     opening_configuration_required: bool
-    statement_day: int
-    due_day: int
+    statement_day: int | None
+    due_day: int | None
     cycle_mode: CreditCycleMode
-    current_cycle: CreditCycleResponse
+    current_cycle: CreditCycleResponse | None
     next_due_cycle: CreditCycleResponse | None
     has_overdue_cycle: bool
     active_installment_count: int = 0

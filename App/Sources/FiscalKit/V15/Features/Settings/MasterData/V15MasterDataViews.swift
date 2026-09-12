@@ -125,9 +125,43 @@ public struct V15MasterDataView: View {
 #endif
     }
     @ViewBuilder private var inspector: some View { VStack(alignment: .leading, spacing: V15Spacing.md) { HStack { VStack(alignment: .leading, spacing: 2) { Text(model.selectedSection.rawValue).font(V15Typography.cardTitle) }; Spacer(); Button { prepareNew() } label: { Label("新建", systemImage: "plus") }.disabled(model.writeDisabledReason != nil).accessibilityHint(model.writeDisabledReason?.message ?? "").v15PlatformHitArea() }; editorContent; V15ActionButton("保存", symbol: "checkmark", disabledReason: model.saveDisabledReason, action: { Task { await save() } }).accessibilityIdentifier("v15.f1c.save.macos"); Spacer() }.padding(V15Spacing.md) }
-    @ViewBuilder private var editorContent: some View { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { if let text = model.receipt { V15SuccessReceiptState(title: "已保存", detail: text) }; if let reason = model.unknownCreateReloadReason { V15ActionButton("重新读取后再确认", symbol: "arrow.clockwise", kind: .quiet, disabledReason: model.isOffline ? model.writeDisabledReason : nil, action: { Task { await model.reloadAfterUnknownCreate() } }).accessibilityIdentifier("v15.f1c.create-unknown.reload"); Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; if let conflict = model.conflict { V15ConflictState(conflict: conflict, changes: model.conflictChanges, reload: { Task { await model.resolveConflictByReload() } }) }
+    @ViewBuilder private var editorContent: some View { ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { receiptBanner; if let reason = model.unknownCreateReloadReason { V15ActionButton("重新读取后再确认", symbol: "arrow.clockwise", kind: .quiet, disabledReason: model.isOffline ? model.writeDisabledReason : nil, action: { Task { await model.reloadAfterUnknownCreate() } }).accessibilityIdentifier("v15.f1c.create-unknown.reload"); Text(reason.message).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }; if let conflict = model.conflict { V15ConflictState(conflict: conflict, changes: model.conflictChanges, reload: { Task { await model.resolveConflictByReload() } }) }
         switch model.selectedSection { case .accounts: accountEditor; case .categories: categoryEditor; case .merchants: merchantEditor }
     }.padding(V15Spacing.md) } }
+    @ViewBuilder private var receiptBanner: some View {
+        if let text = model.receipt {
+            switch model.receiptStatus {
+            case .success: V15SuccessReceiptState(title: model.receiptTitle, detail: text)
+            case .unknown: V15OutcomeUnknownState(message: text)
+            case .validation, .failure, .conflict, .informational:
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(model.receiptTitle, systemImage: model.receiptStatus == .informational ? "info.circle" : "exclamationmark.circle")
+                        .font(V15Typography.body.weight(.semibold))
+                    Text(text).font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(model.receiptStatus == .informational ? V15Palette.ink.color : V15Palette.danger.color)
+                .padding(14).frame(maxWidth: .infinity, alignment: .leading).v22FormSurface()
+            }
+        }
+    }
+    @ViewBuilder private var accountKindSelection: some View {
+#if os(macOS)
+        V23ChoiceGroup("账户类型", selection: $model.accountKind, choices: [V23Choice(.cash, "现金", symbol: "banknote"), V23Choice(.debit, "借记", symbol: "building.columns"), V23Choice(.credit, "信用", symbol: "creditcard")], identifier: "v230.account.kind")
+#else
+        Picker("账户类型", selection: $model.accountKind) { Text("现金").tag(V15AccountKind.cash); Text("借记").tag(V15AccountKind.debit); Text("信用").tag(V15AccountKind.credit) }.pickerStyle(.menu)
+#endif
+    }
+    @ViewBuilder private var creditModeSelection: some View {
+#if os(macOS)
+        V23ChoiceGroup("账期方式", selection: $model.cycleMode, choices: [V23Choice("statement_day_cutoff", "账单日截点"), V23Choice("previous_calendar_month", "上个自然月"), V23Choice("on_demand", "随借随还", symbol: "arrow.left.arrow.right")], identifier: "v230.account.cycle-mode")
+#else
+        Picker("账期方式", selection: $model.cycleMode) {
+            Text("账单日截点").tag("statement_day_cutoff")
+            Text("上个自然月").tag("previous_calendar_month")
+            Text("随借随还").tag("on_demand")
+        }.pickerStyle(.menu).accessibilityIdentifier("v230.account.cycle-mode")
+#endif
+    }
     private var accountEditor: some View {
         Group {
             let archived = model.selectedAccount?.archivedAt != nil
@@ -137,12 +171,7 @@ public struct V15MasterDataView: View {
                 V15Field("账户昵称", text: $model.accountName, prompt: "例如 日常现金", issues: issues(matching: FieldPaths.accountName))
                     .disabled(archived)
                     .accessibilityIdentifier("v15.f1c.account.name")
-                Picker("账户类型", selection: $model.accountKind) {
-                    Text("现金").tag(V15AccountKind.cash)
-                    Text("借记").tag(V15AccountKind.debit)
-                    Text("信用").tag(V15AccountKind.credit)
-                }
-                .pickerStyle(.menu)
+                accountKindSelection
                 .disabled(archived || existing)
                 .onChange(of: model.accountKind) { _, _ in model.clearCreditFieldsIfNeeded() }
                 V15FieldIssues(issues: issues(matching: FieldPaths.accountKind))
@@ -156,24 +185,23 @@ public struct V15MasterDataView: View {
                 V15Field("期初余额（元）", text: $model.openingBalance, prompt: "0.00", issues: issues(matching: FieldPaths.openingBalance), keyboard: .decimal)
                     .disabled(archived)
                 if model.accountKind == .credit {
-                    V15Field("信用额度（元）", text: $model.creditLimit, prompt: "10000.00", issues: issues(matching: FieldPaths.creditLimit), keyboard: .decimal)
-                        .disabled(archived)
-                    V15Field("账单日", text: $model.statementDay, prompt: "1–28", issues: issues(matching: FieldPaths.statementDay), keyboard: .integer)
-                        .disabled(archived)
-                    V15Field("还款日", text: $model.dueDay, prompt: "1–28", issues: issues(matching: FieldPaths.dueDay), keyboard: .integer)
-                        .disabled(archived)
-                    Picker("账期方式", selection: $model.cycleMode) {
-                        Text("账单日截点").tag("statement_day_cutoff")
-                        Text("上个自然月").tag("previous_calendar_month")
+                    creditModeSelection.disabled(archived)
+                    if model.cycleMode == "on_demand" {
+                        Text("随借随还：不设额度、账单日或还款日；借入与偿还按真实资金往来记录。")
+                            .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.65))
+                    } else {
+                        V15Field("信用额度（元）", text: $model.creditLimit, prompt: "10000.00", issues: issues(matching: FieldPaths.creditLimit), keyboard: .decimal).disabled(archived)
+                        V15Field("账单日", text: $model.statementDay, prompt: "1–28", issues: issues(matching: FieldPaths.statementDay), keyboard: .integer).disabled(archived)
+                        V15Field("还款日", text: $model.dueDay, prompt: "1–28", issues: issues(matching: FieldPaths.dueDay), keyboard: .integer).disabled(archived)
                     }
-                    .pickerStyle(.menu)
-                    .disabled(archived)
                     V15FieldIssues(issues: issues(matching: FieldPaths.cycleMode))
                     if CNYAmountParser.minorUnits(model.openingBalance) ?? 0 > 0 {
                         V15Field("期初余额日期", text: $model.openingBalanceAsOfDate, prompt: "YYYY-MM-DD", issues: issues(matching: FieldPaths.openingBalanceAsOfDate))
                             .disabled(archived)
+                        if model.cycleMode != "on_demand" {
                         V15Field("期初到期日期", text: $model.openingDueDate, prompt: "YYYY-MM-DD", issues: issues(matching: FieldPaths.openingDueDate))
                             .disabled(archived)
+                        }
                     }
                 }
             }
@@ -359,9 +387,11 @@ public struct V15MasterDataView: View {
     private var visibleAccountFieldPaths: [String] {
         var paths = FieldPaths.accountName + FieldPaths.accountKind + FieldPaths.openingBalance
         if model.accountKind == .credit {
-            paths += FieldPaths.creditLimit + FieldPaths.statementDay + FieldPaths.dueDay + FieldPaths.cycleMode
+            paths += FieldPaths.cycleMode
+            if model.cycleMode != "on_demand" { paths += FieldPaths.creditLimit + FieldPaths.statementDay + FieldPaths.dueDay }
             if CNYAmountParser.minorUnits(model.openingBalance) ?? 0 > 0 {
-                paths += FieldPaths.openingBalanceAsOfDate + FieldPaths.openingDueDate
+                paths += FieldPaths.openingBalanceAsOfDate
+                if model.cycleMode != "on_demand" { paths += FieldPaths.openingDueDate }
             }
         }
         return paths
