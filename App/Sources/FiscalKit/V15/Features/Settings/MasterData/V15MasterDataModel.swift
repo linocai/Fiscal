@@ -103,6 +103,9 @@ import Foundation
         if selectedAccount?.archivedAt != nil {
             return .init(code: "archived_read_only", message: "归档账户只能恢复，不能编辑。", fieldPath: nil)
         }
+        if let account = selectedAccount, account.kind != accountKind {
+            return .init(code: "account_kind_immutable", message: "账户类型创建后不可修改，请重新选择此账户后继续。", fieldPath: "account.kind")
+        }
         guard !accountName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .init(code: "account_name_required", message: "请先填写账户昵称。", fieldPath: "account.name")
         }

@@ -105,11 +105,11 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         actual.click(); actual.typeText("1280")
         app.checkBoxes["v230.payoff.bank-confirmed"].click()
         let preview = app.buttons["v230.payoff.preview"]
-        for _ in 0..<8 where !preview.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        for _ in 0..<8 where !preview.isHittable { app.scrollViews.firstMatch.scroll(byDeltaX: 0, deltaY: -450) }
         XCTAssertTrue(preview.isHittable); preview.click()
         let commit = app.buttons["v230.payoff.commit"]
         XCTAssertTrue(commit.waitForExistence(timeout: 5))
-        for _ in 0..<10 where !commit.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        for _ in 0..<10 where !commit.isHittable { app.scrollViews.firstMatch.scroll(byDeltaX: 0, deltaY: -450) }
         XCTAssertTrue(commit.isEnabled); XCTAssertTrue(commit.isHittable)
         let previewCapture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
         previewCapture.name = "v230-mac-payoff-preview"; previewCapture.lifetime = .keepAlways; add(previewCapture)
@@ -117,18 +117,18 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         commit.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
         XCTAssertTrue(app.descendants(matching: .any)["v230.payoff.receipt"].firstMatch.waitForExistence(timeout: 8))
         let reverse = app.buttons["v230.payoff.reverse.preview"]
-        for _ in 0..<8 where !reverse.isHittable { app.scrollViews.firstMatch.swipeDown() }
+        for _ in 0..<8 where !reverse.isHittable { app.scrollViews.firstMatch.scroll(byDeltaX: 0, deltaY: 450) }
         XCTAssertTrue(reverse.isHittable); reverse.click()
         let confirmReverse = app.buttons["v230.payoff.reverse.commit"]
         XCTAssertTrue(confirmReverse.waitForExistence(timeout: 5))
-        for _ in 0..<8 where !confirmReverse.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        for _ in 0..<8 where !confirmReverse.isHittable { app.scrollViews.firstMatch.scroll(byDeltaX: 0, deltaY: -450) }
         XCTAssertTrue(confirmReverse.isEnabled)
         XCTAssertTrue(app.windows.firstMatch.frame.contains(confirmReverse.frame))
         confirmReverse.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
         XCTAssertTrue(app.staticTexts["整组结清已撤销"].waitForExistence(timeout: 5))
         let change = app.descendants(matching: .any)["v230.payoff.receipt.debt-change"].firstMatch
         XCTAssertTrue(change.waitForExistence(timeout: 5))
-        for _ in 0..<8 where !change.isHittable { app.scrollViews.firstMatch.swipeDown() }
+        for _ in 0..<8 where !change.isHittable { app.scrollViews.firstMatch.scroll(byDeltaX: 0, deltaY: 450) }
         XCTAssertTrue(change.isHittable)
         XCTAssertEqual(change.value as? String, "¥0.00 → ¥1,280.00")
         let receiptCapture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())

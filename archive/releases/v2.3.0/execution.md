@@ -274,3 +274,6 @@ App 定位均相对 `App/Sources/FiscalKit/`。完整审查覆盖 B01–B07 代�
 
 
 复查固定 `3f79bdb` → `4d2b67570aaa6befeba22be4d9a07a300901bb58` 时，独立 reviewer 确认 R2–R5 可关闭，但 R1 新建期间仅修改字段会丢失已创建身份。独立 probe 已确认原补丁连续两次 POST（期初 10000/12500 分）。补充区分 editorSessionGeneration 与字段 generation：同一会话成功绑定服务器 ID并保留新输入，显式切对象/新建草稿仍隔离；新增三类对象 POST→PATCH 回归。补充后 **FiscalKit 459 tests / 44 suites 全量通过**（`client-full-3.log`），原 probe 为一次 POST 后同 ID 的 PATCH（`new_draft_identity-after.json`）；独立 reviewer 将对新固定提交复查此项。
+
+
+继续复查 `4d2b675` → `0c438dcfd6239133123c83dc0f9c0aa27616b695` 时，R1 的两条 P1 路径已关闭，另确认提交途中 cash→debit 会因 PATCH 不支持 kind 而假成功（`new_draft_kind-before.json`）。补充在双端共享账户类型控件保存期间禁用，并由模型拒绝现有账户与草稿类型不一致的保存；新增延迟创建、拒绝不支持的 PATCH、重新选择账户后正常改名的回归。当前验证中。

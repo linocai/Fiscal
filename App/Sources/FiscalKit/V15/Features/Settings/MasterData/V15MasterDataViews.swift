@@ -172,7 +172,7 @@ public struct V15MasterDataView: View {
                     .disabled(archived)
                     .accessibilityIdentifier("v15.f1c.account.name")
                 accountKindSelection
-                .disabled(archived || existing)
+                .disabled(archived || existing || model.isSaving)
                 .onChange(of: model.accountKind) { _, _ in model.clearCreditFieldsIfNeeded() }
                 V15FieldIssues(issues: issues(matching: FieldPaths.accountKind))
                 if existing {

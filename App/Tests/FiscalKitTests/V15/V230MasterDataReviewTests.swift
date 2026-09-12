@@ -55,6 +55,29 @@ struct V230MasterDataReviewTests {
         if kind == "accounts" { #expect(model.selectedAccount?.openingBalanceMinor == 2500) }
     }
 
+    @Test @MainActor func inFlightAccountKindChangeCannotSendUnsupportedPatch() async throws {
+        let transport = MasterReviewTransport(delayed: true)
+        let model = V15MasterDataModel(services: V15Services(transport: transport))
+        #expect(await model.load()); model.beginNewDraft()
+        model.accountName = "cash creation"; model.openingBalance = "10"
+        let saving = Task { await model.saveAccount() }
+        await transport.waitUntilStarted()
+        model.accountKind = .debit
+        await transport.release(); await saving.value
+        let created = try #require(model.selectedAccount)
+        #expect(created.kind == .cash && model.accountKind == .debit)
+        #expect(model.saveDisabledReason?.code == "account_kind_immutable")
+        await model.saveAccount()
+        #expect(await transport.writeMethods == ["POST"])
+        #expect(model.receiptStatus == .validation)
+        #expect(model.fieldIssues.first?.code == "account_kind_immutable")
+        model.selectAccount(created); model.accountName = "cash renamed"
+        await model.saveAccount()
+        #expect(await transport.writeMethods == ["POST", "PATCH"])
+        #expect(model.selectedAccountID == created.id && model.selectedAccount?.kind == .cash)
+        #expect(model.receiptStatus == .success)
+    }
+
     @Test(arguments: ["accounts", "categories", "merchants"], [false, true])
     @MainActor func lateCreateOrUpdateCannotSelectOverNewDraft(kind: String, creating: Bool) async {
         let transport = MasterReviewTransport(delayed: true)
