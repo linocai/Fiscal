@@ -5,7 +5,7 @@
 ## 工程与门禁
 
 - Apple 工程用 xcodegen：改 `App/project.yml` 或增删源文件后必须 `cd App && xcodegen generate`（会重写 xcodeproj；重生成会顺带改 scheme 文件，通常 `git checkout -- Fiscal.xcodeproj/xcshareddata/xcschemes/` 还原噪声）。
-- 单测：`xcodebuild -project App/Fiscal.xcodeproj -scheme FiscalmacOS -destination 'platform=macOS' test -only-testing:FiscalKitTests`（即 `swift test` 语义；无 SPM Package）。
+- 单测仍为 `FiscalmacOS` / `FiscalKitTests`（无 SPM Package），统一经 `scripts/test_artifacts.py run` 调用 xcodebuild，登记用途、源码及清理状态；命令示例见 [脚本说明](scripts/README.md)。
 - 改 SwiftUI View 的批次收口，必须 `xcodebuild` 跑 iOS 与 macOS App target（`FiscaliOS` generic iOS Simulator + `FiscalmacOS` platform=macOS）；只跑 FiscalKit/test 不暴露 View 层问题。
 - 后端在 `Backend/`；疑似项核实以后端 schema/service 为准（见各 `api/*_schemas.py`、`services/*.py`）。
 
@@ -21,6 +21,7 @@
 - 金额一律走 `CNYAmountParser`（元，两位小数），禁止把「元」当「分」或反之；报销回款与报销单必须同单位。
 - 切换交易类型必须清理方向/账户类型不兼容的引用（`TransactionEditorModel.changeKind`），并在有账户/分类上下文处做类型一致性校验（`validateReferences`），不能只查非空。
 - 转账/还款/结算等写入前校验来源与目标账户非空且不同、且账户类型匹配（信用 vs 非信用）。
+- 分期资格、期间锁定和修改校验都按消费与还款/减免的业务时间判断；结清后同账期的新消费不能被旧还款锁住。资格响应自带账期选项，前端直接复用，避免后续请求把业务否决覆盖成读取失败。
 - 高危金额/记账改动收口跑针对性 `swift test`，并手动走一遍真实 posting/回款/还款/入账路径确认写入方向与金额。
 
 ## 时区
@@ -32,3 +33,11 @@
 - “一条龙发布”按生产当前 revision 到目标 revision 的**累计差异**决定范围，不能只看最后一个快修提交是否改了 Backend。先读目标 `RELEASE_STATE.md` 的未执行项，并只读核对生产 revision、Alembic head、服务与备份状态。
 - 新前端依赖尚未上线的 API 或 migration 时，必须把后端 dry-run、迁移前备份、apply、迁移后备份、readiness/public smoke 与 App 换包作为同一发布链记录；不能把前端换包单独宣称为完整发布。
 - 既有版本标签不可移动；同营销版本追加构建号时使用独立不可变 build 标签（如 `v1.5.5-build32`）。
+
+## 测试证据与清理
+
+- `scripts/test_artifacts.py run` 管理每次 Apple 测试的结果路径、日志、结构化摘要和 `run.json`；复用既有 DerivedData，串行两 job，不默认导出附件。视觉用例截图仍属验收证据，不能为省空间删除断言或把必要截图全部关掉。
+- 每轮问题闭环和发布收尾，分类所有 `.xcresult` 及包外图片/视频：最终验收、未解决问题代表证据保留；其他轮次先保存按测试项的摘要和替代依据，再列入精确删除清单。保留运行日志及重要源码版本，禁止用“final”文件名或修改日期代替结果核实。
+- 附件只为当次检查按需导出；定位失败可用 `xcresulttool export attachments --only-failures`。确认原件位于保留结果包或正式归档后删除导出副本；废弃轮次附件随该轮次一起处理。不要重复保存整包与全量导出视频。
+- 清理先 `plan` 后 `apply`，再 `check`，用同一脚本校验未跟踪范围、指纹、保留证据、在用文件与未分类产物。计划/回执/检查结果写入当前版本 `archive`；主 Plan 只记一行结果。新测试产生的 `cleanup_status=pending` 必须收口，资源检查未通过不能宣称清理完成。
+- 当前使用及回退的 App/安装包/dSYM、待通过 Xcode 安装的 iOS 产物、真实账本/数据库备份、用户 scheme 修改受保护；本脚本不自动删除它们。设备支持文件按全局规则另行核验，保留项不能和测试垃圾混删。

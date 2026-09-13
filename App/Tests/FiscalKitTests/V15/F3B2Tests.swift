@@ -369,10 +369,15 @@ struct F3B2Tests {
 
     @MainActor @Test("eligibility reason is server-owned and transaction input invalidates derived options")
     func eligibilityAndInvalidation() async {
-        let model = V15InstallmentModel(services: V15F3B2Fixtures.services(route: "installments-ineligible"), now: { fixedNow })
+        let transport = F3B2Transport(mode: .ineligible)
+        let model = V15InstallmentModel(services: V15F3B2Fixtures.services(transport: transport), now: { fixedNow })
         await model.load(); model.purchaseTransactionIDText = V15F3B2Fixtures.purchaseID.uuidString; await model.checkEligibility()
         #expect(model.eligibility?.eligible == false)
+        #expect(model.eligibilityPhase == .loaded)
+        #expect(model.cycleOptions.isEmpty)
+        #expect(await transport.recordedWires().allSatisfy { $0.path != "installment-cycle-options" })
         #expect(model.createPlanDisabledReason?.code == "installment_plan_in_use")
+        #expect(model.createPlanDisabledReason?.message == "这笔消费已经属于另一个分期计划。")
         model.purchaseTransactionIDText = UUID().uuidString
         #expect(model.eligibility == nil && model.cycleOptions.isEmpty)
     }

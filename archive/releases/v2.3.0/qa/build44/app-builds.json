@@ -1,0 +1,12 @@
+{
+  "FiscalmacOS": {
+    "status": "passed",
+    "exit_code": 0,
+    "purpose": "App target compilation only; no delivery or installation"
+  },
+  "FiscaliOS": {
+    "status": "passed",
+    "exit_code": 0,
+    "purpose": "App target compilation only; no delivery or installation"
+  }
+}

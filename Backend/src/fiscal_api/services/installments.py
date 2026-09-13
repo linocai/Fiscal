@@ -603,11 +603,16 @@ class InstallmentService:
                     "installment_period_locked", "Replacement suffix must remain in open periods"
                 )
             if existing is not None:
-                _charges, repayments = (await self.credit_repository.amounts([existing.id])).get(
-                    existing.id, (0, 0)
-                )
-                if repayments:
-                    conflict("installment_period_locked", "Replacement suffix has repayments")
+                reduced_at = (
+                    await self.credit_repository.latest_cycle_reductions([existing.id])
+                ).get(existing.id)
+                if reduced_at is not None and ensure_utc(reduced_at) >= ensure_utc(
+                    request.purchase.occurred_at
+                ):
+                    conflict(
+                        "installment_period_locked",
+                        "消费发生后该账期已有还款或减免。不能修改为未锁定的分期。",
+                    )
             principal_minor = principal_split[index - len(locked)]
             fee_minor = fee_split[index - len(locked)]
             if principal_minor + fee_minor == 0:
@@ -1483,8 +1488,18 @@ class InstallmentService:
             invalid("purchase_not_eligible", "The credit account is not active")
         if cycle is None or cycle.is_opening_cycle or cycle.statement_date < self._today():
             invalid("purchase_not_eligible", "The purchase cycle is no longer open")
-        if await self.repository.cycle_has_repayment(cycle.id):
-            invalid("purchase_not_eligible", "The purchase cycle already has a repayment")
+        reduced_at = (await self.credit_repository.latest_cycle_reductions([cycle.id])).get(
+            cycle.id
+        )
+        # A prior payoff belongs to older debt, even when the new purchase lands
+        # in the same statement cycle. Do not guess allocations once a repayment
+        # or waiver occurs at/after this purchase; whole-purchase conversion then
+        # remains blocked. Creation still validates all chronological invariants.
+        if reduced_at is not None and ensure_utc(reduced_at) >= ensure_utc(transaction.occurred_at):
+            invalid(
+                "purchase_cycle_repaid_after_purchase",
+                "这笔消费发生后所在账期已有还款或减免。暂不支持整笔转分期。",
+            )
         return account, abs(posting.amount_minor), cycle
 
     async def _planned_purchase_context(
@@ -1578,6 +1593,7 @@ class InstallmentService:
             }
         )
         amounts = await self.credit_repository.amounts(list(cycles))
+        reductions = await self.credit_repository.latest_cycle_reductions(list(cycles))
         periods: list[InstallmentPeriodResponse] = []
         locked_count = cycle_settled = 0
         for period in plan.periods:
@@ -1589,7 +1605,11 @@ class InstallmentService:
             opening = 0
             remaining = purchase_minor + opening - repaid
             status = self._cycle_status(cycle, remaining, repaid)
-            locked = cycle.statement_date < self._today() or repaid > 0
+            reduced_at = reductions.get(cycle.id)
+            locked = cycle.statement_date < self._today() or (
+                reduced_at is not None
+                and ensure_utc(reduced_at) >= ensure_utc(purchase.occurred_at)
+            )
             locked_count += int(locked)
             cycle_settled += int(status is CreditCycleStatus.SETTLED)
             period_status = self._period_status(period, cycle, status)

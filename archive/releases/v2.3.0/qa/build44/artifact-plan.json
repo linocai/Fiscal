@@ -1,0 +1,229 @@
+{
+  "schema": 1,
+  "root": "/Users/linotsai/Lino/Fiscal",
+  "keep": [
+    {
+      "path": "build/release-v2.2.0-41/mac-wide-passed.xcresult",
+      "reason": "Build41 final wide-window verification",
+      "fingerprint": {
+        "sha256": "a105ae913559c5bdd0891c4c93185950d9e0f9e45b2604f705122b1823caa864",
+        "inode": 155838716,
+        "device": 16777232,
+        "logical_bytes": 1834425,
+        "allocated_bytes": 1970176
+      }
+    },
+    {
+      "path": "build/release-v2.2.0-41/units.xcresult",
+      "reason": "Build41 final targeted unit verification",
+      "fingerprint": {
+        "sha256": "e82c724c611f7eedc33c891beb37fc940960fd0e461ab23f60b3827b15ed899a",
+        "inode": 155839326,
+        "device": 16777232,
+        "logical_bytes": 297258,
+        "allocated_bytes": 487424
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/full-fiscalkit-tests-final.xcresult",
+      "reason": "V2.2 final unit suite",
+      "fingerprint": {
+        "sha256": "0d485fa886b01b5b356826bdd618f7a2edf531de971344ce233015ec9febecd5",
+        "inode": 155746108,
+        "device": 16777232,
+        "logical_bytes": 787136,
+        "allocated_bytes": 4091904
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-gallery-r3.xcresult",
+      "reason": "V2.2 final corrected iOS visual scenarios",
+      "fingerprint": {
+        "sha256": "fe1f6f780270479c039e78b2d565075ad50150da1577124d5e3e1502b79bc70b",
+        "inode": 155742281,
+        "device": 16777232,
+        "logical_bytes": 899098,
+        "allocated_bytes": 1032192
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-reduced-effects.xcresult",
+      "reason": "V2.2 reduced-effects verification",
+      "fingerprint": {
+        "sha256": "8cba3cf2b83f25f1da0968ce3edc444b9f3b748b46664acc3b6a57ec7a88005c",
+        "inode": 155744260,
+        "device": 16777232,
+        "logical_bytes": 655558,
+        "allocated_bytes": 778240
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-root-r3.xcresult",
+      "reason": "V2.2 iOS root navigation verification",
+      "fingerprint": {
+        "sha256": "1121dc50210ee31d771a3c337d68f6e190a597271a71b5e045c6e75e91e5fa47",
+        "inode": 155743333,
+        "device": 16777232,
+        "logical_bytes": 3535360,
+        "allocated_bytes": 3735552
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-ios-root-final.xcresult",
+      "reason": "V2.2 final iOS fixes",
+      "fingerprint": {
+        "sha256": "d02803bb2922ce224cfe53f8ededa3070deb2e581cd50edab4b7a9d01798840a",
+        "inode": 155805837,
+        "device": 16777232,
+        "logical_bytes": 4087779,
+        "allocated_bytes": 4255744
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-mac-navigation-final.xcresult",
+      "reason": "V2.2 final Mac navigation fix",
+      "fingerprint": {
+        "sha256": "2931d303cd20fe7821bfda11d84add8ec8ce66e7bf3e6ea640172e59126f6cda",
+        "inode": 155810047,
+        "device": 16777232,
+        "logical_bytes": 719139,
+        "allocated_bytes": 835584
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-mac-root-final.xcresult",
+      "reason": "V2.2 final Mac root fixes",
+      "fingerprint": {
+        "sha256": "e7b1e5a689cf5ca7d5895869d734a6b33804ae85f950f803dff93c7a8048ad48",
+        "inode": 155804202,
+        "device": 16777232,
+        "logical_bytes": 2820829,
+        "allocated_bytes": 2981888
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/mac-gallery-final.xcresult",
+      "reason": "V2.2 final Mac visual acceptance",
+      "fingerprint": {
+        "sha256": "bd598dd7fc699c93364a994623f090453e4c07206b721c29e44c1a894f8cf728",
+        "inode": 155710593,
+        "device": 16777232,
+        "logical_bytes": 123099483,
+        "allocated_bytes": 128843776
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/fiscalkit-2.xcresult",
+      "reason": "V2.3 initial complete unit evidence; final repair is separate",
+      "fingerprint": {
+        "sha256": "f5f450c1d83acf3eedcf7ec93005b63cbf51300ef1dd10fc63297343cb6ae5e1",
+        "inode": 161756047,
+        "device": 16777232,
+        "logical_bytes": 841752,
+        "allocated_bytes": 4472832
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/ios-ui-2.xcresult",
+      "reason": "V2.3 final iOS UI scenarios",
+      "fingerprint": {
+        "sha256": "6bdc445523a1722e365d8566d4c4ef1fe139630de39c580549c3c083d0276ca5",
+        "inode": 162032136,
+        "device": 16777232,
+        "logical_bytes": 1249731,
+        "allocated_bytes": 1388544
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/mac-ui-2.xcresult",
+      "reason": "V2.3 four accepted UI scenarios in a mixed batch; remaining failures fixed in mac-ui-3",
+      "fingerprint": {
+        "sha256": "93ace44dbc79759033c4952bf98ca6e677a572b4113d540114770ad43a679157",
+        "inode": 162025566,
+        "device": 16777232,
+        "logical_bytes": 207146689,
+        "allocated_bytes": 214343680
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/mac-ui-3.xcresult",
+      "reason": "V2.3 final corrected Mac UI scenarios",
+      "fingerprint": {
+        "sha256": "933378da9cd4b9cd1588dce9643a16961d6245d83fd68c52e730af39b65f474f",
+        "inode": 162031393,
+        "device": 16777232,
+        "logical_bytes": 1816486,
+        "allocated_bytes": 1953792
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/macos-final.xcresult",
+      "reason": "V2.3 final initial-build targeted checks",
+      "fingerprint": {
+        "sha256": "d7d7036f8989c1f59a3980f6aacd6e9d8f7316c605aa848dcfba0c56aefeb3b6",
+        "inode": 162034483,
+        "device": 16777232,
+        "logical_bytes": 302115,
+        "allocated_bytes": 512000
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/repair/client-full-4.xcresult",
+      "reason": "Final reviewed FiscalKit suite",
+      "fingerprint": {
+        "sha256": "0049d2834966af9255aabcdfe528f6f9bf6388b0e27b18d8ec31b9df584b358c",
+        "inode": 162279109,
+        "device": 16777232,
+        "logical_bytes": 914299,
+        "allocated_bytes": 5025792
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-real-receipt-3.xcresult",
+      "reason": "Final real HTTP receipt display evidence",
+      "fingerprint": {
+        "sha256": "8929a5402c06e24521af45876f38bff2b31325d5b4b6dbd2db8e9acfd8bc6ff0",
+        "inode": 162296148,
+        "device": 16777232,
+        "logical_bytes": 470226,
+        "allocated_bytes": 589824
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-ui-4.xcresult",
+      "reason": "Unresolved complete Mac workflow: representative assertion failure with recording",
+      "fingerprint": {
+        "sha256": "c24909e5f9ee7c7e1ee8bfb48d6654cc56bf9b00433427538d2a335f38c73532",
+        "inode": 162280685,
+        "device": 16777232,
+        "logical_bytes": 319655707,
+        "allocated_bytes": 326930432
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-ui-5.xcresult",
+      "reason": "Unresolved complete Mac workflow: latest AX/window-loss failure with recording",
+      "fingerprint": {
+        "sha256": "deb1ea7f7ff3d66b39ef6c74abc47a7faec783d5da9abb1eb3d1c95a90b59fa1",
+        "inode": 162285836,
+        "device": 16777232,
+        "logical_bytes": 211259322,
+        "allocated_bytes": 218521600
+      }
+    },
+    {
+      "path": "build/v2.3.0-44/client-tests/tests.xcresult",
+      "reason": "Build44 final FiscalKit regression: 459 passed, 1 conditional PDF-loopback test skipped; eligibility rejection and stale-state guards passed",
+      "fingerprint": {
+        "sha256": "851b79b20a0fe5c149886a83e6d73f982568629d9d4393493c676f525af47aff",
+        "inode": 162691393,
+        "device": 16777232,
+        "logical_bytes": 915190,
+        "allocated_bytes": 5025792
+      }
+    }
+  ],
+  "delete": [],
+  "status": "planned",
+  "planned_at": "2026-09-13T12:33:04.754424+00:00"
+}

@@ -136,6 +136,15 @@ public struct V15InstallmentEligibility: Codable, Sendable, Equatable {
     public let principalMinor: V15MinorUnits
     public let naturalStatementDate: String
     public let startOptions: [V15InstallmentCycleOption]
+    public var reasonMessage: String {
+        switch reasonCode {
+        case "purchase_cycle_repaid_after_purchase": "这笔消费发生后，所在账期已有还款或减免，暂不支持整笔转分期。"
+        case "installment_plan_in_use": "这笔消费已经属于另一个分期计划。"
+        case "transaction_kind_invalid": "只有信用消费可以建立分期计划。"
+        case "transaction_voided": "已作废的消费不能建立分期计划。"
+        default: "这笔消费当前不符合分期条件。"
+        }
+    }
     enum CodingKeys: String, CodingKey { case purchaseTransactionID = "purchase_transaction_id", eligible, reasonCode = "reason_code", creditAccountID = "credit_account_id", principalMinor = "principal_minor", naturalStatementDate = "natural_statement_date", startOptions = "start_options" }
 }
 

@@ -148,7 +148,9 @@ actor F3B2Transport: V15Transporting {
         case ("transactions/\(V15F3B2Fixtures.purchaseID)/installment-eligibility", "GET"):
             if mode == .eligibilityRace { try await Task.sleep(for: .milliseconds(150)) }
             return try decode(mode == .ineligible ? V15F3B2Fixtures.ineligible : V15F3B2Fixtures.eligibility)
-        case ("installment-cycle-options", "GET"): return try decode(mode == .ineligible ? "[]" : V15F3B2Fixtures.options)
+        case ("installment-cycle-options", "GET"):
+            if mode == .ineligible { throw V15Failure(kind: .transport, code: "purchase_not_eligible", message: "The purchase is not eligible") }
+            return try decode(V15F3B2Fixtures.options)
         case ("installment-purchases/preview", "POST"): return try decode(V15F3B2Fixtures.purchasePreview)
         case ("installment-purchases", "POST"):
             purchaseAttempts += 1

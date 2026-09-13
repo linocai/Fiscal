@@ -247,7 +247,7 @@ public struct V15InstallmentView: View {
                     V15SuccessReceiptState(title: "可以建立分期", detail: "已取得可用账期，请继续设置计划。")
                         .accessibilityIdentifier("v15.f3b2.eligibility.success")
                 } else {
-                    V15ErrorMessageState(title: "当前不能分期", message: eligibilityReason(eligibility.reasonCode))
+                    V15ErrorMessageState(title: "当前不能分期", message: eligibility.reasonMessage)
                         .accessibilityIdentifier("v15.f3b2.eligibility.reason")
                 }
             }
@@ -438,15 +438,6 @@ public struct V15InstallmentView: View {
     }
 
     private func positiveFee(_ text: String) -> Bool { (CNYAmountParser.minorUnits(text) ?? 0) > 0 }
-
-    private func eligibilityReason(_ code: String?) -> String {
-        switch code {
-        case "installment_plan_in_use": "这笔消费已经属于另一个分期计划。"
-        case "transaction_kind_invalid": "只有信用消费可以建立分期计划。"
-        case "transaction_voided": "已作废的消费不能建立分期计划。"
-        default: "这笔消费当前不符合分期条件。"
-        }
-    }
 
     private func unknownState(_ message: String, id: String) -> some View {
         V15OutcomeUnknownState(title: "需要核对", message: message).accessibilityIdentifier(id)

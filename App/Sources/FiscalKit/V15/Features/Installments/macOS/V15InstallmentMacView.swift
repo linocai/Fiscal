@@ -390,7 +390,7 @@ private struct V15InstallmentMacCreationView: View {
                     V15SuccessReceiptState(title: "可以建立分期", detail: "已取得可用账期，请继续设置计划。")
                         .accessibilityIdentifier("v15.f3b2.mac.eligibility.success")
                 } else {
-                    V15ErrorMessageState(title: "当前不能分期", message: eligibility.reasonCode ?? "这笔消费当前不符合分期条件。")
+                    V15ErrorMessageState(title: "当前不能分期", message: eligibility.reasonMessage)
                         .accessibilityIdentifier("v15.f3b2.mac.eligibility.reason")
                 }
             }

@@ -1,0 +1,38 @@
+{
+  "checked_at": "2026-09-13T07:47:48.509721+00:00",
+  "devices": [
+    {
+      "model": "iPhone17,3",
+      "os": "26.6.2",
+      "build": "23G90",
+      "validated": false,
+      "current_support": "/Users/linotsai/Library/Developer/Xcode/iOS DeviceSupport/iPhone17,3 26.6.2 (23G90)",
+      "reason": "Current developer services unavailable; unlock/connect device and prepare in Xcode"
+    },
+    {
+      "model": "iPhone18,4",
+      "os": "26.6.2",
+      "build": "23G90",
+      "validated": true,
+      "current_support": "/Users/linotsai/Library/Developer/Xcode/iOS DeviceSupport/iPhone18,4 26.6.2 (23G90)",
+      "symbol_sha256": {
+        "usr/lib/dyld": "1fc4abd3de915de4065f575a48909b796e0dbb8bd03fc9199f22c407cced701f",
+        "System/Library/Frameworks/Foundation.framework/Foundation": "949e0f841ab7826397ab872206fce5aa59cc4e75587e7eb5af026b6d1fd1e0e0",
+        "System/Library/Frameworks/UIKit.framework/UIKit": "a34b4b3749cc49b4b5dc75651e2fe7d39d5d95fbe84c3efe8c008320b72bdb0b"
+      }
+    }
+  ],
+  "candidates": [
+    "/Users/linotsai/Library/Developer/Xcode/iOS DeviceSupport/iPhone18,4 26.6.1 (23G83)"
+  ],
+  "deleted": [
+    {
+      "path": "/Users/linotsai/Library/Developer/Xcode/iOS DeviceSupport/iPhone18,4 26.6.1 (23G83)",
+      "allocated_bytes_before": 6108323840
+    }
+  ],
+  "pending_devices": [
+    "iPhone17,3"
+  ],
+  "status": "partial"
+}

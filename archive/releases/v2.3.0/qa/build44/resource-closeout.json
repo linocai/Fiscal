@@ -1,0 +1,11 @@
+{
+  "test_database_removed": "fiscal_v230_44_tests_20260913",
+  "test_database_bytes": 27066883,
+  "pytest_temp_removed": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/pytest-of-linotsai/pytest-0",
+  "pytest_allocated_bytes": 3383296,
+  "remote_temporary_artifacts": "None; only read-only psql over SSH, no remote files written",
+  "temporary_exports": "None; no attachments exported",
+  "apple_result_retention": "One final 460-test result bundle retained; classification and verification recorded separately",
+  "test_processes": "exited; database connections zero before removal",
+  "free_bytes_after": 70976815104
+}

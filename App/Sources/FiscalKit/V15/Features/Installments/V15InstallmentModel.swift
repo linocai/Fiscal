@@ -233,7 +233,7 @@ public final class V15InstallmentModel {
     public var createPlanDisabledReason: V15DisabledReason? {
         if isOffline { return reason("offline_read_only", "离线时只可查看，无法创建分期计划。") }
         if currentCreateOwnerState?.attempt != nil { return createPlanPhase == .committing ? reason("create_in_flight", "创建操作正在处理中；结果会保存到原消费账目。") : reason("unknown_create_pending", "此消费上一笔创建结果暂时不明，请先安全检查结果。") }
-        guard eligibility?.eligible == true else { return reason(eligibility?.reasonCode ?? "eligibility_required", eligibility == nil ? "请先检查消费是否可分期。" : "该消费当前不可分期。") }
+        guard eligibility?.eligible == true else { return reason(eligibility?.reasonCode ?? "eligibility_required", eligibility?.reasonMessage ?? "请先检查消费是否可分期。") }
         switch eligibilityPurchasePhase {
         case .loading: return reason("purchase_detail_loading", "正在读取消费时间，请稍候。")
         case .failed: return reason("purchase_detail_failed", "消费详情读取失败，请重试分期资格检查。")
@@ -434,19 +434,18 @@ public final class V15InstallmentModel {
             return
         }
         eligibilityPhase = .loading; eligibilityPurchasePhase = .loading
-        async let eligibilityLoad: (V15InstallmentEligibility, [V15InstallmentCycleOption]) = {
-            let result = try await services.installments.eligibility(transactionID: id)
-            let options = try await services.installments.cycleOptions(purchaseTransactionID: id, months: 60)
-            return (result, options)
-        }()
+        // Eligibility already includes options from the same server evaluation.
+        // A second options request can turn an expected ineligible result into
+        // a transport error, or combine two different account revisions.
+        async let eligibilityLoad = services.installments.eligibility(transactionID: id)
         async let purchaseLoad: V15Transaction = services.ledger.get(transactionID: id)
         do {
-            let (result, options) = try await eligibilityLoad
+            let result = try await eligibilityLoad
             guard ownsEligibility(generation: generation, transactionID: id) else { return }
             if result.purchaseTransactionID != id {
                 eligibilityPhase = .failed(.init(kind: .decoding, code: "eligibility_purchase_mismatch", message: "分期资格与当前消费不匹配，请重新检查。"))
             } else {
-                eligibility = result; cycleOptions = options
+                eligibility = result; cycleOptions = result.eligible ? result.startOptions : []
                 if createStartStatementDate.isEmpty { isApplyingDraft = true; createStartStatementDate = result.startOptions.first(where: { $0.eligible })?.statementDate ?? ""; isApplyingDraft = false }
                 eligibilityPhase = .loaded
             }

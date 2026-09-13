@@ -244,6 +244,26 @@ class CreditRepository:
     async def cycle_events(self, cycle_id: UUID) -> list[tuple[datetime, int]]:
         return (await self.cycle_events_many([cycle_id])).get(cycle_id, [])
 
+    async def latest_cycle_reductions(self, cycle_ids: list[UUID]) -> dict[UUID, datetime]:
+        """Actual repayment/waiver times, rather than an all-time paid flag."""
+        if not cycle_ids:
+            return {}
+        rows = await self.session.execute(
+            select(LedgerTransaction.credit_cycle_id, func.max(LedgerTransaction.occurred_at))
+            .join(Posting, Posting.transaction_id == LedgerTransaction.id)
+            .where(
+                LedgerTransaction.credit_cycle_id.in_(cycle_ids),
+                LedgerTransaction.kind.in_(
+                    ["repayment", "credit_principal_waiver", "credit_fee_refund"]
+                ),
+                LedgerTransaction.voided_at.is_(None),
+                Posting.role.in_(["account", "destination"]),
+                Posting.amount_minor > 0,
+            )
+            .group_by(LedgerTransaction.credit_cycle_id)
+        )
+        return {cycle_id: occurred_at for cycle_id, occurred_at in rows}
+
     async def cycle_events_many(
         self, cycle_ids: list[UUID]
     ) -> dict[UUID, list[tuple[datetime, int]]]:
