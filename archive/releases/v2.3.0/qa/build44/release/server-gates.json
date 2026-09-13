@@ -1,0 +1,16 @@
+{
+  "pytest": {
+    "passed": 177,
+    "skipped": 297,
+    "warnings": 1
+  },
+  "ruff_check": "passed",
+  "ruff_format": {
+    "files": 271,
+    "status": "passed"
+  },
+  "pyright_errors": 0,
+  "database_tests": "Skipped on production host; same source passed all 474 tests in disposable local PostgreSQL",
+  "local_verification": "../verification.json",
+  "log": "build/release-v2.3.0-44/logs/production-apply.log"
+}

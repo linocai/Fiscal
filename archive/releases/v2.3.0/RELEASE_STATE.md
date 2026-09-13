@@ -1,4 +1,6 @@
-# Fiscal v2.3.0 build 43 release state
+# Fiscal v2.3.0 release state
+
+最新发布：**2.3.0（44）RELEASED**，2026-09-13。后端与Mac已更新，iOS签名构建就绪；详见[build44发布完成](#2026-09-13-build44-紧急发布完成)。下列build43内容保留为历史记录。
 
 2026-09-12, Asia/Shanghai. **RELEASED** — 用户授权的一条龙发布已完成：后端0040已上线，Mac已换装并读取生产；iOS已完成签名真机构建，由用户通过Xcode安装，无IPA。
 
@@ -63,3 +65,21 @@
 - 2026-09-12记录的展开旧App备份路径在本轮核验时已不存在，本次删除范围未包含`/Applications`；v2.2.1-build42签名ZIP及符号仍完整保留、SHA-256一致，作为当前回退来源，不为清理再重复解压一份。
 - 新增 `scripts/test_artifacts.py` 的run/plan/apply/check入口：测试必须登记用途及待收尾状态，不默认导出附件；删除前整批检查精确路径、未跟踪范围、内容指纹、唯一证据和在用状态；未分类产物或未收尾运行使check返回非零。14项隔离脚本测试通过，覆盖真实子进程成功/失败状态及删除防护；设备保留边界7项通过。未修改App源码、版本或build。
 - 跨项目规则和设备审计工具落在全局AGENTS及`~/.codex/scripts/apple_device_support.py`，Fiscal细则与入口落在项目AGENTS及[scripts/README.md](../../../scripts/README.md)。删除计划、逐项回执和终验均在本节链接的证据目录；本轮临时枚举文件已清除。
+
+## 2026-09-13 build44 紧急发布完成
+
+用户明确要求立即发布。**2.3.0（44）完整发布与资源收尾完成**：后端和本机Mac已更新，iOS签名真机构建已就绪，由用户通过Xcode安装。未创建或修改真实财务账目。
+
+- 冻结源码 `3b29dcdd8ed9b330949f716b3ba170ddcffc7216`，不可变标签 `v2.3.0-build44`，tag object `4cdf3ba76f81e56f33dd1f060aca90d4ead4b061`；main与标签已推送。收尾文档在其后单独提交，既有标签不移动。
+- 主会话核对实际生产 `fa4181f` 至目标的累计11个App/Backend文件；无新增迁移，312个后端文件的上传及部署指纹均与冻结源码一致。本轮未执行独立复审，build43独立复审结论不覆盖新增快修。见[累计范围](qa/build44/release/cumulative-audit.json)、[部署源码](qa/build44/release/deployed-source-verification.json)。
+- 同一源码的本地Backend全量474项通过；FiscalKit 459项通过、1项既有PDF/loopback条件跳过，Ruff/格式/Pyright通过。服务器门禁177项通过、297项数据库用例跳过、1项既有警告；数据库用例已由本地隔离PostgreSQL全量覆盖，服务器门禁不连接生产数据库。见[本地验证](qa/build44/verification.json)、[服务器门禁](qa/build44/release/server-gates.json)。
+- 从标签导出canonical schemes，串行完成iOS Simulator arm64、Mac arm64/x86_64和iOS device arm64的Release构建，实际版本均2.3.0（44）。App/framework严格验签、Mac Developer ID与hardened runtime、iOS开发签名/profile、dSYM UUID和ZIP解压后签名/指纹均核验通过。见[构建](qa/build44/release/build-state.json)、[签名及包验证](qa/build44/release/verification.json)。
+- NB当前目录 `/opt/fiscal/releases/3b29dcdd8ed9`，完整revision为上述源码，Alembic仍为 `20260912_0040`。API及四个运维timer active/enabled、数据库ready、磁盘healthy；15张财务表的条数与完整内容指纹在部署前后完全一致。
+- 部署前备份 `/var/lib/fiscal/backups/releases/v2.3.0-build44/pre/fiscal-20260913T124654Z.dump`；部署后备份 `/var/lib/fiscal/backups/releases/v2.3.0-build44/post/fiscal-20260913T124656Z.dump`。均完成内容核验，20:47:01 CST隔离恢复演练通过，演练库已删除。发布备份以硬链接保留已有运维dump，避免重复整库占用；精确SHA-256及账本指纹见[部署证据](qa/build44/release/production-deployment.json)。
+- 公网TLS/live、鉴权边界、运维状态、历史报表能力、幂等回执、30日预测与信用账户读取均通过；原报告消费的只读资格返回 `eligible=true`，可选起始账期60个。见[上线后核验](qa/build44/release/production-postflight.json)。
+- `/Applications/Fiscal.app` 已换装并单实例运行2.3.0（44），二进制SHA-256 `acefa59362e62bcb22057fec1446b805b432386acba1026ba82fd4644b0599c0`。已验签回退包为 `/Applications/Fiscal-v2.3.0-build43-backup-20260913-204955.app`；数据及凭据保留。见[安装记录](qa/build44/release/installation.json)。
+- 实际Mac页面显示“可以建立分期”，恢复用户原输入12期、零手续费，起始账单日2026-09-25、还款日2026-10-12，停在最终确认前。目视核对原生截图，未导出私人截图，未提交分期；生产只读验收不冒充整套真实写入端到端测试。
+- 交付包与符号位于 `build/release-v2.3.0-44/artifacts/`，见[校验和](qa/build44/release/SHA256SUMS)。iOS真机App保留在既有DerivedData的 `Build/Products/Release-iphoneos/Fiscal.app`，工程版本与签名配置就绪；没有生成IPA或提交App Store/TestFlight/公证。
+- 本地准确删除源码导出、打包staging和bundle，按分配空间计479,584,256字节；删除后整盘可用70,781,583,360字节。远端准确删除部署源码、bundle、测试缓存及已确认归属的临时目录，按逻辑空间计494,882,313字节。清单及保留项见[本地清理](qa/build44/release/local-cleanup.json)、[远端清理](qa/build44/release/remote-cleanup.json)，不同计量口径不合并宣称磁盘净收益。
+- 测试产物终验 `complete`，无未分类产物、未收尾运行或待删残留；保留最终及未解决问题证据，没有批量导出附件。复用既有DerivedData与主模拟器，六个用户scheme逐字节保持且不提交；[设备审计](qa/build44/release/device-support.json)无待处理项。保护当前及回退App、安装包、符号、iOS真机构建和数据库备份。
+- 后端回退可切回已保留的 `fa4181f02025` 源码并重启服务，schema同为0040；不得以代码回退为由用旧库覆盖用户后续写入。主Plan和NB事实已同步，无剩余agent发布动作。

@@ -1,0 +1,32 @@
+{
+  "deleted": [
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/release-v2.3.0-44/source",
+      "allocated_bytes": 10571776
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/release-v2.3.0-44/staging",
+      "allocated_bytes": 318013440
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/release-v2.3.0-44/source.bundle",
+      "allocated_bytes": 150999040
+    }
+  ],
+  "artifacts_check": {
+    "status": "complete",
+    "unclassified_artifacts": [],
+    "unclosed_runs": [],
+    "changed_retained_evidence": [],
+    "remaining_deletions": []
+  },
+  "user_schemes_preserved": true,
+  "free_bytes_after": 70781583360,
+  "retained": [
+    "Signed build44 macOS ZIP and symbols",
+    "Signed iOS device App for Xcode",
+    "Installed build44 and verified expanded build43 rollback App",
+    "Prior release artifacts and final/unresolved test evidence"
+  ],
+  "new_local_system_temporary_artifacts": "No pytest or custom system-temp directory created by this release; screenshot stayed in tool output"
+}

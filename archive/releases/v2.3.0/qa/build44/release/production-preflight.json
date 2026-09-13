@@ -1,0 +1,59 @@
+{
+  "checked_at": "2026-09-13T12:42:52.027269+00:00",
+  "current": "/opt/fiscal/releases/fa4181f02025",
+  "release": {
+    "revision": "fa4181f02025da25b15053eee12075ffe1a84bd4",
+    "alembic_head": "20260912_0040",
+    "created_at": "2026-09-12T12:12:06Z"
+  },
+  "alembic_head": "20260912_0040",
+  "units": {
+    "fiscal-api.service": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-backup.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-restore-verify.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-health-check.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-disk-check.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    }
+  },
+  "latest-backup": {
+    "result": "verified",
+    "created_at": "2026-09-12T19:31:27Z",
+    "created_epoch": 1789241487,
+    "duration_seconds": 0,
+    "size_bytes": 438753,
+    "file": "fiscal-20260912T193127Z.dump"
+  },
+  "latest-restore-verify": {
+    "result": "verified",
+    "checked_at": "2026-09-12T20:47:28Z",
+    "checked_epoch": 1789246048,
+    "duration_seconds": 2,
+    "backup_file": "fiscal-20260912T193127Z.dump"
+  },
+  "disk": "Filesystem      Size  Used Avail Use% Mounted on\n/dev/vda1        58G   12G   46G  21% /",
+  "readiness": {
+    "code": 200,
+    "body": {
+      "status": "ready",
+      "database": "ready"
+    }
+  },
+  "migration_backfill": {
+    "candidate_count": 3,
+    "ambiguous_ownership_count": 0
+  }
+}

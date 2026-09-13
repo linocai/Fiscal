@@ -1,0 +1,20 @@
+{
+  "deployed_revision": "fa4181f02025da25b15053eee12075ffe1a84bd4",
+  "validated_files_sha256": {
+    "App/Fiscal.xcodeproj/project.pbxproj": "82a7963ba228dbc535c3ab0ae94c218f3097181265a4c56b40de969a972a81a3",
+    "App/Sources/FiscalKit/V15/Features/Installments/V15InstallmentModel.swift": "f8202af3f5378372eb14679a5db1cb52b17cdc50ec1e9401f2735cd969be7faf",
+    "App/Sources/FiscalKit/V15/Features/Installments/iOS/V15InstallmentView.swift": "b462220718bc96e3b3d83d48b6d2cdc10d9de74cdcecad98e4735db90a418aba",
+    "App/Sources/FiscalKit/V15/Features/Installments/macOS/V15InstallmentMacView.swift": "c7c52b1e96eaffca7686f528174340da8b96a3fe19145711fedb990b24147a6a",
+    "App/Sources/FiscalKit/V15/Foundation/V15InstallmentContracts.swift": "83fb2dd16671229eeb2a0271643d2204febf53c9a4e6c5463f67a962c2ed9414",
+    "App/Sources/FiscalKit/V15/Shared/Fixtures/F3B2Fixtures.swift": "54074a0e7702a4bb75a89f2cb1592993c00b1aa2c25781b196636e7d1a23e5fb",
+    "App/Tests/FiscalKitTests/V15/F3B2Tests.swift": "c8fcb4e9d30dcfdf442da3aa6c7f79fd4206177e4c78e7c1e5c209dbbabfd29d",
+    "App/project.yml": "8f96df32d4fdf4e486acb120874de9620bf596bc96b16d3b66c80eb378dbe59c",
+    "Backend/src/fiscal_api/repositories/credit.py": "5083604589dcf261b695dc18103f88ec7c074ea1938a55bdfb36f9fe72143a7e",
+    "Backend/src/fiscal_api/services/installments.py": "817c575226f94286dbfffe74010b2c99b689bf74255ca91d6722882f1727c5ee",
+    "Backend/tests/test_v230_installment_repurchase_postgres.py": "afc89b54072705e808e4f06e064931a218233384cf12537173ead1df0475b7e4"
+  },
+  "cumulative_product_files": 11,
+  "no_schema_change": true,
+  "assessment": "Cumulative delta matches freshly validated fix; creation still holds mutation lock and credit invariants, time guards include same-instant and void handling. Client preserves ineligibility and consumes same-response options. No new blocking issue identified in primary release audit.",
+  "independent_review": "Not requested; user explicitly directed immediate release after recommendation."
+}

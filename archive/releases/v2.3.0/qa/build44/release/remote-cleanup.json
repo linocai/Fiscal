@@ -1,0 +1,36 @@
+{
+  "deleted": [
+    {
+      "path": "/opt/fiscal/deploy-source/3b29dcdd8ed9b330949f716b3ba170ddcffc7216",
+      "logical_bytes": 358211948
+    },
+    {
+      "path": "/tmp/fiscal-build44-3b29dcdd8ed9.bundle",
+      "logical_bytes": 136598953
+    },
+    {
+      "path": "/opt/fiscal/releases/3b29dcdd8ed9/Backend/.pytest_cache",
+      "logical_bytes": 50441
+    },
+    {
+      "path": "/opt/fiscal/releases/3b29dcdd8ed9/Backend/.ruff_cache",
+      "logical_bytes": 18166
+    },
+    {
+      "path": "/tmp/pytest-of-root/pytest-3",
+      "logical_bytes": 935
+    },
+    {
+      "path": "/tmp/pytest-of-root/pytest-4",
+      "logical_bytes": 935
+    },
+    {
+      "path": "/tmp/pytest-of-root/pytest-5",
+      "logical_bytes": 935
+    }
+  ],
+  "retained_release": "/opt/fiscal/releases/3b29dcdd8ed9",
+  "backup_storage": "Release pre/post snapshots use hardlinks to verified operational backups; no copied dump replicas.",
+  "all_removed": true,
+  "disk": "Filesystem      Size  Used Avail Use% Mounted on\n/dev/vda1        58G   12G   46G  21% /\n"
+}

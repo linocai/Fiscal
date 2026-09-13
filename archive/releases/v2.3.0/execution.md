@@ -315,4 +315,4 @@ App 定位均相对 `App/Sources/FiscalKit/`。完整审查覆盖 B01–B07 代�
 - macOS与generic iOS Simulator的正式App target Debug编译通过，版本2.3.0（44）；此次只作编译验证，不是签名交付构建。未启动生产写入路径、未进行新截图验收、未部署/换包/改标签，安装中的Mac仍为build43。本轮未执行独立复审，发布前建议覆盖该金额规则与关联锁定行为。
 - 新建且仅本轮使用的`fiscal_v230_44_tests_20260913`在退出测试后删除，连接数为0；本轮pytest系统临时目录在核对归属与未占用后回收。仅新增保留一份最终xcresult，无附件导出；摘要与测试XML移入本节证据目录，日志在`build/v2.3.0-44/`。清理规则及设备审计终验见[资源回执](qa/build44/resource-closeout.json)、[产物检查](qa/build44/artifact-check.json)、[设备检查](qa/build44/device-support.json)。未触及其他历史测试库或线上数据库。
 
-恢复后先看本节、主Plan与git status；如用户要求复审，包含本轮未提交/未跟踪产品变更，排除预存scheme；如要求发布，先完成本轮发布审查和签名构建、部署本轮Backend、换装客户端，不能把上述本地通过宣称为线上已修复。
+本节以上为发布前的实施与本地验证记录。用户随后明确要求立即发布，已冻结 `3b29dcd` / `v2.3.0-build44` 并完成后端部署、签名构建、Mac换装、原问题实际页面验证及资源收尾；当前发布与回退事实见[build44发布完成](RELEASE_STATE.md#2026-09-13-build44-紧急发布完成)。恢复工作先看主Plan、该发布节与git status。

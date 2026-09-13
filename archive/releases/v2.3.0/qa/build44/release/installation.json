@@ -1,0 +1,14 @@
+{
+  "installed": "/Applications/Fiscal.app",
+  "version": "2.3.0",
+  "build": "44",
+  "mac_executable_sha256": "acefa59362e62bcb22057fec1446b805b432386acba1026ba82fd4644b0599c0",
+  "backup": "/Applications/Fiscal-v2.3.0-build43-backup-20260913-204955.app",
+  "backup_executable_sha256": "51ec5adf68990340067385f4579f894d20095994b7b9d5a7905b8cc579523d6c",
+  "ios_delivery": "Xcode device build ready; no IPA",
+  "installed_at": "2026-09-13T20:49:56.687039+08:00",
+  "launch_and_live_read": "passed: installed build44 showed eligibility success for reported purchase; 12 periods and zero fee restored; left before final confirmation",
+  "running_processes": 1,
+  "real_financial_writes": false,
+  "visual_verification": "Native screenshot inspected; no private screenshot file exported"
+}

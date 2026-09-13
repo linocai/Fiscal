@@ -1,0 +1,117 @@
+{
+  "checked_at": "2026-09-13T12:48:07.979490+00:00",
+  "release": {
+    "revision": "3b29dcdd8ed9b330949f716b3ba170ddcffc7216",
+    "alembic_head": "20260912_0040",
+    "created_at": "2026-09-13T12:46:54Z"
+  },
+  "pre_backup": {
+    "path": "/var/lib/fiscal/backups/releases/v2.3.0-build44/pre/fiscal-20260913T124654Z.dump",
+    "sha256": "72712ac874c695585c4abe2df418e9cfcc3a26e2b85b07a5b739e3784836668a",
+    "bytes": 441570,
+    "inode": 581017,
+    "hardlinks": 2
+  },
+  "post_backup": {
+    "path": "/var/lib/fiscal/backups/releases/v2.3.0-build44/post/fiscal-20260913T124656Z.dump",
+    "sha256": "6f725e8eac2da013c0e69252b0af68ab53a19f739c1f30314eddfd5fa15f554a",
+    "bytes": 441570,
+    "inode": 581022,
+    "hardlinks": 2
+  },
+  "ledger_before": {
+    "accounts:hash": "9442595b76f05e9f4bac51b81300086e",
+    "postings:hash": "6c95f991fc8ad98639d84869560a9816",
+    "accounts:count": 8,
+    "postings:count": 280,
+    "categories:hash": "6a587190685e1543a47ce266510ab281",
+    "categories:count": 19,
+    "transactions:hash": "1bd577ab5892c8228f57ca8fe98647a8",
+    "credit_cycles:hash": "714f1ba1f7930d20ee13daf535d2b5e0",
+    "transactions:count": 253,
+    "credit_cycles:count": 24,
+    "cash_flow_items:hash": "2c271230523e602324f95982e0ab37f3",
+    "cash_flow_items:count": 61,
+    "installment_plans:hash": "e4ca4cb6f0c3a1775fa4ddcc837b08ef",
+    "installment_plans:count": 2,
+    "credit_payoff_links:hash": null,
+    "installment_periods:hash": "50f902d0fe279fa868f46a18d8a7a7ce",
+    "credit_payoff_links:count": 0,
+    "installment_periods:count": 8,
+    "installment_operations:hash": "0402c1e0a8c6d5092db98bb597c05810",
+    "installment_operations:count": 1,
+    "cash_flow_item_revisions:hash": "13bb1660cf1962b648fc60dfae7aab7c",
+    "credit_payoff_operations:hash": null,
+    "installment_ledger_links:hash": "1adba3b5e8e00b363326c620f0030180",
+    "cash_flow_item_revisions:count": 154,
+    "credit_payoff_operations:count": 0,
+    "installment_ledger_links:count": 3,
+    "cash_flow_settlement_links:hash": "95ee359fca362ebcfaf6def5ca8d307a",
+    "installment_plan_revisions:hash": "c728d0543e86c5902a419f3b160cee8e",
+    "cash_flow_settlement_links:count": 3,
+    "installment_plan_revisions:count": 3
+  },
+  "ledger_after": {
+    "accounts:hash": "9442595b76f05e9f4bac51b81300086e",
+    "postings:hash": "6c95f991fc8ad98639d84869560a9816",
+    "accounts:count": 8,
+    "postings:count": 280,
+    "categories:hash": "6a587190685e1543a47ce266510ab281",
+    "categories:count": 19,
+    "transactions:hash": "1bd577ab5892c8228f57ca8fe98647a8",
+    "credit_cycles:hash": "714f1ba1f7930d20ee13daf535d2b5e0",
+    "transactions:count": 253,
+    "credit_cycles:count": 24,
+    "cash_flow_items:hash": "2c271230523e602324f95982e0ab37f3",
+    "cash_flow_items:count": 61,
+    "installment_plans:hash": "e4ca4cb6f0c3a1775fa4ddcc837b08ef",
+    "installment_plans:count": 2,
+    "credit_payoff_links:hash": null,
+    "installment_periods:hash": "50f902d0fe279fa868f46a18d8a7a7ce",
+    "credit_payoff_links:count": 0,
+    "installment_periods:count": 8,
+    "installment_operations:hash": "0402c1e0a8c6d5092db98bb597c05810",
+    "installment_operations:count": 1,
+    "cash_flow_item_revisions:hash": "13bb1660cf1962b648fc60dfae7aab7c",
+    "credit_payoff_operations:hash": null,
+    "installment_ledger_links:hash": "1adba3b5e8e00b363326c620f0030180",
+    "cash_flow_item_revisions:count": 154,
+    "credit_payoff_operations:count": 0,
+    "installment_ledger_links:count": 3,
+    "cash_flow_settlement_links:hash": "95ee359fca362ebcfaf6def5ca8d307a",
+    "installment_plan_revisions:hash": "c728d0543e86c5902a419f3b160cee8e",
+    "cash_flow_settlement_links:count": 3,
+    "installment_plan_revisions:count": 3
+  },
+  "ledger_fingerprints_unchanged": true,
+  "restore_verification": {
+    "result": "verified",
+    "checked_at": "2026-09-13T12:47:01Z",
+    "checked_epoch": 1789303621,
+    "duration_seconds": 2,
+    "backup_file": "fiscal-20260913T124656Z.dump"
+  },
+  "units": {
+    "fiscal-api.service": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-backup.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-restore-verify.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-health-check.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    },
+    "fiscal-disk-check.timer": {
+      "active": "active",
+      "enabled": "enabled"
+    }
+  },
+  "restore_databases_remaining": []
+}
