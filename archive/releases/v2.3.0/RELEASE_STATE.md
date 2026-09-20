@@ -104,3 +104,15 @@
 - 按精确iPhone目的地完成iOS27.0（24A437）符号复制与提取。Xcode27将完整符号写入arm64e子目录；全局审计脚本已兼容该布局，仍校验采集元数据、关键Mach-O及SHA-256，并拒绝链接路径和不完整新版回退到旧符号。7项隔离边界验证通过，临时测试目录自动回收。
 - 新版开发服务与dyld/Foundation/UIKit符号验证通过后，删除同型号26.6.2（23G90）支持缓存，按分配空间计6,108,323,840字节；删除后新版符号指纹不变、旧路径不存在，pending_devices为空。详见[最终回执](qa/build45/release/device-support-followup.json)。本节关闭上文首次发布留下的设备待办。
 - 首次准备未明确destination而误选已配对Watch，已中止；随后仅用精确iPhone目的地成功准备。未改配对、未安装手机App、未修改真实账目。发布标签及已安装客户端不变，iOS仍由用户通过Xcode安装。
+
+## 2026-09-20 build46 发布完成
+
+用户授权发布。**2.3.0（46）已发布，最低iOS/macOS均为27.0**；Mac已换装并读取生产成功，iOS签名构建就绪，最终安装由用户通过Xcode执行。
+
+- 源码 `b4848d3ad87ef1110a4ffc18a839c1d7207fad59`，不可变标签 `v2.3.0-build46`，tag object `faf368a4cdc4f2707d62853a796cf72191585378`；main和标签已推送。六份用户scheme逐字节保留，发布从标签导出的canonical schemes构建。
+- 累计核对已安装build45至目标：仅系统下限、build与说明变化，无业务代码或Backend变动。本轮未调用独立复审；双端Debug和iOS Simulator/Mac通用/iOS真机三组Release构建通过，不冒充全量业务重测。生产后端仍为3b29dcd/0040，API、四个timer、备份及恢复状态正常；无迁移、重启或财务写入。
+- 双端最低系统27.0、版本2.3.0（46）、生产API、App/framework严格签名、架构、dSYM UUID、iOS开发profile及Mac ZIP解压验签均通过。见[构建](qa/build46/release/build-state.json)、[包校验](qa/build46/release/verification.json)、[累计核对](qa/build46/release/cumulative-audit.json)、[生产读取](qa/build46/release/production-postflight.json)。
+- Mac于18:29 CST换装并单实例启动，总览与30日预测实际加载成功。可回退备份 `/Applications/Fiscal-v2.3.0-build45-backup-20260920-182946.app` 已验签；当前二进制SHA-256 `246901f802dc778e72a7a840cb1074c2a83dbf5f457567295e2d2861e7caf7f1`。见[安装记录](qa/build46/release/installation.json)。
+- 签名Mac ZIP及双端符号保留在 `build/release-v2.3.0-46/artifacts/`；iOS产物保留于既有DerivedData的Release-iphoneos/Fiscal.app。无IPA、TestFlight、App Store或公证提交，未执行iOS真机交互验收。
+- 精确删除源码导出、打包staging及首次导出失败产生的系统临时xcresult，按分配空间计516,964,352字节；发布目录从588,804,096降至71,868,416字节。完成后的ibtoold持有源码cwd，退出该闲置进程后重验再删；只保留发布物、必要日志和证据。无新测试结果包/附件导出，无远端临时文件；设备审计无待办。见[删除计划](qa/build46/release/cleanup-plan.json)、[清理回执](qa/build46/release/cleanup-receipt.json)、[设备核验](qa/build46/release/device-support.json)。
+- 主Plan及NB客户端事实已同步；当前与回退App、iOS待安装产物、账本和备份均保留。既有iOS26主模拟器及其测试数据未在本轮泛清。

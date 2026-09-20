@@ -1,0 +1,10 @@
+{
+  "client_baseline": "00a70259a29f38ec02b5ccfe601f6786a40318d6",
+  "backend_baseline": "3b29dcdd8ed9b330949f716b3ba170ddcffc7216",
+  "target": "b4848d3ad87ef1110a4ffc18a839c1d7207fad59",
+  "client_source_delta": "deployment targets 26 to 27; build45 to46; docs only; no business code changes",
+  "backend_changed_files": [],
+  "independent_review": false,
+  "validation": "Prior turn Debug iOS and macOS App builds passed; Release three targets running",
+  "known_first_attempt": "Python tarfile filter argument unavailable; export retried via tar. First xcodebuild had no project and failed before compiling."
+}

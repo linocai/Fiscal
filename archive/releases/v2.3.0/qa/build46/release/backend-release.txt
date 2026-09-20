@@ -1,0 +1,11 @@
+revision=3b29dcdd8ed9b330949f716b3ba170ddcffc7216
+alembic_head=20260912_0040
+created_at=2026-09-13T12:46:54Z
+NEXT                            LEFT LAST                             PASSED UNIT                        ACTIVATES
+Sun 2026-09-20 18:24:26 CST 1min 50s Sun 2026-09-20 18:19:26 CST 3min 9s ago fiscal-health-check.timer   fiscal-health-check.service
+Sun 2026-09-20 18:29:45 CST     7min Sun 2026-09-20 18:14:45 CST    7min ago fiscal-disk-check.timer     fiscal-disk-check.service
+Mon 2026-09-21 03:31:00 CST       9h Sun 2026-09-20 03:32:26 CST     14h ago fiscal-backup.timer         fiscal-backup.service
+Sun 2026-09-27 04:54:24 CST   6 days Sun 2026-09-20 04:51:56 CST     13h ago fiscal-restore-verify.timer fiscal-restore-verify.service
+
+4 timers listed.
+active

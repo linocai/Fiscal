@@ -1,0 +1,15 @@
+{
+  "installed": "/Applications/Fiscal.app",
+  "version": "2.3.0",
+  "build": "46",
+  "mac_executable_sha256": "246901f802dc778e72a7a840cb1074c2a83dbf5f457567295e2d2861e7caf7f1",
+  "backup": "/Applications/Fiscal-v2.3.0-build45-backup-20260920-182946.app",
+  "backup_executable_sha256": "7575fc436ce02bb6cb06ae1424c70a6e5e1aafc612a80f18ff17e82aafc88785",
+  "ios_delivery": "Xcode device build ready; no IPA",
+  "installed_at": "2026-09-20T18:29:47.125123+08:00",
+  "launch_and_live_read": "passed",
+  "live_read_evidence": "Native AX overview loaded production data at 18:29 CST; no financial writes",
+  "running_processes": [
+    "62572"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "status": "complete",
+  "deleted": {
+    "/Users/linotsai/Lino/Fiscal/build/release-v2.3.0-46/source": {
+      "sha256": "f7923f6ff400eb4e3dca812529b5f022211033fae3d1f6c713cffb880a1df2d1",
+      "allocated_bytes": 225366016
+    },
+    "/Users/linotsai/Lino/Fiscal/build/release-v2.3.0-46/staging": {
+      "sha256": "54bf203b7282421ef06b3064a6e00946a4ebd0e3d8e093849b1b8f48eb07a31c",
+      "allocated_bytes": 291569664
+    },
+    "/private/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/ResultBundle_2026-20-09_18-22-0014.xcresult": {
+      "sha256": "1757f46e5ed9f2efb132d439e307d57a2bfebc640d5a1f294cd04c02604d9359",
+      "allocated_bytes": 28672
+    }
+  },
+  "remaining_deletions": [],
+  "release_allocated_bytes_after": 71868416,
+  "retained": "Signed packages and symbols, iOS device product, build logs, audit scripts/evidence, installed current and rollback App; existing DerivedData reused",
+  "remote_temporary_files": "none created",
+  "system_temporary_files": "only failed initial source-export xcodebuild result bundle; deleted above",
+  "idle_process_closeout": "Completed orphan ibtoold PID62088 held source cwd; terminated then rechecked all deletion candidates",
+  "release_allocated_bytes_before": 588804096
+}
