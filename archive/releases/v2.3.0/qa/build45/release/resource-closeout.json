@@ -1,0 +1,39 @@
+{
+  "deleted": [
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/release-v2.3.0-45/source",
+      "fingerprint": {
+        "sha256": "16793e32b68e71039aa9c2c8868955feff01ccbb6bd67c6bb588a0cc47605cea",
+        "inode": 167419765,
+        "device": 16777230,
+        "logical_bytes": 6401185,
+        "allocated_bytes": 6930432
+      }
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/release-v2.3.0-45/staging",
+      "fingerprint": {
+        "sha256": "d4a841b0d86976189128f8c6d66ccb0a09b44bcda7d21bfee6704cbbd5314ef3",
+        "inode": 167445985,
+        "device": 16777230,
+        "logical_bytes": 288776840,
+        "allocated_bytes": 288837632
+      }
+    }
+  ],
+  "release_allocated_bytes_before": 367357952,
+  "release_allocated_bytes_after": 71589888,
+  "test_artifact_check": {
+    "status": "complete",
+    "unclassified_artifacts": [],
+    "unclosed_runs": [],
+    "changed_retained_evidence": [],
+    "remaining_deletions": []
+  },
+  "retained": "Signed artifacts, iOS device app, installed build45 and build44 rollback, logs, previous release backups",
+  "user_schemes_preserved": true,
+  "remote_temporary_files": "none created; production read-only",
+  "device_support": "pending iPhone18,4 symbols; no device cache deleted",
+  "system_temporary_files": "no custom system temporary files created by this release",
+  "idle_process_closeout": "Stopped completed ibtoold PID49979 holding source cwd, then rechecked no in-use paths"
+}

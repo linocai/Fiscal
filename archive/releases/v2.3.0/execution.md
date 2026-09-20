@@ -332,4 +332,4 @@ App 定位均相对 `App/Sources/FiscalKit/`。完整审查覆盖 B01–B07 代�
 - 资源按精确清单保留4份本轮最终结果，首轮失败、中断、被替代对照及临时导出副本在提取摘要后回收；旧验收证据与发布物不动。见[清单](qa/build45/artifact-plan.json)、[回执](qa/build45/artifact-receipt.json)、[终验](qa/build45/artifact-check.json)。独立临时目录与模拟器收尾见[资源状态](qa/build45/resource-closeout.json)。
 - 限制：未进行iOS27真机安装及交互，未覆盖真实照片权限弹窗/系统文件提供者交互；归档界面测试为隔离fixture，不代表真实恢复生产账本。设备审计显示iPhone18,4已为27.0（24A437），但新版符号缺usr/lib/dyld，列为pending并保留旧支持缓存；未要求解锁其他连接记录，也未操作配对。详见[设备审计](qa/build45/device-support.json)。
 
-本轮未发布、未替换已安装App、未创建新发布标签。后续发布以build44实际部署状态为起点，包含本节修复与测试隔离变更；按既有发布链完成签名和交付，iOS最终安装仍由用户通过Xcode执行。
+本节以上为发布前实施证据。用户随后授权一条龙发布，已冻结00a7025/v2.3.0-build45并完成签名构建、Mac换装与读取、iOS安装准备及临时产物收尾；设备支持符号待就绪。最终事实见[build45发布完成](RELEASE_STATE.md#2026-09-20-build45-发布完成)。

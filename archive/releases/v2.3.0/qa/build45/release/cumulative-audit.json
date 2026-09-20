@@ -1,0 +1,12 @@
+{
+  "deployed_source": "3b29dcdd8ed9b330949f716b3ba170ddcffc7216",
+  "backend_delta": "none",
+  "migration": "none",
+  "review": "primary cumulative audit; iOS-only date layout, Xcode/build settings, test isolation; no financial rules changed",
+  "gates": "459 core passed, 1 conditional skip; 10 iOS27 UI passed; 1 iOS26 fixed regression passed; both App targets passed",
+  "product_hashes_verified": true,
+  "preexisting_schemes_preserved": true,
+  "target_source": "00a70259a29f38ec02b5ccfe601f6786a40318d6",
+  "tag": "v2.3.0-build45",
+  "tag_object": "fd00959a3e281c7d7530ad21576fd6a4cf29579d"
+}

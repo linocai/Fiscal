@@ -1,6 +1,6 @@
 # Fiscal v2.3.0 release state
 
-最新发布：**2.3.0（44）RELEASED**，2026-09-13。后端与Mac已更新，iOS签名构建就绪；详见[build44发布完成](#2026-09-13-build44-紧急发布完成)。下列build43内容保留为历史记录。
+最新发布：**2.3.0（45）RELEASED**，2026-09-20。Mac已换装，iOS签名构建就绪，后端无改动；详见[build45发布完成](#2026-09-20-build45-发布完成)。旧版本内容保留为历史记录。
 
 2026-09-12, Asia/Shanghai. **RELEASED** — 用户授权的一条龙发布已完成：后端0040已上线，Mac已换装并读取生产；iOS已完成签名真机构建，由用户通过Xcode安装，无IPA。
 
@@ -83,3 +83,18 @@
 - 本地准确删除源码导出、打包staging和bundle，按分配空间计479,584,256字节；删除后整盘可用70,781,583,360字节。远端准确删除部署源码、bundle、测试缓存及已确认归属的临时目录，按逻辑空间计494,882,313字节。清单及保留项见[本地清理](qa/build44/release/local-cleanup.json)、[远端清理](qa/build44/release/remote-cleanup.json)，不同计量口径不合并宣称磁盘净收益。
 - 测试产物终验 `complete`，无未分类产物、未收尾运行或待删残留；保留最终及未解决问题证据，没有批量导出附件。复用既有DerivedData与主模拟器，六个用户scheme逐字节保持且不提交；[设备审计](qa/build44/release/device-support.json)无待处理项。保护当前及回退App、安装包、符号、iOS真机构建和数据库备份。
 - 后端回退可切回已保留的 `fa4181f02025` 源码并重启服务，schema同为0040；不得以代码回退为由用旧库覆盖用户后续写入。主Plan和NB事实已同步，无剩余agent发布动作。
+
+
+## 2026-09-20 build45 发布完成
+
+用户授权一条龙发布。**2.3.0（45）已发布**：Mac已换装并读取生产成功，iOS签名真机构建已就绪，由用户通过Xcode安装。发布与测试临时产物清理通过；设备支持缓存因新版符号未完整保留待处理。
+
+- 发布源 `00a70259a29f38ec02b5ccfe601f6786a40318d6`、不可变标签 `v2.3.0-build45`、tag object `fd00959a3e281c7d7530ad21576fd6a4cf29579d` 已推送main。六份用户scheme逐字节保留且不提交，正式包从标签导出的canonical schemes构建；收尾记录单独提交，标签不移动。
+- 从实际生产build44对应 `3b29dcd` 核对累计差异：只有iOS日期布局、工具链/build配置和测试隔离，无Backend差异、无迁移、无金额规则变化。主会话累计审查完成，本轮未调用独立复审。验证为核心459项通过/1项既有PDF联调条件跳过，iOS27界面10项及iOS26回归1项通过。见[累计核对](qa/build45/release/cumulative-audit.json)、[实施记录 §15](execution.md#15-2026-09-20-build45-ios-27兼容验证与快修)。
+- 三组Release构建全部通过：iOS Simulator arm64、Mac arm64/x86_64、iOS device arm64。版本2.3.0（45）、最低系统26.0、生产API核验一致；Mac Developer ID/hardened runtime/secure timestamp、iOS开发签名/profile与有效Keychain组、App及framework严格验签、dSYM UUID、ZIP解压后验签/hash均通过。见[构建](qa/build45/release/build-state.json)、[包验证](qa/build45/release/verification.json)。
+- 生产后端继续运行 `3b29dcdd8ed9b330949f716b3ba170ddcffc7216`，Alembic `20260912_0040`。仅只读核对RELEASE文件、服务、备份恢复状态及公网API；不重启、不迁移、不新增数据库备份副本。API与四个timer正常，最近备份及恢复演练verified，数据库ready、磁盘healthy；报表、30日公式、信用账户及鉴权边界读取通过。见[生产读取](qa/build45/release/production-postflight.json)。
+- `/Applications/Fiscal.app` 已于17:23 CST换装并单实例运行。二进制SHA-256 `7575fc436ce02bb6cb06ae1424c70a6e5e1aafc612a80f18ff17e82aafc88785`；旧版已验签备份 `/Applications/Fiscal-v2.3.0-build44-backup-20260920-172334.app`。实际新窗口总览和30日预测成功加载，无真实财务写入。见[安装记录](qa/build45/release/installation.json)。
+- iOS签名App位于既有DerivedData `Fiscal-gxhyzwdownkctphiwckdkhzmywou/Build/Products/Release-iphoneos/Fiscal.app`，工程build45及签名配置就绪。Mac ZIP和双端符号在 `build/release-v2.3.0-45/artifacts/`，见[校验和](qa/build45/release/SHA256SUMS)。无IPA、TestFlight、App Store或公证提交；iOS最终安装和真机交互由用户执行。
+- 发布目录分配空间从367,357,952降到71,589,888字节，精确回收源码导出和打包staging。清理先发现完成后的ibtoold仍持有源码工作目录，退出该闲置进程后重验再删。测试资源终验complete，无未分类或未收尾测试；保留签名发布物、最终证据、日志、当前与回退App和iOS待安装产物。本轮未创建远端或自定义系统临时目录。见[资源回执](qa/build45/release/resource-closeout.json)。
+- 设备审计已执行apply，无删除候选；`pending_devices=[iPhone18,4]`：iOS27.0新版调试符号仍缺usr/lib/dyld，旧支持文件保留，待新版准备完整再回收，不冒充设备资源全部清理完成。见[设备状态](qa/build45/release/device-support.json)。
+- 主Plan及NB事实已同步。客户端回退使用上述build44备份，不涉及数据库恢复；不以客户端回退覆盖用户后续账目。

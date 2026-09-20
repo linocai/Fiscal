@@ -1,0 +1,26 @@
+{
+  "source_commit": "00a70259a29f38ec02b5ccfe601f6786a40318d6",
+  "jobs": [
+    {
+      "name": "ios-simulator",
+      "started": "2026-09-20T09:16:49.283163+00:00",
+      "state": "passed",
+      "exit_code": 0,
+      "finished": "2026-09-20T09:18:40.387960+00:00"
+    },
+    {
+      "name": "macos-universal",
+      "started": "2026-09-20T09:18:40.390824+00:00",
+      "state": "passed",
+      "exit_code": 0,
+      "finished": "2026-09-20T09:21:20.521955+00:00"
+    },
+    {
+      "name": "ios-device",
+      "started": "2026-09-20T09:21:20.522688+00:00",
+      "state": "passed",
+      "exit_code": 0,
+      "finished": "2026-09-20T09:23:11.481033+00:00"
+    }
+  ]
+}
