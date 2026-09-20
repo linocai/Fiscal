@@ -2,8 +2,8 @@ name: Fiscal
 options:
   bundleIdPrefix: com.linotsai
   deploymentTarget:
-    iOS: "26.0"
-    macOS: "26.0"
+    iOS: "27.0"
+    macOS: "27.0"
   xcodeVersion: "27.0"
 settings:
   base:
@@ -12,7 +12,7 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     GENERATE_INFOPLIST_FILE: YES
     MARKETING_VERSION: 2.3.0
-    CURRENT_PROJECT_VERSION: 45
+    CURRENT_PROJECT_VERSION: 46
 targets:
   FiscalKit:
     type: framework

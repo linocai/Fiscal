@@ -12,7 +12,7 @@
 
 ## 稳定技术决定
 
-- iOS/macOS 26+、Swift 6、xcodegen；金额输入为元，领域/API 为 Int64 分，统一 CNYAmountParser；日期采用 Asia/Shanghai。
+- iOS/macOS 27+、Swift 6、xcodegen；金额输入为元，领域/API 为 Int64 分，统一 CNYAmountParser；日期采用 Asia/Shanghai。
 - 信用账户新增 `cycle_mode=on_demand`（随借随还），`kind` 仍为 `credit`；不生成虚构额度、账单日、还款日或信用账期。已有固定账期语义保留。
 - 随借随还通过明确的“借入”及“还款”双账户记账；借入本金和还款本金不计收入/消费，余额与信用欠款随实际 postings 变化。期初欠款必须有余额确认日。
 - 全额结清采用账户级预览和一次原子提交，覆盖已出账、未出账及全部剩余分期；费用/减免须明确核对。已发送请求保留稳定幂等键、请求体及恢复归属。
@@ -35,6 +35,8 @@
 - 原问题在生产API与已安装Mac均验证可分期；恢复12期、零手续费输入并停在确认前，无真实账目写入。本地/远端临时产物已按归属回收，测试产物终验通过，设备审计无待处理项。
 
 ## 当前 Plan
+
+用户要求build46将双端最低系统提高到27.0；源码版本2.3.0（46），当前已发布仍为build45。双端App构建通过，产物最低系统27.0及build46已核验；未发布换装。详见[验证记录](archive/releases/v2.3.0/qa/build46/verification.json)。
 
 build45已完成累计差异核对、签名构建、main与标签推送、Mac换装和生产读取验证；后端无变化，维持3b29dcd/0040。iOS通过Xcode安装，真机交互尚未验证。发布临时产物已清理，新版设备符号与开发服务验证通过，旧缓存回收6.108 GB，设备待办清零。详见[build45发布记录](archive/releases/v2.3.0/RELEASE_STATE.md#2026-09-20-build45-发布完成)。
 

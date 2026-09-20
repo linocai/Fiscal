@@ -1,0 +1,62 @@
+{
+  "iOS": {
+    "CFBundleShortVersionString": "2.3.0",
+    "CFBundleVersion": "46",
+    "MinimumOSVersion": "27.0"
+  },
+  "macOS": {
+    "CFBundleShortVersionString": "2.3.0",
+    "CFBundleVersion": "46",
+    "LSMinimumSystemVersion": "27.0"
+  },
+  "scope": "Deployment targets and build number only; Debug App builds, no runtime tests, no release or installation",
+  "source_baseline": "d7d22fea487092fbf1c0c8982741974dfed159ed",
+  "device_support": {
+    "checked_at": "2026-09-20T10:18:29.098873+00:00",
+    "devices": [
+      {
+        "model": "iPhone17,3",
+        "os": "",
+        "build": "",
+        "validated": false,
+        "reason": "No local support cache; this connection record needs no cleanup"
+      },
+      {
+        "model": "iPhone18,4",
+        "os": "27.0",
+        "build": "24A437",
+        "validated": true,
+        "current_support": "/Users/linotsai/Library/Developer/Xcode/iOS DeviceSupport/iPhone18,4 27.0 (24A437)",
+        "symbol_sha256": {
+          "usr/lib/dyld": "0c2a1a965f1ed87612fec9272ae1bc508d8aef72d81ec7c62e8f52040291d5b8",
+          "System/Library/Frameworks/Foundation.framework/Foundation": "dca7116f518c99b0b2ec01f91cad6edda9efb7d07061c804d1ca1c2f6e39306c",
+          "System/Library/Frameworks/UIKit.framework/UIKit": "65303e9403b9caf37e85eae43fb16667b4404582fc3df8e758b9ab0b5cee0a54"
+        }
+      },
+      {
+        "model": "iPhone19,2",
+        "os": "",
+        "build": "",
+        "validated": false,
+        "reason": "No local support cache; this connection record needs no cleanup"
+      },
+      {
+        "model": "iPhone18,1",
+        "os": "",
+        "build": "",
+        "validated": false,
+        "reason": "No local support cache; this connection record needs no cleanup"
+      }
+    ],
+    "candidates": [],
+    "deleted": [],
+    "user_confirmed_unused_models": [],
+    "unused_reason": "",
+    "pending_devices": [],
+    "status": "audited"
+  },
+  "resource_state": {
+    "retained": "Two build logs and device audit; reused existing DerivedData, no xcresult, exported attachments, remote or custom system temporary files",
+    "local_allocated_bytes": 536576
+  }
+}
