@@ -1,0 +1,144 @@
+{
+  "summary": {
+    "devicesAndConfigurations": [
+      {
+        "device": {
+          "architecture": "arm64",
+          "deviceId": "0415D5BA-594C-4288-A110-E947FB31EB4E",
+          "deviceName": "iPhone 18 Pro",
+          "modelName": "iPhone 18 Pro",
+          "osBuildNumber": "24A434",
+          "osVersion": "27.0",
+          "platform": "iOS Simulator"
+        },
+        "expectedFailures": 0,
+        "failedTests": 0,
+        "passedTests": 5,
+        "skippedTests": 0,
+        "testPlanConfiguration": {
+          "configurationId": "1",
+          "configurationName": "Test Scheme Action"
+        }
+      }
+    ],
+    "environmentDescription": "V15GalleryiOS · Built with macOS 27.0",
+    "expectedFailures": 0,
+    "failedTests": 0,
+    "finishTime": 1789894845.904,
+    "passedTests": 5,
+    "result": "Passed",
+    "runtimeWarnings": [],
+    "skippedTests": 0,
+    "startTime": 1789894604.122,
+    "statistics": [],
+    "testFailures": [],
+    "title": "Test - V15GalleryiOS",
+    "topInsights": [],
+    "totalTestCount": 5
+  },
+  "tests": {
+    "devices": [
+      {
+        "architecture": "arm64",
+        "deviceId": "0415D5BA-594C-4288-A110-E947FB31EB4E",
+        "deviceName": "iPhone 18 Pro",
+        "modelName": "iPhone 18 Pro",
+        "osBuildNumber": "24A434",
+        "osVersion": "27.0",
+        "platform": "iOS Simulator"
+      }
+    ],
+    "testNodes": [
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "duration": "13秒",
+                    "durationInSeconds": 13.397887110710144,
+                    "name": "testRepaymentPrefillKeepsCycleAndSaveReachableAtAX5()",
+                    "nodeIdentifier": "F1AGalleryUITests/testRepaymentPrefillKeepsCycleAndSaveReachableAtAX5()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15GalleryUITests/F1AGalleryUITests/testRepaymentPrefillKeepsCycleAndSaveReachableAtAX5",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "41秒",
+                    "durationInSeconds": 41.39553904533386,
+                    "name": "testRepaymentUsesHumanCyclePickerPreviewAndUserFacingSuccess()",
+                    "nodeIdentifier": "F1AGalleryUITests/testRepaymentUsesHumanCyclePickerPreviewAndUserFacingSuccess()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15GalleryUITests/F1AGalleryUITests/testRepaymentUsesHumanCyclePickerPreviewAndUserFacingSuccess",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F1AGalleryUITests",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15GalleryUITests/F1AGalleryUITests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "2分钟33秒",
+                    "durationInSeconds": 153.7107299566269,
+                    "name": "testEligibilityReasonPageFailureAndPurchaseInputInvalidationAreVisible()",
+                    "nodeIdentifier": "F3B2GalleryUITests/testEligibilityReasonPageFailureAndPurchaseInputInvalidationAreVisible()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15GalleryUITests/F3B2GalleryUITests/testEligibilityReasonPageFailureAndPurchaseInputInvalidationAreVisible",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "12秒",
+                    "durationInSeconds": 12.069646000862122,
+                    "name": "testLedgerHandoffOpensExistingPurchaseWithTransactionPrefilled()",
+                    "nodeIdentifier": "F3B2GalleryUITests/testLedgerHandoffOpensExistingPurchaseWithTransactionPrefilled()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15GalleryUITests/F3B2GalleryUITests/testLedgerHandoffOpensExistingPurchaseWithTransactionPrefilled",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F3B2GalleryUITests",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15GalleryUITests/F3B2GalleryUITests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "12秒",
+                    "durationInSeconds": 12.813161015510559,
+                    "name": "testArchiveConfirmationTransferAndRestoreBoundary()",
+                    "nodeIdentifier": "F4CGalleryUITests/testArchiveConfirmationTransferAndRestoreBoundary()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15GalleryUITests/F4CGalleryUITests/testArchiveConfirmationTransferAndRestoreBoundary",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F4CGalleryUITests",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15GalleryUITests/F4CGalleryUITests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              }
+            ],
+            "name": "V15GalleryUITests",
+            "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15GalleryUITests",
+            "nodeType": "UI test bundle",
+            "result": "Passed"
+          }
+        ],
+        "name": "V15GalleryiOS",
+        "nodeType": "Test Plan",
+        "result": "Passed"
+      }
+    ],
+    "testPlanConfigurations": [
+      {
+        "configurationId": "1",
+        "configurationName": "Test Scheme Action"
+      }
+    ]
+  }
+}

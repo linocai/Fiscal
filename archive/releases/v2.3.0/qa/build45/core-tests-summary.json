@@ -1,0 +1,3206 @@
+{
+  "summary": {
+    "devicesAndConfigurations": [
+      {
+        "device": {
+          "architecture": "arm64",
+          "deviceId": "00008132-0001242821FA401C",
+          "deviceName": "My Mac",
+          "modelName": "Mac mini",
+          "osBuildNumber": "26A428",
+          "osVersion": "27.0",
+          "platform": "macOS"
+        },
+        "expectedFailures": 0,
+        "failedTests": 2,
+        "passedTests": 317,
+        "skippedTests": 0,
+        "testPlanConfiguration": {
+          "configurationId": "1",
+          "configurationName": "Test Scheme Action"
+        }
+      }
+    ],
+    "environmentDescription": "FiscalmacOS · Built with macOS 27.0",
+    "expectedFailures": 0,
+    "failedTests": 2,
+    "finishTime": 1789895117.764,
+    "passedTests": 317,
+    "result": "Failed",
+    "runtimeWarnings": [],
+    "skippedTests": 0,
+    "startTime": 1789894856.539,
+    "statistics": [],
+    "testFailures": [
+      {
+        "failureText": "Test crashed with signal int.",
+        "targetName": "FiscalKitTests",
+        "testIdentifier": 318,
+        "testIdentifierString": "P16InfrastructureTests/apiTransportDecodesBackendTimestamps()",
+        "testIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P16InfrastructureTests/apiTransportDecodesBackendTimestamps()",
+        "testName": "API transport decodes Backend ISO-8601 timestamps with fractional seconds and offsets"
+      },
+      {
+        "failureText": "Testing was canceled",
+        "targetName": "FiscalKitTests",
+        "testIdentifier": 319,
+        "testIdentifierString": "xctest (47240) encountered an error",
+        "testName": "xctest (47240) encountered an error"
+      }
+    ],
+    "title": "Test - FiscalmacOS",
+    "topInsights": [
+      {
+        "category": "Longest Test Runs",
+        "impact": "67% of duration",
+        "text": "4 longest test runs with outlier durations exceeding 4.07s (three standard deviations)"
+      }
+    ],
+    "totalTestCount": 319
+  },
+  "tests": {
+    "devices": [
+      {
+        "architecture": "arm64",
+        "deviceId": "00008132-0001242821FA401C",
+        "deviceName": "My Mac",
+        "modelName": "Mac mini",
+        "osBuildNumber": "26A428",
+        "osVersion": "27.0",
+        "platform": "macOS"
+      }
+    ],
+    "testNodes": [
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "duration": "0.0086s",
+                    "durationInSeconds": 0.008583784103393555,
+                    "name": "session, readiness, master-data, cycle read and create preserve exact backend paths",
+                    "nodeIdentifier": "F1ATests/routesAndJSON()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1ATests/routesAndJSON()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0023s",
+                    "durationInSeconds": 0.0023009777069091797,
+                    "name": "system, passphrase, provider, and quality facts use their exact backend contracts",
+                    "nodeIdentifier": "F1ATests/settingsAndSystemRoutes()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1ATests/settingsAndSystemRoutes()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0032s",
+                    "durationInSeconds": 0.0032460689544677734,
+                    "name": "formal action previews and commits preserve tokens, keys, and fresh receipt reads",
+                    "nodeIdentifier": "F1ATests/formalActionRoutes()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1ATests/formalActionRoutes()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0071s",
+                    "durationInSeconds": 0.007108926773071289,
+                    "name": "CNY conversion, overflow and Shanghai day instant are deterministic",
+                    "nodeIdentifier": "F1ATests/moneyAndDate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1ATests/moneyAndDate()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0045s",
+                    "durationInSeconds": 0.004487037658691406,
+                    "name": "kind transitions clear every incompatible reference and reload direction-correct categories",
+                    "nodeIdentifier": "F1ATests/transitionsAndValidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1ATests/transitionsAndValidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.19s",
+                    "durationInSeconds": 0.18604207038879395,
+                    "name": "credit-cycle loads cannot overwrite a newer kind, destination, or cancellation",
+                    "nodeIdentifier": "F1ATests/creditCycleRaces()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1ATests/creditCycleRaces()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.027s",
+                    "durationInSeconds": 0.027106761932373047,
+                    "name": "response-unknown retains original key despite edits; resolved outcomes permit a new entry",
+                    "nodeIdentifier": "F1ATests/payloadBoundIdempotency()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1ATests/payloadBoundIdempotency()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.092s",
+                    "durationInSeconds": 0.09247994422912598,
+                    "name": "one confirmed save clears the draft and concurrent taps create only once",
+                    "nodeIdentifier": "F1ATests/confirmedSaveClearsAndDeduplicates()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1ATests/confirmedSaveClearsAndDeduplicates()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.011s",
+                    "durationInSeconds": 0.011200904846191406,
+                    "name": "queued saves clear once while deterministic failures preserve the draft",
+                    "nodeIdentifier": "F1ATests/queuedAndFailedDraftLifecycle()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1ATests/queuedAndFailedDraftLifecycle()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F1-A clean-room contracts and record model",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1ATests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.0038s",
+                    "durationInSeconds": 0.003821134567260742,
+                    "name": "list preserves the backend keyset/filter query and opaque cursor",
+                    "nodeIdentifier": "F1BTests/listQuery()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/listQuery()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0039s",
+                    "durationInSeconds": 0.003910064697265625,
+                    "name": "detail, revision and provenance decode only backend-shaped fixtures",
+                    "nodeIdentifier": "F1BTests/readsDecode()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/readsDecode()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0056s",
+                    "durationInSeconds": 0.0056421756744384766,
+                    "name": "replace, void and restore retain expected version in exact request body",
+                    "nodeIdentifier": "F1BTests/mutationBodies()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/mutationBodies()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00004s",
+                    "durationInSeconds": 3.981590270996094e-05,
+                    "name": "disabled and unknown capabilities cannot become actions",
+                    "nodeIdentifier": "F1BTests/capabilitySafety()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/capabilitySafety()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.09s",
+                    "durationInSeconds": 0.08991694450378418,
+                    "name": "filter generation prevents an old page from replacing new results",
+                    "nodeIdentifier": "F1BTests/listRace()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/listRace()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00039s",
+                    "durationInSeconds": 0.00039315223693847656,
+                    "name": "filter amounts use CNY input and local invalid fields block a request",
+                    "nodeIdentifier": "F1BTests/amountFilterValidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/amountFilterValidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000071s",
+                    "durationInSeconds": 7.104873657226562e-05,
+                    "name": "unknown write outcomes include lost response, cancellation and invalid response but not request encoding",
+                    "nodeIdentifier": "F1BTests/unknownWriteOutcomes()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/unknownWriteOutcomes()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0054s",
+                    "durationInSeconds": 0.0053827762603759766,
+                    "name": "offline model exposes snapshot and never authorises a mutation",
+                    "nodeIdentifier": "F1BTests/offlineReadOnly()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/offlineReadOnly()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.047s",
+                    "durationInSeconds": 0.046868085861206055,
+                    "name": "void and restore unknown responses reconcile by readback without a second write",
+                    "nodeIdentifier": "F1BTests/mutationUnknownReconciles()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/mutationUnknownReconciles()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0079s",
+                    "durationInSeconds": 0.00793600082397461,
+                    "name": "deterministic write failures never enter unknown-outcome reconciliation",
+                    "nodeIdentifier": "F1BTests/deterministicMutationFailuresDoNotReadBack()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/deterministicMutationFailuresDoNotReadBack()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.09s",
+                    "durationInSeconds": 0.09018707275390625,
+                    "name": "category confirmation accepts only one in-flight commit",
+                    "nodeIdentifier": "F1BTests/categoryConfirmationIsSingleFlight()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/categoryConfirmationIsSingleFlight()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.087s",
+                    "durationInSeconds": 0.08704710006713867,
+                    "name": "category commit remains successful when post-commit refresh fails",
+                    "nodeIdentifier": "F1BTests/categoryCommitSeparatesWriteFromRefresh()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/categoryCommitSeparatesWriteFromRefresh()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00012s",
+                    "durationInSeconds": 0.0001220703125,
+                    "name": "account-scoped repayment uses the selected posting and explains both accounts",
+                    "nodeIdentifier": "F1BTests/accountScopedRepaymentPresentation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/accountScopedRepaymentPresentation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00002s",
+                    "durationInSeconds": 2.002716064453125e-05,
+                    "name": "credit expense is debt growth while an unscoped ledger keeps transaction direction",
+                    "nodeIdentifier": "F1BTests/creditExpensePresentation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/creditExpensePresentation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00002s",
+                    "durationInSeconds": 2.002716064453125e-05,
+                    "name": "income and transfers follow each selected account posting",
+                    "nodeIdentifier": "F1BTests/incomeAndTransferPresentation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests/incomeAndTransferPresentation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F1-B typed ledger contracts and race safety",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1BTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.0042s",
+                    "durationInSeconds": 0.0041849613189697266,
+                    "name": "account ordering reads the server revision before writing it",
+                    "nodeIdentifier": "F1CTests/accountOrder()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/accountOrder()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0014s",
+                    "durationInSeconds": 0.0013790130615234375,
+                    "name": "category transform is preview token then idempotent commit",
+                    "nodeIdentifier": "F1CTests/transform()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/transform()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0023s",
+                    "durationInSeconds": 0.002313852310180664,
+                    "name": "merchant query and mapping carry backend pagination/idempotency/version semantics",
+                    "nodeIdentifier": "F1CTests/merchant()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/merchant()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0068s",
+                    "durationInSeconds": 0.006788015365600586,
+                    "name": "offline master data rejects mutation",
+                    "nodeIdentifier": "F1CTests/offline()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/offline()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0014s",
+                    "durationInSeconds": 0.0014369487762451172,
+                    "name": "split uses one preview token and an idempotent commit",
+                    "nodeIdentifier": "F1CTests/split()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/split()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0074s",
+                    "durationInSeconds": 0.007437944412231445,
+                    "name": "merge and split response-unknown retries keep payload-bound key; input and dismiss invalidate preview",
+                    "nodeIdentifier": "F1CTests/transformRetryLifecycle()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/transformRetryLifecycle()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.025s",
+                    "durationInSeconds": 0.02450108528137207,
+                    "name": "merge preview initializes every child mapping, commits untouched defaults, and blocks empty targets",
+                    "nodeIdentifier": "F1CTests/mergeChildMappingDefaults()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/mergeChildMappingDefaults()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.026s",
+                    "durationInSeconds": 0.02571582794189453,
+                    "name": "merge and split preview conflicts reload once, require fresh preview, and do not replay",
+                    "nodeIdentifier": "F1CTests/transformPreviewConflictTakeover()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/transformPreviewConflictTakeover()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.021s",
+                    "durationInSeconds": 0.021490097045898438,
+                    "name": "preview transport, offline, and failed conflict reload retain a visible transform failure",
+                    "nodeIdentifier": "F1CTests/transformPreviewFailuresAreExplicit()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/transformPreviewFailuresAreExplicit()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.012174129486083984,
+                    "name": "reorder conflict reloads authoritative order state",
+                    "nodeIdentifier": "F1CTests/reorderConflictReloads()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/reorderConflictReloads()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.01s",
+                    "durationInSeconds": 0.010480642318725586,
+                    "name": "mapping unknown reads facts; release retry preserves its idempotency key",
+                    "nodeIdentifier": "F1CTests/mappingUnknownLifecycle()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/mappingUnknownLifecycle()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0061s",
+                    "durationInSeconds": 0.006061077117919922,
+                    "name": "merchant next-page failure preserves first page and exposes local retry state",
+                    "nodeIdentifier": "F1CTests/merchantPageFailurePreservesRows()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/merchantPageFailurePreservesRows()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0067s",
+                    "durationInSeconds": 0.006721019744873047,
+                    "name": "master-data save is enabled only for a valid changed draft",
+                    "nodeIdentifier": "F1CTests/saveDraftGate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/saveDraftGate()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000062s",
+                    "durationInSeconds": 6.198883056640625e-05,
+                    "name": "master-data field issues are routed only to their matching field",
+                    "nodeIdentifier": "F1CTests/fieldIssueRouting()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/fieldIssueRouting()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.012880086898803711,
+                    "name": "master-data editor feedback never leaks across records, new drafts, or successful saves",
+                    "nodeIdentifier": "F1CTests/editorFeedbackLifecycle()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/editorFeedbackLifecycle()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00016s",
+                    "durationInSeconds": 0.00015687942504882812,
+                    "name": "offline snapshot copy is deterministic Chinese Shanghai time",
+                    "nodeIdentifier": "F1CTests/offlineSnapshotCopy()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/offlineSnapshotCopy()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00014s",
+                    "durationInSeconds": 0.00013875961303710938,
+                    "name": "credit account request only uses backend cycle modes and carries positive-opening dates",
+                    "nodeIdentifier": "F1CTests/creditAccountWireContract()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/creditAccountWireContract()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000077s",
+                    "durationInSeconds": 7.700920104980469e-05,
+                    "name": "existing account patch deliberately excludes account kind",
+                    "nodeIdentifier": "F1CTests/accountPatchDoesNotPretendToChangeKind()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/accountPatchDoesNotPretendToChangeKind()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000023s",
+                    "durationInSeconds": 2.288818359375e-05,
+                    "name": "credit opening dates become explicit JSON null when positive opening is cleared",
+                    "nodeIdentifier": "F1CTests/creditOpeningDateClearWire()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/creditOpeningDateClearWire()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.012839078903198242,
+                    "name": "unknown account patch reads the known object and never repeats POST/PATCH",
+                    "nodeIdentifier": "F1CTests/unknownPatchReadback()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/unknownPatchReadback()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.012848854064941406,
+                    "name": "unknown merchant patch is confirmed only by matching GET facts",
+                    "nodeIdentifier": "F1CTests/unknownMerchantPatchApplied()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/unknownMerchantPatchApplied()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.01234889030456543,
+                    "name": "unknown category patch with failed readback remains unconfirmed and is not repeated",
+                    "nodeIdentifier": "F1CTests/unknownCategoryReadbackFailed()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/unknownCategoryReadbackFailed()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.012022018432617188,
+                    "name": "unknown merchant creation refreshes but never guesses an ID or repeats POST",
+                    "nodeIdentifier": "F1CTests/unknownMerchantCreateRefreshesWithoutRetry()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/unknownMerchantCreateRefreshesWithoutRetry()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0047s",
+                    "durationInSeconds": 0.0046999454498291016,
+                    "name": "offline guards every owned write entry before transport",
+                    "nodeIdentifier": "F1CTests/offlineGuards()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/offlineGuards()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.037s",
+                    "durationInSeconds": 0.03743886947631836,
+                    "name": "account and category conflicts retain field comparisons until explicit reload and never replay",
+                    "nodeIdentifier": "F1CTests/mutationConflictTakeover()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/mutationConflictTakeover()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.018s",
+                    "durationInSeconds": 0.018110036849975586,
+                    "name": "merge and split conflicts invalidate tokens, reload, and require a fresh preview",
+                    "nodeIdentifier": "F1CTests/transformConflictTakeover()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/transformConflictTakeover()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.012641191482543945,
+                    "name": "transform state never reuses ordinary receipt, conflict, or field issues",
+                    "nodeIdentifier": "F1CTests/transformStateIsIndependent()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/transformStateIsIndependent()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00003s",
+                    "durationInSeconds": 2.9802322387695312e-05,
+                    "name": "master-data reorder accessibility hints describe the current action and boundary",
+                    "nodeIdentifier": "F1CTests/reorderAccessibilityCopy()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/reorderAccessibilityCopy()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.035s",
+                    "durationInSeconds": 0.0354311466217041,
+                    "name": "unknown account, category, and merchant creates remain locked after editing until identity is confirmed",
+                    "nodeIdentifier": "F1CTests/unknownCreateLocksEachEntity()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/unknownCreateLocksEachEntity()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.019s",
+                    "durationInSeconds": 0.018585205078125,
+                    "name": "unknown create remains locked after a list reload without identity proof",
+                    "nodeIdentifier": "F1CTests/unknownCreateExplicitReload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/unknownCreateExplicitReload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.009s",
+                    "durationInSeconds": 0.009023189544677734,
+                    "name": "failed unknown-create reload keeps every write locked",
+                    "nodeIdentifier": "F1CTests/unknownCreateReloadFailureLocksWrites()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/unknownCreateReloadFailureLocksWrites()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.019s",
+                    "durationInSeconds": 0.019150972366333008,
+                    "name": "new account switched from credit to cash or debit omits all hidden credit fields",
+                    "nodeIdentifier": "F1CTests/accountKindSwitchWire()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests/accountKindSwitchWire()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F1-C master-data contracts",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F1CTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.00091s",
+                    "durationInSeconds": 0.0009138584136962891,
+                    "name": "Facts decode without reconciliation fields and retain known future facts",
+                    "nodeIdentifier": "F2ATests/factsDecode()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F2ATests/factsDecode()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00079s",
+                    "durationInSeconds": 0.0007889270782470703,
+                    "name": "Today refresh reads facts only",
+                    "nodeIdentifier": "F2ATests/refreshUsesOnlyFactsReadModelEndpoints()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F2ATests/refreshUsesOnlyFactsReadModelEndpoints()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "v1.7 facts read boundary",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F2ATests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.000032s",
+                    "durationInSeconds": 3.218650817871094e-05,
+                    "name": "refresh reopens only a scope that was already open",
+                    "nodeIdentifier": "F2CMacTodayPolicyTests/refreshPolicyUsesOpenScopeOnly()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F2CMacTodayPolicyTests/refreshPolicyUsesOpenScopeOnly()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F2-C macOS Today refresh ownership",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F2CMacTodayPolicyTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.0014s",
+                    "durationInSeconds": 0.0014109611511230469,
+                    "name": "exact future-events query retains bounded server scope and opaque cursor",
+                    "nodeIdentifier": "F3ATests/contractAndPagination()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3ATests/contractAndPagination()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0032s",
+                    "durationInSeconds": 0.0032248497009277344,
+                    "name": "window account and invalid service arguments stay in the typed boundary",
+                    "nodeIdentifier": "F3ATests/filtersAndValidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3ATests/filtersAndValidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00099s",
+                    "durationInSeconds": 0.000985860824584961,
+                    "name": "next-page failure keeps first page and conflict can only fresh-reload",
+                    "nodeIdentifier": "F3ATests/localPageFailureAndConflictGate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3ATests/localPageFailureAndConflictGate()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.39s",
+                    "durationInSeconds": 0.3936121463775635,
+                    "name": "event-aware locators and authoritative account filters stay local and race-safe",
+                    "nodeIdentifier": "F3ATests/strictLocatorsAndAccountOptionRaces()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3ATests/strictLocatorsAndAccountOptionRaces()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.012779951095581055,
+                    "name": "opening a future event requires a fresh owner read and rejects stale ownership",
+                    "nodeIdentifier": "F3ATests/freshOwnerReadBeforeNavigation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3ATests/freshOwnerReadBeforeNavigation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.13s",
+                    "durationInSeconds": 0.12603497505187988,
+                    "name": "offline and superseded owner reads cannot navigate",
+                    "nodeIdentifier": "F3ATests/offlineAndSupersededOwnerRead()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3ATests/offlineAndSupersededOwnerRead()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.26s",
+                    "durationInSeconds": 0.25824618339538574,
+                    "name": "closing or replacing an inspector invalidates a slow owner read",
+                    "nodeIdentifier": "F3ATests/inspectorLifecycleInvalidatesSlowOwnerRead()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3ATests/inspectorLifecycleInvalidatesSlowOwnerRead()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F3-A server-owned future timeline",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3ATests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.6s",
+                    "durationInSeconds": 0.6008589267730713,
+                    "name": "an A command settling after B selection updates only A's command state",
+                    "nodeIdentifier": "F3B1Tests/delayedACommandsNeverPolluteB()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/delayedACommandsNeverPolluteB()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.18s",
+                    "durationInSeconds": 0.1761457920074463,
+                    "name": "unknown recovery is account-scoped while B can preview commit and A replays its exact key",
+                    "nodeIdentifier": "F3B1Tests/unknownRecoveryIsAccountScoped()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/unknownRecoveryIsAccountScoped()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.013200044631958008,
+                    "name": "only the selected unknown account may explicitly abandon its recovery",
+                    "nodeIdentifier": "F3B1Tests/unknownAbandonIsAccountScoped()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/unknownAbandonIsAccountScoped()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.13s",
+                    "durationInSeconds": 0.12818217277526855,
+                    "name": "delayed A master cannot overwrite a newer B account selection",
+                    "nodeIdentifier": "F3B1Tests/delayedMasterSelectionKeepsBState()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/delayedMasterSelectionKeepsBState()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.13s",
+                    "durationInSeconds": 0.13418173789978027,
+                    "name": "delayed A cycle page cannot clear or replace newer B cycles",
+                    "nodeIdentifier": "F3B1Tests/delayedCyclePageKeepsBState()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/delayedCyclePageKeepsBState()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.17s",
+                    "durationInSeconds": 0.16661500930786133,
+                    "name": "refresh load and selection race leaves the newest B account and draft intact",
+                    "nodeIdentifier": "F3B1Tests/refreshLoadSelectionRaceKeepsBState()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/refreshLoadSelectionRaceKeepsBState()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.022s",
+                    "durationInSeconds": 0.021715879440307617,
+                    "name": "all P33 credit reads retain server fields, opaque cursors and local page errors",
+                    "nodeIdentifier": "F3B1Tests/readsAndPages()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/readsAndPages()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.015s",
+                    "durationInSeconds": 0.014842033386230469,
+                    "name": "preview invalidates on every input and commits only exact preview token with account version",
+                    "nodeIdentifier": "F3B1Tests/previewLifecycleAndCommit()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/previewLifecycleAndCommit()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.012389898300170898,
+                    "name": "an unknown command blocks preview traffic and keeps same-key recovery visible until it settles",
+                    "nodeIdentifier": "F3B1Tests/unknownCommandBlocksPreviewUntilSameKeyRecovery()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/unknownCommandBlocksPreviewUntilSameKeyRecovery()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.14s",
+                    "durationInSeconds": 0.13882780075073242,
+                    "name": "an in-flight command blocks preview traffic without replacing its phase or preview",
+                    "nodeIdentifier": "F3B1Tests/committingCommandBlocksPreviewUntilItSettles()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/committingCommandBlocksPreviewUntilItSettles()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "16秒",
+                    "durationInSeconds": 16.162587642669678,
+                    "name": "normal and same-key success stay hard-gated through their delayed post-commit refresh",
+                    "nodeIdentifier": "F3B1Tests/postSuccessRefreshKeepsEveryCommandActionGated()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/postSuccessRefreshKeepsEveryCommandActionGated()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.063s",
+                    "durationInSeconds": 0.06334495544433594,
+                    "name": "expiry disabled server action conflict and response-unknown stay visible and safe",
+                    "nodeIdentifier": "F3B1Tests/gatesAndUnknownRetry()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/gatesAndUnknownRetry()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0061s",
+                    "durationInSeconds": 0.006089925765991211,
+                    "name": "unknown replay records an honest definitive expiry instead of making a new write",
+                    "nodeIdentifier": "F3B1Tests/unknownReplayExpiry()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/unknownReplayExpiry()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0062s",
+                    "durationInSeconds": 0.0062100887298583984,
+                    "name": "unknown readback failure retains both recovery actions and the exact replay",
+                    "nodeIdentifier": "F3B1Tests/unknownReadbackFailureThenReplay()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/unknownReadbackFailureThenReplay()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.014s",
+                    "durationInSeconds": 0.014111757278442383,
+                    "name": "unknown readback keeps replay when current server facts cannot prove the intent",
+                    "nodeIdentifier": "F3B1Tests/unknownReadbackOldStateRetainsAttempt()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/unknownReadbackOldStateRetainsAttempt()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.01s",
+                    "durationInSeconds": 0.01030874252319336,
+                    "name": "matching schedule and advanced account version can confirm unknown by readback",
+                    "nodeIdentifier": "F3B1Tests/unknownReadbackMatchingStateConfirmsWithoutReceipt()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/unknownReadbackMatchingStateConfirmsWithoutReceipt()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.011s",
+                    "durationInSeconds": 0.011030197143554688,
+                    "name": "unknown readback forces every proving fact fresh while ordinary reads retain cache defaults",
+                    "nodeIdentifier": "F3B1Tests/unknownReadbackForcesFreshFacts()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/unknownReadbackForcesFreshFacts()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.011s",
+                    "durationInSeconds": 0.0106658935546875,
+                    "name": "decoded offline fallback cannot confirm unknown attempt",
+                    "nodeIdentifier": "F3B1Tests/unknownReadbackOfflineFallbackRetainsAttempt()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/unknownReadbackOfflineFallbackRetainsAttempt()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.14s",
+                    "durationInSeconds": 0.13700413703918457,
+                    "name": "double unknown readback is a single flight",
+                    "nodeIdentifier": "F3B1Tests/doubleUnknownReadbackIsSingleFlight()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/doubleUnknownReadbackIsSingleFlight()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0093s",
+                    "durationInSeconds": 0.009307146072387695,
+                    "name": "offline unknown retry preserves the immutable attempt until online same-key replay",
+                    "nodeIdentifier": "F3B1Tests/unknownRetryOfflineThenOnlineUsesCapturedWire()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/unknownRetryOfflineThenOnlineUsesCapturedWire()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0097s",
+                    "durationInSeconds": 0.009704113006591797,
+                    "name": "offline response during unknown replay retains attempt instead of failing",
+                    "nodeIdentifier": "F3B1Tests/unknownRetryOfflineRaceRetainsAttempt()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/unknownRetryOfflineRaceRetainsAttempt()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.14s",
+                    "durationInSeconds": 0.14206910133361816,
+                    "name": "double unknown replay is a single flight",
+                    "nodeIdentifier": "F3B1Tests/doubleUnknownReplayIsSingleFlight()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/doubleUnknownReplayIsSingleFlight()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.019s",
+                    "durationInSeconds": 0.018992900848388672,
+                    "name": "conflict cannot clear until account and master refresh both succeed",
+                    "nodeIdentifier": "F3B1Tests/conflictReloadFailureThenRetry()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/conflictReloadFailureThenRetry()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.14s",
+                    "durationInSeconds": 0.14361786842346191,
+                    "name": "double schedule submit has one in-flight request",
+                    "nodeIdentifier": "F3B1Tests/doubleCommitIsSingleFlight()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/doubleCommitIsSingleFlight()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.011s",
+                    "durationInSeconds": 0.010725021362304688,
+                    "name": "server field validation stays in the schedule sheet model",
+                    "nodeIdentifier": "F3B1Tests/serverFieldErrors()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/serverFieldErrors()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0081s",
+                    "durationInSeconds": 0.008113861083984375,
+                    "name": "offline blocks all schedule writes before transport",
+                    "nodeIdentifier": "F3B1Tests/offlineWritesAreZero()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests/offlineWritesAreZero()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F3-B1 credit schedule",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B1Tests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.017s",
+                    "durationInSeconds": 0.017286300659179688,
+                    "name": "complete five-state page decodes and future state remains display-only",
+                    "nodeIdentifier": "F3B2Tests/statusesDecode()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/statusesDecode()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.012414693832397461,
+                    "name": "all server preview and result shapes retain locked periods cycles warnings and receipts",
+                    "nodeIdentifier": "F3B2Tests/previewShapesDecode()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/previewShapesDecode()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.029s",
+                    "durationInSeconds": 0.02907872200012207,
+                    "name": "replacement carries the exact reviewed fingerprint",
+                    "nodeIdentifier": "F3B2Tests/replacementFingerprint()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/replacementFingerprint()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.021s",
+                    "durationInSeconds": 0.021254777908325195,
+                    "name": "list detail purchase and liabilities are server facts",
+                    "nodeIdentifier": "F3B2Tests/loadFacts()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/loadFacts()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.032s",
+                    "durationInSeconds": 0.031655073165893555,
+                    "name": "initial account and plan select the exact plan and refresh never falls back to the first item",
+                    "nodeIdentifier": "F3B2Tests/exactInitialPlanSelection()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/exactInitialPlanSelection()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0063s",
+                    "durationInSeconds": 0.00630497932434082,
+                    "name": "initial plan missing from the first page is fetched by exact server id",
+                    "nodeIdentifier": "F3B2Tests/exactInitialPlanOutsideFirstPage()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/exactInitialPlanOutsideFirstPage()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0021s",
+                    "durationInSeconds": 0.0021262168884277344,
+                    "name": "missing initial credit account fails explicitly without selecting another account plan",
+                    "nodeIdentifier": "F3B2Tests/missingInitialAccountDoesNotFallback()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/missingInitialAccountDoesNotFallback()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.2s",
+                    "durationInSeconds": 0.19520807266235352,
+                    "name": "fee categories have independent loading empty error retry and generation ownership",
+                    "nodeIdentifier": "F3B2Tests/feeCategoryStatesAndRace()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/feeCategoryStatesAndRace()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.053s",
+                    "durationInSeconds": 0.053217172622680664,
+                    "name": "all three positive-fee workflows require an authoritative expense category and visible Shanghai date; zero clears both",
+                    "nodeIdentifier": "F3B2Tests/feeInputsAreReachableAndZeroIsNull()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/feeInputsAreReachableAndZeroIsNull()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.043s",
+                    "durationInSeconds": 0.04342484474182129,
+                    "name": "fee time obeys purchase occurrence and now boundaries for atomic existing and edit paths",
+                    "nodeIdentifier": "F3B2Tests/feeTimeObeysBothBackendBoundaries()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/feeTimeObeysBothBackendBoundaries()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.044s",
+                    "durationInSeconds": 0.04357409477233887,
+                    "name": "existing purchase detail drives same-day late and later-day fee instants",
+                    "nodeIdentifier": "F3B2Tests/existingPurchaseUsesAuthoritativeOccurredAt()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/existingPurchaseUsesAuthoritativeOccurredAt()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0014s",
+                    "durationInSeconds": 0.0013620853424072266,
+                    "name": "backend-like fixture rejects fee instants outside purchase and now bounds",
+                    "nodeIdentifier": "F3B2Tests/backendLikeFixtureRejectsInvalidFeeInstant()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/backendLikeFixtureRejectsInvalidFeeInstant()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.68s",
+                    "durationInSeconds": 0.6757791042327881,
+                    "name": "purchase write callback remains owned after dismiss and editor changes for success unknown and failure",
+                    "nodeIdentifier": "F3B2Tests/purchaseOperationOwnershipRace()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/purchaseOperationOwnershipRace()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.71s",
+                    "durationInSeconds": 0.7077779769897461,
+                    "name": "existing-purchase create callback remains owned after dismiss and editor changes",
+                    "nodeIdentifier": "F3B2Tests/createOperationOwnershipRace()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/createOperationOwnershipRace()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.73s",
+                    "durationInSeconds": 0.7260732650756836,
+                    "name": "no-key PUT callback remains plan-scoped across selection changes and never retransmits",
+                    "nodeIdentifier": "F3B2Tests/updateOperationOwnershipRace()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/updateOperationOwnershipRace()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.73s",
+                    "durationInSeconds": 0.727031946182251,
+                    "name": "idempotent command callback remains plan-scoped across selection changes",
+                    "nodeIdentifier": "F3B2Tests/commandOperationOwnershipRace()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/commandOperationOwnershipRace()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.034s",
+                    "durationInSeconds": 0.033666372299194336,
+                    "name": "opaque keyset failure retains the loaded page and exposes retry",
+                    "nodeIdentifier": "F3B2Tests/pageFailureRetainsFacts()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/pageFailureRetainsFacts()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.023s",
+                    "durationInSeconds": 0.02345442771911621,
+                    "name": "eligibility reason is server-owned and transaction input invalidates derived options",
+                    "nodeIdentifier": "F3B2Tests/eligibilityAndInvalidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/eligibilityAndInvalidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.72s",
+                    "durationInSeconds": 0.7227201461791992,
+                    "name": "eligibility UUID ownership is case-insensitive and stale mixed-case response cannot write",
+                    "nodeIdentifier": "F3B2Tests/eligibilityUUIDValueOwnership()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/eligibilityUUIDValueOwnership()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.041s",
+                    "durationInSeconds": 0.04067492485046387,
+                    "name": "existing purchase detail has independent failure and retry state",
+                    "nodeIdentifier": "F3B2Tests/eligibilityPurchaseDetailFailureRetry()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/eligibilityPurchaseDetailFailureRetry()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.025s",
+                    "durationInSeconds": 0.0245211124420166,
+                    "name": "purchase preview becomes invalid after valid or invalid input changes",
+                    "nodeIdentifier": "F3B2Tests/purchasePreviewInvalidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/purchasePreviewInvalidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.026s",
+                    "durationInSeconds": 0.025645017623901367,
+                    "name": "purchase preview and unknown retry preserve one exact body and idempotency key",
+                    "nodeIdentifier": "F3B2Tests/purchaseUnknownSameRequest()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/purchaseUnknownSameRequest()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.022s",
+                    "durationInSeconds": 0.021730661392211914,
+                    "name": "existing purchase plan creation unknown retries exact body and key",
+                    "nodeIdentifier": "F3B2Tests/createPlanUnknownSameRequest()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/createPlanUnknownSameRequest()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.026s",
+                    "durationInSeconds": 0.025715112686157227,
+                    "name": "plan preview input and dismiss invalidation never preserve an actionable preview",
+                    "nodeIdentifier": "F3B2Tests/planPreviewInvalidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/planPreviewInvalidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.026s",
+                    "durationInSeconds": 0.02582383155822754,
+                    "name": "no-key PUT response unknown performs only fresh GET plan and purchase and never retransmits PUT",
+                    "nodeIdentifier": "F3B2Tests/updateUnknownConfirmedByFreshReadback()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/updateUnknownConfirmedByFreshReadback()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.073s",
+                    "durationInSeconds": 0.07311511039733887,
+                    "name": "no-key PUT mismatch or readback failure stays unknown without a second PUT",
+                    "nodeIdentifier": "F3B2Tests/updateUnknownNotConfirmed()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/updateUnknownNotConfirmed()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.025s",
+                    "durationInSeconds": 0.024568796157836914,
+                    "name": "unknown command retries exact body and same key then displays operation receipt",
+                    "nodeIdentifier": "F3B2Tests/commandUnknownSameKey()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/commandUnknownSameKey()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.027s",
+                    "durationInSeconds": 0.027100324630737305,
+                    "name": "unknown command remains owned by its plan across selection changes",
+                    "nodeIdentifier": "F3B2Tests/commandOwnership()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/commandOwnership()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.017s",
+                    "durationInSeconds": 0.01721501350402832,
+                    "name": "offline snapshot dispatches no preview or command writes and shows reasons",
+                    "nodeIdentifier": "F3B2Tests/offlineZeroWrite()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/offlineZeroWrite()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.35s",
+                    "durationInSeconds": 0.34861087799072266,
+                    "name": "slow detail A cannot overwrite fast selected plan B",
+                    "nodeIdentifier": "F3B2Tests/detailRace()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/detailRace()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.022s",
+                    "durationInSeconds": 0.022195816040039062,
+                    "name": "all three command services send backend endpoint names and stable idempotency header",
+                    "nodeIdentifier": "F3B2Tests/commandWireMatrix()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests/commandWireMatrix()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F3-B2 typed installment lifecycle",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3B2Tests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.00098s",
+                    "durationInSeconds": 0.0009789466857910156,
+                    "name": "candidate preserves nullable category and every authoritative eligibility amount",
+                    "nodeIdentifier": "F3CTests/candidateDecode()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/candidateDecode()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.029s",
+                    "durationInSeconds": 0.028786182403564453,
+                    "name": "six closed claim states decode and a future state remains display-only",
+                    "nodeIdentifier": "F3CTests/claimStatuses()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/claimStatuses()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00023s",
+                    "durationInSeconds": 0.00022912025451660156,
+                    "name": "validation arrays and domain reason objects preserve exact field paths",
+                    "nodeIdentifier": "F3CTests/fieldPathMapping()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/fieldPathMapping()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.054s",
+                    "durationInSeconds": 0.05381488800048828,
+                    "name": "typed service emits exact filters, four preview-commit pairs, keys, tokens and keyless direct bodies",
+                    "nodeIdentifier": "F3CTests/typedServiceWires()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/typedServiceWires()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.011s",
+                    "durationInSeconds": 0.011003971099853516,
+                    "name": "new claim explains every local blocker and accepts an eligible uncategorized candidate",
+                    "nodeIdentifier": "F3CTests/newClaimGreyButtonRegression()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/newClaimGreyButtonRegression()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.035s",
+                    "durationInSeconds": 0.03549003601074219,
+                    "name": "candidate and receipt-account loading empty error retry stay independently actionable",
+                    "nodeIdentifier": "F3CTests/independentReadStates()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/independentReadStates()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.16s",
+                    "durationInSeconds": 0.16435790061950684,
+                    "name": "candidate filter generation rejects a late stale page",
+                    "nodeIdentifier": "F3CTests/candidateGenerationRace()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/candidateGenerationRace()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.044s",
+                    "durationInSeconds": 0.04440116882324219,
+                    "name": "receipt invalid-valid-preview-edit-repreview-commit uses CNY and Shanghai date",
+                    "nodeIdentifier": "F3CTests/receiptGreyButtonRegression()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/receiptGreyButtonRegression()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.018s",
+                    "durationInSeconds": 0.017534971237182617,
+                    "name": "Shanghai today remains writable before local noon",
+                    "nodeIdentifier": "F3CTests/receiptTodayBeforeNoon()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/receiptTodayBeforeNoon()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.031s",
+                    "durationInSeconds": 0.03112506866455078,
+                    "name": "receipt 409 requires fresh reload and repreview before success",
+                    "nodeIdentifier": "F3CTests/conflictRecovery()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/conflictRecovery()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.015s",
+                    "durationInSeconds": 0.015130996704101562,
+                    "name": "remote receipt reasons stay in the editor and clear only after input changes",
+                    "nodeIdentifier": "F3CTests/remoteReasons()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/remoteReasons()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.031s",
+                    "durationInSeconds": 0.03116011619567871,
+                    "name": "response-unknown create and receipt replay identical body and key exactly once",
+                    "nodeIdentifier": "F3CTests/sameKeyReplay()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/sameKeyReplay()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0091s",
+                    "durationInSeconds": 0.009120941162109375,
+                    "name": "offline blocks create and receipt before any write wire",
+                    "nodeIdentifier": "F3CTests/offlineZeroWire()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/offlineZeroWire()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0038s",
+                    "durationInSeconds": 0.0038411617279052734,
+                    "name": "keyless direct exact-looking fresh facts remain unattributed and never resend",
+                    "nodeIdentifier": "F3CTests/directUnknownReadback()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/directUnknownReadback()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.032s",
+                    "durationInSeconds": 0.03181290626525879,
+                    "name": "unknown create and receipt survive close reopen without replacing owner body or key",
+                    "nodeIdentifier": "F3CTests/unknownCloseReopenRecovery()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/unknownCloseReopenRecovery()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.028s",
+                    "durationInSeconds": 0.027801990509033203,
+                    "name": "owner A recovery never projects onto B and restores when A returns",
+                    "nodeIdentifier": "F3CTests/ownerScopedRecovery()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/ownerScopedRecovery()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.31s",
+                    "durationInSeconds": 0.3109889030456543,
+                    "name": "delayed owner A receipt success or failure cannot contaminate selected B",
+                    "nodeIdentifier": "F3CTests/receiptOwnerRace()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/receiptOwnerRace()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.015s",
+                    "durationInSeconds": 0.014833927154541016,
+                    "name": "direct no-key prealready no-advance mismatch and read failure never clear unknown lock",
+                    "nodeIdentifier": "F3CTests/directProofBoundaries()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/directProofBoundaries()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.016s",
+                    "durationInSeconds": 0.01598191261291504,
+                    "name": "keyless receipt direct readback requires both fresh versions and still cannot attribute",
+                    "nodeIdentifier": "F3CTests/directReceiptProofBoundary()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/directReceiptProofBoundary()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.029s",
+                    "durationInSeconds": 0.029043197631835938,
+                    "name": "cancel outstanding uses one model reason matrix for every status and hard gate",
+                    "nodeIdentifier": "F3CTests/cancelReasonMatrix()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/cancelReasonMatrix()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.075s",
+                    "durationInSeconds": 0.07507801055908203,
+                    "name": "all four model previews commit exact typed versions and tokens",
+                    "nodeIdentifier": "F3CTests/fourPreviewCommitModels()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/fourPreviewCommitModels()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.02s",
+                    "durationInSeconds": 0.02033400535583496,
+                    "name": "typed claim and receipt action applicability matches Backend field matrix",
+                    "nodeIdentifier": "F3CTests/actionMatrix()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/actionMatrix()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0091s",
+                    "durationInSeconds": 0.009077787399291992,
+                    "name": "receipt replacement aggregates every local blocker and invalid input sends no preview wire",
+                    "nodeIdentifier": "F3CTests/receiptReplacementGreyButtonRegression()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/receiptReplacementGreyButtonRegression()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.038s",
+                    "durationInSeconds": 0.037847042083740234,
+                    "name": "receipt replace void restore converge claim and receipt facts before next versioned wire",
+                    "nodeIdentifier": "F3CTests/receiptMutationFactConvergence()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/receiptMutationFactConvergence()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.067s",
+                    "durationInSeconds": 0.06711387634277344,
+                    "name": "receipt mutation refresh failure is partial success with GET-only retry and write lock",
+                    "nodeIdentifier": "F3CTests/receiptMutationRefreshFailure()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/receiptMutationRefreshFailure()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00043s",
+                    "durationInSeconds": 0.00043320655822753906,
+                    "name": "initial expense transaction is found across server candidate pages and selected exactly",
+                    "nodeIdentifier": "F3CTests/initialTransactionPagesToExactCandidate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/initialTransactionPagesToExactCandidate()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00033s",
+                    "durationInSeconds": 0.00033211708068847656,
+                    "name": "missing initial expense transaction reports an explicit error and never selects another candidate",
+                    "nodeIdentifier": "F3CTests/missingInitialTransactionDoesNotFallback()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests/missingInitialTransactionDoesNotFallback()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F3-C typed reimbursement lifecycle",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3CTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.0037s",
+                    "durationInSeconds": 0.003667116165161133,
+                    "name": "server status direction action and 64-bit amounts decode without inference",
+                    "nodeIdentifier": "F3DTests/typedFactDecode()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/typedFactDecode()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0079s",
+                    "durationInSeconds": 0.007934808731079102,
+                    "name": "typed service emits exact routes keys scopes and settlement body",
+                    "nodeIdentifier": "F3DTests/typedServiceWires()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/typedServiceWires()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.017s",
+                    "durationInSeconds": 0.0165708065032959,
+                    "name": "active history and manual detail remain independently retriable",
+                    "nodeIdentifier": "F3DTests/independentReadsAndDetail()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/independentReadsAndDetail()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.018s",
+                    "durationInSeconds": 0.01783299446105957,
+                    "name": "CNY Shanghai and transfer account constraints share submit guards",
+                    "nodeIdentifier": "F3DTests/validationAndSettlement()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/validationAndSettlement()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.02s",
+                    "durationInSeconds": 0.02010631561279297,
+                    "name": "create and settle unknown recover with the identical immutable key and body",
+                    "nodeIdentifier": "F3DTests/stableSameKeyRecovery()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/stableSameKeyRecovery()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0077s",
+                    "durationInSeconds": 0.007709026336669922,
+                    "name": "keyless unknown does zero resend and only fresh GET permits explicit abandon",
+                    "nodeIdentifier": "F3DTests/directUnknownReadback()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/directUnknownReadback()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.015s",
+                    "durationInSeconds": 0.014899253845214844,
+                    "name": "409 and field issues remain truthful and scoped to their editor",
+                    "nodeIdentifier": "F3DTests/conflictAndFieldIssues()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/conflictAndFieldIssues()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.014s",
+                    "durationInSeconds": 0.014084815979003906,
+                    "name": "offline blocks every write and system override wire omits D5 amount",
+                    "nodeIdentifier": "F3DTests/offlineAndSystemD5()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/offlineAndSystemD5()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0085s",
+                    "durationInSeconds": 0.008504390716552734,
+                    "name": "accepted write partial refresh retries GET only",
+                    "nodeIdentifier": "F3DTests/partialRefreshGate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/partialRefreshGate()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.77s",
+                    "durationInSeconds": 0.7741029262542725,
+                    "name": "generation and operation owner guards reject stale selection and list writes",
+                    "nodeIdentifier": "F3DTests/ownerAndGenerationGuards()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/ownerAndGenerationGuards()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.61s",
+                    "durationInSeconds": 0.6070280075073242,
+                    "name": "A to B account filter race clears old detail editor and actions",
+                    "nodeIdentifier": "F3DTests/accountSelectionScopeRace()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/accountSelectionScopeRace()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.45s",
+                    "durationInSeconds": 0.4467799663543701,
+                    "name": "history month race auto-selects only the current month token",
+                    "nodeIdentifier": "F3DTests/historySelectionScopeRace()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/historySelectionScopeRace()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.019s",
+                    "durationInSeconds": 0.018965959548950195,
+                    "name": "server action and scope are the only command authority",
+                    "nodeIdentifier": "F3DTests/actionGuards()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/actionGuards()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.11s",
+                    "durationInSeconds": 0.11202692985534668,
+                    "name": "cash-flow confirmation accepts only one in-flight commit",
+                    "nodeIdentifier": "F3DTests/confirmPreviewCommitIsSingleFlight()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/confirmPreviewCommitIsSingleFlight()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00041s",
+                    "durationInSeconds": 0.0004069805145263672,
+                    "name": "single-flight UI gate returns one immutable attempt key",
+                    "nodeIdentifier": "F3DTests/singleFlightAttemptGate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/singleFlightAttemptGate()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.011646747589111328,
+                    "name": "blank cash-flow draft does not disable opening its editor",
+                    "nodeIdentifier": "F3DTests/createEntryUsesOnlyOperationalReasons()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests/createEntryUsesOnlyOperationalReasons()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F3-D typed cash-flow facts and mutations",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3DTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.0013s",
+                    "durationInSeconds": 0.001332998275756836,
+                    "name": "D3 settings are false-only and provider configuration cannot change the effective result",
+                    "nodeIdentifier": "F3FTests/settingsContract()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/settingsContract()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.026s",
+                    "durationInSeconds": 0.02589893341064453,
+                    "name": "Status, snapshots and quality events remain forward-readable but unknown state is display-only",
+                    "nodeIdentifier": "F3FTests/forwardFacts()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/forwardFacts()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0039s",
+                    "durationInSeconds": 0.0038840770721435547,
+                    "name": "Service wires use the authoritative page, nested draft and undo version shapes",
+                    "nodeIdentifier": "F3FTests/authoritativeWires()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/authoritativeWires()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.014s",
+                    "durationInSeconds": 0.014174938201904297,
+                    "name": "Create installs one immutable key and unknown recovery reuses that exact key and body",
+                    "nodeIdentifier": "F3FTests/stableCreateRecovery()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/stableCreateRecovery()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.036s",
+                    "durationInSeconds": 0.0355072021484375,
+                    "name": "Stable create recovery survives owner restoration and only replays after a fresh safe settings read",
+                    "nodeIdentifier": "F3FTests/stableCreateRecoverySettingsGateAndOwnerIsolation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/stableCreateRecoverySettingsGateAndOwnerIsolation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.029s",
+                    "durationInSeconds": 0.02921915054321289,
+                    "name": "D3-sticky settings never authorize stable replay and abandon only clears the local attempt",
+                    "nodeIdentifier": "F3FTests/stableCreateRecoveryD3StickyAbandon()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/stableCreateRecoveryD3StickyAbandon()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.014s",
+                    "durationInSeconds": 0.014280080795288086,
+                    "name": "Human save is required before execute and the server version advances between writes",
+                    "nodeIdentifier": "F3FTests/editThenExecute()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/editThenExecute()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.038s",
+                    "durationInSeconds": 0.03827714920043945,
+                    "name": "Ignore, retry and undo use status-specific exact versions",
+                    "nodeIdentifier": "F3FTests/lifecycleActions()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/lifecycleActions()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.018s",
+                    "durationInSeconds": 0.018484830856323242,
+                    "name": "Only unposted pending, failed and ignored proposals allow permanent deletion",
+                    "nodeIdentifier": "F3FTests/deletionPolicy()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/deletionPolicy()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.011886835098266602,
+                    "name": "Confirmed deletion sends once, updates the queue and selects the adjacent item",
+                    "nodeIdentifier": "F3FTests/deleteUpdatesQueueExactlyOnce()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/deleteUpdatesQueueExactlyOnce()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.011529207229614258,
+                    "name": "Unknown delete outcome is confirmed by a fresh not-found read without resending",
+                    "nodeIdentifier": "F3FTests/unknownDeleteReadback()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/unknownDeleteReadback()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.02s",
+                    "durationInSeconds": 0.019501924514770508,
+                    "name": "Ordinary refresh resolves an unknown completed delete without orphaning its write lock",
+                    "nodeIdentifier": "F3FTests/unknownDeleteOrdinaryRefreshConfirmsAbsence()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/unknownDeleteOrdinaryRefreshConfirmsAbsence()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.02s",
+                    "durationInSeconds": 0.019824981689453125,
+                    "name": "Ordinary refresh keeps the unknown owner visible when the delete did not arrive",
+                    "nodeIdentifier": "F3FTests/unknownDeleteOrdinaryRefreshStillPresent()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/unknownDeleteOrdinaryRefreshStillPresent()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.027s",
+                    "durationInSeconds": 0.027496814727783203,
+                    "name": "Ordinary refresh keeps a retryable recovery surface when delete readback fails",
+                    "nodeIdentifier": "F3FTests/unknownDeleteOrdinaryRefreshReadFailure()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/unknownDeleteOrdinaryRefreshReadFailure()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.01171112060546875,
+                    "name": "Failed delete readback keeps the lock until a later fresh read confirms deletion",
+                    "nodeIdentifier": "F3FTests/unknownDeleteReadbackFailureRetainsLock()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/unknownDeleteReadbackFailureRetainsLock()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.011s",
+                    "durationInSeconds": 0.011189937591552734,
+                    "name": "Delete conflict requires a fresh read and never automatically retries the mutation",
+                    "nodeIdentifier": "F3FTests/deleteConflictReadback()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/deleteConflictReadback()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.011558055877685547,
+                    "name": "No-key response unknown requires fresh GET and never resends or claims attribution",
+                    "nodeIdentifier": "F3FTests/unknownDirectReadback()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/unknownDirectReadback()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.011551141738891602,
+                    "name": "No-key fresh GET failure retains the owner-scoped unknown lock until a successful retry",
+                    "nodeIdentifier": "F3FTests/unknownDirectReadbackFailureRetainsLock()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/unknownDirectReadbackFailureRetainsLock()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.011s",
+                    "durationInSeconds": 0.011492252349853516,
+                    "name": "Conflict reload failure remains a conflict and can retry its GET-only gate",
+                    "nodeIdentifier": "F3FTests/conflictReloadFailureRetainsGate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/conflictReloadFailureRetainsGate()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.01s",
+                    "durationInSeconds": 0.01036214828491211,
+                    "name": "Cash-flow target uses the p8 replacement wire but reviews a planned cash-flow fact",
+                    "nodeIdentifier": "F3FTests/cashFlowTargetReviewAndExecute()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/cashFlowTargetReviewAndExecute()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.013247013092041016,
+                    "name": "Kind changes clear incompatible references and owner state restores after A to B to A",
+                    "nodeIdentifier": "F3FTests/kindAndOwnerIsolation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/kindAndOwnerIsolation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.013185977935791016,
+                    "name": "Confirmation is the exact returned server version and draft, not merely the proposal ID",
+                    "nodeIdentifier": "F3FTests/confirmationIdentityInvalidatesOnFreshServerChange()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/confirmationIdentityInvalidatesOnFreshServerChange()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.015s",
+                    "durationInSeconds": 0.014525175094604492,
+                    "name": "Fresh selection and dismissal invalidate confirmation even when the server fact is unchanged",
+                    "nodeIdentifier": "F3FTests/confirmationIdentityInvalidatesOnSelectionAndDismissal()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/confirmationIdentityInvalidatesOnSelectionAndDismissal()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.013459920883178711,
+                    "name": "Exact unchanged server response can execute without selection, but canonical title and note own the wire identity",
+                    "nodeIdentifier": "F3FTests/canonicalDraftConfirmationAndExecution()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/canonicalDraftConfirmationAndExecution()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.011875152587890625,
+                    "name": "Whitespace-only notes canonicalize to nil and never produce a different confirmation wire",
+                    "nodeIdentifier": "F3FTests/whitespaceNoteCanonicalizesToNil()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/whitespaceNoteCanonicalizesToNil()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "5秒",
+                    "durationInSeconds": 5.071840047836304,
+                    "name": "Readback is owner single-flight and a deterministic failure remains on its owner",
+                    "nodeIdentifier": "F3FTests/ownerReadbackAndFailureIsolation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/ownerReadbackAndFailureIsolation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.026s",
+                    "durationInSeconds": 0.025582075119018555,
+                    "name": "Hidden stale shape fields block every invalid transaction wire, including cash-flow compatibility drafts",
+                    "nodeIdentifier": "F3FTests/staleShapeFieldsEmitZeroMutationWires()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/staleShapeFieldsEmitZeroMutationWires()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.011986970901489258,
+                    "name": "Offline state emits zero writes and every button exposes the same model reasons",
+                    "nodeIdentifier": "F3FTests/offlineZeroWire()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/offlineZeroWire()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.012s",
+                    "durationInSeconds": 0.012433052062988281,
+                    "name": "Conflict retains the immutable attempt until a cache-bypassing reload",
+                    "nodeIdentifier": "F3FTests/conflictReloadGate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/conflictReloadGate()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.6s",
+                    "durationInSeconds": 0.6035559177398682,
+                    "name": "Selection A/B and page reload races cannot restore stale ownership",
+                    "nodeIdentifier": "F3FTests/generationRaces()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/generationRaces()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.061s",
+                    "durationInSeconds": 0.06119990348815918,
+                    "name": "A later D3 settings violation clears trusted review state and locks every mutation for this session",
+                    "nodeIdentifier": "F3FTests/laterSettingsViolationFailsClosed()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/laterSettingsViolationFailsClosed()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.02s",
+                    "durationInSeconds": 0.020328998565673828,
+                    "name": "Settings transport failure also clears stale settings, while only typed D3 errors become sticky violations",
+                    "nodeIdentifier": "F3FTests/settingsFailureAndTypedViolationClassification()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/settingsFailureAndTypedViolationClassification()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.23s",
+                    "durationInSeconds": 0.2257089614868164,
+                    "name": "Unknown attempts survive the D3 gate only for GET recovery and old safe loads cannot unlock it",
+                    "nodeIdentifier": "F3FTests/settingsViolationPreservesReadOnlyRecoveryAndWinsRaces()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/settingsViolationPreservesReadOnlyRecoveryAndWinsRaces()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.017s",
+                    "durationInSeconds": 0.01664423942565918,
+                    "name": "Settings contract violation fails the whole surface and leaves writes locked",
+                    "nodeIdentifier": "F3FTests/settingsViolation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests/settingsViolation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F3-F typed AI proposals",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3FTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.048s",
+                    "durationInSeconds": 0.04849505424499512,
+                    "name": "provider candidate first never hides the sole existing transaction; multiple matches require selection",
+                    "nodeIdentifier": "F3GTests/explicitMatchSelection()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/explicitMatchSelection()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.045s",
+                    "durationInSeconds": 0.044670820236206055,
+                    "name": "definitive confirm rejection releases journal and allows a fresh preview, including receipt404 then replay409",
+                    "nodeIdentifier": "F3GTests/confirmationRejectionRecovery()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/confirmationRejectionRecovery()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.045s",
+                    "durationInSeconds": 0.04535031318664551,
+                    "name": "unknown confirmation retains its key after receipt404 and gateway401 or429, until the original receipt arrives",
+                    "nodeIdentifier": "F3GTests/confirmationGatewayRejectionDoesNotSettleUnknown()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/confirmationGatewayRejectionDoesNotSettleUnknown()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.021s",
+                    "durationInSeconds": 0.02149033546447754,
+                    "name": "register wire is metadata-only and masked evidence has no raw document surface",
+                    "nodeIdentifier": "F3GTests/metadataOnly()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/metadataOnly()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.021s",
+                    "durationInSeconds": 0.02129983901977539,
+                    "name": "provider unknown recovery reuses exact request-bound authorization, body and key",
+                    "nodeIdentifier": "F3GTests/providerSameKeyRecovery()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/providerSameKeyRecovery()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.02s",
+                    "durationInSeconds": 0.019771099090576172,
+                    "name": "preview is server-derived, selection invalidates it, and confirmation sends exact request",
+                    "nodeIdentifier": "F3GTests/previewExactPayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/previewExactPayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.02s",
+                    "durationInSeconds": 0.0202028751373291,
+                    "name": "confirmation unknown only reads same key receipt and never blindly creates a new key",
+                    "nodeIdentifier": "F3GTests/confirmationUnknownReadback()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/confirmationUnknownReadback()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.02s",
+                    "durationInSeconds": 0.019832849502563477,
+                    "name": "missing receipt keeps unknown; explicit recovery reuses saved confirmation key and body",
+                    "nodeIdentifier": "F3GTests/originalConfirmationReplay()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/originalConfirmationReplay()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.061s",
+                    "durationInSeconds": 0.061266183853149414,
+                    "name": "offline has zero mutation wires and unknown resolution remains display-only",
+                    "nodeIdentifier": "F3GTests/offlineAndForwardSafety()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/offlineAndForwardSafety()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "14秒",
+                    "durationInSeconds": 14.716802835464478,
+                    "name": "synthetic PDF extraction releases its private temporary workspace and emits only masked evidence",
+                    "nodeIdentifier": "F3GTests/localPDFCleanup()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/localPDFCleanup()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.017s",
+                    "durationInSeconds": 0.016927003860473633,
+                    "name": "the local filename never crosses the registration boundary",
+                    "nodeIdentifier": "F3GTests/filenameNeverOnWire()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/filenameNeverOnWire()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.061s",
+                    "durationInSeconds": 0.06112527847290039,
+                    "name": "unknown batch workbench and preview statuses are uniformly display-only with zero later writes",
+                    "nodeIdentifier": "F3GTests/futureStatusStopsWrites()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/futureStatusStopsWrites()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.043s",
+                    "durationInSeconds": 0.04252481460571289,
+                    "name": "workbench filters and integer cursor retain prior rows on a local next-page failure",
+                    "nodeIdentifier": "F3GTests/workbenchPagination()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/workbenchPagination()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00022s",
+                    "durationInSeconds": 0.0002162456512451172,
+                    "name": "workbench filter query uses every backend snake_case key and fixture rejects camelCase",
+                    "nodeIdentifier": "F3GTests/workbenchFilterWire()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/workbenchFilterWire()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.021s",
+                    "durationInSeconds": 0.020548105239868164,
+                    "name": "masked page retry remains local to the workbench",
+                    "nodeIdentifier": "F3GTests/pageReadFailureIsLocalAndRetryable()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/pageReadFailureIsLocalAndRetryable()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.12s",
+                    "durationInSeconds": 0.11778116226196289,
+                    "name": "owned provider work cancels before wire, and after wire remains same-key recoverable",
+                    "nodeIdentifier": "F3GTests/lifecycleCancellationOwnership()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/lifecycleCancellationOwnership()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.14s",
+                    "durationInSeconds": 0.14371490478515625,
+                    "name": "confirmation sheet dismissal is a clear pre-wire cancel and a same-key post-wire receipt recovery",
+                    "nodeIdentifier": "F3GTests/confirmationDismissalOwnership()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/confirmationDismissalOwnership()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "5秒",
+                    "durationInSeconds": 5.26976203918457,
+                    "name": "preview owns visible loading and deterministic failure or conflict retry state",
+                    "nodeIdentifier": "F3GTests/previewLoadingAndRetryState()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/previewLoadingAndRetryState()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "2秒",
+                    "durationInSeconds": 2.571807861328125,
+                    "name": "page, filter, reload, and next reads do not replace a delayed resolution owner",
+                    "nodeIdentifier": "F3GTests/readsDoNotCancelPostWireResolution()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/readsDoNotCancelPostWireResolution()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.17s",
+                    "durationInSeconds": 0.16707110404968262,
+                    "name": "post-wire resolution cancellation recovers by readback and never replays the PUT",
+                    "nodeIdentifier": "F3GTests/resolutionUnknownUsesReadbackOnly()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/resolutionUnknownUsesReadbackOnly()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "1秒",
+                    "durationInSeconds": 1.1693429946899414,
+                    "name": "unknown resolution recovery scans unfiltered cursor pages and only unlocks an owner with fresh matching facts",
+                    "nodeIdentifier": "F3GTests/resolutionOwnerScopedReadback()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/resolutionOwnerScopedReadback()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.12s",
+                    "durationInSeconds": 0.1228642463684082,
+                    "name": "active resolution fail-closes every other mutation wire",
+                    "nodeIdentifier": "F3GTests/activeResolutionBlocksMutationReplacement()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/activeResolutionBlocksMutationReplacement()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.025s",
+                    "durationInSeconds": 0.024825096130371094,
+                    "name": "replacing a workbench invalidates a server preview before confirm",
+                    "nodeIdentifier": "F3GTests/reloadRequiresFreshPreview()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests/reloadRequiresFreshPreview()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F3-G typed statement import",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F3GTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.0051s",
+                    "durationInSeconds": 0.005074024200439453,
+                    "name": "category distribution never relabels net facts as an unsupported spending measure",
+                    "nodeIdentifier": "F4ATests/categoryMeasureTruth()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4ATests/categoryMeasureTruth()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0029s",
+                    "durationInSeconds": 0.002871274948120117,
+                    "name": "nonzero summary remains a loaded report even without dimension rows",
+                    "nodeIdentifier": "F4ATests/summaryOnlyIsNotEmpty()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4ATests/summaryOnlyIsNotEmpty()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0035s",
+                    "durationInSeconds": 0.003496885299682617,
+                    "name": "period bounds and forward-compatible report enums are display-only",
+                    "nodeIdentifier": "F4ATests/boundsAndEnums()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4ATests/boundsAndEnums()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0015s",
+                    "durationInSeconds": 0.0015189647674560547,
+                    "name": "year fixtures expose a complete calendar-year range",
+                    "nodeIdentifier": "F4ATests/yearFixtureRange()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4ATests/yearFixtureRange()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000083s",
+                    "durationInSeconds": 8.320808410644531e-05,
+                    "name": "macOS spending trends use business semantics instead of numeric sign",
+                    "nodeIdentifier": "F4ATests/macTrendSemantics()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4ATests/macTrendSemantics()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0026s",
+                    "durationInSeconds": 0.0025739669799804688,
+                    "name": "typed drill item retains Int64 facts and service never forms an unfiltered period query",
+                    "nodeIdentifier": "F4ATests/typedDrillAndWire()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4ATests/typedDrillAndWire()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0097s",
+                    "durationInSeconds": 0.009697198867797852,
+                    "name": "disabled aggregate rows issue zero drill requests while enabled rows bind period revision filter and paging",
+                    "nodeIdentifier": "F4ATests/capabilityAndOwner()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4ATests/capabilityAndOwner()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0024s",
+                    "durationInSeconds": 0.0023698806762695312,
+                    "name": "conflict clears selection and reload is cache-bypassing",
+                    "nodeIdentifier": "F4ATests/conflictRecovery()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4ATests/conflictRecovery()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0039s",
+                    "durationInSeconds": 0.0039000511169433594,
+                    "name": "completeness-only report remains loaded and lens changes invalidate every drill owner state",
+                    "nodeIdentifier": "F4ATests/completenessAndLensInvalidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4ATests/completenessAndLensInvalidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "1秒",
+                    "durationInSeconds": 1.052980899810791,
+                    "name": "first-page drill failure retries the exact owner while offline status follows services dynamically",
+                    "nodeIdentifier": "F4ATests/firstPageRetryAndDynamicOffline()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4ATests/firstPageRetryAndDynamicOffline()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0031s",
+                    "durationInSeconds": 0.003075838088989258,
+                    "name": "unknown account kind is display-only and issues zero period drill requests",
+                    "nodeIdentifier": "F4ATests/unknownAccountZeroWire()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4ATests/unknownAccountZeroWire()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F4-A report facts and same-revision drill-down",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4ATests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.0076s",
+                    "durationInSeconds": 0.007560014724731445,
+                    "name": "export sends the visible revision and only accepts matching response metadata",
+                    "nodeIdentifier": "F4BTests/revisionBoundExport()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4BTests/revisionBoundExport()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0075s",
+                    "durationInSeconds": 0.007493019104003906,
+                    "name": "missing or mismatched metadata fails closed and never retains a file",
+                    "nodeIdentifier": "F4BTests/invalidMetadataFailsClosed()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4BTests/invalidMetadataFailsClosed()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0034s",
+                    "durationInSeconds": 0.003409147262573242,
+                    "name": "offline and changed report owner issue zero export requests",
+                    "nodeIdentifier": "F4BTests/disabledAndOwnerInvalidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4BTests/disabledAndOwnerInvalidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0035s",
+                    "durationInSeconds": 0.0035452842712402344,
+                    "name": "409 and unknown export results preserve no local artifact and require a fresh decision",
+                    "nodeIdentifier": "F4BTests/exportConflictAndUnknown()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4BTests/exportConflictAndUnknown()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0035s",
+                    "durationInSeconds": 0.0035331249237060547,
+                    "name": "a 409 gate survives dismissal and only a fresh read unlocks the next revision",
+                    "nodeIdentifier": "F4BTests/staleGateRequiresFreshReload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4BTests/staleGateRequiresFreshReload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.006s",
+                    "durationInSeconds": 0.005974531173706055,
+                    "name": "temporary artifacts preserve the server basename; cancel, retry, and overwrite never re-GET",
+                    "nodeIdentifier": "F4BTests/temporaryNameAndLocalSaveLifecycle()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4BTests/temporaryNameAndLocalSaveLifecycle()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F4-B revision-bound report export",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4BTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.013314008712768555,
+                    "name": "Archive uses the exact POST contract and fixed AI-redaction flag",
+                    "nodeIdentifier": "F4CTests/exactWireAndHandoff()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4CTests/exactWireAndHandoff()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.062s",
+                    "durationInSeconds": 0.06218886375427246,
+                    "name": "invalid metadata fails closed and password change cleans an active file",
+                    "nodeIdentifier": "F4CTests/metadataAndCredentialInvalidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4CTests/metadataAndCredentialInvalidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.013011932373046875,
+                    "name": "offline, invalid confirmation, cancel, and unknown issue no unsafe local success",
+                    "nodeIdentifier": "F4CTests/disabledCancellationAndUnknown()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4CTests/disabledCancellationAndUnknown()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.051s",
+                    "durationInSeconds": 0.051145076751708984,
+                    "name": "failed and unknown transfers require an explicit reset and new POST",
+                    "nodeIdentifier": "F4CTests/retryIsExplicitNewTransfer()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4CTests/retryIsExplicitNewTransfer()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.014s",
+                    "durationInSeconds": 0.013963937759399414,
+                    "name": "save cancellation deletes temporary bytes without another export",
+                    "nodeIdentifier": "F4CTests/saveCancellationAndRestoreBoundary()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4CTests/saveCancellationAndRestoreBoundary()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.028s",
+                    "durationInSeconds": 0.02763819694519043,
+                    "name": "temporary write failure leaves no partial directory and can be explicitly retried",
+                    "nodeIdentifier": "F4CTests/temporaryWriteFailureCleansUpAndRetries()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4CTests/temporaryWriteFailureCleansUpAndRetries()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0062s",
+                    "durationInSeconds": 0.006211280822753906,
+                    "name": "system facts load independently and passphrase success clears every credential field",
+                    "nodeIdentifier": "F4CTests/systemFactsAndPassphraseSuccess()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4CTests/systemFactsAndPassphraseSuccess()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0039s",
+                    "durationInSeconds": 0.003918170928955078,
+                    "name": "a later failed facts refresh clears prior server facts instead of presenting them as current",
+                    "nodeIdentifier": "F4CTests/failedSecondFactsReadDoesNotReuseFacts()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4CTests/failedSecondFactsReadDoesNotReuseFacts()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0004s",
+                    "durationInSeconds": 0.0004019737243652344,
+                    "name": "passphrase validation and uncertain outcomes fail closed without unsafe retry advice",
+                    "nodeIdentifier": "F4CTests/passphraseFailureStates()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4CTests/passphraseFailureStates()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00034s",
+                    "durationInSeconds": 0.0003409385681152344,
+                    "name": "credential-store failure after a successful passphrase rotation requires re-unlock and cannot be resubmitted",
+                    "nodeIdentifier": "F4CTests/passphraseStoreFailureRequiresReunlock()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4CTests/passphraseStoreFailureRequiresReunlock()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.002s",
+                    "durationInSeconds": 0.0019559860229492188,
+                    "name": "native overwrite replaces only the selected destination",
+                    "nodeIdentifier": "F4CTests/atomicOverwrite()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4CTests/atomicOverwrite()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "F4-C encrypted Archive",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/F4CTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.0011s",
+                    "durationInSeconds": 0.0010609626770019531,
+                    "name": "AI proposal decodes strict integer confidence and authoritative pending count",
+                    "nodeIdentifier": "FiscalKitP8Tests/proposalContract()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP8Tests/proposalContract()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00029s",
+                    "durationInSeconds": 0.0002899169921875,
+                    "name": "AI proposal replacement keeps draft nested beside expected version",
+                    "nodeIdentifier": "FiscalKitP8Tests/nestedReplacement()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP8Tests/nestedReplacement()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000094s",
+                    "durationInSeconds": 9.393692016601562e-05,
+                    "name": "AI settings payload cannot disguise confidence or money as floating point",
+                    "nodeIdentifier": "FiscalKitP8Tests/settingsPayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP8Tests/settingsPayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00014s",
+                    "durationInSeconds": 0.00014209747314453125,
+                    "name": "AI provider settings never decode or echo an API key",
+                    "nodeIdentifier": "FiscalKitP8Tests/providerSettingsContract()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP8Tests/providerSettingsContract()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000091s",
+                    "durationInSeconds": 9.107589721679688e-05,
+                    "name": "Undo payload binds both proposal and ledger versions",
+                    "nodeIdentifier": "FiscalKitP8Tests/undoPayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP8Tests/undoPayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00018s",
+                    "durationInSeconds": 0.00017595291137695312,
+                    "name": "P23 quality metrics preserve the proposal denominator and settings mark user confirmation",
+                    "nodeIdentifier": "FiscalKitP8Tests/p23QualityContract()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP8Tests/p23QualityContract()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00033s",
+                    "durationInSeconds": 0.00033402442932128906,
+                    "name": "AI text transactions remain ordinary user editable rows",
+                    "nodeIdentifier": "FiscalKitP8Tests/aiTextEditable()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP8Tests/aiTextEditable()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.086s",
+                    "durationInSeconds": 0.08589816093444824,
+                    "name": "A stale AI queue response cannot replace the current filter",
+                    "nodeIdentifier": "FiscalKitP8Tests/staleAIQueue()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP8Tests/staleAIQueue()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "FiscalKit P8 contracts",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP8Tests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.00018s",
+                    "durationInSeconds": 0.00017833709716796875,
+                    "name": "Money uses integer minor units",
+                    "nodeIdentifier": "FiscalKitTests/moneyDecimal()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitTests/moneyDecimal()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00058s",
+                    "durationInSeconds": 0.0005810260772705078,
+                    "name": "System status decodes the backend contract",
+                    "nodeIdentifier": "FiscalKitTests/systemStatusContract()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitTests/systemStatusContract()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "FiscalKit P1",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.00042s",
+                    "durationInSeconds": 0.00041604042053222656,
+                    "name": "Account draft uses snake case and excludes ordering",
+                    "nodeIdentifier": "FiscalKitP2Tests/accountPayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP2Tests/accountPayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00032s",
+                    "durationInSeconds": 0.000324249267578125,
+                    "name": "Optimistic update sends expected_version",
+                    "nodeIdentifier": "FiscalKitP2Tests/optimisticPayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP2Tests/optimisticPayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00025s",
+                    "durationInSeconds": 0.0002472400665283203,
+                    "name": "Category local validation enforces color and duplicates",
+                    "nodeIdentifier": "FiscalKitP2Tests/categoryValidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP2Tests/categoryValidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00031s",
+                    "durationInSeconds": 0.000308990478515625,
+                    "name": "API error envelope decodes stable code",
+                    "nodeIdentifier": "FiscalKitP2Tests/errorEnvelope()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP2Tests/errorEnvelope()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000086s",
+                    "durationInSeconds": 8.606910705566406e-05,
+                    "name": "CNY parser accepts exact cents and rejects truncation or overflow",
+                    "nodeIdentifier": "FiscalKitP2Tests/exactMinorUnits()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP2Tests/exactMinorUnits()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "FiscalKit P2 contracts",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP2Tests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.00015s",
+                    "durationInSeconds": 0.00015282630920410156,
+                    "name": "Transfer payload uses account_id as source and no source alias",
+                    "nodeIdentifier": "FiscalKitP3Tests/transferPayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP3Tests/transferPayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00036s",
+                    "durationInSeconds": 0.0003619194030761719,
+                    "name": "Versioned update is a full semantic replacement",
+                    "nodeIdentifier": "FiscalKitP3Tests/updatePayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP3Tests/updatePayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00024s",
+                    "durationInSeconds": 0.00024366378784179688,
+                    "name": "Canonical response decodes account impacts without internal transaction IDs",
+                    "nodeIdentifier": "FiscalKitP3Tests/responsePayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP3Tests/responsePayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00041s",
+                    "durationInSeconds": 0.00040984153747558594,
+                    "name": "Editor validates all three semantic shapes",
+                    "nodeIdentifier": "FiscalKitP3Tests/semanticValidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP3Tests/semanticValidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000082s",
+                    "durationInSeconds": 8.20159912109375e-05,
+                    "name": "Create key is retained only for ambiguous failures",
+                    "nodeIdentifier": "FiscalKitP3Tests/idempotencyDisposition()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP3Tests/idempotencyDisposition()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.012962818145751953,
+                    "name": "A cancelled old search cannot replace the current query",
+                    "nodeIdentifier": "FiscalKitP3Tests/staleSearchIsIgnored()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP3Tests/staleSearchIsIgnored()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.013s",
+                    "durationInSeconds": 0.01292109489440918,
+                    "name": "Pagination is bound to its filter and cursor snapshot",
+                    "nodeIdentifier": "FiscalKitP3Tests/stalePageIsIgnored()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP3Tests/stalePageIsIgnored()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "FiscalKit P3 contracts",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP3Tests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.00004s",
+                    "durationInSeconds": 3.981590270996094e-05,
+                    "name": "Party status uses the localized reimbursement vocabulary",
+                    "nodeIdentifier": "FiscalKitP6Tests/partyStatusTitle()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/partyStatusTitle()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00034s",
+                    "durationInSeconds": 0.00033783912658691406,
+                    "name": "Claim replacement preserves the party by expense matrix",
+                    "nodeIdentifier": "FiscalKitP6Tests/claimPayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/claimPayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0001s",
+                    "durationInSeconds": 0.00010204315185546875,
+                    "name": "Receipt mutation uses exact optimistic version names",
+                    "nodeIdentifier": "FiscalKitP6Tests/receiptPayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/receiptPayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000023s",
+                    "durationInSeconds": 2.3126602172851562e-05,
+                    "name": "P6 server-owned ledger kind is never a manual editor choice",
+                    "nodeIdentifier": "FiscalKitP6Tests/systemKind()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/systemKind()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000081s",
+                    "durationInSeconds": 8.082389831542969e-05,
+                    "name": "Reimbursement operation conflict triggers refresh UX",
+                    "nodeIdentifier": "FiscalKitP6Tests/conflict()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/conflict()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0023s",
+                    "durationInSeconds": 0.0022568702697753906,
+                    "name": "Summary requires merchant principal refunds explicitly",
+                    "nodeIdentifier": "FiscalKitP6Tests/summaryContract()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/summaryContract()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0017s",
+                    "durationInSeconds": 0.0017211437225341797,
+                    "name": "Required nullable reimbursement response keys cannot disappear",
+                    "nodeIdentifier": "FiscalKitP6Tests/requiredNullableKeys()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/requiredNullableKeys()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.085s",
+                    "durationInSeconds": 0.0851891040802002,
+                    "name": "A stale claim response cannot replace the newly selected claim",
+                    "nodeIdentifier": "FiscalKitP6Tests/staleClaimSelection()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/staleClaimSelection()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0022s",
+                    "durationInSeconds": 0.0022401809692382812,
+                    "name": "A changed receipt request cannot commit a stale preview",
+                    "nodeIdentifier": "FiscalKitP6Tests/receiptPreviewSnapshot()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/receiptPreviewSnapshot()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0013s",
+                    "durationInSeconds": 0.0013020038604736328,
+                    "name": "Cancellation confirmation is bound to the preview claim and version",
+                    "nodeIdentifier": "FiscalKitP6Tests/cancellationPreviewSnapshot()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/cancellationPreviewSnapshot()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0004s",
+                    "durationInSeconds": 0.00039505958557128906,
+                    "name": "Cancellation confirmation rejects a changed selected version",
+                    "nodeIdentifier": "FiscalKitP6Tests/staleCancellationPreview()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/staleCancellationPreview()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.14s",
+                    "durationInSeconds": 0.1379859447479248,
+                    "name": "Claim and receipt pagination reject duplicate concurrent loads",
+                    "nodeIdentifier": "FiscalKitP6Tests/guardedPagination()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/guardedPagination()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.086s",
+                    "durationInSeconds": 0.08602404594421387,
+                    "name": "A filtered refresh discards an older claim page",
+                    "nodeIdentifier": "FiscalKitP6Tests/staleClaimPage()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests/staleClaimPage()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "FiscalKit P6 contracts",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP6Tests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.00087s",
+                    "durationInSeconds": 0.0008730888366699219,
+                    "name": "Credit cycle and account summary decode the frozen schema",
+                    "nodeIdentifier": "FiscalKitP4Tests/creditResponsePayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP4Tests/creditResponsePayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00025s",
+                    "durationInSeconds": 0.0002532005310058594,
+                    "name": "Credit purchase and repayment use exact transaction fields",
+                    "nodeIdentifier": "FiscalKitP4Tests/creditTransactionPayloads()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP4Tests/creditTransactionPayloads()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00033s",
+                    "durationInSeconds": 0.00032711029052734375,
+                    "name": "Credit opening debt requires valid explicit dates",
+                    "nodeIdentifier": "FiscalKitP4Tests/openingDebtValidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP4Tests/openingDebtValidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00039s",
+                    "durationInSeconds": 0.00038909912109375,
+                    "name": "Editing a settled repayment retains its canonical cycle",
+                    "nodeIdentifier": "FiscalKitP4Tests/settledRepaymentCycleRetention()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP4Tests/settledRepaymentCycleRetention()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "FiscalKit P4 contracts",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP4Tests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.00051s",
+                    "durationInSeconds": 0.0005121231079101562,
+                    "name": "Installment plan decodes scheduled gross semantics and fee metadata",
+                    "nodeIdentifier": "FiscalKitP5Tests/planResponsePayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP5Tests/planResponsePayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00027s",
+                    "durationInSeconds": 0.00027108192443847656,
+                    "name": "Installment preview accepts cycles that do not exist yet",
+                    "nodeIdentifier": "FiscalKitP5Tests/previewCycleIDsAreNullable()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP5Tests/previewCycleIDsAreNullable()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00056s",
+                    "durationInSeconds": 0.0005578994750976562,
+                    "name": "Installment mutation payload uses exact snake-case contract",
+                    "nodeIdentifier": "FiscalKitP5Tests/createPayload()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP5Tests/createPayload()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00009s",
+                    "durationInSeconds": 8.988380432128906e-05,
+                    "name": "System-generated installment ledger kinds are not manual editor choices",
+                    "nodeIdentifier": "FiscalKitP5Tests/systemKindsAreNotManual()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP5Tests/systemKindsAreNotManual()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0052s",
+                    "durationInSeconds": 0.0051517486572265625,
+                    "name": "Missing P5 outer keys fail decoding instead of silently using P4 shape",
+                    "nodeIdentifier": "FiscalKitP5Tests/requiredOuterKeys()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP5Tests/requiredOuterKeys()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00014s",
+                    "durationInSeconds": 0.00014400482177734375,
+                    "name": "Backend installment conflict codes all trigger conflict recovery",
+                    "nodeIdentifier": "FiscalKitP5Tests/conflictCodes()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP5Tests/conflictCodes()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.085s",
+                    "durationInSeconds": 0.0850379467010498,
+                    "name": "Switching accounts never publishes the previous account installment list",
+                    "nodeIdentifier": "FiscalKitP5Tests/accountKeyedLoading()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP5Tests/accountKeyedLoading()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0016s",
+                    "durationInSeconds": 0.0016071796417236328,
+                    "name": "A changed editor request cannot submit an old preview",
+                    "nodeIdentifier": "FiscalKitP5Tests/previewSnapshotInvalidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP5Tests/previewSnapshotInvalidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "FiscalKit P5 contracts",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/FiscalKitP5Tests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.0063s",
+                    "durationInSeconds": 0.006285905838012695,
+                    "name": "Recording preferences validate defaults and persist only local values",
+                    "nodeIdentifier": "P10InfrastructureTests/recordingPreferencesValidation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P10InfrastructureTests/recordingPreferencesValidation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00044s",
+                    "durationInSeconds": 0.00043702125549316406,
+                    "name": "Continuous recording resets content and rotates idempotency",
+                    "nodeIdentifier": "P10InfrastructureTests/continuousRecordingReset()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P10InfrastructureTests/continuousRecordingReset()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00032s",
+                    "durationInSeconds": 0.0003230571746826172,
+                    "name": "Memory response cache expires, reports real bytes, and clears",
+                    "nodeIdentifier": "P10InfrastructureTests/responseCacheLifecycle()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P10InfrastructureTests/responseCacheLifecycle()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000071s",
+                    "durationInSeconds": 7.104873657226562e-05,
+                    "name": "Response cache TTL is capped at thirty seconds",
+                    "nodeIdentifier": "P10InfrastructureTests/responseCacheCapsTTL()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P10InfrastructureTests/responseCacheCapsTTL()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00026s",
+                    "durationInSeconds": 0.00025773048400878906,
+                    "name": "CSV export receives the normalized current filters without paging",
+                    "nodeIdentifier": "P10InfrastructureTests/csvExportUsesCurrentFilters()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P10InfrastructureTests/csvExportUsesCurrentFilters()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "FiscalKit P10 infrastructure",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P10InfrastructureTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.00063s",
+                    "durationInSeconds": 0.0006282329559326172,
+                    "name": "Batch classification encodes the frozen atomic request shape",
+                    "nodeIdentifier": "P10MacWorkbenchTests/batchClassificationEncoding()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P10MacWorkbenchTests/batchClassificationEncoding()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000035s",
+                    "durationInSeconds": 3.4809112548828125e-05,
+                    "name": "Classification filters keep the frozen raw query values",
+                    "nodeIdentifier": "P10MacWorkbenchTests/classificationRawValues()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P10MacWorkbenchTests/classificationRawValues()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "FiscalKit P10 macOS workbench contracts",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P10MacWorkbenchTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.00011s",
+                    "durationInSeconds": 0.00010991096496582031,
+                    "name": "Account balance cards distinguish assets from credit debt",
+                    "nodeIdentifier": "V151MacLedgerScopeTests/accountBalanceCardSemantics()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V151MacLedgerScopeTests/accountBalanceCardSemantics()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.0014s",
+                    "durationInSeconds": 0.001447916030883789,
+                    "name": "Month context uses the Shanghai business-month range",
+                    "nodeIdentifier": "V151MacLedgerScopeTests/monthContextUsesShanghaiRange()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V151MacLedgerScopeTests/monthContextUsesShanghaiRange()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000096s",
+                    "durationInSeconds": 9.632110595703125e-05,
+                    "name": "Ledger account filter survives detail changes and clears only after references remove it",
+                    "nodeIdentifier": "V151MacLedgerScopeTests/accountFilterAndDetailOwnershipStaySeparate()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V151MacLedgerScopeTests/accountFilterAndDetailOwnershipStaySeparate()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000028s",
+                    "durationInSeconds": 2.8133392333984375e-05,
+                    "name": "Ledger search draft changes only on explicit confirmation",
+                    "nodeIdentifier": "V151MacLedgerScopeTests/searchDraftRequiresConfirmation()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V151MacLedgerScopeTests/searchDraftRequiresConfirmation()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "v1.7 macOS ledger context",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/V151MacLedgerScopeTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.00016s",
+                    "durationInSeconds": 0.00015997886657714844,
+                    "name": "iOS writes prefer the iCloud-synchronizable variant, never device-bound accessibility",
+                    "nodeIdentifier": "P19AccessPassphraseTests/synchronizableWriteShape()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P19AccessPassphraseTests/synchronizableWriteShape()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000043s",
+                    "durationInSeconds": 4.291534423828125e-05,
+                    "name": "macOS writes are local: Developer ID without provisioned entitlements cannot sync",
+                    "nodeIdentifier": "P19AccessPassphraseTests/macWriteShapeIsLocal()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P19AccessPassphraseTests/macWriteShapeIsLocal()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.000064s",
+                    "durationInSeconds": 6.389617919921875e-05,
+                    "name": "Reads and deletes match both variants so older builds' items are still found",
+                    "nodeIdentifier": "P19AccessPassphraseTests/lookupSpansBothVariants()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P19AccessPassphraseTests/lookupSpansBothVariants()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00086s",
+                    "durationInSeconds": 0.0008578300476074219,
+                    "name": "Entering the passphrase mints and stores an access key and reaches the connected state",
+                    "nodeIdentifier": "P19AccessPassphraseTests/loginStoresAccessKeyAndConnects()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P19AccessPassphraseTests/loginStoresAccessKeyAndConnects()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00078s",
+                    "durationInSeconds": 0.0007839202880859375,
+                    "name": "Changing the passphrase rotates the stored access key and stays connected",
+                    "nodeIdentifier": "P19AccessPassphraseTests/changeRotatesAccessKey()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P19AccessPassphraseTests/changeRotatesAccessKey()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00037s",
+                    "durationInSeconds": 0.00037288665771484375,
+                    "name": "A globally revoked access key drops the model into the unauthorized state",
+                    "nodeIdentifier": "P19AccessPassphraseTests/globalRevocationForcesUnauthorized()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P19AccessPassphraseTests/globalRevocationForcesUnauthorized()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "FiscalKit P19 access passphrase",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P19AccessPassphraseTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "duration": "0.087s",
+                    "durationInSeconds": 0.08690500259399414,
+                    "name": "Cash-flow history ignores a stale month response",
+                    "nodeIdentifier": "P16HorizontalTests/cashFlowHistoryIgnoresStaleMonth()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P16HorizontalTests/cashFlowHistoryIgnoresStaleMonth()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "0.00091s",
+                    "durationInSeconds": 0.0009098052978515625,
+                    "name": "AI settings save survives a failing provider re-read",
+                    "nodeIdentifier": "P16HorizontalTests/aiSettingsSaveSurvivesProviderReadFailure()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P16HorizontalTests/aiSettingsSaveSurvivesProviderReadFailure()",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "FiscalKit P16 horizontal guards",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P16HorizontalTests",
+                "nodeType": "Test Suite",
+                "result": "Passed"
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "name": "Test crashed with signal int.",
+                        "nodeType": "Failure Message"
+                      }
+                    ],
+                    "name": "API transport decodes Backend ISO-8601 timestamps with fractional seconds and offsets",
+                    "nodeIdentifier": "P16InfrastructureTests/apiTransportDecodesBackendTimestamps()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P16InfrastructureTests/apiTransportDecodesBackendTimestamps()",
+                    "nodeType": "Test Case",
+                    "result": "Failed"
+                  }
+                ],
+                "name": "FiscalKit P16 infrastructure",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests/P16InfrastructureTests",
+                "nodeType": "Test Suite",
+                "result": "Failed"
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "name": "Testing was canceled",
+                        "nodeType": "Failure Message"
+                      }
+                    ],
+                    "name": "xctest (47240) encountered an error",
+                    "nodeIdentifier": "xctest (47240) encountered an error",
+                    "nodeType": "Test Case",
+                    "result": "Failed"
+                  }
+                ],
+                "name": "System Failures",
+                "nodeType": "Test Suite",
+                "result": "Failed"
+              }
+            ],
+            "name": "FiscalKitTests",
+            "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/FiscalKitTests",
+            "nodeType": "Unit test bundle",
+            "result": "Failed"
+          }
+        ],
+        "name": "FiscalmacOS",
+        "nodeType": "Test Plan",
+        "result": "Failed"
+      }
+    ],
+    "testPlanConfigurations": [
+      {
+        "configurationId": "1",
+        "configurationName": "Test Scheme Action"
+      }
+    ]
+  }
+}

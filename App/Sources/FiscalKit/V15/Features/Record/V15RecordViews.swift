@@ -87,7 +87,11 @@ private struct V15RecordEditor: View {
             .v15IOSScreenCanvas()
             .v22CompactNavigationTitle()
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                primaryAction
+                VStack(alignment: .leading, spacing: V15Spacing.sm) {
+                    businessDateField
+                        .disabled(model.hasUnresolvedSubmission)
+                    primaryAction
+                }
                     .padding(.horizontal, V15IOSLayout.contentPadding)
                     .padding(.vertical, V15Spacing.sm)
                     .background(V15Palette.paper.color)
@@ -271,17 +275,7 @@ private struct V15RecordEditor: View {
 
     private var iOSSecondaryControls: some View {
         VStack(alignment: .leading, spacing: V15Spacing.sm) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: V15Spacing.md) {
-                    businessDateField
-                    Spacer(minLength: V15Spacing.sm)
-                    noteToggle
-                }
-                VStack(alignment: .leading, spacing: V15Spacing.sm) {
-                    businessDateField
-                    noteToggle.frame(maxWidth: .infinity, alignment: .trailing)
-                }
-            }
+            noteToggle.frame(maxWidth: .infinity, alignment: .trailing)
             if showsNote {
                 V15Field("备注", text: $model.note, prompt: "可选")
                     .accessibilityIdentifier("v15.f1a.record.note")

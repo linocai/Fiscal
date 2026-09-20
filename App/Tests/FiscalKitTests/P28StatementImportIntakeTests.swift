@@ -198,6 +198,8 @@ struct FiscalKitP28StatementImportIntakeTests {
 
   @Test("Resolution PUT reloads cache-free versions and never resends after a 409")
   func resolutionUsesFreshVersionsAndConflictReloadsOnce() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     let batchID = UUID(), rowID = UUID()
     let cache = HTTPResponseCache()
     StubURLProtocol.install { request in
@@ -220,7 +222,7 @@ struct FiscalKitP28StatementImportIntakeTests {
       #expect(body["ignored_reason"] as? String == "synthetic reason")
       return .init(status: 409, body: Data(#"{"error":{"code":"version_conflict","message":"changed","request_id":"r"}}"#.utf8))
     }
-    let transport = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t", responseCache: cache)
+    let transport = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t", responseCache: cache, offlineSnapshots: snapshotScope.store)
     let model = await MainActor.run {
       StatementImportReviewWorkbenchModel(
         repository: RemoteStatementImportReviewWorkbenchRepository(transport: transport),
@@ -236,6 +238,8 @@ struct FiscalKitP28StatementImportIntakeTests {
 
   @Test("Final create draft reads its current version and decodes the normal JSON response")
   func finalCreateDraftUsesFreshVersion() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     let batchID = UUID(), rowID = UUID(), finalID = UUID(), resolutionID = UUID()
     StubURLProtocol.install { request in
       if request.httpMethod == "GET" {
@@ -250,7 +254,7 @@ struct FiscalKitP28StatementImportIntakeTests {
         {"id":"\(finalID.uuidString)","statement_import_row_id":"\(rowID.uuidString)","draft_resolution_id":"\(resolutionID.uuidString)","transaction":{"kind":"expense","amount_minor":123,"occurred_at":"2026-08-12T12:00:00Z","title":"Manual","note":null,"account_id":null,"category_id":null,"destination_account_id":null,"credit_cycle_id":null},"version":7}
         """.utf8))
     }
-    let transport = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t", responseCache: HTTPResponseCache())
+    let transport = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t", responseCache: HTTPResponseCache(), offlineSnapshots: snapshotScope.store)
     var transaction = TransactionDraft(); transaction.kind = .expense; transaction.amountMinor = 123
     transaction.title = "Manual"; transaction.occurredAt = Date(timeIntervalSince1970: 1_786_276_800)
     let response = try await RemoteStatementImportFinalCreateDraftRepository(transport: transport)
@@ -261,6 +265,8 @@ struct FiscalKitP28StatementImportIntakeTests {
 
   @Test("Confirmation previews before one explicit final POST with its exact key")
   func confirmationPreviewThenExplicitFinalPost() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     let batchID = UUID(), rowID = UUID(), operationID = UUID()
     let observedConfirm = ConfirmationFlag()
     StubURLProtocol.install { request in
@@ -285,7 +291,7 @@ struct FiscalKitP28StatementImportIntakeTests {
         {"operation_id":"\(operationID.uuidString)","batch_id":"\(batchID.uuidString)","batch_version":10,"status":"confirmed","confirmed_row_ids":["\(rowID.uuidString)"],"replay":false}
         """.utf8))
     }
-    let transport = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t", responseCache: HTTPResponseCache())
+    let transport = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t", responseCache: HTTPResponseCache(), offlineSnapshots: snapshotScope.store)
     let model = await MainActor.run {
       StatementImportReviewWorkbenchModel(
         repository: RemoteStatementImportReviewWorkbenchRepository(transport: transport),

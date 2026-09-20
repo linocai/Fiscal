@@ -41,3 +41,4 @@
 - 附件只为当次检查按需导出；定位失败可用 `xcresulttool export attachments --only-failures`。确认原件位于保留结果包或正式归档后删除导出副本；废弃轮次附件随该轮次一起处理。不要重复保存整包与全量导出视频。
 - 清理先 `plan` 后 `apply`，再 `check`，用同一脚本校验未跟踪范围、指纹、保留证据、在用文件与未分类产物。计划/回执/检查结果写入当前版本 `archive`；主 Plan 只记一行结果。新测试产生的 `cleanup_status=pending` 必须收口，资源检查未通过不能宣称清理完成。
 - 当前使用及回退的 App/安装包/dSYM、待通过 Xcode 安装的 iOS 产物、真实账本/数据库备份、用户 scheme 修改受保护；本脚本不自动删除它们。设备支持文件按全局规则另行核验，保留项不能和测试垃圾混删。
+- APITransport单测必须显式注入隔离的离线缓存，禁止使用正式shared目录/钥匙串默认项；传输测试复用 `TestSnapshotScope` 并在defer中清理，避免Xcode升级后被正式缓存授权弹窗卡住。

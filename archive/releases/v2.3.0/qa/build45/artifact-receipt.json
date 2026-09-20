@@ -1,0 +1,14 @@
+{
+  "status": "complete",
+  "deleted": [
+    "build/ios27-compat-20260920/root-ui/tests.xcresult",
+    "build/ios27-compat-20260920/ios26-control/tests.xcresult",
+    "build/ios27-compat-20260920/core-tests/tests.xcresult",
+    "build/ios27-compat-20260920/date-inspection/6B42D87E-FF89-467B-BDBA-1DA03AE81C34.mp4",
+    "build/ios27-compat-20260920/date-inspection/7EEFB008-83B2-4FD0-B1DD-7DF8FB2F4A3E.png",
+    "build/ios27-compat-20260920/fixed-inspection/F57989E7-6C04-4B71-897E-AD1DD0BA2B42.png"
+  ],
+  "planned_allocated_bytes": 82952192,
+  "retained_evidence_verified": true,
+  "completed_at": "2026-09-20T09:09:27.775585+00:00"
+}

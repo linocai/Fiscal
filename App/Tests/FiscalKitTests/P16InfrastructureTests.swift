@@ -1,7 +1,31 @@
 import Foundation
 import Testing
+import Security
 
 @testable import FiscalKit
+
+/// Transport tests own their encrypted cache and key; never use the user's shared store.
+final class TestSnapshotScope {
+  private let directory: URL
+  private let service: String
+  let store: OfflineSnapshotStore
+
+  init() {
+    let id = UUID().uuidString
+    directory = FileManager.default.temporaryDirectory.appending(path: "FiscalKitTransportTests-" + id)
+    service = "FiscalKitTests.Transport." + id
+    store = OfflineSnapshotStore(directory: directory, keyStore: SnapshotKeyStore(service: service))
+  }
+
+  func cleanUp() {
+    try? FileManager.default.removeItem(at: directory)
+    SecItemDelete([
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecAttrAccount as String: "aes-256-key",
+    ] as CFDictionary)
+  }
+}
 
 /// Programmable URLProtocol used to drive `APITransport` end-to-end without a live server.
 /// The suite that uses it is `.serialized` because the handler registry is process-global.
@@ -69,6 +93,8 @@ private let validPage = Data(#"{"items":[],"next_cursor":null}"#.utf8)
 struct P16InfrastructureTests {
   @Test("API transport decodes Backend ISO-8601 timestamps with fractional seconds and offsets")
   func apiTransportDecodesBackendTimestamps() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     struct TimestampEnvelope: Decodable, Sendable { let timestamp: Date }
     StubURLProtocol.install { request in
       let timestamp = request.url?.lastPathComponent == "fractional"
@@ -76,12 +102,9 @@ struct P16InfrastructureTests {
         : "2026-08-22T12:07:07+08:00"
       return .init(body: Data("{\"timestamp\":\"\(timestamp)\"}".utf8))
     }
-    let snapshots = OfflineSnapshotStore(
-      directory: URL(fileURLWithPath: NSTemporaryDirectory())
-        .appending(path: "FiscalKitTimestampTests-\(UUID().uuidString)", directoryHint: .isDirectory))
     let transport = APITransport(
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
-      responseCache: HTTPResponseCache(), offlineSnapshots: snapshots)
+      responseCache: HTTPResponseCache(), offlineSnapshots: snapshotScope.store)
 
     let fractional = try await transport.request("fractional") as TimestampEnvelope
     let offset = try await transport.request("offset") as TimestampEnvelope
@@ -127,11 +150,13 @@ struct P16InfrastructureTests {
 
   @Test("A malformed GET body is never cached")
   func malformedBodyNotCached() async {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     StubURLProtocol.install { _ in .init(body: Data("{not-json".utf8)) }
     let cache = HTTPResponseCache()
     let transport = APITransport(
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
-      responseCache: cache)
+      responseCache: cache, offlineSnapshots: snapshotScope.store)
     await #expect(throws: FiscalAPIError.self) {
       _ = try await transport.request("transactions") as TransactionPage
     }
@@ -140,11 +165,13 @@ struct P16InfrastructureTests {
 
   @Test("A decodable GET is cached and the second read skips the network")
   func decodableGetIsCached() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     StubURLProtocol.install { _ in .init(body: validPage) }
     let cache = HTTPResponseCache()
     let transport = APITransport(
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
-      responseCache: cache)
+      responseCache: cache, offlineSnapshots: snapshotScope.store)
     _ = try await transport.request("transactions") as TransactionPage
     _ = try await transport.request("transactions") as TransactionPage
     #expect(StubURLProtocol.requestCount == 1)
@@ -153,6 +180,8 @@ struct P16InfrastructureTests {
 
   @Test("A cache hit that no longer decodes is evicted and refetched")
   func poisonedCacheHitFallsBackToNetwork() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     StubURLProtocol.install { _ in
       // First call stores an object that decodes as JSONValue but not as TransactionPage;
       // the second call returns a valid page for the forced refetch.
@@ -162,7 +191,7 @@ struct P16InfrastructureTests {
     let cache = HTTPResponseCache()
     let transport = APITransport(
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
-      responseCache: cache)
+      responseCache: cache, offlineSnapshots: snapshotScope.store)
     _ = try await transport.request("transactions") as JSONValue  // caches {"foo":1}
     let page = try await transport.request("transactions") as TransactionPage  // hit → evict → refetch
     #expect(page.items.isEmpty)
@@ -173,6 +202,8 @@ struct P16InfrastructureTests {
 
   @Test("A GET already in flight when a mutation clears the cache does not repopulate it")
   func inFlightGetCannotRepoisonCache() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     StubURLProtocol.install { request in
       request.httpMethod == "GET"
         ? .init(body: validPage, sleep: 0.30) : .init(body: validPage)
@@ -180,7 +211,7 @@ struct P16InfrastructureTests {
     let cache = HTTPResponseCache()
     let transport = APITransport(
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
-      responseCache: cache)
+      responseCache: cache, offlineSnapshots: snapshotScope.store)
 
     let slowGet = Task { try await transport.request("transactions") as TransactionPage }
     // Let the GET reach the network layer (stub sleeps 300ms) before mutating.
@@ -196,12 +227,14 @@ struct P16InfrastructureTests {
 struct P20RateLimitTests {
   @Test("A gateway 429 without an API envelope maps to rateLimited, not invalidResponse")
   func gateway429MapsToRateLimited() async {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     StubURLProtocol.install { _ in
       .init(status: 429, body: Data("<html>限流</html>".utf8))
     }
     let transport = APITransport(
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
-      responseCache: HTTPResponseCache())
+      responseCache: HTTPResponseCache(), offlineSnapshots: snapshotScope.store)
     do {
       try await transport.requestNoContent("ai/proposals/x/execute", method: "POST")
       Issue.record("expected rateLimited")
@@ -213,10 +246,12 @@ struct P20RateLimitTests {
 
   @Test("An idempotent GET retries once after a gateway 429 and succeeds")
   func get429RetriesOnce() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     StubURLProtocol.install { _ in .init(status: 429, body: Data("busy".utf8)) }
     let transport = APITransport(
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
-      responseCache: HTTPResponseCache())
+      responseCache: HTTPResponseCache(), offlineSnapshots: snapshotScope.store)
     // First attempt 429s, the stub flips to success before the backoff retry lands.
     Task {
       try await Task.sleep(nanoseconds: 400_000_000)
@@ -228,11 +263,13 @@ struct P20RateLimitTests {
 
   @Test("An app-level 429 with a JSON envelope keeps its domain message")
   func envelope429KeepsDomainDetail() async {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     let envelope = #"{"error":{"code":"login_rate_limited","message":"稍后再试","request_id":"r"}}"#
     StubURLProtocol.install { _ in .init(status: 429, body: Data(envelope.utf8)) }
     let transport = APITransport(
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
-      responseCache: HTTPResponseCache())
+      responseCache: HTTPResponseCache(), offlineSnapshots: snapshotScope.store)
     do {
       try await transport.requestNoContent("auth/session", method: "POST")
       Issue.record("expected domain error")

@@ -1,0 +1,147 @@
+{
+  "summary": {
+    "devicesAndConfigurations": [
+      {
+        "device": {
+          "architecture": "arm64",
+          "deviceId": "0415D5BA-594C-4288-A110-E947FB31EB4E",
+          "deviceName": "iPhone 18 Pro",
+          "modelName": "iPhone 18 Pro",
+          "osBuildNumber": "24A434",
+          "osVersion": "27.0",
+          "platform": "iOS Simulator"
+        },
+        "expectedFailures": 0,
+        "failedTests": 1,
+        "passedTests": 4,
+        "skippedTests": 0,
+        "testPlanConfiguration": {
+          "configurationId": "1",
+          "configurationName": "Test Scheme Action"
+        }
+      }
+    ],
+    "environmentDescription": "V15RootSmokeiOS · Built with macOS 27.0",
+    "expectedFailures": 0,
+    "failedTests": 1,
+    "finishTime": 1789894406.595,
+    "passedTests": 4,
+    "result": "Failed",
+    "runtimeWarnings": [],
+    "skippedTests": 0,
+    "startTime": 1789894155.371,
+    "statistics": [],
+    "testFailures": [
+      {
+        "failureText": "XCTAssertLessThanOrEqual failed: (\"578.3333333333333\") is greater than (\"516.0\")",
+        "targetName": "V15RootSmokeUITests",
+        "testIdentifier": 2,
+        "testIdentifierString": "V15RootSmokeUITests/testFormalRecordKeepsKeyboardAndReturnPathReachable()",
+        "testIdentifierURL": "test://com.apple.xcode/Fiscal/V15RootSmokeUITests/V15RootSmokeUITests/testFormalRecordKeepsKeyboardAndReturnPathReachable",
+        "testName": "testFormalRecordKeepsKeyboardAndReturnPathReachable()"
+      }
+    ],
+    "title": "Test - V15RootSmokeiOS",
+    "topInsights": [],
+    "totalTestCount": 5
+  },
+  "tests": {
+    "devices": [
+      {
+        "architecture": "arm64",
+        "deviceId": "0415D5BA-594C-4288-A110-E947FB31EB4E",
+        "deviceName": "iPhone 18 Pro",
+        "modelName": "iPhone 18 Pro",
+        "osBuildNumber": "24A434",
+        "osVersion": "27.0",
+        "platform": "iOS Simulator"
+      }
+    ],
+    "testNodes": [
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "duration": "14秒",
+                    "durationInSeconds": 14.697504043579102,
+                    "name": "testAccountAndAnalysisTabsKeepBottomCreationAvailable()",
+                    "nodeIdentifier": "V15RootSmokeUITests/testAccountAndAnalysisTabsKeepBottomCreationAvailable()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15RootSmokeUITests/V15RootSmokeUITests/testAccountAndAnalysisTabsKeepBottomCreationAvailable",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "children": [
+                      {
+                        "name": "XCTAssertLessThanOrEqual failed: (\"578.3333333333333\") is greater than (\"516.0\")",
+                        "nodeType": "Failure Message",
+                        "sourceLocation": {
+                          "filePath": "/Users/linotsai/Lino/Fiscal/App/Tests/V15RootSmokeUITests/V15RootSmokeUITests.swift",
+                          "lineNumber": 324
+                        }
+                      }
+                    ],
+                    "duration": "13秒",
+                    "durationInSeconds": 13.04534900188446,
+                    "name": "testFormalRecordKeepsKeyboardAndReturnPathReachable()",
+                    "nodeIdentifier": "V15RootSmokeUITests/testFormalRecordKeepsKeyboardAndReturnPathReachable()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15RootSmokeUITests/V15RootSmokeUITests/testFormalRecordKeepsKeyboardAndReturnPathReachable",
+                    "nodeType": "Test Case",
+                    "result": "Failed"
+                  },
+                  {
+                    "duration": "33秒",
+                    "durationInSeconds": 33.345553040504456,
+                    "name": "testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5()",
+                    "nodeIdentifier": "V15RootSmokeUITests/testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15RootSmokeUITests/V15RootSmokeUITests/testFormalWorkspaceFixtureRendersOnIPhone17ProLightDarkAndAX5",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "6秒",
+                    "durationInSeconds": 6.709430932998657,
+                    "name": "testV230ForecastAndSources()",
+                    "nodeIdentifier": "V15RootSmokeUITests/testV230ForecastAndSources()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15RootSmokeUITests/V15RootSmokeUITests/testV230ForecastAndSources",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  },
+                  {
+                    "duration": "9秒",
+                    "durationInSeconds": 9.327820062637329,
+                    "name": "testV230PayoffSheetKeepsValidationVisible()",
+                    "nodeIdentifier": "V15RootSmokeUITests/testV230PayoffSheetKeepsValidationVisible()",
+                    "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15RootSmokeUITests/V15RootSmokeUITests/testV230PayoffSheetKeepsValidationVisible",
+                    "nodeType": "Test Case",
+                    "result": "Passed"
+                  }
+                ],
+                "name": "V15RootSmokeUITests",
+                "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15RootSmokeUITests/V15RootSmokeUITests",
+                "nodeType": "Test Suite",
+                "result": "Failed"
+              }
+            ],
+            "name": "V15RootSmokeUITests",
+            "nodeIdentifierURL": "test://com.apple.xcode/Fiscal/V15RootSmokeUITests",
+            "nodeType": "UI test bundle",
+            "result": "Failed"
+          }
+        ],
+        "name": "V15RootSmokeiOS",
+        "nodeType": "Test Plan",
+        "result": "Failed"
+      }
+    ],
+    "testPlanConfigurations": [
+      {
+        "configurationId": "1",
+        "configurationName": "Test Scheme Action"
+      }
+    ]
+  }
+}

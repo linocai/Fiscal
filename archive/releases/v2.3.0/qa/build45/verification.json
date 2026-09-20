@@ -1,0 +1,28 @@
+{
+  "baseline": "f208d7e2057af22691da6e98c9208e7273791290",
+  "purpose": "iOS 27 compatibility validation; isolated fixtures only",
+  "schemes": {
+    "App/Fiscal.xcodeproj/xcshareddata/xcschemes/V15RootSmokemacOS.xcscheme": "7bdfa006628711dee320e13aeee51d9520152116518b2f2ef225cae71c300d4f",
+    "App/Fiscal.xcodeproj/xcshareddata/xcschemes/FiscalmacOS.xcscheme": "b2b2e7fd6c8da9a64fb8ac0f0d161d3951addee59d1b91b66fd1cfcc600808f2",
+    "App/Fiscal.xcodeproj/xcshareddata/xcschemes/V15RootSmokeiOS.xcscheme": "e72c37c8503ba1be6d39c4720e254ceeccd78cd3e91db2fe886084c5974f9622",
+    "App/Fiscal.xcodeproj/xcshareddata/xcschemes/FiscaliOS.xcscheme": "62751c8af676755c2722e17cd6c6667920c7bf123aa91c8e6a0b64cf4218f382",
+    "App/Fiscal.xcodeproj/xcshareddata/xcschemes/V15GallerymacOS.xcscheme": "24bee7cca28bc8e50e8b1f99147a26a73bf44192aa11db935eb43903d73fa5c7",
+    "App/Fiscal.xcodeproj/xcshareddata/xcschemes/V15GalleryiOS.xcscheme": "28fb7d91285f7032b1058f1ab2e7c6e7496065112c3f0ba90945fd3916f9b7ff"
+  },
+  "product_files": {
+    "App/project.yml": "9035196d7733013b5ef93461b9793aaa34d026d8f4762db5b02033f5ee7faebc",
+    "App/Fiscal.xcodeproj/project.pbxproj": "46fe7be55ca773cdbe25d242943a127ffd3dd96c1d4f739dbceafb981d6dcc05",
+    "App/Sources/FiscalKit/V15/Features/Record/V15RecordViews.swift": "e328a7b599d84339e756bf1468ae4591b9c4594b57b8e407e573f7f16d686a6e"
+  },
+  "ios27_ui_passed": 10,
+  "ios26_fixed_passed": 1,
+  "core_passed": 459,
+  "core_skipped": 1,
+  "production_writes": false,
+  "published": false,
+  "version": "2.3.0",
+  "build": 45,
+  "ios_app_build": "passed",
+  "mac_app_build": "passed with core-tests-isolated",
+  "remaining": "Physical iOS27 device validation not performed; current device symbols incomplete"
+}

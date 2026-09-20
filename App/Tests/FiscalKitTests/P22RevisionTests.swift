@@ -25,11 +25,13 @@ struct P22RevisionTests {
   @Test("Old server receipt omission is compatible and low revisions never roll back")
   @MainActor
   func oldServerAndRepeatedRevisionAreSafe() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     let store = DataRevisionStore(defaults: nil)
     StubURLProtocol.install { _ in .init(body: Data(#"{"items":[],"next_cursor":null}"#.utf8)) }
     let transport = APITransport(
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
-      responseCache: HTTPResponseCache(), revisionStore: store)
+      responseCache: HTTPResponseCache(), offlineSnapshots: snapshotScope.store, revisionStore: store)
     _ = try await transport.request("transactions", method: "POST") as TransactionPage
     #expect(store.latest == nil)
 
@@ -57,6 +59,8 @@ struct P22RevisionTests {
   @Test("Foreground endpoint turns an external revision into full refresh")
   @MainActor
   func foregroundEndpointObservesRevision() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     let store = DataRevisionStore(defaults: nil)
     StubURLProtocol.install { request in
       #expect(request.url?.path == "/api/v1/data-revision")
@@ -64,7 +68,7 @@ struct P22RevisionTests {
     }
     let transport = APITransport(
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
-      responseCache: HTTPResponseCache(), revisionStore: store)
+      responseCache: HTTPResponseCache(), offlineSnapshots: snapshotScope.store, revisionStore: store)
     try await transport.refreshDataRevision()
     #expect(store.latest == .init(revision: 12, scopes: []))
   }
@@ -72,6 +76,8 @@ struct P22RevisionTests {
   @Test("Foreground revision polling does not invalidate ordinary GET cache")
   @MainActor
   func foregroundPollKeepsReadCache() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
     let cache = HTTPResponseCache()
     StubURLProtocol.install { request in
       request.url?.path == "/api/v1/data-revision"
@@ -79,7 +85,7 @@ struct P22RevisionTests {
         : .init(body: Data(#"{"items":[],"next_cursor":null}"#.utf8))
     }
     let transport = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(),
-      token: "t", responseCache: cache, revisionStore: DataRevisionStore(defaults: nil))
+      token: "t", responseCache: cache, offlineSnapshots: snapshotScope.store, revisionStore: DataRevisionStore(defaults: nil))
     _ = try await transport.request("transactions") as TransactionPage
     #expect(await cache.snapshot().entryCount == 1)
     try await transport.refreshDataRevision()

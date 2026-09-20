@@ -4,7 +4,7 @@ options:
   deploymentTarget:
     iOS: "26.0"
     macOS: "26.0"
-  xcodeVersion: "26.6"
+  xcodeVersion: "27.0"
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -12,7 +12,7 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     GENERATE_INFOPLIST_FILE: YES
     MARKETING_VERSION: 2.3.0
-    CURRENT_PROJECT_VERSION: 44
+    CURRENT_PROJECT_VERSION: 45
 targets:
   FiscalKit:
     type: framework

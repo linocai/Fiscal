@@ -316,3 +316,20 @@ App 定位均相对 `App/Sources/FiscalKit/`。完整审查覆盖 B01–B07 代�
 - 新建且仅本轮使用的`fiscal_v230_44_tests_20260913`在退出测试后删除，连接数为0；本轮pytest系统临时目录在核对归属与未占用后回收。仅新增保留一份最终xcresult，无附件导出；摘要与测试XML移入本节证据目录，日志在`build/v2.3.0-44/`。清理规则及设备审计终验见[资源回执](qa/build44/resource-closeout.json)、[产物检查](qa/build44/artifact-check.json)、[设备检查](qa/build44/device-support.json)。未触及其他历史测试库或线上数据库。
 
 本节以上为发布前的实施与本地验证记录。用户随后明确要求立即发布，已冻结 `3b29dcd` / `v2.3.0-build44` 并完成后端部署、签名构建、Mac换装、原问题实际页面验证及资源收尾；当前发布与回退事实见[build44发布完成](RELEASE_STATE.md#2026-09-13-build44-紧急发布完成)。恢复工作先看主Plan、该发布节与git status。
+
+
+## 15. 2026-09-20 build45 iOS 27兼容验证与快修
+
+用户授权执行iOS27兼容检查并修复发现的问题。本轮快修基线 `f208d7e2057af22691da6e98c9208e7273791290`；营销版本仍2.3.0，build45，最低iOS/macOS仍26。没有发布授权升级、生产服务操作或真实账目写入；已安装Mac和生产后端仍为build44对应版本。
+
+- 环境：Xcode27.0（27A266a），iOS27 SDK；使用现有iPhone18 Pro/iOS27.0（24A434）模拟器。旧主模拟器iPhone17 Pro/iOS26.5（23F77）仅作兼容对照，不创建新设备，不迁移或删除用户模拟器数据。
+- 原代码在iOS27环境的5项正式工作区测试中4通过、1失败：键盘可见时日期底边578.33pt越过保存按钮顶部516pt；实际截图确认日期被遮挡。同一断言在既有iOS26模拟器通过。两组设备型号不同，因此该对照不宣称排除了所有硬件布局差异。
+- 修复将iOS记账日期移入底部安全区，与保存/还款按钮同驻键盘上方；备注留在滚动表单，未解决提交状态仍禁用日期编辑。无金额计算、API契约或后端改动。Xcodegen配置更新27.0，重新生成工程，六份预存用户scheme逐字节还原；移除生成器无意义的临时ID变更。
+- 原有日期/键盘断言原样保留：iOS27正式工作区5/5、还款/分期/归档界面5/5，修复后iOS26日期回归1/1。实际截图已核对，[修复前](qa/build45/keyboard-before.png)、[修复后](qa/build45/keyboard-after.png)均为隔离合成数据。界面用例覆盖浅/深色、大字体、30日来源、结清校验、还款预览提交回执、分期资格否决与预览失效、归档交互。
+- 首次完整核心测试在P16时间戳用例停住；进程采样定位到默认SnapshotKeyStore读取正式钥匙串项。已中止该轮，未更改钥匙串授权；为所有原先遗漏offlineSnapshots注入的APITransport测试使用TestSnapshotScope，独立目录和钥匙串service，并defer清理。既有显式隔离的持久化测试保持行为。
+- 隔离修正后FiscalKit完整459项通过、0失败、1项既有外部PDF联调条件跳过；包含合成PDF/OCR用例。macOS正式App随测试构建通过；修复后的iOS正式App generic Simulator构建通过，版本2.3.0（45）。新编译器的未使用值警告和AppIntents无依赖提示不阻断构建，未顺带扩展无关修改。
+- 准确范围和源码指纹见[verification](qa/build45/verification.json)，每轮按测试项摘要位于同目录，原日志在 `build/ios27-compat-20260920/`。iOS27首轮失败后的大型simctl诊断收集被终止以结束无效等待，测试断言/截图/完整结果随后正常落盘；后续禁用额外诊断收集，保留测试附件和断言。
+- 资源按精确清单保留4份本轮最终结果，首轮失败、中断、被替代对照及临时导出副本在提取摘要后回收；旧验收证据与发布物不动。见[清单](qa/build45/artifact-plan.json)、[回执](qa/build45/artifact-receipt.json)、[终验](qa/build45/artifact-check.json)。独立临时目录与模拟器收尾见[资源状态](qa/build45/resource-closeout.json)。
+- 限制：未进行iOS27真机安装及交互，未覆盖真实照片权限弹窗/系统文件提供者交互；归档界面测试为隔离fixture，不代表真实恢复生产账本。设备审计显示iPhone18,4已为27.0（24A437），但新版符号缺usr/lib/dyld，列为pending并保留旧支持缓存；未要求解锁其他连接记录，也未操作配对。详见[设备审计](qa/build45/device-support.json)。
+
+本轮未发布、未替换已安装App、未创建新发布标签。后续发布以build44实际部署状态为起点，包含本节修复与测试隔离变更；按既有发布链完成签名和交付，iOS最终安装仍由用户通过Xcode执行。

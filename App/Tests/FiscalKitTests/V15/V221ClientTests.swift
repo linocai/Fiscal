@@ -180,13 +180,15 @@ struct V221ClientTests {
     }
 
     @Test func reportCapabilityNegotiationUsesRealHTTPBoundary() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [ReportCapabilityProtocol.self]
         let session = URLSession(configuration: config)
         defer { session.invalidateAndCancel() }
-        let supported = APITransport(baseURL: URL(string: "https://supported.example")!, session: session, token: "fixture")
+        let supported = APITransport(baseURL: URL(string: "https://supported.example")!, session: session, token: "fixture", offlineSnapshots: snapshotScope.store)
         let value: V15PeriodReport = try await supported.request("reports/v2/monthly/2026-08", cache: false)
         #expect(value.summary.incomeMinor == 100000)
-        let old = APITransport(baseURL: URL(string: "https://legacy.example")!, session: session, token: "fixture")
+        let old = APITransport(baseURL: URL(string: "https://legacy.example")!, session: session, token: "fixture", offlineSnapshots: snapshotScope.store)
         do {
             let _: V15PeriodReport = try await old.request("reports/v2/monthly/2026-08", cache: false)
             Issue.record("a response without capability echo must fail closed")
@@ -198,11 +200,13 @@ struct V221ClientTests {
     }
 
     @Test func recoveredReceiptInvalidatesEarlierReadCache() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [ReportCapabilityProtocol.self]
         let session = URLSession(configuration: config); defer { session.invalidateAndCancel() }
         let cache = HTTPResponseCache()
         await cache.store(Data("old-account-balance".utf8), for: "old-account-read")
-        let transport = APITransport(baseURL: URL(string: "https://supported.example")!, session: session, token: "fixture", responseCache: cache)
+        let transport = APITransport(baseURL: URL(string: "https://supported.example")!, session: session, token: "fixture", responseCache: cache, offlineSnapshots: snapshotScope.store)
         let _: V15Transaction = try await transport.request("transactions/by-idempotency/\(UUID())", cache: false)
         #expect(await cache.data(for: "old-account-read") == nil)
     }

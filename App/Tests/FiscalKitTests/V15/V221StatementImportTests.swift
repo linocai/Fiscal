@@ -37,11 +37,13 @@ struct V221StatementImportTests {
     }
     @Test("Real PDF to loopback backend through production HTTP transport", .enabled(if: ProcessInfo.processInfo.environment["FISCAL_STATEMENT_E2E_URL"] != nil))
     @MainActor func realHTTPChain() async throws {
+    let snapshotScope = TestSnapshotScope()
+    defer { snapshotScope.cleanUp() }
         let raw = try #require(ProcessInfo.processInfo.environment["FISCAL_STATEMENT_E2E_URL"])
         let url = try #require(URL(string: raw))
         #expect(url.host == "127.0.0.1" || url.host == "localhost")
         guard url.host == "127.0.0.1" || url.host == "localhost" else { return }
-        let transport = APITransport(baseURL: url, token: "local-e2e-only")
+        let transport = APITransport(baseURL: url, token: "local-e2e-only", offlineSnapshots: snapshotScope.store)
         let services = V15Services(transport: V15APITransportAdapter(transport: transport))
         try await checkPDF(scanned: false, services: services)
         try await checkPDF(scanned: true, services: services)

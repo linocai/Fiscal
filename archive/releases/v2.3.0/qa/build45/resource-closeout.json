@@ -1,0 +1,52 @@
+{
+  "test_artifact_status": "complete",
+  "artifact_allocated_bytes_removed": 82952192,
+  "additional_removed": [
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/ios27-compat-20260920/date-inspection",
+      "fingerprint": {
+        "sha256": "f06efeea17456365b1af69e5da6b1006f6c761ca339ba7a456fa4861d816d668",
+        "inode": 167388191,
+        "device": 16777230,
+        "logical_bytes": 5745,
+        "allocated_bytes": 12288
+      }
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/ios27-compat-20260920/fixed-inspection",
+      "fingerprint": {
+        "sha256": "bb4f3f623162fbc01966901986de2dcb6270de7d1783113f314d0380d7247270",
+        "inode": 167390067,
+        "device": 16777230,
+        "logical_bytes": 728,
+        "allocated_bytes": 4096
+      }
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/ios27-compat-20260920/failure-images",
+      "fingerprint": {
+        "sha256": "474b104d34a02b225a9829c596a19e92c62c84b2351f742436ce675f7f91b1dc",
+        "inode": 167387663,
+        "device": 16777230,
+        "logical_bytes": 4,
+        "allocated_bytes": 4096
+      }
+    },
+    {
+      "path": "/private/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalKitTimestampTests-35F1533B-99E8-4608-A04A-EAD431D43889",
+      "fingerprint": {
+        "sha256": "70ee39c22abfb97a961c5e551accca9abc4503e8440ca0f5f7786621ed0b558d",
+        "inode": 167396228,
+        "device": 16777230,
+        "logical_bytes": 0,
+        "allocated_bytes": 0
+      }
+    }
+  ],
+  "temporary_transport_directories_remaining": [],
+  "remote_operations": "none",
+  "device_support_status": "pending iPhone18,4 current symbols; existing caches retained",
+  "retained": "4 final current test bundles, prior evidence, build logs, installed/release artifacts, comparison screenshots",
+  "local_build_bytes_after": 17821696,
+  "ios27_simulator_closeout": "QA apps removed; restored original Shutdown state. Existing iOS26 main simulator retained for compatibility and user data."
+}
