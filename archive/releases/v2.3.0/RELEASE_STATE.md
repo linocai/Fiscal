@@ -98,3 +98,9 @@
 - 发布目录分配空间从367,357,952降到71,589,888字节，精确回收源码导出和打包staging。清理先发现完成后的ibtoold仍持有源码工作目录，退出该闲置进程后重验再删。测试资源终验complete，无未分类或未收尾测试；保留签名发布物、最终证据、日志、当前与回退App和iOS待安装产物。本轮未创建远端或自定义系统临时目录。见[资源回执](qa/build45/release/resource-closeout.json)。
 - 设备审计已执行apply，无删除候选；`pending_devices=[iPhone18,4]`：iOS27.0新版调试符号仍缺usr/lib/dyld，旧支持文件保留，待新版准备完整再回收，不冒充设备资源全部清理完成。见[设备状态](qa/build45/release/device-support.json)。
 - 主Plan及NB事实已同步。客户端回退使用上述build44备份，不涉及数据库恢复；不以客户端回退覆盖用户后续账目。
+
+### build45 设备支持补充收尾
+
+- 按精确iPhone目的地完成iOS27.0（24A437）符号复制与提取。Xcode27将完整符号写入arm64e子目录；全局审计脚本已兼容该布局，仍校验采集元数据、关键Mach-O及SHA-256，并拒绝链接路径和不完整新版回退到旧符号。7项隔离边界验证通过，临时测试目录自动回收。
+- 新版开发服务与dyld/Foundation/UIKit符号验证通过后，删除同型号26.6.2（23G90）支持缓存，按分配空间计6,108,323,840字节；删除后新版符号指纹不变、旧路径不存在，pending_devices为空。详见[最终回执](qa/build45/release/device-support-followup.json)。本节关闭上文首次发布留下的设备待办。
+- 首次准备未明确destination而误选已配对Watch，已中止；随后仅用精确iPhone目的地成功准备。未改配对、未安装手机App、未修改真实账目。发布标签及已安装客户端不变，iOS仍由用户通过Xcode安装。

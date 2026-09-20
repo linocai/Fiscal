@@ -35,5 +35,11 @@
   "remote_temporary_files": "none created; production read-only",
   "device_support": "pending iPhone18,4 symbols; no device cache deleted",
   "system_temporary_files": "no custom system temporary files created by this release",
-  "idle_process_closeout": "Stopped completed ibtoold PID49979 holding source cwd, then rechecked no in-use paths"
+  "idle_process_closeout": "Stopped completed ibtoold PID49979 holding source cwd, then rechecked no in-use paths",
+  "device_support_followup": {
+    "status": "complete",
+    "evidence": "device-support-followup.json",
+    "pending_devices": [],
+    "removed_old_cache_bytes": 6108323840
+  }
 }

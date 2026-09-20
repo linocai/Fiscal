@@ -1,0 +1,71 @@
+{
+  "checked_at": "2026-09-20T09:41:00.357611+00:00",
+  "devices": [
+    {
+      "model": "iPhone17,3",
+      "os": "",
+      "build": "",
+      "validated": false,
+      "reason": "No local support cache; this connection record needs no cleanup"
+    },
+    {
+      "model": "iPhone18,4",
+      "os": "27.0",
+      "build": "24A437",
+      "validated": true,
+      "current_support": "/Users/linotsai/Library/Developer/Xcode/iOS DeviceSupport/iPhone18,4 27.0 (24A437)",
+      "symbol_sha256": {
+        "usr/lib/dyld": "0c2a1a965f1ed87612fec9272ae1bc508d8aef72d81ec7c62e8f52040291d5b8",
+        "System/Library/Frameworks/Foundation.framework/Foundation": "dca7116f518c99b0b2ec01f91cad6edda9efb7d07061c804d1ca1c2f6e39306c",
+        "System/Library/Frameworks/UIKit.framework/UIKit": "65303e9403b9caf37e85eae43fb16667b4404582fc3df8e758b9ab0b5cee0a54"
+      }
+    },
+    {
+      "model": "iPhone19,2",
+      "os": "",
+      "build": "",
+      "validated": false,
+      "reason": "No local support cache; this connection record needs no cleanup"
+    },
+    {
+      "model": "iPhone18,1",
+      "os": "",
+      "build": "",
+      "validated": false,
+      "reason": "No local support cache; this connection record needs no cleanup"
+    }
+  ],
+  "candidates": [
+    "/Users/linotsai/Library/Developer/Xcode/iOS DeviceSupport/iPhone18,4 26.6.2 (23G90)"
+  ],
+  "deleted": [
+    {
+      "path": "/Users/linotsai/Library/Developer/Xcode/iOS DeviceSupport/iPhone18,4 26.6.2 (23G90)",
+      "allocated_bytes_before": 6108323840
+    }
+  ],
+  "user_confirmed_unused_models": [],
+  "unused_reason": "",
+  "pending_devices": [],
+  "status": "complete",
+  "remaining_support_directories": [
+    "iPhone18,4 27.0 (24A437)"
+  ],
+  "allocated_bytes_after": 7127592960,
+  "deleted_paths_absent": true,
+  "preparation": "Exact iPhone UDID destination; xcodebuild prepareDeviceSupport copy/extraction exit 0",
+  "script_fix": "Accept Xcode 27 arm64e collection, reject incomplete nested fallback and noncanonical symbol paths; retain Mach-O and hash checks",
+  "regression_checks": {
+    "passed": 7,
+    "cases": [
+      "legacy layout",
+      "architecture layout",
+      "incomplete nested rejection",
+      "symlink rejection",
+      "obsolete selected",
+      "current retained",
+      "unvalidated same-model protects cache"
+    ]
+  },
+  "audit_script_sha256": "8fc58f6e20ebd355ef01123f79e72e8c210441136c54d7423c02703fb3d6775a"
+}
