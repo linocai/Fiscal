@@ -875,3 +875,13 @@ def test_p33_schedule_two_sessions_repayment_settled_cycle_and_calendar_edges() 
     assert schedule_for_statement(
         date(2027, 2, 28), 28, 28, CreditCycleMode.PREVIOUS_CALENDAR_MONTH
     ).due_date == date(2027, 3, 28)
+
+
+@pytest.fixture(autouse=True)
+def stable_credit_schedule_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    # These fixtures exercise September 20 debt before it becomes overdue.
+    from datetime import UTC, datetime
+
+    monkeypatch.setattr(
+        "fiscal_api.services.credit.utc_now", lambda: datetime(2026, 9, 20, tzinfo=UTC)
+    )

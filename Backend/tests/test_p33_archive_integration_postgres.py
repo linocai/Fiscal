@@ -496,3 +496,13 @@ def test_p33_archive_round_trip_preserves_formal_facts_and_excludes_operational_
         get_settings.cache_clear()
     assert schedule_purchase["id"]
     assert receipt.json()["id"]
+
+
+@pytest.fixture(autouse=True)
+def stable_credit_schedule_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    # These fixtures exercise September 20 debt before it becomes overdue.
+    from datetime import UTC, datetime
+
+    monkeypatch.setattr(
+        "fiscal_api.services.credit.utc_now", lambda: datetime(2026, 9, 20, tzinfo=UTC)
+    )

@@ -117,7 +117,10 @@ class CreditRepository:
                 func.coalesce(
                     func.sum(
                         case(
-                            (LedgerTransaction.kind == "credit_purchase", -Posting.amount_minor),
+                            (
+                                LedgerTransaction.kind.in_(["credit_purchase", "loan_principal"]),
+                                -Posting.amount_minor,
+                            ),
                             else_=0,
                         )
                     ),
@@ -203,6 +206,7 @@ class CreditRepository:
                 LedgerTransaction.kind.in_(
                     [
                         "credit_purchase",
+                        "loan_principal",
                         "repayment",
                         "borrowing",
                         "credit_principal_waiver",
@@ -281,6 +285,7 @@ class CreditRepository:
                 LedgerTransaction.kind.in_(
                     [
                         "credit_purchase",
+                        "loan_principal",
                         "repayment",
                         "borrowing",
                         "credit_principal_waiver",

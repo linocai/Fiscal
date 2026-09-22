@@ -43,7 +43,8 @@ assert (
 ARCHIVE_MAGIC = b"FISCAL-ARCHIVE-V1\n"
 ARCHIVE_SCHEMA = "fiscal-archive-v1"
 API_SCHEMA = "fiscal-api-v1"
-CURRENT_DATABASE_REVISION = "20260912_0040"
+CURRENT_DATABASE_REVISION = "20260922_0041"
+V40_DATABASE_REVISION = "20260912_0040"
 PREVIOUS_DATABASE_REVISION = "20260910_0039"
 _V40_TABLES = {"credit_payoff_operations", "credit_payoff_links", "cash_flow_settlement_links"}
 LEGACY_DATABASE_REVISION = "20260831_0038"
@@ -334,6 +335,7 @@ class ArchiveService:
         revision = manifest.get("database_revision")
         if revision not in {
             CURRENT_DATABASE_REVISION,
+            V40_DATABASE_REVISION,
             PREVIOUS_DATABASE_REVISION,
             LEGACY_DATABASE_REVISION,
         }:
@@ -349,7 +351,7 @@ class ArchiveService:
         if not isinstance(entities, dict) or not isinstance(manifest.get("entity_counts"), dict):
             raise ArchiveError("archive payload shape is invalid")
         allowed = {table.name for table in _archive_tables(Base.metadata)}
-        if revision != CURRENT_DATABASE_REVISION:
+        if revision in {PREVIOUS_DATABASE_REVISION, LEGACY_DATABASE_REVISION}:
             allowed -= _V40_TABLES
         if set(entities) != allowed:
             raise ArchiveCompatibilityError(
@@ -382,6 +384,8 @@ class ArchiveService:
         converted_payload = deepcopy(dict(payload))
         source = manifest["database_revision"]
         added: list[str] = []
+        if source == V40_DATABASE_REVISION:
+            converted_manifest["database_revision"] = CURRENT_DATABASE_REVISION
         if source == LEGACY_DATABASE_REVISION:
             entities = _json_object(converted_payload["entities"], error="invalid entities")
             backfill_mapping_generations(

@@ -1467,10 +1467,16 @@ class InstallmentService:
         self,
         transaction: LedgerTransaction,
     ) -> tuple[Account, int, CreditCycle]:
+        existing_loan = transaction.kind == "loan_principal" and transaction.source == "system"
         if (
-            transaction.kind != TransactionKind.CREDIT_PURCHASE.value
-            or transaction.source
-            not in {TransactionSource.MANUAL.value, TransactionSource.AI_TEXT.value}
+            (
+                not existing_loan
+                and (
+                    transaction.kind != TransactionKind.CREDIT_PURCHASE.value
+                    or transaction.source
+                    not in {TransactionSource.MANUAL.value, TransactionSource.AI_TEXT.value}
+                )
+            )
             or transaction.voided_at is not None
             or len(transaction.postings) != 1
         ):
@@ -1486,7 +1492,11 @@ class InstallmentService:
         )
         if account is None or account.kind != AccountKind.CREDIT.value or account.archived_at:
             invalid("purchase_not_eligible", "The credit account is not active")
-        if cycle is None or cycle.is_opening_cycle or cycle.statement_date < self._today():
+        if (
+            cycle is None
+            or cycle.is_opening_cycle
+            or (not existing_loan and cycle.statement_date < self._today())
+        ):
             invalid("purchase_not_eligible", "The purchase cycle is no longer open")
         reduced_at = (await self.credit_repository.latest_cycle_reductions([cycle.id])).get(
             cycle.id
