@@ -1,0 +1,13 @@
+{
+  "checked_at": "2026-09-22T07:12:30.425528+00:00",
+  "remaining_principal_minor": 9118800,
+  "remaining_periods": 36,
+  "monthly_principal_minor": 253300,
+  "next_due_date": "2026-10-22",
+  "today_repayment_minor": 253300,
+  "payment_balance_delta_minor": -253300,
+  "original_opening_preserved": true,
+  "today_exactly_one_principal_and_one_repayment": true,
+  "superseded_plans_cancelled": 37,
+  "repayment_id": "63b903da-0f32-41c2-9193-6329c65399cb"
+}

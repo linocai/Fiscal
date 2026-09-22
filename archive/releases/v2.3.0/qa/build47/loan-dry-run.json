@@ -1,0 +1,10 @@
+{
+  "principal_transaction_id": "cb025857-ab7e-544b-85c7-b013282b4c5a",
+  "plan_id": "481bb0d4-3ade-4689-9070-09dcb5ab2450",
+  "repayment_id": "735f9926-54ce-48a9-a26d-efcc2b401df5",
+  "principal_before_minor": 9372100,
+  "principal_after_minor": 9118800,
+  "cancelled_plan_count": 37,
+  "replayed": false,
+  "applied": false
+}

@@ -116,3 +116,16 @@
 - 签名Mac ZIP及双端符号保留在 `build/release-v2.3.0-46/artifacts/`；iOS产物保留于既有DerivedData的Release-iphoneos/Fiscal.app。无IPA、TestFlight、App Store或公证提交，未执行iOS真机交互验收。
 - 精确删除源码导出、打包staging及首次导出失败产生的系统临时xcresult，按分配空间计516,964,352字节；发布目录从588,804,096降至71,868,416字节。完成后的ibtoold持有源码cwd，退出该闲置进程后重验再删；只保留发布物、必要日志和证据。无新测试结果包/附件导出，无远端临时文件；设备审计无待办。见[删除计划](qa/build46/release/cleanup-plan.json)、[清理回执](qa/build46/release/cleanup-receipt.json)、[设备核验](qa/build46/release/device-support.json)。
 - 主Plan及NB客户端事实已同步；当前与回退App、iOS待安装产物、账本和备份均保留。既有iOS26主模拟器及其测试数据未在本轮泛清。
+
+
+## 2026-09-22 build47 车贷修复发布完成
+
+- 范围：从实际客户端build46 `b4848d3`、后端 `3b29dcd`/0040 到目标 `db95c136ddfb8efeba8e30e3ca59a4dc6db25c25` / **v2.3.0-build47** / 0041；main和不可变标签已推送。最低OS27，未移动历史标签。
+- 后端：部署dry-run后执行标准门禁/前备份/迁移/后备份/public smoke；迁移前后15张财务表指纹一致，恢复验证成功，API与4个运维timer active+enabled。
+- 真实账本修复独立执行：同一请求与幂等键dry-run→apply→replay，首轮演练cwd权限失败发生在连接数据库前，已纠正运行目录。本金确认93721元，9月22日工商3495还款2533元；当前债务91188元，剩36期每期2533元，下期10月22日。替代37条手工计划已取消留历史，原期初5066元未改。线上API与Mac实读均验收通过。
+- 迁移备份：`fiscal-20260922T071010Z.dump` / `fiscal-20260922T071012Z.dump`；修复前后备份与校验文件保留于 `/var/lib/fiscal/backups/releases/v2.3.0-build47/loan-pre`、`loan-post`，修复后 `fiscal-20260922T071125Z.dump` 恢复验证成功。使用hardlink而非重复整库。私有请求和幂等键仅保留在root受控 `/var/lib/fiscal/operations/loan-build47`。
+- Mac universal和iOS模拟器/真机Release构建通过；应用/框架严格签名、架构、符号UUID与解包hash通过。Mac安装 `/Applications/Fiscal.app`，回退 `/Applications/Fiscal-v2.3.0-build46-backup-20260922-151141.app`；已启动读取并留在车贷10月账期。iOS签名产物供Xcode安装，无IPA；未执行真机交互。
+- 验证：Backend全量首轮473通过6项日期相关失败；固定测试时钟后涉及模块与新测试16通过。新增5项回归覆盖金额、账期、幂等、撤销、历史、消费/现金流、归档及防止手工伪造本金。Ruff/格式/Pyright和双端Debug App通过。本轮无独立复审，不沿用旧审查结论。
+- 资源：本地精确清理 **623.88 MiB**（发布目录约693MiB降至69.49MiB），远端 **477.95 MiB**；源码副本、打包中间物、上传副本和本地私有输入已回收，保留签名交付/回退/证据和运行目录。已核验占用、指纹、临时目录及隔离库不存在，未清共享开发环境。设备iPhone19,2 OS27符号缺Info.plist仍pending，缓存保留；这项设备准备尚未完成。
+- 证据：[build47目录](qa/build47)、[账目断言](qa/build47/loan-verification.json)、[Mac安装](qa/build47/installation.json)、[公网验收](qa/build47/production-postflight.json)、[本地清理](qa/build47/cleanup-receipt.json)、[远端清理](qa/build47/remote-cleanup.json)。详细日志与签名交付保留在 `build/release-v2.3.0-47`，测试日志在 `build/loan-build47`。
+- 回退限制：0041存在本金类型后不可直接降级schema或只替换为不识别此类型的旧后端；需要修正发布，或在明确数据恢复方案下使用修复前备份，不自动覆盖账本。

@@ -1,0 +1,17 @@
+{
+  "installed": "/Applications/Fiscal.app",
+  "version": "2.3.0",
+  "build": "47",
+  "mac_executable_sha256": "3bc9f26784b040709d24ae6a3b6f7b08798ff528032e0cda3d9376309e71a705",
+  "backup": "/Applications/Fiscal-v2.3.0-build46-backup-20260922-151141.app",
+  "backup_executable_sha256": "246901f802dc778e72a7a840cb1074c2a83dbf5f457567295e2d2861e7caf7f1",
+  "ios_delivery": "Xcode device build ready; no IPA",
+  "installed_at": "2026-09-22T15:11:43.060262+08:00",
+  "launch_and_live_read": "passed",
+  "ui_verified": [
+    "车贷欠款91188元",
+    "工商3495→车贷还款2533元",
+    "9月22日账期已结清",
+    "10月22日起36期每期2533元"
+  ]
+}

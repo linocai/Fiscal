@@ -1,0 +1,11 @@
+{
+  "user_schemes_hashes_preserved": true,
+  "local_test_database": "fiscal_loan47_20260922 absent on localhost; no sessions",
+  "checked_temporary_roots": [
+    "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T",
+    "/tmp"
+  ],
+  "candidate_temporary_paths": [],
+  "apple_test_results": "No new xcresult produced: App builds only; backend pytest logs retained",
+  "device_support": "iPhone19,2 OS27 symbols lack Info.plist; retained, pending; no support cache deleted"
+}

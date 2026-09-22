@@ -1,0 +1,32 @@
+{
+  "status": "complete",
+  "freed_allocated_bytes": 501170176,
+  "deleted": {
+    "/tmp/fiscal-build47.bundle": {
+      "sha256": "f950e4286aebf04328bafd408b8126b6fa848688699c001ec5bd9d5c1b3cf20b",
+      "allocated_bytes": 137105408
+    },
+    "/tmp/fiscal-build47-apply.sh": {
+      "sha256": "ae98ad6661630decd85a4f26242e0c637887c0a78ba17dc94f4942794b625cb0",
+      "allocated_bytes": 8192
+    },
+    "/tmp/loan-repair.sh": {
+      "sha256": "10ba361b8716671e5f7d6ab14b355a9add5e2c7ae18b209752e9ddbda53a1828",
+      "allocated_bytes": 4096
+    },
+    "/tmp/production-request.json": {
+      "sha256": "72a2422c598ea21353632f53ff4e385da0fb98ad1d7219170cfd866904592c71",
+      "allocated_bytes": 4096
+    },
+    "/tmp/operation-key.txt": {
+      "sha256": "adea8b70be815f5e83dab7ccef8eeaadcb474273643ab1961046a09492897056",
+      "allocated_bytes": 4096
+    },
+    "/opt/fiscal/deploy-source/db95c136ddfb8efeba8e30e3ca59a4dc6db25c25": {
+      "sha256": "ce8e901815eefe1c905d805ba45b87c61445dbb5e0612967d1a51c7417ab1e52",
+      "allocated_bytes": 364044288
+    }
+  },
+  "remaining_deletions": [],
+  "retained": "Current backend release; pre/post migration and repair backups via hardlinks; root-protected repair request/key/receipts for audit and idempotent recovery"
+}
