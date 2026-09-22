@@ -1,0 +1,19 @@
+{
+  "status": "complete",
+  "deleted": [
+    "build/test-runs/chart48-macos-verified/tests.xcresult",
+    "build/chart-build48/screenshots/CD7B8ED1-2FFC-4EE7-8F23-BEA7A30C7129.png",
+    "build/chart-build48/screenshots/49146C90-51D0-42DC-82C1-4BCF6114CA0D.png",
+    "build/chart-build48/screenshots/DF7B5B0D-04C1-4EF1-A16D-EDD5575FE555.png",
+    "build/chart-build48/screenshots/4D1B069F-D6F8-47ED-B438-EBEC17D4E0EB.png",
+    "build/chart-build48/screenshots/4B24CA79-C972-47A7-9B46-E80D48C2E65C.png",
+    "build/chart-build48/screenshots/2AA44324-A6F9-43DF-85B7-F5ED790DCA90.png",
+    "build/chart-build48/verified-screenshots/3AF77F22-CAAE-4268-BC62-8BA11DC255D6.png",
+    "build/chart-build48/verified-screenshots/E6796E71-4BB5-45DA-9859-127236B0623F.png",
+    "build/chart-build48/axis-screenshots/C8394B45-C78B-4CDD-A075-CE3E1A8791C0.png",
+    "build/chart-build48/axis-screenshots/34E20332-11DE-447B-8E19-A191D865FC64.png"
+  ],
+  "planned_allocated_bytes": 5468160,
+  "retained_evidence_verified": true,
+  "completed_at": "2026-09-22T07:51:37.002403+00:00"
+}

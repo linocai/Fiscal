@@ -1,0 +1,197 @@
+{
+  "keep": [
+    {
+      "path": "build/test-runs/chart48-axis-final/tests.xcresult",
+      "reason": "Final date-axis acceptance"
+    },
+    {
+      "path": "build/test-runs/chart48-macos-final/tests.xcresult",
+      "reason": "Unresolved wide-window background pixel assertion evidence"
+    },
+    {
+      "path": "build/v2.2.0-qa/mac-gallery-final.xcresult",
+      "reason": "V2.2 final Mac visual acceptance"
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-reduced-effects.xcresult",
+      "reason": "V2.2 reduced-effects verification"
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-mac-navigation-final.xcresult",
+      "reason": "V2.2 final Mac navigation fix"
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-root-r3.xcresult",
+      "reason": "V2.2 iOS root navigation verification"
+    },
+    {
+      "path": "build/v2.2.0-qa/full-fiscalkit-tests-final.xcresult",
+      "reason": "V2.2 final unit suite"
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-mac-root-final.xcresult",
+      "reason": "V2.2 final Mac root fixes"
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-ios-root-final.xcresult",
+      "reason": "V2.2 final iOS fixes"
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-gallery-r3.xcresult",
+      "reason": "V2.2 final corrected iOS visual scenarios"
+    },
+    {
+      "path": "build/ios27-compat-20260920/core-tests-isolated/tests.xcresult",
+      "reason": "Final Xcode27 compatibility acceptance: core-tests-isolated"
+    },
+    {
+      "path": "build/ios27-compat-20260920/gallery-ui/tests.xcresult",
+      "reason": "Final Xcode27 compatibility acceptance: gallery-ui"
+    },
+    {
+      "path": "build/ios27-compat-20260920/root-ui-fixed/tests.xcresult",
+      "reason": "Final Xcode27 compatibility acceptance: root-ui-fixed"
+    },
+    {
+      "path": "build/ios27-compat-20260920/ios26-fixed/tests.xcresult",
+      "reason": "Final Xcode27 compatibility acceptance: ios26-fixed"
+    },
+    {
+      "path": "build/v2.3.0-43/qa/fiscalkit-2.xcresult",
+      "reason": "V2.3 initial complete unit evidence; final repair is separate"
+    },
+    {
+      "path": "build/v2.3.0-43/qa/ios-ui-2.xcresult",
+      "reason": "V2.3 final iOS UI scenarios"
+    },
+    {
+      "path": "build/v2.3.0-43/qa/macos-final.xcresult",
+      "reason": "V2.3 final initial-build targeted checks"
+    },
+    {
+      "path": "build/v2.3.0-43/qa/mac-ui-3.xcresult",
+      "reason": "V2.3 final corrected Mac UI scenarios"
+    },
+    {
+      "path": "build/v2.3.0-43/qa/mac-ui-2.xcresult",
+      "reason": "V2.3 four accepted UI scenarios in a mixed batch; remaining failures fixed in mac-ui-3"
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-ui-4.xcresult",
+      "reason": "Unresolved complete Mac workflow: representative assertion failure with recording"
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-ui-5.xcresult",
+      "reason": "Unresolved complete Mac workflow: latest AX/window-loss failure with recording"
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-real-receipt-3.xcresult",
+      "reason": "Final real HTTP receipt display evidence"
+    },
+    {
+      "path": "build/v2.3.0-43/repair/client-full-4.xcresult",
+      "reason": "Final reviewed FiscalKit suite"
+    },
+    {
+      "path": "build/v2.3.0-44/client-tests/tests.xcresult",
+      "reason": "Build44 final FiscalKit regression: 459 passed, 1 conditional PDF-loopback test skipped; eligibility rejection and stale-state guards passed"
+    },
+    {
+      "path": "build/release-v2.2.0-41/mac-wide-passed.xcresult",
+      "reason": "Build41 final wide-window verification"
+    },
+    {
+      "path": "build/release-v2.2.0-41/units.xcresult",
+      "reason": "Build41 final targeted unit verification"
+    }
+  ],
+  "delete": [
+    {
+      "path": "build/test-runs/chart48-macos-verified/tests.xcresult",
+      "reason": "Replaced by final axis anchoring verification",
+      "evidence": [
+        "archive/releases/v2.3.0/qa/build48/axis-final-summary.json"
+      ]
+    },
+    {
+      "path": "build/chart-build48/screenshots/CD7B8ED1-2FFC-4EE7-8F23-BEA7A30C7129.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+        "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json"
+      ]
+    },
+    {
+      "path": "build/chart-build48/screenshots/49146C90-51D0-42DC-82C1-4BCF6114CA0D.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+        "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json"
+      ]
+    },
+    {
+      "path": "build/chart-build48/screenshots/DF7B5B0D-04C1-4EF1-A16D-EDD5575FE555.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+        "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json"
+      ]
+    },
+    {
+      "path": "build/chart-build48/screenshots/4D1B069F-D6F8-47ED-B438-EBEC17D4E0EB.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+        "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json"
+      ]
+    },
+    {
+      "path": "build/chart-build48/screenshots/4B24CA79-C972-47A7-9B46-E80D48C2E65C.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+        "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json"
+      ]
+    },
+    {
+      "path": "build/chart-build48/screenshots/2AA44324-A6F9-43DF-85B7-F5ED790DCA90.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+        "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json"
+      ]
+    },
+    {
+      "path": "build/chart-build48/verified-screenshots/3AF77F22-CAAE-4268-BC62-8BA11DC255D6.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+        "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json"
+      ]
+    },
+    {
+      "path": "build/chart-build48/verified-screenshots/E6796E71-4BB5-45DA-9859-127236B0623F.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+        "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json"
+      ]
+    },
+    {
+      "path": "build/chart-build48/axis-screenshots/C8394B45-C78B-4CDD-A075-CE3E1A8791C0.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+        "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json"
+      ]
+    },
+    {
+      "path": "build/chart-build48/axis-screenshots/34E20332-11DE-447B-8E19-A191D865FC64.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+        "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json"
+      ]
+    }
+  ]
+}

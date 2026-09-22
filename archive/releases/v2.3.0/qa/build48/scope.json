@@ -1,0 +1,8 @@
+{
+  "baseline": "b12ea32",
+  "build": 48,
+  "purpose": "overview monthly chart date-axis spacing",
+  "change": "continuous day positions plus width-dependent evenly spaced tick indices; complete daily bar data retained",
+  "validation": "Both OS27 App targets; existing Mac overview UI cases with full-month fixture",
+  "release_status": "not released; installed remains build47"
+}

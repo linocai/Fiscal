@@ -1,0 +1,6 @@
+{
+  "path": "/private/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/ResultBundle_2026-22-09_15-43-0039.xcresult",
+  "sha256": "a3425a9040f8486af6857919f535cd1108a85201cb210b7c01e278335cd57e76",
+  "allocated_bytes": 20480,
+  "reason": "Duplicate jobs rejected before tests; command error retained in test.log"
+}

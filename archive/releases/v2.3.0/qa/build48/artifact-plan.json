@@ -1,0 +1,649 @@
+{
+  "schema": 1,
+  "root": "/Users/linotsai/Lino/Fiscal",
+  "keep": [
+    {
+      "path": "build/test-runs/chart48-axis-final/tests.xcresult",
+      "reason": "Final date-axis acceptance",
+      "fingerprint": {
+        "sha256": "b325bfc56ddb9705d074525edbbe4a4d91829676e09b9904dda5a78980052602",
+        "inode": 169184377,
+        "device": 16777232,
+        "logical_bytes": 1172872,
+        "allocated_bytes": 1294336
+      }
+    },
+    {
+      "path": "build/test-runs/chart48-macos-final/tests.xcresult",
+      "reason": "Unresolved wide-window background pixel assertion evidence",
+      "fingerprint": {
+        "sha256": "f41aa052dbf0746f652a2d31440b07f2d7bda1e0f74b7f06e380e5a4a8535824",
+        "inode": 169167834,
+        "device": 16777232,
+        "logical_bytes": 84888112,
+        "allocated_bytes": 91025408
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/mac-gallery-final.xcresult",
+      "reason": "V2.2 final Mac visual acceptance",
+      "fingerprint": {
+        "sha256": "bd598dd7fc699c93364a994623f090453e4c07206b721c29e44c1a894f8cf728",
+        "inode": 155710593,
+        "device": 16777232,
+        "logical_bytes": 123099483,
+        "allocated_bytes": 128843776
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-reduced-effects.xcresult",
+      "reason": "V2.2 reduced-effects verification",
+      "fingerprint": {
+        "sha256": "8cba3cf2b83f25f1da0968ce3edc444b9f3b748b46664acc3b6a57ec7a88005c",
+        "inode": 155744260,
+        "device": 16777232,
+        "logical_bytes": 655558,
+        "allocated_bytes": 778240
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-mac-navigation-final.xcresult",
+      "reason": "V2.2 final Mac navigation fix",
+      "fingerprint": {
+        "sha256": "2931d303cd20fe7821bfda11d84add8ec8ce66e7bf3e6ea640172e59126f6cda",
+        "inode": 155810047,
+        "device": 16777232,
+        "logical_bytes": 719139,
+        "allocated_bytes": 835584
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-root-r3.xcresult",
+      "reason": "V2.2 iOS root navigation verification",
+      "fingerprint": {
+        "sha256": "1121dc50210ee31d771a3c337d68f6e190a597271a71b5e045c6e75e91e5fa47",
+        "inode": 155743333,
+        "device": 16777232,
+        "logical_bytes": 3535360,
+        "allocated_bytes": 3735552
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/full-fiscalkit-tests-final.xcresult",
+      "reason": "V2.2 final unit suite",
+      "fingerprint": {
+        "sha256": "0d485fa886b01b5b356826bdd618f7a2edf531de971344ce233015ec9febecd5",
+        "inode": 155746108,
+        "device": 16777232,
+        "logical_bytes": 787136,
+        "allocated_bytes": 4091904
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-mac-root-final.xcresult",
+      "reason": "V2.2 final Mac root fixes",
+      "fingerprint": {
+        "sha256": "e7b1e5a689cf5ca7d5895869d734a6b33804ae85f950f803dff93c7a8048ad48",
+        "inode": 155804202,
+        "device": 16777232,
+        "logical_bytes": 2820829,
+        "allocated_bytes": 2981888
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-ios-root-final.xcresult",
+      "reason": "V2.2 final iOS fixes",
+      "fingerprint": {
+        "sha256": "d02803bb2922ce224cfe53f8ededa3070deb2e581cd50edab4b7a9d01798840a",
+        "inode": 155805837,
+        "device": 16777232,
+        "logical_bytes": 4087779,
+        "allocated_bytes": 4255744
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-gallery-r3.xcresult",
+      "reason": "V2.2 final corrected iOS visual scenarios",
+      "fingerprint": {
+        "sha256": "fe1f6f780270479c039e78b2d565075ad50150da1577124d5e3e1502b79bc70b",
+        "inode": 155742281,
+        "device": 16777232,
+        "logical_bytes": 899098,
+        "allocated_bytes": 1032192
+      }
+    },
+    {
+      "path": "build/ios27-compat-20260920/core-tests-isolated/tests.xcresult",
+      "reason": "Final Xcode27 compatibility acceptance: core-tests-isolated",
+      "fingerprint": {
+        "sha256": "da62125b4d57903214a49525658eff221d04ab8e01c7954eae184611cd92cf76",
+        "inode": 167397697,
+        "device": 16777232,
+        "logical_bytes": 1033873,
+        "allocated_bytes": 5074944
+      }
+    },
+    {
+      "path": "build/ios27-compat-20260920/gallery-ui/tests.xcresult",
+      "reason": "Final Xcode27 compatibility acceptance: gallery-ui",
+      "fingerprint": {
+        "sha256": "fd7cbbd5361fb5fab2db2ffbe195b02af5f54594e107c5f536b243bce947c854",
+        "inode": 167390075,
+        "device": 16777232,
+        "logical_bytes": 5511680,
+        "allocated_bytes": 5677056
+      }
+    },
+    {
+      "path": "build/ios27-compat-20260920/root-ui-fixed/tests.xcresult",
+      "reason": "Final Xcode27 compatibility acceptance: root-ui-fixed",
+      "fingerprint": {
+        "sha256": "6ba55350bf320793fc49e8387be2a758b784eaa65c49cbce4baadcb9ac6e1a2e",
+        "inode": 167388757,
+        "device": 16777232,
+        "logical_bytes": 3761014,
+        "allocated_bytes": 3948544
+      }
+    },
+    {
+      "path": "build/ios27-compat-20260920/ios26-fixed/tests.xcresult",
+      "reason": "Final Xcode27 compatibility acceptance: ios26-fixed",
+      "fingerprint": {
+        "sha256": "3927b0aca18e033fe4afdef1f178f4bc8c400cbd31500fedd82fd5ca66bd0456",
+        "inode": 167401685,
+        "device": 16777232,
+        "logical_bytes": 524655,
+        "allocated_bytes": 651264
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/fiscalkit-2.xcresult",
+      "reason": "V2.3 initial complete unit evidence; final repair is separate",
+      "fingerprint": {
+        "sha256": "f5f450c1d83acf3eedcf7ec93005b63cbf51300ef1dd10fc63297343cb6ae5e1",
+        "inode": 161756047,
+        "device": 16777232,
+        "logical_bytes": 841752,
+        "allocated_bytes": 4472832
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/ios-ui-2.xcresult",
+      "reason": "V2.3 final iOS UI scenarios",
+      "fingerprint": {
+        "sha256": "6bdc445523a1722e365d8566d4c4ef1fe139630de39c580549c3c083d0276ca5",
+        "inode": 162032136,
+        "device": 16777232,
+        "logical_bytes": 1249731,
+        "allocated_bytes": 1388544
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/macos-final.xcresult",
+      "reason": "V2.3 final initial-build targeted checks",
+      "fingerprint": {
+        "sha256": "d7d7036f8989c1f59a3980f6aacd6e9d8f7316c605aa848dcfba0c56aefeb3b6",
+        "inode": 162034483,
+        "device": 16777232,
+        "logical_bytes": 302115,
+        "allocated_bytes": 512000
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/mac-ui-3.xcresult",
+      "reason": "V2.3 final corrected Mac UI scenarios",
+      "fingerprint": {
+        "sha256": "933378da9cd4b9cd1588dce9643a16961d6245d83fd68c52e730af39b65f474f",
+        "inode": 162031393,
+        "device": 16777232,
+        "logical_bytes": 1816486,
+        "allocated_bytes": 1953792
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/mac-ui-2.xcresult",
+      "reason": "V2.3 four accepted UI scenarios in a mixed batch; remaining failures fixed in mac-ui-3",
+      "fingerprint": {
+        "sha256": "93ace44dbc79759033c4952bf98ca6e677a572b4113d540114770ad43a679157",
+        "inode": 162025566,
+        "device": 16777232,
+        "logical_bytes": 207146689,
+        "allocated_bytes": 214343680
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-ui-4.xcresult",
+      "reason": "Unresolved complete Mac workflow: representative assertion failure with recording",
+      "fingerprint": {
+        "sha256": "c24909e5f9ee7c7e1ee8bfb48d6654cc56bf9b00433427538d2a335f38c73532",
+        "inode": 162280685,
+        "device": 16777232,
+        "logical_bytes": 319655707,
+        "allocated_bytes": 326930432
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-ui-5.xcresult",
+      "reason": "Unresolved complete Mac workflow: latest AX/window-loss failure with recording",
+      "fingerprint": {
+        "sha256": "deb1ea7f7ff3d66b39ef6c74abc47a7faec783d5da9abb1eb3d1c95a90b59fa1",
+        "inode": 162285836,
+        "device": 16777232,
+        "logical_bytes": 211259322,
+        "allocated_bytes": 218521600
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-real-receipt-3.xcresult",
+      "reason": "Final real HTTP receipt display evidence",
+      "fingerprint": {
+        "sha256": "8929a5402c06e24521af45876f38bff2b31325d5b4b6dbd2db8e9acfd8bc6ff0",
+        "inode": 162296148,
+        "device": 16777232,
+        "logical_bytes": 470226,
+        "allocated_bytes": 589824
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/repair/client-full-4.xcresult",
+      "reason": "Final reviewed FiscalKit suite",
+      "fingerprint": {
+        "sha256": "0049d2834966af9255aabcdfe528f6f9bf6388b0e27b18d8ec31b9df584b358c",
+        "inode": 162279109,
+        "device": 16777232,
+        "logical_bytes": 914299,
+        "allocated_bytes": 5025792
+      }
+    },
+    {
+      "path": "build/v2.3.0-44/client-tests/tests.xcresult",
+      "reason": "Build44 final FiscalKit regression: 459 passed, 1 conditional PDF-loopback test skipped; eligibility rejection and stale-state guards passed",
+      "fingerprint": {
+        "sha256": "851b79b20a0fe5c149886a83e6d73f982568629d9d4393493c676f525af47aff",
+        "inode": 162691393,
+        "device": 16777232,
+        "logical_bytes": 915190,
+        "allocated_bytes": 5025792
+      }
+    },
+    {
+      "path": "build/release-v2.2.0-41/mac-wide-passed.xcresult",
+      "reason": "Build41 final wide-window verification",
+      "fingerprint": {
+        "sha256": "a105ae913559c5bdd0891c4c93185950d9e0f9e45b2604f705122b1823caa864",
+        "inode": 155838716,
+        "device": 16777232,
+        "logical_bytes": 1834425,
+        "allocated_bytes": 1970176
+      }
+    },
+    {
+      "path": "build/release-v2.2.0-41/units.xcresult",
+      "reason": "Build41 final targeted unit verification",
+      "fingerprint": {
+        "sha256": "e82c724c611f7eedc33c891beb37fc940960fd0e461ab23f60b3827b15ed899a",
+        "inode": 155839326,
+        "device": 16777232,
+        "logical_bytes": 297258,
+        "allocated_bytes": 487424
+      }
+    }
+  ],
+  "delete": [
+    {
+      "path": "build/test-runs/chart48-macos-verified/tests.xcresult",
+      "reason": "Replaced by final axis anchoring verification",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+          "fingerprint": {
+            "sha256": "1696655f4191843a87b68fe7f5e4f7c7be27f5ebbead678002d71fa2c6d1a2cf",
+            "inode": 169186860,
+            "device": 16777232,
+            "logical_bytes": 2851,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "631625d4e5a92cc2a62dbc187b263456942fdddd1bd4ee902f11eb8881974ad7",
+        "inode": 169181454,
+        "device": 16777232,
+        "logical_bytes": 1159229,
+        "allocated_bytes": 1282048
+      }
+    },
+    {
+      "path": "build/chart-build48/screenshots/CD7B8ED1-2FFC-4EE7-8F23-BEA7A30C7129.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+          "fingerprint": {
+            "sha256": "1696655f4191843a87b68fe7f5e4f7c7be27f5ebbead678002d71fa2c6d1a2cf",
+            "inode": 169186860,
+            "device": 16777232,
+            "logical_bytes": 2851,
+            "allocated_bytes": 4096
+          }
+        },
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json",
+          "fingerprint": {
+            "sha256": "cab2674cffb19a8b5e748ac3c68e4250edd049fafec1102b51489e5834679ca9",
+            "inode": 169185135,
+            "device": 16777232,
+            "logical_bytes": 12128,
+            "allocated_bytes": 12288
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "de794ecf5f68524d0f0d0367be6857a06b6efef73f54dc8020c4009bdb5ae87e",
+        "inode": 169176458,
+        "device": 16777232,
+        "logical_bytes": 375809,
+        "allocated_bytes": 376832
+      }
+    },
+    {
+      "path": "build/chart-build48/screenshots/49146C90-51D0-42DC-82C1-4BCF6114CA0D.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+          "fingerprint": {
+            "sha256": "1696655f4191843a87b68fe7f5e4f7c7be27f5ebbead678002d71fa2c6d1a2cf",
+            "inode": 169186860,
+            "device": 16777232,
+            "logical_bytes": 2851,
+            "allocated_bytes": 4096
+          }
+        },
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json",
+          "fingerprint": {
+            "sha256": "cab2674cffb19a8b5e748ac3c68e4250edd049fafec1102b51489e5834679ca9",
+            "inode": 169185135,
+            "device": 16777232,
+            "logical_bytes": 12128,
+            "allocated_bytes": 12288
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "fc0f9f7555f075168998d1345071cfc5ff786aad304116c69cccd26a3d033ace",
+        "inode": 169176461,
+        "device": 16777232,
+        "logical_bytes": 505850,
+        "allocated_bytes": 507904
+      }
+    },
+    {
+      "path": "build/chart-build48/screenshots/DF7B5B0D-04C1-4EF1-A16D-EDD5575FE555.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+          "fingerprint": {
+            "sha256": "1696655f4191843a87b68fe7f5e4f7c7be27f5ebbead678002d71fa2c6d1a2cf",
+            "inode": 169186860,
+            "device": 16777232,
+            "logical_bytes": 2851,
+            "allocated_bytes": 4096
+          }
+        },
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json",
+          "fingerprint": {
+            "sha256": "cab2674cffb19a8b5e748ac3c68e4250edd049fafec1102b51489e5834679ca9",
+            "inode": 169185135,
+            "device": 16777232,
+            "logical_bytes": 12128,
+            "allocated_bytes": 12288
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "bb253b7bc670511e1c9622480caa0e5d4c5b2e61c26dab293c9e9ff9fcb14b07",
+        "inode": 169176462,
+        "device": 16777232,
+        "logical_bytes": 325085,
+        "allocated_bytes": 327680
+      }
+    },
+    {
+      "path": "build/chart-build48/screenshots/4D1B069F-D6F8-47ED-B438-EBEC17D4E0EB.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+          "fingerprint": {
+            "sha256": "1696655f4191843a87b68fe7f5e4f7c7be27f5ebbead678002d71fa2c6d1a2cf",
+            "inode": 169186860,
+            "device": 16777232,
+            "logical_bytes": 2851,
+            "allocated_bytes": 4096
+          }
+        },
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json",
+          "fingerprint": {
+            "sha256": "cab2674cffb19a8b5e748ac3c68e4250edd049fafec1102b51489e5834679ca9",
+            "inode": 169185135,
+            "device": 16777232,
+            "logical_bytes": 12128,
+            "allocated_bytes": 12288
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "d25cca2710db458b5928e9240bb02855e05a459e1234d8a26f41ece0b6906e9f",
+        "inode": 169176459,
+        "device": 16777232,
+        "logical_bytes": 440213,
+        "allocated_bytes": 442368
+      }
+    },
+    {
+      "path": "build/chart-build48/screenshots/4B24CA79-C972-47A7-9B46-E80D48C2E65C.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+          "fingerprint": {
+            "sha256": "1696655f4191843a87b68fe7f5e4f7c7be27f5ebbead678002d71fa2c6d1a2cf",
+            "inode": 169186860,
+            "device": 16777232,
+            "logical_bytes": 2851,
+            "allocated_bytes": 4096
+          }
+        },
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json",
+          "fingerprint": {
+            "sha256": "cab2674cffb19a8b5e748ac3c68e4250edd049fafec1102b51489e5834679ca9",
+            "inode": 169185135,
+            "device": 16777232,
+            "logical_bytes": 12128,
+            "allocated_bytes": 12288
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "8dede31a6d0feee633170a2d2f8338cf51cf837a2fa948f409f32e3f301f1173",
+        "inode": 169176463,
+        "device": 16777232,
+        "logical_bytes": 508515,
+        "allocated_bytes": 512000
+      }
+    },
+    {
+      "path": "build/chart-build48/screenshots/2AA44324-A6F9-43DF-85B7-F5ED790DCA90.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+          "fingerprint": {
+            "sha256": "1696655f4191843a87b68fe7f5e4f7c7be27f5ebbead678002d71fa2c6d1a2cf",
+            "inode": 169186860,
+            "device": 16777232,
+            "logical_bytes": 2851,
+            "allocated_bytes": 4096
+          }
+        },
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json",
+          "fingerprint": {
+            "sha256": "cab2674cffb19a8b5e748ac3c68e4250edd049fafec1102b51489e5834679ca9",
+            "inode": 169185135,
+            "device": 16777232,
+            "logical_bytes": 12128,
+            "allocated_bytes": 12288
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "ede7cbb004121236a34789cb48d0a59066305e1eef74ba37c213cd29511d3dfb",
+        "inode": 169176460,
+        "device": 16777232,
+        "logical_bytes": 377998,
+        "allocated_bytes": 380928
+      }
+    },
+    {
+      "path": "build/chart-build48/verified-screenshots/3AF77F22-CAAE-4268-BC62-8BA11DC255D6.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+          "fingerprint": {
+            "sha256": "1696655f4191843a87b68fe7f5e4f7c7be27f5ebbead678002d71fa2c6d1a2cf",
+            "inode": 169186860,
+            "device": 16777232,
+            "logical_bytes": 2851,
+            "allocated_bytes": 4096
+          }
+        },
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json",
+          "fingerprint": {
+            "sha256": "cab2674cffb19a8b5e748ac3c68e4250edd049fafec1102b51489e5834679ca9",
+            "inode": 169185135,
+            "device": 16777232,
+            "logical_bytes": 12128,
+            "allocated_bytes": 12288
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "e027e22b50ad1e4f70a5e3eb85bc44ddb67b9c4a87ef4cb2e1ea4ffed2663a52",
+        "inode": 169182485,
+        "device": 16777232,
+        "logical_bytes": 440234,
+        "allocated_bytes": 442368
+      }
+    },
+    {
+      "path": "build/chart-build48/verified-screenshots/E6796E71-4BB5-45DA-9859-127236B0623F.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+          "fingerprint": {
+            "sha256": "1696655f4191843a87b68fe7f5e4f7c7be27f5ebbead678002d71fa2c6d1a2cf",
+            "inode": 169186860,
+            "device": 16777232,
+            "logical_bytes": 2851,
+            "allocated_bytes": 4096
+          }
+        },
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json",
+          "fingerprint": {
+            "sha256": "cab2674cffb19a8b5e748ac3c68e4250edd049fafec1102b51489e5834679ca9",
+            "inode": 169185135,
+            "device": 16777232,
+            "logical_bytes": 12128,
+            "allocated_bytes": 12288
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "9c794a0530b577a5ae777ff4ba628cecf46fee340aef2c51c9b3aa50a48bcfc3",
+        "inode": 169182484,
+        "device": 16777232,
+        "logical_bytes": 375917,
+        "allocated_bytes": 376832
+      }
+    },
+    {
+      "path": "build/chart-build48/axis-screenshots/C8394B45-C78B-4CDD-A075-CE3E1A8791C0.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+          "fingerprint": {
+            "sha256": "1696655f4191843a87b68fe7f5e4f7c7be27f5ebbead678002d71fa2c6d1a2cf",
+            "inode": 169186860,
+            "device": 16777232,
+            "logical_bytes": 2851,
+            "allocated_bytes": 4096
+          }
+        },
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json",
+          "fingerprint": {
+            "sha256": "cab2674cffb19a8b5e748ac3c68e4250edd049fafec1102b51489e5834679ca9",
+            "inode": 169185135,
+            "device": 16777232,
+            "logical_bytes": 12128,
+            "allocated_bytes": 12288
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "d32f73ffe4b2e7b963cf602200143765b7c7c67d593d2f399a5b640b4b41fa28",
+        "inode": 169186713,
+        "device": 16777232,
+        "logical_bytes": 375359,
+        "allocated_bytes": 376832
+      }
+    },
+    {
+      "path": "build/chart-build48/axis-screenshots/34E20332-11DE-447B-8E19-A191D865FC64.png",
+      "reason": "Inspected export duplicate; original in retained xcresult",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+          "fingerprint": {
+            "sha256": "1696655f4191843a87b68fe7f5e4f7c7be27f5ebbead678002d71fa2c6d1a2cf",
+            "inode": 169186860,
+            "device": 16777232,
+            "logical_bytes": 2851,
+            "allocated_bytes": 4096
+          }
+        },
+        {
+          "path": "archive/releases/v2.3.0/qa/build48/chart48-macos-final-summary.json",
+          "fingerprint": {
+            "sha256": "cab2674cffb19a8b5e748ac3c68e4250edd049fafec1102b51489e5834679ca9",
+            "inode": 169185135,
+            "device": 16777232,
+            "logical_bytes": 12128,
+            "allocated_bytes": 12288
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "cb6c528a443c4ec99933c850e8b7eee806dd4c6b617f77525f75af7eb811117f",
+        "inode": 169186714,
+        "device": 16777232,
+        "logical_bytes": 439969,
+        "allocated_bytes": 442368
+      }
+    }
+  ],
+  "status": "planned",
+  "planned_at": "2026-09-22T07:51:32.036932+00:00"
+}

@@ -344,3 +344,12 @@ App 定位均相对 `App/Sources/FiscalKit/`。完整审查覆盖 B01–B07 代�
 - 线上API逐项核对全部36期、当天恰好一条本金确认和一条还款、付款账户仅减少2533元及全部被替代计划已取消。Mac Build47换装后实际打开车贷账期，看到9月已结清、10月应还2533元；iOS签名产物通过Xcode安装，未验证真机交互。见[发布记录](RELEASE_STATE.md#2026-09-22-build47-车贷修复发布完成)和[验收证据](qa/build47/loan-verification.json)。
 - 运维演练首次因runuser继承了不可访问的cwd，Settings读取相对.env时报权限错误，数据库连接前退出；显式切到当前Backend目录后演练、正式写入和幂等复验通过。以后专用身份运行CLI时明确工作目录，不放宽目录或凭据权限。
 - 资源：清理本地源码导出/打包中间目录/bundle和私有输入副本，远端上传与deploy-source副本；保留当前发布、回退App、签名包/dSYM、必要日志及受保护操作输入/回执和备份。隔离测试库已不存在，无活动会话；临时目录无本轮候选残留。设备审计仅iPhone19,2的OS27符号缺Info.plist仍pending，保留未删，不宣称设备收尾完成。
+
+## 17. 2026-09-22 build48 每日支出日期轴快修
+
+- 用户报告Mac总览“本月流动”整月日期重叠。基线b12ea32，当前安装/生产仍build47。本次为快修，营销版2.3.0不变，build48；未发布、未换包、未写生产账目。
+- 共享V22SpendingTrend从文本分类轴改为数值日期位置轴，按宽度均匀抽取标签；保留首尾、边缘留白及完整每天柱状数据。总览和报表双端共用此组件，金额/统计不变。根工作区隔离fixture补足该月份全部日期（新增日期金额0），防止六天样本掩盖拥挤。
+- 最终OS27 macOS/iOS Simulator正式App target构建通过；现有Mac窄窗口用例通过，实际检查1000浅色、1280深色完整月份截图，标签分开显示且月末完整。日志build/chart-build48，最终结果build/test-runs/chart48-axis-final/tests.xcresult；[摘要](qa/build48/axis-final-summary.json)。未执行iOS交互验收。
+- 初轮额外宽窗口用例在既有背景色像素断言失败（line367），并非日期标签断言；保留完整失败结果build/test-runs/chart48-macos-final/tests.xcresult，在Backlog记录，不修改/弱化断言。不得报告整套UI全部通过。中间截图发现框架隐藏月末，补充留白和显式标签布局后复验通过。
+- 测试入口首次缺DerivedData被脚本拒绝；随后重复传入脚本自带jobs被xcodebuild拒绝，未执行测试。正确调用只提供已有DerivedData，jobs/并行配置由脚本统一注入；错误日志保留，系统临时错误结果包已核验删除。
+- 资源：按精确清单删除被替代轮次和导出图片副本，保留最终/未解决背景色问题原始证据。11项5,468,160分配字节已回收，资源check无未分类或未关闭运行；[清理核验](qa/build48/artifact-check.json)。本轮无远端产物，设备审计仍iPhone19,2 OS27符号未就绪，保留缓存；不影响本地构建。用户六份scheme及AGENTS既有改动保持不提交。

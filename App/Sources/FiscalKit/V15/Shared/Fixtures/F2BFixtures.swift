@@ -271,7 +271,10 @@ extension V15F2BFixtures {
         payload["accounts"] = accounts
         // Only the isolated normal root fixture supplies this deterministic
         // daily series. Production views never synthesize missing report data.
+        // Include every day so overview QA catches crowded monthly date axes.
+        let dayCount = calendar.range(of: .day, in: .month, for: start)!.count
         let gross = [12_000, 0, 50_000, 18_000, 35_000, 21_400]
+            + Array(repeating: 0, count: dayCount - 6)
         payload["daily"] = gross.enumerated().map { index, amount -> [String: Any] in
             let refund = index == 2 ? 4_500 : 0
             let expected = index == 2 ? 21_000 : 0

@@ -151,10 +151,12 @@ public struct V22SpendingTrend: View {
         self.height = height
     }
 
-    private var dateLabels: [String] {
-        let step = max(1, points.count / 5)
-        return points.enumerated().compactMap { index, point in
-            index.isMultiple(of: step) || index == points.count - 1 ? point.date : nil
+    private func dateLabelIndices(width: CGFloat) -> [Int] {
+        // Reserve room for the amount axis and at least 64 pt per date label.
+        let count = min(points.count, max(2, Int(max(0, width - 48) / 64)))
+        guard count > 1 else { return [0] }
+        return (0..<count).map { index in
+            Int((Double(index) * Double(points.count - 1) / Double(count - 1)).rounded())
         }
     }
 
@@ -173,29 +175,34 @@ public struct V22SpendingTrend: View {
                     Text("元").font(V15Typography.label)
                         .foregroundStyle(V15Palette.ink.color.opacity(0.52))
                 }
-                Chart(points) { point in
-                    BarMark(
-                        x: .value("日期", point.date),
-                        y: .value("金额（元）", Double(point.amountMinor) / 100)
-                    )
-                    .foregroundStyle(V15Palette.teal.color.gradient)
-                    .cornerRadius(3)
-                    .accessibilityLabel(point.date)
-                    .accessibilityValue(V15MoneyPresentation(minorUnits: point.amountMinor, direction: .balance, includeCurrency: true).text)
-                }
-                .chartXAxis {
-                    AxisMarks(values: dateLabels) { value in
-                        AxisValueLabel {
-                            if let date = value.as(String.self) {
-                                Text(String(date.suffix(5))).font(.caption2)
+                GeometryReader { geometry in
+                    Chart(Array(points.enumerated()), id: \.element.id) { index, point in
+                        BarMark(
+                            x: .value("日期", index),
+                            y: .value("金额（元）", Double(point.amountMinor) / 100)
+                        )
+                        .foregroundStyle(V15Palette.teal.color.gradient)
+                        .cornerRadius(3)
+                        .accessibilityLabel(point.date)
+                        .accessibilityValue(V15MoneyPresentation(minorUnits: point.amountMinor, direction: .balance, includeCurrency: true).text)
+                    }
+                    .chartXScale(domain: -0.5...(Double(points.count) - 0.5), range: .plotDimension(padding: 24))
+                    .chartXAxis {
+                        AxisMarks(values: dateLabelIndices(width: geometry.size.width)) { value in
+                            AxisValueLabel(centered: false, anchor: .top, collisionResolution: .disabled) {
+                                if let index = value.as(Int.self), points.indices.contains(index) {
+                                    Text(String(points[index].date.suffix(5)))
+                                        .font(.caption2)
+                                        .fixedSize()
+                                }
                             }
                         }
                     }
-                }
-                .chartYAxis {
-                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) {
-                        AxisGridLine().foregroundStyle(V15Palette.hairline.color.opacity(0.65))
-                        AxisValueLabel()
+                    .chartYAxis {
+                        AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) {
+                            AxisGridLine().foregroundStyle(V15Palette.hairline.color.opacity(0.65))
+                            AxisValueLabel()
+                        }
                     }
                 }
                 .frame(height: height)
