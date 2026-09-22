@@ -1,0 +1,10 @@
+{
+  "/Users/linotsai/Lino/Fiscal/build/release-v2.3.0-48/source": {
+    "sha256": "25f48a1404320eff25e91f98dea203df8eb3056eb22dda9b35c09861b515bda4",
+    "allocated_bytes": 225644544
+  },
+  "/Users/linotsai/Lino/Fiscal/build/release-v2.3.0-48/staging": {
+    "sha256": "e1c7914232bd8240c700cb6785f0ff070a5c539a091927a7c97cbcb0f276f375",
+    "allocated_bytes": 291753984
+  }
+}

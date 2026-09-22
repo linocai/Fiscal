@@ -353,3 +353,5 @@ App 定位均相对 `App/Sources/FiscalKit/`。完整审查覆盖 B01–B07 代�
 - 初轮额外宽窗口用例在既有背景色像素断言失败（line367），并非日期标签断言；保留完整失败结果build/test-runs/chart48-macos-final/tests.xcresult，在Backlog记录，不修改/弱化断言。不得报告整套UI全部通过。中间截图发现框架隐藏月末，补充留白和显式标签布局后复验通过。
 - 测试入口首次缺DerivedData被脚本拒绝；随后重复传入脚本自带jobs被xcodebuild拒绝，未执行测试。正确调用只提供已有DerivedData，jobs/并行配置由脚本统一注入；错误日志保留，系统临时错误结果包已核验删除。
 - 资源：按精确清单删除被替代轮次和导出图片副本，保留最终/未解决背景色问题原始证据。11项5,468,160分配字节已回收，资源check无未分类或未关闭运行；[清理核验](qa/build48/artifact-check.json)。本轮无远端产物，设备审计仍iPhone19,2 OS27符号未就绪，保留缓存；不影响本地构建。用户六份scheme及AGENTS既有改动保持不提交。
+
+用户随后授权一条龙发布，Build48已完成三组Release构建/严格验签、Mac换装及真实日期轴验收，临时产物清理完成。详见[Build48发布记录](RELEASE_STATE.md#2026-09-22-build48-发布完成)。

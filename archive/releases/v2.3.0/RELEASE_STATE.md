@@ -129,3 +129,14 @@
 - 资源：本地精确清理 **623.88 MiB**（发布目录约693MiB降至69.49MiB），远端 **477.95 MiB**；源码副本、打包中间物、上传副本和本地私有输入已回收，保留签名交付/回退/证据和运行目录。已核验占用、指纹、临时目录及隔离库不存在，未清共享开发环境。设备iPhone19,2 OS27符号缺Info.plist仍pending，缓存保留；这项设备准备尚未完成。
 - 证据：[build47目录](qa/build47)、[账目断言](qa/build47/loan-verification.json)、[Mac安装](qa/build47/installation.json)、[公网验收](qa/build47/production-postflight.json)、[本地清理](qa/build47/cleanup-receipt.json)、[远端清理](qa/build47/remote-cleanup.json)。详细日志与签名交付保留在 `build/release-v2.3.0-47`，测试日志在 `build/loan-build47`。
 - 回退限制：0041存在本金类型后不可直接降级schema或只替换为不识别此类型的旧后端；需要修正发布，或在明确数据恢复方案下使用修复前备份，不自动覆盖账本。
+
+
+## 2026-09-22 build48 发布完成
+
+- 已发布 **2.3.0（48）**，源码 `825705eb0d5e1aa41f39cb200838fc6da948a195`、不可变标签 `v2.3.0-build48`，main和标签已推送。累计差异从实际已安装build47/db95c13核对，仅共享日期轴、整月fixture与build；Backend差异为空，线上继续db95c13/0041，本轮无部署、迁移、重启或账目写入。
+- 三组Release构建（iOS Simulator arm64、Mac universal、iOS device arm64）通过；OS最低27.0、签名/profile、架构、dSYM UUID、Mac打包解压严格验签与hash通过。公网健康/鉴权/报表/30日公式与备份恢复状态正常。
+- Mac已换装 `/Applications/Fiscal.app` 并打开真实总览，09-01至09-30日期标签已间隔显示无重叠；月度数据与换装前相同。当前hash `f86cc3dfbe649d71fd9a6d11e204bc5d1ce378e609b9b9f9e670332816e98559`，回退 `/Applications/Fiscal-v2.3.0-build47-backup-20260922-160222.app` 已验签。
+- iOS签名真机构建及符号已就绪，由用户经Xcode安装；无IPA、TestFlight、App Store或公证提交，未验证真机交互。签名Mac ZIP和双端dSYM位于 `build/release-v2.3.0-48/artifacts/`。
+- 日期专项截图验收和双端Debug构建见执行§17，未重复跑全量测试；已有宽窗口背景色断言失败继续保留在Backlog，不算通过。本轮未调用独立复审。
+- 清理导出源码及staging，核验指纹/无占用后回收 517,398,528 分配字节，发布目录剩 72,060,928 字节；保留签名交付、回退、必要日志及测试证据。无本轮远端产物或系统临时候选残留，用户scheme逐字节保留。设备iPhone19,2的OS27符号仍待就绪，未删缓存。
+- 证据：[发布目录](qa/build48/release)、[累计核对](qa/build48/release/cumulative-audit.json)、[安装验收](qa/build48/release/installation.json)、[资源核验](qa/build48/release/resource-check.json)。

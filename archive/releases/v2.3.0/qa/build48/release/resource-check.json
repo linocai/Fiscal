@@ -1,0 +1,10 @@
+{
+  "status": "complete",
+  "temporary_candidates": [],
+  "release_deletions_absent": true,
+  "user_schemes_preserved": true,
+  "remote_artifacts": "none created",
+  "device_support_pending": [
+    "iPhone19,2"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "installed": "/Applications/Fiscal.app",
+  "version": "2.3.0",
+  "build": "48",
+  "mac_executable_sha256": "f86cc3dfbe649d71fd9a6d11e204bc5d1ce378e609b9b9f9e670332816e98559",
+  "backup": "/Applications/Fiscal-v2.3.0-build47-backup-20260922-160222.app",
+  "backup_executable_sha256": "3bc9f26784b040709d24ae6a3b6f7b08798ff528032e0cda3d9376309e71a705",
+  "ios_delivery": "Xcode device build ready; no IPA",
+  "installed_at": "2026-09-22T16:02:23.135365+08:00",
+  "launch_and_live_read": "passed",
+  "visual_check": "Production overview: date labels spaced without overlap; 09-01 and 09-30 visible; monthly values match before replacement"
+}

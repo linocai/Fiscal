@@ -1,0 +1,11 @@
+{
+  "client_baseline": "db95c13",
+  "backend_actual": "db95c136ddfb8efeba8e30e3ca59a4dc6db25c25",
+  "target": "825705eb0d5e1aa41f39cb200838fc6da948a195",
+  "backend_diff_empty": true,
+  "installed_build": 47,
+  "schema": "20260922_0041",
+  "scope": "chart date axis; full-month fixture; build48",
+  "known_issue": "Unrelated wide-window background color pixel assertion retained in Backlog",
+  "user_schemes": "excluded; canonical tag source used"
+}

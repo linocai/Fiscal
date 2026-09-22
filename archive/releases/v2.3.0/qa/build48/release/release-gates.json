@@ -1,0 +1,11 @@
+{
+  "baseline_client": "db95c13 / build47",
+  "baseline_backend": "db95c13 / 0041",
+  "target": "825705e / build48",
+  "backend_deployment_required": false,
+  "data_migration_required": false,
+  "validation_evidence": "archive/releases/v2.3.0/qa/build48/axis-final-summary.json",
+  "known_nonblocking_issue": "Wide-window background pixel assertion remains unresolved in Backlog; not a passing test",
+  "independent_review": "not requested",
+  "ios_installation": "User installs through Xcode; no IPA"
+}
