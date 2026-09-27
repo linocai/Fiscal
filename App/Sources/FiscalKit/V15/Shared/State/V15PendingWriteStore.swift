@@ -20,6 +20,10 @@ public final class V15PendingWriteStore {
         case creditPayoff, creditPayoffReverse
         case statementProviderAttempt
         case statementConfirmation
+
+        var isRetiredStatementImport: Bool {
+            self == .statementProviderAttempt || self == .statementConfirmation
+        }
     }
 
     public struct Item: Codable, Sendable, Equatable, Identifiable {
@@ -86,12 +90,12 @@ public final class V15PendingWriteStore {
             if let data = try self.persistence?.read() {
                 let decoded = try JSONDecoder().decode([Item].self, from: data)
                 guard decoded.allSatisfy({ $0.scope == nil || $0.scope == scope }) else { throw CocoaError(.fileReadCorruptFile) }
-                items = decoded
+                items = decoded.map(Self.retireLegacyStatementImport)
             }
             if let legacy = defaults?.data(forKey: storageKey) {
                 let old = try JSONDecoder().decode([Item].self, from: legacy)
                 for item in old where !items.contains(where: { $0.id == item.id }) {
-                    items.append(Item(id: item.id, kind: item.kind, createdAt: item.createdAt, title: item.title, amountMinor: item.amountMinor, createRequest: item.createRequest, transactionID: item.transactionID, replaceRequest: item.replaceRequest, payload: item.payload, resourceID: item.resourceID, scope: scope, status: item.status, message: item.message))
+                    items.append(Self.retireLegacyStatementImport(Item(id: item.id, kind: item.kind, createdAt: item.createdAt, title: item.title, amountMinor: item.amountMinor, createRequest: item.createRequest, transactionID: item.transactionID, replaceRequest: item.replaceRequest, payload: item.payload, resourceID: item.resourceID, scope: scope, status: item.status, message: item.message)))
                 }
                 guard let persistence = self.persistence else { throw CocoaError(.fileWriteUnknown) }
                 let encoded = try JSONEncoder().encode(items)
@@ -99,7 +103,7 @@ public final class V15PendingWriteStore {
                 guard try persistence.read() == encoded else { throw CocoaError(.fileReadCorruptFile) }
                 defaults?.removeObject(forKey: storageKey)
             }
-            items = items.map { item in var value = item; if value.status == .syncing { value.status = .outcomeUnknown }; return value }
+            items = items.map { item in var value = Self.retireLegacyStatementImport(item); if value.status == .syncing { value.status = .outcomeUnknown }; return value }
             if !items.isEmpty { try persist(items) }
         } catch { storageFailure = Self.storageError }
     }
@@ -110,6 +114,7 @@ public final class V15PendingWriteStore {
 
     public func prepare(kind: Kind, title: String, payload: JSONValue, idempotencyKey: UUID, resourceID: UUID? = nil) throws -> UUID {
         try ensureStorage()
+        guard !kind.isRetiredStatementImport else { throw invalidPayload() }
         if let existing = items.first(where: { $0.id == idempotencyKey }) {
             guard existing.kind == kind, existing.payload == payload, existing.resourceID == resourceID else { throw invalidPayload() }
             return existing.id
@@ -173,7 +178,7 @@ public final class V15PendingWriteStore {
         guard !replaying, storageFailure == nil, services.offlineSnapshotAt == nil else { return }
         replaying = true
         defer { replaying = false }
-        let queuedIDs = items.filter { $0.status == .queued || $0.status == .outcomeUnknown }.map(\.id)
+        let queuedIDs = items.filter { !$0.kind.isRetiredStatementImport && ($0.status == .queued || $0.status == .outcomeUnknown) }.map(\.id)
         var succeeded = 0
         for id in queuedIDs {
             guard services.offlineSnapshotAt == nil,
@@ -210,8 +215,11 @@ public final class V15PendingWriteStore {
                 guard let payload = item.payload else { throw invalidPayload() }
                 let request = try V15BodyEncoder.decode(V15JournalRepayment.self, from: payload)
                 _ = try await services.actions.commitRepayment(previewToken: request.previewToken, idempotencyKey: item.id)
-            case .creditPayoff, .creditPayoffReverse, .statementProviderAttempt, .statementConfirmation:
-                markUnknown(id, message: "请回到账单导入继续恢复此操作。")
+            case .creditPayoff, .creditPayoffReverse:
+                markUnknown(id, message: "请核对原操作结果后继续。")
+                return false
+            case .statementProviderAttempt, .statementConfirmation:
+                update(id, status: .requiresDecision, message: Self.retiredStatementImportMessage)
                 return false
             }
             try complete(id)
@@ -274,6 +282,7 @@ public final class V15PendingWriteStore {
     /// receipt is never evidence that the first request did not execute.
     public func replayUnknown(_ id: UUID, using services: V15Services) async -> Bool {
         guard services.offlineSnapshotAt == nil, let item = item(id), item.status == .outcomeUnknown else { return false }
+        guard !item.kind.isRetiredStatementImport else { return false }
         if await recover(id, using: services) { return true }
         guard let latest = self.item(id), latest.status == .outcomeUnknown || latest.status == .queued else { return false }
         do { try markInFlight(id) } catch { return false }
@@ -294,6 +303,14 @@ public final class V15PendingWriteStore {
         catch { storageFailure = Self.storageError; throw Self.storageError }
     }
     private func persist(_ value: [Item]) throws { try persistence?.write(JSONEncoder().encode(value)) }
+    private static let retiredStatementImportMessage = "旧账单导入请求已停用。请核对原请求和账本结果；Fiscal 不会自动重放或删除这条记录。"
+    private static func retireLegacyStatementImport(_ item: Item) -> Item {
+        guard item.kind.isRetiredStatementImport else { return item }
+        var result = item
+        result.status = .requiresDecision
+        result.message = retiredStatementImportMessage
+        return result
+    }
     private static var storageError: V15Failure { .init(kind: .transport, code: "write_journal_unavailable", message: "安全写入记录无法保存或读取，请恢复本地存储；未确认请求会保留，不会自动重发。") }
     private func invalidPayload() -> V15Failure { .init(kind: .decoding, code: "pending_write_invalid", message: "本地待处理请求无法读取，请保留记录并恢复存储。") }
 }

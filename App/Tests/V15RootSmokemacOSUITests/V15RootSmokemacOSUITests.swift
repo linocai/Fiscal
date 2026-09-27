@@ -36,6 +36,23 @@ final class V15RootSmokemacOSUITests: XCTestCase {
     private static let qaOnlyPassphrase = "f5b-root-smoke-qa-only"
     private let keychainServicePrefix = "com.linotsai.fiscal.v15-root-smoke.macos.access."
 
+    func testMerchantSuggestionCanBeConfirmedFromTransaction() {
+        let app = launchApp(service: uniqueKeychainService(), reviewScenario: "merchant-confirmation", formalFixture: true)
+        app.buttons["v151.mac.module.timeline"].click()
+        let row = app.buttons["v151.mac.transaction.00000000-0000-0000-0000-00000000B101"]
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.click()
+        let open = app.buttons["v240.merchant.open"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5)); open.click()
+        let save = app.buttons["v240.merchant.save"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["已识别到商户，确认后用于分析。"].exists)
+        XCTAssertTrue(save.isEnabled); save.click()
+        XCTAssertTrue(app.staticTexts["商户信息已保存。"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["当前商户：工作餐商户"].exists)
+        let capture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        capture.name = "build50-macos-merchant-confirmation"; capture.lifetime = .keepAlways; add(capture)
+    }
+
     private func uniqueKeychainService() -> String {
         "\(keychainServicePrefix)\(UUID().uuidString.lowercased())"
     }
@@ -249,7 +266,6 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         defer { _ = V15RootSmokeSupport.terminateRootSmokeApp() }
 
         XCTAssertTrue(app.descendants(matching: .any)["v15.f1a.bootstrap"].waitForExistence(timeout: 8))
-        XCTAssertFalse(app.descendants(matching: .any)["v15.gallery.macos"].exists)
     }
 
     func testFixtureTimelineSelectionSurvivesAnalysisRoundTrip() {
@@ -263,8 +279,10 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         transaction.click()
         XCTAssertTrue(inspector.waitForExistence(timeout: 5))
 
-        app.descendants(matching: .any)["v151.mac.module.reports"].firstMatch.click()
+        app.descendants(matching: .any)["v151.mac.module.overview"].firstMatch.click()
+        app.buttons["v221.mac.overview.analysis"].click()
         XCTAssertTrue(app.descendants(matching: .any)["v15.f4a.reports.macos"].waitForExistence(timeout: 8))
+        app.buttons["v151.mac.module.back"].click()
         app.descendants(matching: .any)["v151.mac.module.timeline"].firstMatch.click()
         XCTAssertTrue(inspector.waitForExistence(timeout: 5), "Returning from analysis must preserve the selected transaction context")
         let attachment = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
@@ -326,9 +344,10 @@ final class V15RootSmokemacOSUITests: XCTestCase {
             let app = launchApp(service: uniqueKeychainService(), formalFixture: true, scheme: scheme, accountOverflow: true, windowWidth: width)
             let overview = app.descendants(matching: .any)["v152.mac.overview"]
             XCTAssertTrue(overview.waitForExistence(timeout: 8))
-            for destination in ["overview", "timeline", "accounts", "reports"] {
+            for destination in ["overview", "timeline", "accounts"] {
                 XCTAssertTrue(app.buttons["v151.mac.module.\(destination)"].isHittable)
             }
+            XCTAssertTrue(app.buttons["v221.mac.overview.analysis"].isHittable)
             XCTAssertTrue(app.staticTexts["每日实际支出"].waitForExistence(timeout: 6))
             XCTAssertLessThanOrEqual(app.windows.firstMatch.frame.width, CGFloat(width + 2))
             let capture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
@@ -348,6 +367,7 @@ final class V15RootSmokemacOSUITests: XCTestCase {
             let app = launchApp(service: uniqueKeychainService(), formalFixture: true, scheme: scheme, windowWidth: 2000)
             let overview = app.scrollViews["v152.mac.overview"]
             XCTAssertTrue(overview.waitForExistence(timeout: 8))
+            XCTAssertTrue(app.buttons["v221.mac.overview.analysis"].isHittable)
             XCTAssertTrue(app.staticTexts["每日实际支出"].waitForExistence(timeout: 6))
             let window = app.windows.firstMatch
             XCTAssertGreaterThanOrEqual(overview.frame.width, window.frame.width - 250,
@@ -357,7 +377,10 @@ final class V15RootSmokemacOSUITests: XCTestCase {
             let bitmap = try XCTUnwrap(NSBitmapImageRep(data: screenshot.pngRepresentation))
             // Compare pixels within the same captured color space. Display
             // profiles can shift dark RGB values away from the token's hex.
-            let sampleY = bitmap.pixelsHigh - 48
+            // The bottom row crosses the recent-transactions card at the
+            // center, so it compares a card with the canvas gutters. Sample
+            // the clear band between the future summary and flow cards.
+            let sampleY = Int(Double(bitmap.pixelsHigh) * 0.40)
             let center = try XCTUnwrap(bitmap.colorAt(x: bitmap.pixelsWide / 2, y: sampleY)?.usingColorSpace(.sRGB))
             let canvas = [center.redComponent, center.greenComponent, center.blueComponent]
             XCTAssertTrue(scheme == "light" ? canvas.allSatisfy { $0 > 0.85 } : canvas.allSatisfy { $0 < 0.20 })
@@ -400,6 +423,22 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         let row = app.buttons["v220.mac.recent.transaction." + id]
         XCTAssertTrue(row.waitForExistence(timeout: 8)); row.click()
         XCTAssertTrue(app.staticTexts["v220.mac.detail.title." + id].waitForExistence(timeout: 8))
+    }
+
+    func testCreditAndInstallmentRoutesStartFromAccounts() {
+        let app = launchApp(service: uniqueKeychainService(), formalFixture: true)
+        app.buttons["v151.mac.module.accounts"].click()
+        let credit = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "v152.mac.accounts.credit.")).firstMatch
+        XCTAssertTrue(credit.waitForExistence(timeout: 8))
+        credit.click()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f3b1.credit.macos"].waitForExistence(timeout: 8))
+        XCTAssertEqual(app.buttons["v151.mac.module.back"].label, "返回账户")
+        app.buttons["v151.mac.module.back"].click()
+        let installments = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "v152.mac.accounts.installments.")).firstMatch
+        XCTAssertTrue(installments.waitForExistence(timeout: 8))
+        installments.click()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f3b2.installments.macos"].waitForExistence(timeout: 8))
+        XCTAssertEqual(app.buttons["v151.mac.module.back"].label, "返回账户")
     }
 
     func testOverviewFutureFailureRetriesAndReturnsToOverview() {
@@ -488,7 +527,6 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         defer { _ = V15RootSmokeSupport.terminateRootSmokeApp() }
         XCTAssertTrue(errorApp.descendants(matching: .any)["v15.f1a.bootstrap"].waitForExistence(timeout: 8))
         XCTAssertTrue(errorApp.buttons["重试"].waitForExistence(timeout: 8))
-        XCTAssertFalse(errorApp.descendants(matching: .any)["v15.gallery.macos"].exists)
         XCTAssertTrue(V15RootSmokeSupport.terminateRootSmokeApp())
         assertAppCleanup(service: errorService)
 
@@ -503,12 +541,11 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         XCTAssertTrue(offlineApp.descendants(matching: .any)["v151.mac.workspace"].waitForExistence(timeout: 12))
         let offlineBanner = offlineApp.staticTexts.matching(NSPredicate(format: "value BEGINSWITH %@", "离线 · 只读")).firstMatch
         XCTAssertTrue(offlineBanner.waitForExistence(timeout: 8))
-        XCTAssertFalse(offlineApp.descendants(matching: .any)["v15.gallery.macos"].exists)
         XCTAssertTrue(V15RootSmokeSupport.terminateRootSmokeApp())
         assertAppCleanup(service: offlineService)
     }
 
-    func testWorkspaceUsesFourFinancialSpacesAndKeepsDomainsContextual() {
+    func testWorkspaceUsesThreeFinancialSpacesAndKeepsDomainsContextual() {
         let service = uniqueKeychainService()
         let app = launchApp(service: service, formalFixture: true, accountOverflow: true)
         defer { _ = V15RootSmokeSupport.terminateRootSmokeApp() }
@@ -517,8 +554,8 @@ final class V15RootSmokemacOSUITests: XCTestCase {
             app.descendants(matching: .any)[identifier]
         }
 
-        let navigation = ["overview", "timeline", "accounts", "reports"]
-        func assertFourRootSpacesRemainVisible() {
+        let navigation = ["overview", "timeline", "accounts"]
+        func assertThreeRootSpacesRemainVisible() {
             for item in navigation {
                 XCTAssertTrue(element("v151.mac.module.\(item)").exists, item)
             }
@@ -529,7 +566,7 @@ final class V15RootSmokemacOSUITests: XCTestCase {
             }
         }
 
-        assertFourRootSpacesRemainVisible()
+        assertThreeRootSpacesRemainVisible()
         assertHiddenKeyboardCommandsStayOutOfAccessibilityTree()
         XCTAssertTrue(element("v152.mac.overview").exists)
         let overviewCapture = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
@@ -558,7 +595,7 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         XCTAssertTrue(element("v15.f3a.timeline.macos").waitForExistence(timeout: 8))
         XCTAssertEqual(element("v151.mac.module.back").label, "返回交易")
         element("v151.mac.module.back").click()
-        assertFourRootSpacesRemainVisible()
+        assertThreeRootSpacesRemainVisible()
 
         XCTAssertTrue(element("v151.mac.timeline.cash-flow").waitForExistence(timeout: 5))
         element("v151.mac.timeline.cash-flow").click()
@@ -566,16 +603,18 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         XCTAssertEqual(element("v151.mac.module.back").label, "返回交易")
         element("v151.mac.module.back").click()
         XCTAssertTrue(element("v151.mac.ledger.title").waitForExistence(timeout: 8))
-        assertFourRootSpacesRemainVisible()
+        assertThreeRootSpacesRemainVisible()
 
         XCTAssertTrue(element("v151.mac.ledger.search").exists)
         app.buttons["记一笔"].click()
         XCTAssertEqual(element("v151.mac.module.back").label, "返回交易")
         element("v151.mac.module.back").click()
 
-        element("v151.mac.module.reports").click()
+        element("v151.mac.module.overview").click()
+        element("v221.mac.overview.analysis").click()
         XCTAssertTrue(element("v15.f4a.reports.macos").exists)
-        XCTAssertFalse(element("v151.mac.module.title").exists)
+        XCTAssertEqual(element("v151.mac.module.back").label, "返回总览")
+        element("v151.mac.module.back").click()
 
         element("v151.mac.module.accounts").click()
         XCTAssertTrue(element("v152.mac.accounts").waitForExistence(timeout: 5))
@@ -583,8 +622,8 @@ final class V15RootSmokemacOSUITests: XCTestCase {
         XCTAssertTrue(element("v15.settings").exists)
         XCTAssertFalse(element("v151.mac.module.title").exists)
         XCTAssertTrue(element("v15.settings.pane.masterData").exists)
-        XCTAssertTrue(element("v15.settings.pane.proposals").exists)
-        XCTAssertTrue(element("v15.settings.pane.statementImport").exists)
+        XCTAssertTrue(element("v15.settings.pane.ai").exists)
+        XCTAssertFalse(element("v15.settings.pane.statementImport").exists)
 
         element("v15.settings.pane.archive").click()
         XCTAssertTrue(element("v15.settings.archive").waitForExistence(timeout: 5))

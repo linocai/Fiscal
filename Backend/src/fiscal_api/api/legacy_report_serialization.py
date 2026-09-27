@@ -11,7 +11,6 @@ from typing import Any, cast
 from fastapi.responses import JSONResponse
 
 from fiscal_api.api.p7_schemas import FactsDrillDownPage, ReportFacts
-from fiscal_api.api.p34_schemas import PeriodReport
 
 
 def facts_response(value: ReportFacts) -> JSONResponse:
@@ -27,25 +26,4 @@ def facts_drill_down_response(value: FactsDrillDownPage) -> JSONResponse:
     for item in cast(list[dict[str, Any]], content["items"]):
         if item.get("item_type") == "cash_account":
             item["last_reconciled_at"] = None
-    return JSONResponse(content=content)
-
-
-def period_report_response(value: PeriodReport) -> JSONResponse:
-    content = value.model_dump(mode="json")
-    completeness = cast(dict[str, Any], content["completeness"])
-    completeness["open_reconciliation_difference_count"] = 0
-    for key in (
-        "credit_debt_at_period_end_status",
-        "unknown_balance_account_ids",
-        "balance_unavailable_reason",
-    ):
-        content["summary"].pop(key, None)
-    for row in content["accounts"]:
-        for key in (
-            "opening_balance_status",
-            "closing_balance_status",
-            "balance_as_of_date",
-            "balance_unavailable_reason",
-        ):
-            row.pop(key, None)
     return JSONResponse(content=content)

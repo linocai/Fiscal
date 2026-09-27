@@ -1,6 +1,22 @@
 import FiscalKit
+import Foundation
 import UIKit
 @preconcurrency import UserNotifications
+
+@MainActor enum FiscalProposalNavigation {
+    static let didRequest = Notification.Name("fiscal.proposal.open")
+    static let proposalIDKey = "proposal_id"
+    private static var pendingID: UUID?
+
+    static func pendingProposalID() -> UUID? { pendingID }
+    static func consume(_ id: UUID) {
+        if pendingID == id { pendingID = nil }
+    }
+    static func request(_ id: UUID) {
+        pendingID = id
+        NotificationCenter.default.post(name: didRequest, object: nil, userInfo: [proposalIDKey: id])
+    }
+}
 
 enum FiscalNotificationContract {
     static let executedCategory = "FISCAL_AI_EXECUTED"
@@ -39,7 +55,7 @@ enum FiscalNotificationContract {
 }
 
 enum FiscalNotificationService {
-    static func notify(for proposal: AIProposalDTO) async {
+    static func notify(for proposal: V15AIProposal) async {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
@@ -53,7 +69,7 @@ enum FiscalNotificationService {
             guard let transactionID = proposal.transactionID,
                 let transactionVersion = proposal.transactionVersion
             else { return }
-            content.title = "Fiscal 已自动记账"
+            content.title = "Fiscal 记账已完成"
             content.body = "点按查看，或验证身份后从通知撤销。"
             content.categoryIdentifier = FiscalNotificationContract.executedCategory
             content.userInfo = [
@@ -64,7 +80,7 @@ enum FiscalNotificationService {
             ]
         case .pending:
             content.title = "Fiscal 需要你确认"
-            content.body = "识别结果已进入 AI 待确认。"
+            content.body = "识别结果已准备好，点按检查后记账。"
             content.categoryIdentifier = FiscalNotificationContract.pendingCategory
             content.userInfo = [FiscalNotificationContract.proposalID: proposal.id.uuidString]
         default:
@@ -93,11 +109,13 @@ enum FiscalNotificationService {
             return
         }
 
-        let repository = RemoteAIProposalRepository(
-            transport: APITransport(baseURL: APIConfiguration.baseURL())
-        )
+        let ai = await MainActor.run {
+            let policy = APIConfiguration.iOSAccessKeyPolicy(bundleIdentifier: Bundle.main.bundleIdentifier)
+            let accessKeyStore = AccessKeyStore(accessGroup: policy.accessGroup, prefersSynchronizable: policy.prefersSynchronizable)
+            return V15Services(baseURL: APIConfiguration.baseURL(), accessKeyStore: accessKeyStore).ai
+        }
         do {
-            _ = try await repository.undo(
+            _ = try await ai.undo(
                 id: proposalID,
                 expectedVersion: proposalVersion,
                 expectedTransactionVersion: transactionVersion
@@ -107,7 +125,7 @@ enum FiscalNotificationService {
             center.removeDeliveredNotifications(withIdentifiers: [identifier])
             center.removePendingNotificationRequests(withIdentifiers: [identifier])
             await postResult("这笔 AI 记账已安全撤销。")
-        } catch let error as FiscalAPIError where error.code == "ai_undo_transaction_changed" {
+        } catch let error as V15Failure where error.code == "ai_undo_transaction_changed" {
             await postResult("流水后来已被修改，旧通知不能撤销；请打开 Fiscal 处理。")
         } catch {
             await postResult("撤销没有完成，请打开 Fiscal 检查后重试。")
@@ -156,9 +174,14 @@ final class FiscalAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        guard response.actionIdentifier == FiscalNotificationContract.undoAction else { return }
-        await FiscalNotificationService.handleUndo(
-            userInfo: response.notification.request.content.userInfo
-        )
+        let userInfo = response.notification.request.content.userInfo
+        if response.actionIdentifier == FiscalNotificationContract.undoAction {
+            await FiscalNotificationService.handleUndo(userInfo: userInfo)
+            return
+        }
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+              let rawID = userInfo[FiscalNotificationContract.proposalID] as? String,
+              let proposalID = UUID(uuidString: rawID) else { return }
+        await MainActor.run { FiscalProposalNavigation.request(proposalID) }
     }
 }

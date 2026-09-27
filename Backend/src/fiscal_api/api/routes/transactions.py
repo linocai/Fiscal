@@ -7,7 +7,7 @@ from starlette import status
 
 from fiscal_api.api.dependencies import (
     ActionPreviewServiceDependency,
-    MerchantServiceDependency,
+    MerchantMappingServiceDependency,
     TransactionHistoryServiceDependency,
     TransactionServiceDependency,
     formal_mutation,
@@ -26,10 +26,10 @@ from fiscal_api.api.p10_schemas import (
     TransactionClassification,
 )
 from fiscal_api.api.p31_schemas import (
+    MerchantMappingRead,
     MerchantMappingReceipt,
     MerchantMappingReleaseRequest,
     MerchantMappingRequest,
-    MerchantMappingResponse,
     TransactionProvenanceResponse,
     TransactionRevisionPage,
 )
@@ -225,12 +225,11 @@ async def commit_category_change(
     return await service.commit_category(request.preview_token, idempotency_key)
 
 
-@router.get("/{transaction_id}/merchant-mapping", response_model=MerchantMappingResponse | None)
+@router.get("/{transaction_id}/merchant-mapping", response_model=MerchantMappingRead)
 async def transaction_merchant_mapping(
-    transaction_id: UUID,
-    service: MerchantServiceDependency,
-) -> MerchantMappingResponse | None:
-    return await service.mapping(transaction_id)
+    transaction_id: UUID, service: MerchantMappingServiceDependency
+) -> MerchantMappingRead:
+    return await service.read(transaction_id)
 
 
 @router.put(
@@ -241,10 +240,10 @@ async def transaction_merchant_mapping(
 async def confirm_transaction_merchant_mapping(
     transaction_id: UUID,
     request: MerchantMappingRequest,
-    service: MerchantServiceDependency,
+    service: MerchantMappingServiceDependency,
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
 ) -> MerchantMappingReceipt:
-    return await service.confirm_mapping(transaction_id, request, idempotency_key)
+    return await service.confirm(transaction_id, request, idempotency_key)
 
 
 @router.delete(
@@ -255,14 +254,10 @@ async def confirm_transaction_merchant_mapping(
 async def release_transaction_merchant_mapping(
     transaction_id: UUID,
     request: MerchantMappingReleaseRequest,
-    service: MerchantServiceDependency,
+    service: MerchantMappingServiceDependency,
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
 ) -> MerchantMappingReceipt:
-    return await service.release_mapping(
-        transaction_id,
-        request.expected_mapping_version,
-        idempotency_key,
-    )
+    return await service.release(transaction_id, request.expected_mapping_version, idempotency_key)
 
 
 @router.get("/{transaction_id}/revisions", response_model=TransactionRevisionPage)

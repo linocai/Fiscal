@@ -6,11 +6,7 @@ from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from fiscal_api.api.dependencies import ReportingServiceDependency
-from fiscal_api.api.legacy_report_serialization import (
-    facts_drill_down_response,
-    facts_response,
-    period_report_response,
-)
+from fiscal_api.api.legacy_report_serialization import facts_drill_down_response, facts_response
 from fiscal_api.api.p7_schemas import (
     CashFlowReport,
     DebtReport,
@@ -23,7 +19,6 @@ from fiscal_api.api.p7_schemas import (
 )
 from fiscal_api.api.p34_schemas import (
     SUPPORTED_REPORT_YEAR_RANGE,
-    PeriodReportDrillDownPage,
     PeriodReportDrillDownPageV2,
     PeriodReportV2,
     ReportPeriodKind,
@@ -31,7 +26,7 @@ from fiscal_api.api.p34_schemas import (
 from fiscal_api.core.middleware import DATA_REVISION_HEADER
 from fiscal_api.core.security import require_authenticated
 from fiscal_api.db.models import TransactionSource
-from fiscal_api.services.report_exports import report_csv, report_export_filename, report_pdf
+from fiscal_api.services.report_exports import report_csv, report_export_filename
 
 BALANCE_SEMANTICS_HEADER = "X-Fiscal-Report-Balance-Semantics"
 
@@ -163,33 +158,6 @@ async def future_events(
     )
 
 
-@router.get("/monthly/{period}", response_class=JSONResponse)
-async def monthly_report(
-    period: Annotated[
-        str,
-        Path(
-            pattern=r"^\d{4}-(0[1-9]|1[0-2])$",
-            description=f"Supported report years: {SUPPORTED_REPORT_YEAR_RANGE}",
-        ),
-    ],
-    service: ReportingServiceDependency,
-) -> JSONResponse:
-    return period_report_response(await service.monthly_report(period=period))
-
-
-@router.get("/yearly/{period}", response_class=JSONResponse)
-async def yearly_report(
-    period: Annotated[
-        str,
-        Path(
-            pattern=r"^\d{4}$", description=f"Supported report years: {SUPPORTED_REPORT_YEAR_RANGE}"
-        ),
-    ],
-    service: ReportingServiceDependency,
-) -> JSONResponse:
-    return period_report_response(await service.yearly_report(period=period))
-
-
 @router.get("/v2/monthly/{period}", response_model=PeriodReportV2)
 async def monthly_report_v2(
     period: Annotated[
@@ -224,7 +192,7 @@ async def export_monthly_report_v2_csv(
         Path(pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
     ],
     service: ReportingServiceDependency,
-    expected_data_revision: Annotated[int, Query(ge=0)],
+    expected_data_revision: Annotated[int | None, Query(ge=0)] = None,
 ) -> Response:
     report = await service.monthly_report_v2(
         period=period, expected_data_revision=expected_data_revision
@@ -233,24 +201,6 @@ async def export_monthly_report_v2_csv(
         report_csv(report),
         report_export_filename(report, "csv"),
         "text/csv; charset=utf-8",
-        data_revision=report.meta.data_revision,
-        balance_semantics=service.balance_as_of_semantics,
-    )
-
-
-@router.get("/v2/monthly/{period}/export.pdf", response_class=Response)
-async def export_monthly_report_v2_pdf(
-    period: Annotated[str, Path(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")],
-    service: ReportingServiceDependency,
-    expected_data_revision: Annotated[int, Query(ge=0)],
-) -> Response:
-    report = await service.monthly_report_v2(
-        period=period, expected_data_revision=expected_data_revision
-    )
-    return _report_file_response(
-        report_pdf(report),
-        report_export_filename(report, "pdf"),
-        "application/pdf",
         data_revision=report.meta.data_revision,
         balance_semantics=service.balance_as_of_semantics,
     )
@@ -260,7 +210,7 @@ async def export_monthly_report_v2_pdf(
 async def export_yearly_report_v2_csv(
     period: Annotated[str, Path(pattern=r"^\d{4}$")],
     service: ReportingServiceDependency,
-    expected_data_revision: Annotated[int, Query(ge=0)],
+    expected_data_revision: Annotated[int | None, Query(ge=0)] = None,
 ) -> Response:
     report = await service.yearly_report_v2(
         period=period, expected_data_revision=expected_data_revision
@@ -271,155 +221,6 @@ async def export_yearly_report_v2_csv(
         "text/csv; charset=utf-8",
         data_revision=report.meta.data_revision,
         balance_semantics=service.balance_as_of_semantics,
-    )
-
-
-@router.get("/v2/yearly/{period}/export.pdf", response_class=Response)
-async def export_yearly_report_v2_pdf(
-    period: Annotated[str, Path(pattern=r"^\d{4}$")],
-    service: ReportingServiceDependency,
-    expected_data_revision: Annotated[int, Query(ge=0)],
-) -> Response:
-    report = await service.yearly_report_v2(
-        period=period, expected_data_revision=expected_data_revision
-    )
-    return _report_file_response(
-        report_pdf(report),
-        report_export_filename(report, "pdf"),
-        "application/pdf",
-        data_revision=report.meta.data_revision,
-        balance_semantics=service.balance_as_of_semantics,
-    )
-
-
-@router.get("/monthly/{period}/export.csv", response_class=Response)
-async def export_monthly_report_csv(
-    period: Annotated[
-        str,
-        Path(
-            pattern=r"^\d{4}-(0[1-9]|1[0-2])$",
-            description=f"Supported report years: {SUPPORTED_REPORT_YEAR_RANGE}",
-        ),
-    ],
-    service: ReportingServiceDependency,
-    expected_data_revision: Annotated[int | None, Query(ge=0)] = None,
-) -> Response:
-    report = await service.monthly_report(
-        period=period, expected_data_revision=expected_data_revision
-    )
-    return _report_file_response(
-        report_csv(report),
-        report_export_filename(report, "csv"),
-        "text/csv; charset=utf-8",
-        data_revision=report.meta.data_revision,
-        balance_semantics=service.balance_as_of_semantics,
-    )
-
-
-@router.get("/monthly/{period}/export.pdf", response_class=Response)
-async def export_monthly_report_pdf(
-    period: Annotated[
-        str,
-        Path(
-            pattern=r"^\d{4}-(0[1-9]|1[0-2])$",
-            description=f"Supported report years: {SUPPORTED_REPORT_YEAR_RANGE}",
-        ),
-    ],
-    service: ReportingServiceDependency,
-    expected_data_revision: Annotated[int | None, Query(ge=0)] = None,
-) -> Response:
-    report = await service.monthly_report(
-        period=period, expected_data_revision=expected_data_revision
-    )
-    return _report_file_response(
-        report_pdf(report),
-        report_export_filename(report, "pdf"),
-        "application/pdf",
-        data_revision=report.meta.data_revision,
-        balance_semantics=service.balance_as_of_semantics,
-    )
-
-
-@router.get("/yearly/{period}/export.csv", response_class=Response)
-async def export_yearly_report_csv(
-    period: Annotated[
-        str,
-        Path(
-            pattern=r"^\d{4}$", description=f"Supported report years: {SUPPORTED_REPORT_YEAR_RANGE}"
-        ),
-    ],
-    service: ReportingServiceDependency,
-    expected_data_revision: Annotated[int | None, Query(ge=0)] = None,
-) -> Response:
-    report = await service.yearly_report(
-        period=period, expected_data_revision=expected_data_revision
-    )
-    return _report_file_response(
-        report_csv(report),
-        report_export_filename(report, "csv"),
-        "text/csv; charset=utf-8",
-        data_revision=report.meta.data_revision,
-        balance_semantics=service.balance_as_of_semantics,
-    )
-
-
-@router.get("/yearly/{period}/export.pdf", response_class=Response)
-async def export_yearly_report_pdf(
-    period: Annotated[
-        str,
-        Path(
-            pattern=r"^\d{4}$", description=f"Supported report years: {SUPPORTED_REPORT_YEAR_RANGE}"
-        ),
-    ],
-    service: ReportingServiceDependency,
-    expected_data_revision: Annotated[int | None, Query(ge=0)] = None,
-) -> Response:
-    report = await service.yearly_report(
-        period=period, expected_data_revision=expected_data_revision
-    )
-    return _report_file_response(
-        report_pdf(report),
-        report_export_filename(report, "pdf"),
-        "application/pdf",
-        data_revision=report.meta.data_revision,
-        balance_semantics=service.balance_as_of_semantics,
-    )
-
-
-@router.get("/period-drill-down", response_model=PeriodReportDrillDownPage)
-async def period_report_drill_down(
-    service: ReportingServiceDependency,
-    period_kind: Annotated[
-        ReportPeriodKind,
-        Query(description="Selects period format: month uses YYYY-MM; year uses YYYY."),
-    ],
-    period: Annotated[
-        str,
-        Query(
-            description=(
-                f"Supported report years: {SUPPORTED_REPORT_YEAR_RANGE}; "
-                "month uses YYYY-MM; year uses YYYY."
-            )
-        ),
-    ],
-    expected_data_revision: Annotated[int, Query(ge=0)],
-    category_id: UUID | None = None,
-    account_id: UUID | None = None,
-    merchant_id: UUID | None = None,
-    source: TransactionSource | None = None,
-    cursor: str | None = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
-) -> PeriodReportDrillDownPage:
-    return await service.period_report_drill_down(
-        period_kind=period_kind,
-        period=period,
-        expected_data_revision=expected_data_revision,
-        category_id=category_id,
-        account_id=account_id,
-        merchant_id=merchant_id,
-        source=source,
-        cursor=cursor,
-        limit=limit,
     )
 
 

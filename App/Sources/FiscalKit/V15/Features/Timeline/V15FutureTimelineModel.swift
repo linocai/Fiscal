@@ -3,7 +3,7 @@ import Observation
 
 public enum V15FutureOpenTarget: Sendable, Equatable {
     case creditCycle(V15CreditCycle)
-    case reimbursementParty(claim: V15ReimbursementClaim, partyID: UUID)
+    case reimbursementClaim(V15ReimbursementClaim)
     case cashFlowItem(V15CashFlowItem)
 }
 
@@ -156,16 +156,15 @@ public final class V15FutureTimelineModel {
                     throw V15Failure(kind: .conflict, code: "future_owner_changed", message: "这项信用账期的归属已经变化，请刷新时间线。")
                 }
                 target = .creditCycle(cycle)
-            case .reimbursementParty:
-                guard let claimID = event.claimID, let partyID = event.partyID else {
+            case .reimbursementClaim:
+                guard let claimID = event.claimID, claimID == event.sourceID else {
                     throw V15Failure(kind: .decoding, code: "future_owner_missing", message: "这项报销记录缺少归属信息。")
                 }
                 let claim = try await services.reimbursements.claim(id: claimID, readCachePolicy: .reloadIgnoringCache)
-                guard claim.id == claimID, partyID == event.sourceID,
-                      claim.parties.contains(where: { $0.id == partyID }) else {
+                guard claim.id == event.sourceID else {
                     throw V15Failure(kind: .conflict, code: "future_owner_changed", message: "这项报销记录的归属已经变化，请刷新时间线。")
                 }
-                target = .reimbursementParty(claim: claim, partyID: partyID)
+                target = .reimbursementClaim(claim)
             case .cashFlowItem:
                 let item = try await services.cashFlow.item(id: event.sourceID, readCachePolicy: .reloadIgnoringCache)
                 let accountMatches = event.accountID == nil || event.accountID == item.accountID || event.accountID == item.destinationAccountID
@@ -233,7 +232,7 @@ public final class V15FutureTimelineModel {
     private static func readingOrder(_ lhs: V15FutureEvent, _ rhs: V15FutureEvent) -> Bool {
         let certaintyRank: [V15FutureEventCertainty: Int] = [.exactDue: 0, .confirmed: 1, .scheduled: 2, .expected: 3]
         let directionRank: [V15FutureEventDirection: Int] = [.outflow: 0, .inflow: 1]
-        let sourceRank: [V15FutureEventSource: Int] = [.creditCycle: 0, .reimbursementParty: 1, .cashFlowItem: 2]
+        let sourceRank: [V15FutureEventSource: Int] = [.creditCycle: 0, .reimbursementClaim: 1, .cashFlowItem: 2]
         if certaintyRank[lhs.certainty] != certaintyRank[rhs.certainty] { return certaintyRank[lhs.certainty, default: .max] < certaintyRank[rhs.certainty, default: .max] }
         if directionRank[lhs.direction] != directionRank[rhs.direction] { return directionRank[lhs.direction, default: .max] < directionRank[rhs.direction, default: .max] }
         if sourceRank[lhs.sourceType] != sourceRank[rhs.sourceType] { return sourceRank[lhs.sourceType, default: .max] < sourceRank[rhs.sourceType, default: .max] }
@@ -253,9 +252,9 @@ public final class V15FutureTimelineModel {
         switch event.sourceType {
         case .creditCycle:
             return c.host == "credit" && event.cycleID == event.sourceID && hasTwoSegmentPath("cycles", event.sourceID)
-        case .reimbursementParty:
-            guard let claimID = event.claimID, event.partyID == event.sourceID else { return false }
-            return c.host == "reimbursements" && parts.count == 3 && matchesUUID(parts[0], claimID) && parts[1] == "parties" && matchesUUID(parts[2], event.sourceID)
+        case .reimbursementClaim:
+            guard event.claimID == event.sourceID else { return false }
+            return c.host == "reimbursements" && parts.count == 1 && matchesUUID(parts[0], event.sourceID)
         case .cashFlowItem:
             return c.host == "cash-flow" && hasTwoSegmentPath("items", event.sourceID)
         }

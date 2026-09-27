@@ -23,7 +23,6 @@ from fiscal_api.db.models import (
     Posting,
     ReimbursementAllocation,
     ReimbursementClaim,
-    ReimbursementParty,
     TransactionMerchantMapping,
     TransactionRevision,
 )
@@ -211,7 +210,7 @@ def test_history_balance_opt_in_legacy_and_exports():
         assert "opening_balance_status" not in known.json()["accounts"][0]
         assert "credit_debt_at_period_end_status" not in known.json()["summary"]
         legacy_v1 = client.get("/api/v1/reports/monthly/2026-08", headers=auth)
-        assert legacy_v1.status_code == 409
+        assert legacy_v1.status_code == 404
 
 
 def test_large_report_source_sets_have_bounded_binds_and_exact_totals():
@@ -270,19 +269,16 @@ def test_large_report_source_sets_have_bounded_binds_and_exact_totals():
                 merchant = Merchant(name="large fixture merchant")
                 claim = ReimbursementClaim(
                     title="large fixture claim",
+                    counterparty_name="fixture payer",
                     submitted_at=now,
                     create_idempotency_key=uuid4(),
                     create_request_hash="0" * 64,
                 )
                 session.add_all([merchant, claim])
                 await session.flush()
-                party = ReimbursementParty(claim_id=claim.id, name="fixture payer", position=0)
-                session.add(party)
-                await session.flush()
                 session.add(
                     ReimbursementAllocation(
                         claim_id=claim.id,
-                        party_id=party.id,
                         transaction_id=ids[-1],
                         amount_minor=1,
                         position=0,

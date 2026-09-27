@@ -32,7 +32,7 @@ struct P22RevisionTests {
     let transport = APITransport(
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
       responseCache: HTTPResponseCache(), offlineSnapshots: snapshotScope.store, revisionStore: store)
-    _ = try await transport.request("transactions", method: "POST") as TransactionPage
+    _ = try await transport.request("transactions", method: "POST") as V15Page<V15JSONRecord>
     #expect(store.latest == nil)
 
     store.accept(.init(revision: 9, scopes: ["accounts"]))
@@ -86,11 +86,11 @@ struct P22RevisionTests {
     }
     let transport = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(),
       token: "t", responseCache: cache, offlineSnapshots: snapshotScope.store, revisionStore: DataRevisionStore(defaults: nil))
-    _ = try await transport.request("transactions") as TransactionPage
+    _ = try await transport.request("transactions") as V15Page<V15JSONRecord>
     #expect(await cache.snapshot().entryCount == 1)
     try await transport.refreshDataRevision()
     #expect(await cache.snapshot().entryCount == 1)
-    _ = try await transport.request("transactions") as TransactionPage
+    _ = try await transport.request("transactions") as V15Page<V15JSONRecord>
     #expect(StubURLProtocol.requestCount == 2)
   }
 
@@ -111,9 +111,10 @@ struct P22RevisionTests {
 
   @Test("Offline snapshots encrypt request metadata and payload")
   func snapshotRoundTripKeepsPlaintextOutOfDisk() async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "fiscal-p22-\(UUID())")
-    let keyStore = SnapshotKeyStore(service: "FiscalKitTests.P22.\(UUID())")
-    let snapshots = OfflineSnapshotStore(directory: directory, keyStore: keyStore)
+    let scope = TestSnapshotScope()
+    defer { scope.cleanUp() }
+    let directory = scope.directory
+    let snapshots = scope.store
     let requestKey = "https://example.invalid/api/v1/accounts?name=private"
     let body = Data("private fiscal payload".utf8)
     await snapshots.store(body, for: requestKey)
@@ -121,42 +122,39 @@ struct P22RevisionTests {
     #expect(!String(decoding: encrypted, as: UTF8.self).contains("private"))
     let restored = await snapshots.data(for: requestKey)
     #expect(restored?.data == body)
-    try FileManager.default.removeItem(at: directory)
   }
 
   @Test("Offline fallback is cleared only by a live successful GET")
   @MainActor
   func liveGetClearsOfflineSnapshotState() async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "fiscal-p22-offline-\(UUID())")
-    let snapshots = OfflineSnapshotStore(
-      directory: directory, keyStore: SnapshotKeyStore(service: "FiscalKitTests.P22.\(UUID())"))
+    let scope = TestSnapshotScope()
+    defer { scope.cleanUp() }
+    let snapshots = scope.store
     let revisions = DataRevisionStore(defaults: nil)
     let page = Data(#"{"items":[],"next_cursor":null}"#.utf8)
     StubURLProtocol.install { _ in .init(body: page) }
     let seeded = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(),
       token: "t", responseCache: HTTPResponseCache(), offlineSnapshots: snapshots, revisionStore: revisions)
-    _ = try await seeded.request("transactions") as TransactionPage
+    _ = try await seeded.request("transactions") as V15Page<V15JSONRecord>
 
     StubURLProtocol.install { _ in .init(body: Data(), failure: URLError(.notConnectedToInternet)) }
     let offline = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(),
       token: "t", responseCache: HTTPResponseCache(), offlineSnapshots: snapshots, revisionStore: revisions)
-    _ = try await offline.request("transactions") as TransactionPage
+    _ = try await offline.request("transactions") as V15Page<V15JSONRecord>
     #expect(revisions.offlineSnapshotAt != nil)
 
     StubURLProtocol.install { _ in .init(body: page) }
     let recovered = APITransport(baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(),
       token: "t", responseCache: HTTPResponseCache(), offlineSnapshots: snapshots, revisionStore: revisions)
-    _ = try await recovered.request("transactions") as TransactionPage
+    _ = try await recovered.request("transactions") as V15Page<V15JSONRecord>
     #expect(revisions.offlineSnapshotAt == nil)
-    try FileManager.default.removeItem(at: directory)
   }
 
   @Test("Offline snapshots evict old entries and reject oversized responses")
   func snapshotStoreIsBounded() async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "fiscal-p22-bounded-\(UUID())")
-    let snapshots = OfflineSnapshotStore(
-      directory: directory, keyStore: SnapshotKeyStore(service: "FiscalKitTests.P22.\(UUID())"),
-      maxEntries: 2, maxPayloadBytes: 6, maxSingleResponseBytes: 4)
+    let scope = TestSnapshotScope(maxEntries: 2, maxPayloadBytes: 6, maxSingleResponseBytes: 4)
+    defer { scope.cleanUp() }
+    let snapshots = scope.store
     await snapshots.store(Data("aa".utf8), for: "old", now: .distantPast)
     await snapshots.store(Data("bb".utf8), for: "middle", now: .now)
     await snapshots.store(Data("cc".utf8), for: "new", now: .distantFuture)
@@ -166,25 +164,6 @@ struct P22RevisionTests {
     #expect(await snapshots.data(for: "middle")?.data == Data("bb".utf8))
     #expect(await snapshots.data(for: "new")?.data == Data("cc".utf8))
     #expect(await snapshots.data(for: "too-large") == nil)
-    try FileManager.default.removeItem(at: directory)
-  }
-
-  @Test("Explicit local draft preserves the idempotency key and never performs a request")
-  func localDraftRoundTripPreservesReplayProtection() async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "fiscal-p22-draft-\(UUID())")
-    let snapshots = OfflineSnapshotStore(
-      directory: directory, keyStore: SnapshotKeyStore(service: "FiscalKitTests.P22.\(UUID())"))
-    let drafts = TransactionLocalDraftStore(encryptedStore: snapshots)
-    StubURLProtocol.install { _ in .init(body: Data()) }
-    let key = UUID()
-    var draft = TransactionDraft(); draft.title = "未提交午餐"; draft.amountMinor = 1_200
-    await drafts.save(.init(draft: draft, amountText: "12.00", idempotencyKey: key))
-    let restored = await drafts.load()
-    #expect(restored?.draft == draft)
-    #expect(restored?.amountText == "12.00")
-    #expect(restored?.idempotencyKey == key)
-    #expect(StubURLProtocol.requestCount == 0)
-    try FileManager.default.removeItem(at: directory)
   }
 
   @Test("An offline snapshot blocks formal submission before any request")

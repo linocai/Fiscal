@@ -16,7 +16,6 @@ public final class V15AIProposalModel {
     public private(set) var pendingCount = 0
     public private(set) var nextCursor: String?
     public private(set) var selectedProposal: V15AIProposal?
-    public private(set) var qualityEvents: [V15AIQualityEvent] = []
     public private(set) var settings: V15AISettings?
     public private(set) var accounts: [V15AccountResponse] = []
     public private(set) var expenseCategories: [V15CategoryResponse] = []
@@ -27,7 +26,6 @@ public final class V15AIProposalModel {
     public private(set) var reviewConfirmed = false
     public private(set) var readbackCompleted = false
     public private(set) var recoveryMessage: String?
-    public private(set) var settingsContractViolation: V15Failure?
 
     public var source: V15AIProposalSource = .text { didSet { createInputChanged() } }
     public var inputText = "" { didSet { createInputChanged() } }
@@ -120,11 +118,6 @@ public final class V15AIProposalModel {
         return nil
     }
     public var writeLocked: Bool { stableAttempt != nil || !directAttempts.isEmpty || mutationPhase == .loading }
-    public var effectiveAutoExecute: Bool { settings?.effectiveAutoExecute ?? false }
-    public var settingsSafetyReason: V15DisabledReason? {
-        guard settingsContractViolation != nil else { return nil }
-        return .init(code: "ai_d3_contract_violation", message: "AI 安全设置异常；本页已停止所有保存操作。请重新打开此页面。", fieldPath: "effective_auto_execute")
-    }
     public var unknownCreateRetryReasons: [V15DisabledReason] {
         guard let attempt = stableAttempt else {
             return [.init(code: "ai_create_recovery_missing", message: "没有可安全重试的创建操作。", fieldPath: nil)]
@@ -132,8 +125,7 @@ public final class V15AIProposalModel {
         var reasons: [V15DisabledReason] = []
         if stableRecoveryPhase != .unknown { reasons.append(.init(code: "ai_create_recovery_in_flight", message: "正在等待本次创建结果，请稍候。", fieldPath: nil)) }
         if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时不能创建。", fieldPath: nil)) }
-        if let reason = settingsSafetyReason { reasons.append(reason) }
-        else if isSettingsLoading { reasons.append(.init(code: "ai_settings_loading", message: "正在读取 AI 安全设置，请稍候。", fieldPath: nil)) }
+        if isSettingsLoading { reasons.append(.init(code: "ai_settings_loading", message: "正在读取 AI 安全设置，请稍候。", fieldPath: nil)) }
         else if settings == nil { reasons.append(.init(code: "ai_settings_unavailable", message: settingsLoadFailure?.message ?? "AI 安全设置尚未读取完成。", fieldPath: nil)) }
         if attempt.mutationGeneration != mutationGeneration { reasons.append(.init(code: "ai_create_recovery_generation_mismatch", message: "安全设置已经变化；请先重新读取设置，再安全检查原内容。", fieldPath: nil)) }
         if !directAttempts.isEmpty { reasons.append(.init(code: "ai_write_in_flight", message: "另一项写操作仍在进行或结果未知。", fieldPath: nil)) }
@@ -216,11 +208,9 @@ public final class V15AIProposalModel {
             let newCycles = try await loadCreditCycles(accounts: newAccounts)
             guard generation == listGeneration else { return }
             isSettingsLoading = false
-            if settingsContractViolation == nil {
-                settings = newSettings
-                settingsLoadFailure = nil
-                authorizeStableCreateRecoveryAfterSafeSettings()
-            }
+            settings = newSettings
+            settingsLoadFailure = nil
+            authorizeStableCreateRecoveryAfterSafeSettings()
             accounts = newAccounts; expenseCategories = newExpense; incomeCategories = newIncome
             creditCycles = newCycles
             if directAttemptOwnerAtStart != nil {
@@ -237,8 +227,7 @@ public final class V15AIProposalModel {
         } catch let failure as V15Failure {
             guard generation == listGeneration else { return }
             isSettingsLoading = false
-            if Self.isSettingsContractViolation(failure) { enterSettingsContractViolation(failure) }
-            else { enterSettingsUnavailable(failure) }
+            enterSettingsUnavailable(failure)
             phase = failure.kind == .cancelled ? .idle : phaseAfterSettingsFailure(failure)
         } catch {
             guard generation == listGeneration else { return }
@@ -271,15 +260,13 @@ public final class V15AIProposalModel {
 
     public func select(_ proposal: V15AIProposal) async {
         selectionGeneration &+= 1; let generation = selectionGeneration
-        selectedProposal = proposal; syncConfirmation(for: proposal); qualityEvents = []; detailPhase = .loading
+        selectedProposal = proposal; syncConfirmation(for: proposal); detailPhase = .loading
         dismissEditor()
         restoreOwnerState(for: proposal.id)
         do {
-            async let proposalLoad = services.ai.proposal(id: proposal.id)
-            async let eventLoad = services.ai.qualityEvents(proposalID: proposal.id)
-            let (fresh, events) = try await (proposalLoad, eventLoad)
+            let fresh = try await services.ai.proposal(id: proposal.id)
             guard generation == selectionGeneration, selectedProposal?.id == proposal.id else { return }
-            selectedProposal = fresh; syncConfirmation(for: fresh); qualityEvents = events; detailPhase = .loaded
+            selectedProposal = fresh; syncConfirmation(for: fresh); detailPhase = .loaded
             replaceListFact(fresh)
             restoreOwnerState(for: fresh.id)
         } catch let failure as V15Failure {
@@ -296,7 +283,6 @@ public final class V15AIProposalModel {
         selectionGeneration &+= 1
         dismissEditor()
         selectedProposal = nil
-        qualityEvents = []
         detailPhase = .idle
         mutationPhase = .idle
     }
@@ -477,8 +463,6 @@ public final class V15AIProposalModel {
             } else if selectedProposal?.id == attempt.proposalID {
                 editorGeneration &+= 1; editorMode = .closed; confirmedReviews.removeValue(forKey: attempt.proposalID); reviewConfirmed = false
             }
-            let freshEvents = try? await services.ai.qualityEvents(proposalID: result.id, readCachePolicy: .reloadIgnoringCache)
-            if selectedProposal?.id == result.id, let freshEvents { qualityEvents = freshEvents }
         } catch let failure as V15Failure {
             guard directAttempts[attempt.proposalID] == attempt, attempt.mutationGeneration == mutationGeneration else { return }
             if attempt.isDelete, failure.code == "ai_proposal_not_found" {
@@ -530,7 +514,6 @@ public final class V15AIProposalModel {
         }
         selectionGeneration &+= 1
         selectedProposal = nil
-        qualityEvents = []
         detailPhase = .idle
         editorGeneration &+= 1
         editorMode = .closed
@@ -550,54 +533,18 @@ public final class V15AIProposalModel {
     }
 
     private func makeDraft() -> (value: V15AIProposalReviewDraft?, issues: [V15FieldIssue]) {
-        var issues: [V15FieldIssue] = []
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedNote = Self.canonicalNote(note)
-        let amount = CNYAmountParser.minorUnits(amountText)
-        if amount == nil || amount ?? 0 <= 0 { issues.append(.init(code: "amount_invalid", message: "金额必须大于 0，且最多两位小数。", fieldPath: "draft.amount_minor")) }
-        if trimmedTitle.isEmpty { issues.append(.init(code: "title_required", message: "请填写标题。", fieldPath: "draft.title")) }
-        if trimmedTitle.count > 120 { issues.append(.init(code: "title_too_long", message: "标题最多 120 个字符。", fieldPath: "draft.title")) }
-        if (trimmedNote?.count ?? 0) > 500 { issues.append(.init(code: "note_too_long", message: "备注最多 500 个字符。", fieldPath: "draft.note")) }
-        let cash = activeAccounts.filter { $0.kind == .cash || $0.kind == .debit }
-        let credit = activeAccounts.filter { $0.kind == .credit }
+        let draft = V15TransactionDraftRules.validate(
+            kind: kind, amountText: amountText, title: title, note: note,
+            accountID: accountID, categoryID: categoryID, destinationAccountID: destinationAccountID, creditCycleID: creditCycleID,
+            accounts: activeAccounts, categories: expenseCategories + incomeCategories, creditCycles: creditCycles,
+            fieldPathPrefix: "draft.")
+        var issues = draft.issues
         let target = selectedProposal?.target
         if target == .cashFlow, ![V15ManualTransactionKind.income, .expense, .transfer].contains(kind) {
             issues.append(.init(code: "cash_flow_kind_invalid", message: "未来现金流只支持收入、支出或转账。", fieldPath: "draft.kind"))
         }
-        switch kind {
-        case .expense, .income:
-            if accountID == nil || !cash.contains(where: { $0.id == accountID }) { issues.append(.init(code: "account_required", message: "请选择现金或借记账户。", fieldPath: "draft.account_id")) }
-            if destinationAccountID != nil { issues.append(.init(code: "destination_not_allowed", message: "收入或支出不能保留目标账户。", fieldPath: "draft.destination_account_id")) }
-            if creditCycleID != nil { issues.append(.init(code: "credit_cycle_not_allowed", message: "收入或支出不能保留信用账期。", fieldPath: "draft.credit_cycle_id")) }
-        case .transfer:
-            if accountID == nil || destinationAccountID == nil { issues.append(.init(code: "transfer_accounts_required", message: "请选择转出与转入账户。", fieldPath: "draft.destination_account_id")) }
-            if accountID == destinationAccountID { issues.append(.init(code: "transfer_accounts_same", message: "转出与转入账户不能相同。", fieldPath: "draft.destination_account_id")) }
-            if categoryID != nil { issues.append(.init(code: "category_not_allowed", message: "转账不能保留分类。", fieldPath: "draft.category_id")) }
-            if creditCycleID != nil { issues.append(.init(code: "credit_cycle_not_allowed", message: "转账不能保留信用账期。", fieldPath: "draft.credit_cycle_id")) }
-        case .creditPurchase:
-            if accountID == nil || !credit.contains(where: { $0.id == accountID && $0.cycleMode != "on_demand" }) { issues.append(.init(code: "credit_account_required", message: "请选择信用账户。", fieldPath: "draft.account_id")) }
-            if destinationAccountID != nil { issues.append(.init(code: "destination_not_allowed", message: "信用消费不能保留目标账户。", fieldPath: "draft.destination_account_id")) }
-            if creditCycleID != nil { issues.append(.init(code: "credit_cycle_not_allowed", message: "信用消费不能保留信用账期。", fieldPath: "draft.credit_cycle_id")) }
-        case .borrowing:
-            if !credit.contains(where: { $0.id == accountID && $0.cycleMode == "on_demand" }) { issues.append(.init(code: "on_demand_required", message: "借入来源须为随借随还账户。", fieldPath: "draft.account_id")) }
-            if !cash.contains(where: { $0.id == destinationAccountID }) { issues.append(.init(code: "cash_destination_required", message: "请选择实际收款账户。", fieldPath: "draft.destination_account_id")) }
-            if categoryID != nil || creditCycleID != nil { issues.append(.init(code: "borrowing_references_invalid", message: "借入不使用分类或账期。", fieldPath: "draft.credit_cycle_id")) }
-        case .repayment:
-            if accountID == nil || !cash.contains(where: { $0.id == accountID }) { issues.append(.init(code: "repayment_source_required", message: "请选择还款来源账户。", fieldPath: "draft.account_id")) }
-            if destinationAccountID == nil || !credit.contains(where: { $0.id == destinationAccountID }) { issues.append(.init(code: "repayment_destination_required", message: "请选择信用还款账户。", fieldPath: "draft.destination_account_id")) }
-            if creditCycleID == nil && !credit.contains(where: { $0.id == destinationAccountID && $0.cycleMode == "on_demand" }) { issues.append(.init(code: "credit_cycle_required", message: "还款必须保留或选择账期。", fieldPath: "draft.credit_cycle_id")) }
-            if categoryID != nil { issues.append(.init(code: "category_not_allowed", message: "还款不能保留分类。", fieldPath: "draft.category_id")) }
-        }
-        if kind == .expense || kind == .creditPurchase, categoryID != nil, !expenseCategories.contains(where: { $0.id == categoryID }) { issues.append(.init(code: "expense_category_mismatch", message: "请选择支出分类。", fieldPath: "draft.category_id")) }
-        if kind == .income, categoryID != nil, !incomeCategories.contains(where: { $0.id == categoryID }) { issues.append(.init(code: "income_category_mismatch", message: "请选择收入分类。", fieldPath: "draft.category_id")) }
-        if kind == .transfer {
-            if !allowedSource(accountID, for: .transfer) { issues.append(.init(code: "transfer_source_invalid", message: "请选择现金或借记转出账户。", fieldPath: "draft.account_id")) }
-            if !allowedDestination(destinationAccountID, for: .transfer, sourceID: accountID) { issues.append(.init(code: "transfer_destination_invalid", message: "请选择现金或借记转入账户。", fieldPath: "draft.destination_account_id")) }
-        }
-        if kind == .repayment, credit.contains(where: { $0.id == destinationAccountID && $0.cycleMode == "on_demand" }), creditCycleID != nil { issues.append(.init(code: "credit_cycle_not_allowed", message: "随借随还不使用账期。", fieldPath: "draft.credit_cycle_id")) }
-        if kind == .repayment, let cycleID = creditCycleID, let destinationAccountID, !creditCycles.contains(where: { $0.id == cycleID && $0.accountID == destinationAccountID }) { issues.append(.init(code: "credit_cycle_account_mismatch", message: "账期必须属于目标信用账户。", fieldPath: "draft.credit_cycle_id")) }
-        guard issues.isEmpty, let amount else { return (nil, issues) }
-        let wire = V15TransactionCreateRequest(kind: kind, amountMinor: amount, occurredAt: occurredAt, title: trimmedTitle, note: trimmedNote, accountID: accountID, categoryID: categoryID, destinationAccountID: destinationAccountID, creditCycleID: creditCycleID)
+        guard issues.isEmpty, let amount = draft.amountMinor else { return (nil, issues) }
+        let wire = V15TransactionCreateRequest(kind: kind, amountMinor: amount, occurredAt: occurredAt, title: draft.title, note: draft.note, accountID: accountID, categoryID: categoryID, destinationAccountID: destinationAccountID, creditCycleID: creditCycleID)
         return (target == .cashFlow ? .cashFlow(.init(wireDraft: wire)) : .transaction(wire), [])
     }
 
@@ -619,22 +566,13 @@ public final class V15AIProposalModel {
     }
 
     private func enterSettingsUnavailable(_ failure: V15Failure) {
-        guard settingsContractViolation == nil else { return }
         settings = nil
         settingsLoadFailure = failure
         invalidateMutationsForSettingsGate(failure, recoveryMessage: "无法读取安全设置；为保护数据，已暂停更改。你仍可以查看现有内容，并刷新后重试。")
     }
 
-    private func enterSettingsContractViolation(_ failure: V15Failure) {
-        settingsContractViolation = failure
-        settings = nil
-        settingsLoadFailure = nil
-        invalidateMutationsForSettingsGate(failure, recoveryMessage: "AI 安全设置异常；暂时无法确认操作结果。检查最新状态不会重复保存。")
-    }
-
     private func authorizeStableCreateRecoveryAfterSafeSettings() {
-        guard settingsContractViolation == nil,
-              stableRecoveryPhase == .unknown,
+        guard stableRecoveryPhase == .unknown,
               let attempt = stableAttempt,
               attempt.mutationGeneration != mutationGeneration
         else { return }
@@ -668,7 +606,7 @@ public final class V15AIProposalModel {
             readbackCompleted = false
             recoveryMessage = message
         } else {
-            mutationPhase = settingsContractViolation == nil ? .failed(failure) : .idle
+            mutationPhase = .failed(failure)
             readbackCompleted = false
             recoveryMessage = message
         }
@@ -678,8 +616,7 @@ public final class V15AIProposalModel {
         var reasons: [V15DisabledReason] = []
         if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时只可查看，不能修改。", fieldPath: nil)) }
         if writeLocked { reasons.append(.init(code: "ai_write_in_flight", message: "上一项写操作仍在进行或结果未知。", fieldPath: nil)) }
-        if let reason = settingsSafetyReason { reasons.append(reason) }
-        else if settings == nil { reasons.append(.init(code: "ai_settings_unavailable", message: settingsLoadFailure?.message ?? "AI 安全设置尚未读取完成。", fieldPath: nil)) }
+        if settings == nil { reasons.append(.init(code: "ai_settings_unavailable", message: settingsLoadFailure?.message ?? "AI 安全设置尚未读取完成。", fieldPath: nil)) }
         return Self.unique(reasons)
     }
 
@@ -714,7 +651,6 @@ public final class V15AIProposalModel {
         guard selectedProposal?.id != owner, let proposal = proposals.first(where: { $0.id == owner }) else { return }
         selectionGeneration &+= 1
         selectedProposal = proposal
-        qualityEvents = []
         detailPhase = .loaded
         editorGeneration &+= 1
         editorMode = .closed
@@ -740,12 +676,10 @@ public final class V15AIProposalModel {
         reviewConfirmed = false; serverIssues = []
     }
     private func allowedSource(_ id: UUID?, for kind: V15ManualTransactionKind) -> Bool {
-        guard let id else { return true }; guard let account = activeAccounts.first(where: { $0.id == id }) else { return false }
-        switch kind { case .expense, .income, .transfer, .repayment: return account.kind == .cash || account.kind == .debit; case .creditPurchase: return account.kind == .credit && account.cycleMode != "on_demand"; case .borrowing: return account.kind == .credit && account.cycleMode == "on_demand" }
+        V15TransactionReferenceRules.allowsSource(id, kind: kind, accounts: activeAccounts)
     }
     private func allowedDestination(_ id: UUID?, for kind: V15ManualTransactionKind, sourceID: UUID?) -> Bool {
-        guard let id else { return true }; guard let account = activeAccounts.first(where: { $0.id == id }) else { return false }
-        switch kind { case .transfer, .borrowing: return (account.kind == .cash || account.kind == .debit) && id != sourceID; case .repayment: return account.kind == .credit; case .expense, .income, .creditPurchase: return false }
+        V15TransactionReferenceRules.allowsDestination(id, kind: kind, sourceID: sourceID, accounts: activeAccounts)
     }
     private func editorFingerprint() -> String? {
         guard case .reviewing = editorMode, let target = selectedProposal?.target, let draft = makeDraft().value?.wireDraft else { return nil }
@@ -808,7 +742,6 @@ public final class V15AIProposalModel {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
-    private static func isSettingsContractViolation(_ failure: V15Failure) -> Bool { failure.code == "ai_settings_contract_violation" }
     private static func reason(_ issue: V15FieldIssue) -> V15DisabledReason { .init(code: issue.code, message: issue.message, fieldPath: issue.fieldPath) }
     private static func unique(_ values: [V15DisabledReason]) -> [V15DisabledReason] { var seen = Set<String>(); return values.filter { seen.insert("\($0.code)|\($0.fieldPath ?? "")").inserted } }
     private static func outcomeMayBeUnknown(_ failure: V15Failure) -> Bool { V15LedgerCreateService.outcomeMayBeUnknown(failure) }

@@ -12,16 +12,12 @@ from fiscal_api.api.p2_schemas import (
     CategoryOrderState,
     CategoryPatch,
     CategoryResponse,
-    CategorySplitRequest,
     VersionRequest,
 )
 from fiscal_api.api.p31_schemas import (
     CategoryMergeCommitRequest,
     CategoryMergePreview,
     CategoryMergePreviewRequest,
-    CategorySplitCommitRequest,
-    CategorySplitPreview,
-    CategorySplitPreviewRequest,
     CategoryTransformReceipt,
 )
 from fiscal_api.core.security import require_authenticated
@@ -160,23 +156,6 @@ async def merge_category(
     )
 
 
-@router.post(
-    "/{root_id}/split",
-    response_model=list[CategoryResponse],
-    dependencies=[formal_mutation("ledger", "reports", "ai")],
-)
-async def split_category(
-    root_id: UUID,
-    request: CategorySplitRequest,
-    service: CategoryServiceDependency,
-) -> list[CategoryResponse]:
-    return await service.split(
-        root_id=root_id,
-        root_expected_version=request.root_expected_version,
-        drafts=request.children,
-    )
-
-
 @router.post("/{source_id}/merge-preview", response_model=CategoryMergePreview)
 async def preview_category_merge(
     source_id: UUID,
@@ -198,26 +177,3 @@ async def commit_category_merge(
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
 ) -> CategoryTransformReceipt:
     return await service.merge_commit(source_id, request, idempotency_key)
-
-
-@router.post("/{root_id}/split-preview", response_model=CategorySplitPreview)
-async def preview_category_split(
-    root_id: UUID,
-    request: CategorySplitPreviewRequest,
-    service: CategoryServiceDependency,
-) -> CategorySplitPreview:
-    return await service.split_preview(root_id, request)
-
-
-@router.post(
-    "/{root_id}/split-commit",
-    response_model=CategoryTransformReceipt,
-    dependencies=[formal_mutation("ledger", "reports", "ai")],
-)
-async def commit_category_split(
-    root_id: UUID,
-    request: CategorySplitCommitRequest,
-    service: CategoryServiceDependency,
-    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
-) -> CategoryTransformReceipt:
-    return await service.split_commit(root_id, request, idempotency_key)

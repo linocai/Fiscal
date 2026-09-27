@@ -1,0 +1,35 @@
+{
+  "checked_at": "2026-09-26T10:28:02.508771+00:00",
+  "result": "7/7 byte-identical",
+  "baseline": "2d5cc840c4a558ced3fa5753606a9542c0f92618",
+  "files": {
+    "AGENTS.md": {
+      "sha256": "306dee0a24467b0c721ef083cfe666756ae2bb019a04658457324324d40115b3",
+      "bytes": 5942
+    },
+    "App/Fiscal.xcodeproj/xcshareddata/xcschemes/FiscaliOS.xcscheme": {
+      "sha256": "62751c8af676755c2722e17cd6c6667920c7bf123aa91c8e6a0b64cf4218f382",
+      "bytes": 3199
+    },
+    "App/Fiscal.xcodeproj/xcshareddata/xcschemes/FiscalmacOS.xcscheme": {
+      "sha256": "b2b2e7fd6c8da9a64fb8ac0f0d161d3951addee59d1b91b66fd1cfcc600808f2",
+      "bytes": 4169
+    },
+    "App/Fiscal.xcodeproj/xcshareddata/xcschemes/V15GalleryiOS.xcscheme": {
+      "sha256": "28fb7d91285f7032b1058f1ab2e7c6e7496065112c3f0ba90945fd3916f9b7ff",
+      "bytes": 3716
+    },
+    "App/Fiscal.xcodeproj/xcshareddata/xcschemes/V15GallerymacOS.xcscheme": {
+      "sha256": "24bee7cca28bc8e50e8b1f99147a26a73bf44192aa11db935eb43903d73fa5c7",
+      "bytes": 3742
+    },
+    "App/Fiscal.xcodeproj/xcshareddata/xcschemes/V15RootSmokeiOS.xcscheme": {
+      "sha256": "e72c37c8503ba1be6d39c4720e254ceeccd78cd3e91db2fe886084c5974f9622",
+      "bytes": 3740
+    },
+    "App/Fiscal.xcodeproj/xcshareddata/xcschemes/V15RootSmokemacOS.xcscheme": {
+      "sha256": "7bdfa006628711dee320e13aeee51d9520152116518b2f2ef225cae71c300d4f",
+      "bytes": 3766
+    }
+  }
+}

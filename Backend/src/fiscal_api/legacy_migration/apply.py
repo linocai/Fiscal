@@ -15,7 +15,6 @@ from fiscal_api.api.p3_schemas import TransactionDraft
 from fiscal_api.api.p6_schemas import (
     ReimbursementAllocationDraft,
     ReimbursementClaimDraft,
-    ReimbursementPartyDraft,
     ReimbursementReceiptDraft,
 )
 from fiscal_api.core.time import utc_now
@@ -336,15 +335,11 @@ class LegacyShadowApplier:
             ReimbursementClaimDraft(
                 title=item.title,
                 note=item.note,
-                parties=[
-                    ReimbursementPartyDraft(
-                        name=item.party_name,
-                        expected_date=item.expected_date,
-                        allocations=[
-                            ReimbursementAllocationDraft(
-                                transaction_id=expense_id, amount_minor=item.amount_minor
-                            )
-                        ],
+                counterparty_name=item.party_name,
+                expected_date=item.expected_date,
+                expenses=[
+                    ReimbursementAllocationDraft(
+                        transaction_id=expense_id, amount_minor=item.amount_minor
                     )
                 ],
             ),
@@ -367,13 +362,10 @@ class LegacyShadowApplier:
         claim_id = self._target(targets, "reimbursement_claims", item.claim_source_id)
         service = ReimbursementService(self.session)
         claim = await service.get(claim_id)
-        if len(claim.parties) != 1:
-            raise LegacyApplyConflict("ambiguous_claim_party", item.source.object_id)
         response = await service.create_receipt(
             claim_id,
             ReimbursementReceiptDraft(
                 expected_claim_version=claim.version,
-                party_id=claim.parties[0].id,
                 amount_minor=item.amount_minor,
                 received_at=item.received_at,
                 destination_account_id=self._target(

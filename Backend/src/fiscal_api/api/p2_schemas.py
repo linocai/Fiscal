@@ -226,8 +226,3 @@ class CategoryMergeRequest(APIModel):
     target_id: UUID
     source_expected_version: StrictInt = Field(ge=1)
     target_expected_version: StrictInt = Field(ge=1)
-
-
-class CategorySplitRequest(APIModel):
-    root_expected_version: StrictInt = Field(ge=1)
-    children: list[CategoryDraft] = Field(min_length=2)

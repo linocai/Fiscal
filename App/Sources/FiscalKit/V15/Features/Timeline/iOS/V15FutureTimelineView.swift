@@ -221,6 +221,6 @@ struct V15FutureEventRow: View {
     }
     private var certainty: String { switch event.certainty { case .exactDue: "到期日已确认"; case .confirmed: "已确认"; case .expected: "预计（尚未确认）"; case .scheduled: "已排期" } }
     private var direction: String { event.direction == .inflow ? "流入" : "流出" }
-    private var source: String { switch event.sourceType { case .creditCycle: "信用账期"; case .reimbursementParty: "报销对象"; case .cashFlowItem: "现金流事项" } }
+    private var source: String { switch event.sourceType { case .creditCycle: "信用账期"; case .reimbursementClaim: "报销待收"; case .cashFlowItem: "现金流事项" } }
 }
 #endif

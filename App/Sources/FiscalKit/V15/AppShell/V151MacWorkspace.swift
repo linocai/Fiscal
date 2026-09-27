@@ -134,12 +134,14 @@ public struct V151MacWorkspace: View {
     private enum ContextualOrigin {
         case overview
         case timeline
+        case accounts
         case future
 
         var destination: Destination {
             switch self {
             case .overview: .overview
             case .timeline: .timeline
+            case .accounts: .accounts
             case .future: .future
             }
         }
@@ -148,6 +150,7 @@ public struct V151MacWorkspace: View {
     private static let transactionRowHeight: CGFloat = 39
 
     private let services: V15Services
+    private let proposalOpenRequest: V15ProposalOpenRequest?
     @State private var ledger: V15LedgerModel
     @State private var overviewLedger: V15LedgerModel
     @State private var facts: V15TodayReadModel
@@ -177,6 +180,7 @@ public struct V151MacWorkspace: View {
     @State private var futureTimeline: V15FutureTimelineModel
     @State private var futureTimelineSelectedID: String?
     @State private var recordOrigin: Destination = .timeline
+    @State private var recordProposalID: UUID?
     @State private var futureOverviewOrigin: Destination = .timeline
     @State private var sidebarAccountGroup: SidebarAccountGroup?
     @State private var knownFutureOpenPhase: KnownFutureOpenPhase = .idle
@@ -187,13 +191,13 @@ public struct V151MacWorkspace: View {
     @State private var initialInstallmentPlanID: UUID?
     @State private var initialInstallmentPurchaseTransactionID: UUID?
     @State private var initialReimbursementClaimID: UUID?
-    @State private var initialReimbursementPartyID: UUID?
     @State private var initialReimbursementTransactionID: UUID?
     @FocusState private var searchFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(services: V15Services) {
+    public init(services: V15Services, proposalOpenRequest: V15ProposalOpenRequest? = nil) {
         self.services = services
+        self.proposalOpenRequest = proposalOpenRequest
         _ledger = State(initialValue: V15LedgerModel(services: services))
         _overviewLedger = State(initialValue: V15LedgerModel(services: services))
         _accountDetail = State(initialValue: V15AccountDetailModel(services: services))
@@ -208,6 +212,12 @@ public struct V151MacWorkspace: View {
         .background(V15Palette.canvas.color.ignoresSafeArea())
         .tint(V15Palette.teal.color)
         .task { await loadInitialFacts() }
+        .task(id: proposalOpenRequest?.id) {
+            guard let proposalOpenRequest else { return }
+            if destination != .record { recordOrigin = destination }
+            recordProposalID = proposalOpenRequest.proposalID
+            destination = .record
+        }
         .onChange(of: services.confirmedWriteRevision) { _, _ in Task { await refreshAfterConfirmedRecord() } }
         .sheet(isPresented: $categoryPresented) { categorySheet }
         .overlay { if destination == .timeline { keyboardCommands } }
@@ -235,7 +245,7 @@ public struct V151MacWorkspace: View {
                 }
             } else {
                 modulePane.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(V15Palette.canvas.color.ignoresSafeArea())
+                    .background((destination == .overview ? V15Palette.paper : V15Palette.canvas).color.ignoresSafeArea())
             }
         }
         .navigationSplitViewStyle(.balanced)
@@ -275,7 +285,6 @@ public struct V151MacWorkspace: View {
                 moduleNavigation("总览", symbol: "square.grid.2x2", destination: .overview, compact: compact)
                 moduleNavigation("交易", symbol: "list.bullet.rectangle", destination: .timeline, compact: compact)
                 moduleNavigation("账户", symbol: "building.columns", destination: .accounts, compact: compact)
-                moduleNavigation("分析", symbol: "chart.line.uptrend.xyaxis", destination: .reports, compact: compact)
             }
             .padding(.horizontal, compact ? 10 : 12)
             if !compact {
@@ -743,7 +752,7 @@ public struct V151MacWorkspace: View {
     private func knownFutureSourceLabel(_ source: V15FutureEventSource) -> String {
         switch source {
         case .creditCycle: "信用账期 · 有来源"
-        case .reimbursementParty: "报销对象 · 有来源"
+        case .reimbursementClaim: "报销待收 · 有来源"
         case .cashFlowItem: "现金流事项 · 有来源"
         }
     }
@@ -1020,6 +1029,7 @@ public struct V151MacWorkspace: View {
                 }
             }
             fieldCard(transaction, presentation: presentation)
+            V15MerchantMappingButton(services: services, transaction: transaction).id(transaction.id)
             inspectorSection("来源链") {
                 HStack(spacing: 8) {
                     Text(sourceLabel(transaction.source)).font(.system(size: 12, weight: .semibold)).foregroundStyle(V15Palette.teal.color).padding(.horizontal, 9).padding(.vertical, 5).background(V15Palette.selected.color, in: RoundedRectangle(cornerRadius: 5))
@@ -1124,10 +1134,10 @@ public struct V151MacWorkspace: View {
                         .accessibilityIdentifier("v151.mac.transaction.installment.\(planID)")
                     }
                     ForEach(Array(transaction.reimbursementRelations.enumerated()), id: \.offset) { _, relation in
-                        V15ActionButton("报销 · \(relation.claimTitle)\(relation.partyName.map { " · \($0)" } ?? "")", kind: .secondary) {
-                            openReimbursements(claimID: relation.claimID, partyID: relation.partyID, from: .timeline)
+                        V15ActionButton("报销 · \(relation.claimTitle) · \(relation.counterpartyName)", kind: .secondary) {
+                            openReimbursements(claimID: relation.claimID, from: .timeline)
                         }
-                        .accessibilityIdentifier("v151.mac.transaction.reimbursement.\(relation.claimID).\(relation.partyID?.uuidString ?? "claim")")
+                        .accessibilityIdentifier("v151.mac.transaction.reimbursement.\(relation.claimID)")
                     }
                 }
             }
@@ -1228,7 +1238,7 @@ public struct V151MacWorkspace: View {
 
     private var showsModuleHeader: Bool {
         switch destination {
-        case .overview, .timeline, .accounts, .reports, .settings: false
+        case .overview, .timeline, .accounts, .settings: false
         default: true
         }
     }
@@ -1240,7 +1250,8 @@ public struct V151MacWorkspace: View {
             secondaryModuleHeader("有来源未来", parent: futureOverviewOrigin)
         case .pendingSync:
             secondaryModuleHeader("待同步", parent: .settings)
-        case .reports, .settings: EmptyView()
+        case .reports: secondaryModuleHeader("财务分析", parent: .overview)
+        case .settings: EmptyView()
         case .record: secondaryModuleHeader("记一笔", parent: recordOrigin)
         case .credit: secondaryModuleHeader("信用账期", parent: contextualOrigin.destination)
         case .installments: secondaryModuleHeader("分期", parent: contextualOrigin.destination)
@@ -1289,15 +1300,16 @@ public struct V151MacWorkspace: View {
             openPendingSync: openPendingSync,
             openAllFuture: openFutureOverview,
             openRecord: { openRecord() },
-            openReports: { navigateRoot(to: .reports) },
+            openReports: { openReportsFromOverview() },
             openFuture: { event in openKnownFuture(event, from: .overview) }
         )
         case .timeline: EmptyView()
         case .accounts: V152MacAccountsHub(ledger: ledger, selectAccount: { id in
             navigateRoot(to: .timeline)
             selectAccount(id)
-        }, openSettings: { navigateRoot(to: .settings) }, retry: { Task { await refreshLedgerReferencesAndReconcileSelectedAccount() } })
-        case .record: V15RecordView(services: services, onCommitted: recordCommitted)
+        }, openCredit: { id in openCredit(accountID: id, from: .accounts) }, openInstallments: { id in openInstallments(accountID: id, from: .accounts) }, openSettings: { navigateRoot(to: .settings) }, retry: { Task { await refreshLedgerReferencesAndReconcileSelectedAccount() } })
+        case .record: V15RecordView(services: services, initialProposalID: recordProposalID, onCommitted: recordCommitted)
+            .id(proposalOpenRequest?.id)
         case .future:
             V15FutureTimelineMacView(model: futureTimeline, selectedID: $futureTimelineSelectedID) { target in
                 openVerifiedFutureTarget(target, from: .future)
@@ -1313,12 +1325,11 @@ public struct V151MacWorkspace: View {
                 initialPurchaseTransactionID: initialInstallmentPurchaseTransactionID
             )
         case .reimbursements:
-            if case .reimbursementParty(let claim, let partyID) = futureTarget { V15ReimbursementMacView(services: services, initialClaim: claim, initialPartyID: partyID) }
+            if case .reimbursementClaim(let claim) = futureTarget { V15ReimbursementMacView(services: services, initialClaim: claim) }
             else {
                 V15ReimbursementMacView(
                     services: services,
                     initialClaimID: initialReimbursementClaimID,
-                    initialPartyID: initialReimbursementPartyID,
                     initialTransactionID: initialReimbursementTransactionID
                 )
             }
@@ -1339,7 +1350,7 @@ public struct V151MacWorkspace: View {
         futureTarget = target
         switch target {
         case .creditCycle: destination = .credit
-        case .reimbursementParty: destination = .reimbursements
+        case .reimbursementClaim: destination = .reimbursements
         case .cashFlowItem: destination = .cashFlow
         }
     }
@@ -1357,10 +1368,18 @@ public struct V151MacWorkspace: View {
 
     private func openRecord() {
         recordOrigin = destination
+        recordProposalID = nil
         invalidateKnownFutureOpen()
         futureTarget = nil
         clearSpecialistInitialTargets()
         destination = .record
+    }
+
+    private func openReportsFromOverview() {
+        invalidateKnownFutureOpen()
+        futureTarget = nil
+        clearSpecialistInitialTargets()
+        destination = .reports
     }
 
     private func openFutureOverview() {
@@ -1391,13 +1410,12 @@ public struct V151MacWorkspace: View {
         destination = .installments
     }
 
-    private func openReimbursements(claimID: UUID? = nil, partyID: UUID? = nil, transactionID: UUID? = nil, from origin: ContextualOrigin) {
+    private func openReimbursements(claimID: UUID? = nil, transactionID: UUID? = nil, from origin: ContextualOrigin) {
         invalidateKnownFutureOpen()
         futureTarget = nil
         clearSpecialistInitialTargets()
         contextualOrigin = origin
         initialReimbursementClaimID = claimID
-        initialReimbursementPartyID = partyID
         initialReimbursementTransactionID = transactionID
         destination = .reimbursements
     }
@@ -1449,7 +1467,6 @@ public struct V151MacWorkspace: View {
         initialInstallmentPlanID = nil
         initialInstallmentPurchaseTransactionID = nil
         initialReimbursementClaimID = nil
-        initialReimbursementPartyID = nil
         initialReimbursementTransactionID = nil
     }
 
@@ -1869,7 +1886,7 @@ private struct V152MacOverview: View {
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(V15Palette.canvas.color.ignoresSafeArea())
+        .background(V15Palette.paper.color.ignoresSafeArea())
         .task(id: facts.facts?.meta.dataRevision) { await refreshMonthlyReport() }
         .accessibilityIdentifier("v152.mac.overview")
     }
@@ -2094,8 +2111,6 @@ private struct V152MacOverview: View {
         HStack(spacing: 24) {
             Text("需要留意").font(V15Typography.label)
             careRow("未分类交易", count: snapshot.completeness.uncategorizedTransactionCount)
-            careRow("待处理导入", count: snapshot.completeness.unresolvedImportCount)
-            careRow("导入失败", count: snapshot.completeness.failedImportCount)
         }
         .foregroundStyle(V15Palette.ink.color.opacity(0.65))
     }
@@ -2122,6 +2137,8 @@ private struct V152MacOverview: View {
 private struct V152MacAccountsHub: View {
     let ledger: V15LedgerModel
     let selectAccount: (UUID) -> Void
+    let openCredit: (UUID) -> Void
+    let openInstallments: (UUID) -> Void
     let openSettings: () -> Void
     let retry: () -> Void
     @State private var query = ""
@@ -2182,24 +2199,37 @@ private struct V152MacAccountsHub: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(values.enumerated()), id: \.element.id) { index, account in
-                        Button { selectAccount(account.id) } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: account.kind == .credit ? "creditcard" : "building.columns")
-                                    .foregroundStyle(account.kind == .credit ? V15Palette.outflow.color : V15Palette.teal.color)
-                                    .frame(width: 26)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(account.name).font(V15Typography.body.weight(.semibold))
-                                    Text(account.institution ?? kind(account.kind)).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                        VStack(alignment: .leading, spacing: 0) {
+                            Button { selectAccount(account.id) } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: account.kind == .credit ? "creditcard" : "building.columns")
+                                        .foregroundStyle(account.kind == .credit ? V15Palette.outflow.color : V15Palette.teal.color)
+                                        .frame(width: 26)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(account.name).font(V15Typography.body.weight(.semibold))
+                                        Text(account.institution ?? kind(account.kind)).font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.56))
+                                    }
+                                    Spacer()
+                                    V15MoneyText(minorUnits: account.currentBalanceMinor, direction: V151MacAccountBalanceSemantics.direction(account.kind, minorUnits: account.currentBalanceMinor), font: V15Typography.money)
+                                        .frame(minWidth: 112, alignment: .trailing)
+                                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(V15Palette.ink.color.opacity(0.38))
                                 }
-                                Spacer()
-                                V15MoneyText(minorUnits: account.currentBalanceMinor, direction: V151MacAccountBalanceSemantics.direction(account.kind, minorUnits: account.currentBalanceMinor), font: V15Typography.money)
-                                    .frame(minWidth: 112, alignment: .trailing)
-                                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(V15Palette.ink.color.opacity(0.38))
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                                .contentShape(Rectangle())
                             }
-                            .padding(.horizontal, 16).padding(.vertical, 14)
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                            if account.kind == .credit {
+                                HStack(spacing: V15Spacing.sm) {
+                                    V15ActionButton(account.cycleMode == "on_demand" ? "借入与还款" : "信用账期", kind: .quiet) { openCredit(account.id) }
+                                        .accessibilityIdentifier("v152.mac.accounts.credit.\(account.id)")
+                                    if account.cycleMode != "on_demand" {
+                                        V15ActionButton("分期计划", kind: .quiet) { openInstallments(account.id) }
+                                            .accessibilityIdentifier("v152.mac.accounts.installments.\(account.id)")
+                                    }
+                                }
+                                .padding(.leading, 54).padding(.bottom, V15Spacing.sm)
+                            }
                         }
-                        .buttonStyle(.plain)
                         if index < values.count - 1 {
                             Rectangle().fill(V15Palette.hairline.color.opacity(0.8)).frame(height: 1).padding(.leading, 54)
                         }

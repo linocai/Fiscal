@@ -3,14 +3,13 @@ import SwiftUI
 private enum V15InstallmentMacCreationMode { case purchase, existingPurchase }
 
 public struct V15InstallmentMacView: View {
-    private enum InspectorMode: String, CaseIterable { case facts = "详情", edit = "修改", command = "操作" }
+    public enum InspectorMode: String, CaseIterable { case facts = "详情", edit = "修改", command = "操作" }
     @State private var model: V15InstallmentModel
     @State private var inspectorMode: InspectorMode = .facts
     @State private var showsCreation: Bool
     @State private var creationMode: V15InstallmentMacCreationMode
-    @State private var appliedGalleryScenario = false
     @State private var appliedInitialContext = false
-    private let initialGalleryScenario: String?
+    private let preparesOwnModel: Bool
     private let initialAccountID: UUID?
     private let initialPlanID: UUID?
     private let initialPurchaseTransactionID: UUID?
@@ -18,7 +17,6 @@ public struct V15InstallmentMacView: View {
     @MainActor public init(
         services: V15Services,
         offlineSnapshotAt: Date? = nil,
-        initialGalleryScenario: String? = nil,
         initialAccountID: UUID? = nil,
         initialPlanID: UUID? = nil,
         initialPurchaseTransactionID: UUID? = nil,
@@ -29,10 +27,21 @@ public struct V15InstallmentMacView: View {
         _model = State(initialValue: model)
         _showsCreation = State(initialValue: initialPurchaseTransactionID != nil)
         _creationMode = State(initialValue: initialPurchaseTransactionID == nil ? .purchase : .existingPurchase)
-        self.initialGalleryScenario = initialGalleryScenario
+        preparesOwnModel = true
         self.initialAccountID = initialAccountID
         self.initialPlanID = initialPlanID
         self.initialPurchaseTransactionID = initialPurchaseTransactionID
+    }
+
+    @MainActor public init(model: V15InstallmentModel, initialInspector: InspectorMode = .facts) {
+        _model = State(initialValue: model)
+        _inspectorMode = State(initialValue: initialInspector)
+        _showsCreation = State(initialValue: false)
+        _creationMode = State(initialValue: .purchase)
+        preparesOwnModel = false
+        initialAccountID = nil
+        initialPlanID = nil
+        initialPurchaseTransactionID = nil
     }
 
     public var body: some View {
@@ -64,22 +73,11 @@ public struct V15InstallmentMacView: View {
             Button { creationMode = .purchase; showsCreation = true } label: { Label("新分期", systemImage: "plus") }.accessibilityIdentifier("v15.f3b2.mac.create")
         }
         .task {
+            guard preparesOwnModel else { return }
             if case .idle = model.phase { await model.load(initialAccountID: initialAccountID, initialPlanID: initialPlanID) }
             if !appliedInitialContext {
                 appliedInitialContext = true
                 if initialPurchaseTransactionID != nil { await model.checkEligibility() }
-            }
-            guard !appliedGalleryScenario else { return }
-            appliedGalleryScenario = true
-            switch initialGalleryScenario {
-            case "installments-page-error": await model.loadNextPage()
-            case "installments-update-unknown-confirmed":
-                guard let plan = model.plans.first else { return }
-                await model.selectPlan(plan); inspectorMode = .edit; await model.requestPlanPreview()
-            case "installments-command-unknown":
-                guard let plan = model.plans.first else { return }
-                await model.selectPlan(plan); inspectorMode = .command; await model.requestCommandPreview()
-            default: break
             }
         }
         .sheet(isPresented: $showsCreation, onDismiss: model.dismissEditor) { V15InstallmentMacCreationView(model: model, mode: creationMode).frame(minWidth: 620, minHeight: 640) }

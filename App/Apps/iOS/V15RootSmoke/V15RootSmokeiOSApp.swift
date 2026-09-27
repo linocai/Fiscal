@@ -1,5 +1,7 @@
 import FiscalKit
+import FiscalPreviewSupportiOS
 import SwiftUI
+import UIKit
 
 /// Isolated local-network launch target for the formal V15 composition.  This
 /// target intentionally shares `V15IOSLiveAppShell` with FiscaliOS while its
@@ -69,6 +71,9 @@ struct V15RootSmokeiOSApp: App {
                 V15RootSmokeCleanupView(accessKeyStore: accessKeyStore, offlineSnapshots: offlineSnapshots)
             } else if let bootstrapFixtureServices {
                 V15IOSLiveAppShell(services: bootstrapFixtureServices)
+            } else if formalFixture && ProcessInfo.processInfo.environment["FISCAL_ROOT_SMOKE_UI_ROUTE"] == "proposal" {
+                V240ProposalRouteHost(services: V15F2BFixtures.services(route: formalFixtureRoute, reviewScenario: "proposal-bootstrap-delay"))
+                    .preferredColorScheme(preferredScheme)
             } else if formalFixture && ProcessInfo.processInfo.environment["FISCAL_ROOT_SMOKE_UI_ROUTE"] == "payoff" {
                 V15CreditPayoffView(services: V230Fixtures.services(scenario: ProcessInfo.processInfo.environment["FISCAL_ROOT_SMOKE_REVIEW_SCENARIO"] ?? "v230"), accountID: V230Fixtures.accountID, accountName: "随借随还示例")
                     .preferredColorScheme(preferredScheme)
@@ -85,15 +90,42 @@ struct V15RootSmokeiOSApp: App {
     }
 }
 
+/// QA-only URL handoff host. The isolated bundle owns fiscal-qa, while the
+/// production root still parses the canonical fiscal proposal destination.
+private struct V240ProposalRouteHost: View {
+    let services: V15Services
+    private let proposalURL = URL(string: "fiscal-qa://ai/proposals/\(V15F3FFixtures.createdID.uuidString)")!
+    private let otherProposalURL = URL(string: "fiscal-qa://ai/proposals/\(V15F3FFixtures.pendingID.uuidString)")!
+    private let invalidURL = URL(string: "fiscal-qa://ai/proposals/not-a-uuid")!
+
+    var body: some View {
+        IOSRootView(services: services, bootstrapAccessKey: nil, qaURLScheme: "fiscal-qa")
+            .overlay(alignment: .topTrailing) {
+                VStack {
+                    Button("QA 打开现有提案") { UIApplication.shared.open(proposalURL) }
+                        .accessibilityIdentifier("v240.qa.proposal.hot")
+                    Button("QA 打开另一提案") { UIApplication.shared.open(otherProposalURL) }
+                        .accessibilityIdentifier("v240.qa.proposal.other")
+                    Button("QA 打开无效提案") { UIApplication.shared.open(invalidURL) }
+                        .accessibilityIdentifier("v240.qa.proposal.invalid")
+                }
+                .font(.caption2)
+                .padding(.top, 64)
+                .padding(.trailing, 8)
+            }
+    }
+}
+
 /// Read actual device settings; these EnvironmentValues are read-only.
 private struct V220AccessibilitySettingsMarker: View {
     @Environment(\.accessibilityReduceMotion) private var motion
     @Environment(\.accessibilityReduceTransparency) private var transparency
     var body: some View {
-        Color.clear.frame(width: 1, height: 1)
+        let settingValue = "motion=\(motion);transparency=\(transparency)"
+        return Color.clear.frame(width: 1, height: 1)
             .accessibilityElement()
             .accessibilityLabel("辅助功能验证")
-            .accessibilityValue("motion=\(motion);transparency=\(transparency)")
+            .accessibilityValue(Text(verbatim: settingValue))
             .accessibilityIdentifier("v220.qa.accessibility-settings")
             .allowsHitTesting(false)
     }

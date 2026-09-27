@@ -43,11 +43,74 @@ assert (
 ARCHIVE_MAGIC = b"FISCAL-ARCHIVE-V1\n"
 ARCHIVE_SCHEMA = "fiscal-archive-v1"
 API_SCHEMA = "fiscal-api-v1"
-CURRENT_DATABASE_REVISION = "20260922_0041"
+CURRENT_DATABASE_REVISION = "20260926_0042"
+V41_DATABASE_REVISION = "20260922_0041"
 V40_DATABASE_REVISION = "20260912_0040"
 PREVIOUS_DATABASE_REVISION = "20260910_0039"
 _V40_TABLES = {"credit_payoff_operations", "credit_payoff_links", "cash_flow_settlement_links"}
 LEGACY_DATABASE_REVISION = "20260831_0038"
+_RETIRED_STATEMENT_TABLES = {
+    "statement_imports",
+    "statement_import_pages",
+    "statement_import_rows",
+    "statement_import_attempts",
+    "statement_import_resolutions",
+    "statement_import_operations",
+    "statement_import_provider_attempts",
+    "statement_import_provider_attempt_snapshots",
+    "statement_import_provider_snapshot_source_refs",
+    "statement_import_validation_runs",
+    "statement_import_validation_checks",
+    "statement_import_review_candidates",
+    "statement_import_draft_resolutions",
+    "statement_import_confirmation_operations",
+    "statement_import_transaction_provenance",
+    "statement_import_final_create_drafts",
+}
+_RETIRED_AI_TABLES = {
+    "ai_quality_events",
+    "ai_execution_policies",
+    "ai_shadow_evaluations",
+}
+_RETIRED_V240_TABLES = _RETIRED_STATEMENT_TABLES | _RETIRED_AI_TABLES | {"reimbursement_parties"}
+_LEGACY_COLUMN_ADDITIONS = {
+    "reimbursement_allocations": {"party_id"},
+    "reimbursement_receipts": {"party_id"},
+    "ai_settings": {"auto_execute_enabled", "auto_execute_limit_minor", "minimum_confidence_bps"},
+    "ai_proposals": {"initial_parse_snapshot", "final_confirmed_snapshot", "final_field_diff"},
+}
+_LEGACY_COLUMN_REMOVALS = {
+    "reimbursement_claims": {"counterparty_name", "expected_date"},
+}
+_LEGACY_RETIRED_COLUMNS = {
+    "reimbursement_parties": {"id", "claim_id", "name", "expected_date", "note", "position"},
+    "ai_quality_events": {"id", "proposal_id", "event_type", "reason", "details", "occurred_at"},
+    "ai_execution_policies": {
+        "id",
+        "version",
+        "effective_at",
+        "source",
+        "transaction_kind",
+        "auto_execute_enabled",
+        "auto_execute_limit_minor",
+        "minimum_confidence_bps",
+        "minimum_sample_size",
+        "change_reason",
+        "changed_automatically",
+        "created_at",
+    },
+    "ai_shadow_evaluations": {
+        "id",
+        "provider",
+        "model",
+        "prompt_version",
+        "corpus_fingerprint",
+        "sample_size",
+        "passed_cases",
+        "evaluator_version",
+        "completed_at",
+    },
+}
 KDF_N = 2**15
 KDF_R = 8
 KDF_P = 1
@@ -80,11 +143,8 @@ _AI_SECRET_COLUMNS = {
 _AI_REDACTED_RAW_INPUT = "[AI raw input excluded from Fiscal Archive]"
 _CANONICAL_AI_SETTINGS_SEED = {
     "id": 1,
-    "auto_execute_enabled": False,
     "ocr_source_enabled": False,
     "shortcut_text_source_enabled": False,
-    "auto_execute_limit_minor": 100_000,
-    "minimum_confidence_bps": 9_000,
     "provider_kind": None,
     "provider_base_url": None,
     "provider_model": None,
@@ -178,12 +238,67 @@ def _json_object(value: object, *, error: str) -> dict[str, Any]:
     return cast(dict[str, Any], value)
 
 
-def _retire_ai_auto_execute(table_name: str, values: Mapping[str, object]) -> dict[str, object]:
-    """Fail closed for both archive export and every restore/import caller."""
-    sanitized = dict(values)
-    if table_name in {"ai_settings", "ai_execution_policies"}:
-        sanitized["auto_execute_enabled"] = False
-    return sanitized
+def _adapt_v240_entities(entities: dict[str, Any]) -> None:
+    if any(entities[name] for name in _RETIRED_STATEMENT_TABLES):
+        raise ArchiveCompatibilityError(
+            "nonempty PDF import history requires isolated 0041 recovery"
+        )
+    parties: dict[str, list[dict[str, Any]]] = {}
+    party_claim: dict[str, str] = {}
+    for party in entities["reimbursement_parties"]:
+        claim_id = str(party["claim_id"])
+        parties.setdefault(claim_id, []).append(party)
+        party_claim[str(party["id"])] = claim_id
+    allocations = entities["reimbursement_allocations"]
+    receipts = entities["reimbursement_receipts"]
+    for claim in entities["reimbursement_claims"]:
+        claim_id = str(claim["id"])
+        rows = parties.get(claim_id, [])
+        if len(rows) > 1:
+            raise ArchiveCompatibilityError(
+                "multi-counterparty reimbursement requires isolated 0041 recovery"
+            )
+        if not rows:
+            if claim["submitted_at"] is not None or any(
+                str(row["claim_id"]) == claim_id for row in [*allocations, *receipts]
+            ):
+                raise ArchiveCompatibilityError("legacy reimbursement has no counterparty")
+            claim["counterparty_name"] = claim["title"]
+            claim["expected_date"] = None
+            continue
+        party = rows[0]
+        claim["counterparty_name"] = party["name"]
+        claim["expected_date"] = party["expected_date"]
+        party_note, claim_note = party["note"], claim["note"]
+        if party_note is not None and claim_note is None:
+            claim["note"] = party_note
+        elif party_note is not None and claim_note not in {None, party_note}:
+            combined = f"{claim_note}\n{party_note}"
+            if len(combined) > 500:
+                raise ArchiveCompatibilityError("legacy reimbursement notes exceed current limit")
+            claim["note"] = combined
+    for name in ("reimbursement_allocations", "reimbursement_receipts"):
+        for row in entities[name]:
+            party_id = str(row.pop("party_id"))
+            if party_claim.get(party_id) != str(row["claim_id"]):
+                raise ArchiveCompatibilityError("legacy reimbursement ownership mismatch")
+    mapped_overrides: set[str] = set()
+    for row in entities["cash_flow_system_overrides"]:
+        if row["system_kind"] != "reimbursement":
+            continue
+        claim_id = party_claim.get(str(row["system_reference_id"]))
+        if claim_id is None or claim_id in mapped_overrides:
+            raise ArchiveCompatibilityError("legacy reimbursement override is ambiguous")
+        mapped_overrides.add(claim_id)
+        row["system_reference_id"] = claim_id
+    for name in _RETIRED_V240_TABLES:
+        del entities[name]
+    for row in entities["ai_settings"]:
+        for name in _LEGACY_COLUMN_ADDITIONS["ai_settings"]:
+            row.pop(name)
+    for row in entities["ai_proposals"]:
+        for name in _LEGACY_COLUMN_ADDITIONS["ai_proposals"]:
+            row.pop(name)
 
 
 class ArchiveService:
@@ -200,10 +315,7 @@ class ArchiveService:
                 rows = (await snapshot.execute(select(table))).mappings().all()
                 encoded_rows: list[dict[str, object]] = []
                 for row in rows:
-                    values = _retire_ai_auto_execute(
-                        table.name,
-                        {key: _json_value(value) for key, value in dict(row).items()},
-                    )
+                    values = {key: _json_value(value) for key, value in dict(row).items()}
                     if table.name == "ai_settings":
                         for column in _AI_SECRET_COLUMNS:
                             values[column] = None
@@ -335,6 +447,7 @@ class ArchiveService:
         revision = manifest.get("database_revision")
         if revision not in {
             CURRENT_DATABASE_REVISION,
+            V41_DATABASE_REVISION,
             V40_DATABASE_REVISION,
             PREVIOUS_DATABASE_REVISION,
             LEGACY_DATABASE_REVISION,
@@ -351,6 +464,8 @@ class ArchiveService:
         if not isinstance(entities, dict) or not isinstance(manifest.get("entity_counts"), dict):
             raise ArchiveError("archive payload shape is invalid")
         allowed = {table.name for table in _archive_tables(Base.metadata)}
+        if revision != CURRENT_DATABASE_REVISION:
+            allowed |= _RETIRED_V240_TABLES
         if revision in {PREVIOUS_DATABASE_REVISION, LEGACY_DATABASE_REVISION}:
             allowed -= _V40_TABLES
         if set(entities) != allowed:
@@ -364,7 +479,23 @@ class ArchiveService:
             rows = entities.get(table_name)
             if not isinstance(expected, int) or not isinstance(rows, list) or len(rows) != expected:
                 raise ArchiveError("archive entity counts do not match manifest")
-            columns = {column.name for column in Base.metadata.tables[table_name].columns}
+            if table_name in Base.metadata.tables:
+                columns = {column.name for column in Base.metadata.tables[table_name].columns}
+                if revision != CURRENT_DATABASE_REVISION:
+                    columns |= _LEGACY_COLUMN_ADDITIONS.get(table_name, set())
+                    columns -= _LEGACY_COLUMN_REMOVALS.get(table_name, set())
+            elif table_name in _LEGACY_RETIRED_COLUMNS:
+                columns = _LEGACY_RETIRED_COLUMNS[table_name]
+            elif table_name in _RETIRED_STATEMENT_TABLES:
+                # Imported statement rows cannot be converted at all. The
+                # guard below rejects them without interpreting private text.
+                if rows:
+                    raise ArchiveCompatibilityError(
+                        "nonempty PDF import history requires isolated 0041 recovery"
+                    )
+                continue
+            else:
+                raise ArchiveCompatibilityError("archive table is not known")
             if revision == LEGACY_DATABASE_REVISION and table_name == "transactions":
                 columns.remove("merchant_mapping_generation")
             for row in rows:
@@ -384,8 +515,6 @@ class ArchiveService:
         converted_payload = deepcopy(dict(payload))
         source = manifest["database_revision"]
         added: list[str] = []
-        if source == V40_DATABASE_REVISION:
-            converted_manifest["database_revision"] = CURRENT_DATABASE_REVISION
         if source == LEGACY_DATABASE_REVISION:
             entities = _json_object(converted_payload["entities"], error="invalid entities")
             backfill_mapping_generations(
@@ -394,15 +523,18 @@ class ArchiveService:
                 entities["merchant_operations"],
             )
             added = ["transactions.merchant_mapping_generation"]
-            converted_manifest["database_revision"] = CURRENT_DATABASE_REVISION
-            converted_manifest["payload_sha256"] = hashlib.sha256(
-                _canonical_json(converted_payload)
-            ).hexdigest()
         if source in {LEGACY_DATABASE_REVISION, PREVIOUS_DATABASE_REVISION}:
             entities = _json_object(converted_payload["entities"], error="invalid entities")
             for name in _V40_TABLES:
                 entities[name] = []
             entities["cash_flow_settlement_links"] = _legacy_cash_flow_links(entities)
+            added.extend(sorted(_V40_TABLES))
+        if source != CURRENT_DATABASE_REVISION:
+            entities = _json_object(converted_payload["entities"], error="invalid entities")
+            _adapt_v240_entities(entities)
+            added.extend(
+                ["reimbursement_claims.counterparty_name", "reimbursement_claims.expected_date"]
+            )
             converted_manifest["database_revision"] = CURRENT_DATABASE_REVISION
             converted_manifest["entity_counts"] = {
                 name: len(cast(list[object], rows)) for name, rows in entities.items()
@@ -410,7 +542,6 @@ class ArchiveService:
             converted_manifest["payload_sha256"] = hashlib.sha256(
                 _canonical_json(converted_payload)
             ).hexdigest()
-            added.extend(sorted(_V40_TABLES))
         ArchiveService._validate_payload(converted_manifest, converted_payload)
         ArchiveService._validate_relationships(converted_payload)
         return (
@@ -508,13 +639,10 @@ class ArchiveService:
             rows: list[dict[str, object]] = []
             for raw in raw_rows:
                 raw = _json_object(raw, error="archive row shape is invalid")
-                decoded = _retire_ai_auto_execute(
-                    table.name,
-                    {
-                        column.name: _decode_value(column, raw.get(column.name))
-                        for column in table.columns
-                    },
-                )
+                decoded = {
+                    column.name: _decode_value(column, raw.get(column.name))
+                    for column in table.columns
+                }
                 rows.append(decoded)
             if rows:
                 await connection.execute(table.insert(), rows)

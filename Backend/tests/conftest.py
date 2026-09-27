@@ -81,7 +81,8 @@ def reset_disposable_postgres_before_each_test(
     monkeypatch.setenv("FISCAL_DATABASE_URL", test_database_url)
     get_settings.cache_clear()
     config = _alembic_config()
-    if request.path.name.endswith("_migration_postgres.py"):
+    migration_test = request.path.name.endswith("_migration_postgres.py")
+    if migration_test:
         # Each historical migration guard needs to begin on the last reversible
         # revision. P20 is deliberately irreversible, so sharing a current-head
         # schema would make its guard mask the older guard under test.
@@ -104,6 +105,11 @@ def reset_disposable_postgres_before_each_test(
         lambda: datetime(2026, 7, 15, 15, tzinfo=UTC),
     )
     yield
+    if migration_test:
+        # Historical migration fixtures may intentionally leave rows that are
+        # invalid under the current schema. Never upgrade those rows as setup
+        # for an unrelated test.
+        asyncio.run(_reset_disposable_postgres_to_base(test_database_url))
 
 
 @pytest.fixture

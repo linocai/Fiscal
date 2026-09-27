@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from fiscal_api.api.p24_schemas import P24Model
+from fiscal_api.api.p3_schemas import APIModel
 from fiscal_api.db.models import MigrationRunMode, MigrationRunStatus
 
 
-class MigrationRunResponse(P24Model):
+class MigrationRunResponse(APIModel):
     id: UUID
     mode: MigrationRunMode
     status: MigrationRunStatus

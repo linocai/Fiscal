@@ -132,17 +132,6 @@ class TransactionService:
             commit=commit,
         )
 
-    async def create_statement_import(
-        self, draft: TransactionDraft, idempotency_key: UUID, *, commit: bool = False
-    ) -> TransactionResponse:
-        """Internal-only P27 confirmation adapter; no public transaction route uses this source."""
-        return await self._create(
-            draft,
-            idempotency_key,
-            source=TransactionSource.STATEMENT_IMPORT,
-            commit=commit,
-        )
-
     async def create_cash_flow(
         self,
         draft: TransactionDraft,
@@ -1342,7 +1331,6 @@ class TransactionService:
             received = (await self.reimbursement_repository.active_received(claim.id)).get(
                 allocation.id, 0
             )
-            party = next(item for item in claim.parties if item.id == allocation.party_id)
             effective_allocated = (
                 received if claim.cancelled_at is not None else allocation.amount_minor
             )
@@ -1352,8 +1340,7 @@ class TransactionService:
                     claim_id=claim.id,
                     claim_title=claim.title,
                     claim_status=await service.derived_status(claim),
-                    party_id=party.id,
-                    party_name=party.name,
+                    counterparty_name=claim.counterparty_name,
                     receipt_id=None,
                     allocated_minor=effective_allocated,
                     received_minor=received,
@@ -1364,7 +1351,6 @@ class TransactionService:
             claim = await self.reimbursement_repository.claim(receipt.claim_id)
             if claim is None:
                 raise RuntimeError("reimbursement receipt claim missing")
-            party = next(item for item in claim.parties if item.id == receipt.party_id)
             amount = response.amount_minor
             relations.append(
                 ReimbursementRelation(
@@ -1372,8 +1358,7 @@ class TransactionService:
                     claim_id=claim.id,
                     claim_title=claim.title,
                     claim_status=await service.derived_status(claim),
-                    party_id=party.id,
-                    party_name=party.name,
+                    counterparty_name=claim.counterparty_name,
                     receipt_id=receipt.id,
                     allocated_minor=amount,
                     received_minor=0 if transaction.voided_at else amount,

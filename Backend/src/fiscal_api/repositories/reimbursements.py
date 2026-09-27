@@ -25,7 +25,6 @@ class ReimbursementRepository:
     @staticmethod
     def _options():
         return (
-            selectinload(ReimbursementClaim.parties),
             selectinload(ReimbursementClaim.allocations),
             selectinload(ReimbursementClaim.receipts).selectinload(
                 ReimbursementReceipt.allocations

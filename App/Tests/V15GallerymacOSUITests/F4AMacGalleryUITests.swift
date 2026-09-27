@@ -67,12 +67,11 @@ import XCTest
         app.terminate()
     }
 
-    func testRevisionBoundPDFExport() {
+    func testRevisionBoundCSVExport() {
         let app = launchGalleryMac(["--v15-f4b-route", "reports"])
         let any = app.descendants(matching: .any)
         XCTAssertTrue(any["v15.f4a.reports.macos"].waitForExistence(timeout: 10))
         element(app, "v15.f4b.export").click()
-        element(app, "v15.f4b.export.pdf").click()
         XCTAssertTrue(any["v15.f4b.export.inspector"].waitForExistence(timeout: 6))
         app.buttons["v15.f4b.export.confirm"].click()
         XCTAssertTrue(any["v15.f4b.export.ready"].waitForExistence(timeout: 6))
@@ -86,7 +85,6 @@ import XCTest
         let cancelAny = cancel.descendants(matching: .any)
         XCTAssertTrue(cancelAny["v15.f4a.reports.macos"].waitForExistence(timeout: 10))
         element(cancel, "v15.f4b.export").click()
-        element(cancel, "v15.f4b.export.csv").click()
         cancel.buttons["v15.f4b.export.confirm"].click()
         XCTAssertTrue(cancelAny["v15.f4b.export.ready"].waitForExistence(timeout: 6))
         cancel.buttons["v15.f4b.export.handoff"].click()
@@ -97,7 +95,6 @@ import XCTest
         let retryAny = retry.descendants(matching: .any)
         XCTAssertTrue(retryAny["v15.f4a.reports.macos"].waitForExistence(timeout: 10))
         element(retry, "v15.f4b.export").click()
-        element(retry, "v15.f4b.export.pdf").click()
         retry.buttons["v15.f4b.export.confirm"].click()
         XCTAssertTrue(retryAny["v15.f4b.export.ready"].waitForExistence(timeout: 6))
         retry.buttons["v15.f4b.export.handoff"].click()

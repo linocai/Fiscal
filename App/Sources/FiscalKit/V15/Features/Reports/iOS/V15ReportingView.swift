@@ -32,16 +32,10 @@ public struct V15ReportingView: View {
             .v22CompactNavigationTitle()
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Menu {
-                        Button("导出 CSV") { model.beginExport(.csv) }
-                            .disabled(model.exportDisabledReason != nil)
-                            .accessibilityIdentifier("v15.f4b.export.csv")
-                        Button("导出 PDF") { model.beginExport(.pdf) }
-                            .disabled(model.exportDisabledReason != nil)
-                            .accessibilityIdentifier("v15.f4b.export.pdf")
-                    } label: {
-                        Label("导出", systemImage: "square.and.arrow.up")
+                    Button { model.beginExport(.csv) } label: {
+                        Label("导出 CSV", systemImage: "square.and.arrow.up")
                     }
+                    .disabled(model.exportDisabledReason != nil)
                     .accessibilityIdentifier("v15.f4b.export")
                     Button { Task { await model.load() } } label: {
                         Label("重新读取", systemImage: V15Symbol.retry)
@@ -429,8 +423,6 @@ public struct V15ReportingView: View {
 
     private func completenessGrid(_ value: V15PeriodReport.Completeness) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: V15Spacing.xs)], spacing: V15Spacing.xs) {
-            countCell("未处理导入", value.unresolvedImportCount)
-            countCell("失败导入", value.failedImportCount)
             countCell("未分类", value.uncategorizedTransactionCount)
         }
     }
@@ -629,8 +621,8 @@ public struct V15ReportingView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 switch model.exportPhase {
-                case .confirming(let format):
-                    Text(format == .pdf ? "PDF 仅供阅读；不含口令、完整账户标识、账单或 AI 原始内容。" : "CSV 用于逐行复核；不含口令、完整账户标识、账单或 AI 原始内容。")
+                case .confirming:
+                    Text("CSV 用于逐行复核；不含口令、完整账户标识或 AI 原始内容。")
                     V15AdaptiveStack {
                         V15ActionButton("取消", kind: .secondary) { model.cancelExport() }
                         V15ActionButton("开始导出") { Task { await model.exportConfirmed() } }

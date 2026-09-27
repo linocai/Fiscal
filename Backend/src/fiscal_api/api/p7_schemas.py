@@ -46,7 +46,7 @@ class KnownFutureDirection(StrEnum):
 
 class KnownFutureSourceType(StrEnum):
     CREDIT_CYCLE = "credit_cycle"
-    REIMBURSEMENT_PARTY = "reimbursement_party"
+    REIMBURSEMENT_CLAIM = "reimbursement_claim"
     CASH_FLOW_ITEM = "cash_flow_item"
 
 
@@ -60,8 +60,6 @@ class FactsDrillDownScopeType(StrEnum):
 
 
 class CompletenessIssueType(StrEnum):
-    UNRESOLVED_IMPORTS = "unresolved_imports"
-    FAILED_IMPORTS = "failed_imports"
     UNCATEGORIZED_TRANSACTIONS = "uncategorized_transactions"
 
 
@@ -139,7 +137,6 @@ class ForecastEvent(APIModel):
     account_id: UUID | None = None
     cycle_id: UUID | None = None
     claim_id: UUID | None = None
-    party_id: UUID | None = None
 
 
 class ForecastSummary(APIModel):
@@ -322,14 +319,6 @@ class ReimbursementFacts(APIModel):
 
 
 class CompletenessFacts(APIModel):
-    unresolved_import_count: int = Field(
-        ge=0,
-        description="Statement imports that have not reached a terminal result.",
-    )
-    failed_import_count: int = Field(
-        ge=0,
-        description="Statement imports whose processing failed and require attention.",
-    )
     uncategorized_transaction_count: int = Field(ge=0)
     uncategorized_transaction_amount_minor: int = Field(ge=0, default=0)
     scope: FactsDrillDownScope | None = None
@@ -360,8 +349,8 @@ class CreditCycleFact(APIModel):
 class ReimbursementOutstandingFact(APIModel):
     item_type: Literal["reimbursement_outstanding"] = "reimbursement_outstanding"
     claim_id: UUID
-    party_id: UUID
-    party_name: str
+    expense_transaction_id: UUID
+    counterparty_name: str
     expected_date: date | None
     expected_minor: int = Field(ge=0)
     received_minor: int = Field(ge=0)
@@ -402,7 +391,6 @@ class KnownFutureEvent(APIModel):
     deep_link: str
     account_id: UUID | None = None
     claim_id: UUID | None = None
-    party_id: UUID | None = None
     cycle_id: UUID | None = None
 
 

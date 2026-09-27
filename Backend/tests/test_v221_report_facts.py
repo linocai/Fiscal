@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fiscal_api.core.errors import APIError
 from fiscal_api.db.models import Account, LedgerTransaction, Posting
-from fiscal_api.services.report_exports import _yuan_number, _yuan_text
+from fiscal_api.services.report_exports import _yuan_number
 from fiscal_api.services.reporting import ReportingService
 
 
@@ -82,10 +82,7 @@ def test_drill_cash_is_only_effective_cash_legs(kind, legs, expected):
         ],
     )
     kwargs = dict(categories={}, accounts={a.id: a for a in accounts}, merchant=None, spending=None)
-    for build in (
-        ReportingService._period_drill_down_item,
-        ReportingService._period_drill_down_item_v2,
-    ):
+    for build in (ReportingService._period_drill_down_item_v2,):
         assert build(transaction, **kwargs).external_cash_amount_minor == expected
         transaction.voided_at = datetime(2026, 9, 11, tzinfo=UTC)
         assert build(transaction, **kwargs).external_cash_amount_minor == 0
@@ -96,19 +93,17 @@ def test_drill_cash_is_only_effective_cash_legs(kind, legs, expected):
         )
 
 
-def test_exports_preserve_negative_and_unknown_values():
+def test_csv_exports_preserve_negative_and_unknown_values():
     assert _yuan_number(-1) == "-0.01"
-    assert _yuan_text(-(2**63)).startswith("-¥92,233,720,368,547,758.08")
     assert _yuan_number(None) == ""
-    assert _yuan_text(None) == "未知"
 
 
 def test_complete_exports_keep_unknown_reasons_and_all_summary_metrics():
     import csv
     from io import StringIO
 
-    from fiscal_api.api.p34_schemas import PeriodReport, ReportSummary
-    from fiscal_api.services.report_exports import SUMMARY_LABELS, report_csv, report_pdf
+    from fiscal_api.api.p34_schemas import PeriodReportV2, ReportSummary
+    from fiscal_api.services.report_exports import SUMMARY_LABELS, report_csv
 
     credit = _account("credit", 10000, date(2026, 9, 10))
     accounts = ReportingService._period_account_rows(
@@ -121,8 +116,8 @@ def test_complete_exports_keep_unknown_reasons_and_all_summary_metrics():
         unknown_balance_account_ids=[credit.id],
         balance_unavailable_reason="historical_basis_unavailable",
     )
-    report = PeriodReport(
-        meta=ReportingService._period_report_meta(
+    report = PeriodReportV2(
+        meta=ReportingService._period_report_meta_v2(
             "month", "2026-08", date(2026, 8, 1), date(2026, 8, 31), data_revision=0
         ),
         summary=ReportSummary.model_validate(summary),
@@ -130,9 +125,11 @@ def test_complete_exports_keep_unknown_reasons_and_all_summary_metrics():
         categories=[],
         merchants=[],
         sources=[],
-        completeness=dict(
-            unresolved_import_count=0, failed_import_count=0, uncategorized_transaction_count=0
-        ),
+        completeness=dict(uncategorized_transaction_count=0),
+        daily=[],
+        known_future_events=[],
+        debt_cycles=[],
+        installments=[],
         drill_down_path="/fixture",
     )
     rows = list(csv.reader(StringIO(report_csv(report).decode("utf-8-sig"))))
@@ -146,6 +143,3 @@ def test_complete_exports_keep_unknown_reasons_and_all_summary_metrics():
     assert any(
         row[3] == "" and row[5] == "before_opening_as_of" for row in rows if row[0] == "账户"
     )
-    pdf = report_pdf(report)
-    assert "未知".encode("utf-16-be").hex().upper().encode() in pdf
-    assert "historical_basis_unavailable".encode("utf-16-be").hex().upper().encode() in pdf

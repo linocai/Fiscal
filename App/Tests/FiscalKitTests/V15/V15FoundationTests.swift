@@ -1,3 +1,4 @@
+@testable import FiscalPreviewSupportmacOS
 import Foundation
 import Testing
 
@@ -47,7 +48,7 @@ struct V15FoundationTests {
         let cancel = try V15FixtureCodec.decoder.decode(V15ReimbursementCancelPreview.self, from: V15FixtureLibrary.reimbursementCancelPreview)
         let createReceipt = try V15FixtureCodec.decoder.decode(V15ReimbursementReceiptPreview.self, from: V15FixtureLibrary.reimbursementReceiptPreview)
         let replaceReceipt = try V15FixtureCodec.decoder.decode(V15ReimbursementReceiptPreview.self, from: V15FixtureLibrary.reimbursementReceiptPreview)
-        #expect(replace.current.parties.first?.allocations.first?.transactionID == UUID(uuidString: "00000000-0000-0000-0000-000000000034"))
+        #expect(replace.current.expenses.first?.transactionID == UUID(uuidString: "00000000-0000-0000-0000-000000000034"))
         #expect(replace.proposed.title == "新报销")
         #expect(cancel.proposedStatus == "cancelled" && cancel.releasedMinor == 100)
         #expect(createReceipt.persistedAllocations.first?.allocationID == UUID(uuidString: "00000000-0000-0000-0000-000000000033"))
@@ -97,11 +98,9 @@ struct V15FoundationTests {
     @Test("P31 category previews retain every server-visible atomic dependency")
     func categoryPreviewContracts() throws {
         let merge = Data(#"{"preview_token":"00000000-0000-0000-0000-000000000060","source":{"category_id":"00000000-0000-0000-0000-000000000061","transaction_count":2,"amount_minor":300},"target_id":"00000000-0000-0000-0000-000000000062","child_mapping_requirements":[{"source_child_id":"00000000-0000-0000-0000-000000000063","source_child_name":"子类","target_child_ids":["00000000-0000-0000-0000-000000000064"]}],"atomic":true,"future_additive":true}"#.utf8)
-        let split = Data(#"{"preview_token":"00000000-0000-0000-0000-000000000065","root":{"category_id":"00000000-0000-0000-0000-000000000066","transaction_count":1,"amount_minor":100},"required_transaction_ids":["00000000-0000-0000-0000-000000000067"],"child_names":["餐饮","交通"],"atomic":true}"#.utf8)
         let mergePreview = try V15FixtureCodec.decoder.decode(V15CategoryMergePreview.self, from: merge)
-        let splitPreview = try V15FixtureCodec.decoder.decode(V15CategorySplitPreview.self, from: split)
         #expect(mergePreview.childMappingRequirements.first?.targetChildIDs.count == 1)
-        #expect(splitPreview.requiredTransactionIDs.count == 1 && splitPreview.atomic)
+        #expect(mergePreview.atomic)
         #expect(throws: (any Error).self) { try V15FixtureCodec.decoder.decode(V15CategoryMergePreview.self, from: Data(#"{"preview_token":"00000000-0000-0000-0000-000000000060"}"#.utf8)) }
     }
 
@@ -127,25 +126,24 @@ struct V15FoundationTests {
 
     @Test("typed write dates use APITransport ISO-8601 wire strings and reimbursement tokens are phase-specific")
     func typedMutationWireContracts() throws {
-        let party = UUID(uuidString: "00000000-0000-0000-0000-000000000090")!
         let account = UUID(uuidString: "00000000-0000-0000-0000-000000000091")!
         let transaction = UUID(uuidString: "00000000-0000-0000-0000-000000000092")!
         let token = UUID(uuidString: "00000000-0000-0000-0000-000000000093")!
         let instant = Date(timeIntervalSince1970: 1_755_274_862) // 2025-08-15T16:21:02Z
-        let receiptPreview = V15ReimbursementReceiptDraft(expectedClaimVersion: 3, partyID: party, amountMinor: 100, receivedAt: instant, destinationAccountID: account, title: "回款")
+        let receiptPreview = V15ReimbursementReceiptDraft(expectedClaimVersion: 3, amountMinor: 100, receivedAt: instant, destinationAccountID: account, title: "回款")
         let previewObject = try #require(JSONSerialization.jsonObject(with: V15BodyEncoder.data(receiptPreview)) as? [String: Any])
         #expect((previewObject["received_at"] as? String)?.hasSuffix("Z") == true)
         #expect(previewObject["preview_token"] == nil)
-        let claimPreview = V15ReimbursementClaimPreviewRequest(title: "报销", parties: [.init(name: "同事", allocations: [.init(transactionID: transaction, amountMinor: 100)])], expectedVersion: 3)
+        let claimPreview = V15ReimbursementClaimPreviewRequest(title: "报销", counterpartyName: "同事", expectedDate: "2026-08-20", expenses: [.init(transactionID: transaction, amountMinor: 100)], expectedVersion: 3)
         let claimPreviewObject = try #require(JSONSerialization.jsonObject(with: V15BodyEncoder.data(claimPreview)) as? [String: Any])
         #expect(claimPreviewObject["preview_token"] == nil && claimPreviewObject["expected_version"] as? Int == 3)
-        let claimCommit = V15ReimbursementClaimCommitRequest(title: "报销", parties: [.init(name: "同事", allocations: [.init(transactionID: transaction, amountMinor: 100)])], expectedVersion: 3, previewToken: token)
+        let claimCommit = V15ReimbursementClaimCommitRequest(title: "报销", counterpartyName: "同事", expectedDate: "2026-08-20", expenses: [.init(transactionID: transaction, amountMinor: 100)], expectedVersion: 3, previewToken: token)
         let claimCommitObject = try #require(JSONSerialization.jsonObject(with: V15BodyEncoder.data(claimCommit)) as? [String: Any])
         #expect(claimCommitObject["preview_token"] as? String == token.uuidString.uppercased())
-        let replacePreview = V15ReimbursementReceiptReplacePreviewRequest(expectedClaimVersion: 3, partyID: party, amountMinor: 100, receivedAt: instant, destinationAccountID: account, title: "回款", expectedReceiptVersion: 2)
+        let replacePreview = V15ReimbursementReceiptReplacePreviewRequest(expectedClaimVersion: 3, amountMinor: 100, receivedAt: instant, destinationAccountID: account, title: "回款", expectedReceiptVersion: 2)
         let replacePreviewObject = try #require(JSONSerialization.jsonObject(with: V15BodyEncoder.data(replacePreview)) as? [String: Any])
         #expect(replacePreviewObject["preview_token"] == nil && replacePreviewObject["expected_receipt_version"] as? Int == 2)
-        let replaceCommit = V15ReimbursementReceiptReplaceCommitRequest(expectedClaimVersion: 3, partyID: party, amountMinor: 100, receivedAt: instant, destinationAccountID: account, title: "回款", expectedReceiptVersion: 2, previewToken: token)
+        let replaceCommit = V15ReimbursementReceiptReplaceCommitRequest(expectedClaimVersion: 3, amountMinor: 100, receivedAt: instant, destinationAccountID: account, title: "回款", expectedReceiptVersion: 2, previewToken: token)
         let replaceCommitObject = try #require(JSONSerialization.jsonObject(with: V15BodyEncoder.data(replaceCommit)) as? [String: Any])
         #expect(replaceCommitObject["preview_token"] as? String == token.uuidString.uppercased())
         let installment = V15InstallmentActionRequest(expectedVersion: 4, occurredAt: instant)
@@ -178,9 +176,9 @@ struct V15FoundationTests {
 
     @Test("future event optional domain locators are not discarded")
     func futureEventLocators() throws {
-        let data = Data(#"{"source_type":"reimbursement_party","source_id":"00000000-0000-0000-0000-000000000070","date":"2026-08-20","direction":"inflow","amount_minor":100,"certainty":"expected","title":"回款","deep_link":"fiscal://reimbursements/1","account_id":null,"claim_id":"00000000-0000-0000-0000-000000000071","party_id":"00000000-0000-0000-0000-000000000072","cycle_id":null}"#.utf8)
+        let data = Data(#"{"source_type":"reimbursement_claim","source_id":"00000000-0000-0000-0000-000000000071","date":"2026-08-20","direction":"inflow","amount_minor":100,"certainty":"expected","title":"回款","deep_link":"fiscal://reimbursements/00000000-0000-0000-0000-000000000071","account_id":null,"claim_id":"00000000-0000-0000-0000-000000000071","cycle_id":null}"#.utf8)
         let event = try V15FixtureCodec.decoder.decode(V15FutureEvent.self, from: data)
-        #expect(event.claimID != nil && event.partyID != nil && event.cycleID == nil)
+        #expect(event.claimID == event.sourceID && event.cycleID == nil)
     }
 
     @Test("older generations and their cancellation cannot overwrite newer work")

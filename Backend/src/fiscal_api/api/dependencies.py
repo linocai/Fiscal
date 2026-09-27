@@ -18,22 +18,10 @@ from fiscal_api.services.categories import CategoryService
 from fiscal_api.services.credit import CreditService
 from fiscal_api.services.credit_payoffs import CreditPayoffService
 from fiscal_api.services.installments import InstallmentService
-from fiscal_api.services.merchants import MerchantService
+from fiscal_api.services.merchant_mapping import MerchantMappingService
 from fiscal_api.services.migrations import MigrationRunService
 from fiscal_api.services.reimbursements import ReimbursementService
 from fiscal_api.services.reporting import ReportingService
-from fiscal_api.services.statement_import_confirmation import StatementImportConfirmationService
-from fiscal_api.services.statement_import_confirmation_preview import (
-    StatementImportConfirmationPreviewService,
-)
-from fiscal_api.services.statement_import_final_drafts import StatementImportFinalDraftService
-from fiscal_api.services.statement_import_provider import (
-    OpenAICompatibleStatementImportProvider,
-    StatementImportProvider,
-)
-from fiscal_api.services.statement_import_review import StatementImportReviewService
-from fiscal_api.services.statement_import_workbench import StatementImportWorkbenchService
-from fiscal_api.services.statement_imports import StatementImportService
 from fiscal_api.services.transaction_history import TransactionHistoryService
 from fiscal_api.services.transactions import TransactionService
 
@@ -104,6 +92,10 @@ def get_transaction_service(session: SessionDependency) -> TransactionService:
     return TransactionService(session)
 
 
+def get_merchant_mapping_service(session: SessionDependency) -> MerchantMappingService:
+    return MerchantMappingService(session)
+
+
 def get_transaction_history_service(session: SessionDependency) -> TransactionHistoryService:
     return TransactionHistoryService(session)
 
@@ -126,10 +118,6 @@ def get_reporting_service(session: SessionDependency) -> ReportingService:
 
 def get_migration_run_service(session: SessionDependency) -> MigrationRunService:
     return MigrationRunService(session)
-
-
-def get_merchant_service(session: SessionDependency) -> MerchantService:
-    return MerchantService(session)
 
 
 def get_ai_provider(settings: Annotated[Settings, Depends(get_settings)]) -> AIProvider:
@@ -162,55 +150,13 @@ def get_action_preview_service(session: SessionDependency) -> ActionPreviewServi
     return ActionPreviewService(session)
 
 
-async def get_statement_import_provider(
-    session: SessionDependency,
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> StatementImportProvider | None:
-    import hashlib
-
-    from sqlalchemy import select
-
-    from fiscal_api.db.models.ai import AISettings
-    from fiscal_api.services.ai_provider import OpenAICompatibleProvider
-
-    stored = await session.scalar(select(AISettings))
-    fallback = build_ai_provider(settings)
-    service = AIService(
-        session,
-        fallback,
-        runtime_settings=settings,
-        credential_cipher=(
-            ProviderCredentialCipher.from_settings(settings)
-            if settings.token_pepper is not None
-            else None
-        ),
-    )
-    resolved = service.provider_for(stored) if stored is not None else fallback
-    if not isinstance(resolved, OpenAICompatibleProvider):
-        return None
-    # Opaque configuration binding includes credential changes without exposing secrets.
-    revision = hashlib.sha256(
-        (
-            f"{stored.version if stored else 0}:{resolved.base_url}:"
-            f"{resolved.model_id}:{resolved.api_key}"
-        ).encode()
-    ).hexdigest()
-    return OpenAICompatibleStatementImportProvider(
-        resolved, revision, stored.version if stored else 0
-    )
-
-
-def get_statement_import_service(
-    session: SessionDependency,
-    provider: Annotated[StatementImportProvider | None, Depends(get_statement_import_provider)],
-) -> StatementImportService:
-    return StatementImportService(session, provider)
-
-
 AccountServiceDependency = Annotated[AccountService, Depends(get_account_service)]
 CategoryServiceDependency = Annotated[CategoryService, Depends(get_category_service)]
 CashFlowServiceDependency = Annotated[CashFlowService, Depends(get_cash_flow_service)]
 TransactionServiceDependency = Annotated[TransactionService, Depends(get_transaction_service)]
+MerchantMappingServiceDependency = Annotated[
+    MerchantMappingService, Depends(get_merchant_mapping_service)
+]
 TransactionHistoryServiceDependency = Annotated[
     TransactionHistoryService, Depends(get_transaction_history_service)
 ]
@@ -219,70 +165,10 @@ InstallmentServiceDependency = Annotated[InstallmentService, Depends(get_install
 ReimbursementServiceDependency = Annotated[ReimbursementService, Depends(get_reimbursement_service)]
 ReportingServiceDependency = Annotated[ReportingService, Depends(get_reporting_service)]
 MigrationRunServiceDependency = Annotated[MigrationRunService, Depends(get_migration_run_service)]
-MerchantServiceDependency = Annotated[MerchantService, Depends(get_merchant_service)]
 AIServiceDependency = Annotated[AIService, Depends(get_ai_service)]
 AccessServiceDependency = Annotated[AccessService, Depends(get_access_service)]
 ActionPreviewServiceDependency = Annotated[
     ActionPreviewService, Depends(get_action_preview_service)
-]
-StatementImportServiceDependency = Annotated[
-    StatementImportService, Depends(get_statement_import_service)
-]
-
-
-def get_statement_import_review_service(
-    session: SessionDependency,
-) -> StatementImportReviewService:
-    return StatementImportReviewService(session)
-
-
-StatementImportReviewServiceDependency = Annotated[
-    StatementImportReviewService, Depends(get_statement_import_review_service)
-]
-
-
-def get_statement_import_workbench_service(
-    session: SessionDependency,
-) -> StatementImportWorkbenchService:
-    return StatementImportWorkbenchService(session)
-
-
-StatementImportWorkbenchServiceDependency = Annotated[
-    StatementImportWorkbenchService, Depends(get_statement_import_workbench_service)
-]
-
-
-def get_statement_import_final_draft_service(
-    session: SessionDependency,
-) -> StatementImportFinalDraftService:
-    return StatementImportFinalDraftService(session)
-
-
-StatementImportFinalDraftServiceDependency = Annotated[
-    StatementImportFinalDraftService, Depends(get_statement_import_final_draft_service)
-]
-
-
-def get_statement_import_confirmation_service(
-    session: SessionDependency,
-) -> StatementImportConfirmationService:
-    return StatementImportConfirmationService(session)
-
-
-StatementImportConfirmationServiceDependency = Annotated[
-    StatementImportConfirmationService, Depends(get_statement_import_confirmation_service)
-]
-
-
-def get_statement_import_confirmation_preview_service(
-    session: SessionDependency,
-) -> StatementImportConfirmationPreviewService:
-    return StatementImportConfirmationPreviewService(session)
-
-
-StatementImportConfirmationPreviewServiceDependency = Annotated[
-    StatementImportConfirmationPreviewService,
-    Depends(get_statement_import_confirmation_preview_service),
 ]
 
 

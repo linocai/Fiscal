@@ -5,6 +5,24 @@ final class V15RootSmokeUITests: XCTestCase {
     private let qaOnlyPassphrase = "f5b-root-smoke-qa-only"
     private let keychainServicePrefix = "com.linotsai.fiscal.v15-root-smoke.ios.access."
 
+    func testMerchantSuggestionCanBeConfirmedFromTransaction() {
+        let app = launchApp(service: uniqueKeychainService(), reviewScenario: "merchant-confirmation", formalFixture: true)
+        XCTAssertTrue(rootTab("交易", in: app).waitForExistence(timeout: 8)); rootTab("交易", in: app).tap()
+        let row = app.buttons["v221.ios.transaction.00000000-0000-0000-0000-00000000B101"]
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); reveal(row, in: app); row.tap()
+        let open = app.buttons["v240.merchant.open"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5)); reveal(open, in: app); open.tap()
+        let save = app.buttons["v240.merchant.save"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["已识别到商户，确认后用于分析。"].exists)
+        XCTAssertTrue(save.isEnabled); save.tap()
+        XCTAssertTrue(app.staticTexts["商户信息已保存。"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["当前商户：工作餐商户"].exists)
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "build50-ios-merchant-confirmation"; capture.lifetime = .keepAlways; add(capture)
+        app.terminate()
+    }
+
     func testV230ForecastAndSources() {
         let app = launchApp(service: uniqueKeychainService(), reviewScenario: "v230", formalFixture: true)
         let inflow = app.buttons["v230.overview.disposable.inflow"]
@@ -59,8 +77,8 @@ final class V15RootSmokeUITests: XCTestCase {
         "\(keychainServicePrefix)\(UUID().uuidString.lowercased())"
     }
 
-    private func launchApp(service: String, reviewScenario: String = "", accessKey: String? = nil, cleanupOnly: Bool = false, forceTransportError: Bool = false, formalFixture: Bool = false, formalBoundary: Bool = false, scheme: String? = nil, extraArguments: [String] = [], uiRoute: String? = nil) -> XCUIApplication {
-        let app = XCUIApplication()
+    private func launchApp(service: String, reviewScenario: String = "", accessKey: String? = nil, cleanupOnly: Bool = false, forceTransportError: Bool = false, formalFixture: Bool = false, formalBoundary: Bool = false, scheme: String? = nil, extraArguments: [String] = [], uiRoute: String? = nil, openURL: URL? = nil) -> XCUIApplication {
+        let app = openURL == nil ? XCUIApplication() : XCUIApplication(bundleIdentifier: "com.linotsai.fiscal.v15-root-smoke.ios")
         app.launchEnvironment["FISCAL_ROOT_SMOKE_UI_ROUTE"] = uiRoute
         app.launchEnvironment["FISCAL_ROOT_SMOKE_REVIEW_SCENARIO"] = reviewScenario
         app.launchEnvironment["FISCAL_ROOT_SMOKE_KEYCHAIN_SERVICE"] = service
@@ -83,8 +101,41 @@ final class V15RootSmokeUITests: XCTestCase {
             app.launchEnvironment["FISCAL_ROOT_SMOKE_COLOR_SCHEME"] = scheme
         }
         app.launchArguments = extraArguments
-        app.launch()
+        if let openURL { app.open(openURL) }
+        else { app.launch() }
         return app
+    }
+
+    func testProposalColdURLWaitsForBootstrapThenOpensExistingDraft() {
+        let url = URL(string: "fiscal-qa://ai/proposals/00000000-0000-0000-0000-00000000F305")!
+        let app = launchApp(service: uniqueKeychainService(), formalFixture: true, uiRoute: "proposal", openURL: url)
+        XCTAssertTrue(app.buttons["v15.f3f.close"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.workspace-marker"].exists)
+        XCTAssertTrue(app.staticTexts["截图待确认专用提案"].waitForExistence(timeout: 6))
+        XCTAssertFalse(app.descendants(matching: .any)["v15.f3f.route.error"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["v15.f3f.mutation.error"].exists)
+        app.terminate()
+    }
+
+    func testProposalHotURLAndInvalidTargetKeepOneExistingDraft() {
+        let app = launchApp(service: uniqueKeychainService(), formalFixture: true, uiRoute: "proposal")
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.workspace-marker"].waitForExistence(timeout: 10))
+        for (route, title) in [
+            ("v240.qa.proposal.hot", "截图待确认专用提案"),
+            ("v240.qa.proposal.other", "很长但可完整检查的离线合成工作餐提案"),
+            ("v240.qa.proposal.hot", "截图待确认专用提案")
+        ] {
+            app.buttons[route].tap()
+            XCTAssertTrue(app.buttons["v15.f3f.close"].waitForExistence(timeout: 8))
+            XCTAssertTrue(app.staticTexts[title].waitForExistence(timeout: 6))
+            XCTAssertFalse(app.descendants(matching: .any)["v15.f3f.mutation.error"].exists)
+            app.buttons["v15.f3f.close"].tap()
+            XCTAssertTrue(app.descendants(matching: .any)["v151.ios.workspace-marker"].waitForExistence(timeout: 5))
+        }
+        app.buttons["v240.qa.proposal.invalid"].tap()
+        XCTAssertTrue(app.alerts["无法打开内容"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["v15.f3f.close"].exists)
+        app.terminate()
     }
 
     private func assertAppCleanup(service: String) {
@@ -119,7 +170,6 @@ final class V15RootSmokeUITests: XCTestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["v15.f1a.bootstrap"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["Fiscal"].exists)
-        XCTAssertFalse(app.descendants(matching: .any)["v15.gallery.ios"].exists)
     }
 
     func testLocalServerBootstrapThenNavigatesToLiveReadRoutes() async throws {
@@ -146,7 +196,6 @@ final class V15RootSmokeUITests: XCTestCase {
         let errorApp = launchApp(service: errorService, accessKey: qaAccessKey, forceTransportError: true)
         XCTAssertTrue(errorApp.descendants(matching: .any)["v15.f1a.bootstrap"].waitForExistence(timeout: 8))
         XCTAssertTrue(errorApp.staticTexts["无法连接"].exists)
-        XCTAssertFalse(errorApp.descendants(matching: .any)["v15.gallery.ios"].exists)
         errorApp.terminate()
         assertAppCleanup(service: errorService)
 
@@ -159,7 +208,6 @@ final class V15RootSmokeUITests: XCTestCase {
         let offlineApp = launchApp(service: offlineService, forceTransportError: true)
         XCTAssertTrue(offlineApp.descendants(matching: .any)["v151.ios.workspace-marker"].waitForExistence(timeout: 8))
         XCTAssertTrue(offlineApp.descendants(matching: .any)["v151.ios.offline"].waitForExistence(timeout: 8))
-        XCTAssertFalse(offlineApp.descendants(matching: .any)["v15.gallery.ios"].exists)
         offlineApp.terminate()
         assertAppCleanup(service: offlineService)
     }
@@ -183,7 +231,7 @@ final class V15RootSmokeUITests: XCTestCase {
             XCTAssertTrue(rootTab("总览", in: app).isHittable, testCase.name)
             XCTAssertTrue(rootTab("交易", in: app).isHittable, testCase.name)
             XCTAssertTrue(rootTab("账户", in: app).isHittable, testCase.name)
-            XCTAssertTrue(rootTab("分析", in: app).isHittable, testCase.name)
+            XCTAssertFalse(rootTab("分析", in: app).exists, testCase.name)
             XCTAssertTrue(app.buttons.matching(identifier: "v152.ios.record").firstMatch.isHittable, testCase.name)
             XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", currentMonth + "-01 至")).firstMatch.waitForExistence(timeout: 6), "本月必须来自上海当前月份")
             if testCase.name.hasSuffix("ax5") {
@@ -273,9 +321,9 @@ final class V15RootSmokeUITests: XCTestCase {
         app.terminate()
     }
 
-    func testAccountAndAnalysisTabsKeepBottomCreationAvailable() {
+    func testThreeTabsKeepBottomCreationAndOverviewOpensAnalysis() {
         let app = launchApp(service: uniqueKeychainService(), formalFixture: true, scheme: "light")
-        for (title, identifier) in [("账户", "v152.ios.accounts"), ("分析", "v15.f4a.reports.ios")] {
+        for (title, identifier) in [("账户", "v152.ios.accounts"), ("总览", "v151.ios.today")] {
             rootTab(title, in: app).tap()
             XCTAssertTrue(app.descendants(matching: .any)[identifier].waitForExistence(timeout: 8))
             XCTAssertTrue(app.buttons.matching(identifier: "v152.ios.record").firstMatch.isHittable)
@@ -284,7 +332,30 @@ final class V15RootSmokeUITests: XCTestCase {
             shot.lifetime = .keepAlways
             add(shot)
         }
+        app.buttons["v151.ios.today.reports"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f4a.reports.ios"].waitForExistence(timeout: 8))
         app.terminate()
+    }
+
+    func testCreditAndInstallmentRoutesStartFromAccounts() {
+        let app = launchApp(service: uniqueKeychainService(), formalFixture: true, scheme: "light")
+        rootTab("账户", in: app).tap()
+        let credit = app.buttons["v152.ios.accounts.account.00000000-0000-0000-0000-000000000103"]
+        XCTAssertTrue(credit.waitForExistence(timeout: 8))
+        credit.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.account-detail"].waitForExistence(timeout: 8))
+        let creditRoute = app.buttons["v151.ios.account-detail.credit"]
+        for _ in 0..<8 where !creditRoute.isHittable { app.swipeUp() }
+        XCTAssertTrue(creditRoute.isHittable)
+        creditRoute.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f3b1.credit.ios"].waitForExistence(timeout: 8))
+        app.buttons["关闭"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v151.ios.account-detail"].waitForExistence(timeout: 5))
+        let installmentRoute = app.buttons["v151.ios.account-detail.installments"]
+        for _ in 0..<8 where !installmentRoute.isHittable { app.swipeUp() }
+        XCTAssertTrue(installmentRoute.isHittable)
+        installmentRoute.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.f3b2.installments.ios"].waitForExistence(timeout: 8))
     }
 
     /// Run with Reduce Motion and Reduce Transparency enabled in the existing
@@ -294,7 +365,7 @@ final class V15RootSmokeUITests: XCTestCase {
         let settings = app.descendants(matching: .any)["v220.qa.accessibility-settings"].firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 8))
         XCTAssertEqual(settings.value as? String, "motion=true;transparency=true")
-        for title in ["总览", "交易", "账户", "分析"] {
+        for title in ["总览", "交易", "账户"] {
             rootTab(title, in: app).tap()
             XCTAssertTrue(app.buttons.matching(identifier: "v152.ios.record").firstMatch.isHittable)
         }
@@ -345,7 +416,7 @@ final class V15RootSmokeUITests: XCTestCase {
         XCTAssertTrue(rootTab("总览", in: app).isHittable)
         XCTAssertTrue(rootTab("交易", in: app).isHittable)
         XCTAssertTrue(rootTab("账户", in: app).isHittable)
-        XCTAssertTrue(rootTab("分析", in: app).isHittable)
+        XCTAssertFalse(rootTab("分析", in: app).exists)
         XCTAssertTrue(app.buttons.matching(identifier: "v152.ios.record").firstMatch.isHittable)
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = "v151-ios-workspace-boundary-iphone17pro"
@@ -431,12 +502,11 @@ final class V15RootSmokeUITests: XCTestCase {
         let settings = app.descendants(matching: .any)["v15.settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 8))
 
-        let proposals = app.descendants(matching: .any)["v15.settings.open.proposals"]
-        let statementImport = app.descendants(matching: .any)["v15.settings.open.statement-import"]
+        let aiSettings = app.descendants(matching: .any)["v15.settings.open.ai"]
         let pendingSync = app.descendants(matching: .any)["v15.settings.open.pending-sync"]
         let security = app.descendants(matching: .any)["v15.settings.open.security"]
-        XCTAssertTrue(proposals.isHittable)
-        XCTAssertTrue(statementImport.isHittable)
+        XCTAssertTrue(aiSettings.isHittable)
+        XCTAssertFalse(app.descendants(matching: .any)["v15.settings.open.statement-import"].exists)
         XCTAssertTrue(pendingSync.isHittable)
         for _ in 0..<6 where !security.isHittable { settings.swipeUp() }
         XCTAssertTrue(security.isHittable)
@@ -446,14 +516,11 @@ final class V15RootSmokeUITests: XCTestCase {
         app.buttons["返回设置与数据"].tap()
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
 
-        proposals.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["v15.f3f.ai.ios"].waitForExistence(timeout: 8))
-        app.buttons.matching(identifier: "v15.f3f.close").firstMatch.tap()
-        XCTAssertTrue(settings.waitForExistence(timeout: 5))
-
-        statementImport.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["v15.f3g.statement-import.ios"].waitForExistence(timeout: 8))
-        app.buttons.matching(identifier: "v15.f3g.close").firstMatch.tap()
+        aiSettings.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["v15.settings.ai"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["v15.settings.ai.ocr-enabled"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["v15.settings.ai.shortcut-enabled"].exists)
+        app.buttons.matching(identifier: "v15.settings.pane.close").firstMatch.tap()
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
 
         security.tap()
@@ -461,5 +528,22 @@ final class V15RootSmokeUITests: XCTestCase {
         app.buttons.matching(identifier: "v15.settings.pane.close").firstMatch.tap()
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
         app.terminate()
+    }
+
+    func testOCRSourceToggleSavesInSettings() {
+        let app = launchApp(service: uniqueKeychainService(), reviewScenario: "ai-source-update", formalFixture: true, scheme: "light")
+        app.descendants(matching: .any)["v151.ios.today.settings"].tap()
+        let settings = app.descendants(matching: .any)["v15.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 8))
+        app.descendants(matching: .any)["v15.settings.open.ai"].tap()
+        let ocr = app.switches["v15.settings.ai.ocr-enabled"]
+        XCTAssertTrue(ocr.waitForExistence(timeout: 8))
+        ocr.tap()
+        app.buttons["v15.settings.ai.save-sources"].tap()
+        XCTAssertTrue(app.staticTexts["v15.settings.ai.save-result"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["来源设置已保存。"].exists)
+        app.buttons["v15.settings.pane.close"].tap()
+        app.descendants(matching: .any)["v15.settings.open.ai"].tap()
+        XCTAssertEqual(app.switches["v15.settings.ai.ocr-enabled"].value as? String, "0")
     }
 }

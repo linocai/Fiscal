@@ -12,7 +12,7 @@ import XCTest
         element(app, "v15.f3c.mac.claim.new.open").click()
         XCTAssertTrue(element(app, "v15.f3c.mac.claim.inspector").waitForExistence(timeout: 6))
         XCTAssertFalse(app.staticTexts["请填写报销标题。"].exists)
-        XCTAssertFalse(app.staticTexts["请填写报销当事人。"].exists)
+        XCTAssertFalse(app.staticTexts["请填写报销对象。"].exists)
         XCTAssertFalse(app.staticTexts["请选择一笔垫付。"].exists)
         attachV220(app, name: "v220-mac-F3CMacGalleryUITests-app")
         app.terminate()

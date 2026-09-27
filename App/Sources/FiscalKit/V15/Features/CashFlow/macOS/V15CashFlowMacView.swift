@@ -4,15 +4,22 @@ import SwiftUI
 public struct V15CashFlowMacView: View {
     @State private var model: V15CashFlowModel
     @State private var section: Section = .active
-    private let initialGalleryScenario: String?
     private let initialItem: V15CashFlowItem?
+    private let preparesOwnModel: Bool
 
     private enum Section: String, CaseIterable { case active, history; var title: String { self == .active ? "未来事项" : "历史" } }
 
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialGalleryScenario: String? = nil, initialItem: V15CashFlowItem? = nil) {
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialItem: V15CashFlowItem? = nil) {
         _model = State(initialValue: V15CashFlowModel(services: services, offlineSnapshotAt: offlineSnapshotAt))
-        self.initialGalleryScenario = initialGalleryScenario
         self.initialItem = initialItem
+        preparesOwnModel = true
+    }
+
+    public init(model: V15CashFlowModel) {
+        _model = State(initialValue: model)
+        _section = State(initialValue: model.visibleList == .history ? .history : .active)
+        initialItem = nil
+        preparesOwnModel = false
     }
 
     public var body: some View {
@@ -25,7 +32,12 @@ public struct V15CashFlowMacView: View {
         }
         .padding(24)
         .v22PageCanvas()
-        .task { if model.phase == .idle { await model.load(); await applyInitialScenario() }; if let initialItem { model.showVerifiedItem(initialItem) } }
+        .task {
+            guard preparesOwnModel else { return }
+            if model.phase == .idle { await model.load() }
+            if let initialItem { model.showVerifiedItem(initialItem) }
+        }
+        .onChange(of: model.visibleList) { _, value in section = value == .history ? .history : .active }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f3d.cash-flow.macos")
     }
@@ -244,23 +256,5 @@ public struct V15CashFlowMacView: View {
     private func settleOpenReasons(_ item: V15CashFlowItem) -> [V15DisabledReason] { var values: [V15DisabledReason] = []; if model.writeLocked { values.append(.init(code: "write_locked", message: "上一项操作还没有完成。", fieldPath: nil)) }; if !item.allows(.settle) { values.append(.init(code: "server_action_unavailable", message: "当前状态不能入账。", fieldPath: "actions")) }; return values }
     private func systemOpenReasons(_ item: V15CashFlowItem) -> [V15DisabledReason] { var values: [V15DisabledReason] = []; if model.writeLocked { values.append(.init(code: "write_locked", message: "上一项操作还没有完成。", fieldPath: nil)) }; if item.systemKind == .creditCycle { values.append(.init(code: "credit_projection_read_only", message: "信用账单安排只供查看。", fieldPath: "system_kind")) }; if !item.allows(.edit) { values.append(.init(code: "server_action_unavailable", message: "当前状态不能修改。", fieldPath: "actions")) }; return values }
 
-    private func applyInitialScenario() async {
-        guard let scenario = initialGalleryScenario else { return }
-        if scenario.contains("history") { section = .history; await model.setVisibleList(.history); if let item = model.history?.items.first { await model.selectItem(item, from: .history) } }
-        else if let item = model.active?.items.first { await model.selectItem(item) }
-        if scenario.contains("conflict"), let item = model.active?.items.first {
-            await model.selectItem(item); model.openEdit(item); model.title = "冲突中的现金流修改"; await model.update()
-        }
-        else if scenario.contains("unknown"), let item = model.active?.items.first(where: { $0.id == V15F3DFixtures.transferID.uuidString }) {
-            await model.selectItem(item); model.openSettle(item); await model.settle()
-        }
-        else if scenario.contains("partial-refresh") {
-            model.openCreate(); model.title = "新建现金流"; model.amountText = "123.45"; model.expectedDateText = "2026-08-28"; await model.create()
-        }
-        else if scenario.contains("create") { model.openCreate(); model.title = "新建现金流"; model.amountText = scenario.contains("invalid") ? "12.345" : "123.45"; model.expectedDateText = "2026-08-28" }
-        else if scenario.contains("settle"), let item = model.active?.items.first(where: { $0.id == V15F3DFixtures.transferID.uuidString }) { await model.selectItem(item); model.openSettle(item) }
-        else if scenario.contains("system"), let item = model.active?.items.first(where: { $0.systemKind == .reimbursement }) { await model.selectItem(item); model.openEdit(item) }
-        else if scenario.contains("edit"), let item = model.active?.items.first { await model.selectItem(item); model.openEdit(item); model.mutationScope = .thisAndFuture }
-    }
 }
 #endif

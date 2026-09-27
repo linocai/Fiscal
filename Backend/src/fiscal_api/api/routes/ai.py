@@ -6,9 +6,6 @@ from starlette import status as http_status
 
 from fiscal_api.api.dependencies import AIServiceDependency, formal_mutation
 from fiscal_api.api.p8_schemas import (
-    AIExecutionPolicyReplace,
-    AIExecutionPolicyResponse,
-    AILearningRuleResponse,
     AIProposalCreate,
     AIProposalMutationResponse,
     AIProposalPage,
@@ -19,12 +16,8 @@ from fiscal_api.api.p8_schemas import (
     AIProposalVersionRequest,
     AIProviderSettingsReplace,
     AIProviderSettingsResponse,
-    AIQualityEventResponse,
-    AIQualityMetricsResponse,
     AISettingsReplace,
     AISettingsResponse,
-    AIShadowEvaluationCreate,
-    AIShadowEvaluationResponse,
     ProposalStatus,
 )
 from fiscal_api.core.security import AuthenticatedDependency, require_authenticated
@@ -50,54 +43,6 @@ async def update_ai_settings(
     replacement: AISettingsReplace, service: AIServiceDependency
 ) -> AISettingsResponse:
     return await service.update_settings(replacement)
-
-
-@router.get("/quality/metrics", response_model=AIQualityMetricsResponse)
-async def get_ai_quality_metrics(service: AIServiceDependency) -> AIQualityMetricsResponse:
-    return await service.quality_metrics()
-
-
-@router.get("/strategy", response_model=list[AIExecutionPolicyResponse])
-async def list_ai_strategy(service: AIServiceDependency) -> list[AIExecutionPolicyResponse]:
-    return await service.policies()
-
-
-@router.post(
-    "/strategy",
-    response_model=AIExecutionPolicyResponse,
-    dependencies=[formal_mutation("ai")],
-)
-async def replace_ai_strategy(
-    replacement: AIExecutionPolicyReplace, service: AIServiceDependency
-) -> AIExecutionPolicyResponse:
-    return await service.replace_policy(replacement)
-
-
-@router.post(
-    "/shadow-evaluations",
-    response_model=AIShadowEvaluationResponse,
-    dependencies=[formal_mutation("ai")],
-)
-async def record_ai_shadow_evaluation(
-    record: AIShadowEvaluationCreate, service: AIServiceDependency
-) -> AIShadowEvaluationResponse:
-    return await service.record_shadow_evaluation(record)
-
-
-@router.get("/learning-rules", response_model=list[AILearningRuleResponse])
-async def list_ai_learning_rules(service: AIServiceDependency) -> list[AILearningRuleResponse]:
-    return await service.rules()
-
-
-@router.post(
-    "/learning-rules/{rule_id}/revoke",
-    response_model=AILearningRuleResponse,
-    dependencies=[formal_mutation("ai")],
-)
-async def revoke_ai_learning_rule(
-    rule_id: UUID, service: AIServiceDependency
-) -> AILearningRuleResponse:
-    return await service.revoke_rule(rule_id)
 
 
 @router.get("/provider-settings", response_model=AIProviderSettingsResponse)
@@ -163,13 +108,6 @@ async def delete_ai_proposal(
 ) -> Response:
     await service.delete(proposal_id, expected_version)
     return Response(status_code=http_status.HTTP_204_NO_CONTENT)
-
-
-@router.get("/proposals/{proposal_id}/quality-events", response_model=list[AIQualityEventResponse])
-async def get_ai_quality_events(
-    proposal_id: UUID, service: AIServiceDependency
-) -> list[AIQualityEventResponse]:
-    return await service.quality_events(proposal_id)
 
 
 @router.put(

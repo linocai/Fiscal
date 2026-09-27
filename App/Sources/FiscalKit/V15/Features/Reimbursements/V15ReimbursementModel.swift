@@ -26,14 +26,14 @@ public final class V15ReimbursementModel {
     public private(set) var candidatePagePhase: PagePhase = .idle
     public private(set) var candidates: [V15ReimbursementCandidate] = []
     public private(set) var nextCandidateCursor: String?
-    public private(set) var selectedCandidate: V15ReimbursementCandidate?
+    public private(set) var selectedCandidates: [V15ReimbursementCandidate] = []
+    private var expenseAmountTexts: [UUID: String] = [:]
     public private(set) var newClaimIssues: [V15FieldIssue] = []
     public private(set) var newClaimServerIssues: [V15FieldIssue] = []
     public private(set) var newClaimResult: V15ReimbursementClaim?
     public var claimTitle = "" { didSet { newClaimInputChanged(fieldPath: "title") } }
-    public var partyName = "" { didSet { newClaimInputChanged(fieldPath: "parties[0].name") } }
-    public var allocationAmountText = "" { didSet { newClaimInputChanged(fieldPath: "parties[0].allocations[0].amount_minor") } }
-    public var expectedDateText = "" { didSet { newClaimInputChanged(fieldPath: "parties[0].expected_date") } }
+    public var counterpartyName = "" { didSet { newClaimInputChanged(fieldPath: "counterparty_name") } }
+    public var expectedDateText = "" { didSet { newClaimInputChanged(fieldPath: "expected_date") } }
     public var candidateQuery = "" { didSet { candidateFilterChanged() } }
     public var candidateDateFrom = "" { didSet { candidateFilterChanged() } }
     public var candidateDateTo = "" { didSet { candidateFilterChanged() } }
@@ -43,7 +43,6 @@ public final class V15ReimbursementModel {
     public var receiptAccountsPhase: Phase { selectedClaim.flatMap { receiptStates[$0.id]?.accountsPhase } ?? .idle }
     public var receiptAccounts: [V15ReceiptAccountOption] { selectedClaim.flatMap { receiptStates[$0.id]?.accounts } ?? [] }
     public var selectedReceiptAccount: V15ReceiptAccountOption? { selectedClaim.flatMap { receiptStates[$0.id]?.selectedAccount } }
-    public var selectedPartyID: UUID? { selectedClaim.flatMap { receiptStates[$0.id]?.selectedPartyID } }
     public var receiptPreview: V15ReimbursementReceiptPreview? { selectedClaim.flatMap { receiptStates[$0.id]?.preview } }
     public var receiptIssues: [V15FieldIssue] { selectedClaim.flatMap { receiptStates[$0.id]?.issues } ?? [] }
     public var receiptServerIssues: [V15FieldIssue] { selectedClaim.flatMap { receiptStates[$0.id]?.serverIssues } ?? [] }
@@ -113,7 +112,7 @@ public final class V15ReimbursementModel {
     private var newClaimSessionID = UUID()
     private var receiptSessionID = UUID()
 
-    private struct CreateClaimAttempt: Sendable, Equatable { let operationID: UUID; let editorID: UUID; let request: V15ReimbursementClaimDraft; let candidate: V15ReimbursementCandidate; let identity: String; let key: UUID }
+    private struct CreateClaimAttempt: Sendable, Equatable { let operationID: UUID; let editorID: UUID; let request: V15ReimbursementClaimDraft; let candidates: [V15ReimbursementCandidate]; let identity: String; let key: UUID }
     private struct ReceiptAttempt: Sendable, Equatable { let operationID: UUID; let claimID: UUID; let request: V15ReimbursementReceiptCreateCommitRequest; let identity: String; let key: UUID }
     private enum SecondaryAttempt: Sendable, Equatable {
         case claimReplace(operationID: UUID, owner: UUID, request: V15ReimbursementClaimCommitRequest, key: UUID)
@@ -130,7 +129,6 @@ public final class V15ReimbursementModel {
         var accountsPhase: Phase = .idle
         var accounts: [V15ReceiptAccountOption] = []
         var selectedAccount: V15ReceiptAccountOption?
-        var selectedPartyID: UUID?
         var preview: V15ReimbursementReceiptPreview?
         var preparedDraft: V15ReimbursementReceiptDraft?
         var issues: [V15FieldIssue] = []
@@ -201,7 +199,7 @@ public final class V15ReimbursementModel {
         var reasons = newClaimIssues.map(reason)
         if isOffline { reasons.append(.init(code: "offline_read_only", message: "离线时只可查看，无法新建报销单。", fieldPath: nil)) }
         if createAttempt != nil { reasons.append(.init(code: "claim_attempt_in_flight", message: "上一笔新建操作仍在处理中，或结果暂时不明。请先安全检查保存结果。", fieldPath: nil)) }
-        if candidatesPhase == .loading { reasons.append(.init(code: "candidates_loading", message: "垫付候选仍在读取，请稍候。", fieldPath: "parties[0].allocations[0].transaction_id")) }
+        if candidatesPhase == .loading { reasons.append(.init(code: "candidates_loading", message: "垫付候选仍在读取，请稍候。", fieldPath: "expenses[0].transaction_id")) }
         return uniqueReasons(reasons)
     }
     public var receiptPreviewDisabledReasons: [V15DisabledReason] {
@@ -399,17 +397,17 @@ public final class V15ReimbursementModel {
             newClaimTouchedFields = []; newClaimSubmissionAttempted = false
             isApplyingNewClaim = true
             claimTitle = attempt.request.title
-            partyName = attempt.request.parties.first?.name ?? ""
-            expectedDateText = attempt.request.parties.first?.expectedDate ?? ""
-            allocationAmountText = attempt.request.parties.first?.allocations.first.map { formatMinor($0.amountMinor) } ?? ""
-            selectedCandidate = attempt.candidate
+            counterpartyName = attempt.request.counterpartyName
+            expectedDateText = attempt.request.expectedDate ?? ""
+            selectedCandidates = attempt.candidates
+            expenseAmountTexts = Dictionary(uniqueKeysWithValues: attempt.request.expenses.map { ($0.transactionID, formatMinor($0.amountMinor)) })
             isApplyingNewClaim = false
             validateNewClaim()
             return
         }
         newClaimSessionID = UUID(); newClaimSheetVisible = true; newClaimPhase = .loading; newClaimIssues = []; newClaimServerIssues = []; newClaimResult = nil
         newClaimTouchedFields = []; newClaimSubmissionAttempted = false
-        isApplyingNewClaim = true; claimTitle = ""; partyName = ""; allocationAmountText = ""; expectedDateText = ""; selectedCandidate = nil; isApplyingNewClaim = false
+        isApplyingNewClaim = true; claimTitle = ""; counterpartyName = ""; expectedDateText = ""; selectedCandidates = []; expenseAmountTexts = [:]; isApplyingNewClaim = false
         await loadCandidates(reset: true)
         if let transactionID { await selectInitialCandidate(transactionID: transactionID) }
         validateNewClaim()
@@ -426,9 +424,27 @@ public final class V15ReimbursementModel {
     public func loadNextCandidates() async { await loadCandidates(reset: false) }
     public func chooseCandidate(_ candidate: V15ReimbursementCandidate) {
         guard candidate.eligibility.eligible else { newClaimServerIssues = candidate.eligibility.reasonDetails.map { .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath) }; validateNewClaim(); return }
-        newClaimTouchedFields.insert("parties[0].allocations[0].transaction_id")
-        selectedCandidate = candidate
-        if allocationAmountText.isEmpty { allocationAmountText = formatMinor(candidate.availableMinor) } else { newClaimInputChanged(fieldPath: "parties[0].allocations[0].transaction_id") }
+        guard !selectedCandidates.contains(where: { $0.transactionID == candidate.transactionID }) else { return }
+        let index = selectedCandidates.count
+        selectedCandidates.append(candidate)
+        expenseAmountTexts[candidate.transactionID] = formatMinor(candidate.availableMinor)
+        newClaimInputChanged(fieldPath: "expenses[\(index)].transaction_id")
+        newClaimTouchedFields.insert("expenses[\(index)].amount_minor")
+    }
+
+    public func removeCandidate(_ transactionID: UUID) {
+        guard selectedCandidates.contains(where: { $0.transactionID == transactionID }) else { return }
+        selectedCandidates.removeAll { $0.transactionID == transactionID }
+        expenseAmountTexts.removeValue(forKey: transactionID)
+        newClaimInputChanged(fieldPath: "expenses[0].transaction_id")
+    }
+
+    public func expenseAmountText(for transactionID: UUID) -> String { expenseAmountTexts[transactionID] ?? "" }
+
+    public func setExpenseAmountText(_ text: String, for transactionID: UUID) {
+        guard let index = selectedCandidates.firstIndex(where: { $0.transactionID == transactionID }) else { return }
+        expenseAmountTexts[transactionID] = text
+        newClaimInputChanged(fieldPath: "expenses[\(index)].amount_minor")
     }
 
     private func selectInitialCandidate(transactionID: UUID) async {
@@ -448,10 +464,10 @@ public final class V15ReimbursementModel {
                     chooseCandidate(candidate)
                 } else {
                     let issues = candidate.eligibility.reasonDetails.map {
-                        V15FieldIssue(code: $0.code, message: $0.message, fieldPath: $0.fieldPath ?? "parties[0].allocations[0].transaction_id")
+                        V15FieldIssue(code: $0.code, message: $0.message, fieldPath: $0.fieldPath ?? "expenses[0].transaction_id")
                     }
                     newClaimServerIssues = issues.isEmpty ? [
-                        .init(code: "initial_reimbursement_candidate_ineligible", message: "这笔账目当前不符合报销条件。", fieldPath: "parties[0].allocations[0].transaction_id")
+                        .init(code: "initial_reimbursement_candidate_ineligible", message: "这笔账目当前不符合报销条件。", fieldPath: "expenses[0].transaction_id")
                     ] : issues
                     newClaimPhase = .failed(.init(kind: .decoding, code: "initial_reimbursement_candidate_ineligible", message: "这笔账目当前不符合报销条件，请查看原因。"))
                 }
@@ -466,7 +482,7 @@ public final class V15ReimbursementModel {
             }
             guard let cursor = nextCandidateCursor else {
                 newClaimServerIssues = [
-                    .init(code: "initial_reimbursement_candidate_not_found", message: "这笔账目当前不在可报销候选中；它可能已报销、已作废或不符合条件。", fieldPath: "parties[0].allocations[0].transaction_id")
+                    .init(code: "initial_reimbursement_candidate_not_found", message: "这笔账目当前不在可报销候选中；它可能已报销、已作废或不符合条件。", fieldPath: "expenses[0].transaction_id")
                 ]
                 newClaimPhase = .failed(.init(kind: .decoding, code: "initial_reimbursement_candidate_not_found", message: "无法在服务器候选中找到这笔账目，没有替换为其他候选。"))
                 return
@@ -481,8 +497,8 @@ public final class V15ReimbursementModel {
 
     public func createClaim() async {
         newClaimSubmissionAttempted = true
-        validateNewClaim(); guard createClaimDisabledReasons.isEmpty, let request = makeNewClaimDraft(recordIssues: true), let candidate = selectedCandidate else { return }
-        let identity = claimIdentity(request); let attempt = CreateClaimAttempt(operationID: UUID(), editorID: newClaimSessionID, request: request, candidate: candidate, identity: identity, key: UUID())
+        validateNewClaim(); guard createClaimDisabledReasons.isEmpty, let request = makeNewClaimDraft(recordIssues: true) else { return }
+        let identity = claimIdentity(request); let attempt = CreateClaimAttempt(operationID: UUID(), editorID: newClaimSessionID, request: request, candidates: selectedCandidates, identity: identity, key: UUID())
         createAttempt = attempt; newClaimGeneration &+= 1; newClaimPhase = .committing
         await performCreateClaim(attempt)
     }
@@ -494,7 +510,6 @@ public final class V15ReimbursementModel {
         receiptSessionID = UUID(); receiptSheetVisible = true
         if let attempt = receiptAttempts[claim.id] {
             withReceiptState(claim.id) { state in
-                state.selectedPartyID = attempt.request.partyID
                 state.selectedAccount = state.accounts.first { $0.id == attempt.request.destinationAccountID }
                 state.preview = nil; state.preparedDraft = nil
             }
@@ -505,9 +520,9 @@ public final class V15ReimbursementModel {
             return
         }
         guard claim.status.isKnown else { withReceiptState(claim.id) { $0.phase = .failed(.init(kind: .decoding, code: "unknown_claim_status", message: "暂时无法识别此状态，只能查看。")) }; receiptSheetVisible = false; return }
-        withReceiptState(claim.id) { state in state = ReceiptState(); state.phase = .loading; state.selectedPartyID = claim.parties.first(where: { $0.outstandingMinor > 0 })?.id }
+        withReceiptState(claim.id) { state in state = ReceiptState(); state.phase = .loading }
         isApplyingReceipt = true; receiptTitle = "报销到账"; receiptAmountText = ""; receiptDateText = ShanghaiBusinessDate.string(for: now()); isApplyingReceipt = false
-        if let party = claim.parties.first(where: { $0.id == selectedPartyID }) { receiptAmountText = formatMinor(party.outstandingMinor) }
+        receiptAmountText = formatMinor(claim.outstandingMinor)
         await loadReceiptAccounts()
         validateReceipt()
     }
@@ -519,7 +534,6 @@ public final class V15ReimbursementModel {
     }
     public func retryReceiptAccounts() async { await loadReceiptAccounts() }
     public func chooseReceiptAccount(_ account: V15ReceiptAccountOption) { guard let owner = selectedClaim?.id else { return }; withReceiptState(owner) { $0.selectedAccount = account }; receiptInputChanged() }
-    public func chooseParty(_ id: UUID) { guard let owner = selectedClaim?.id else { return }; withReceiptState(owner) { $0.selectedPartyID = id }; receiptInputChanged() }
 
     public func previewReceipt() async {
         validateReceipt(); guard receiptPreviewDisabledReasons.isEmpty, let claim = selectedClaim, let request = makeReceiptDraft(recordIssues: true) else { return }
@@ -532,7 +546,7 @@ public final class V15ReimbursementModel {
 
     public func commitReceipt() async {
         validateReceipt(); guard receiptCommitDisabledReasons.isEmpty, let claim = selectedClaim, let draft = makeReceiptDraft(recordIssues: true), let preview = receiptPreview else { return }
-        let request = V15ReimbursementReceiptCreateCommitRequest(expectedClaimVersion: draft.expectedClaimVersion, partyID: draft.partyID, amountMinor: draft.amountMinor, receivedAt: draft.receivedAt, destinationAccountID: draft.destinationAccountID, title: draft.title, note: draft.note, previewToken: preview.previewToken)
+        let request = V15ReimbursementReceiptCreateCommitRequest(expectedClaimVersion: draft.expectedClaimVersion, amountMinor: draft.amountMinor, receivedAt: draft.receivedAt, destinationAccountID: draft.destinationAccountID, title: draft.title, note: draft.note, previewToken: preview.previewToken)
         let attempt = ReceiptAttempt(operationID: UUID(), claimID: claim.id, request: request, identity: receiptCommitIdentity(request), key: UUID())
         receiptAttempts[claim.id] = attempt; withReceiptState(claim.id) { $0.phase = .committing }
         await performReceipt(attempt)
@@ -627,7 +641,7 @@ public final class V15ReimbursementModel {
         guard let claim = selectedClaim else { return }
         if secondaryStates[claim.id]?.claimReplacementTitle.isEmpty != false { openClaimReplacement() }
         guard claimReplacementPreviewReasons(for: claim).isEmpty else { syncSecondaryIssues(claimReplacementPreviewReasons(for: claim)); return }
-        let request = V15ReimbursementClaimPreviewRequest(title: claimReplacementTitle.trimmingCharacters(in: .whitespacesAndNewlines), note: claimReplacementNote.nilIfEmpty, parties: claim.parties.map(partyDraft), expectedVersion: claim.version)
+        let request = V15ReimbursementClaimPreviewRequest(title: claimReplacementTitle.trimmingCharacters(in: .whitespacesAndNewlines), note: claimReplacementNote.nilIfEmpty, counterpartyName: claim.counterpartyName, expectedDate: claim.expectedDate, expenses: claim.expenses.map(expenseDraft), expectedVersion: claim.version)
         secondaryGenerations[claim.id, default: 0] &+= 1; let generation = secondaryGenerations[claim.id]!
         withSecondaryState(claim.id) { $0.phase = .previewing; $0.claimPreview = nil; $0.cancelPreview = nil; $0.receiptPreview = nil; $0.preparedClaimRequest = request; $0.issues = [] }
         do { let value = try await services.reimbursements.previewClaim(claimID: claim.id, request: request); guard generation == secondaryGenerations[claim.id], secondaryStates[claim.id]?.preparedClaimRequest == request else { return }; withSecondaryState(claim.id) { $0.claimPreview = value; $0.phase = .previewed } }
@@ -636,7 +650,7 @@ public final class V15ReimbursementModel {
     }
     public func commitCurrentClaimReplacement() async {
         guard let claim = selectedClaim, let preview = claimReplacePreview, preview.claimVersion == claim.version, !isOffline, secondaryStates[claim.id]?.preparedClaimRequest != nil else { return }
-        let request = V15ReimbursementClaimCommitRequest(title: preview.proposed.title, note: preview.proposed.note, parties: preview.proposed.parties.map(partyDraft), expectedVersion: preview.claimVersion, previewToken: preview.previewToken)
+        let request = V15ReimbursementClaimCommitRequest(title: preview.proposed.title, note: preview.proposed.note, counterpartyName: preview.proposed.counterpartyName, expectedDate: preview.proposed.expectedDate, expenses: preview.proposed.expenses.map(expenseDraft), expectedVersion: preview.claimVersion, previewToken: preview.previewToken)
         guard claimReplacementCommitReasons(for: claim).isEmpty else { return }
         let attempt = SecondaryAttempt.claimReplace(operationID: UUID(), owner: claim.id, request: request, key: UUID()); secondaryAttempts[claim.id] = attempt; withSecondaryState(claim.id) { $0.phase = .committing }; await performSecondary(attempt)
     }
@@ -658,7 +672,7 @@ public final class V15ReimbursementModel {
         if secondaryStates[claim.id]?.replacementReceiptID != receipt.id { openReceiptReplacement(receipt) }
         let reasons = receiptReplacementPreviewReasons(for: receipt, claim: claim)
         guard reasons.isEmpty, let amount = CNYAmountParser.minorUnits(receiptReplacementAmountText), let receivedAt = shanghaiStartOfDay(receiptReplacementDateText) else { syncSecondaryIssues(reasons); return }
-        let request = V15ReimbursementReceiptReplacePreviewRequest(expectedClaimVersion: claim.version, partyID: receipt.partyID, amountMinor: amount, receivedAt: receivedAt, destinationAccountID: receipt.destinationAccountID, title: receiptReplacementTitle.trimmingCharacters(in: .whitespacesAndNewlines), note: receipt.note, expectedReceiptVersion: receipt.version)
+        let request = V15ReimbursementReceiptReplacePreviewRequest(expectedClaimVersion: claim.version, amountMinor: amount, receivedAt: receivedAt, destinationAccountID: receipt.destinationAccountID, title: receiptReplacementTitle.trimmingCharacters(in: .whitespacesAndNewlines), note: receipt.note, expectedReceiptVersion: receipt.version)
         secondaryGenerations[claim.id, default: 0] &+= 1; let generation = secondaryGenerations[claim.id]!
         withSecondaryState(claim.id) { $0.phase = .previewing; $0.claimPreview = nil; $0.cancelPreview = nil; $0.receiptPreview = nil; $0.preparedReceiptRequest = request; $0.issues = [] }
         do { let value = try await services.reimbursements.previewReceiptReplacement(receiptID: receipt.id, request: request); guard generation == secondaryGenerations[claim.id], secondaryStates[claim.id]?.preparedReceiptRequest == request else { return }; withSecondaryState(claim.id) { $0.receiptPreview = value; $0.phase = .previewed } }
@@ -667,7 +681,7 @@ public final class V15ReimbursementModel {
     }
     public func commitReceiptReplacement(_ receipt: V15ReimbursementReceipt) async {
         guard let claim = selectedClaim, let preview = replacementReceiptPreview, preview.claimVersion == claim.version, preview.receiptVersion == receipt.version, !isOffline, let prepared = secondaryStates[claim.id]?.preparedReceiptRequest else { return }
-        let request = V15ReimbursementReceiptReplaceCommitRequest(expectedClaimVersion: prepared.expectedClaimVersion, partyID: prepared.partyID, amountMinor: prepared.amountMinor, receivedAt: prepared.receivedAt, destinationAccountID: prepared.destinationAccountID, title: prepared.title, note: prepared.note, expectedReceiptVersion: prepared.expectedReceiptVersion, previewToken: preview.previewToken)
+        let request = V15ReimbursementReceiptReplaceCommitRequest(expectedClaimVersion: prepared.expectedClaimVersion, amountMinor: prepared.amountMinor, receivedAt: prepared.receivedAt, destinationAccountID: prepared.destinationAccountID, title: prepared.title, note: prepared.note, expectedReceiptVersion: prepared.expectedReceiptVersion, previewToken: preview.previewToken)
         guard receiptReplacementCommitReasons(for: receipt, claim: claim).isEmpty else { return }
         let attempt = SecondaryAttempt.receiptReplace(operationID: UUID(), owner: claim.id, receiptID: receipt.id, request: request, key: UUID()); secondaryAttempts[claim.id] = attempt; withSecondaryState(claim.id) { $0.phase = .committing }; await performSecondary(attempt)
     }
@@ -809,7 +823,7 @@ public final class V15ReimbursementModel {
     }
 
     private func newClaimInputChanged(fieldPath: String) { guard !isApplyingNewClaim else { return }; newClaimTouchedFields.insert(fieldPath); newClaimServerIssues = []; if createAttempt == nil, newClaimSheetVisible { newClaimPhase = .ready }; validateNewClaim() }
-    private func candidateFilterChanged() { guard newClaimSheetVisible else { return }; newClaimTouchedFields.insert("parties[0].allocations[0].transaction_id"); candidateGeneration &+= 1; candidatePageGeneration &+= 1; selectedCandidate = nil; newClaimServerIssues = []; if createAttempt == nil { newClaimPhase = .ready }; validateNewClaim() }
+    private func candidateFilterChanged() { guard newClaimSheetVisible else { return }; candidateGeneration &+= 1; candidatePageGeneration &+= 1; newClaimServerIssues = []; if createAttempt == nil { newClaimPhase = .ready }; validateNewClaim() }
     private func receiptInputChanged() { guard !isApplyingReceipt, let owner = selectedClaim?.id else { return }; receiptPreviewGenerations[owner, default: 0] &+= 1; withReceiptState(owner) { state in state.preparedDraft = nil; state.preview = nil; state.serverIssues = []; if receiptAttempts[owner] == nil, receiptSheetVisible { state.phase = .ready } }; validateReceipt() }
     private func secondaryInputChanged(owner: UUID) {
         secondaryGenerations[owner, default: 0] &+= 1
@@ -825,31 +839,33 @@ public final class V15ReimbursementModel {
     }
     private func validateNewClaim() { _ = makeNewClaimDraft(recordIssues: true) }
     private func makeNewClaimDraft(recordIssues: Bool) -> V15ReimbursementClaimDraft? {
-        var issues: [V15FieldIssue] = []; let title = claimTitle.trimmingCharacters(in: .whitespacesAndNewlines); let party = partyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        var issues: [V15FieldIssue] = []; let title = claimTitle.trimmingCharacters(in: .whitespacesAndNewlines); let counterparty = counterpartyName.trimmingCharacters(in: .whitespacesAndNewlines)
         if title.isEmpty { issues.append(.init(code: "title_required", message: "请填写报销标题。", fieldPath: "title")) }; if title.count > 120 { issues.append(.init(code: "title_too_long", message: "报销标题最多 120 个字符。", fieldPath: "title")) }
-        if party.isEmpty { issues.append(.init(code: "party_required", message: "请填写报销当事人。", fieldPath: "parties[0].name")) }; if party.count > 120 { issues.append(.init(code: "party_too_long", message: "当事人最多 120 个字符。", fieldPath: "parties[0].name")) }
-        guard let candidate = selectedCandidate else { issues.append(.init(code: "candidate_required", message: "请选择一笔垫付。", fieldPath: "parties[0].allocations[0].transaction_id")); if recordIssues { newClaimIssues = issues }; return nil }
-        if !candidate.eligibility.eligible { issues.append(contentsOf: candidate.eligibility.reasonDetails.map { .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath ?? "parties[0].allocations[0].transaction_id") }) }
-        guard let amount = CNYAmountParser.minorUnits(allocationAmountText), amount > 0 else { issues.append(.init(code: "amount_invalid", message: "分摊金额须为正数，且最多两位小数。", fieldPath: "parties[0].allocations[0].amount_minor")); if recordIssues { newClaimIssues = issues }; return nil }
-        if amount > candidate.availableMinor { issues.append(.init(code: "amount_exceeds_available", message: "分摊金额不能超过可报销余额。", fieldPath: "parties[0].allocations[0].amount_minor")) }
-        let date = expectedDateText.nilIfEmpty; if !strictDateOrEmpty(date) { issues.append(.init(code: "date_invalid", message: "预计日期必须为 YYYY-MM-DD。", fieldPath: "parties[0].expected_date")) }
+        if counterparty.isEmpty { issues.append(.init(code: "counterparty_required", message: "请填写报销对象。", fieldPath: "counterparty_name")) }; if counterparty.count > 120 { issues.append(.init(code: "counterparty_too_long", message: "报销对象最多 120 个字符。", fieldPath: "counterparty_name")) }
+        if selectedCandidates.isEmpty { issues.append(.init(code: "candidate_required", message: "请至少选择一笔垫付。", fieldPath: "expenses[0].transaction_id")) }
+        var expenses: [V15ReimbursementExpenseDraft] = []
+        for (index, candidate) in selectedCandidates.enumerated() {
+            let path = "expenses[\(index)]"
+            if !candidate.eligibility.eligible { issues.append(contentsOf: candidate.eligibility.reasonDetails.map { .init(code: $0.code, message: $0.message, fieldPath: $0.fieldPath ?? "\(path).transaction_id") }) }
+            guard let amount = CNYAmountParser.minorUnits(expenseAmountTexts[candidate.transactionID] ?? ""), amount > 0 else {
+                issues.append(.init(code: "amount_invalid", message: "申请金额须为正数，且最多两位小数。", fieldPath: "\(path).amount_minor"))
+                continue
+            }
+            if amount > candidate.availableMinor { issues.append(.init(code: "amount_exceeds_available", message: "申请金额不能超过可报销余额。", fieldPath: "\(path).amount_minor")) }
+            expenses.append(.init(transactionID: candidate.transactionID, amountMinor: amount))
+        }
+        let date = expectedDateText.nilIfEmpty; if !strictDateOrEmpty(date) { issues.append(.init(code: "date_invalid", message: "预计日期必须为 YYYY-MM-DD。", fieldPath: "expected_date")) }
         if recordIssues { newClaimIssues = issues }; guard issues.isEmpty else { return nil }
-        return .init(title: title, parties: [.init(name: party, expectedDate: date, allocations: [.init(transactionID: candidate.transactionID, amountMinor: amount)])])
+        return .init(title: title, counterpartyName: counterparty, expectedDate: date, expenses: expenses)
     }
     private func validateReceipt() { _ = makeReceiptDraft(recordIssues: true) }
     private func makeReceiptDraft(recordIssues: Bool) -> V15ReimbursementReceiptDraft? {
         var issues: [V15FieldIssue] = []; guard let claim = selectedClaim else { return nil }
         guard claim.status.isKnown else { issues.append(.init(code: "unknown_claim_status", message: "未知报销状态只可查看。", fieldPath: "status")); if recordIssues { withReceiptState(claim.id) { $0.issues = issues } }; return nil }
-        let partyID = selectedPartyID
-        let party = partyID.flatMap { id in claim.parties.first(where: { $0.id == id }) }
-        if let party {
-            if party.outstandingMinor <= 0 { issues.append(.init(code: "party_fully_received", message: "该当事人没有未到账金额。", fieldPath: "party_id")) }
-        } else {
-            issues.append(.init(code: "party_required", message: "请选择到账当事人。", fieldPath: "party_id"))
-        }
+        if claim.outstandingMinor <= 0 { issues.append(.init(code: "claim_fully_received", message: "该报销单没有未到账金额。", fieldPath: "outstanding_minor")) }
         let amount = CNYAmountParser.minorUnits(receiptAmountText)
         if let amount, amount > 0 {
-            if let party, amount > party.outstandingMinor { issues.append(.init(code: "amount_exceeds_outstanding", message: "到账金额不能超过该当事人未到账金额。", fieldPath: "amount_minor")) }
+            if amount > claim.outstandingMinor { issues.append(.init(code: "amount_exceeds_outstanding", message: "到账金额不能超过报销单未到账金额。", fieldPath: "amount_minor")) }
         } else {
             issues.append(.init(code: "amount_invalid", message: "到账金额须为正数，且最多两位小数。", fieldPath: "amount_minor"))
         }
@@ -867,8 +883,8 @@ public final class V15ReimbursementModel {
             issues.append(.init(code: "date_invalid", message: "到账日期必须为 YYYY-MM-DD。", fieldPath: "received_at"))
         }
         if recordIssues { withReceiptState(claim.id) { $0.issues = issues } }
-        guard issues.isEmpty, let partyID, let amount, let account, let receivedAt else { return nil }
-        return .init(expectedClaimVersion: claim.version, partyID: partyID, amountMinor: amount, receivedAt: receivedAt, destinationAccountID: account.id, title: title)
+        guard issues.isEmpty, let amount, let account, let receivedAt else { return nil }
+        return .init(expectedClaimVersion: claim.version, amountMinor: amount, receivedAt: receivedAt, destinationAccountID: account.id, title: title)
     }
 
     private func invalidateAllReads() { listGeneration &+= 1; claimPageGeneration &+= 1; detailGeneration &+= 1; receiptPageGeneration &+= 1 }
@@ -975,10 +991,10 @@ public final class V15ReimbursementModel {
         if freshClaim.version == request.expectedClaimVersion + 1, freshReceipt.version == request.expectedReceiptVersion + 1, directReceiptTargetSatisfied(freshReceipt, action: action), beforeClaim.id == freshClaim.id, beforeReceipt.id == freshReceipt.id { return "数据已经变化，但仍无法确认是否由本次操作造成。请核对后继续。" }
         return "最新到账状态与本次操作不完全一致，暂时无法确认结果。请核对后继续。"
     }
-    private func partyDraft(_ party: V15ReimbursementParty) -> V15ReimbursementPartyDraft { .init(id: party.id, name: party.name, expectedDate: party.expectedDate, note: party.note, allocations: party.allocations.map { .init(id: $0.id, transactionID: $0.transactionID, amountMinor: $0.amountMinor) }) }
-    private func claimIdentity(_ request: V15ReimbursementClaimDraft) -> String { request.parties.flatMap(\.allocations).reduce("\(request.title)|\(request.parties.map(\.name).joined(separator: ","))") { "\($0)|\($1.transactionID)|\($1.amountMinor)" } }
-    private func receiptIdentity(_ request: V15ReimbursementReceiptDraft) -> String { "\(request.expectedClaimVersion)|\(request.partyID)|\(request.amountMinor)|\(request.receivedAt.timeIntervalSince1970)|\(request.destinationAccountID)|\(request.title)|\(request.note ?? "")" }
-    private func receiptCommitIdentity(_ request: V15ReimbursementReceiptCreateCommitRequest) -> String { "\(request.expectedClaimVersion)|\(request.partyID)|\(request.amountMinor)|\(request.receivedAt.timeIntervalSince1970)|\(request.destinationAccountID)|\(request.title)|\(request.note ?? "")|\(request.previewToken)" }
+    private func expenseDraft(_ expense: V15ReimbursementExpense) -> V15ReimbursementExpenseDraft { .init(id: expense.id, transactionID: expense.transactionID, amountMinor: expense.amountMinor) }
+    private func claimIdentity(_ request: V15ReimbursementClaimDraft) -> String { request.expenses.reduce("\(request.title)|\(request.counterpartyName)|\(request.expectedDate ?? "")") { "\($0)|\($1.transactionID)|\($1.amountMinor)" } }
+    private func receiptIdentity(_ request: V15ReimbursementReceiptDraft) -> String { "\(request.expectedClaimVersion)|\(request.amountMinor)|\(request.receivedAt.timeIntervalSince1970)|\(request.destinationAccountID)|\(request.title)|\(request.note ?? "")" }
+    private func receiptCommitIdentity(_ request: V15ReimbursementReceiptCreateCommitRequest) -> String { "\(request.expectedClaimVersion)|\(request.amountMinor)|\(request.receivedAt.timeIntervalSince1970)|\(request.destinationAccountID)|\(request.title)|\(request.note ?? "")|\(request.previewToken)" }
     private func currentReceiptIdentity() -> String? { makeReceiptDraft(recordIssues: false).map(receiptIdentity) }
     private func reason(_ issue: V15FieldIssue) -> V15DisabledReason { .init(code: issue.code, message: issue.message, fieldPath: issue.fieldPath) }
     private func uniqueReasons(_ values: [V15DisabledReason]) -> [V15DisabledReason] { var seen = Set<String>(); return values.filter { seen.insert("\($0.code)|\($0.fieldPath ?? "")").inserted } }

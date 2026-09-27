@@ -87,18 +87,12 @@ public struct V15ReportingMacView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("下一个期间")
                 .accessibilityIdentifier("v15.f4a.period.next")
-            Menu {
-                Button("导出 CSV") { model.beginExport(.csv) }
-                    .disabled(model.exportDisabledReason != nil)
-                    .accessibilityIdentifier("v15.f4b.export.csv")
-                Button("导出 PDF") { model.beginExport(.pdf) }
-                    .disabled(model.exportDisabledReason != nil)
-                    .accessibilityIdentifier("v15.f4b.export.pdf")
-            } label: {
-                Label("导出", systemImage: "square.and.arrow.up")
+            Button { model.beginExport(.csv) } label: {
+                Label("导出 CSV", systemImage: "square.and.arrow.up")
                     .font(V15Typography.secondary.weight(.semibold))
             }
-            .menuStyle(.borderlessButton)
+            .disabled(model.exportDisabledReason != nil)
+            .buttonStyle(.plain)
             .accessibilityIdentifier("v15.f4b.export")
             Button { Task { await model.load() } } label: { Image(systemName: V15Symbol.retry) }
                 .buttonStyle(.plain)
@@ -430,8 +424,6 @@ public struct V15ReportingMacView: View {
 
     private func completenessRows(_ value: V15PeriodReport.Completeness) -> some View {
         VStack(spacing: 0) {
-            countRow("未处理导入", value.unresolvedImportCount)
-            countRow("失败导入", value.failedImportCount)
             countRow("未分类", value.uncategorizedTransactionCount)
         }
     }
@@ -647,8 +639,8 @@ public struct V15ReportingMacView: View {
                     .foregroundStyle(V15Palette.ink.color.opacity(0.66))
             }
             switch model.exportPhase {
-            case .confirming(let format):
-                Text(format == .pdf ? "PDF 仅供阅读；不含口令、完整账户标识、账单或 AI 原始内容。" : "CSV 用于逐行复核；不含口令、完整账户标识、账单或 AI 原始内容。")
+            case .confirming:
+                Text("CSV 用于逐行复核；不含口令、完整账户标识或 AI 原始内容。")
                 HStack {
                     V15ActionButton("取消", kind: .secondary) { model.cancelExport() }
                     V15ActionButton("开始导出") { Task { await model.exportConfirmed() } }

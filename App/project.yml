@@ -11,8 +11,8 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     GENERATE_INFOPLIST_FILE: YES
-    MARKETING_VERSION: 2.3.0
-    CURRENT_PROJECT_VERSION: 48
+    MARKETING_VERSION: 2.4.0
+    CURRENT_PROJECT_VERSION: 50
 targets:
   FiscalKit:
     type: framework
@@ -22,6 +22,35 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.kit
         DEFINES_MODULE: YES
+      configs:
+        Debug:
+          ENABLE_TESTABILITY: YES
+  FiscalPreviewSupportiOS:
+    type: framework
+    platform: iOS
+    sources: Tests/PreviewSupport
+    dependencies:
+      - target: FiscalKit_iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.preview-support.ios
+        DEFINES_MODULE: YES
+      configs:
+        Debug:
+          ENABLE_TESTABILITY: YES
+  FiscalPreviewSupportmacOS:
+    type: framework
+    platform: macOS
+    sources: Tests/PreviewSupport
+    dependencies:
+      - target: FiscalKit_macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.preview-support.macos
+        DEFINES_MODULE: YES
+      configs:
+        Debug:
+          ENABLE_TESTABILITY: YES
   FiscaliOS:
     type: application
     platform: iOS
@@ -116,6 +145,7 @@ targets:
         UILaunchScreen: {}
     dependencies:
       - target: FiscalKit_iOS
+      - target: FiscalPreviewSupportiOS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.v15-gallery.ios
@@ -133,6 +163,7 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
     dependencies:
       - target: FiscalKit_macOS
+      - target: FiscalPreviewSupportmacOS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.v15-gallery.macos
@@ -144,6 +175,7 @@ targets:
     sources:
       - Apps/iOS/V15RootSmoke
       - Apps/iOS/IOSRootView.swift
+      - Apps/iOS/FiscalNotifications.swift
     info:
       path: Apps/iOS/V15RootSmoke/Info.plist
       properties:
@@ -151,11 +183,15 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         FISCAL_API_BASE_URL: "$(FISCAL_API_BASE_URL)"
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - fiscal-qa
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UILaunchScreen: {}
     dependencies:
       - target: FiscalKit_iOS
+      - target: FiscalPreviewSupportiOS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.v15-root-smoke.ios
@@ -181,6 +217,7 @@ targets:
           NSAllowsLocalNetworking: true
     dependencies:
       - target: FiscalKit_macOS
+      - target: FiscalPreviewSupportmacOS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.v15-root-smoke.macos
@@ -231,6 +268,7 @@ targets:
     sources: Tests/FiscalKitTests
     dependencies:
       - target: FiscalKit_macOS
+      - target: FiscalPreviewSupportmacOS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.kit.tests
@@ -240,6 +278,7 @@ targets:
     sources: Tests/V15GallerySnapshotTool
     dependencies:
       - target: FiscalKit_macOS
+      - target: FiscalPreviewSupportmacOS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.linotsai.fiscal.v15-gallery-snapshot-tool

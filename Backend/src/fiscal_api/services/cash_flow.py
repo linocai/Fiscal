@@ -110,7 +110,7 @@ class CashFlowService:
 
     async def history(self, month: str | None) -> CashFlowHistoryResponse:
         month_value, start, end = self._month_range(month)
-        reimbursement_values = await self._reimbursement_values_by_party()
+        reimbursement_values = await self._reimbursement_values_by_claim()
         items = [
             await self._manual_response(item, self._today())
             for item in await self.repository.history(start, end)
@@ -356,7 +356,7 @@ class CashFlowService:
             override.version += 1
             override.updated_at = utc_now()
         await self.session.commit()
-        reimbursement_values = await self._reimbursement_values_by_party()
+        reimbursement_values = await self._reimbursement_values_by_claim()
         return self._system_override_response(
             override,
             self._today(),
@@ -682,20 +682,20 @@ class CashFlowService:
                     ],
                 )
             )
-        party_values = {
-            party_id: value
-            for party_id, value in (await self._reimbursement_values_by_party()).items()
+        claim_values = {
+            claim_id: value
+            for claim_id, value in (await self._reimbursement_values_by_claim()).items()
             if value[1] > 0
         }
-        for fact_value, amount in party_values.values():
+        for fact_value, amount in claim_values.values():
             fact = fact_value
             expected = fact.expected_date
             result.append(
                 CashFlowItemResponse(
-                    id=f"reimbursement:{fact.party_id}",
+                    id=f"reimbursement:{fact.claim_id}",
                     system_kind=CashFlowSystemKind.REIMBURSEMENT,
-                    system_reference_id=fact.party_id,
-                    title=f"{fact.party_name} 报销待到账",
+                    system_reference_id=fact.claim_id,
+                    title=f"{fact.counterparty_name} 报销待到账",
                     direction=CashFlowDirection.INFLOW,
                     planned_amount_minor=amount,
                     remaining_amount_minor=amount,
@@ -709,10 +709,10 @@ class CashFlowService:
             )
         return result
 
-    async def _reimbursement_values_by_party(
+    async def _reimbursement_values_by_claim(
         self,
     ) -> dict[UUID, tuple[ReimbursementFact, int]]:
-        party_values: dict[UUID, tuple[ReimbursementFact, int]] = {}
+        claim_values: dict[UUID, tuple[ReimbursementFact, int]] = {}
         for fact in await self.reporting_repository.reimbursement_facts():
             if (
                 fact.claim_voided_at is not None
@@ -723,10 +723,10 @@ class CashFlowService:
             outstanding = checked_int64(
                 fact.allocated_minor - fact.received_minor, label="reimbursement outstanding"
             )
-            current = party_values.get(fact.party_id)
+            current = claim_values.get(fact.claim_id)
             total = outstanding if current is None else checked_int64(current[1] + outstanding)
-            party_values[fact.party_id] = (fact, total)
-        return {party_id: (value[0], max(0, value[1])) for party_id, value in party_values.items()}
+            claim_values[fact.claim_id] = (fact, total)
+        return {claim_id: (value[0], max(0, value[1])) for claim_id, value in claim_values.items()}
 
     @staticmethod
     def _system_override_response(

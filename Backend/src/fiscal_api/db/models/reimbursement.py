@@ -41,6 +41,9 @@ class ReimbursementClaim(Base):
     __tablename__ = "reimbursement_claims"
     __table_args__ = (
         CheckConstraint("char_length(title) BETWEEN 1 AND 120", name="title_length"),
+        CheckConstraint(
+            "char_length(counterparty_name) BETWEEN 1 AND 120", name="counterparty_name_length"
+        ),
         CheckConstraint("note IS NULL OR char_length(note) <= 500", name="note_length"),
         CheckConstraint("version >= 1", name="version_positive"),
         UniqueConstraint(
@@ -52,6 +55,8 @@ class ReimbursementClaim(Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     note: Mapped[str | None] = mapped_column(Text)
+    counterparty_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    expected_date: Mapped[date | None] = mapped_column(Date)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -65,11 +70,6 @@ class ReimbursementClaim(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
-    parties: Mapped[list["ReimbursementParty"]] = relationship(
-        back_populates="claim",
-        order_by="(ReimbursementParty.position, ReimbursementParty.id)",
-        cascade="all, delete-orphan",
-    )
     allocations: Mapped[list["ReimbursementAllocation"]] = relationship(
         back_populates="claim",
         order_by="(ReimbursementAllocation.position, ReimbursementAllocation.id)",
@@ -82,42 +82,18 @@ class ReimbursementClaim(Base):
     )
 
 
-class ReimbursementParty(Base):
-    __tablename__ = "reimbursement_parties"
-    __table_args__ = (
-        CheckConstraint("char_length(name) BETWEEN 1 AND 120", name="name_length"),
-        CheckConstraint("note IS NULL OR char_length(note) <= 500", name="note_length"),
-        CheckConstraint("position >= 0", name="position_nonnegative"),
-        UniqueConstraint("claim_id", "position", name="uq_reimbursement_parties_position"),
-    )
-    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    claim_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("reimbursement_claims.id", ondelete="CASCADE"), nullable=False
-    )
-    name: Mapped[str] = mapped_column(String(120), nullable=False)
-    expected_date: Mapped[date | None] = mapped_column(Date)
-    note: Mapped[str | None] = mapped_column(Text)
-    position: Mapped[int] = mapped_column(Integer, nullable=False)
-    claim: Mapped[ReimbursementClaim] = relationship(back_populates="parties")
-
-
 class ReimbursementAllocation(Base):
     __tablename__ = "reimbursement_allocations"
     __table_args__ = (
         CheckConstraint("amount_minor > 0", name="amount_positive"),
         CheckConstraint("position >= 0", name="position_nonnegative"),
-        UniqueConstraint(
-            "claim_id", "party_id", "transaction_id", name="uq_reimbursement_allocations_matrix"
-        ),
+        UniqueConstraint("claim_id", "transaction_id", name="uq_reimbursement_allocations_expense"),
         UniqueConstraint("claim_id", "position", name="uq_reimbursement_allocations_position"),
         Index("ix_reimbursement_allocations_transaction", "transaction_id"),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     claim_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("reimbursement_claims.id", ondelete="CASCADE"), nullable=False
-    )
-    party_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("reimbursement_parties.id", ondelete="RESTRICT"), nullable=False
     )
     transaction_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("transactions.id", ondelete="RESTRICT"), nullable=False
@@ -137,9 +113,6 @@ class ReimbursementReceipt(Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     claim_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("reimbursement_claims.id", ondelete="RESTRICT"), nullable=False
-    )
-    party_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("reimbursement_parties.id", ondelete="RESTRICT"), nullable=False
     )
     transaction_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("transactions.id", ondelete="RESTRICT"), nullable=False

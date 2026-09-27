@@ -1,0 +1,157 @@
+{
+  "keep": [
+    {
+      "path": "build/ios27-compat-20260920/core-tests-isolated/tests.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/ios27-compat-20260920/gallery-ui/tests.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/ios27-compat-20260920/ios26-fixed/tests.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/ios27-compat-20260920/root-ui-fixed/tests.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/release-v2.2.0-41/mac-wide-passed.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/release-v2.2.0-41/units.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/test-runs/chart48-axis-final/tests.xcresult",
+      "reason": "既有 Build48 历史轴线证据，不属本轮删除范围"
+    },
+    {
+      "path": "build/test-runs/chart48-macos-final/tests.xcresult",
+      "reason": "既有 Build48 宽屏失败原件，保留历史差异来源"
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-final-second/tests.xcresult",
+      "reason": "Build49 最终 329/329 Swift 业务回归"
+    },
+    {
+      "path": "build/test-runs/v240-gallery-ios-build49-acceptance/tests.xcresult",
+      "reason": "Build49 最终 iOS 未来来源/多费用/AI/CSV 5/5"
+    },
+    {
+      "path": "build/test-runs/v240-gallery-macos-final/tests.xcresult",
+      "reason": "Build49 macOS 报销与 CSV 3/3"
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-build49-acceptance/tests.xcresult",
+      "reason": "Build49 最终原子录入呈现修复后正式 iOS 三空间、账户与 OCR 设置 3/3 及截图"
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-deeplink-verified/tests.xcresult",
+      "reason": "Build49 冷热 URL/不同草稿/错误目标 2/2"
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-macos-final/tests.xcresult",
+      "reason": "Build49 正式 macOS 三空间、宽屏画布与账户 4/4 及截图"
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-ios-root-final.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-mac-navigation-final.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-mac-root-final.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.2.0-qa/full-fiscalkit-tests-final.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-gallery-r3.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-reduced-effects.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-root-r3.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.2.0-qa/mac-gallery-final.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.3.0-43/qa/fiscalkit-2.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.3.0-43/qa/ios-ui-2.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.3.0-43/qa/mac-ui-2.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.3.0-43/qa/mac-ui-3.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.3.0-43/qa/macos-final.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.3.0-43/repair/client-full-4.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-real-receipt-3.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-ui-4.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-ui-5.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/v2.3.0-44/client-tests/tests.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收"
+    },
+    {
+      "path": "build/test-runs/v240-build50-fiscalkit-verified/tests.xcresult",
+      "reason": "Build50 final regression or native merchant confirmation evidence"
+    },
+    {
+      "path": "build/test-runs/v240-build50-merchant-lifecycle/tests.xcresult",
+      "reason": "Build50 final regression or native merchant confirmation evidence"
+    },
+    {
+      "path": "build/test-runs/v240-build50-merchant-macos-final/tests.xcresult",
+      "reason": "Build50 final regression or native merchant confirmation evidence"
+    },
+    {
+      "path": "build/test-runs/v240-build50-merchant-ios-final/tests.xcresult",
+      "reason": "Build50 final regression or native merchant confirmation evidence"
+    }
+  ],
+  "delete": [
+    {
+      "path": "build/v240/build50/ios-failure/8A1D28C6-515F-4C3A-8F3C-935B0508B9F1.png",
+      "reason": "Superseded first UI failure screenshot exported before export manifest collision; final passing screenshot retained in xcresult",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/build50.md"
+      ]
+    }
+  ]
+}

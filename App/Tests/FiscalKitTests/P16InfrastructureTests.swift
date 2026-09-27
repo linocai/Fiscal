@@ -6,15 +6,17 @@ import Security
 
 /// Transport tests own their encrypted cache and key; never use the user's shared store.
 final class TestSnapshotScope {
-  private let directory: URL
+  let directory: URL
   private let service: String
   let store: OfflineSnapshotStore
 
-  init() {
+  init(maxEntries: Int? = nil, maxPayloadBytes: Int? = nil, maxSingleResponseBytes: Int? = nil) {
     let id = UUID().uuidString
     directory = FileManager.default.temporaryDirectory.appending(path: "FiscalKitTransportTests-" + id)
     service = "FiscalKitTests.Transport." + id
-    store = OfflineSnapshotStore(directory: directory, keyStore: SnapshotKeyStore(service: service))
+    store = OfflineSnapshotStore(directory: directory, keyStore: SnapshotKeyStore(service: service),
+      maxEntries: maxEntries ?? 128, maxPayloadBytes: maxPayloadBytes ?? 16 * 1024 * 1024,
+      maxSingleResponseBytes: maxSingleResponseBytes ?? 1_000_000)
   }
 
   func cleanUp() {
@@ -87,6 +89,7 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
   override func stopLoading() {}
 }
 
+private struct TransportPage: Decodable, Sendable { let items: [JSONValue]; let nextCursor: String?; enum CodingKeys: String, CodingKey { case items; case nextCursor = "next_cursor" } }
 private let validPage = Data(#"{"items":[],"next_cursor":null}"#.utf8)
 
 @Suite("FiscalKit P16 infrastructure", .serialized)
@@ -130,22 +133,6 @@ struct P16InfrastructureTests {
     #expect(plusPlus.query(percentEncoded: true) == "query=C%2B%2B")
   }
 
-  // MARK: L17 – absent optional keys decode as nil instead of failing the page
-
-  @Test("Transaction decoding tolerates omitted optional keys")
-  func transactionOmitsOptionalKeys() throws {
-    let json = Data(
-      #"{"id":"00000000-0000-0000-0000-000000000001","kind":"expense","amount_minor":100,"occurred_at":"2026-07-16T04:00:00Z","business_date":"2026-07-16","title":"午餐","source":"manual","postings":[],"reimbursement_relations":[],"version":1,"created_at":"2026-07-16T04:00:00Z","updated_at":"2026-07-16T04:00:00Z"}"#
-        .utf8)
-    let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
-    let transaction = try decoder.decode(TransactionDTO.self, from: json)
-    #expect(transaction.note == nil)
-    #expect(transaction.categoryID == nil)
-    #expect(transaction.installmentPlanID == nil)
-    #expect(transaction.voidedAt == nil)
-    #expect(transaction.reimbursementRelations.isEmpty)
-  }
-
   // MARK: M15 – decode before caching; evict a poisoned entry and fall back to the network
 
   @Test("A malformed GET body is never cached")
@@ -158,7 +145,7 @@ struct P16InfrastructureTests {
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
       responseCache: cache, offlineSnapshots: snapshotScope.store)
     await #expect(throws: FiscalAPIError.self) {
-      _ = try await transport.request("transactions") as TransactionPage
+      _ = try await transport.request("transactions") as TransportPage
     }
     #expect(await cache.snapshot().entryCount == 0)
   }
@@ -172,8 +159,8 @@ struct P16InfrastructureTests {
     let transport = APITransport(
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
       responseCache: cache, offlineSnapshots: snapshotScope.store)
-    _ = try await transport.request("transactions") as TransactionPage
-    _ = try await transport.request("transactions") as TransactionPage
+    _ = try await transport.request("transactions") as TransportPage
+    _ = try await transport.request("transactions") as TransportPage
     #expect(StubURLProtocol.requestCount == 1)
     #expect(await cache.snapshot().entryCount == 1)
   }
@@ -183,7 +170,7 @@ struct P16InfrastructureTests {
     let snapshotScope = TestSnapshotScope()
     defer { snapshotScope.cleanUp() }
     StubURLProtocol.install { _ in
-      // First call stores an object that decodes as JSONValue but not as TransactionPage;
+      // First call stores an object that decodes as JSONValue but not as TransportPage;
       // the second call returns a valid page for the forced refetch.
       StubURLProtocol.requestCount == 1
         ? .init(body: Data(#"{"foo":1}"#.utf8)) : .init(body: validPage)
@@ -193,7 +180,7 @@ struct P16InfrastructureTests {
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
       responseCache: cache, offlineSnapshots: snapshotScope.store)
     _ = try await transport.request("transactions") as JSONValue  // caches {"foo":1}
-    let page = try await transport.request("transactions") as TransactionPage  // hit → evict → refetch
+    let page = try await transport.request("transactions") as TransportPage  // hit → evict → refetch
     #expect(page.items.isEmpty)
     #expect(StubURLProtocol.requestCount == 2)
   }
@@ -213,10 +200,10 @@ struct P16InfrastructureTests {
       baseURL: URL(string: "http://stub")!, session: StubURLProtocol.session(), token: "t",
       responseCache: cache, offlineSnapshots: snapshotScope.store)
 
-    let slowGet = Task { try await transport.request("transactions") as TransactionPage }
+    let slowGet = Task { try await transport.request("transactions") as TransportPage }
     // Let the GET reach the network layer (stub sleeps 300ms) before mutating.
     try await Task.sleep(for: .milliseconds(80))
-    _ = try await transport.request("transactions", method: "POST") as TransactionPage
+    _ = try await transport.request("transactions", method: "POST") as TransportPage
     #expect(await cache.snapshot().entryCount == 0)  // mutation cleared the cache
     _ = try await slowGet.value  // slow GET now finishes; its store must be suppressed
     #expect(await cache.snapshot().entryCount == 0)
@@ -257,7 +244,7 @@ struct P20RateLimitTests {
       try await Task.sleep(nanoseconds: 400_000_000)
       StubURLProtocol.install { _ in .init(body: validPage) }
     }
-    let page: TransactionPage = try await transport.request("transactions")
+    let page: TransportPage = try await transport.request("transactions")
     #expect(page.items.isEmpty)
   }
 

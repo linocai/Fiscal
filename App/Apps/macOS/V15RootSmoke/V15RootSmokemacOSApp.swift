@@ -4,6 +4,7 @@
 import FiscalKit
 #endif
 import SwiftUI
+@testable import FiscalPreviewSupportmacOS
 
 /// Isolated local-network launch target for the formal V15 composition.  It
 /// cannot share the formal macOS bundle or any Gallery fixture surface.

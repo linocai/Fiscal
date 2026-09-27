@@ -142,7 +142,9 @@ import XCTest
         let retry = element("v15.f3b1.schedule.unknown.retry")
         XCTAssertFalse(retry.isEnabled); XCTAssertTrue(element("v15.f3b1.schedule.unknown.retry-reason").waitForExistence(timeout: 5))
         element("v15.f3b1.schedule.unknown.readback").tap(); XCTAssertTrue(element("v15.f3b1.schedule.unknown.readback.not-confirmed").waitForExistence(timeout: 5))
-        element("v15.f3b1.fixture.reconnect").tap(); XCTAssertTrue(retry.waitForExistence(timeout: 5)); XCTAssertTrue(retry.isEnabled)
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(retry.waitForExistence(timeout: 5)); XCTAssertTrue(retry.isEnabled)
         retry.tap(); XCTAssertTrue(element("v15.f3b1.schedule.receipt").waitForExistence(timeout: 6)); attach("f3b1-ios-unknown-offline-recovered")
     }
 }

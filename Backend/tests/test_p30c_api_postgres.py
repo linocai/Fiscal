@@ -92,13 +92,9 @@ def _create_expense(
 def _claim_payload(transaction_id: str, amount_minor: int) -> dict[str, object]:
     return {
         "title": "P30-C 报销",
-        "parties": [
-            {
-                "name": "公司",
-                "expected_date": "2026-08-31",
-                "allocations": [{"transaction_id": transaction_id, "amount_minor": amount_minor}],
-            }
-        ],
+        "counterparty_name": "公司",
+        "expected_date": "2026-08-31",
+        "expenses": [{"transaction_id": transaction_id, "amount_minor": amount_minor}],
     }
 
 
@@ -142,18 +138,18 @@ def test_p30c_uncategorized_candidate_and_draft_diagnostics() -> None:
 
         for mutate, path in (
             (lambda payload: payload.update(title=" "), ["title"]),
-            (lambda payload: payload.update(parties=[]), ["parties"]),
+            (lambda payload: payload.update(expenses=[]), ["expenses"]),
             (
-                lambda payload: payload["parties"][0].update(name=" "),
-                ["parties", 0, "name"],
+                lambda payload: payload.update(counterparty_name=" "),
+                ["counterparty_name"],
             ),
             (
-                lambda payload: payload["parties"][0].update(allocations=[]),
-                ["parties", 0, "allocations"],
+                lambda payload: payload.update(expenses=[]),
+                ["expenses"],
             ),
             (
-                lambda payload: payload["parties"][0]["allocations"][0].update(amount_minor=0),
-                ["parties", 0, "allocations", 0, "amount_minor"],
+                lambda payload: payload["expenses"][0].update(amount_minor=0),
+                ["expenses", 0, "amount_minor"],
             ),
         ):
             malformed = _claim_payload(str(expense["id"]), 1)
@@ -168,13 +164,7 @@ def test_p30c_uncategorized_candidate_and_draft_diagnostics() -> None:
             )
 
         duplicate = _claim_payload(str(expense["id"]), 5_000)
-        duplicate["parties"] = [
-            duplicate["parties"][0],
-            {
-                "name": "同一交易",
-                "allocations": [{"transaction_id": expense["id"], "amount_minor": 5_000}],
-            },
-        ]
+        duplicate["expenses"].append({"transaction_id": expense["id"], "amount_minor": 5_000})
         duplicate_response = client.post(
             "/api/v1/reimbursement-claims",
             headers={**auth, "Idempotency-Key": str(uuid4())},
@@ -187,8 +177,8 @@ def test_p30c_uncategorized_candidate_and_draft_diagnostics() -> None:
             "request_id": duplicate_response.json()["error"]["request_id"],
             "details": {
                 "reason": "duplicate_transaction",
-                "field_path": "parties[1].allocations[0].transaction_id",
-                "duplicate_of": "parties[0].allocations[0].transaction_id",
+                "field_path": "expenses[1].transaction_id",
+                "duplicate_of": "expenses[0].transaction_id",
                 "transaction_id": expense["id"],
             },
         }
@@ -200,13 +190,9 @@ def test_p30c_uncategorized_candidate_and_draft_diagnostics() -> None:
         )
         assert created.status_code == 201, created.text
         replace_duplicate = _claim_payload(str(expense["id"]), 5_000)
-        replace_duplicate["parties"] = [
-            replace_duplicate["parties"][0],
-            {
-                "name": "替换重复",
-                "allocations": [{"transaction_id": expense["id"], "amount_minor": 5_000}],
-            },
-        ]
+        replace_duplicate["expenses"].append(
+            {"transaction_id": expense["id"], "amount_minor": 5_000}
+        )
         replace_duplicate["expected_version"] = created.json()["version"]
         revision_before_duplicate_preview = client.get(
             "/api/v1/data-revision", headers=auth
@@ -219,9 +205,7 @@ def test_p30c_uncategorized_candidate_and_draft_diagnostics() -> None:
         assert replace_preview.status_code == 422
         replace_error = replace_preview.json()["error"]
         assert replace_error["code"] == "reimbursement_duplicate_transaction"
-        assert replace_error["details"]["field_path"] == (
-            "parties[1].allocations[0].transaction_id"
-        )
+        assert replace_error["details"]["field_path"] == ("expenses[1].transaction_id")
         assert "preview_token" not in replace_preview.json()
         unchanged = client.get(f"/api/v1/reimbursement-claims/{created.json()['id']}", headers=auth)
         assert unchanged.status_code == 200, unchanged.text
@@ -303,13 +287,13 @@ def test_p30c_uncategorized_candidate_and_draft_diagnostics() -> None:
         assert over_capacity.status_code == 409
         assert over_capacity.json()["error"]["details"] == {
             "reason": "insufficient_reimbursable_capacity",
-            "field_path": "parties[0].allocations[0].amount_minor",
+            "field_path": "expenses[0].amount_minor",
             "transaction_id": over_capacity_expense["id"],
             "available_minor": 100,
         }
 
         malformed_date = _claim_payload(str(over_capacity_expense["id"]), 1)
-        malformed_date["parties"][0]["expected_date"] = "2026-08-31T00:00:00+08:00"
+        malformed_date["expected_date"] = "2026-08-31T00:00:00+08:00"
         date_error = client.post(
             "/api/v1/reimbursement-claims",
             headers={**auth, "Idempotency-Key": str(uuid4())},
@@ -317,11 +301,7 @@ def test_p30c_uncategorized_candidate_and_draft_diagnostics() -> None:
         )
         _assert_validation_path(
             date_error,
-            [
-                "parties",
-                0,
-                "expected_date",
-            ],
+            ["expected_date"],
         )
 
 

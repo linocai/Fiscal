@@ -99,7 +99,6 @@ import XCTest
     func testRevisionBoundExportReadyHandoffAndStaleResponse() {
         launch()
         revealButton("v15.f4b.export").tap()
-        app.buttons["导出 CSV"].tap()
         XCTAssertTrue(element("v15.f4b.export.sheet").waitForExistence(timeout: 6))
         app.buttons["v15.f4b.export.confirm"].tap()
         XCTAssertTrue(element("v15.f4b.export.ready").waitForExistence(timeout: 6))
@@ -111,7 +110,6 @@ import XCTest
 
         launch("reports-export-stale")
         revealButton("v15.f4b.export").tap()
-        app.buttons["导出 PDF"].tap()
         app.buttons["v15.f4b.export.confirm"].tap()
         XCTAssertTrue(element("v15.f4b.export.error").waitForExistence(timeout: 6))
     }

@@ -1,0 +1,77 @@
+{
+  "files": [
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/v240/build50/V15RootSmokemacOS.xcscheme",
+      "sha256": "7bdfa006628711dee320e13aeee51d9520152116518b2f2ef225cae71c300d4f",
+      "bytes": 3766,
+      "reason": "Verified duplicate of protected user scheme"
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/v240/build50/FiscalmacOS.xcscheme",
+      "sha256": "b2b2e7fd6c8da9a64fb8ac0f0d161d3951addee59d1b91b66fd1cfcc600808f2",
+      "bytes": 4169,
+      "reason": "Verified duplicate of protected user scheme"
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/v240/build50/V15RootSmokeiOS.xcscheme",
+      "sha256": "e72c37c8503ba1be6d39c4720e254ceeccd78cd3e91db2fe886084c5974f9622",
+      "bytes": 3740,
+      "reason": "Verified duplicate of protected user scheme"
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/v240/build50/FiscaliOS.xcscheme",
+      "sha256": "62751c8af676755c2722e17cd6c6667920c7bf123aa91c8e6a0b64cf4218f382",
+      "bytes": 3199,
+      "reason": "Verified duplicate of protected user scheme"
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/v240/build50/V15GallerymacOS.xcscheme",
+      "sha256": "24bee7cca28bc8e50e8b1f99147a26a73bf44192aa11db935eb43903d73fa5c7",
+      "bytes": 3742,
+      "reason": "Verified duplicate of protected user scheme"
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/v240/build50/V15GalleryiOS.xcscheme",
+      "sha256": "28fb7d91285f7032b1058f1ab2e7c6e7496065112c3f0ba90945fd3916f9b7ff",
+      "bytes": 3716,
+      "reason": "Verified duplicate of protected user scheme"
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/v240/build50/ios-failure/manifest.json",
+      "sha256": "ace810d7e2cbb4f8c40ce09dc8e191ae466adb4e1a7d49c59f2215b411d38b05",
+      "bytes": 4,
+      "reason": "Attachment export index; originals remain in classified xcresult"
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/v240/build50/ios-preview/manifest.json",
+      "sha256": "b3311df9d79c8548e2dd2bb2de6f6e80496e2836eab4b6ad3bd15331362d1e53",
+      "bytes": 730,
+      "reason": "Attachment export index; originals remain in classified xcresult"
+    },
+    {
+      "path": "/Users/linotsai/Lino/Fiscal/build/v240/build50/mac-preview/manifest.json",
+      "sha256": "bd6e53c2cc66ae884067d4e0ce095ee8d79ce047d597fc9a46949db5fadce17e",
+      "bytes": 730,
+      "reason": "Attachment export index; originals remain in classified xcresult"
+    },
+    {
+      "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-5B32987B-CE8F-4668-8A9D-8BEF41DBF3A1/fiscal-archive-v1.far",
+      "sha256": "2684e5902e099d22d087726578a57cb999978d4015fb203f63d7062a3740966c",
+      "bytes": 27,
+      "reason": "Exact synthetic bytes from Build50 F4A/F4C regression fixtures"
+    },
+    {
+      "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-343ED247-D6B6-4F2E-8BFC-70ED36EE406E/fiscal-archive-v1.far",
+      "sha256": "2684e5902e099d22d087726578a57cb999978d4015fb203f63d7062a3740966c",
+      "bytes": 27,
+      "reason": "Exact synthetic bytes from Build50 F4A/F4C regression fixtures"
+    },
+    {
+      "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Exports/7D26F039-B619-4537-BE6E-1D184D3EF483/fiscal-report-2026-08-r78.csv",
+      "sha256": "754f3093c3dd04291d93795b6b30ce4eecd15bee326ce99582c4aeb3e2f6491e",
+      "bytes": 16,
+      "reason": "Exact synthetic bytes from Build50 F4A/F4C regression fixtures"
+    }
+  ],
+  "protected_verified": 7
+}

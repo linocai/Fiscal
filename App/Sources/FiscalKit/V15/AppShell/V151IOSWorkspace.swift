@@ -3,11 +3,16 @@ import SwiftUI
 
 #if os(iOS)
 
-/// Four persistent system tabs, with creation and specialist work presented
+/// Three persistent system tabs, with creation and specialist work presented
 /// above the selected tab. Each cross-tab detail request has its own identity.
 private struct V152LedgerFocusRequest: Hashable {
     let token = UUID()
     let transactionID: UUID?
+}
+
+private struct V152RecordPresentation: Identifiable {
+    let id = UUID()
+    let proposalID: UUID?
 }
 
 public struct V151IOSWorkspace: View {
@@ -16,7 +21,7 @@ public struct V151IOSWorkspace: View {
         case credit(accountID: UUID?)
         case installments(accountID: UUID?, planID: UUID?, purchaseTransactionID: UUID?)
         case reimbursements(transactionID: UUID?)
-        case reimbursementClaim(claimID: UUID, partyID: UUID?)
+        case reimbursementClaim(claimID: UUID)
         case cashFlow
         case reports, settings, pendingSync
         var id: String {
@@ -26,7 +31,7 @@ public struct V151IOSWorkspace: View {
             case .installments(let accountID, let planID, let purchaseTransactionID):
                 "installments:\(accountID?.uuidString ?? "all"):\(planID?.uuidString ?? "new"):\(purchaseTransactionID?.uuidString ?? "none")"
             case .reimbursements(let transactionID): "reimbursements:\(transactionID?.uuidString ?? "all")"
-            case .reimbursementClaim(let claimID, let partyID): "reimbursementClaim:\(claimID.uuidString):\(partyID?.uuidString ?? "claim")"
+            case .reimbursementClaim(let claimID): "reimbursementClaim:\(claimID.uuidString)"
             case .cashFlow: "cashFlow"
             case .reports: "reports"
             case .settings: "settings"
@@ -49,15 +54,21 @@ public struct V151IOSWorkspace: View {
 
     /// Keep destinations as real system tabs. Creation stays an accessory
     /// action so it never pretends to be a fifth destination.
-    private enum RootTab: Hashable { case overview, ledger, accounts, reports }
+    private enum RootTab: Hashable { case overview, ledger, accounts }
     private let services: V15Services
+    private let proposalOpenRequest: V15ProposalOpenRequest?
+    private let onProposalRouteAccepted: (UUID) -> Void
     @State private var tab: RootTab = .overview
-    @State private var recordPresented = false
+    @State private var recordPresentation: V152RecordPresentation?
     @State private var destination: Destination?
     @State private var ledgerFocusRequest: V152LedgerFocusRequest?
     @State private var recordFactsRevision: UInt64 = 0
 
-    public init(services: V15Services) { self.services = services }
+    public init(services: V15Services, proposalOpenRequest: V15ProposalOpenRequest? = nil, onProposalRouteAccepted: @escaping (UUID) -> Void = { _ in }) {
+        self.services = services
+        self.proposalOpenRequest = proposalOpenRequest
+        self.onProposalRouteAccepted = onProposalRouteAccepted
+    }
 
     public var body: some View {
         TabView(selection: $tab) {
@@ -86,12 +97,9 @@ public struct V151IOSWorkspace: View {
                     refreshRootFacts: refreshRootFacts
                 )
             }
-            Tab("分析", systemImage: "chart.line.uptrend.xyaxis", value: .reports) {
-                V15ReportingView(services: services, refreshToken: recordFactsRevision)
-            }
         }
         .tabViewBottomAccessory {
-            Button { recordPresented = true } label: {
+            Button { recordPresentation = .init(proposalID: nil) } label: {
                 Label("记一笔", systemImage: "plus.circle.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(V15Palette.teal.color)
@@ -105,6 +113,11 @@ public struct V151IOSWorkspace: View {
         }
         .tabBarMinimizeBehavior(.never)
         .onChange(of: services.confirmedWriteRevision) { _, _ in refreshRootFacts() }
+        .task(id: proposalOpenRequest?.id) {
+            guard let proposalOpenRequest else { return }
+            recordPresentation = .init(proposalID: proposalOpenRequest.proposalID)
+            onProposalRouteAccepted(proposalOpenRequest.proposalID)
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .topLeading) {
             Text("V151 iOS workspace")
@@ -116,8 +129,8 @@ public struct V151IOSWorkspace: View {
         }
         .background(V15Palette.canvas.color.ignoresSafeArea())
         .tint(V15Palette.teal.color)
-        .fullScreenCover(isPresented: $recordPresented) {
-            V15RecordView(services: services, presentsEditorDirectly: true, onCommitted: recordCommitted)
+        .fullScreenCover(item: $recordPresentation) { presentation in
+            V15RecordView(services: services, initialProposalID: presentation.proposalID, presentsEditorDirectly: true, onCommitted: recordCommitted)
         }
         .fullScreenCover(item: $destination) { value in
             V151IOSDestinationHost(services: services, destination: value, onDismiss: refreshRootFacts)
@@ -134,13 +147,7 @@ public struct V151IOSWorkspace: View {
     /// while ensuring a completed write is not left stale at the root.
     private func refreshRootFacts() { recordFactsRevision &+= 1 }
 
-    private func openDestination(_ value: Destination) {
-        if case .reports = value {
-            tab = .reports
-        } else {
-            destination = value
-        }
-    }
+    private func openDestination(_ value: Destination) { destination = value }
 
 }
 
@@ -315,7 +322,7 @@ private struct V151IOSTodayDashboard: View {
                     Spacer()
                     Button("查看分析") { openTodayDestination(.reports) }
                         .font(V15Typography.secondary.weight(.semibold)).buttonStyle(.plain).v15PlatformHitArea()
-                        .accessibilityIdentifier("v151.ios.today.reports")
+                        .accessibilityIdentifier("v151.ios.today.monthly-analysis")
                 }
                 HStack(spacing: V15Spacing.sm) {
                     metric("收入", report.summary.incomeMinor, .inflow)
@@ -336,7 +343,7 @@ private struct V151IOSTodayDashboard: View {
                 Spacer()
                 Button("查看分析") { openTodayDestination(.reports) }
                     .font(V15Typography.secondary.weight(.semibold)).buttonStyle(.plain).v15PlatformHitArea()
-                    .accessibilityIdentifier("v151.ios.today.reports")
+                    .accessibilityIdentifier("v151.ios.today.monthly-analysis")
             }
             .padding(.vertical, 4)
         }
@@ -539,16 +546,15 @@ private struct V151IOSTodayDashboard: View {
                     throw V15Failure(kind: .conflict, code: "future_owner_changed", message: "这项信用账期的归属已经变化，请刷新后再打开。")
                 }
                 target = .creditCycle(cycle)
-            case .reimbursementParty:
-                guard let claimID = event.claimID, let partyID = event.partyID else {
+            case .reimbursementClaim:
+                guard let claimID = event.claimID else {
                     throw V15Failure(kind: .decoding, code: "future_owner_missing", message: "这项报销记录缺少归属信息。")
                 }
                 let claim = try await services.reimbursements.claim(id: claimID, readCachePolicy: .reloadIgnoringCache)
-                guard claim.id == claimID, partyID == event.sourceID,
-                      claim.parties.contains(where: { $0.id == partyID }) else {
+                guard claim.id == claimID, claim.id == event.sourceID else {
                     throw V15Failure(kind: .conflict, code: "future_owner_changed", message: "这项报销记录的归属已经变化，请刷新后再打开。")
                 }
-                target = .reimbursementParty(claim: claim, partyID: partyID)
+                target = .reimbursementClaim(claim)
             case .cashFlowItem:
                 let item = try await services.cashFlow.item(id: event.sourceID, readCachePolicy: .reloadIgnoringCache)
                 let accountMatches = event.accountID == nil || event.accountID == item.accountID || event.accountID == item.destinationAccountID
@@ -845,9 +851,8 @@ private struct V151IOSReimbursementInlineDecision: View {
             Text("登记收款").font(.title3.weight(.semibold))
             Text("\(claim.title) · 待收 \(V15MoneyPresentation(minorUnits: claim.outstandingMinor, direction: .neutral).text)")
                 .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.62))
-            Picker("付款方", selection: Binding(get: { model.selectedPartyID }, set: { id in if let id { model.chooseParty(id) } })) {
-                ForEach(claim.parties.filter { $0.outstandingMinor > 0 }, id: \.id) { Text($0.name).tag(Optional($0.id)) }
-            }.pickerStyle(.menu)
+            Text("报销对象：\(claim.counterpartyName)")
+                .font(V15Typography.secondary)
             Picker("入账账户", selection: Binding(get: { model.selectedReceiptAccount?.id }, set: { id in if let account = model.receiptAccounts.first(where: { $0.id == id }) { model.chooseReceiptAccount(account) } })) {
                 ForEach(model.receiptAccounts) { Text($0.name).tag(Optional($0.id)) }
             }.pickerStyle(.menu)
@@ -1315,6 +1320,7 @@ private struct V151IOSLedger: View {
             if let categoryCommitNotice {
                 V15ServerFactState(title: "分类已保存", detail: categoryCommitNotice)
             }
+            V15MerchantMappingButton(services: services, transaction: transaction).id(transaction.id)
             if transaction.voidedAt == nil && ["expense", "income", "credit_purchase"].contains(transaction.kind) {
                 V15ActionButton(transaction.categoryID == nil ? "设置分类" : "修改分类") {
                     categoryID = transaction.categoryID
@@ -1347,7 +1353,7 @@ private struct V151IOSLedger: View {
                     ForEach(Array(transaction.reimbursementRelations.enumerated()), id: \.offset) { indexed in
                         let relation = indexed.element
                         V15ActionButton("查看报销单 · \(relation.claimTitle)", kind: .secondary) {
-                            transactionContextDestination = .reimbursementClaim(claimID: relation.claimID, partyID: relation.partyID)
+                            transactionContextDestination = .reimbursementClaim(claimID: relation.claimID)
                         }
                     }
                 }
@@ -1789,7 +1795,8 @@ private struct V151IOSAccountDetail: View {
                 }
                 V15AdaptiveStack {
                     V15ActionButton(account.cycleMode == "on_demand" ? "借入、还款与全额结清" : "查看信用账期", kind: .secondary) { contextDestination = .credit(accountID: account.id) }
-                    if account.cycleMode != "on_demand" { V15ActionButton("分期计划", kind: .secondary) { contextDestination = .installments(accountID: account.id, planID: nil, purchaseTransactionID: nil) } }
+                        .accessibilityIdentifier("v151.ios.account-detail.credit")
+                    if account.cycleMode != "on_demand" { V15ActionButton("分期计划", kind: .secondary) { contextDestination = .installments(accountID: account.id, planID: nil, purchaseTransactionID: nil) }.accessibilityIdentifier("v151.ios.account-detail.installments") }
                 }
             }
             V15ActionButton("账户与分类设置", kind: .secondary) { contextDestination = .settings }
@@ -1949,8 +1956,8 @@ private struct V151IOSDestinationHost: View {
                 initialPurchaseTransactionID: purchaseTransactionID
             )
         case .reimbursements(let transactionID): V15ReimbursementView(services: services, initialTransactionID: transactionID)
-        case .reimbursementClaim(let claimID, let partyID):
-            V15ReimbursementView(services: services, initialClaimID: claimID, initialPartyID: partyID)
+        case .reimbursementClaim(let claimID):
+            V15ReimbursementView(services: services, initialClaimID: claimID)
         case .cashFlow: V15CashFlowView(services: services)
         case .reports: V15ReportingView(services: services)
         case .settings:
@@ -1966,8 +1973,8 @@ private struct V151IOSDestinationHost: View {
         switch target {
         case .creditCycle(let cycle):
             V15CreditView(services: services, initialCycle: cycle)
-        case .reimbursementParty(let claim, let partyID):
-            V15ReimbursementView(services: services, initialClaim: claim, initialPartyID: partyID)
+        case .reimbursementClaim(let claim):
+            V15ReimbursementView(services: services, initialClaim: claim)
         case .cashFlowItem(let item):
             V15CashFlowView(services: services, initialItem: item)
         }

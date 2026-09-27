@@ -16,7 +16,6 @@ from fiscal_api.api.p6_schemas import (
     ReimbursementAllocationDraft,
     ReimbursementClaimDraft,
     ReimbursementClaimReplace,
-    ReimbursementPartyDraft,
     ReimbursementReceiptDraft,
     ReimbursementReceiptReplace,
 )
@@ -48,7 +47,7 @@ async def session() -> AsyncIterator[AsyncSession]:
             text(
                 "TRUNCATE reimbursement_operations, reimbursement_receipt_revisions, "
                 "reimbursement_claim_revisions, reimbursement_receipt_allocations, "
-                "reimbursement_receipts, reimbursement_allocations, reimbursement_parties, "
+                "reimbursement_receipts, reimbursement_allocations, "
                 "reimbursement_claims, installment_plan_revisions, installment_ledger_links, "
                 "installment_operations, installment_periods, installment_plans, "
                 "transaction_revisions, postings, transactions, credit_cycles, categories, "
@@ -96,26 +95,11 @@ async def test_matrix_partial_receipts_and_income_exclusion(session: AsyncSessio
     claim = await service.create(
         ReimbursementClaimDraft(
             title="差旅报销",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="公司",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[0].id, amount_minor=10_000
-                        ),
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[1].id, amount_minor=15_000
-                        ),
-                    ],
-                ),
-                ReimbursementPartyDraft(
-                    name="客户",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[2].id, amount_minor=20_000
-                        )
-                    ],
-                ),
+            counterparty_name="公司",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=10000),
+                ReimbursementAllocationDraft(transaction_id=expenses[1].id, amount_minor=15000),
+                ReimbursementAllocationDraft(transaction_id=expenses[2].id, amount_minor=20000),
             ],
         ),
         uuid4(),
@@ -124,8 +108,7 @@ async def test_matrix_partial_receipts_and_income_exclusion(session: AsyncSessio
     assert claim.status.value == "draft"
     receipt_draft = ReimbursementReceiptDraft(
         expected_claim_version=claim.version,
-        party_id=claim.parties[0].id,
-        amount_minor=18_000,
+        amount_minor=18000,
         received_at=datetime.now(UTC) - timedelta(seconds=1),
         destination_account_id=bank.id,
         title="公司首笔回款",
@@ -158,15 +141,9 @@ async def test_global_cap_and_generic_guards(session: AsyncSession) -> None:
     first = await service.create(
         ReimbursementClaimDraft(
             title="一",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="甲",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[0].id, amount_minor=7_000
-                        )
-                    ],
-                )
+            counterparty_name="甲",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=7000)
             ],
         ),
         uuid4(),
@@ -175,15 +152,9 @@ async def test_global_cap_and_generic_guards(session: AsyncSession) -> None:
         await service.create(
             ReimbursementClaimDraft(
                 title="二",
-                parties=[
-                    ReimbursementPartyDraft(
-                        name="乙",
-                        allocations=[
-                            ReimbursementAllocationDraft(
-                                transaction_id=expenses[0].id, amount_minor=4_000
-                            )
-                        ],
-                    )
+                counterparty_name="乙",
+                expenses=[
+                    ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=4000)
                 ],
             ),
             uuid4(),
@@ -201,18 +172,10 @@ async def test_receipt_replace_soft_void_restore_and_versions(session: AsyncSess
     claim = await service.create(
         ReimbursementClaimDraft(
             title="纠错",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="公司",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[0].id, amount_minor=10_000
-                        ),
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[1].id, amount_minor=10_000
-                        ),
-                    ],
-                )
+            counterparty_name="公司",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=10000),
+                ReimbursementAllocationDraft(transaction_id=expenses[1].id, amount_minor=10000),
             ],
         ),
         uuid4(),
@@ -221,8 +184,7 @@ async def test_receipt_replace_soft_void_restore_and_versions(session: AsyncSess
         claim.id,
         ReimbursementReceiptDraft(
             expected_claim_version=claim.version,
-            party_id=claim.parties[0].id,
-            amount_minor=8_000,
+            amount_minor=8000,
             received_at=datetime.now(UTC) - timedelta(seconds=3),
             destination_account_id=bank.id,
             title="首笔",
@@ -234,8 +196,7 @@ async def test_receipt_replace_soft_void_restore_and_versions(session: AsyncSess
     replacement = ReimbursementReceiptReplace(
         expected_claim_version=claim.version,
         expected_receipt_version=receipt.version,
-        party_id=claim.parties[0].id,
-        amount_minor=12_000,
+        amount_minor=12000,
         received_at=datetime.now(UTC) - timedelta(seconds=2),
         destination_account_id=bank.id,
         title="更正回款",
@@ -255,23 +216,16 @@ async def test_receipt_replace_soft_void_restore_and_versions(session: AsyncSess
     assert voided.allocations == []
     assert (await service.get(claim.id)).received_minor == 0
     claim = await service.get(claim.id)
-    second = claim.parties[0].allocations[1]
+    second = claim.expenses[1]
     claim = await service.update(
         claim.id,
         ReimbursementClaimReplace(
             expected_version=claim.version,
             title=claim.title,
-            parties=[
-                ReimbursementPartyDraft(
-                    id=claim.parties[0].id,
-                    name=claim.parties[0].name,
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            id=second.id,
-                            transaction_id=second.transaction_id,
-                            amount_minor=20_000,
-                        )
-                    ],
+            counterparty_name=claim.counterparty_name,
+            expenses=[
+                ReimbursementAllocationDraft(
+                    id=second.id, transaction_id=second.transaction_id, amount_minor=20000
                 )
             ],
         ),
@@ -289,6 +243,104 @@ async def test_receipt_replace_soft_void_restore_and_versions(session: AsyncSess
     assert unarchived.archived_at is None
 
 
+async def test_receipt_edit_keeps_expense_attribution_after_reorder_and_other_receipts(
+    session: AsyncSession,
+) -> None:
+    bank, expenses = await seed(session)
+    service = ReimbursementService(session)
+    claim = await service.create(
+        ReimbursementClaimDraft(
+            title="稳定回款归属",
+            counterparty_name="公司",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=10_000),
+                ReimbursementAllocationDraft(transaction_id=expenses[1].id, amount_minor=10_000),
+            ],
+        ),
+        uuid4(),
+    )
+    a_id, b_id = (expense.id for expense in claim.expenses)
+
+    async def create_receipt(amount: int, title: str):  # type: ignore[no-untyped-def]
+        current = await service.get(claim.id)
+        return await service.create_receipt(
+            claim.id,
+            ReimbursementReceiptDraft(
+                expected_claim_version=current.version,
+                amount_minor=amount,
+                received_at=datetime.now(UTC) - timedelta(seconds=2),
+                destination_account_id=bank.id,
+                title=title,
+            ),
+            uuid4(),
+        )
+
+    first = await create_receipt(6_000, "首笔")
+    assert [(item.allocation_id, item.amount_minor) for item in first.allocations] == [
+        (a_id, 6_000)
+    ]
+    second = await create_receipt(5_000, "第二笔")
+    assert [(item.allocation_id, item.amount_minor) for item in second.allocations] == [
+        (a_id, 4_000),
+        (b_id, 1_000),
+    ]
+    claim = await service.get(claim.id)
+    claim = await service.update(
+        claim.id,
+        ReimbursementClaimReplace(
+            expected_version=claim.version,
+            title=claim.title,
+            counterparty_name=claim.counterparty_name,
+            expenses=[
+                ReimbursementAllocationDraft(
+                    id=b_id, transaction_id=expenses[1].id, amount_minor=10_000
+                ),
+                ReimbursementAllocationDraft(
+                    id=a_id, transaction_id=expenses[0].id, amount_minor=10_000
+                ),
+            ],
+        ),
+    )
+
+    def replacement(receipt, amount: int, title: str) -> ReimbursementReceiptReplace:  # type: ignore[no-untyped-def]
+        return ReimbursementReceiptReplace(
+            expected_claim_version=claim.version,
+            expected_receipt_version=receipt.version,
+            amount_minor=amount,
+            received_at=receipt.received_at,
+            destination_account_id=bank.id,
+            title=title,
+        )
+
+    unchanged = await service.replace_receipt(first.id, replacement(first, 6_000, "改备注"))
+    assert [(item.allocation_id, item.amount_minor) for item in unchanged.allocations] == [
+        (a_id, 6_000)
+    ]
+    claim = await service.get(claim.id)
+    reduced = await service.replace_receipt(unchanged.id, replacement(unchanged, 3_000, "调减"))
+    assert [(item.allocation_id, item.amount_minor) for item in reduced.allocations] == [
+        (a_id, 3_000)
+    ]
+    claim = await service.get(claim.id)
+    increased = await service.replace_receipt(reduced.id, replacement(reduced, 7_000, "调增"))
+    assert [(item.allocation_id, item.amount_minor) for item in increased.allocations] == [
+        (a_id, 3_000),
+        (b_id, 4_000),
+    ]
+    # The original 3,000 remains on A; only the extra 4,000 follows the
+    # current expense order. The other receipt still owns A 4,000 / B 1,000.
+    claim = await service.get(claim.id)
+    received = {expense.id: expense.received_minor for expense in claim.expenses}
+    assert received == {b_id: 5_000, a_id: 7_000}
+    voided = await service.receipt_lifecycle(second.id, claim.version, second.version, "void")
+    assert voided.allocations == []
+    claim = await service.get(claim.id)
+    restored = await service.receipt_lifecycle(second.id, claim.version, voided.version, "restore")
+    assert sum(item.amount_minor for item in restored.allocations) == 5_000
+    claim = await service.get(claim.id)
+    assert sum(expense.received_minor for expense in claim.expenses) == 12_000
+
+
 async def test_preview_filters_lifecycle_and_idempotency(session: AsyncSession) -> None:
     _bank, expenses = await seed(session)
     service = ReimbursementService(session)
@@ -296,14 +348,8 @@ async def test_preview_filters_lifecycle_and_idempotency(session: AsyncSession) 
     draft = ReimbursementClaimDraft(
         title="可搜索差旅",
         note="七月项目",
-        parties=[
-            ReimbursementPartyDraft(
-                name="原主体",
-                allocations=[
-                    ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=5_000)
-                ],
-            )
-        ],
+        counterparty_name="原主体",
+        expenses=[ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=5000)],
     )
     claim = await service.create(draft, key)
     assert await service.create(draft, key) == claim
@@ -314,23 +360,16 @@ async def test_preview_filters_lifecycle_and_idempotency(session: AsyncSession) 
         expected_version=claim.version,
         title="可搜索差旅 · 更正",
         note=claim.note,
-        parties=[
-            ReimbursementPartyDraft(
-                id=claim.parties[0].id,
-                name="新主体",
-                allocations=[
-                    ReimbursementAllocationDraft(
-                        id=claim.parties[0].allocations[0].id,
-                        transaction_id=expenses[0].id,
-                        amount_minor=6_000,
-                    )
-                ],
+        counterparty_name="新主体",
+        expenses=[
+            ReimbursementAllocationDraft(
+                id=claim.expenses[0].id, transaction_id=expenses[0].id, amount_minor=6000
             )
         ],
     )
     preview = await service.preview(claim.id, proposed)
-    assert preview.proposed.parties[0].name == "新主体"
-    assert preview.proposed.parties[0].allocations[0].amount_minor == 6_000
+    assert preview.proposed.counterparty_name == "新主体"
+    assert preview.proposed.expenses[0].amount_minor == 6_000
     queried = await service.list(
         cursor=None,
         limit=1,
@@ -360,14 +399,10 @@ async def test_deferred_move_validates_old_claim(session: AsyncSession) -> None:
             await service.create(
                 ReimbursementClaimDraft(
                     title=f"移动 {index}",
-                    parties=[
-                        ReimbursementPartyDraft(
-                            name=f"主体 {index}",
-                            allocations=[
-                                ReimbursementAllocationDraft(
-                                    transaction_id=expenses[index].id, amount_minor=5_000
-                                )
-                            ],
+                    counterparty_name=f"主体 {index}",
+                    expenses=[
+                        ReimbursementAllocationDraft(
+                            transaction_id=expenses[index].id, amount_minor=5000
                         )
                     ],
                 ),
@@ -376,22 +411,14 @@ async def test_deferred_move_validates_old_claim(session: AsyncSession) -> None:
         )
     source, destination = claims
     await session.execute(
-        text("UPDATE reimbursement_parties SET position=1 WHERE id=:id"),
-        {"id": source.parties[0].id},
-    )
-    await session.execute(
         text("UPDATE reimbursement_allocations SET position=1 WHERE id=:id"),
-        {"id": source.parties[0].allocations[0].id},
-    )
-    await session.execute(
-        text("UPDATE reimbursement_parties SET claim_id=:target WHERE id=:id"),
-        {"target": destination.id, "id": source.parties[0].id},
+        {"id": source.expenses[0].id},
     )
     await session.execute(
         text("UPDATE reimbursement_allocations SET claim_id=:target WHERE id=:id"),
-        {"target": destination.id, "id": source.parties[0].allocations[0].id},
+        {"target": destination.id, "id": source.expenses[0].id},
     )
-    with pytest.raises(DBAPIError, match="reimbursement claim requires matrix rows"):
+    with pytest.raises(DBAPIError, match="reimbursement claim requires expenses"):
         await session.commit()
     await session.rollback()
 
@@ -410,15 +437,10 @@ async def test_concurrent_claims_cannot_overallocate_final_capacity(
                 await ReimbursementService(concurrent).create(
                     ReimbursementClaimDraft(
                         title=name,
-                        parties=[
-                            ReimbursementPartyDraft(
-                                name=name,
-                                allocations=[
-                                    ReimbursementAllocationDraft(
-                                        transaction_id=expenses[0].id,
-                                        amount_minor=7_000,
-                                    )
-                                ],
+                        counterparty_name=name,
+                        expenses=[
+                            ReimbursementAllocationDraft(
+                                transaction_id=expenses[0].id, amount_minor=7000
                             )
                         ],
                     ),
@@ -443,15 +465,10 @@ async def test_receipt_create_preview_action_validation_parity(
         return await service.create(
             ReimbursementClaimDraft(
                 title=title,
-                parties=[
-                    ReimbursementPartyDraft(
-                        name="公司",
-                        allocations=[
-                            ReimbursementAllocationDraft(
-                                transaction_id=expenses[expense_index].id,
-                                amount_minor=5_000,
-                            )
-                        ],
+                counterparty_name="公司",
+                expenses=[
+                    ReimbursementAllocationDraft(
+                        transaction_id=expenses[expense_index].id, amount_minor=5000
                     )
                 ],
             ),
@@ -468,8 +485,7 @@ async def test_receipt_create_preview_action_validation_parity(
     live = await claim_for(0, "校验")
     base = ReimbursementReceiptDraft(
         expected_claim_version=live.version,
-        party_id=live.parties[0].id,
-        amount_minor=1_000,
+        amount_minor=1000,
         received_at=datetime.now(UTC) - timedelta(seconds=1),
         destination_account_id=bank.id,
         title="回款",
@@ -506,7 +522,7 @@ async def test_receipt_create_preview_action_validation_parity(
     cancelled_draft = base.model_copy(
         update={
             "expected_claim_version": cancelled.version,
-            "party_id": cancelled.parties[0].id,
+            "party_id": cancelled.id,
         }
     )
     await assert_same_error(cancelled, cancelled_draft, "reimbursement_claim_cancelled")
@@ -525,15 +541,9 @@ async def test_p33_preview_tokens_bind_reimbursement_mutations(session: AsyncSes
     claim = await service.create(
         ReimbursementClaimDraft(
             title="P33 claim",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="公司",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[0].id, amount_minor=8_000
-                        )
-                    ],
-                )
+            counterparty_name="公司",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=8000)
             ],
         ),
         uuid4(),
@@ -541,17 +551,10 @@ async def test_p33_preview_tokens_bind_reimbursement_mutations(session: AsyncSes
     replacement = ReimbursementClaimReplace(
         expected_version=claim.version,
         title="P33 claim updated",
-        parties=[
-            ReimbursementPartyDraft(
-                id=claim.parties[0].id,
-                name="公司",
-                allocations=[
-                    ReimbursementAllocationDraft(
-                        id=claim.parties[0].allocations[0].id,
-                        transaction_id=expenses[0].id,
-                        amount_minor=8_000,
-                    )
-                ],
+        counterparty_name="公司",
+        expenses=[
+            ReimbursementAllocationDraft(
+                id=claim.expenses[0].id, transaction_id=expenses[0].id, amount_minor=8000
             )
         ],
     )
@@ -621,23 +624,16 @@ async def test_p33_preview_tokens_bind_reimbursement_mutations(session: AsyncSes
     receipt_claim = await service.create(
         ReimbursementClaimDraft(
             title="P33 receipt",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="客户",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[1].id, amount_minor=10_000
-                        )
-                    ],
-                )
+            counterparty_name="客户",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[1].id, amount_minor=10000)
             ],
         ),
         uuid4(),
     )
     receipt_draft = ReimbursementReceiptDraft(
         expected_claim_version=receipt_claim.version,
-        party_id=receipt_claim.parties[0].id,
-        amount_minor=4_000,
+        amount_minor=4000,
         received_at=datetime.now(UTC) - timedelta(seconds=1),
         destination_account_id=bank.id,
         title="P33 first receipt",
@@ -667,8 +663,7 @@ async def test_p33_preview_tokens_bind_reimbursement_mutations(session: AsyncSes
     replace_draft = ReimbursementReceiptReplace(
         expected_claim_version=refreshed.version,
         expected_receipt_version=receipt.version,
-        party_id=refreshed.parties[0].id,
-        amount_minor=5_000,
+        amount_minor=5000,
         received_at=receipt_draft.received_at,
         destination_account_id=bank.id,
         title="P33 corrected receipt",
@@ -724,15 +719,9 @@ async def test_p33_concurrent_preview_sessions_allow_only_one_commit(
     claim = await ReimbursementService(session).create(
         ReimbursementClaimDraft(
             title="P33 concurrent",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="公司",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[0].id, amount_minor=6_000
-                        )
-                    ],
-                )
+            counterparty_name="公司",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=6000)
             ],
         ),
         uuid4(),
@@ -745,17 +734,10 @@ async def test_p33_concurrent_preview_sessions_allow_only_one_commit(
         return ReimbursementClaimReplace(
             expected_version=claim.version,
             title=title,
-            parties=[
-                ReimbursementPartyDraft(
-                    id=claim.parties[0].id,
-                    name="公司",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            id=claim.parties[0].allocations[0].id,
-                            transaction_id=expenses[0].id,
-                            amount_minor=6_000,
-                        )
-                    ],
+            counterparty_name="公司",
+            expenses=[
+                ReimbursementAllocationDraft(
+                    id=claim.expenses[0].id, transaction_id=expenses[0].id, amount_minor=6000
                 )
             ],
         )
@@ -817,39 +799,24 @@ async def test_p33_claim_matrix_preview_commit_validation_parity_and_zero_writes
             expected_version=claim.version,
             title=claim.title,
             note=claim.note,
-            parties=[
-                ReimbursementPartyDraft(
-                    id=party.id,
-                    name=party.name,
-                    expected_date=party.expected_date,
-                    note=party.note,
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            id=allocation.id,
-                            transaction_id=allocation.transaction_id,
-                            amount_minor=(
-                                amount if amount is not None else allocation.amount_minor
-                            ),
-                        )
-                        for allocation in party.allocations
-                    ],
+            counterparty_name=claim.counterparty_name,
+            expected_date=claim.expected_date,
+            expenses=[
+                ReimbursementAllocationDraft(
+                    id=allocation.id,
+                    transaction_id=allocation.transaction_id,
+                    amount_minor=(amount if amount is not None else allocation.amount_minor),
                 )
-                for party in claim.parties
+                for allocation in claim.expenses
             ],
         )
 
     voidable = await service.create(
         ReimbursementClaimDraft(
             title="P33 voided",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="公司",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[0].id, amount_minor=5_000
-                        )
-                    ],
-                )
+            counterparty_name="公司",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=5000)
             ],
         ),
         uuid4(),
@@ -860,15 +827,9 @@ async def test_p33_claim_matrix_preview_commit_validation_parity_and_zero_writes
     cancelled = await service.create(
         ReimbursementClaimDraft(
             title="P33 cancelled",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="公司",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[1].id, amount_minor=5_000
-                        )
-                    ],
-                )
+            counterparty_name="公司",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[1].id, amount_minor=5000)
             ],
         ),
         uuid4(),
@@ -886,23 +847,10 @@ async def test_p33_claim_matrix_preview_commit_validation_parity_and_zero_writes
     locked = await service.create(
         ReimbursementClaimDraft(
             title="P33 locked",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="甲",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[0].id, amount_minor=5_000
-                        )
-                    ],
-                ),
-                ReimbursementPartyDraft(
-                    name="乙",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[2].id, amount_minor=5_000
-                        )
-                    ],
-                ),
+            counterparty_name="甲",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=5000),
+                ReimbursementAllocationDraft(transaction_id=expenses[2].id, amount_minor=5000),
             ],
         ),
         uuid4(),
@@ -911,8 +859,7 @@ async def test_p33_claim_matrix_preview_commit_validation_parity_and_zero_writes
         locked.id,
         ReimbursementReceiptDraft(
             expected_claim_version=locked.version,
-            party_id=locked.parties[0].id,
-            amount_minor=1_000,
+            amount_minor=1000,
             received_at=datetime.now(UTC) - timedelta(seconds=1),
             destination_account_id=bank.id,
             title="P33 lock receipt",
@@ -925,25 +872,20 @@ async def test_p33_claim_matrix_preview_commit_validation_parity_and_zero_writes
         replacement(locked, amount=999),
         "reimbursement_allocation_locked",
     )
-    second_party = locked.parties[1]
+    second_expense = locked.expenses[1]
     removal = ReimbursementClaimReplace(
         expected_version=locked.version,
         title=locked.title,
-        parties=[
-            ReimbursementPartyDraft(
-                id=second_party.id,
-                name=second_party.name,
-                allocations=[
-                    ReimbursementAllocationDraft(
-                        id=second_party.allocations[0].id,
-                        transaction_id=second_party.allocations[0].transaction_id,
-                        amount_minor=second_party.allocations[0].amount_minor,
-                    )
-                ],
+        counterparty_name=locked.counterparty_name,
+        expenses=[
+            ReimbursementAllocationDraft(
+                id=second_expense.id,
+                transaction_id=second_expense.transaction_id,
+                amount_minor=second_expense.amount_minor,
             )
         ],
     )
-    await assert_parity(locked.id, removal, "reimbursement_party_in_use")
+    await assert_parity(locked.id, removal, "reimbursement_allocation_locked")
 
 
 async def test_p33_preview_external_dependencies_stale_without_consuming_token(
@@ -954,15 +896,9 @@ async def test_p33_preview_external_dependencies_stale_without_consuming_token(
     claim = await service.create(
         ReimbursementClaimDraft(
             title="P33 external claim",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="公司",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[0].id, amount_minor=5_000
-                        )
-                    ],
-                )
+            counterparty_name="公司",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=5000)
             ],
         ),
         uuid4(),
@@ -970,17 +906,10 @@ async def test_p33_preview_external_dependencies_stale_without_consuming_token(
     draft = ReimbursementClaimReplace(
         expected_version=claim.version,
         title="P33 external claim renamed",
-        parties=[
-            ReimbursementPartyDraft(
-                id=claim.parties[0].id,
-                name=claim.parties[0].name,
-                allocations=[
-                    ReimbursementAllocationDraft(
-                        id=claim.parties[0].allocations[0].id,
-                        transaction_id=expenses[0].id,
-                        amount_minor=5_000,
-                    )
-                ],
+        counterparty_name=claim.counterparty_name,
+        expenses=[
+            ReimbursementAllocationDraft(
+                id=claim.expenses[0].id, transaction_id=expenses[0].id, amount_minor=5000
             )
         ],
     )
@@ -988,15 +917,9 @@ async def test_p33_preview_external_dependencies_stale_without_consuming_token(
     await service.create(
         ReimbursementClaimDraft(
             title="P33 competing claim",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="客户",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[0].id, amount_minor=1_000
-                        )
-                    ],
-                )
+            counterparty_name="客户",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[0].id, amount_minor=1000)
             ],
         ),
         uuid4(),
@@ -1039,23 +962,16 @@ async def test_p33_preview_external_dependencies_stale_without_consuming_token(
     receipt_claim = await service.create(
         ReimbursementClaimDraft(
             title="P33 external receipt",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="公司",
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=expenses[1].id, amount_minor=5_000
-                        )
-                    ],
-                )
+            counterparty_name="公司",
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expenses[1].id, amount_minor=5000)
             ],
         ),
         uuid4(),
     )
     receipt_draft = ReimbursementReceiptDraft(
         expected_claim_version=receipt_claim.version,
-        party_id=receipt_claim.parties[0].id,
-        amount_minor=1_000,
+        amount_minor=1000,
         received_at=datetime.now(UTC) - timedelta(seconds=1),
         destination_account_id=bank.id,
         title="P33 external account receipt",

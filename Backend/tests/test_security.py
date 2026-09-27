@@ -41,7 +41,6 @@ def test_system_status_rejects_invalid_access_key(unauthenticated_client: TestCl
         ("PUT", "/api/v1/categories/order", {"parent_id": None, "ordered_ids": []}),
         ("PATCH", f"/api/v1/categories/{RESOURCE_ID}", {}),
         ("POST", f"/api/v1/categories/{RESOURCE_ID}/merge", {}),
-        ("POST", f"/api/v1/categories/{RESOURCE_ID}/split", {}),
         ("GET", "/api/v1/transactions", None),
         ("POST", "/api/v1/transactions", {}),
         ("GET", "/api/v1/transactions/summary", None),
@@ -167,7 +166,7 @@ def test_system_status_returns_operational_contract(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.json() == {
         "service": "fiscal-api",
-        "version": "0.1.0",
+        "version": "2.4.0",
         "environment": "test",
         "status": "operational",
         "database": "ready",

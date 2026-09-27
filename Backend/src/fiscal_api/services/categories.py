@@ -22,9 +22,6 @@ from fiscal_api.api.p31_schemas import (
     CategoryMergeCommitRequest,
     CategoryMergePreview,
     CategoryMergePreviewRequest,
-    CategorySplitCommitRequest,
-    CategorySplitPreview,
-    CategorySplitPreviewRequest,
     CategoryTransformReceipt,
 )
 from fiscal_api.core.time import utc_now
@@ -329,55 +326,6 @@ class CategoryService:
         await self.session.refresh(target)
         return self.response(target)
 
-    async def split(
-        self,
-        *,
-        root_id: UUID,
-        root_expected_version: int,
-        drafts: list[CategoryDraft],
-    ) -> list[CategoryResponse]:
-        await acquire_p2_mutation_lock(self.session)
-        root = await self._required(root_id, for_update=True)
-        check_version(root.version, root_expected_version)
-        if root.archived_at is not None or root.parent_id is not None:
-            invalid("invalid_category_hierarchy", "Split requires an active root category")
-        existing_names = {
-            child.name.casefold()
-            for child in await self.repository.children(root.id, active_only=True)
-        }
-        draft_names: set[str] = set()
-        for draft in drafts:
-            if draft.parent_id not in {None, root.id}:
-                invalid("invalid_category_hierarchy", "Split children must use the requested root")
-            if draft.direction.value != root.direction:
-                invalid("invalid_category_hierarchy", "Child direction must match its root")
-            key = draft.name.casefold()
-            if key in existing_names or key in draft_names:
-                conflict("category_name_conflict", "An active sibling already uses this name")
-            draft_names.add(key)
-        next_order = await self.repository.next_sort_order(
-            root.id, CategoryDirection(root.direction)
-        )
-        created: list[Category] = []
-        for offset, draft in enumerate(drafts):
-            category = Category(
-                name=draft.name,
-                direction=draft.direction.value,
-                parent_id=root.id,
-                icon=draft.icon,
-                color_hex=draft.color_hex,
-                aliases=draft.aliases,
-                examples=draft.examples,
-                sort_order=next_order + offset,
-            )
-            self.repository.add(category)
-            created.append(category)
-        self._touch(root)
-        await self._commit_name_safe()
-        for category in created:
-            await self.session.refresh(category)
-        return [self.response(category) for category in created]
-
     async def merge_preview(
         self, source_id: UUID, request: CategoryMergePreviewRequest
     ) -> CategoryMergePreview:
@@ -543,161 +491,6 @@ class CategoryService:
             raise
         return receipt
 
-    async def split_preview(
-        self, root_id: UUID, request: CategorySplitPreviewRequest
-    ) -> CategorySplitPreview:
-        root = await self._required(root_id)
-        check_version(root.version, request.root_expected_version)
-        self._validate_split_root(root)
-        self._validate_split_drafts(
-            root,
-            request.children,
-            await self.repository.children(root.id, active_only=True),
-        )
-        transaction_ids = await self.repository.category_transaction_ids(root.id)
-        active_children = await self.repository.children(root.id, active_only=True)
-        child_transaction_ids = [
-            transaction_id
-            for child in active_children
-            for transaction_id in await self.repository.category_transaction_ids(child.id)
-        ]
-        transactions = await TransactionRepository(self.session).get_many_for_update(
-            transaction_ids + child_transaction_ids
-        )
-        count, amount = await self.repository.dependency(root.id)
-        payload = {
-            "root_id": str(root.id),
-            "root_version": root.version,
-            "children": [draft.model_dump(mode="json") for draft in request.children],
-            "transaction_ids": [str(item) for item in transaction_ids],
-            "category_dependencies": [
-                self._category_dependency(item) for item in [root, *active_children]
-            ],
-            "transaction_dependencies": [
-                self._transaction_dependency(item) for item in transactions
-            ],
-            "transaction_scope_category_ids": [
-                str(item) for item in [root.id, *[child.id for child in active_children]]
-            ],
-            "active_child_ids_by_parent": self._active_child_ids_payload(
-                {root.id: active_children}
-            ),
-            "data_revision": await self._data_revision(),
-        }
-        preview = CategoryTransformPreview(
-            kind="split", request_hash=self._hash(payload), payload=payload
-        )
-        self.session.add(preview)
-        await self.session.commit()
-        return CategorySplitPreview(
-            preview_token=preview.id,
-            root=CategoryDependency(
-                category_id=root.id, transaction_count=count, amount_minor=amount
-            ),
-            required_transaction_ids=transaction_ids,
-            child_names=[draft.name for draft in request.children],
-        )
-
-    async def split_commit(
-        self,
-        root_id: UUID,
-        request: CategorySplitCommitRequest,
-        idempotency_key: UUID,
-    ) -> CategoryTransformReceipt:
-        request_hash = self._hash({"root_id": str(root_id), **request.model_dump(mode="json")})
-        replay = await self._transform_operation(idempotency_key, request_hash)
-        if replay is not None:
-            return replay
-        await acquire_p2_mutation_lock(self.session)
-        replay = await self._transform_operation(idempotency_key, request_hash)
-        if replay is not None:
-            return replay
-        preview = await self._preview(request.preview_token, "split")
-        payload = preview.payload
-        if payload.get("root_id") != str(root_id):
-            invalid("category_preview_input_mismatch", "The preview does not belong to this root")
-        root = await self._required(root_id, for_update=True)
-        await self._assert_preview_fresh(payload)
-        check_version(root.version, self._payload_int(payload, "root_version"))
-        self._validate_split_root(root)
-        drafts = [
-            CategoryDraft.model_validate(item)
-            for item in self._payload_objects(payload, "children")
-        ]
-        self._validate_split_drafts(
-            root,
-            drafts,
-            await self.repository.children(root.id, active_only=True),
-        )
-        required_ids = {UUID(item) for item in self._payload_strings(payload, "transaction_ids")}
-        current_ids = set(await self.repository.category_transaction_ids(root.id))
-        if current_ids != required_ids:
-            conflict("category_preview_stale", "The category transactions changed; preview again")
-        assignments = {item.transaction_id: item.child_name for item in request.assignments}
-        if len(assignments) != len(request.assignments) or set(assignments) != required_ids:
-            invalid(
-                "category_transaction_mapping_required",
-                "Assign every previewed transaction exactly once",
-            )
-        names = {draft.name: draft for draft in drafts}
-        if any(name not in names for name in assignments.values()):
-            invalid(
-                "invalid_category_transaction_mapping",
-                "Assignments must use previewed child names",
-            )
-        next_order = await self.repository.next_sort_order(
-            root.id, CategoryDirection(root.direction)
-        )
-        created: dict[str, Category] = {}
-        for offset, draft in enumerate(drafts):
-            child = Category(
-                name=draft.name,
-                direction=root.direction,
-                parent_id=root.id,
-                icon=draft.icon,
-                color_hex=draft.color_hex,
-                aliases=draft.aliases,
-                examples=draft.examples,
-                sort_order=next_order + offset,
-            )
-            self.repository.add(child)
-            created[draft.name] = child
-        await self.session.flush()
-        moved = 0
-        for name, child in created.items():
-            moved += await self._move_transactions(
-                root.id,
-                child.id,
-                transaction_ids=[
-                    transaction_id
-                    for transaction_id, assigned in assignments.items()
-                    if assigned == name
-                ],
-            )
-        self._touch(root)
-        receipt = CategoryTransformReceipt(
-            action="split",
-            categories=[self.response(created[draft.name]) for draft in drafts],
-            reclassified_transaction_count=moved,
-        )
-        self.session.add(
-            CategoryTransformOperation(
-                preview_id=preview.id,
-                idempotency_key=idempotency_key,
-                request_hash=request_hash,
-                receipt=receipt.model_dump(mode="json"),
-            )
-        )
-        try:
-            await self.session.commit()
-        except IntegrityError:
-            await self.session.rollback()
-            replay = await self._transform_operation(idempotency_key, request_hash)
-            if replay is not None:
-                return replay
-            conflict("category_name_conflict", "An active sibling already uses this name")
-        return receipt
-
     def _validate_merge_pair(
         self, source: Category, target: Category, source_version: int, target_version: int
     ) -> None:
@@ -709,25 +502,6 @@ class CategoryService:
             target.parent_id is None
         ):
             invalid("invalid_category_hierarchy", "Merge requires matching category scopes")
-
-    @staticmethod
-    def _validate_split_root(root: Category) -> None:
-        if root.archived_at is not None or root.parent_id is not None:
-            invalid("invalid_category_hierarchy", "Split requires an active root category")
-
-    @staticmethod
-    def _validate_split_drafts(
-        root: Category, drafts: list[CategoryDraft], existing: list[Category]
-    ) -> None:
-        existing_names = {child.name.casefold() for child in existing}
-        names: set[str] = set()
-        for draft in drafts:
-            if draft.parent_id not in {None, root.id} or draft.direction.value != root.direction:
-                invalid("invalid_category_hierarchy", "Split children must match the active root")
-            key = draft.name.casefold()
-            if key in existing_names or key in names:
-                conflict("category_name_conflict", "An active sibling already uses this name")
-            names.add(key)
 
     async def _move_transactions(
         self, source_id: UUID, target_id: UUID, *, transaction_ids: list[UUID] | None = None

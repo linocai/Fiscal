@@ -183,25 +183,13 @@ import XCTest
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "当前无法提交更改")).firstMatch.exists)
     }
 
-    func testEmptyErrorContractViolationConflictAndAX5LongStatesAreReachable() {
+    func testEmptyErrorConflictAndAX5LongStatesAreReachable() {
         launch("ai-empty"); XCTAssertTrue(element("v15.f3f.queue.empty").waitForExistence(timeout: 6))
         launch("ai-error"); XCTAssertTrue(element("v15.f3f.queue.error").waitForExistence(timeout: 6))
-        launch("ai-settings-violation"); XCTAssertTrue(element("v15.f3f.queue.error").waitForExistence(timeout: 6)); XCTAssertFalse(revealButton("v15.f3f.create.submit", enabled: false).isEnabled)
         launch("ai-conflict"); revealButton("v15.f3f.review.open").tap(); revealButton("v15.f3f.editor.confirm", enabled: true).tap(); XCTAssertTrue(element("v15.f3f.conflict").waitForExistence(timeout: 8))
         launch("ai-page-error"); revealButton("v15.f3f.page.more").tap(); XCTAssertTrue(element("v15.f3f.page.error").waitForExistence(timeout: 8))
         launch("ai-long", extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         XCTAssertTrue(element("v15.f3f.ai.ios").exists); attach("f3f-ios-ax5-long")
-    }
-
-    func testLaterD3SettingsViolationShowsStickyBannerAndLocksVisibleMutationControls() {
-        launch("ai-settings-violation-after-safe")
-        XCTAssertTrue(reveal("v15.f3f.proposal.00000000-0000-0000-0000-00000000F301").waitForExistence(timeout: 6))
-        button("v15.f3f.refresh").tap()
-        XCTAssertTrue(element("v15.f3f.d3-contract-banner").waitForExistence(timeout: 8))
-        XCTAssertFalse(revealButton("v15.f3f.create.submit", enabled: false).isEnabled)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "本页已停止所有保存操作")).firstMatch.exists)
-        XCTAssertTrue(reveal("v15.f3f.proposal.00000000-0000-0000-0000-00000000F301").waitForExistence(timeout: 6))
-        attach("f3f-ios-sticky-d3-contract-lock")
     }
 
     func testStableCreateRecoveryRemainsVisibleAcrossSelectionAndSettingsRecovery() {
@@ -218,7 +206,7 @@ import XCTest
 
         button("v15.f3f.refresh").tap()
         XCTAssertTrue(revealButton("v15.f3f.unknown.create-retry", enabled: false).waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "AI 安全设置读取失败")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "AI 设置读取失败")).firstMatch.exists)
         button("v15.f3f.refresh").tap()
         XCTAssertTrue(revealButton("v15.f3f.unknown.create-retry", enabled: true).waitForExistence(timeout: 8))
         revealButton("v15.f3f.unknown.create-retry", enabled: true).tap()

@@ -2,7 +2,7 @@ import XCTest
 
 @MainActor final class F3CGalleryUITests: XCTestCase {
     private var app = XCUIApplication()
-    // F3-C gallery fixture's party.expected_date; keep UI input aligned with
+    // F3-C gallery fixture's claim.expected_date; keep UI input aligned with
     // the fixed fixture fact rather than the host clock.
     private let fixtureExpectedDate = "2026-08-20"
 
@@ -18,6 +18,17 @@ import XCTest
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
     private func button(_ id: String) -> XCUIElement { app.buttons[id] }
     private func textField(_ id: String) -> XCUIElement { app.textFields[id] }
+
+    private func presentedSheetScroll() -> XCUIElement {
+        for id in ["v15.f3c.sheet.claim", "v15.f3c.sheet.receipt", "v15.f3c.sheet.operation"] {
+            let sheet = element(id)
+            if sheet.exists, let scroll = sheet.scrollViews.allElementsBoundByIndex.max(by: { $0.frame.height < $1.frame.height }) {
+                return scroll
+            }
+        }
+        XCTFail("no reimbursement sheet is presented")
+        return app.scrollViews.firstMatch
+    }
 
     @discardableResult private func reveal(_ id: String, swipes: Int = 10) -> XCUIElement {
         let value = element(id)
@@ -42,8 +53,12 @@ import XCTest
 
     @discardableResult private func revealAtTop(_ id: String, swipes: Int = 10) -> XCUIElement {
         let value = element(id)
-        for _ in 0..<swipes where !value.exists || !value.isHittable { app.swipeDown() }
+        let scroll = presentedSheetScroll()
+        for _ in 0..<swipes where !value.exists || !value.isHittable || value.frame.minY < scroll.frame.minY {
+            scroll.swipeDown()
+        }
         XCTAssertTrue(value.waitForExistence(timeout: 6), "missing top element \(id)")
+        XCTAssertTrue(value.isHittable, "top element remains outside the sheet ScrollView: \(id)")
         return value
     }
 
@@ -67,8 +82,14 @@ import XCTest
         for _ in 0..<3 {
             let current = textField(identifier)
             if hasKeyboardFocus(current) { return current }
-            if app.keyboards.firstMatch.exists, current.frame.maxY > 500 {
-                app.swipeUp()
+            let scroll = presentedSheetScroll()
+            let visibleTop = scroll.frame.minY + 16
+            let keyboardTop = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.minY : app.windows.firstMatch.frame.maxY
+            let visibleBottom = min(scroll.frame.maxY, keyboardTop) - 16
+            if current.frame.minY < visibleTop {
+                scroll.swipeDown()
+            } else if current.frame.maxY > visibleBottom {
+                scroll.swipeUp()
             }
             let tappable = textField(identifier)
             tappable.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
@@ -97,9 +118,9 @@ import XCTest
         XCTAssertTrue(element("v15.f3c.sheet.claim").waitForExistence(timeout: 6))
         XCTAssertFalse(revealButton("v15.f3c.claim.create", requireHittable: false).isEnabled)
         XCTAssertTrue(app.staticTexts["请填写报销标题。"].exists)
-        XCTAssertTrue(app.staticTexts["请填写报销当事人。"].exists)
+        XCTAssertTrue(app.staticTexts["请填写报销对象。"].exists)
         replace("八月差旅报销", in: revealTextField("v15.f3c.claim.title", upward: false))
-        replace("示例公司", in: revealTextField("v15.f3c.claim.party", upward: false))
+        replace("示例公司", in: revealTextField("v15.f3c.claim.counterparty", upward: false))
         revealButton("v15.f3c.candidate.00000000-0000-0000-0000-00000000C304", swipes: 5).tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "未分类（允许）")).firstMatch.exists)
         replace("2026/08/20", in: revealTextField("v15.f3c.claim.date", upward: false))
@@ -111,6 +132,23 @@ import XCTest
         revealButton("v15.f3c.claim.create").tap()
         XCTAssertTrue(revealAtTop("v15.f3c.sheet.success").waitForExistence(timeout: 8))
         attach("f3c-ios-claim-success")
+    }
+
+    func testOneClaimKeepsTwoExpenseAmountsIndependent() {
+        launch("reimbursements-multi")
+        button("v15.f3c.claim.new.open").tap()
+        replace("两笔差旅费用", in: revealTextField("v15.f3c.claim.title", upward: false))
+        replace("示例公司", in: revealTextField("v15.f3c.claim.counterparty", upward: false))
+        revealButton("v15.f3c.candidate.00000000-0000-0000-0000-00000000C304").tap()
+        revealButton("v15.f3c.candidate.00000000-0000-0000-0000-00000000C314").tap()
+        XCTAssertEqual(textField("v15.f3c.claim.amount.0").value as? String, "300.00")
+        replace("20.00", in: revealTextField("v15.f3c.claim.amount.1"))
+        XCTAssertEqual(textField("v15.f3c.claim.amount.0").value as? String, "300.00")
+        XCTAssertEqual(textField("v15.f3c.claim.amount.1").value as? String, "20.00")
+        let create = revealButton("v15.f3c.claim.create")
+        XCTAssertTrue(create.isEnabled, element("v15.f3c.claim.create.reasons").debugDescription)
+        create.tap()
+        XCTAssertTrue(revealAtTop("v15.f3c.sheet.success").waitForExistence(timeout: 8))
     }
 
     func testReceiptAccountLoadingEmptyErrorRetryAreVisible() {
@@ -247,7 +285,7 @@ import XCTest
         button("v15.f3c.claim.new.open").tap()
         XCTAssertTrue(element("v15.f3c.sheet.claim").waitForExistence(timeout: 6))
         replace("未知恢复报销", in: revealTextField("v15.f3c.claim.title", upward: false))
-        replace("示例公司", in: revealTextField("v15.f3c.claim.party", upward: false))
+        replace("示例公司", in: revealTextField("v15.f3c.claim.counterparty", upward: false))
         revealButton("v15.f3c.candidate.00000000-0000-0000-0000-00000000C304", swipes: 5).tap()
         XCTAssertTrue(revealButton("v15.f3c.claim.create").isEnabled)
         revealButton("v15.f3c.claim.create").tap()

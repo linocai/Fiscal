@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import csv
-import re
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from io import StringIO
@@ -214,7 +213,6 @@ def _post_receipt(
 ) -> dict[str, object]:
     draft = {
         "expected_claim_version": claim["version"],
-        "party_id": claim["parties"][0]["id"],
         "amount_minor": amount_minor,
         "received_at": received_at,
         "destination_account_id": destination_account_id,
@@ -278,7 +276,7 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
             },
         )
 
-        monthly = client.get("/api/v1/reports/monthly/2024-02", headers=auth)
+        monthly = client.get("/api/v1/reports/v2/monthly/2024-02", headers=auth)
         assert monthly.status_code == 200, monthly.text
         report = monthly.json()
         assert report["meta"]["period"] == "2024-02"
@@ -296,67 +294,61 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
         for year in range(MIN_REPORT_YEAR):
             monthly_period = f"{year:04d}-01"
             yearly_period = f"{year:04d}"
-            for suffix in ("", "/export.csv", "/export.pdf"):
+            for suffix in ("", "/export.csv"):
                 _assert_period_range_error(
                     client,
                     auth,
-                    f"/api/v1/reports/monthly/{monthly_period}{suffix}",
+                    f"/api/v1/reports/v2/monthly/{monthly_period}{suffix}",
                     code="invalid_report_month",
                 )
                 _assert_period_range_error(
                     client,
                     auth,
-                    f"/api/v1/reports/yearly/{yearly_period}{suffix}",
+                    f"/api/v1/reports/v2/yearly/{yearly_period}{suffix}",
                     code="invalid_report_year",
                 )
             _assert_period_range_error(
                 client,
                 auth,
-                "/api/v1/reports/period-drill-down?period_kind=month"
+                "/api/v1/reports/v2/period-drill-down?period_kind=month"
                 f"&period={monthly_period}&expected_data_revision=0",
                 code="invalid_report_month",
             )
             _assert_period_range_error(
                 client,
                 auth,
-                "/api/v1/reports/period-drill-down?period_kind=year"
+                "/api/v1/reports/v2/period-drill-down?period_kind=year"
                 f"&period={yearly_period}&expected_data_revision=0",
                 code="invalid_report_year",
             )
         _assert_period_range_error(
             client,
             auth,
-            "/api/v1/reports/monthly/9999-12/export.pdf",
-            code="invalid_report_month",
-        )
-        _assert_period_range_error(
-            client,
-            auth,
-            "/api/v1/reports/yearly/9999/export.csv",
+            "/api/v1/reports/v2/yearly/9999/export.csv",
             code="invalid_report_year",
         )
         _assert_period_range_error(
             client,
             auth,
-            "/api/v1/reports/period-drill-down?period_kind=year&period=9999"
+            "/api/v1/reports/v2/period-drill-down?period_kind=year&period=9999"
             "&expected_data_revision=0",
             code="invalid_report_year",
         )
         minimum_month = client.get(
-            f"/api/v1/reports/monthly/{MIN_REPORT_YEAR:04d}-01", headers=auth
+            f"/api/v1/reports/v2/monthly/{MIN_REPORT_YEAR:04d}-01", headers=auth
         )
-        minimum_year = client.get(f"/api/v1/reports/yearly/{MIN_REPORT_YEAR:04d}", headers=auth)
+        minimum_year = client.get(f"/api/v1/reports/v2/yearly/{MIN_REPORT_YEAR:04d}", headers=auth)
         assert minimum_month.status_code == minimum_year.status_code == 200
         assert minimum_month.json()["meta"]["date_from"] == f"{MIN_REPORT_YEAR:04d}-01-01"
         assert minimum_year.json()["meta"]["date_to"] == f"{MIN_REPORT_YEAR:04d}-12-31"
-        assert client.get("/api/v1/reports/monthly/9998-12", headers=auth).status_code == 200
-        assert client.get("/api/v1/reports/yearly/9998", headers=auth).status_code == 200
+        assert client.get("/api/v1/reports/v2/monthly/9998-12", headers=auth).status_code == 200
+        assert client.get("/api/v1/reports/v2/yearly/9998", headers=auth).status_code == 200
 
-        annual = client.get("/api/v1/reports/yearly/2024", headers=auth)
+        annual = client.get("/api/v1/reports/v2/yearly/2024", headers=auth)
         assert annual.status_code == 200, annual.text
         assert annual.json()["summary"] == report["summary"]
 
-        csv_export = client.get("/api/v1/reports/monthly/2024-02/export.csv", headers=auth)
+        csv_export = client.get("/api/v1/reports/v2/monthly/2024-02/export.csv", headers=auth)
         assert csv_export.status_code == 200, csv_export.text
         assert csv_export.headers["content-type"].startswith("text/csv")
         assert csv_export.headers["cache-control"] == "no-store"
@@ -374,25 +366,10 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
             == report["summary"]["net_consumption_minor"]
         )
 
-        pdf_export = client.get("/api/v1/reports/monthly/2024-02/export.pdf", headers=auth)
-        assert pdf_export.status_code == 200, pdf_export.text
-        assert pdf_export.headers["content-type"] == "application/pdf"
-        assert pdf_export.content.startswith(b"%PDF-1.4")
-        assert b"provider original" not in pdf_export.content
-        assert b"4111-1111" not in pdf_export.content
-        assert b"startxref" in pdf_export.content and b"STSong-Light" in pdf_export.content
-        pdf_text = "\n".join(
-            bytes.fromhex(chunk.decode("ascii")).decode("utf-16-be")
-            for chunk in re.findall(rb"<([0-9A-F]+)> Tj", pdf_export.content)
-        )
-        assert "净消费：¥12.00" in pdf_text
-
         revision = report["meta"]["data_revision"]
         exports = (
-            ("/api/v1/reports/monthly/2024-02/export.csv", "text/csv", "csv", "2024-02"),
-            ("/api/v1/reports/monthly/2024-02/export.pdf", "application/pdf", "pdf", "2024-02"),
-            ("/api/v1/reports/yearly/2024/export.csv", "text/csv", "csv", "2024"),
-            ("/api/v1/reports/yearly/2024/export.pdf", "application/pdf", "pdf", "2024"),
+            ("/api/v1/reports/v2/monthly/2024-02/export.csv", "text/csv", "csv", "2024-02"),
+            ("/api/v1/reports/v2/yearly/2024/export.csv", "text/csv", "csv", "2024"),
         )
         for path, content_type, extension, expected_period in exports:
             # Omission remains compatible for existing callers, but the server
@@ -422,16 +399,9 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
                     "value_minor",
                 ):
                     assert internal not in exported_text
-            else:
-                exported_pdf_text = "\n".join(
-                    bytes.fromhex(chunk.decode("ascii")).decode("utf-16-be")
-                    for chunk in re.findall(rb"<([0-9A-F]+)> Tj", bound.content)
-                )
-                assert "口径：上海时间 · 人民币" in exported_pdf_text
-                assert "revision" not in exported_pdf_text
 
         drill = client.get(
-            "/api/v1/reports/period-drill-down?period_kind=month&period=2024-02"
+            "/api/v1/reports/v2/period-drill-down?period_kind=month&period=2024-02"
             f"&expected_data_revision={revision}&limit=1",
             headers=auth,
         )
@@ -440,7 +410,7 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
         cursor = drill.json()["next_cursor"]
         assert cursor is not None
         continued = client.get(
-            "/api/v1/reports/period-drill-down?period_kind=month&period=2024-02"
+            "/api/v1/reports/v2/period-drill-down?period_kind=month&period=2024-02"
             f"&expected_data_revision={revision}&limit=1&cursor={cursor}",
             headers=auth,
         )
@@ -450,7 +420,7 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
             != drill.json()["items"][0]["transaction_id"]
         )
         tampered = client.get(
-            "/api/v1/reports/period-drill-down?period_kind=month&period=2024-02"
+            "/api/v1/reports/v2/period-drill-down?period_kind=month&period=2024-02"
             f"&expected_data_revision={revision}&account_id={cash['id']}&cursor={cursor}",
             headers=auth,
         )
@@ -470,7 +440,7 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
             },
         )
         stale = client.get(
-            "/api/v1/reports/period-drill-down?period_kind=month&period=2024-02"
+            "/api/v1/reports/v2/period-drill-down?period_kind=month&period=2024-02"
             f"&expected_data_revision={revision}",
             headers=auth,
         )
@@ -478,7 +448,7 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
         assert stale.json()["error"]["code"] == "period_report_changed"
         assert (
             stale.json()["error"]["details"]["reload_path"]
-            == "/api/v1/reports/period-drill-down?period_kind=month&period=2024-02"
+            == "/api/v1/reports/v2/period-drill-down?period_kind=month&period=2024-02"
         )
         for path, _, _, _ in exports:
             stale_export = client.get(f"{path}?expected_data_revision={revision}", headers=auth)
@@ -488,9 +458,7 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
             assert error["details"]["expected_data_revision"] == revision
             assert error["details"]["current_data_revision"] > revision
             assert error["details"]["safe_to_reload"] is True
-            assert error["details"]["reload_path"] == path.removesuffix("/export.csv").removesuffix(
-                "/export.pdf"
-            )
+            assert error["details"]["reload_path"] == path.removesuffix("/export.csv")
 
 
 def test_p34_bound_export_rejects_a_write_during_its_read_boundary(
@@ -499,7 +467,7 @@ def test_p34_bound_export_rejects_a_write_during_its_read_boundary(
     """A bound artifact cannot retry onto a newer revision after its owner changed."""
     app, auth = _app()
     with TestClient(app) as client:
-        baseline = client.get("/api/v1/reports/monthly/2024-02", headers=auth)
+        baseline = client.get("/api/v1/reports/v2/monthly/2024-02", headers=auth)
         assert baseline.status_code == 200, baseline.text
         revision = baseline.json()["meta"]["data_revision"]
         original_data_revision = ReportingService._data_revision
@@ -527,7 +495,7 @@ def test_p34_bound_export_rejects_a_write_during_its_read_boundary(
             ReportingService, "_data_revision", revision_with_interleaved_formal_write
         )
         response = client.get(
-            f"/api/v1/reports/monthly/2024-02/export.csv?expected_data_revision={revision}",
+            f"/api/v1/reports/v2/monthly/2024-02/export.csv?expected_data_revision={revision}",
             headers=auth,
         )
 
@@ -540,7 +508,7 @@ def test_p34_bound_export_rejects_a_write_during_its_read_boundary(
         "expected_data_revision": revision,
         "current_data_revision": revision + 1,
         "safe_to_reload": True,
-        "reload_path": "/api/v1/reports/monthly/2024-02",
+        "reload_path": "/api/v1/reports/v2/monthly/2024-02",
     }
 
 
@@ -569,12 +537,8 @@ def test_p34_reimbursement_period_end_is_rebuilt_from_formal_revisions(
             headers={**auth, "Idempotency-Key": str(uuid4())},
             json={
                 "title": "P34 历史报销",
-                "parties": [
-                    {
-                        "name": "公司",
-                        "allocations": [{"transaction_id": expense["id"], "amount_minor": 1_200}],
-                    }
-                ],
+                "counterparty_name": "公司",
+                "expenses": [{"transaction_id": expense["id"], "amount_minor": 1_200}],
             },
         )
         assert created.status_code == 201, created.text
@@ -590,7 +554,7 @@ def test_p34_reimbursement_period_end_is_rebuilt_from_formal_revisions(
             )
         )
 
-        february = client.get("/api/v1/reports/monthly/2024-02", headers=auth)
+        february = client.get("/api/v1/reports/v2/monthly/2024-02", headers=auth)
         assert february.status_code == 200, february.text
         assert february.json()["summary"]["reimbursement_outstanding_at_period_end_minor"] == 1_200
 
@@ -618,7 +582,7 @@ def test_p34_reimbursement_period_end_is_rebuilt_from_formal_revisions(
                 transaction_at=datetime(2024, 3, 10, 5, tzinfo=UTC),
             )
         )
-        march = client.get("/api/v1/reports/monthly/2024-03", headers=auth)
+        march = client.get("/api/v1/reports/v2/monthly/2024-03", headers=auth)
         assert march.status_code == 200, march.text
         assert march.json()["summary"]["reimbursement_outstanding_at_period_end_minor"] == 600
 
@@ -667,7 +631,6 @@ def test_p34_reimbursement_period_end_is_rebuilt_from_formal_revisions(
         replacement_draft = {
             "expected_claim_version": claim_after_second["version"],
             "expected_receipt_version": first_receipt["version"],
-            "party_id": first_receipt["party_id"],
             "amount_minor": 600,
             "received_at": "2024-05-02T12:00:00+08:00",
             "destination_account_id": cash["id"],
@@ -713,9 +676,9 @@ def test_p34_reimbursement_period_end_is_rebuilt_from_formal_revisions(
         )
         assert restored.status_code == 200, restored.text
 
-        february_after_edits = client.get("/api/v1/reports/monthly/2024-02", headers=auth)
-        march_after_april_receipt = client.get("/api/v1/reports/monthly/2024-03", headers=auth)
-        april = client.get("/api/v1/reports/monthly/2024-04", headers=auth)
+        february_after_edits = client.get("/api/v1/reports/v2/monthly/2024-02", headers=auth)
+        march_after_april_receipt = client.get("/api/v1/reports/v2/monthly/2024-03", headers=auth)
+        april = client.get("/api/v1/reports/v2/monthly/2024-04", headers=auth)
         assert february_after_edits.status_code == march_after_april_receipt.status_code == 200
         assert april.status_code == 200, april.text
         assert (
@@ -758,7 +721,7 @@ def test_p34_reimbursement_period_end_is_rebuilt_from_formal_revisions(
                         connection, manifest=manifest, payload=payload
                     )
                 async with create_session_factory(engine)() as session:
-                    report = await ReportingService(session).monthly_report(period="2024-03")
+                    report = await ReportingService(session).monthly_report_v2(period="2024-03")
                     return report.summary.reimbursement_outstanding_at_period_end_minor
             finally:
                 await engine.dispose()
@@ -792,12 +755,8 @@ def test_p34_reimbursement_cancellation_respects_the_year_boundary() -> None:
             headers={**auth, "Idempotency-Key": str(uuid4())},
             json={
                 "title": "P34 跨年报销",
-                "parties": [
-                    {
-                        "name": "公司",
-                        "allocations": [{"transaction_id": expense["id"], "amount_minor": 700}],
-                    }
-                ],
+                "counterparty_name": "公司",
+                "expenses": [{"transaction_id": expense["id"], "amount_minor": 700}],
             },
         )
         assert created.status_code == 201, created.text
@@ -826,8 +785,8 @@ def test_p34_reimbursement_cancellation_respects_the_year_boundary() -> None:
                 claim_at=datetime(2023, 12, 21, 5, tzinfo=UTC),
             )
         )
-        december = client.get("/api/v1/reports/monthly/2023-12", headers=auth)
-        year_2023 = client.get("/api/v1/reports/yearly/2023", headers=auth)
+        december = client.get("/api/v1/reports/v2/monthly/2023-12", headers=auth)
+        year_2023 = client.get("/api/v1/reports/v2/yearly/2023", headers=auth)
         assert december.status_code == year_2023.status_code == 200
         assert december.json()["summary"]["reimbursement_outstanding_at_period_end_minor"] == 700
         assert year_2023.json()["summary"]["reimbursement_outstanding_at_period_end_minor"] == 700
@@ -856,17 +815,17 @@ def test_p34_reimbursement_cancellation_respects_the_year_boundary() -> None:
             )
         )
         assert (
-            client.get("/api/v1/reports/monthly/2023-12", headers=auth).json()["summary"][
+            client.get("/api/v1/reports/v2/monthly/2023-12", headers=auth).json()["summary"][
                 "reimbursement_outstanding_at_period_end_minor"
             ]
             == 700
         )
-        january = client.get("/api/v1/reports/monthly/2024-01", headers=auth)
+        january = client.get("/api/v1/reports/v2/monthly/2024-01", headers=auth)
         assert january.status_code == 200, january.text
         assert january.json()["summary"]["reimbursement_outstanding_at_period_end_minor"] == 0
 
 
-def test_p36_report_v2_adds_auditable_dimensions_without_changing_v1() -> None:
+def test_p36_report_v2_adds_auditable_dimensions() -> None:
     app, auth = _app()
     suffix = uuid4().hex[:8]
     with TestClient(app) as client:
@@ -896,14 +855,9 @@ def test_p36_report_v2_adds_auditable_dimensions_without_changing_v1() -> None:
             },
         )
 
-        legacy = client.get("/api/v1/reports/monthly/2026-08", headers=auth)
         report = client.get("/api/v1/reports/v2/monthly/2026-08", headers=auth)
-        assert legacy.status_code == report.status_code == 200
-        legacy_body = legacy.json()
+        assert report.status_code == 200
         body = report.json()
-        assert legacy_body["meta"]["report_schema_version"] == "1"
-        assert legacy_body["completeness"]["open_reconciliation_difference_count"] == 0
-        assert "daily" not in legacy_body
         assert body["meta"]["report_schema_version"] == "2"
         assert "open_reconciliation_difference_count" not in body["completeness"]
         revision = body["meta"]["data_revision"]

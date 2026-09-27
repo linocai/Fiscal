@@ -19,19 +19,22 @@ from fiscal_api.api.p3_schemas import TransactionDraft
 from fiscal_api.api.p31_schemas import (
     CategoryMergeCommitRequest,
     CategoryMergePreviewRequest,
-    MerchantDraft,
-    MerchantMappingReceipt,
-    MerchantMappingRequest,
 )
 from fiscal_api.core.config import get_settings
 from fiscal_api.core.errors import APIError
-from fiscal_api.db.models import AccountKind, CategoryDirection, TransactionKind
+from fiscal_api.db.models import (
+    AccountKind,
+    CategoryDirection,
+    Merchant,
+    MerchantIdentifier,
+    MerchantOperation,
+    TransactionKind,
+    TransactionMerchantMapping,
+)
 from fiscal_api.db.session import create_engine, create_session_factory
-from fiscal_api.repositories.merchants import MerchantRepository
 from fiscal_api.services.accounts import AccountService
 from fiscal_api.services.archive import ArchiveService
 from fiscal_api.services.categories import CategoryService
-from fiscal_api.services.merchants import MerchantService
 from fiscal_api.services.transactions import TransactionService
 
 TEST_DATABASE_URL = environ.get("FISCAL_TEST_DATABASE_URL")
@@ -133,32 +136,6 @@ async def _base_ledger(session: AsyncSession) -> tuple[UUID, UUID, UUID]:
     return account.id, category.id, transaction.id
 
 
-def _synchronize_initial_operation_reads(
-    monkeypatch: pytest.MonkeyPatch,
-) -> Callable[[], int]:
-    """Force both sessions past the pre-lock read before either can acquire the lock."""
-
-    original = MerchantRepository.operation
-    arrived = 0
-    released = asyncio.Event()
-    post_lock_reads = 0
-
-    async def synchronized(self: MerchantRepository, key: UUID):
-        nonlocal arrived, post_lock_reads
-        if not getattr(self, "_p31_initial_operation_read", False):
-            self._p31_initial_operation_read = True
-            arrived += 1
-            if arrived == 2:
-                released.set()
-            await released.wait()
-        else:
-            post_lock_reads += 1
-        return await original(self, key)
-
-    monkeypatch.setattr(MerchantRepository, "operation", synchronized)
-    return lambda: post_lock_reads
-
-
 def _synchronize_initial_transform_reads(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Callable[[], int]:
@@ -185,111 +162,6 @@ def _synchronize_initial_transform_reads(
 
     monkeypatch.setattr(CategoryService, "_transform_operation", synchronized)
     return lambda: post_lock_reads
-
-
-async def test_p31_concurrent_idempotency_rechecks_after_global_lock(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    assert TEST_DATABASE_URL is not None
-    engine = create_async_engine(TEST_DATABASE_URL)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    try:
-        async with factory() as setup:
-            _account_id, _category_id, transaction_id = await _base_ledger(setup)
-            merchants = MerchantService(setup)
-            first_merchant = await merchants.create(
-                MerchantDraft(name=f"P31 first {uuid4().hex}", aliases=["P31 first alias"])
-            )
-            second_merchant = await merchants.create(
-                MerchantDraft(name=f"P31 second {uuid4().hex}", aliases=[])
-            )
-
-        async def concurrently(
-            request: MerchantMappingRequest,
-            key: UUID,
-            *,
-            release: bool = False,
-        ) -> tuple[MerchantMappingReceipt, MerchantMappingReceipt, int]:
-            post_lock_reads = _synchronize_initial_operation_reads(monkeypatch)
-
-            async def call() -> MerchantMappingReceipt:
-                async with factory() as session:
-                    service = MerchantService(session)
-                    if release:
-                        assert request.expected_mapping_version is not None
-                        return await service.release_mapping(
-                            transaction_id, request.expected_mapping_version, key
-                        )
-                    return await service.confirm_mapping(transaction_id, request, key)
-
-            first, second = await asyncio.gather(call(), call())
-            return first, second, post_lock_reads()
-
-        confirm_key = uuid4()
-        confirmed, confirm_replay, confirm_checks = await concurrently(
-            MerchantMappingRequest(merchant_id=first_merchant.id), confirm_key
-        )
-        assert confirmed == confirm_replay
-        assert confirm_checks >= 2
-        assert confirmed.mapping is not None
-        assert confirmed.mapping.mapping_version == 1
-
-        correct_key = uuid4()
-        corrected, correct_replay, correct_checks = await concurrently(
-            MerchantMappingRequest(
-                merchant_id=second_merchant.id,
-                expected_mapping_version=confirmed.mapping.mapping_version,
-            ),
-            correct_key,
-        )
-        assert corrected == correct_replay
-        assert correct_checks >= 2
-        assert corrected.mapping is not None
-        assert corrected.mapping.mapping_version == 2
-
-        release_key = uuid4()
-        released, release_replay, release_checks = await concurrently(
-            MerchantMappingRequest(
-                merchant_id=second_merchant.id,
-                expected_mapping_version=corrected.mapping.mapping_version,
-            ),
-            release_key,
-            release=True,
-        )
-        assert released == release_replay
-        assert release_checks >= 2
-        assert released.mapping is None
-
-        async with factory() as verify:
-            assert await verify.scalar(text("SELECT count(*) FROM merchant_operations")) == 3
-            assert (
-                await verify.scalar(text("SELECT count(*) FROM transaction_merchant_mappings")) == 0
-            )
-            with pytest.raises(APIError) as reused:
-                await MerchantService(verify).confirm_mapping(
-                    transaction_id,
-                    MerchantMappingRequest(merchant_id=second_merchant.id),
-                    confirm_key,
-                )
-            assert reused.value.code == "idempotency_key_reused"
-    finally:
-        await engine.dispose()
-
-
-async def test_p31_merchant_rejects_invalid_utf8_before_any_database_write() -> None:
-    assert TEST_DATABASE_URL is not None
-    engine = create_async_engine(TEST_DATABASE_URL)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    try:
-        async with factory() as session:
-            with pytest.raises(APIError) as rejected:
-                await MerchantService(session).create(MerchantDraft(name="\ud800", aliases=[]))
-            assert rejected.value.code == "merchant_identifier_invalid"
-            assert rejected.value.details == {"field": "name", "reason": "invalid_utf8"}
-        async with factory() as verify:
-            assert await verify.scalar(text("SELECT count(*) FROM merchants")) == 0
-    finally:
-        await engine.dispose()
 
 
 async def test_p31_category_merge_commit_is_concurrently_replayable(
@@ -371,8 +243,8 @@ def test_p31_archive_restores_merchant_facts_into_independent_empty_database(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     assert TEST_DATABASE_URL is not None
-    source_name = f"fiscal_p31_archive_source_{uuid4().hex}"
-    target_name = f"fiscal_p31_archive_target_{uuid4().hex}"
+    source_name = f"fiscal_v240_p31_archive_source_{uuid4().hex}"
+    target_name = f"fiscal_v240_p31_archive_target_{uuid4().hex}"
     source_url = (
         make_url(TEST_DATABASE_URL).set(database=source_name).render_as_string(hide_password=False)
     )
@@ -442,39 +314,45 @@ def test_p31_archive_restores_merchant_facts_into_independent_empty_database(
                     uuid4(),
                 ),
             )
-            first_merchant = await formal(
-                factory,
-                lambda session: MerchantService(session).create(
-                    MerchantDraft(name="P31 Archive Merchant", aliases=["P31 Archive Alias"])
-                ),
-            )
-            second_merchant = await formal(
-                factory,
-                lambda session: MerchantService(session).create(
-                    MerchantDraft(name="P31 Archive Corrected", aliases=[])
-                ),
-            )
-            confirmed = await formal(
-                factory,
-                lambda session: MerchantService(session).confirm_mapping(
-                    transaction.id,
-                    MerchantMappingRequest(merchant_id=first_merchant.id),
-                    uuid4(),
-                ),
-            )
-            assert confirmed.mapping is not None
-            corrected = await formal(
-                factory,
-                lambda session: MerchantService(session).confirm_mapping(
-                    transaction.id,
-                    MerchantMappingRequest(
-                        merchant_id=second_merchant.id,
-                        expected_mapping_version=confirmed.mapping.mapping_version,
-                    ),
-                    uuid4(),
-                ),
-            )
-            assert corrected.mapping is not None and corrected.mapping.mapping_version == 2
+            # Historical merchant recognition facts remain portable even though
+            # the standalone merchant management write API has been retired.
+            async with factory() as session:
+                merchant = Merchant(name="P31 Archive Corrected")
+                session.add(merchant)
+                await session.flush()
+                session.add_all(
+                    [
+                        MerchantIdentifier(
+                            merchant_id=merchant.id,
+                            normalized_key="p31 archive corrected",
+                            display_value="P31 Archive Corrected",
+                            kind="canonical",
+                        ),
+                        MerchantIdentifier(
+                            merchant_id=merchant.id,
+                            normalized_key="p31 archive alias",
+                            display_value="P31 Archive Alias",
+                            kind="alias",
+                        ),
+                        TransactionMerchantMapping(
+                            transaction_id=transaction.id,
+                            merchant_id=merchant.id,
+                            version=2,
+                        ),
+                        MerchantOperation(
+                            idempotency_key=uuid4(),
+                            request_hash="0" * 64,
+                            action="confirm",
+                            receipt={
+                                "mapping": {
+                                    "transaction_id": str(transaction.id),
+                                    "mapping_version": 2,
+                                }
+                            },
+                        ),
+                    ]
+                )
+                await session.commit()
             preview = await formal(
                 factory,
                 lambda session: CategoryService(session).merge_preview(

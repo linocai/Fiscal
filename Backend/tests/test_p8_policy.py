@@ -1,19 +1,13 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from fiscal_api.core.config import Settings
-from fiscal_api.core.errors import APIError
-from fiscal_api.core.provider_credentials import ProviderCredentialCipher
 from fiscal_api.db.models import (
     Account,
-    AIExecutionPolicy,
     AIProposal,
-    AISettings,
     Category,
     TransactionKind,
 )
 from fiscal_api.services.ai import AIService
-from fiscal_api.services.ai_provider import DisabledAIProvider
 
 CONFIDENCE_FIELDS = (
     "kind",
@@ -50,86 +44,6 @@ def proposal(
         reason_codes=[],
         status="pending",
     )
-
-
-def settings(*, enabled: bool = True, limit: int = 100_000, confidence: int = 9_000) -> AISettings:
-    return AISettings(
-        id=1,
-        auto_execute_enabled=enabled,
-        ocr_source_enabled=False,
-        shortcut_text_source_enabled=False,
-        auto_execute_limit_minor=limit,
-        minimum_confidence_bps=confidence,
-        version=1,
-        created_at=datetime(2026, 7, 16, tzinfo=UTC),
-        updated_at=datetime(2026, 7, 16, tzinfo=UTC),
-    )
-
-
-def test_d3_retired_policy_rejects_enable_and_every_relaxation_with_stable_code() -> None:
-    for values in (
-        dict(enabled=True, limit=100_000, confidence=9_000, minimum_sample_size=30),
-        dict(enabled=False, limit=100_000, confidence=9_500, minimum_sample_size=30),
-        dict(enabled=False, limit=50_000, confidence=9_000, minimum_sample_size=30),
-        dict(enabled=False, limit=50_000, confidence=9_500, minimum_sample_size=1),
-    ):
-        try:
-            AIService._reject_retired_auto_execute(
-                **values,
-                current_limit=50_000,
-                current_confidence=9_500,
-                current_minimum_sample_size=30,
-            )
-        except APIError as error:
-            assert error.code == "ai_auto_execute_retired"
-        else:
-            raise AssertionError("retired automatic execution relaxation was accepted")
-
-    AIService._reject_retired_auto_execute(
-        enabled=False,
-        limit=40_000,
-        confidence=9_600,
-        minimum_sample_size=40,
-        current_limit=50_000,
-        current_confidence=9_500,
-        current_minimum_sample_size=30,
-    )
-
-
-def test_d3_settings_response_is_false_even_for_legacy_true_configured_row() -> None:
-    value = settings(enabled=True)
-    value.provider_kind = "openai_compatible"
-    value.provider_base_url = "https://provider.example/v1"
-    value.provider_model = "legacy-model"
-    value.provider_api_key_ciphertext = "legacy-ciphertext"
-    value.provider_key_version = 1
-    response = AIService(
-        None,  # type: ignore[arg-type]
-        provider=DisabledAIProvider(),
-        runtime_settings=Settings(environment="test"),
-        credential_cipher=ProviderCredentialCipher("p35-provider-root-secret-at-least-32-bytes"),
-    )._settings_response(value)
-    assert response.provider_configured is True
-    assert response.auto_execute_enabled is False
-    assert response.effective_auto_execute is False
-
-
-def test_d3_strategy_response_is_false_for_legacy_true_row() -> None:
-    policy = AIExecutionPolicy(
-        id=uuid4(),
-        version=9,
-        effective_at=datetime(2026, 7, 16, tzinfo=UTC),
-        source=None,
-        transaction_kind=None,
-        auto_execute_enabled=True,
-        auto_execute_limit_minor=100_000,
-        minimum_confidence_bps=9_000,
-        minimum_sample_size=30,
-        change_reason="legacy true",
-        changed_automatically=False,
-        created_at=datetime(2026, 7, 16, tzinfo=UTC),
-    )
-    assert AIService._policy_response(policy).auto_execute_enabled is False
 
 
 def _parse_result(**overrides):  # type: ignore[no-untyped-def]

@@ -13,8 +13,7 @@ class ReimbursementRelation(BaseModel):
     claim_id: UUID
     claim_title: str
     claim_status: ReimbursementClaimStatus
-    party_id: UUID | None
-    party_name: str | None
+    counterparty_name: str
     receipt_id: UUID | None
     allocated_minor: int
     received_minor: int

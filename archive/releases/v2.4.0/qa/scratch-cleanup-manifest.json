@@ -1,0 +1,700 @@
+{
+  "schema": 1,
+  "evidence": [
+    "archive/releases/v2.4.0/qa/apple-build49.md",
+    "archive/releases/v2.4.0/qa/protected-inputs.json",
+    "archive/releases/v2.4.0/qa/cleanup-check.json"
+  ],
+  "items": [
+    {
+      "path": "build/v240/f3c-failure-attachments/manifest.json",
+      "bytes": 4,
+      "sha256": "ace810d7e2cbb4f8c40ce09dc8e191ae466adb4e1a7d49c59f2215b411d38b05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/015103D9-7CA1-420D-A94A-A8AB4D4514C5",
+      "bytes": 1310,
+      "sha256": "a32edcaa23e7febbbac4b79565bb254fc98dc1a3c8a9f6e91cc667125bb592ca",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/03154178-71FC-423F-9730-E12B9943FEB3",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/06091058-5C35-4F56-867A-85E7EBD2CD32.txt",
+      "bytes": 13877,
+      "sha256": "265f1651610fa8fdf87d3d3cdf91344c584033cbc6737cd39ea7da7541040c09",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/0678F9EA-19E6-40AA-8940-CDB5FE63D32B",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/10F0A64F-9519-4F48-9429-7B4A476D58E6.txt",
+      "bytes": 13877,
+      "sha256": "badd206ef646c7236f7937663d040e391d19ee5dd31c448e8ae6fd5e143cd5f8",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/1149E1E1-50D2-4BB8-AF59-CF8B3A894A34",
+      "bytes": 2071,
+      "sha256": "6d424ef5c8200431289434a6ba5c1bb157afd4934a3613f765fef26ff7efac05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/1A0BEBEA-C10B-4D64-8564-69E48BEEA09B",
+      "bytes": 118747,
+      "sha256": "ae08ed23a6845c5a9f8fe69b7208d2676b187e60642c1fdf79c5b235ab795c5c",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/1B9015B8-5ECD-431A-8CB1-3A6D1227B3AF",
+      "bytes": 1310,
+      "sha256": "a32edcaa23e7febbbac4b79565bb254fc98dc1a3c8a9f6e91cc667125bb592ca",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/201E66DF-A0FD-4F8B-8910-8E06769FE662",
+      "bytes": 2095,
+      "sha256": "1be9b8fd4d911b7cb64a19b00fcec9468e10115e28a7022d9a2b21fd792be345",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/244C0C57-6554-409C-AA12-55FB3EDA25E9",
+      "bytes": 1310,
+      "sha256": "a32edcaa23e7febbbac4b79565bb254fc98dc1a3c8a9f6e91cc667125bb592ca",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/254D93D7-E64F-4B3B-A629-DADBE7CE431A",
+      "bytes": 118747,
+      "sha256": "ae08ed23a6845c5a9f8fe69b7208d2676b187e60642c1fdf79c5b235ab795c5c",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/28A54A6E-2265-4430-9556-DAE8FEF28854",
+      "bytes": 2071,
+      "sha256": "bb23f847c4113cdfe66c70b702641b31b74afa38027a4684d5441758b4a702ee",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/2EBD0BF0-FA97-4731-9600-E091A9CDDA6A.txt",
+      "bytes": 13877,
+      "sha256": "c90f292059420835e5ee5601de6b3d6b3542f797be244938eafb562012994309",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/2F43865C-16E1-4A93-93C8-3F56758D0868",
+      "bytes": 1903,
+      "sha256": "99cc84318d5510740664aa207c4bfb8c341c155afb9599e6f16b98c19f4d6657",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/32CCD1C8-30AE-4185-8CD2-5BACBD3C5CC1",
+      "bytes": 1310,
+      "sha256": "a32edcaa23e7febbbac4b79565bb254fc98dc1a3c8a9f6e91cc667125bb592ca",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/32D85B17-A3E8-425B-A4FA-27A281D3C06C",
+      "bytes": 2071,
+      "sha256": "6d424ef5c8200431289434a6ba5c1bb157afd4934a3613f765fef26ff7efac05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/385FA166-F227-41D3-B391-EDCA91E82945.txt",
+      "bytes": 13856,
+      "sha256": "a34c009e95e830494d2521b5d4e86d0a0aa4f11b1608a794fca765e961c821a4",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/3C9BDDB9-5AD9-4347-B2AA-17D8F7AB4671",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/401419FA-DC97-4F31-AA18-DB317ACB354C.txt",
+      "bytes": 13877,
+      "sha256": "b3f4f799d5758d59e514e777ffb73dd4a07f994dd82d768f9bca3fe1163f0a55",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/412FE997-0F08-4E21-BC7D-3F9232F3F974.txt",
+      "bytes": 13856,
+      "sha256": "787c9c82802e95088907e61fd822ee32e6ab0d697f236a7e012d03c45d170e44",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/435F5A79-1760-4968-B381-36A67B188EEA",
+      "bytes": 1735,
+      "sha256": "7ec58025d76fd0bce19cdb06d53c8a1b6e9b2d9a047310b93f521bab120f5733",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/439AD6FC-D008-42C5-B9BE-07B7922E2168",
+      "bytes": 1310,
+      "sha256": "a32edcaa23e7febbbac4b79565bb254fc98dc1a3c8a9f6e91cc667125bb592ca",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/4C3EB372-6AE9-42A8-B151-F27D68A10B51",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/4DE6B411-30FB-4DBC-835E-AE278B545C26",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/58F39B32-92B8-4674-B6FB-4281E3296B80",
+      "bytes": 1367,
+      "sha256": "dcb7d8a67e5a2bbca57ee9fb951f2cdaeb299e95103ce16bb54aa7cad9a27d22",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/5ECD0538-17CA-42D6-91A5-28C9BF840A60",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/61D65A17-CD06-48A0-A742-4188F1316349.txt",
+      "bytes": 25319,
+      "sha256": "19839f0b6c1a2d9d2cabfb474b4290469c0f35702e4f70278e4a52bd6d409800",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/67DD325B-A5BD-4A9B-9CE5-4F80D149F2FC",
+      "bytes": 1743,
+      "sha256": "b56c62ba98e9be829b841ef250d55503613321bcb9f4b5e71f1369ed9034c621",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/6C83877C-033D-4E8C-A892-C78314D3D57D.txt",
+      "bytes": 13877,
+      "sha256": "3495b388cb2e4a23c05f7ec91ca84f9ad65f91f2f2f6735c110660c97228daaa",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/6D45B70F-2D81-4BD0-9855-82CD48339C2D.txt",
+      "bytes": 13877,
+      "sha256": "98b6df28528fc9f815dde0af8f40f8a9754065b4d7dab101db8502775cc17271",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/70183D21-C3CD-4E50-B154-CBE15C26EEA3",
+      "bytes": 1310,
+      "sha256": "a32edcaa23e7febbbac4b79565bb254fc98dc1a3c8a9f6e91cc667125bb592ca",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/7034D277-30B5-4EAD-8F65-BE10B7C6D4BE",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/72385288-431B-4D60-9080-5FE9323297D4",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/7718E7EF-AC0C-476D-ACCD-B52E821D0E82",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/7A9AF4AA-EF87-4A67-BF3D-9A702652C9ED",
+      "bytes": 1310,
+      "sha256": "a32edcaa23e7febbbac4b79565bb254fc98dc1a3c8a9f6e91cc667125bb592ca",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/7C91EEFF-299E-424C-B778-A87799818F49",
+      "bytes": 1310,
+      "sha256": "a32edcaa23e7febbbac4b79565bb254fc98dc1a3c8a9f6e91cc667125bb592ca",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/81C7A11F-BD9F-4E9B-944A-8B63BDE0AF2C",
+      "bytes": 1310,
+      "sha256": "a32edcaa23e7febbbac4b79565bb254fc98dc1a3c8a9f6e91cc667125bb592ca",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/82173C50-911A-448E-B960-E282450ACC8F",
+      "bytes": 1367,
+      "sha256": "dcb7d8a67e5a2bbca57ee9fb951f2cdaeb299e95103ce16bb54aa7cad9a27d22",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/82F6B909-EBBA-4F8F-99EC-95F5A13C08D3",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/85460C3B-00B6-4100-AA29-17005859F3B2",
+      "bytes": 2071,
+      "sha256": "6d424ef5c8200431289434a6ba5c1bb157afd4934a3613f765fef26ff7efac05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/891486F8-3468-4F07-AB47-85EAE24D2C0E.txt",
+      "bytes": 13877,
+      "sha256": "9710c7b1931f4a8f167c445600ec8d5a5f4f4b2dddf7d682d7556a09930e939b",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/89C0728C-284A-423C-868A-87A10494CA0E",
+      "bytes": 1722,
+      "sha256": "654315153b0b7db36037a65a35e0898eab1abe590b339614f233b86c1c1d05fa",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/8D38D516-999B-4B73-A72F-061692B75656",
+      "bytes": 1891,
+      "sha256": "4769c45c7346a473d648ee58618279ff6cb63a333c2fdee0e2a0a69743ceaedd",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/91730758-BE84-40CC-AB6B-97BF90AF10FA",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/91D77B3D-4CB1-48B0-9F41-E9398BD93152",
+      "bytes": 1891,
+      "sha256": "bf6c6d5a40b82d1fc5c4b159596c934a65ca41539b1f0ad8329c24fc6f96a1c1",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/99854136-AE95-4E82-90B5-3EC150C05D94.txt",
+      "bytes": 13877,
+      "sha256": "594174c2f94b889b70a82fbe564949efafc246a3e49f9fef0583986bf55ad2ce",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/9CB9F669-06B7-4522-A404-5CA4C191DB4C.txt",
+      "bytes": 25319,
+      "sha256": "35adb31d5c59dff995f6a8ee148c0d82e569dcfbde345065f94e5e226e697372",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/9D493015-0E79-474B-AC37-C562B33FA2C3",
+      "bytes": 1891,
+      "sha256": "52590e9125eafe70b778f28992198891d2753c52c59d61a2b7444816612faf38",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/A7E756A7-B31F-476D-86F4-28EAFD73A4F5",
+      "bytes": 1367,
+      "sha256": "dcb7d8a67e5a2bbca57ee9fb951f2cdaeb299e95103ce16bb54aa7cad9a27d22",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/B0F20277-4C19-44C9-9F90-D649833E4D3A",
+      "bytes": 1367,
+      "sha256": "dcb7d8a67e5a2bbca57ee9fb951f2cdaeb299e95103ce16bb54aa7cad9a27d22",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/BAB4A1D9-3833-4720-9DFD-F93AA110131C",
+      "bytes": 2071,
+      "sha256": "6d424ef5c8200431289434a6ba5c1bb157afd4934a3613f765fef26ff7efac05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/BBDED42D-3238-4B01-956A-730D3D94EBE9",
+      "bytes": 1310,
+      "sha256": "a32edcaa23e7febbbac4b79565bb254fc98dc1a3c8a9f6e91cc667125bb592ca",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/BCFE72E0-FC7A-453A-9903-BDC98F25446F",
+      "bytes": 2071,
+      "sha256": "bb23f847c4113cdfe66c70b702641b31b74afa38027a4684d5441758b4a702ee",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/CC379C98-215D-40DF-86AB-56D35B7B189B",
+      "bytes": 2071,
+      "sha256": "6d424ef5c8200431289434a6ba5c1bb157afd4934a3613f765fef26ff7efac05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/CDD3C445-353E-4D78-949E-D67B9A77CC5E",
+      "bytes": 1310,
+      "sha256": "a32edcaa23e7febbbac4b79565bb254fc98dc1a3c8a9f6e91cc667125bb592ca",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/CF70457B-CF41-47E4-8FF2-EAF1FB6D0D0C",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/CFEBA0AD-34AA-46B9-8DA9-4D573FFDE7CF",
+      "bytes": 1855,
+      "sha256": "2ac74b637397eabad436100532eb8af75607bc01e2aa1d823a751d59094c3b03",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/D1C3E797-E9E8-4649-B603-4ED262B48DB9",
+      "bytes": 1891,
+      "sha256": "65f6c55fb52eeec550384c530e541ff5198a23fd726fbe9f2160b2cafc9bbf91",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/D285441D-6EBA-4C63-8639-54698FE289FF",
+      "bytes": 1891,
+      "sha256": "c271866543c1f8ab2f4f4714567dddf9d905fd730355f6cd1613ac357d9dacf0",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/D55ED8F1-47CD-4E1B-9CB5-578E2320E5FE.txt",
+      "bytes": 13877,
+      "sha256": "af4cc4ee261f765b3965790d7c90eb760b47ce443e1008a4d888fdb5d337a9d9",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/DC0EC9AF-710C-4788-9799-0CAA02215B08",
+      "bytes": 1310,
+      "sha256": "a32edcaa23e7febbbac4b79565bb254fc98dc1a3c8a9f6e91cc667125bb592ca",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/E1C40159-2EBB-4F6E-BBCE-54D165E6D65F",
+      "bytes": 2071,
+      "sha256": "6d424ef5c8200431289434a6ba5c1bb157afd4934a3613f765fef26ff7efac05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/E5AC4D79-05F2-41CA-B837-51C7B92A3C9B",
+      "bytes": 2071,
+      "sha256": "6d424ef5c8200431289434a6ba5c1bb157afd4934a3613f765fef26ff7efac05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/EC33724E-C760-4015-9A34-D676279E5EF1",
+      "bytes": 2071,
+      "sha256": "6d424ef5c8200431289434a6ba5c1bb157afd4934a3613f765fef26ff7efac05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/EC583101-086A-4D6E-9C3E-9C104A3FCA13.txt",
+      "bytes": 13877,
+      "sha256": "f47314312c8f58a3d75e1e3d50f83ff9317179c3dc09710f25c31ead4ed801f1",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/EDF3E08F-9230-49EA-AF9E-440BDEAD0BA5",
+      "bytes": 1367,
+      "sha256": "dcb7d8a67e5a2bbca57ee9fb951f2cdaeb299e95103ce16bb54aa7cad9a27d22",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/F0715C19-4309-48FD-9DEB-7F872C834B12",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/F5AA3263-33FC-494B-A252-7A04CFF37D1F",
+      "bytes": 2071,
+      "sha256": "6d424ef5c8200431289434a6ba5c1bb157afd4934a3613f765fef26ff7efac05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/F7B67147-F27A-446F-BC36-3AA0D76BA262",
+      "bytes": 1722,
+      "sha256": "34f8994e218426f0b983d6787687bb3482555da997cc53b1e501ea4ef449746c",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/F7E73A53-C784-4139-9927-F121DDB137C8",
+      "bytes": 1545,
+      "sha256": "9d423379feeaa322cb3109fd8156894b864f326e4d7a0f9546b0f95dd7db511a",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/F8BAF97E-2F0E-46B0-96E2-27C64E27A78A.txt",
+      "bytes": 13877,
+      "sha256": "5a51605bd747d998950a4ae57b6a32831a889ea42a5154b303ecd9e33ca6f03c",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/FC2D3770-FB2B-4A40-89B2-FDCBA08AD265",
+      "bytes": 2071,
+      "sha256": "6d424ef5c8200431289434a6ba5c1bb157afd4934a3613f765fef26ff7efac05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/FF2AB7DD-D177-4D1A-9C21-3269980BF1FB.txt",
+      "bytes": 13877,
+      "sha256": "45305f165827cb20487b3a61bf2e56714edb35950ddc72ded105b81b8a5ffb55",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/FF740459-7B2B-4F4F-9A25-BE8AB656A812",
+      "bytes": 1367,
+      "sha256": "dcb7d8a67e5a2bbca57ee9fb951f2cdaeb299e95103ce16bb54aa7cad9a27d22",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/manifest.json",
+      "bytes": 31609,
+      "sha256": "da6f5aba5bdd4f459940495de7a08b72221715ec6aac4c7d9eae9a46db7cad5f",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/gallery-ios-final-after-success-feedback.log",
+      "bytes": 205097,
+      "sha256": "2608414d7c76053bd63f2b98b66da62cd9315da2b2c79c6648b91f3386feeab6",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/gallery-ios-final.log",
+      "bytes": 314649,
+      "sha256": "ee9b3ef059ce6779dc17e13fe89476dfe4133c1e3b95b1b14614adb49806b0c5",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/gallery-ios-first.log",
+      "bytes": 99216,
+      "sha256": "f6ab126005ab8ccb011a00ac3e76ed21d12a51cdac6bded25f188d3fb0945a7d",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/gallery-ios-second.log",
+      "bytes": 21316,
+      "sha256": "5cbd1c3f93da8285bbc53df89267c6c72e09af7e59aee7a8eda8800803ea81de",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/gallery-ios-third.log",
+      "bytes": 326628,
+      "sha256": "2e55265c1b4fc1f8be1b8ef879992728086036f4541f754ca39de245f0933a74",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/gallery-macos-final.log",
+      "bytes": 40684,
+      "sha256": "6d7f189b23d894cfb82e94ed58ae05304cad5cafd542e47989f58fd20104e44a",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/gallery-macos-first.log",
+      "bytes": 43904,
+      "sha256": "e4b408b17676920899a66f95feca19b3a631dc3829800de5100f39bd90deada2",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/gallery-macos-second.log",
+      "bytes": 76228,
+      "sha256": "506c4fb5a079ee9614a2c1dd3783899c0d0d2d6e0de685419f7cc08fc7c7d6f9",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/gallery-macos-third.log",
+      "bytes": 155800,
+      "sha256": "95e113930ab51e6ef69bee4dc9d28ede26ae5dbee3d31773eed5b4a44bd51818",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/ios-final-after-success-feedback.log",
+      "bytes": 225047,
+      "sha256": "44ce757ea9ff2e11553d15031004dd778d3be54ed1e594dd388ee67a8f607523",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/ios-final-build.log",
+      "bytes": 356179,
+      "sha256": "877c7a1e8d92ecf1314311e9cc08d31a7a54fd371beff192fa19f9975985e487",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/ios-first-build.log",
+      "bytes": 134404,
+      "sha256": "e42220bfc5d724dcc5bd9c2b03ac563348676bd633bdd8d29ff82542b5420a1e",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/ios-second-build.log",
+      "bytes": 87647,
+      "sha256": "6ddae7d91754400443cc2077fe41de9e4fcbd7b574c7bc58200a551a11431d8c",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/ios-third-build.log",
+      "bytes": 247700,
+      "sha256": "a5833c1642f759f53893430c9a761ec7949f647687802bf6fb3fbc98911516d9",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/macos-final-build.log",
+      "bytes": 7902,
+      "sha256": "ab0b48383f69039654d8a8143bb298942d04cf95feaeebc6fab937aea958e87b",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/macos-first-build.log",
+      "bytes": 112742,
+      "sha256": "8491f2261ca25bc4a5c3d29732a927022175d10e02ea4190a82f463a3444dd4b",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/macos-second-build.log",
+      "bytes": 117180,
+      "sha256": "1cc52d5e88d0af6278ef66ff490f9fae4c21a4f3ff737e34fd031aa6dc2a469b",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/macos-third-build.log",
+      "bytes": 41002,
+      "sha256": "682b295adcd395013fa0453c3998e8234ebc083c5f71c1fb7a5e3b996d856ac0",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/protected-inputs/AGENTS.md",
+      "bytes": 5942,
+      "sha256": "306dee0a24467b0c721ef083cfe666756ae2bb019a04658457324324d40115b3",
+      "reason": "七份用户输入已逐字节核对，保留哈希清单后回收原始副本"
+    },
+    {
+      "path": "build/v240/protected-inputs/App/Fiscal.xcodeproj/xcshareddata/xcschemes/FiscaliOS.xcscheme",
+      "bytes": 3199,
+      "sha256": "62751c8af676755c2722e17cd6c6667920c7bf123aa91c8e6a0b64cf4218f382",
+      "reason": "七份用户输入已逐字节核对，保留哈希清单后回收原始副本"
+    },
+    {
+      "path": "build/v240/protected-inputs/App/Fiscal.xcodeproj/xcshareddata/xcschemes/FiscalmacOS.xcscheme",
+      "bytes": 4169,
+      "sha256": "b2b2e7fd6c8da9a64fb8ac0f0d161d3951addee59d1b91b66fd1cfcc600808f2",
+      "reason": "七份用户输入已逐字节核对，保留哈希清单后回收原始副本"
+    },
+    {
+      "path": "build/v240/protected-inputs/App/Fiscal.xcodeproj/xcshareddata/xcschemes/V15GalleryiOS.xcscheme",
+      "bytes": 3716,
+      "sha256": "28fb7d91285f7032b1058f1ab2e7c6e7496065112c3f0ba90945fd3916f9b7ff",
+      "reason": "七份用户输入已逐字节核对，保留哈希清单后回收原始副本"
+    },
+    {
+      "path": "build/v240/protected-inputs/App/Fiscal.xcodeproj/xcshareddata/xcschemes/V15GallerymacOS.xcscheme",
+      "bytes": 3742,
+      "sha256": "24bee7cca28bc8e50e8b1f99147a26a73bf44192aa11db935eb43903d73fa5c7",
+      "reason": "七份用户输入已逐字节核对，保留哈希清单后回收原始副本"
+    },
+    {
+      "path": "build/v240/protected-inputs/App/Fiscal.xcodeproj/xcshareddata/xcschemes/V15RootSmokeiOS.xcscheme",
+      "bytes": 3740,
+      "sha256": "e72c37c8503ba1be6d39c4720e254ceeccd78cd3e91db2fe886084c5974f9622",
+      "reason": "七份用户输入已逐字节核对，保留哈希清单后回收原始副本"
+    },
+    {
+      "path": "build/v240/protected-inputs/App/Fiscal.xcodeproj/xcshareddata/xcschemes/V15RootSmokemacOS.xcscheme",
+      "bytes": 3766,
+      "sha256": "7bdfa006628711dee320e13aeee51d9520152116518b2f2ef225cae71c300d4f",
+      "reason": "七份用户输入已逐字节核对，保留哈希清单后回收原始副本"
+    },
+    {
+      "path": "build/v240/protected-inputs/manifest.json",
+      "bytes": 1332,
+      "sha256": "4c4d0335f0cae0e6155591b968c1a54a9110ab665aa6d595237c04ba0808de27",
+      "reason": "七份用户输入已逐字节核对，保留哈希清单后回收原始副本"
+    },
+    {
+      "path": "build/v240/root-smoke-ios-deeplink-build-second.log",
+      "bytes": 6184,
+      "sha256": "eed68cf8470aa39e83a7d5e76b36afbc78b2542c8424f0cdc4744885e71844a1",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/root-smoke-ios-deeplink-build.log",
+      "bytes": 229545,
+      "sha256": "7c7ebdee60361c82f5a1f8f0911017cbc12446c393d6038b8dd2dce4dbd7f4fa",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/root-smoke-ios-final.log",
+      "bytes": 80371,
+      "sha256": "ce91e84cf514173187d1fd3e1f7d8ca48337c36c6d0d82f09a119d5b299e6272",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/root-smoke-ios-first.log",
+      "bytes": 59123,
+      "sha256": "40032261375a6dd029d96283cbbf62aab15e23ec29b76144935cd56125aafc7a",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/root-smoke-ios-second.log",
+      "bytes": 315738,
+      "sha256": "0cbbe29ccedce21baccb8b7137a72ff1f5dd99657c49aa15a3009af42ad075d6",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/root-smoke-macos-final.log",
+      "bytes": 39515,
+      "sha256": "9c83bc25d3c4dd0b2c0583650c8c6a11e87dfa5fb8fc82a1c2a107818b7846f7",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/root-smoke-macos-first.log",
+      "bytes": 33503,
+      "sha256": "8c68f68d30f6c16d63f614d535ce7576bde6f247163cd93cdb307bb43626499a",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/root-smoke-macos-second.log",
+      "bytes": 39393,
+      "sha256": "84e7ce4d58af80b6a0ced412862f91e8e85323c25b65a3350c11b1e3133d2d42",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/root-smoke-macos-third.log",
+      "bytes": 58020,
+      "sha256": "6575da44fa0e33c8772535fcb3307724bac33d66323a7a4d3e5d43be30ddbf5a",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/snapshot-tool-final.log",
+      "bytes": 33081,
+      "sha256": "a4f9c9203313dd76020ee1aaa1cfa0fabf1a7ae3682aa501d0a3afa300e82a38",
+      "reason": "被最终成功构建日志替代的中间轮次"
+    },
+    {
+      "path": "build/v240/ui/wide-baseline/manifest.json",
+      "bytes": 4,
+      "sha256": "ace810d7e2cbb4f8c40ce09dc8e191ae466adb4e1a7d49c59f2215b411d38b05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/wide-failure-attachments/manifest.json",
+      "bytes": 4,
+      "sha256": "ace810d7e2cbb4f8c40ce09dc8e191ae466adb4e1a7d49c59f2215b411d38b05",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    },
+    {
+      "path": "build/v240/wide-screenshots/manifest.json",
+      "bytes": 1938,
+      "sha256": "b608f3b2254a1da14c0d2d050c0f4b1c2d38b8c2e811cff4298428ecb034fab7",
+      "reason": "诊断导出副本已由 QA 摘要和最终 xcresult 替代"
+    }
+  ]
+}

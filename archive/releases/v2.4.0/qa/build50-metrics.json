@@ -1,0 +1,11 @@
+{
+  "App": {
+    "files": 79,
+    "lines": 27632
+  },
+  "Backend": {
+    "files": 127,
+    "lines": 31040
+  },
+  "code_snapshot_sha256": "648e00bdcbf6b0a34a2cbdfde5bca990ee6fba3d0a0823c6994e12acc055bc86"
+}

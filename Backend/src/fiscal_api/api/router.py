@@ -11,12 +11,10 @@ from fiscal_api.api.routes import (
     credit,
     health,
     installments,
-    merchants,
     migrations,
     reimbursements,
     reports,
     revision,
-    statement_imports,
     system,
     transactions,
 )
@@ -37,6 +35,4 @@ api_router.include_router(installments.router)
 api_router.include_router(reimbursements.router)
 api_router.include_router(reports.router)
 api_router.include_router(migrations.router)
-api_router.include_router(merchants.router)
 api_router.include_router(revision.router)
-api_router.include_router(statement_imports.router)

@@ -5,11 +5,25 @@ public struct V15AIProposalMacView: View {
     @State private var model: V15AIProposalModel
     @State private var showsReview = false
     @State private var listScope: ListScope = .pending
-    private let initialGalleryScenario: String?
+    @State private var focusedProposalID: UUID?
+    @State private var initialOpenMessage: String?
+    private let services: V15Services
+    private let initialProposalID: UUID?
+    private let preparesOwnModel: Bool
 
-    @MainActor public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialGalleryScenario: String? = nil) {
+    @MainActor public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialProposalID: UUID? = nil) {
         _model = State(initialValue: V15AIProposalModel(services: services, offlineSnapshotAt: offlineSnapshotAt))
-        self.initialGalleryScenario = initialGalleryScenario
+        self.services = services
+        self.initialProposalID = initialProposalID
+        preparesOwnModel = true
+    }
+
+    @MainActor public init(model: V15AIProposalModel, services: V15Services, reviewPresented: Bool = false) {
+        _model = State(initialValue: model)
+        _showsReview = State(initialValue: reviewPresented)
+        self.services = services
+        initialProposalID = nil
+        preparesOwnModel = false
     }
 
     public var body: some View {
@@ -24,7 +38,11 @@ public struct V15AIProposalMacView: View {
         .v15MacWorkspaceCanvas()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f3f.ai.macos")
-        .task { if model.phase == .idle { await model.load(); await applyInitialScenario() } }
+        .task(id: initialProposalID) {
+            guard preparesOwnModel else { return }
+            if model.phase == .idle { await model.load() }
+            await openInitialProposal()
+        }
         .onChange(of: listScope) { _, _ in reconcileVisibleSelection() }
         .onChange(of: proposalScopeSignature) { _, _ in reconcileVisibleSelection() }
         .sheet(isPresented: $showsReview, onDismiss: { model.dismissEditor() }) { reviewSheet.frame(minWidth: 620, minHeight: 720) }
@@ -82,6 +100,7 @@ public struct V15AIProposalMacView: View {
 
     private var visibleSelectedProposal: V15AIProposal? {
         guard let selected = model.selectedProposal else { return nil }
+        if focusedProposalID == selected.id { return selected }
         return displayedProposals.first(where: { $0.id == selected.id })
     }
 
@@ -95,13 +114,17 @@ public struct V15AIProposalMacView: View {
                 inspector
                 HStack { Text("内容详情").font(V15Typography.surfaceTitle); Spacer(); Button("刷新") { Task { await model.load() } } }
                 V15AIMutationSurface(model: model)
+                if let initialOpenMessage {
+                    V15ErrorMessageState(title: "无法打开待确认内容", message: initialOpenMessage)
+                        .accessibilityIdentifier("v15.f3f.route.error")
+                }
                 switch model.detailPhase {
                 case .idle: V15EmptyState(title: "选择一项内容", explanation: "这里显示识别结果和待补充内容。")
                 case .loading: V15LoadingSkeleton()
                 case .empty: V15EmptyState(title: "没有详情", explanation: "暂时没有取得这项内容。")
                 case .failed(let failure): V15ServiceErrorState(message: failure.message) { if let proposal = visibleSelectedProposal { Task { await model.select(proposal) } } }
                 case .loaded:
-                    if let proposal = visibleSelectedProposal { V15AIProposalDetail(proposal: proposal, events: model.qualityEvents) }
+                    if let proposal = visibleSelectedProposal { V15AIProposalDetail(proposal: proposal) }
                     else { V15EmptyState(title: "选择一项内容", explanation: "这里显示当前范围内的识别结果和处理状态。") }
                 }
             }.padding(V15Spacing.lg)
@@ -115,14 +138,10 @@ public struct V15AIProposalMacView: View {
                 VStack(alignment: .leading, spacing: V15Spacing.sm) {
                     Label("只接受人工确认", systemImage: "hand.raised.fill").font(V15Typography.body.weight(.semibold)).foregroundStyle(V15Palette.teal.color)
                     Text("每一笔都由你确认，AI 不会自动记账。").font(V15Typography.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("v15.f3f.d3-invariant")
-                    if let reason = model.settingsSafetyReason {
-                        V15ServiceErrorState(message: reason.message) { Task { await model.load() } }
-                            .accessibilityIdentifier("v15.f3f.d3-contract-banner")
-                    }
                     if let snapshot = model.offlineSnapshotAt { V15OfflineReadOnlyBanner(snapshotAt: snapshot) }
                 }
                 V22FormSection("描述这笔收支") {
-                    Picker("来源", selection: $model.source) { ForEach(V15AIProposalSource.allCases) { Text($0.displayName).tag($0) } }.pickerStyle(.menu)
+                    Text("手工文字").font(V15Typography.secondary.weight(.semibold))
                     V15Field("记账文字", text: $model.inputText, prompt: "午餐 132 元", axis: .vertical)
                     V15ActionButton("生成待确认账目", kind: .primary, disabledReasons: model.createReasons) { Task { await model.create() } }.accessibilityIdentifier("v15.f3f.create.submit")
                     V15AIStableCreateRecoverySurface(model: model)
@@ -162,42 +181,29 @@ public struct V15AIProposalMacView: View {
         .accessibilityIdentifier("v15.f3f.editor.sheet")
     }
 
-    private func applyInitialScenario() async {
-        guard let initialGalleryScenario, let proposal = model.selectedProposal else { return }
-        switch initialGalleryScenario {
-        case "ai-review":
-            model.openReview(proposal)
-            guard let categoryID = model.visibleCategories.first?.id else { return }
-            model.categoryID = categoryID
-            showsReview = true
-        case "ai-field-error", "ai-conflict", "ai-response-unknown", "ai-response-unknown-read-failure":
-            model.openReview(proposal)
-            guard let categoryID = model.visibleCategories.first?.id else { return }
-            model.categoryID = categoryID
-            showsReview = true
-            await model.confirmDraft()
-            if initialGalleryScenario == "ai-response-unknown-read-failure" { await model.recoverUnknownDirect() }
-        case "ai-page-error":
-            await model.loadNextPage()
-        case "ai-create-unknown", "ai-create-unknown-settings-transport-after-safe":
-            model.inputText = "午餐 132 元"
-            await model.create()
-            if initialGalleryScenario == "ai-create-unknown-settings-transport-after-safe" { await model.load() }
-        case "ai-cash-flow":
-            model.openReview(proposal)
-            showsReview = true
-        default:
-            break
-        }
-    }
-
 
     private func reconcileVisibleSelection() {
         guard !model.writeLocked else { return }
+        if focusedProposalID == model.selectedProposal?.id { return }
         if case .succeeded = model.mutationPhase { return }
         let visible = displayedProposals
         guard !visible.contains(where: { $0.id == model.selectedProposal?.id }) else { return }
         guard let first = visible.first else { model.clearSelection(); return }
         Task { await model.select(first) }
+    }
+
+    @MainActor private func openInitialProposal() async {
+        guard let initialProposalID else { return }
+        do {
+            let proposal = try await services.ai.proposal(id: initialProposalID, readCachePolicy: .reloadIgnoringCache)
+            listScope = [.pending, .processing, .failed].contains(proposal.status) ? .pending : .history
+            focusedProposalID = proposal.id
+            await model.select(proposal)
+            initialOpenMessage = nil
+        } catch let failure as V15Failure {
+            initialOpenMessage = failure.message
+        } catch {
+            initialOpenMessage = "这项待确认内容暂时不可读取。"
+        }
     }
 }

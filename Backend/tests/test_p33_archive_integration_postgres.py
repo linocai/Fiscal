@@ -14,7 +14,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from fiscal_api.core.config import Settings, get_settings
-from fiscal_api.db.models import AIProposal, StatementImport, StatementImportRow
+from fiscal_api.db.models import AIProposal
 from fiscal_api.db.session import create_engine, create_session_factory
 from fiscal_api.main import create_app
 from fiscal_api.services.archive import ArchiveService
@@ -73,7 +73,7 @@ async def _drop_database(name: str) -> None:
         await engine.dispose()
 
 
-async def _add_ai_and_import_references(cycle_id: str) -> None:
+async def _add_ai_reference(cycle_id: str) -> None:
     assert TEST_DATABASE_URL is not None
     engine = create_engine(TEST_DATABASE_URL)
     try:
@@ -88,23 +88,6 @@ async def _add_ai_and_import_references(cycle_id: str) -> None:
                     target="transaction",
                     status="pending",
                     credit_cycle_id=UUID(cycle_id),
-                )
-            )
-            statement = StatementImport(
-                document_sha256=(uuid4().hex * 2)[:64],
-                byte_size=1,
-                page_count=1,
-                mime_type="application/pdf",
-                display_name="statement.pdf",
-                status="created",
-            )
-            session.add(statement)
-            await session.flush()
-            session.add(
-                StatementImportRow(
-                    statement_import_id=statement.id,
-                    row_number=1,
-                    credit_cycle_id_candidate=UUID(cycle_id),
                 )
             )
             await session.commit()
@@ -163,15 +146,9 @@ async def _source_fingerprint() -> dict[str, object]:
                 ),
                 "references": await connection.scalar(
                     text(
-                        "SELECT coalesce(string_agg("
-                        "kind || ':' || cycle_id, ',' ORDER BY kind), '') "
-                        "FROM ("
-                        " SELECT 'ai' AS kind, credit_cycle_id::text AS cycle_id "
-                        " FROM ai_proposals "
-                        " WHERE credit_cycle_id IS NOT NULL"
-                        " UNION ALL SELECT 'import', credit_cycle_id_candidate::text "
-                        " FROM statement_import_rows WHERE credit_cycle_id_candidate IS NOT NULL"
-                        ") refs"
+                        "SELECT coalesce(string_agg(credit_cycle_id::text, ',' "
+                        "ORDER BY credit_cycle_id), '') FROM ai_proposals "
+                        "WHERE credit_cycle_id IS NOT NULL"
                     )
                 ),
             }
@@ -331,17 +308,12 @@ def test_p33_archive_round_trip_preserves_formal_facts_and_excludes_operational_
             {**auth, "Idempotency-Key": str(uuid4())},
             {
                 "title": "P33 archive reimbursement",
-                "parties": [
-                    {
-                        "name": "P33 employer",
-                        "allocations": [{"transaction_id": expense["id"], "amount_minor": 20_000}],
-                    }
-                ],
+                "counterparty_name": "P33 employer",
+                "expenses": [{"transaction_id": expense["id"], "amount_minor": 20_000}],
             },
         )
         receipt_draft = {
             "expected_claim_version": claim["version"],
-            "party_id": claim["parties"][0]["id"],
             "amount_minor": 12_000,
             "received_at": "2026-08-13T12:00:00+08:00",
             "destination_account_id": debit["id"],
@@ -361,7 +333,7 @@ def test_p33_archive_round_trip_preserves_formal_facts_and_excludes_operational_
         assert receipt.status_code == 201, receipt.text
 
         cycle_id = installment["periods"][0]["effective_cycle_id"]
-        asyncio.run(_add_ai_and_import_references(str(cycle_id)))
+        asyncio.run(_add_ai_reference(str(cycle_id)))
 
         password = uuid4().hex + uuid4().hex
         exported = client.post(
@@ -380,7 +352,7 @@ def test_p33_archive_round_trip_preserves_formal_facts_and_excludes_operational_
     assert len(payload["entities"]["reimbursement_operations"]) == 1
     assert payload["entities"]["reimbursement_operations"][0]["preview_id"] is None
 
-    target_name = f"fiscal_p33_archive_restore_{uuid4().hex}"
+    target_name = f"fiscal_v240_p33_archive_restore_{uuid4().hex}"
     target_url = _fresh_database_url(target_name)
     asyncio.run(_create_database(target_name))
     try:
@@ -472,16 +444,9 @@ def test_p33_archive_round_trip_preserves_formal_facts_and_excludes_operational_
                     assert (
                         await connection.scalar(
                             text(
-                                "SELECT coalesce(string_agg("
-                                "kind || ':' || cycle_id, ',' ORDER BY kind), '') "
-                                "FROM ("
-                                " SELECT 'ai' AS kind, credit_cycle_id::text AS cycle_id "
-                                " FROM ai_proposals "
-                                " WHERE credit_cycle_id IS NOT NULL"
-                                " UNION ALL SELECT 'import', credit_cycle_id_candidate::text "
-                                " FROM statement_import_rows "
-                                " WHERE credit_cycle_id_candidate IS NOT NULL"
-                                ") refs"
+                                "SELECT coalesce(string_agg(credit_cycle_id::text, ',' "
+                                "ORDER BY credit_cycle_id), '') FROM ai_proposals "
+                                "WHERE credit_cycle_id IS NOT NULL"
                             )
                         )
                         == source_fingerprint["references"]

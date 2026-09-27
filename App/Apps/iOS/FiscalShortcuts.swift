@@ -10,16 +10,18 @@ private actor FiscalIntentInputClient {
   private let photos = LatestScreenshotPhotoLibrary()
 
   private init() {
-    let transport = APITransport(baseURL: APIConfiguration.baseURL())
+    let policy = APIConfiguration.iOSAccessKeyPolicy(bundleIdentifier: Bundle.main.bundleIdentifier)
+    let accessKeyStore = AccessKeyStore(accessGroup: policy.accessGroup, prefersSynchronizable: policy.prefersSynchronizable)
+    let transport = APITransport(baseURL: APIConfiguration.baseURL(), accessKeyStore: accessKeyStore)
     submission = AIInputSubmissionService(
-      repository: RemoteAIProposalRepository(transport: transport))
+      repository: RemoteV15AIInputRepository(transport: transport))
   }
 
-  func submitText(_ text: String) async throws -> AIProposalDTO {
+  func submitText(_ text: String) async throws -> V15AIProposal {
     try await submission.submit(source: .shortcutText, text: text)
   }
 
-  func submitLatestScreenshot() async throws -> AIProposalDTO {
+  func submitLatestScreenshot() async throws -> V15AIProposal {
     let data = try await photos.latestScreenshotData(requestAccess: false)
     let result = try await ocr.recognize(imageData: data)
     return try await submission.submit(source: .ocr, text: result.text)
@@ -28,7 +30,7 @@ private actor FiscalIntentInputClient {
 
 struct RecordFiscalTextIntent: AppIntent {
   static let title: LocalizedStringResource = "用文本记账"
-  static let description = IntentDescription("把自然语言记账内容发送给 Fiscal；安全条件不足时会进入待确认队列。")
+  static let description = IntentDescription("把自然语言记账内容发送给 Fiscal；识别后需要在 Fiscal 中人工确认。")
   static let supportedModes: IntentModes = .background
 
   @Parameter(

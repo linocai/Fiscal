@@ -1,10 +1,11 @@
+@testable import FiscalPreviewSupportmacOS
 import Foundation
 import Testing
 @testable import FiscalKit
 
 @Suite("2.3.0 master data review regressions")
 struct V230MasterDataReviewTests {
-    @Test(arguments: ["accounts", "categories", "merchants"], ["success", "failure", "conflict", "unknown", "unknownCommitted"])
+    @Test(arguments: ["accounts", "categories"], ["success", "failure", "conflict", "unknown", "unknownCommitted"])
     @MainActor func lateResponsePreservesSelectionAndNextWriteTarget(kind: String, outcome: String) async throws {
         let transport = MasterReviewTransport(outcome: outcome, delayed: true)
         let services = V15Services(transport: transport)
@@ -28,7 +29,7 @@ struct V230MasterDataReviewTests {
         #expect(paths.last?.lowercased() == "\(kind)/\(targetID.uuidString.lowercased())")
     }
 
-    @Test(arguments: ["accounts", "categories", "merchants"])
+    @Test(arguments: ["accounts", "categories"])
     @MainActor func editingInFlightCreateBindsIdentityAndNextSavePatches(kind: String) async throws {
         let transport = MasterReviewTransport(delayed: true)
         let model = V15MasterDataModel(services: V15Services(transport: transport))
@@ -78,7 +79,7 @@ struct V230MasterDataReviewTests {
         #expect(model.receiptStatus == .success)
     }
 
-    @Test(arguments: ["accounts", "categories", "merchants"], [false, true])
+    @Test(arguments: ["accounts", "categories"], [false, true])
     @MainActor func lateCreateOrUpdateCannotSelectOverNewDraft(kind: String, creating: Bool) async {
         let transport = MasterReviewTransport(delayed: true)
         let model = V15MasterDataModel(services: V15Services(transport: transport))
@@ -95,7 +96,7 @@ struct V230MasterDataReviewTests {
         #expect(await transport.writePaths.last == kind)
     }
 
-    @Test(arguments: ["accounts", "categories", "merchants"])
+    @Test(arguments: ["accounts", "categories"])
     @MainActor func unknownCreateKeepsDuplicateProtectionAfterSwitch(kind: String) async {
         let transport = MasterReviewTransport(outcome: "unknown", delayed: true)
         let model = V15MasterDataModel(services: V15Services(transport: transport))
@@ -173,20 +174,20 @@ struct V230MasterDataReviewTests {
         switch kind {
         case "accounts": model.selectedSection = .accounts; model.selectAccount(model.accounts[index])
         case "categories": model.selectedSection = .categories; model.selectCategory(model.categories[index])
-        default: model.selectedSection = .merchants; model.selectMerchant(model.merchants[index])
+        default: preconditionFailure("Unsupported master-data section")
         }
     }
     @MainActor private func setName(_ model: V15MasterDataModel, kind: String, name: String) {
-        switch kind { case "accounts": model.accountName = name; case "categories": model.categoryName = name; default: model.merchantName = name }
+        switch kind { case "accounts": model.accountName = name; case "categories": model.categoryName = name; default: preconditionFailure("Unsupported master-data section") }
     }
     @MainActor private func name(_ model: V15MasterDataModel, kind: String) -> String {
-        switch kind { case "accounts": model.accountName; case "categories": model.categoryName; default: model.merchantName }
+        switch kind { case "accounts": model.accountName; case "categories": model.categoryName; default: preconditionFailure("Unsupported master-data section") }
     }
     @MainActor private func selectedID(_ model: V15MasterDataModel, kind: String) -> UUID? {
-        switch kind { case "accounts": model.selectedAccountID; case "categories": model.selectedCategoryID; default: model.selectedMerchantID }
+        switch kind { case "accounts": model.selectedAccountID; case "categories": model.selectedCategoryID; default: preconditionFailure("Unsupported master-data section") }
     }
     @MainActor private func save(_ model: V15MasterDataModel, kind: String) async {
-        switch kind { case "accounts": await model.saveAccount(); case "categories": await model.saveCategory(); default: await model.saveMerchant() }
+        switch kind { case "accounts": await model.saveAccount(); case "categories": await model.saveCategory(); default: preconditionFailure("Unsupported master-data section") }
     }
 }
 
@@ -217,15 +218,14 @@ private actor MasterReviewTransport: V15Transporting {
         }
         let timestamp = "2026-09-01T00:00:00Z"
         var categories: [[String: Any]] = []
-        var merchants: [[String: Any]] = []
         for i in 0..<2 {
             let common: [String: Any] = ["id": UUID().uuidString, "name": "Record \(i)", "version": 1, "created_at": timestamp, "updated_at": timestamp, "aliases": []]
             var category = common
             category.merge(["direction": "expense", "icon": "tag", "color_hex": "#008C8A", "examples": [], "is_balance_adjustment": false, "sort_order": i, "usage_count": 0, "children": []]) { _, new in new }
-            categories.append(category); merchants.append(common)
+            categories.append(category)
         }
         if archived { accounts[0]["archived_at"] = timestamp; categories[0]["archived_at"] = timestamp }
-        records = ["accounts": accounts, "categories": categories, "merchants": merchants]
+        records = ["accounts": accounts, "categories": categories]
     }
     func waitUntilStarted() async { if started { return }; await withCheckedContinuation { waiter = $0 } }
     func release() { pending?.resume(); pending = nil }

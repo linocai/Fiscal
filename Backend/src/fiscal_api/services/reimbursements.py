@@ -24,7 +24,6 @@ from fiscal_api.api.p6_schemas import (
     ReimbursementExpenseCandidate,
     ReimbursementExpenseCandidatePage,
     ReimbursementExpenseOption,
-    ReimbursementPartyResponse,
     ReimbursementReceiptAccountOption,
     ReimbursementReceiptAccountOptions,
     ReimbursementReceiptAllocationResponse,
@@ -47,7 +46,6 @@ from fiscal_api.db.models import (
     ReimbursementClaimRevision,
     ReimbursementClaimStatus,
     ReimbursementOperation,
-    ReimbursementParty,
     ReimbursementPreview,
     ReimbursementReceipt,
     ReimbursementReceiptAllocation,
@@ -110,9 +108,10 @@ class ReimbursementService:
         claim = ReimbursementClaim(
             title=draft.title,
             note=draft.note,
+            counterparty_name=draft.counterparty_name,
+            expected_date=draft.expected_date,
             create_idempotency_key=key,
             create_request_hash=request_hash,
-            parties=[],
             allocations=[],
             receipts=[],
         )
@@ -169,92 +168,54 @@ class ReimbursementService:
         await self._validate_matrix_change(claim, draft, creating=False)
         check_version(claim.version, draft.expected_version)
         current = await self.response(claim)
-        # The shared validator above covers the exact matrix that commit can apply.
-        proposed_total = sum(a.amount_minor for p in draft.parties for a in p.allocations)
+        total = sum(a.amount_minor for a in draft.expenses)
         received_map = await self.repository.active_received(claim.id)
         transactions = await self.repository.transactions(
-            {a.transaction_id for p in draft.parties for a in p.allocations}
+            {a.transaction_id for a in draft.expenses}
         )
-        proposed_parties: list[ReimbursementPartyResponse] = []
-        allocation_position = 0
-        for party_position, party_draft in enumerate(draft.parties):
-            party_id = party_draft.id or uuid4()
-            proposed_allocations: list[ReimbursementAllocationResponse] = []
-            for allocation_draft in party_draft.allocations:
-                allocation_id = allocation_draft.id or uuid4()
-                received = received_map.get(allocation_id, 0)
-                expense = transactions[allocation_draft.transaction_id]
-                proposed_allocations.append(
-                    ReimbursementAllocationResponse(
-                        id=allocation_id,
-                        transaction_id=allocation_draft.transaction_id,
-                        expense_title=expense.title,
-                        expense_amount_minor=abs(expense.postings[0].amount_minor),
-                        amount_minor=allocation_draft.amount_minor,
-                        received_minor=received,
-                        outstanding_minor=(
-                            0
-                            if claim.cancelled_at is not None
-                            else allocation_draft.amount_minor - received
-                        ),
-                        locked=received > 0,
-                        position=allocation_position,
-                    )
-                )
-                allocation_position += 1
-            claimed = sum(item.amount_minor for item in proposed_allocations)
-            received = sum(item.received_minor for item in proposed_allocations)
-            party_status = (
-                "cancelled"
-                if claim.cancelled_at is not None and received == 0
-                else "partially_received_cancelled"
-                if claim.cancelled_at is not None
-                else "received"
-                if received == claimed
-                else "partial_received"
-                if received
-                else "pending"
-            )
-            proposed_parties.append(
-                ReimbursementPartyResponse(
-                    id=party_id,
-                    name=party_draft.name,
-                    expected_date=party_draft.expected_date,
-                    note=party_draft.note,
-                    claimed_minor=claimed,
+        expenses: list[ReimbursementAllocationResponse] = []
+        for position, item in enumerate(draft.expenses):
+            received = received_map.get(item.id, 0) if item.id else 0
+            transaction = transactions[item.transaction_id]
+            expenses.append(
+                ReimbursementAllocationResponse(
+                    id=item.id or uuid4(),
+                    transaction_id=item.transaction_id,
+                    expense_title=transaction.title,
+                    expense_amount_minor=abs(transaction.postings[0].amount_minor),
+                    amount_minor=item.amount_minor,
                     received_minor=received,
-                    outstanding_minor=(0 if claim.cancelled_at is not None else claimed - received),
-                    status=party_status,
-                    position=party_position,
-                    allocations=proposed_allocations,
+                    outstanding_minor=0 if claim.cancelled_at else item.amount_minor - received,
+                    locked=received > 0,
+                    position=position,
                 )
             )
-        proposed_received = sum(item.received_minor for item in proposed_parties)
-        proposed_status = (
+        received = sum(item.received_minor for item in expenses)
+        status = (
             ReimbursementClaimStatus.CANCELLED
-            if claim.cancelled_at is not None and proposed_received == 0
+            if claim.cancelled_at and received == 0
             else ReimbursementClaimStatus.PARTIALLY_RECEIVED_CANCELLED
-            if claim.cancelled_at is not None
+            if claim.cancelled_at
             else ReimbursementClaimStatus.RECEIVED
-            if proposed_received == proposed_total
+            if received == total
             else ReimbursementClaimStatus.PARTIAL_RECEIVED
-            if proposed_received
+            if received
             else ReimbursementClaimStatus.PENDING
-            if claim.submitted_at is not None
+            if claim.submitted_at
             else ReimbursementClaimStatus.DRAFT
         )
         proposed = current.model_copy(
             update={
                 "title": draft.title,
                 "note": draft.note,
-                "total_claimed_minor": proposed_total,
-                "outstanding_minor": max(proposed_total - current.received_minor, 0),
-                "party_count": len(draft.parties),
-                "parties": proposed_parties,
-                "status": proposed_status,
-                "expense_count": len(
-                    {a.transaction_id for p in draft.parties for a in p.allocations}
-                ),
+                "counterparty_name": draft.counterparty_name,
+                "expected_date": draft.expected_date,
+                "total_claimed_minor": total,
+                "received_minor": received,
+                "outstanding_minor": 0 if claim.cancelled_at else total - received,
+                "expenses": expenses,
+                "status": status,
+                "expense_count": len(expenses),
             }
         )
         preview = await self._store_preview(
@@ -264,12 +225,7 @@ class ReimbursementService:
             draft,
             external_dependencies={
                 "source_transactions": await self._source_transaction_dependencies(
-                    claim.id,
-                    {
-                        allocation.transaction_id
-                        for party in draft.parties
-                        for allocation in party.allocations
-                    },
+                    claim.id, {a.transaction_id for a in draft.expenses}
                 )
             },
         )
@@ -279,8 +235,8 @@ class ReimbursementService:
             claim_version=claim.version,
             current=current,
             proposed=proposed,
-            released_minor=max(current.total_claimed_minor - proposed_total, 0),
-            newly_claimed_minor=max(proposed_total - current.total_claimed_minor, 0),
+            released_minor=max(current.total_claimed_minor - total, 0),
+            newly_claimed_minor=max(total - current.total_claimed_minor, 0),
             warnings=[],
         )
 
@@ -309,6 +265,7 @@ class ReimbursementService:
         await self._validate_matrix_change(claim, draft, creating=False)
         check_version(claim.version, draft.expected_version)
         claim.title, claim.note = draft.title, draft.note
+        claim.counterparty_name, claim.expected_date = draft.counterparty_name, draft.expected_date
         await self._apply_matrix(claim, draft, creating=False)
         claim.version += 1
         claim.updated_at = utc_now()
@@ -483,7 +440,6 @@ class ReimbursementService:
         claim = await self._claim(claim_id)
         check_version(claim.version, draft.expected_claim_version)
         replaced_amount = 0
-        replaced_party_id: UUID | None = None
         receipt: ReimbursementReceipt | None = None
         if exclude_receipt is None:
             account, allocations = await self._validate_receipt_create(claim, draft)
@@ -491,7 +447,7 @@ class ReimbursementService:
             if not isinstance(draft, ReimbursementReceiptReplace):
                 invalid(
                     "invalid_transaction_configuration",
-                    "Receipt replacement preview requires both expected versions",
+                    "Receipt replacement requires both versions",
                 )
             receipt = await self._receipt(exclude_receipt)
             if receipt.claim_id != claim.id:
@@ -502,24 +458,14 @@ class ReimbursementService:
                 raise RuntimeError("receipt transaction missing")
             await self.session.refresh(transaction, attribute_names=["postings"])
             replaced_amount = abs(transaction.postings[0].amount_minor)
-            replaced_party_id = receipt.party_id
             account, allocations = await self._validate_receipt_replace(
                 claim, receipt, transaction, draft
             )
         current = await self.response(claim)
-        party = next((p for p in current.parties if p.id == draft.party_id), None)
-        if party is None:
-            not_found("reimbursement_party_not_found", "The party does not exist")
-        party_before = party.received_minor
-        claim_before = current.received_minor
-        if replaced_party_id == draft.party_id:
-            party_after = checked_int64(party_before - replaced_amount + draft.amount_minor)
-        else:
-            party_after = checked_int64(party_before + draft.amount_minor)
-        claim_after = checked_int64(claim_before - replaced_amount + draft.amount_minor)
-        planned_ids = [uuid4() for _allocation, _amount in allocations]
+        claim_after = checked_int64(current.received_minor - replaced_amount + draft.amount_minor)
+        planned_ids = [uuid4() for _ in allocations]
         preview = await self._store_preview(
-            "receipt_update" if exclude_receipt is not None else "receipt_create",
+            "receipt_update" if exclude_receipt else "receipt_create",
             claim,
             receipt,
             draft,
@@ -530,22 +476,13 @@ class ReimbursementService:
             preview_token=preview.id,
             input_digest=preview.request_hash,
             claim_version=claim.version,
-            receipt_version=receipt.version if receipt is not None else None,
+            receipt_version=receipt.version if receipt else None,
             claim_before=current,
             claim_after=self._receipt_claim_after(
-                current,
-                party_id=draft.party_id,
-                party_received_after=party_after,
-                claim_received_after=claim_after,
-                replacement_party_id=replaced_party_id,
-                replacement_amount_minor=replaced_amount,
-                creates_receipt=exclude_receipt is None,
+                current, claim_received_after=claim_after, creates_receipt=receipt is None
             ),
-            party_id=draft.party_id,
             amount_minor=draft.amount_minor,
-            party_received_before_minor=party_before,
-            party_received_after_minor=party_after,
-            claim_received_before_minor=claim_before,
+            claim_received_before_minor=current.received_minor,
             claim_received_after_minor=claim_after,
             persisted_allocations=[
                 ReimbursementReceiptAllocationResponse(
@@ -595,9 +532,7 @@ class ReimbursementService:
         )
         self.session.add(tx)
         await self.session.flush()
-        receipt = ReimbursementReceipt(
-            claim_id=claim.id, party_id=draft.party_id, transaction_id=tx.id
-        )
+        receipt = ReimbursementReceipt(claim_id=claim.id, transaction_id=tx.id)
         self.session.add(receipt)
         await self.session.flush()
         for i, (allocation, amount) in enumerate(allocations):
@@ -743,7 +678,6 @@ class ReimbursementService:
         tx.note = draft.note
         tx.version += 1
         tx.updated_at = utc_now()
-        receipt.party_id = draft.party_id
         receipt.version += 1
         receipt.updated_at = utc_now()
         claim.version += 1
@@ -823,7 +757,6 @@ class ReimbursementService:
             await self.session.flush()
             distribution = await self._receipt_distribution(
                 claim,
-                receipt.party_id,
                 abs(tx.postings[0].amount_minor),
                 exclude_receipt=receipt.id,
             )
@@ -1061,14 +994,11 @@ class ReimbursementService:
             {a.transaction_id for a in claim.allocations}
             | {r.transaction_id for r in claim.receipts}
         )
-        parties: list[ReimbursementPartyResponse] = []
-        allocations_by_party: dict[UUID, list[ReimbursementAllocationResponse]] = {
-            p.id: [] for p in claim.parties
-        }
+        expenses: list[ReimbursementAllocationResponse] = []
         for allocation in claim.allocations:
             tx = txs[allocation.transaction_id]
             received = received_map.get(allocation.id, 0)
-            allocations_by_party[allocation.party_id].append(
+            expenses.append(
                 ReimbursementAllocationResponse(
                     id=allocation.id,
                     transaction_id=allocation.transaction_id,
@@ -1077,39 +1007,10 @@ class ReimbursementService:
                     amount_minor=allocation.amount_minor,
                     received_minor=received,
                     outstanding_minor=0
-                    if claim.cancelled_at is not None
+                    if claim.cancelled_at
                     else allocation.amount_minor - received,
                     locked=received > 0,
                     position=allocation.position,
-                )
-            )
-        for party in claim.parties:
-            rows = allocations_by_party[party.id]
-            claimed = sum(a.amount_minor for a in rows)
-            got = sum(a.received_minor for a in rows)
-            status = (
-                "cancelled"
-                if claim.cancelled_at and got == 0
-                else "partially_received_cancelled"
-                if claim.cancelled_at
-                else "received"
-                if got == claimed
-                else "partial_received"
-                if got
-                else "pending"
-            )
-            parties.append(
-                ReimbursementPartyResponse(
-                    id=party.id,
-                    name=party.name,
-                    expected_date=party.expected_date,
-                    note=party.note,
-                    claimed_minor=claimed,
-                    received_minor=got,
-                    outstanding_minor=0 if claim.cancelled_at is not None else claimed - got,
-                    status=status,
-                    position=party.position,
-                    allocations=rows,
                 )
             )
         total = sum(a.amount_minor for a in claim.allocations)
@@ -1124,14 +1025,15 @@ class ReimbursementService:
             id=claim.id,
             title=claim.title,
             note=claim.note,
+            counterparty_name=claim.counterparty_name,
+            expected_date=claim.expected_date,
             status=await self._status(claim, total=total, received=received),
             total_claimed_minor=total,
             received_minor=received,
-            outstanding_minor=0 if claim.cancelled_at is not None else max(total - received, 0),
+            outstanding_minor=0 if claim.cancelled_at else max(total - received, 0),
             expense_count=len({a.transaction_id for a in claim.allocations}),
-            party_count=len(claim.parties),
             receipt_count=len(claim.receipts),
-            parties=parties,
+            expenses=expenses,
             latest_receipt=latest,
             version=claim.version,
             submitted_at=claim.submitted_at,
@@ -1149,7 +1051,6 @@ class ReimbursementService:
         return ReimbursementReceiptResponse(
             id=receipt.id,
             claim_id=receipt.claim_id,
-            party_id=receipt.party_id,
             amount_minor=abs(tx.postings[0].amount_minor),
             received_at=tx.occurred_at,
             destination_account_id=tx.postings[0].account_id,
@@ -1430,64 +1331,29 @@ class ReimbursementService:
     def _receipt_claim_after(
         current: ReimbursementClaimResponse,
         *,
-        party_id: UUID,
-        party_received_after: int,
         claim_received_after: int,
-        replacement_party_id: UUID | None,
-        replacement_amount_minor: int,
         creates_receipt: bool,
     ) -> ReimbursementClaimResponse:
-        parties: list[ReimbursementPartyResponse] = []
-        for party in current.parties:
-            received = party.received_minor
-            if party.id == party_id:
-                received = party_received_after
-            elif replacement_party_id is not None and party.id == replacement_party_id:
-                received = checked_int64(received - replacement_amount_minor)
-            outstanding = 0 if current.cancelled_at is not None else party.claimed_minor - received
-            status = (
-                "cancelled"
-                if current.cancelled_at is not None and received == 0
-                else "partially_received_cancelled"
-                if current.cancelled_at is not None
-                else "received"
-                if received == party.claimed_minor
-                else "partial_received"
-                if received
-                else "pending"
-            )
-            parties.append(
-                party.model_copy(
-                    update={
-                        "received_minor": received,
-                        "outstanding_minor": outstanding,
-                        "status": status,
-                    }
-                )
-            )
         status = (
             ReimbursementClaimStatus.CANCELLED
-            if current.cancelled_at is not None and claim_received_after == 0
+            if current.cancelled_at and claim_received_after == 0
             else ReimbursementClaimStatus.PARTIALLY_RECEIVED_CANCELLED
-            if current.cancelled_at is not None
+            if current.cancelled_at
             else ReimbursementClaimStatus.RECEIVED
             if claim_received_after == current.total_claimed_minor
             else ReimbursementClaimStatus.PARTIAL_RECEIVED
             if claim_received_after
             else ReimbursementClaimStatus.PENDING
-            if creates_receipt or current.submitted_at is not None
+            if creates_receipt or current.submitted_at
             else ReimbursementClaimStatus.DRAFT
         )
         return current.model_copy(
             update={
                 "status": status,
                 "received_minor": claim_received_after,
-                "outstanding_minor": (
-                    0
-                    if current.cancelled_at is not None
-                    else current.total_claimed_minor - claim_received_after
-                ),
-                "parties": parties,
+                "outstanding_minor": 0
+                if current.cancelled_at
+                else current.total_claimed_minor - claim_received_after,
                 "receipt_count": current.receipt_count + int(creates_receipt),
                 "version": current.version + 1,
             }
@@ -1502,189 +1368,111 @@ class ReimbursementService:
     async def _validate_matrix_change(
         self, claim: ReimbursementClaim, draft: ReimbursementClaimDraft, *, creating: bool
     ) -> None:
-        """Validate every matrix transition before either preview or commit mutates it."""
-        if creating:
-            await self._validate_draft(claim, draft, creating=True)
-            return
-        self._mutable(claim)
-        if claim.cancelled_at is not None:
-            current_ids = {
-                (allocation.party_id, allocation.transaction_id, allocation.amount_minor)
-                for allocation in claim.allocations
-            }
-            proposed_ids = {
-                (party.id, allocation.transaction_id, allocation.amount_minor)
-                for party in draft.parties
-                for allocation in party.allocations
-            }
-            if current_ids != proposed_ids:
-                conflict(
-                    "reimbursement_claim_cancelled", "Reopen the claim before changing its matrix"
-                )
-        await self._validate_draft(claim, draft, creating=False)
-        existing_parties = {party.id: party for party in claim.parties}
-        existing_allocations = {allocation.id: allocation for allocation in claim.allocations}
-        received = await self.repository.active_received(claim.id)
-        kept_parties: set[UUID] = set()
-        kept_allocations: set[UUID] = set()
-        for party in draft.parties:
-            if party.id is not None:
-                if party.id not in existing_parties:
-                    invalid(
-                        "reimbursement_party_not_found", "A party id does not belong to this claim"
-                    )
-                kept_parties.add(party.id)
-            for allocation in party.allocations:
-                if allocation.id is None:
-                    continue
-                existing = existing_allocations.get(allocation.id)
-                if existing is None:
-                    invalid(
-                        "reimbursement_allocation_locked",
-                        "An allocation id does not belong to this claim",
-                    )
-                kept_allocations.add(existing.id)
-                if received.get(existing.id, 0) and (
-                    party.id != existing.party_id
-                    or allocation.transaction_id != existing.transaction_id
-                    or allocation.amount_minor < received[existing.id]
-                ):
+        if not creating:
+            self._mutable(claim)
+        await self._validate_draft(claim, draft, creating=creating)
+        existing = {a.id: a for a in claim.allocations}
+        received = await self.repository.active_received(claim.id) if not creating else {}
+        kept: set[UUID] = set()
+        for expense in draft.expenses:
+            if expense.id is None:
+                if claim.cancelled_at is not None:
                     conflict(
-                        "reimbursement_allocation_locked",
-                        "A received matrix row cannot change identity or fall below received",
+                        "reimbursement_claim_cancelled", "Reopen the claim before adding expenses"
                     )
-        receipt_party_ids = {receipt.party_id for receipt in claim.receipts}
-        for party in claim.parties:
-            if party.id not in kept_parties and party.id in receipt_party_ids:
-                conflict("reimbursement_party_in_use", "A party with receipts cannot be removed")
-        for allocation in claim.allocations:
-            if allocation.id not in kept_allocations and received.get(allocation.id, 0):
+                continue
+            allocation = existing.get(expense.id)
+            if allocation is None:
+                invalid(
+                    "reimbursement_allocation_locked", "An expense id does not belong to this claim"
+                )
+            kept.add(allocation.id)
+            if claim.cancelled_at is not None and (
+                expense.transaction_id != allocation.transaction_id
+                or expense.amount_minor != allocation.amount_minor
+            ):
                 conflict(
-                    "reimbursement_allocation_locked", "A received allocation cannot be removed"
+                    "reimbursement_claim_cancelled", "Reopen the claim before changing expenses"
+                )
+            if received.get(allocation.id, 0) and (
+                expense.transaction_id != allocation.transaction_id
+                or expense.amount_minor < received[allocation.id]
+            ):
+                conflict(
+                    "reimbursement_allocation_locked",
+                    "A received expense cannot change identity or fall below received",
+                )
+        for allocation in claim.allocations:
+            if allocation.id not in kept and (
+                received.get(allocation.id, 0) or claim.cancelled_at is not None
+            ):
+                conflict(
+                    "reimbursement_allocation_locked",
+                    "A received or cancelled expense cannot be removed",
                 )
 
     async def _apply_matrix(
         self, claim: ReimbursementClaim, draft: ReimbursementClaimDraft, *, creating: bool
     ) -> None:
-        existing_parties = {p.id: p for p in claim.parties}
-        existing_allocations = {a.id: a for a in claim.allocations}
+        existing = {a.id: a for a in claim.allocations}
         received = await self.repository.active_received(claim.id) if not creating else {}
         if not creating:
-            for party in claim.parties:
-                party.position += 1_000_000
             for allocation in claim.allocations:
                 allocation.position += 1_000_000
             await self.session.flush()
-        keep_parties: set[UUID] = set()
-        keep_allocations: set[UUID] = set()
-        position = 0
-        for ppos, pdraft in enumerate(draft.parties):
-            if pdraft.id is not None:
-                party = existing_parties.get(pdraft.id)
-                if party is None:
-                    invalid(
-                        "reimbursement_party_not_found", "A party id does not belong to this claim"
-                    )
-                keep_parties.add(party.id)
-                party.name = pdraft.name
-                party.expected_date = pdraft.expected_date
-                party.note = pdraft.note
-                party.position = ppos
+        kept: set[UUID] = set()
+        for position, expense in enumerate(draft.expenses):
+            if expense.id is not None:
+                allocation = existing[expense.id]
+                allocation.transaction_id = expense.transaction_id
+                allocation.amount_minor = expense.amount_minor
+                allocation.position = position
             else:
-                party = ReimbursementParty(
+                allocation = ReimbursementAllocation(
                     claim_id=claim.id,
-                    name=pdraft.name,
-                    expected_date=pdraft.expected_date,
-                    note=pdraft.note,
-                    position=ppos,
+                    transaction_id=expense.transaction_id,
+                    amount_minor=expense.amount_minor,
+                    position=position,
                 )
-                self.session.add(party)
+                self.session.add(allocation)
                 await self.session.flush()
-                keep_parties.add(party.id)
-            for adraft in pdraft.allocations:
-                if adraft.id is not None:
-                    allocation = existing_allocations.get(adraft.id)
-                    if allocation is None:
-                        invalid(
-                            "reimbursement_allocation_locked",
-                            "An allocation id does not belong to this claim",
-                        )
-                    if received.get(allocation.id, 0) and (
-                        allocation.party_id != party.id
-                        or allocation.transaction_id != adraft.transaction_id
-                        or adraft.amount_minor < received[allocation.id]
-                    ):
-                        conflict(
-                            "reimbursement_allocation_locked",
-                            "A received matrix row cannot change identity or fall below received",
-                        )
-                    allocation.party_id = party.id
-                    allocation.transaction_id = adraft.transaction_id
-                    allocation.amount_minor = adraft.amount_minor
-                    allocation.position = position
-                else:
-                    allocation = ReimbursementAllocation(
-                        claim_id=claim.id,
-                        party_id=party.id,
-                        transaction_id=adraft.transaction_id,
-                        amount_minor=adraft.amount_minor,
-                        position=position,
-                    )
-                    self.session.add(allocation)
-                    await self.session.flush()
-                keep_allocations.add(allocation.id)
-                position += 1
+            kept.add(allocation.id)
         for allocation in claim.allocations:
-            if allocation.id not in keep_allocations:
+            if allocation.id not in kept:
                 if received.get(allocation.id, 0):
                     conflict(
-                        "reimbursement_allocation_locked", "A received allocation cannot be removed"
+                        "reimbursement_allocation_locked", "A received expense cannot be removed"
                     )
                 await self.session.delete(allocation)
-        receipt_party_ids = {r.party_id for r in claim.receipts}
-        for party in claim.parties:
-            if party.id not in keep_parties:
-                if party.id in receipt_party_ids:
-                    conflict(
-                        "reimbursement_party_in_use", "A party with receipts cannot be removed"
-                    )
-                await self.session.delete(party)
 
     async def _refresh_claim(self, claim: ReimbursementClaim) -> None:
-        await self.session.refresh(claim, attribute_names=["parties", "allocations", "receipts"])
+        await self.session.refresh(claim, attribute_names=["allocations", "receipts"])
         for receipt in claim.receipts:
             await self.session.refresh(receipt, attribute_names=["allocations"])
 
     async def _validate_draft(
         self, claim: ReimbursementClaim, draft: ReimbursementClaimDraft, *, creating: bool
     ) -> None:
-        party_ids = [p.id for p in draft.parties if p.id]
-        allocation_ids = [a.id for p in draft.parties for a in p.allocations if a.id]
-        if len(set(party_ids)) != len(party_ids) or len(set(allocation_ids)) != len(allocation_ids):
+        allocation_ids = [a.id for a in draft.expenses if a.id]
+        if len(set(allocation_ids)) != len(allocation_ids):
             invalid("reimbursement_amount_mismatch", "Stable ids cannot repeat")
-        proposed: dict[UUID, int] = {}
         transaction_paths: dict[UUID, str] = {}
-        for party_index, party in enumerate(draft.parties):
-            for allocation_index, allocation in enumerate(party.allocations):
-                allocation_path = f"parties[{party_index}].allocations[{allocation_index}]"
-                transaction_path = f"{allocation_path}.transaction_id"
-                if allocation.transaction_id in transaction_paths:
-                    invalid(
-                        "reimbursement_duplicate_transaction",
-                        "A source transaction can be allocated only once in a claim",
-                        details={
-                            "reason": "duplicate_transaction",
-                            "field_path": transaction_path,
-                            "duplicate_of": transaction_paths[allocation.transaction_id],
-                            "transaction_id": str(allocation.transaction_id),
-                        },
-                    )
-                transaction_paths[allocation.transaction_id] = transaction_path
-                proposed[allocation.transaction_id] = checked_int64(
-                    proposed.get(allocation.transaction_id, 0) + allocation.amount_minor,
-                    label="reimbursement allocation",
+        for position, allocation in enumerate(draft.expenses):
+            field_path = f"expenses[{position}]"
+            if allocation.transaction_id in transaction_paths:
+                invalid(
+                    "reimbursement_duplicate_transaction",
+                    "A source transaction can be allocated only once in a claim",
+                    details={
+                        "reason": "duplicate_transaction",
+                        "field_path": f"{field_path}.transaction_id",
+                        "duplicate_of": transaction_paths[allocation.transaction_id],
+                        "transaction_id": str(allocation.transaction_id),
+                    },
                 )
-        for transaction_id, amount in proposed.items():
+            transaction_paths[allocation.transaction_id] = f"{field_path}.transaction_id"
+        for allocation in draft.expenses:
+            transaction_id = allocation.transaction_id
             field_path = transaction_paths[transaction_id]
             tx = await self.repository.transaction(transaction_id)
             if (
@@ -1705,7 +1493,10 @@ class ReimbursementService:
                 transaction_id, exclude_claim=None if creating else claim.id
             )
             capacity = await self._capacity(transaction_id)
-            if checked_int64(allocated + amount, label="reimbursement allocation") > capacity:
+            if (
+                checked_int64(allocated + allocation.amount_minor, label="reimbursement allocation")
+                > capacity
+            ):
                 conflict(
                     "reimbursement_expense_overallocated",
                     "The source expense has insufficient reimbursable capacity",
@@ -1732,40 +1523,62 @@ class ReimbursementService:
     async def _receipt_distribution(
         self,
         claim: ReimbursementClaim,
-        party_id: UUID,
         amount: int,
         *,
         exclude_receipt: UUID | None = None,
     ) -> list[tuple[ReimbursementAllocation, int]]:
-        if not any(p.id == party_id for p in claim.parties):
-            not_found("reimbursement_party_not_found", "The party does not exist")
         received = await self.repository.active_received(claim.id)
+        old_allocations: list[ReimbursementReceiptAllocation] = []
         if exclude_receipt is not None:
             old = await self.repository.receipt(exclude_receipt)
             if old:
                 tx = await self.repository.transaction(old.transaction_id)
                 if tx and tx.voided_at is None:
+                    old_allocations = sorted(
+                        old.allocations, key=lambda item: (item.position, item.id)
+                    )
                     for item in old.allocations:
                         received[item.allocation_id] = (
                             received.get(item.allocation_id, 0) - item.amount_minor
                         )
         remaining = amount
         result: list[tuple[ReimbursementAllocation, int]] = []
-        for allocation in sorted(
-            (a for a in claim.allocations if a.party_id == party_id),
-            key=lambda a: (a.position, a.id),
-        ):
+        claim_allocations = {allocation.id: allocation for allocation in claim.allocations}
+        # Editing a receipt must not reassign its historical expense just because
+        # the claim was reordered or another receipt changed. Keep as much of its
+        # old attribution as the requested amount and current capacity permit.
+        for old_item in old_allocations:
+            allocation = claim_allocations.get(old_item.allocation_id)
+            if allocation is None:
+                continue
             available = allocation.amount_minor - received.get(allocation.id, 0)
-            take = min(available, remaining)
+            take = min(old_item.amount_minor, available, remaining)
             if take > 0:
                 result.append((allocation, take))
+                received[allocation.id] = received.get(allocation.id, 0) + take
                 remaining -= take
             if remaining == 0:
                 break
+        for allocation in sorted(claim.allocations, key=lambda a: (a.position, a.id)):
+            if remaining == 0:
+                break
+            available = allocation.amount_minor - received.get(allocation.id, 0)
+            take = min(available, remaining)
+            if take > 0:
+                existing_index = next(
+                    (i for i, (item, _) in enumerate(result) if item.id == allocation.id), None
+                )
+                if existing_index is None:
+                    result.append((allocation, take))
+                else:
+                    item, allocated = result[existing_index]
+                    result[existing_index] = (item, allocated + take)
+                received[allocation.id] = received.get(allocation.id, 0) + take
+                remaining -= take
         if remaining:
             conflict(
                 "reimbursement_receipt_exceeds_outstanding",
-                "The receipt exceeds the party outstanding amount",
+                "The receipt exceeds the claim outstanding amount",
             )
         return result
 
@@ -1777,7 +1590,7 @@ class ReimbursementService:
         self._receipt_claim_mutable(claim)
         self._validate_received_at(draft.received_at)
         account = await self._receipt_account(draft.destination_account_id, allow_archived=False)
-        allocations = await self._receipt_distribution(claim, draft.party_id, draft.amount_minor)
+        allocations = await self._receipt_distribution(claim, draft.amount_minor)
         return account, allocations
 
     async def _validate_receipt_replace(
@@ -1802,10 +1615,7 @@ class ReimbursementService:
             allow_archived=(draft.destination_account_id == transaction.postings[0].account_id),
         )
         allocations = await self._receipt_distribution(
-            claim,
-            draft.party_id,
-            draft.amount_minor,
-            exclude_receipt=receipt.id,
+            claim, draft.amount_minor, exclude_receipt=receipt.id
         )
         return account, allocations
 

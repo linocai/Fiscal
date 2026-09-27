@@ -75,120 +75,41 @@ public enum V15AITransactionKind: Sendable, Equatable, Codable {
     public var rawValue: String { switch self { case .known(let value): value.rawValue; case .unknown(let value): value } }
 }
 
-public enum V15AIQualityStatus: Sendable, Equatable, Codable {
-    case available, historicalUnavailable, unknown(String)
-    public init(from decoder: Decoder) throws {
-        let value = try decoder.singleValueContainer().decode(String.self)
-        self = value == "available" ? .available : value == "historical_unavailable" ? .historicalUnavailable : .unknown(value)
-    }
-    public func encode(to encoder: Encoder) throws { var container = encoder.singleValueContainer(); try container.encode(rawValue) }
-    public var rawValue: String { switch self { case .available: "available"; case .historicalUnavailable: "historical_unavailable"; case .unknown(let value): value } }
-}
-
-public enum V15AIQualityEventType: Sendable, Equatable, Codable {
-    case parsed, confirmUnchanged, confirmEdited, ignored, executeFailed
-    case historicalAutomaticExecute, manualExecute, undone, providerRetry, finalFailure
-    case unknown(String)
-    public init(from decoder: Decoder) throws {
-        let value = try decoder.singleValueContainer().decode(String.self)
-        self = switch value {
-        case "parsed": .parsed
-        case "confirm_unchanged": .confirmUnchanged
-        case "confirm_edited": .confirmEdited
-        case "ignored": .ignored
-        case "execute_failed": .executeFailed
-        case "automatic_execute": .historicalAutomaticExecute
-        case "manual_execute": .manualExecute
-        case "undone": .undone
-        case "provider_retry": .providerRetry
-        case "final_failure": .finalFailure
-        default: .unknown(value)
-        }
-    }
-    public func encode(to encoder: Encoder) throws { var container = encoder.singleValueContainer(); try container.encode(rawValue) }
-    public var rawValue: String {
-        switch self {
-        case .parsed: "parsed"
-        case .confirmUnchanged: "confirm_unchanged"
-        case .confirmEdited: "confirm_edited"
-        case .ignored: "ignored"
-        case .executeFailed: "execute_failed"
-        case .historicalAutomaticExecute: "automatic_execute"
-        case .manualExecute: "manual_execute"
-        case .undone: "undone"
-        case .providerRetry: "provider_retry"
-        case .finalFailure: "final_failure"
-        case .unknown(let value): value
-        }
-    }
-}
-
-/// Typed recursive value used only for the backend's intentionally open
-/// snapshot, diff and quality-event dictionaries.
-public indirect enum V15AIEventValue: Codable, Sendable, Equatable {
-    case string(String), integer(Int64), decimal(Decimal), bool(Bool), array([V15AIEventValue]), object([String: V15AIEventValue]), null
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        if container.decodeNil() { self = .null }
-        else if let value = try? container.decode(Bool.self) { self = .bool(value) }
-        else if let value = try? container.decode(Int64.self) { self = .integer(value) }
-        else if let value = try? container.decode(Decimal.self) { self = .decimal(value) }
-        else if let value = try? container.decode(String.self) { self = .string(value) }
-        else if let value = try? container.decode([V15AIEventValue].self) { self = .array(value) }
-        else { self = .object(try container.decode([String: V15AIEventValue].self)) }
-    }
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        switch self {
-        case .string(let value): try container.encode(value)
-        case .integer(let value): try container.encode(value)
-        case .decimal(let value): try container.encode(value)
-        case .bool(let value): try container.encode(value)
-        case .array(let value): try container.encode(value)
-        case .object(let value): try container.encode(value)
-        case .null: try container.encodeNil()
-        }
-    }
-}
-
 public struct V15AIFieldConfidences: Codable, Sendable, Equatable {
     public let kind, amountMinor, occurredAt, title, note, accountID, categoryID, destinationAccountID: Int
     enum CodingKeys: String, CodingKey { case kind, title, note; case amountMinor = "amount_minor", occurredAt = "occurred_at", accountID = "account_id", categoryID = "category_id", destinationAccountID = "destination_account_id" }
 }
 
-public struct V15AISettings: Decodable, Sendable, Equatable {
-    public let autoExecuteEnabled: Bool
+public struct V15AISettings: Codable, Sendable, Equatable {
     public let ocrSourceEnabled: Bool
     public let shortcutTextSourceEnabled: Bool
-    public let autoExecuteLimitMinor: V15MinorUnits
-    public let minimumConfidenceBPS: Int
-    public let version: Int
     public let providerConfigured: Bool
-    public let effectiveAutoExecute: Bool
+    public let version: Int
     public let createdAt: Date
     public let updatedAt: Date
-    enum CodingKeys: String, CodingKey { case autoExecuteEnabled = "auto_execute_enabled", ocrSourceEnabled = "ocr_source_enabled", shortcutTextSourceEnabled = "shortcut_text_source_enabled", autoExecuteLimitMinor = "auto_execute_limit_minor", minimumConfidenceBPS = "minimum_confidence_bps", version, providerConfigured = "provider_configured", effectiveAutoExecute = "effective_auto_execute", createdAt = "created_at", updatedAt = "updated_at" }
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let configured = try container.decode(Bool.self, forKey: .autoExecuteEnabled)
-        let effective = try container.decode(Bool.self, forKey: .effectiveAutoExecute)
-        guard !configured, !effective else {
-            throw V15Failure(
-                kind: .decoding,
-                code: "ai_settings_contract_violation",
-                message: "AI 安全设置异常，本次使用期间已暂停所有修改。"
-            )
-        }
-        autoExecuteEnabled = false
-        effectiveAutoExecute = false
-        ocrSourceEnabled = try container.decode(Bool.self, forKey: .ocrSourceEnabled)
-        shortcutTextSourceEnabled = try container.decode(Bool.self, forKey: .shortcutTextSourceEnabled)
-        autoExecuteLimitMinor = try container.decode(V15MinorUnits.self, forKey: .autoExecuteLimitMinor)
-        minimumConfidenceBPS = try container.decode(Int.self, forKey: .minimumConfidenceBPS)
-        version = try container.decode(Int.self, forKey: .version)
-        providerConfigured = try container.decode(Bool.self, forKey: .providerConfigured)
-        createdAt = try container.decode(Date.self, forKey: .createdAt)
-        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    enum CodingKeys: String, CodingKey {
+        case ocrSourceEnabled = "ocr_source_enabled"
+        case shortcutTextSourceEnabled = "shortcut_text_source_enabled"
+        case providerConfigured = "provider_configured"
+        case version
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+public struct V15AISettingsUpdateRequest: Codable, Sendable, Equatable {
+    public let ocrSourceEnabled: Bool
+    public let shortcutTextSourceEnabled: Bool
+    public let expectedVersion: Int
+    public init(ocrSourceEnabled: Bool, shortcutTextSourceEnabled: Bool, expectedVersion: Int) {
+        self.ocrSourceEnabled = ocrSourceEnabled
+        self.shortcutTextSourceEnabled = shortcutTextSourceEnabled
+        self.expectedVersion = expectedVersion
+    }
+    enum CodingKeys: String, CodingKey {
+        case ocrSourceEnabled = "ocr_source_enabled"
+        case shortcutTextSourceEnabled = "shortcut_text_source_enabled"
+        case expectedVersion = "expected_version"
     }
 }
 
@@ -216,11 +137,9 @@ public struct V15AIProposal: Codable, Sendable, Equatable, Identifiable {
     public let version: Int
     public let createdAt, updatedAt: Date
     public let executedAt, ignoredAt, undoneAt: Date?
-    public let initialParseSnapshot, finalConfirmedSnapshot, finalFieldDiff: [String: V15AIEventValue]?
-    public let qualityStatus: V15AIQualityStatus
     enum CodingKeys: String, CodingKey {
         case id, source, text, provider, model, target, kind, title, note, status, version, explanation
-        case contentFingerprint = "content_fingerprint", amountMinor = "amount_minor", occurredAt = "occurred_at", accountID = "account_id", categoryID = "category_id", destinationAccountID = "destination_account_id", creditCycleID = "credit_cycle_id", fieldConfidences = "field_confidences", overallConfidenceBPS = "overall_confidence_bps", missingFields = "missing_fields", reasonCodes = "reason_codes", errorCode = "error_code", errorMessage = "error_message", transactionID = "transaction_id", transactionVersion = "transaction_version", cashFlowItemID = "cash_flow_item_id", cashFlowItemVersion = "cash_flow_item_version", createdAt = "created_at", updatedAt = "updated_at", executedAt = "executed_at", ignoredAt = "ignored_at", undoneAt = "undone_at", initialParseSnapshot = "initial_parse_snapshot", finalConfirmedSnapshot = "final_confirmed_snapshot", finalFieldDiff = "final_field_diff", qualityStatus = "quality_status"
+        case contentFingerprint = "content_fingerprint", amountMinor = "amount_minor", occurredAt = "occurred_at", accountID = "account_id", categoryID = "category_id", destinationAccountID = "destination_account_id", creditCycleID = "credit_cycle_id", fieldConfidences = "field_confidences", overallConfidenceBPS = "overall_confidence_bps", missingFields = "missing_fields", reasonCodes = "reason_codes", errorCode = "error_code", errorMessage = "error_message", transactionID = "transaction_id", transactionVersion = "transaction_version", cashFlowItemID = "cash_flow_item_id", cashFlowItemVersion = "cash_flow_item_version", createdAt = "created_at", updatedAt = "updated_at", executedAt = "executed_at", ignoredAt = "ignored_at", undoneAt = "undone_at"
     }
     public var isDisplayOnly: Bool { status.isDisplayOnly || target.isDisplayOnly || (kind.map { if case .unknown = $0 { true } else { false } } ?? false) }
 }
@@ -311,15 +230,6 @@ public struct V15AIProposalMutation: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey { case proposal, transaction; case cashFlowItem = "cash_flow_item" }
 }
 
-public struct V15AIQualityEvent: Codable, Sendable, Equatable, Identifiable {
-    public let id, proposalID: UUID
-    public let eventType: V15AIQualityEventType
-    public let reason: String?
-    public let details: [String: V15AIEventValue]
-    public let occurredAt: Date
-    enum CodingKeys: String, CodingKey { case id, reason, details; case proposalID = "proposal_id", eventType = "event_type", occurredAt = "occurred_at" }
-}
-
 public struct V15AIProviderSettings: Codable, Sendable, Equatable {
     public let provider: String?
     public let baseURL: String?
@@ -335,31 +245,6 @@ public struct V15AIProviderSettings: Codable, Sendable, Equatable {
     }
 }
 
-public struct V15AIQualityMetricsRow: Codable, Sendable, Equatable, Identifiable {
-    public var id: String { [source, provider ?? "none", model ?? "none", promptVersion ?? "none", transactionKind ?? "all", amountBand].joined(separator: "|") }
-    public let source: String
-    public let provider: String?
-    public let model: String?
-    public let promptVersion: String?
-    public let transactionKind: String?
-    public let amountBand: String
-    public let total, parseSucceeded, historicalUnavailable, confirmUnchanged, confirmEdited: Int
-    public let ignored, executeFailed, automaticExecute, manualExecute, undone: Int
-    public let providerRetry, finalFailure, pending, terminalOutcomes: Int
-    enum CodingKeys: String, CodingKey {
-        case source, provider, model, total, ignored, undone, pending
-        case promptVersion = "prompt_version", transactionKind = "transaction_kind", amountBand = "amount_band"
-        case parseSucceeded = "parse_succeeded", historicalUnavailable = "historical_unavailable"
-        case confirmUnchanged = "confirm_unchanged", confirmEdited = "confirm_edited"
-        case executeFailed = "execute_failed", automaticExecute = "automatic_execute", manualExecute = "manual_execute"
-        case providerRetry = "provider_retry", finalFailure = "final_failure", terminalOutcomes = "terminal_outcomes"
-    }
-}
-
-public struct V15AIQualityMetrics: Codable, Sendable, Equatable {
-    public let rows: [V15AIQualityMetricsRow]
-}
-
 public struct V15AIService: Sendable {
     private let transport: any V15Transporting
     private let writable: @MainActor @Sendable () throws -> Void
@@ -367,6 +252,11 @@ public struct V15AIService: Sendable {
 
     public func settings(readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15AISettings {
         try await transport.send(.init(path: "ai/settings", readCachePolicy: readCachePolicy), body: nil)
+    }
+
+    public func updateSettings(_ request: V15AISettingsUpdateRequest) async throws -> V15AISettings {
+        try await writable()
+        return try await transport.send(.init(path: "ai/settings", method: "PUT"), body: try V15BodyEncoder.encode(request))
     }
 
     public func proposals(status: V15AIProposalStatus? = nil, cursor: String? = nil, limit: Int = 50, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15AIProposalPage {
@@ -384,16 +274,8 @@ public struct V15AIService: Sendable {
         try await transport.send(.init(path: "ai/proposals/\(id)", readCachePolicy: readCachePolicy), body: nil)
     }
 
-    public func qualityEvents(proposalID: UUID, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> [V15AIQualityEvent] {
-        try await transport.send(.init(path: "ai/proposals/\(proposalID)/quality-events", readCachePolicy: readCachePolicy), body: nil)
-    }
-
     public func providerSettings(readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15AIProviderSettings {
         try await transport.send(.init(path: "ai/provider-settings", readCachePolicy: readCachePolicy), body: nil)
-    }
-
-    public func qualityMetrics(readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15AIQualityMetrics {
-        try await transport.send(.init(path: "ai/quality/metrics", readCachePolicy: readCachePolicy), body: nil)
     }
 
     public func create(_ request: V15AIProposalCreate, idempotencyKey: UUID) async throws -> V15AIProposal {

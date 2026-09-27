@@ -1,0 +1,18 @@
+[
+  {
+    "configuration": "Debug-iphonesimulator",
+    "path": "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou/Build/Products/Debug-iphonesimulator/Fiscal.app/Info.plist",
+    "bundle_id": "com.linotsai.fiscal",
+    "version": "2.4.0",
+    "build": "50",
+    "minimum_os": "27.0"
+  },
+  {
+    "configuration": "Debug",
+    "path": "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou/Build/Products/Debug/Fiscal.app/Contents/Info.plist",
+    "bundle_id": "com.linotsai.fiscal.mac",
+    "version": "2.4.0",
+    "build": "50",
+    "minimum_os": "27.0"
+  }
+]

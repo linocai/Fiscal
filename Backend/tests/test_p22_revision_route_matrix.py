@@ -10,7 +10,6 @@ ALLOWED_SCOPES = {
     "cash_flow",
     "reports",
     "ai",
-    "statement_imports",
 }
 READ_ONLY_POSTS = {
     "/api/v1/auth/session",
@@ -28,9 +27,7 @@ READ_ONLY_POSTS = {
     "/api/v1/reimbursement-claims/{claim_id}/cancel-preview",
     "/api/v1/reimbursement-claims/{claim_id}/receipt-preview",
     "/api/v1/reimbursement-receipts/{receipt_id}/preview",
-    "/api/v1/statement-imports/{statement_import_id}/confirmation-preview",
     "/api/v1/categories/{source_id}/merge-preview",
-    "/api/v1/categories/{root_id}/split-preview",
     "/api/v1/transactions/repayment-preview",
     "/api/v1/transactions/category-preview",
     "/api/v1/cash-flow-items/{item_id}/confirm-preview",

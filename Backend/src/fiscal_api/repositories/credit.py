@@ -17,7 +17,6 @@ from fiscal_api.db.models import (
     InstallmentPlan,
     LedgerTransaction,
     Posting,
-    StatementImportRow,
 )
 
 
@@ -457,23 +456,6 @@ class CreditRepository:
             ).all()
         )
 
-    async def statement_rows_for_cycles(self, cycle_ids: list[UUID]) -> list[StatementImportRow]:
-        if not cycle_ids:
-            return []
-        return list(
-            (
-                await self.session.scalars(
-                    select(StatementImportRow)
-                    .where(StatementImportRow.credit_cycle_id_candidate.in_(cycle_ids))
-                    .order_by(
-                        StatementImportRow.credit_cycle_id_candidate,
-                        StatementImportRow.created_at,
-                        StatementImportRow.id,
-                    )
-                )
-            ).all()
-        )
-
     async def cycle_is_referenced(self, cycle_id: UUID) -> bool:
         transaction = await self.session.scalar(
             select(LedgerTransaction.id)
@@ -498,13 +480,6 @@ class CreditRepository:
             select(AIProposal.id).where(AIProposal.credit_cycle_id == cycle_id).limit(1)
         )
         if proposal is not None:
-            return True
-        statement_row = await self.session.scalar(
-            select(StatementImportRow.id)
-            .where(StatementImportRow.credit_cycle_id_candidate == cycle_id)
-            .limit(1)
-        )
-        if statement_row is not None:
             return True
         return (
             await self.session.scalar(

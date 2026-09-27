@@ -1,17 +1,13 @@
 import Foundation
 
 @MainActor @Observable public final class V15MasterDataModel {
-    public enum Section: String, CaseIterable, Identifiable, Equatable { case accounts = "账户", categories = "分类", merchants = "商户"; public var id: String { rawValue } }
+    public enum Section: String, CaseIterable, Identifiable, Equatable { case accounts = "账户", categories = "分类"; public var id: String { rawValue } }
     public enum Phase { case idle, loading, loaded, failed(V15Failure) }
     public private(set) var phase: Phase = .idle
     public private(set) var accounts: [V15AccountResponse] = []
     public private(set) var categories: [V15CategoryResponse] = []
-    public private(set) var merchants: [V15Merchant] = []
     public private(set) var accountRevision: String?
     public private(set) var categoryRevisions: [String: String] = [:]
-    public private(set) var merchantCursor: String?
-    public private(set) var merchantPageError: V15Failure?
-    public private(set) var isLoadingMerchants = false
     public enum ReceiptStatus: Equatable { case success, validation, failure, conflict, unknown, informational }
     public private(set) var receiptStatus: ReceiptStatus = .informational
     public var receiptTitle: String { switch receiptStatus { case .success: "已保存"; case .validation: "请检查输入"; case .failure: "未能保存"; case .conflict: "数据已更新"; case .unknown: "结果待确认"; case .informational: "提示" } }
@@ -24,11 +20,8 @@ import Foundation
     public var selectedSection: Section = .accounts { didSet { if selectedSection != oldValue { editorContextChanged() } } }
     public var selectedAccountID: UUID? { didSet { if oldValue != selectedAccountID { editorContextChanged() } } }
     public var selectedCategoryID: UUID? { didSet { if oldValue != selectedCategoryID { editorContextChanged() } } }
-    public var selectedMerchantID: UUID? { didSet { if oldValue != selectedMerchantID { editorContextChanged() } } }
     public var accountName = "" { didSet { draftInputChanged() } }; public var accountKind: V15AccountKind = .cash { didSet { draftInputChanged() } }; public var openingBalance = "0" { didSet { draftInputChanged() } }; public var creditLimit = "" { didSet { draftInputChanged() } }; public var statementDay = "" { didSet { draftInputChanged() } }; public var dueDay = "" { didSet { draftInputChanged() } }; public var cycleMode = "statement_day_cutoff" { didSet { if oldValue != cycleMode && cycleMode == "on_demand" { creditLimit = ""; statementDay = ""; dueDay = ""; openingDueDate = "" }; draftInputChanged() } }; public var openingBalanceAsOfDate = "" { didSet { draftInputChanged() } }; public var openingDueDate = "" { didSet { draftInputChanged() } }
     public var categoryName = "" { didSet { draftInputChanged() } }; public var categoryDirection: V15CategoryDirection = .expense { didSet { draftInputChanged() } }; public var categoryIcon = "tag" { didSet { draftInputChanged() } }; public var categoryColor = "#008C8A" { didSet { draftInputChanged() } }
-    public var merchantName = "" { didSet { draftInputChanged() } }; public var merchantAliases = "" { didSet { draftInputChanged() } }; public var merchantSearch = ""; public private(set) var committedMerchantSearch = ""
-    public var mappingTransactionID = ""; public private(set) var mapping: V15MerchantMapping?
     public var fieldIssues: [V15FieldIssue] = []
     public var transformPreview: V15CategoryMergePreview?
     public var transformReceipt: V15CategoryTransformReceipt?
@@ -37,18 +30,14 @@ import Foundation
     public private(set) var transformFieldIssues: [V15FieldIssue] = []
     public private(set) var transformRequiresRepreview = false
     public var childMappings: [UUID: UUID] = [:]
-    public var splitPreview: V15CategorySplitPreview?
-    public var splitChildNames: [String] = ["子分类一", "子分类二"]
-    public var splitAssignments: [UUID: String] = [:]
     private let services: V15Services
     // A field edit invalidates feedback, while only a different editor session
     // prevents a successful create from attaching its server-assigned identity.
     private var editorSessionGeneration: UInt64 = 0
     private var editorGeneration: UInt64 = 0
     private var generation: UInt64 = 0
-    private var merchantPageGeneration: UInt64 = 0
     private var previewGeneration: UInt64 = 0
-    private enum TransformPreviewIntent { case merge(UUID), split }
+    private enum TransformPreviewIntent { case merge(UUID) }
     private struct UnknownCreateLock { let section: Section; let payloadIdentity: String; var explicitlyReloaded = false }
     private var pendingTransformPreview: TransformPreviewIntent?
     private var unknownCreateLock: UnknownCreateLock?
@@ -87,7 +76,6 @@ import Foundation
     }
     public var selectedAccount: V15AccountResponse? { accounts.first { $0.id == selectedAccountID } }
     public var selectedCategory: V15CategoryResponse? { flatten(categories).first { $0.id == selectedCategoryID } }
-    public var selectedMerchant: V15Merchant? { merchants.first { $0.id == selectedMerchantID } }
     public var visibleAccounts: [V15AccountResponse] { accounts.sorted { $0.sortOrder < $1.sortOrder } }
     public var visibleCategories: [V15CategoryResponse] { flatten(categories).sorted { $0.sortOrder < $1.sortOrder } }
 
@@ -95,7 +83,6 @@ import Foundation
         switch selectedSection {
         case .accounts: accountDraftDisabledReason
         case .categories: categoryDraftDisabledReason
-        case .merchants: merchantDraftDisabledReason
         }
     }
 
@@ -169,23 +156,6 @@ import Foundation
         return unchanged ? .init(code: "no_changes", message: "内容没有变化，无需保存。", fieldPath: nil) : nil
     }
 
-    private var merchantDraftDisabledReason: V15DisabledReason? {
-        if selectedMerchant?.archivedAt != nil {
-            return .init(code: "archived_read_only", message: "归档商户不可编辑。", fieldPath: nil)
-        }
-        let name = merchantName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else {
-            return .init(code: "merchant_name_required", message: "请先填写商户名称。", fieldPath: "merchant.name")
-        }
-        guard let merchant = selectedMerchant else { return nil }
-        let unchanged = merchant.name == name && merchant.aliases == merchantDraftAliases
-        return unchanged ? .init(code: "no_changes", message: "内容没有变化，无需保存。", fieldPath: nil) : nil
-    }
-
-    private var merchantDraftAliases: [String] {
-        merchantAliases.split(separator: "、").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-    }
-
     private static func isBusinessDate(_ value: String) -> Bool {
         guard value.range(of: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", options: .regularExpression) != nil else { return false }
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.calendar = Calendar(identifier: .gregorian); formatter.timeZone = ShanghaiBusinessDate.timeZone; formatter.dateFormat = "yyyy-MM-dd"; formatter.isLenient = false
@@ -196,16 +166,15 @@ import Foundation
         return count > 1 && account.lastFour != nil ? "\(account.name) · 尾号 \(account.lastFour!)" : account.name
     }
     @discardableResult public func load(preservingConflict: Bool = false) async -> Bool {
-        generation &+= 1; merchantPageGeneration &+= 1; isLoadingMerchants = false; merchantPageError = nil; let current = generation; phase = .loading
+        generation &+= 1; let current = generation; phase = .loading
         do {
             async let accountState = services.masterData.accountOrderState()
             async let allAccounts = services.masterData.accounts(includeArchived: true)
             async let expenses = services.masterData.categories(direction: .expense, includeArchived: true)
             async let incomes = services.masterData.categories(direction: .income, includeArchived: true)
-            async let merchantPage = services.merchants.list(query: committedMerchantSearch, limit: 50)
-            let state = try await accountState; let accountResult = try await allAccounts; let categoryResult = try await (expenses + incomes); let page = try await merchantPage
+            let state = try await accountState; let accountResult = try await allAccounts; let categoryResult = try await (expenses + incomes)
             guard current == generation else { return false }
-            accounts = accountResult; accountRevision = state.listRevision; categories = categoryResult; merchants = page.items; merchantCursor = page.nextCursor; merchantPageError = nil; isLoadingMerchants = false
+            accounts = accountResult; accountRevision = state.listRevision; categories = categoryResult
             phase = .loaded
             if !preservingConflict { fieldIssues = []; conflict = nil; conflictChanges = []; writesRequireExplicitReload = false }
             return true
@@ -215,7 +184,6 @@ import Foundation
     }
     public func selectAccount(_ value: V15AccountResponse?) { editorContextChanged(); invalidatePreview(); selectedAccountID = value?.id; if let value { accountName = value.name; accountKind = value.kind; openingBalance = String(format: "%.2f", Double(value.openingBalanceMinor) / 100); creditLimit = value.creditLimitMinor.map { String(format: "%.2f", Double($0) / 100) } ?? ""; statementDay = value.statementDay.map(String.init) ?? ""; dueDay = value.dueDay.map(String.init) ?? ""; cycleMode = value.cycleMode ?? "statement_day_cutoff"; openingBalanceAsOfDate = value.openingBalanceAsOfDate ?? ""; openingDueDate = value.openingDueDate ?? "" } }
     public func selectCategory(_ value: V15CategoryResponse?) { editorContextChanged(); invalidatePreview(); selectedCategoryID = value?.id; if let value { categoryName = value.name; categoryDirection = V15CategoryDirection(rawValue: value.direction) ?? .unknown; categoryIcon = value.icon; categoryColor = value.colorHex } }
-    public func selectMerchant(_ value: V15Merchant?) { editorContextChanged(); invalidatePreview(); selectedMerchantID = value?.id; if let value { merchantName = value.name; merchantAliases = value.aliases.joined(separator: "、") } }
     public func beginNewDraft() {
         editorContextChanged(); invalidatePreview()
         switch selectedSection {
@@ -223,8 +191,6 @@ import Foundation
             selectedAccountID = nil; accountName = ""; accountKind = .cash; openingBalance = "0"; creditLimit = ""; statementDay = ""; dueDay = ""; cycleMode = "statement_day_cutoff"; openingBalanceAsOfDate = ""; openingDueDate = ""
         case .categories:
             selectedCategoryID = nil; categoryName = ""; categoryDirection = .expense; categoryIcon = "tag"; categoryColor = "#008C8A"
-        case .merchants:
-            selectedMerchantID = nil; merchantName = ""; merchantAliases = ""
         }
     }
     public func saveAccount() async {
@@ -257,31 +223,6 @@ import Foundation
     public func archiveOrRestoreAccount() async { guard canWrite("无法更改") else { return }; beginEditorMutation(); guard let account = selectedAccount else { return }; let archiving = account.archivedAt == nil; isSaving = true; defer { isSaving = false }; await mutate(id: account.id, confirmed: { archiving ? $0.archivedAt != nil : $0.archivedAt == nil }) { [self] in archiving ? try await services.masterData.archiveAccount(id: account.id, expectedVersion: account.version) : try await services.masterData.restoreAccount(id: account.id, expectedVersion: account.version) } }
     public func saveCategory() async { guard canWrite("无法保存") else { return }; beginEditorMutation(); guard selectedCategory?.archivedAt == nil else { receiptStatus = .validation; receipt = "归档分类只能恢复，不能编辑。"; return }; guard !categoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, categoryColor.range(of: "^#[0-9A-Fa-f]{6}$", options: .regularExpression) != nil else { receiptStatus = .validation; fieldIssues = [.init(code: "category_required", message: "请填写分类名称和六位颜色值。", fieldPath: "category")]; return }; let category = selectedCategory; let name = categoryName; let direction = categoryDirection.rawValue; let icon = categoryIcon; let color = categoryColor; let createIdentity = category == nil ? identity(["category", name, direction, icon, color]) : nil; guard canSubmitCreate(section: .categories, identity: createIdentity) else { return }; isSaving = true; defer { isSaving = false }; await mutateCategory(id: category?.id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == name && $0.direction == direction && $0.icon == icon && $0.colorHex.uppercased() == color.uppercased() }) { [self] in if let category { return try await services.masterData.patchCategory(id: category.id, patch: .init(expectedVersion: category.version, name: name, direction: direction, icon: icon, colorHex: color)) } else { return try await services.masterData.createCategory(.init(name: name, direction: direction, icon: icon, colorHex: color)) } } }
     public func archiveOrRestoreCategory() async { guard canWrite("无法更改") else { return }; beginEditorMutation(); guard let category = selectedCategory else { return }; let archiving = category.archivedAt == nil; isSaving = true; defer { isSaving = false }; await mutateCategory(id: category.id, confirmed: { archiving ? $0.archivedAt != nil : $0.archivedAt == nil }) { [self] in archiving ? try await services.masterData.archiveCategory(id: category.id, expectedVersion: category.version) : try await services.masterData.restoreCategory(id: category.id, expectedVersion: category.version) } }
-    public func saveMerchant() async {
-        guard canWrite("无法保存") else { return }
-        beginEditorMutation()
-        let aliases = merchantAliases.split(separator: "、").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        let expectedName = merchantName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !expectedName.isEmpty else { receiptStatus = .validation; fieldIssues = [.init(code: "merchant_required", message: "请填写商户名称。", fieldPath: "merchant")]; return }
-        // Capture the selected record before awaiting so an inspector selection change
-        // cannot make the request and its readback predicate describe different input.
-        let merchant = selectedMerchant
-        let id = merchant?.id
-        let createIdentity = merchant == nil ? identity(["merchant", expectedName] + aliases) : nil
-        guard canSubmitCreate(section: .merchants, identity: createIdentity) else { return }
-        isSaving = true; defer { isSaving = false }
-        await mutateMerchant(id: id, unknownCreateIdentity: createIdentity, confirmed: { $0.name == expectedName && $0.aliases == aliases }) {
-            if let merchant {
-                return try await services.merchants.patch(id: merchant.id, patch: .init(expectedVersion: merchant.version, name: expectedName, aliases: aliases))
-            }
-            return try await services.merchants.create(.init(name: expectedName, aliases: aliases))
-        }
-    }
-    public func submitMerchantSearch() async { guard merchantSearch == committedMerchantSearch else { merchantPageGeneration &+= 1; merchantCursor = nil; merchantPageError = nil; isLoadingMerchants = false; committedMerchantSearch = merchantSearch; await load(); return }; await load() }
-    public func loadNextMerchants() async { guard merchantSearch == committedMerchantSearch, let cursor = merchantCursor, !isLoadingMerchants else { return }; merchantPageGeneration &+= 1; let current = merchantPageGeneration; isLoadingMerchants = true; merchantPageError = nil; do { let page = try await services.merchants.list(query: committedMerchantSearch, cursor: cursor, limit: 50); guard current == merchantPageGeneration else { return }; merchants += page.items.filter { item in !merchants.contains(where: { $0.id == item.id }) }; merchantCursor = page.nextCursor } catch let failure as V15Failure { guard current == merchantPageGeneration else { return }; merchantPageError = failure } catch is CancellationError { guard current == merchantPageGeneration else { return }; merchantPageError = nil } catch { guard current == merchantPageGeneration else { return }; merchantPageError = .init(kind: .transport, message: "下一页商户读取失败。") }; guard current == merchantPageGeneration else { return }; isLoadingMerchants = false }
-    public func loadMapping() async { receiptStatus = .informational; guard let id = UUID(uuidString: mappingTransactionID) else { receiptStatus = .validation; fieldIssues = [.init(code: "transaction_id_invalid", message: "无法识别这笔交易。", fieldPath: "transaction_id")]; return }; do { mapping = try await services.merchants.mapping(transactionID: id); receipt = mapping == nil ? "这笔交易尚未关联商户。" : "已关联商户：\(mapping!.merchant.name)。" } catch { apply(error) } }
-    public func confirmMapping() async { guard canWrite("无法提交更改") else { return }; beginEditorMutation(); guard let transactionID = UUID(uuidString: mappingTransactionID), let merchant = selectedMerchant else { receiptStatus = .validation; fieldIssues = [.init(code: "mapping_required", message: "请选择要关联的商户。", fieldPath: "mapping")]; return }; let version = mapping?.mappingVersion; let identity = "confirm|\(transactionID)|\(merchant.id)|\(version.map(String.init) ?? "new")"; let key = idempotency.key(for: "merchant-mapping", payloadIdentity: identity); do { let result = try await services.merchants.confirmMapping(transactionID: transactionID, request: .init(merchantID: merchant.id, expectedMappingVersion: version), idempotencyKey: key); mapping = result.mapping; receiptStatus = .success; receipt = "商户关联已保存。"; idempotency.succeeded(scope: "merchant-mapping", payloadIdentity: identity) } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { if let read = try? await services.merchants.mapping(transactionID: transactionID), read.merchant.id == merchant.id { mapping = read; receiptStatus = .success; receipt = "已确认商户关联保存成功，没有重复保存。"; idempotency.succeeded(scope: "merchant-mapping", payloadIdentity: identity) } else { receiptStatus = .unknown; receipt = "暂时无法确认商户关联结果；系统没有重复保存。" } } catch { apply(error) } }
-    public func releaseMapping() async { guard canWrite("无法提交更改") else { return }; beginEditorMutation(); guard let transactionID = UUID(uuidString: mappingTransactionID), let mapping else { return }; let identity = "release|\(transactionID)|\(mapping.mappingVersion)"; let key = idempotency.key(for: "merchant-release", payloadIdentity: identity); do { let result = try await services.merchants.releaseMapping(transactionID: transactionID, request: .init(expectedMappingVersion: mapping.mappingVersion), idempotencyKey: key); self.mapping = result.mapping; receiptStatus = .success; receipt = "商户关联已解除。"; idempotency.succeeded(scope: "merchant-release", payloadIdentity: identity) } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) { do { let read = try await services.merchants.mapping(transactionID: transactionID); if read == nil { self.mapping = nil; receiptStatus = .success; receipt = "已确认商户关联解除成功，没有重复操作。"; idempotency.succeeded(scope: "merchant-release", payloadIdentity: identity) } else { receiptStatus = .unknown; receipt = "暂时无法确认解除结果；系统没有重复操作。" } } catch { receiptStatus = .unknown; receipt = "暂时无法确认解除结果，请稍后检查。" } } catch { apply(error) } }
     public func reorderAccounts(moving id: UUID, after target: UUID?) async { guard canWrite("无法提交更改") else { return }; beginEditorMutation(); guard selectedAccount?.archivedAt == nil, let revision = accountRevision else { receiptStatus = .validation; receipt = "归档账户只能恢复，不能排序。"; return }; var ids = accounts.filter { $0.archivedAt == nil }.sorted { $0.sortOrder < $1.sortOrder }.map(\.id); ids.removeAll { $0 == id }; if let target, let index = ids.firstIndex(of: target) { ids.insert(id, at: index + 1) } else { ids.insert(id, at: 0) }; do { _ = try await services.masterData.reorderAccounts(.init(orderedIDs: ids, expectedListRevision: revision)); receiptStatus = .success; receipt = "账户排序已保存。"; _ = await load() } catch { await reloadOnConflict(error) } }
     public func reorderCategories(moving id: UUID, after target: UUID?) async { guard canWrite("无法提交更改") else { return }; beginEditorMutation(); guard let category = selectedCategory ?? flatten(categories).first(where: { $0.id == id }) else { return }; guard category.archivedAt == nil else { receiptStatus = .validation; receipt = "归档分类只能恢复，不能排序。"; return }; let key = category.direction + ":" + (category.parentID?.uuidString ?? "root"); do { let state = try await services.masterData.categoryOrderState(direction: V15CategoryDirection(rawValue: category.direction) ?? .unknown, parentID: category.parentID); categoryRevisions[key] = state.listRevision; var ids = state.items.map(\.id); ids.removeAll { $0 == id }; if let target, let index = ids.firstIndex(of: target) { ids.insert(id, at: index + 1) } else { ids.insert(id, at: 0) }; _ = try await services.masterData.reorderCategories(parentID: category.parentID, request: .init(orderedIDs: ids, expectedListRevision: state.listRevision)); receiptStatus = .success; receipt = "分类排序已保存。"; _ = await load() } catch { await reloadOnConflict(error) } }
     public func beginTransformFlow() { invalidatePreview(); transformMessage = nil; transformFailure = nil; transformFieldIssues = []; transformRequiresRepreview = false }
@@ -305,31 +246,8 @@ import Foundation
             recordTransformFailure(.init(kind: .transport, message: "无法读取合并预览。"))
         }
     }
-    public func invalidatePreview() { previewGeneration &+= 1; transformPreview = nil; splitPreview = nil; childMappings = [:]; splitAssignments = [:]; transformReceipt = nil; transformMessage = nil; transformFailure = nil; transformFieldIssues = []; transformRequiresRepreview = false; pendingTransformPreview = nil }
+    public func invalidatePreview() { previewGeneration &+= 1; transformPreview = nil; childMappings = [:]; transformReceipt = nil; transformMessage = nil; transformFailure = nil; transformFieldIssues = []; transformRequiresRepreview = false; pendingTransformPreview = nil }
     public func commitMerge() async -> Bool { guard canWrite("无法提交合并"), !transformRequiresRepreview else { if transformRequiresRepreview { transformMessage = "此预览已失效，请重新读取预览后再提交。" }; return false }; guard let source = selectedCategory, let preview = transformPreview else { return false }; let mapping: [V15CategoryChildMapping] = preview.childMappingRequirements.compactMap { requirement in childMappings[requirement.sourceChildID].map { V15CategoryChildMapping(sourceChildID: requirement.sourceChildID, targetChildID: $0) } }; guard mapping.count == preview.childMappingRequirements.count else { transformFieldIssues = [.init(code: "child_mapping_required", message: "请为每个子分类指定归位目标。", fieldPath: "child_mappings")]; return false }; let identity = "\(preview.previewToken)|\(mapping)"; do { let result = try await services.categories.commitMerge(sourceID: source.id, request: .init(previewToken: preview.previewToken, childMappings: mapping), idempotencyKey: idempotency.key(for: "merge", payloadIdentity: identity)); idempotency.succeeded(scope: "merge", payloadIdentity: identity); transformReceipt = result; transformMessage = "合并已原子提交：重归类 \(result.reclassifiedTransactionCount) 笔。"; _ = await load(); return true } catch let failure as V15Failure where failure.kind == .conflict { await recoverTransformConflict(failure); return false } catch let failure as V15Failure { recordTransformFailure(failure); return false } catch { recordTransformFailure(.init(kind: .transport, message: "合并未完成，请重新决定。")); return false } }
-    public func previewSplit() async {
-        guard let root = selectedCategory else { return }
-        beginTransformFlow(); pendingTransformPreview = .split
-        guard !isOffline else { recordTransformFailure(.init(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法预览拆分结果。")); return }
-        previewGeneration &+= 1; let current = previewGeneration
-        let names = splitChildNames.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        guard names.count >= 2 else { transformFieldIssues = [.init(code: "split_children_required", message: "至少填写两个新子分类。", fieldPath: "split_children")]; return }
-        do {
-            let drafts = names.map { V15CategoryDraft(name: $0, direction: root.direction, parentID: root.id, icon: root.icon, colorHex: root.colorHex) }
-            let result = try await services.categories.splitPreview(rootID: root.id, request: .init(rootExpectedVersion: root.version, children: drafts))
-            guard current == previewGeneration else { return }
-            splitPreview = result
-            let fallback = result.childNames.first ?? names[0]
-            splitAssignments = Dictionary(uniqueKeysWithValues: result.requiredTransactionIDs.map { ($0, fallback) })
-        } catch let failure as V15Failure {
-            guard current == previewGeneration else { return }
-            if failure.kind == .conflict { await recoverTransformConflict(failure) } else { recordTransformFailure(failure) }
-        } catch {
-            guard current == previewGeneration else { return }
-            recordTransformFailure(.init(kind: .transport, message: "无法读取拆分预览。"))
-        }
-    }
-    public func commitSplit() async -> Bool { guard canWrite("无法提交拆分"), !transformRequiresRepreview else { if transformRequiresRepreview { transformMessage = "此预览已失效，请重新读取预览后再提交。" }; return false }; guard let root = selectedCategory, let preview = splitPreview else { return false }; let assignments = preview.requiredTransactionIDs.compactMap { id in splitAssignments[id].map { name in V15CategorySplitAssignment(transactionID: id, childName: name) } }; guard assignments.count == preview.requiredTransactionIDs.count else { transformFieldIssues = [.init(code: "split_assignment_required", message: "请逐笔指定归位子分类。", fieldPath: "assignments")]; return false }; let identity = "\(preview.previewToken)|\(assignments)"; do { let result = try await services.categories.commitSplit(rootID: root.id, request: .init(previewToken: preview.previewToken, assignments: assignments), idempotencyKey: idempotency.key(for: "split", payloadIdentity: identity)); idempotency.succeeded(scope: "split", payloadIdentity: identity); transformReceipt = result; transformMessage = "拆分已原子提交：重归类 \(result.reclassifiedTransactionCount) 笔。"; _ = await load(); return true } catch let failure as V15Failure where failure.kind == .conflict { await recoverTransformConflict(failure); return false } catch let failure as V15Failure { recordTransformFailure(failure); return false } catch { recordTransformFailure(.init(kind: .transport, message: "拆分未完成，请重新决定。")); return false } }
     private func mutate(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15AccountResponse) -> Bool, _ operation: () async throws -> V15AccountResponse) async {
         let context = editorGeneration
         let session = editorSessionGeneration
@@ -391,40 +309,6 @@ import Foundation
                 receiptStatus = .success; receipt = "已确认“\(value.name)”保存成功，没有重复保存。"
             } else if let unknownCreateIdentity {
                 await lockUnknownCreate(section: .categories, identity: unknownCreateIdentity, context: context)
-            } else {
-                _ = await load(preservingConflict: true)
-                guard context == editorGeneration else { return }
-                receiptStatus = .unknown; receipt = "暂时无法确认本次更改；已保留输入，没有重复保存。"
-            }
-        } catch { if context == editorGeneration { apply(error) } }
-    }
-    private func mutateMerchant(id: UUID?, unknownCreateIdentity: String? = nil, confirmed: @escaping (V15Merchant) -> Bool, _ operation: () async throws -> V15Merchant) async {
-        let context = editorGeneration
-        let session = editorSessionGeneration
-        let previous = id.flatMap { target in merchants.first { $0.id == target } }
-        do {
-            let value = try await operation()
-            merchants.removeAll { $0.id == value.id }; merchants.append(value)
-            services.notifyConfirmedWrite()
-            let refreshed = await load(preservingConflict: true)
-            guard session == editorSessionGeneration else { return }
-            let inputUnchanged = context == editorGeneration
-            selectedMerchantID = value.id
-            guard inputUnchanged else { return }
-            receiptStatus = .success
-            receipt = "商户“\(value.name)”已保存" + (refreshed ? "" : "；列表刷新失败，可稍后刷新，无需重新保存。")
-        } catch let failure as V15Failure where failure.kind == .conflict {
-            await recoverMutationConflict(failure, context: context)
-        } catch let failure as V15Failure where V15LedgerCreateService.outcomeMayBeUnknown(failure) {
-            if let id, let value = try? await services.merchants.get(id: id), value.id == id,
-               let previous, value.version > previous.version, confirmed(value) {
-                merchants.removeAll { $0.id == value.id }; merchants.append(value)
-                await services.refreshAfterRecoveredWrite()
-                _ = await load(preservingConflict: true)
-                guard context == editorGeneration else { return }
-                receiptStatus = .success; receipt = "已确认商户“\(value.name)”保存成功，没有重复保存。"
-            } else if let unknownCreateIdentity {
-                await lockUnknownCreate(section: .merchants, identity: unknownCreateIdentity, context: context)
             } else {
                 _ = await load(preservingConflict: true)
                 guard context == editorGeneration else { return }
@@ -497,7 +381,6 @@ import Foundation
         if writesRequireExplicitReload { await reloadAfterTransformConflict(); return }
         switch pendingTransformPreview {
         case .merge(let targetID): await previewMerge(targetID: targetID)
-        case .split: await previewSplit()
         case nil: transformMessage = "请重新选择分类后读取预览。"
         }
     }
@@ -523,7 +406,7 @@ import Foundation
         else { writesRequireExplicitReload = true; receipt = "新建结果暂时不明且刷新失败；请稍后再试。" }
     }
     private func canSubmitCreate(section: Section, identity: String?) -> Bool {
-        guard let identity else { return true }
+        guard identity != nil else { return true }
         guard unknownCreateLock != nil else { return true }
         receiptStatus = .unknown
         receipt = "上次新建结果尚未确认，修改内容也不会解除重复创建保护，请核对现有记录。"
@@ -537,9 +420,7 @@ import Foundation
             let statement = isCredit && cycleMode != "on_demand" ? Int(statementDay) : nil; let due = isCredit && cycleMode != "on_demand" ? Int(dueDay) : nil; let mode = isCredit ? cycleMode : nil
             return accountCreateIdentity(name: accountName, kind: accountKind, opening: opening, credit: credit, statement: statement, due: due, mode: mode, asOf: isCredit && opening > 0 ? openingBalanceAsOfDate : nil, dueDate: isCredit && opening > 0 ? openingDueDate : nil)
         case .categories: return selectedCategory == nil ? identity(["category", categoryName, categoryDirection.rawValue, categoryIcon, categoryColor]) : nil
-        case .merchants:
-            let aliases = merchantAliases.split(separator: "、").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-            return selectedMerchant == nil ? identity(["merchant", merchantName.trimmingCharacters(in: .whitespacesAndNewlines)] + aliases) : nil
+
         }
     }
     private func accountCreateIdentity(name: String, kind: V15AccountKind, opening: Int64, credit: Int64?, statement: Int?, due: Int?, mode: String?, asOf: String?, dueDate: String?) -> String { identity(["account", name, kind.rawValue, String(opening), credit.map(String.init) ?? "∅", statement.map(String.init) ?? "∅", due.map(String.init) ?? "∅", mode ?? "∅", asOf ?? "∅", dueDate ?? "∅"]) }
@@ -588,7 +469,8 @@ public final class V15SettingsOverviewModel {
     public private(set) var transactionsIncomplete = false
     public private(set) var aiSettings: V15AISettings?
     public private(set) var providerSettings: V15AIProviderSettings?
-    public private(set) var qualityMetrics: V15AIQualityMetrics?
+    public private(set) var isUpdatingAISources = false
+    public private(set) var aiSourceSaveMessage: String?
     public private(set) var failures: [String: V15Failure] = [:]
     public private(set) var restoringID: UUID?
     public private(set) var restoreFailure: V15Failure?
@@ -610,14 +492,13 @@ public final class V15SettingsOverviewModel {
     public var archiveItemCount: Int { archivedAccounts.count + archivedCategories.count + archivedClaims.count + voidedClaims.count + voidedTransactions.count }
     public var activeAccountCount: Int { accounts.filter { $0.archivedAt == nil }.count }
     public var activeCategoryCount: Int { flatten(categories).filter { $0.archivedAt == nil }.count }
-    public var qualityTotal: Int { qualityMetrics?.rows.reduce(0) { $0 + $1.total } ?? 0 }
-    public var qualityPending: Int { qualityMetrics?.rows.reduce(0) { $0 + $1.pending } ?? 0 }
     public var providerHost: String? { providerSettings?.baseURL.flatMap { URL(string: $0)?.host } }
 
     public func load() async {
+        guard !isUpdatingAISources else { return }
         generation &+= 1
         let current = generation
-        failures = [:]; restoreFailure = nil; clearFacts()
+        failures = [:]; restoreFailure = nil; aiSourceSaveMessage = nil; clearFacts()
         guard let snapshot = offlineSnapshotAt else {
             phase = .loading
             let masterData = services.masterData
@@ -628,10 +509,9 @@ public final class V15SettingsOverviewModel {
             async let categoryResult = Self.capture { try await masterData.categories(includeArchived: true) }
             async let claimResult = Self.capture { try await reimbursements.claims(includeArchived: true, includeVoided: true, limit: 100) }
             async let transactionResult = Self.capture { try await ledger.list(.init(limit: 100, includeVoided: true)) }
-            async let aiResult = Self.capture { try await ai.settings() }
+            async let aiResult = Self.capture { try await ai.settings(readCachePolicy: .reloadIgnoringCache) }
             async let providerResult = Self.capture { try await ai.providerSettings() }
-            async let qualityResult = Self.capture { try await ai.qualityMetrics() }
-            let results = await (accountResult, categoryResult, claimResult, transactionResult, aiResult, providerResult, qualityResult)
+            let results = await (accountResult, categoryResult, claimResult, transactionResult, aiResult, providerResult)
             guard current == generation else { return }
             if Task.isCancelled { phase = .idle; return }
             apply(results.0, key: "accounts") { accounts = $0 }
@@ -640,8 +520,7 @@ public final class V15SettingsOverviewModel {
             apply(results.3, key: "transactions") { transactions = $0.items; transactionsIncomplete = $0.nextCursor != nil }
             apply(results.4, key: "ai_settings") { aiSettings = $0 }
             apply(results.5, key: "provider") { providerSettings = $0 }
-            apply(results.6, key: "quality") { qualityMetrics = $0 }
-            if accounts.isEmpty && categories.isEmpty && claims.isEmpty && transactions.isEmpty && aiSettings == nil && providerSettings == nil && qualityMetrics == nil {
+            if accounts.isEmpty && categories.isEmpty && claims.isEmpty && transactions.isEmpty && aiSettings == nil && providerSettings == nil {
                 phase = .failed(failures.values.first ?? .init(kind: .transport, message: "无法读取设置。"))
             } else { phase = .loaded }
             return
@@ -650,6 +529,36 @@ public final class V15SettingsOverviewModel {
     }
 
     public func restoreAccount(_ item: V15AccountResponse) async { await restore(id: item.id) { try await services.masterData.restoreAccount(id: item.id, expectedVersion: item.version) } }
+
+    public func updateAISources(ocrSourceEnabled: Bool, shortcutTextSourceEnabled: Bool) async {
+        guard offlineSnapshotAt == nil, phase != .loading, !isUpdatingAISources, let settings = aiSettings else { return }
+        isUpdatingAISources = true
+        aiSourceSaveMessage = nil
+        defer { isUpdatingAISources = false }
+        do {
+            let updated = try await services.ai.updateSettings(.init(
+                ocrSourceEnabled: ocrSourceEnabled,
+                shortcutTextSourceEnabled: shortcutTextSourceEnabled,
+                expectedVersion: settings.version))
+            aiSettings = updated
+            failures["ai_settings"] = nil
+            aiSourceSaveMessage = "来源设置已保存。"
+            services.notifyConfirmedWrite()
+        } catch let failure as V15Failure {
+            failures["ai_settings"] = failure
+            let requiresRefresh = !failure.isDefinitiveRejection || failure.kind == .conflict
+            if requiresRefresh { aiSettings = nil }
+            aiSourceSaveMessage = requiresRefresh
+                ? "保存结果暂时不明，请刷新设置后核对，不要直接重复提交。"
+                : failure.message
+        } catch {
+            let failure = V15Failure(kind: .transport, message: "来源设置未能保存，请重新读取后再试。")
+            failures["ai_settings"] = failure
+            aiSettings = nil
+            aiSourceSaveMessage = "保存结果暂时不明，请刷新设置后核对，不要直接重复提交。"
+        }
+    }
+
     public func restoreCategory(_ item: V15CategoryResponse) async { await restore(id: item.id) { try await services.masterData.restoreCategory(id: item.id, expectedVersion: item.version) } }
     public func unarchiveClaim(_ item: V15ReimbursementClaim) async { await restore(id: item.id) { try await services.reimbursements.unarchive(claimID: item.id, request: .init(expectedVersion: item.version)) } }
     public func restoreClaim(_ item: V15ReimbursementClaim) async { await restore(id: item.id) { try await services.reimbursements.restoreClaim(claimID: item.id, request: .init(expectedVersion: item.version)) } }
@@ -669,7 +578,7 @@ public final class V15SettingsOverviewModel {
     private func clearFacts() {
         accounts = []; categories = []; claims = []; transactions = []
         claimsIncomplete = false; transactionsIncomplete = false
-        aiSettings = nil; providerSettings = nil; qualityMetrics = nil
+        aiSettings = nil; providerSettings = nil
     }
     private func flatten(_ items: [V15CategoryResponse]) -> [V15CategoryResponse] { items + items.flatMap { flatten($0.children) } }
     private nonisolated static func capture<Value: Sendable>(_ operation: @Sendable () async throws -> Value) async -> Result<Value, V15Failure> {

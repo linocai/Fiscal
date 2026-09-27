@@ -1,0 +1,14 @@
+{
+  "status": "complete",
+  "deleted": [
+    "build/test-runs/v240-build50-fiscalkit/tests.xcresult",
+    "build/test-runs/v240-build50-merchant-final/tests.xcresult",
+    "build/test-runs/v240-build50-merchant-macos/tests.xcresult",
+    "build/test-runs/v240-build50-merchant-ios/tests.xcresult",
+    "build/v240/build50/mac-preview/2222EF6D-5203-4C74-942B-EDDA523F96C6.png",
+    "build/v240/build50/ios-preview/AA5F9D6F-428E-4783-962D-CD81FC05DABD.png"
+  ],
+  "planned_allocated_bytes": 137916416,
+  "retained_evidence_verified": true,
+  "completed_at": "2026-09-27T02:37:34.572518+00:00"
+}

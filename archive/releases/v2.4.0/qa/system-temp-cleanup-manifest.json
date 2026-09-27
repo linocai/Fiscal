@@ -1,0 +1,126 @@
+{
+  "schema": 1,
+  "reason": "Build49 isolated synthetic archive and CSV tests left scoped OS temporary files; no production data or remote operations",
+  "items": [
+    {
+      "directory": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-C7E0F835-A635-42B0-960D-BD4B8A8E4703",
+      "files": [
+        {
+          "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-C7E0F835-A635-42B0-960D-BD4B8A8E4703/fiscal-archive-v1.far",
+          "bytes": 27,
+          "sha256": "2684e5902e099d22d087726578a57cb999978d4015fb203f63d7062a3740966c"
+        }
+      ]
+    },
+    {
+      "directory": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-50E1CA70-322C-4636-93EE-E7755EDD1D89",
+      "files": [
+        {
+          "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-50E1CA70-322C-4636-93EE-E7755EDD1D89/fiscal-archive-v1.far",
+          "bytes": 27,
+          "sha256": "2684e5902e099d22d087726578a57cb999978d4015fb203f63d7062a3740966c"
+        }
+      ]
+    },
+    {
+      "directory": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-AB6C9C49-560A-45DC-80B9-705A83F69C6F",
+      "files": [
+        {
+          "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-AB6C9C49-560A-45DC-80B9-705A83F69C6F/fiscal-archive-v1.far",
+          "bytes": 27,
+          "sha256": "2684e5902e099d22d087726578a57cb999978d4015fb203f63d7062a3740966c"
+        }
+      ]
+    },
+    {
+      "directory": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-4999CA6A-5F47-445C-8269-9C700F8F8882",
+      "files": [
+        {
+          "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-4999CA6A-5F47-445C-8269-9C700F8F8882/fiscal-archive-v1.far",
+          "bytes": 27,
+          "sha256": "2684e5902e099d22d087726578a57cb999978d4015fb203f63d7062a3740966c"
+        }
+      ]
+    },
+    {
+      "directory": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-A958ABF0-7971-49BA-9B0F-FE728C336349",
+      "files": [
+        {
+          "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-A958ABF0-7971-49BA-9B0F-FE728C336349/fiscal-archive-v1.far",
+          "bytes": 27,
+          "sha256": "2684e5902e099d22d087726578a57cb999978d4015fb203f63d7062a3740966c"
+        }
+      ]
+    },
+    {
+      "directory": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-B3D367A4-4009-489A-993D-8AE8C63700DD",
+      "files": [
+        {
+          "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-B3D367A4-4009-489A-993D-8AE8C63700DD/fiscal-archive-v1.far",
+          "bytes": 27,
+          "sha256": "2684e5902e099d22d087726578a57cb999978d4015fb203f63d7062a3740966c"
+        }
+      ]
+    },
+    {
+      "directory": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-B94C2129-B548-4C13-96F6-B6855A5853FC",
+      "files": [
+        {
+          "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-B94C2129-B548-4C13-96F6-B6855A5853FC/fiscal-archive-v1.far",
+          "bytes": 27,
+          "sha256": "2684e5902e099d22d087726578a57cb999978d4015fb203f63d7062a3740966c"
+        }
+      ]
+    },
+    {
+      "directory": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Exports/08E2B694-D119-4248-8EB9-9EA0DA8C1573",
+      "files": [
+        {
+          "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Exports/08E2B694-D119-4248-8EB9-9EA0DA8C1573/fiscal-report-2026-08-r78.csv",
+          "bytes": 16,
+          "sha256": "754f3093c3dd04291d93795b6b30ce4eecd15bee326ce99582c4aeb3e2f6491e"
+        }
+      ]
+    },
+    {
+      "directory": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Exports/0E75BC7B-E3EA-4A7E-B86B-D411DF66D49C",
+      "files": [
+        {
+          "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Exports/0E75BC7B-E3EA-4A7E-B86B-D411DF66D49C/fiscal-report-2026-08-r78.csv",
+          "bytes": 16,
+          "sha256": "754f3093c3dd04291d93795b6b30ce4eecd15bee326ce99582c4aeb3e2f6491e"
+        }
+      ]
+    },
+    {
+      "directory": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Exports/5E523C70-A9EF-4DC2-931D-8F2BCF521F12",
+      "files": [
+        {
+          "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Exports/5E523C70-A9EF-4DC2-931D-8F2BCF521F12/fiscal-report-2026-08-r78.csv",
+          "bytes": 16,
+          "sha256": "754f3093c3dd04291d93795b6b30ce4eecd15bee326ce99582c4aeb3e2f6491e"
+        }
+      ]
+    },
+    {
+      "directory": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Exports/D1297F80-0F05-4D84-8493-9EEF188F5385",
+      "files": [
+        {
+          "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Exports/D1297F80-0F05-4D84-8493-9EEF188F5385/fiscal-report-2026-08-r78.csv",
+          "bytes": 16,
+          "sha256": "754f3093c3dd04291d93795b6b30ce4eecd15bee326ce99582c4aeb3e2f6491e"
+        }
+      ]
+    },
+    {
+      "directory": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-7EA0779E-DD7A-4C18-9408-2878E415B105",
+      "files": [
+        {
+          "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Archive-7EA0779E-DD7A-4C18-9408-2878E415B105/fiscal-archive-v1.far",
+          "bytes": 27,
+          "sha256": "2684e5902e099d22d087726578a57cb999978d4015fb203f63d7062a3740966c"
+        }
+      ]
+    }
+  ]
+}

@@ -7,11 +7,12 @@ public struct V15CreditMacView: View {
     @State private var showsPayoff = false
     @State private var recordKind: V15ManualTransactionKind?
     @State private var model: V15CreditModel
-    private let initialGalleryScenario: String?
+    private let preparesOwnModel: Bool
     private let initialCycle: V15CreditCycle?
     private let initialAccountID: UUID?
     @State private var initialContextFailure: V15Failure?
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, initialGalleryScenario: String? = nil, initialCycle: V15CreditCycle? = nil, initialAccountID: UUID? = nil) { self.services = services; _model = State(initialValue: .init(services: services, offlineSnapshotAt: offlineSnapshotAt, offlineSnapshotProvider: offlineSnapshotProvider)); _initialContextFailure = State(initialValue: nil); self.initialGalleryScenario = initialGalleryScenario; self.initialCycle = initialCycle; self.initialAccountID = initialAccountID }
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, initialCycle: V15CreditCycle? = nil, initialAccountID: UUID? = nil) { self.services = services; _model = State(initialValue: .init(services: services, offlineSnapshotAt: offlineSnapshotAt, offlineSnapshotProvider: offlineSnapshotProvider)); _initialContextFailure = State(initialValue: nil); preparesOwnModel = true; self.initialCycle = initialCycle; self.initialAccountID = initialAccountID }
+    public init(model: V15CreditModel, services: V15Services) { self.services = services; _model = State(initialValue: model); _initialContextFailure = State(initialValue: nil); preparesOwnModel = false; initialCycle = nil; initialAccountID = nil }
     public var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             accounts
@@ -49,6 +50,7 @@ public struct V15CreditMacView: View {
         .accessibilityIdentifier("v15.f3b1.credit.macos")
     }
     private func loadInitialState() async {
+        guard preparesOwnModel else { return }
         initialContextFailure = nil
         await model.load()
         // Keep a real list/master-data failure visible with its retry action.
@@ -68,12 +70,6 @@ public struct V15CreditMacView: View {
             }
             await model.selectAccount(account)
         }
-        guard let scenario = initialGalleryScenario else { return }
-        if scenario == "credit-page-error" { await model.loadNextCycles(); return }
-        guard ["credit-expired", "credit-disabled", "credit-conflict", "credit-field-error"].contains(scenario) else { return }
-        model.openScheduleSheet(); model.cycleMode = .statementDayCutoff; model.statementDayText = "25"; model.dueDayText = "10"
-        await model.requestSchedulePreview()
-        if scenario == "credit-conflict" { await model.commitSchedule() }
     }
     private var initialContextMayResolve: Bool {
         switch model.phase {
@@ -185,7 +181,7 @@ public struct V15CreditMacView: View {
     private func money(_ value: V15MinorUnits) -> String { V15MoneyPresentation(minorUnits: value, direction: .neutral).text }
 }
 
-private struct V15CreditScheduleMacSheet: View {
+struct V15CreditScheduleMacSheet: View {
     @Bindable var model: V15CreditModel
     var body: some View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
@@ -273,45 +269,6 @@ private struct V15CreditScheduleMacSheet: View {
                 .foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier(accessibilityIdentifier)
-        }
-    }
-}
-
-/// Offline Gallery evidence for states that would otherwise live in a modal
-/// sheet (which AppKit's headless snapshot host does not attach to a window).
-/// It mirrors the production sheet's copy and controls; interaction evidence
-/// remains in the iOS XCUITest and the macOS UI target.
-public struct V15CreditMacGalleryEvidence: View {
-    public let scenario: String
-    public init(scenario: String) { self.scenario = scenario }
-    public var body: some View {
-        HSplitView {
-            VStack(alignment: .leading, spacing: V15Spacing.md) {
-                Text("信用账户").font(V15Typography.surfaceTitle)
-                Text("日常信用账户").font(V15Typography.body)
-                Text("账单日 20 · 还款日 5").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                Spacer()
-            }.padding(V15Spacing.md).frame(minWidth: 220)
-            VStack(alignment: .leading, spacing: V15Spacing.md) {
-                Text(scenario == "credit-page-error" ? "账期" : "调整账期").font(V15Typography.surfaceTitle)
-                if scenario == "credit-page-error" {
-                    V15Section("账期读取失败") { Text("下一页账期读取失败。请保留当前账期后重试。").font(V15Typography.secondary); Button("重试读取下一页") {} }
-                } else {
-                    Text("步骤 1 设置 → 步骤 2 预览 → 步骤 3 提交").font(V15Typography.secondary)
-                    Text("账期方式：账单日截点 · 账单日 25 · 还款日 10").font(V15Typography.secondary)
-                    notice
-                }
-                Spacer()
-            }.padding(V15Spacing.lg).frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .background(V15Palette.paper.color)
-        .accessibilityIdentifier("v15.f3b1.credit.gallery-evidence")
-    }
-    @ViewBuilder private var notice: some View {
-        switch scenario {
-        case "credit-expired": V15Section("预览已过期") { Text("预览已过期，请重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.warning.color); Button("重新取预览") {} }
-        case "credit-disabled": V15Section("暂时无法提交") { Text("当前预览不允许确认账期变更。").font(V15Typography.secondary).foregroundStyle(V15Palette.warning.color); Button("确认账期变更") {}.disabled(true) }
-        default: V15Section("账期已变化") { Text("账期数据已变化。请刷新账户后重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.warning.color); Button("刷新账户后重新预览") {} }
         }
     }
 }

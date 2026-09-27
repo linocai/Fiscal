@@ -1,11 +1,10 @@
 import asyncio
-import unicodedata
 from os import environ
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event, text
+from sqlalchemy import text
 
 from fiscal_api.core.config import Settings
 from fiscal_api.db.session import create_engine
@@ -146,114 +145,6 @@ def _expense(
     return response.json()
 
 
-def test_p31_merchant_mapping_is_idempotent_and_keeps_ledger_evidence() -> None:
-    app, auth = _app()
-    with TestClient(app) as client:
-        account = _account(client, auth)
-        transaction = _expense(client, auth, str(account["id"]), title="Original shop evidence")
-        merchant = client.post(
-            "/api/v1/merchants",
-            headers=auth,
-            json={"name": "Merchant A", "aliases": ["Shop A", "A Pay"]},
-        )
-        assert merchant.status_code == 201, merchant.text
-        merchant_body = merchant.json()
-        mapping_key = str(uuid4())
-        mapping_payload = {"merchant_id": merchant_body["id"]}
-        confirmed = client.put(
-            f"/api/v1/transactions/{transaction['id']}/merchant-mapping",
-            headers={**auth, "Idempotency-Key": mapping_key},
-            json=mapping_payload,
-        )
-        assert confirmed.status_code == 200, confirmed.text
-        assert confirmed.json()["action"] == "confirmed"
-        assert confirmed.json()["mapping"]["merchant"]["aliases"] == ["A Pay", "Shop A"]
-        replay = client.put(
-            f"/api/v1/transactions/{transaction['id']}/merchant-mapping",
-            headers={**auth, "Idempotency-Key": mapping_key},
-            json=mapping_payload,
-        )
-        assert replay.status_code == 200
-        assert replay.json() == confirmed.json()
-        unchanged = client.get(f"/api/v1/transactions/{transaction['id']}", headers=auth)
-        assert unchanged.status_code == 200
-        assert unchanged.json()["title"] == "Original shop evidence"
-        assert unchanged.json()["amount_minor"] == 1_234
-        assert unchanged.json()["postings"] == transaction["postings"]
-        password = f"p31-{uuid4().hex}"
-        exported = client.post(
-            "/api/v1/archives/export",
-            headers=auth,
-            json={"password": password},
-        )
-        assert exported.status_code == 200, exported.text
-        _, payload = ArchiveService.open(exported.content, password=password)
-        entities = payload["entities"]
-        assert isinstance(entities, dict)
-        assert any(row["id"] == merchant_body["id"] for row in entities["merchants"])
-        assert any(
-            row["transaction_id"] == transaction["id"]
-            for row in entities["transaction_merchant_mappings"]
-        )
-
-        corrected_merchant = client.post(
-            "/api/v1/merchants", headers=auth, json={"name": "Merchant B", "aliases": []}
-        )
-        assert corrected_merchant.status_code == 201
-        corrected = client.put(
-            f"/api/v1/transactions/{transaction['id']}/merchant-mapping",
-            headers={**auth, "Idempotency-Key": str(uuid4())},
-            json={
-                "merchant_id": corrected_merchant.json()["id"],
-                "expected_mapping_version": confirmed.json()["mapping"]["mapping_version"],
-            },
-        )
-        assert corrected.status_code == 200, corrected.text
-        assert corrected.json()["action"] == "corrected"
-        released = client.request(
-            "DELETE",
-            f"/api/v1/transactions/{transaction['id']}/merchant-mapping",
-            headers={**auth, "Idempotency-Key": str(uuid4())},
-            json={"expected_mapping_version": corrected.json()["mapping"]["mapping_version"]},
-        )
-        assert released.status_code == 200, released.text
-        assert released.json()["mapping"] is None
-
-
-def test_p31_merchant_namespace_and_keyset_page_are_stable() -> None:
-    app, auth = _app()
-    with TestClient(app) as client:
-        first = client.post(
-            "/api/v1/merchants",
-            headers=auth,
-            json={"name": "\uff21 Store", "aliases": ["Shop A"]},
-        )
-        assert first.status_code == 201, first.text
-        # NFKC + casefold makes canonical names and aliases a single namespace.
-        collision = client.post(
-            "/api/v1/merchants", headers=auth, json={"name": "shop a", "aliases": []}
-        )
-        assert collision.status_code == 409
-        second = client.post(
-            "/api/v1/merchants", headers=auth, json={"name": "Z Store", "aliases": []}
-        )
-        assert second.status_code == 201
-        page = client.get("/api/v1/merchants", headers=auth, params={"limit": 1})
-        assert page.status_code == 200, page.text
-        assert len(page.json()["items"]) == 1
-        cursor = page.json()["next_cursor"]
-        assert cursor
-        following = client.get(
-            "/api/v1/merchants", headers=auth, params={"limit": 1, "cursor": cursor}
-        )
-        assert following.status_code == 200, following.text
-        assert following.json()["items"][0]["id"] != page.json()["items"][0]["id"]
-        tampered = client.get(
-            "/api/v1/merchants", headers=auth, params={"cursor": cursor, "query": "other"}
-        )
-        assert tampered.status_code == 422
-
-
 def test_p31_transaction_revisions_and_privacy_safe_provenance() -> None:
     app, auth = _app()
     with TestClient(app) as client:
@@ -349,48 +240,13 @@ def test_p31_preview_survives_unrelated_formal_mutation() -> None:
             },
         )
         assert preview.status_code == 200, preview.text
-        unrelated = client.post(
-            "/api/v1/merchants",
-            headers=auth,
-            json={"name": f"Independent {uuid4().hex}", "aliases": []},
-        )
-        assert unrelated.status_code == 201, unrelated.text
+        _account(client, auth)
         committed = client.post(
             f"/api/v1/categories/{source['id']}/merge-commit",
             headers={**auth, "Idempotency-Key": str(uuid4())},
             json={"preview_token": preview.json()["preview_token"], "child_mappings": []},
         )
         assert committed.status_code == 200, committed.text
-
-
-def test_p31_merchant_page_batches_aliases_without_n_plus_one() -> None:
-    app, auth = _app()
-    with TestClient(app) as client:
-        for index in range(4):
-            created = client.post(
-                "/api/v1/merchants",
-                headers=auth,
-                json={"name": f"Batch {index}", "aliases": [f"Alias {index}"]},
-            )
-            assert created.status_code == 201, created.text
-        statements: list[str] = []
-
-        def counted(*args: object) -> None:
-            statements.append(str(args[2]))
-
-        event.listen(app.state.db_engine.sync_engine, "before_cursor_execute", counted)
-        try:
-            small = client.get("/api/v1/merchants", headers=auth, params={"limit": 1})
-            small_count = len(statements)
-            statements.clear()
-            large = client.get("/api/v1/merchants", headers=auth, params={"limit": 4})
-            large_count = len(statements)
-        finally:
-            event.remove(app.state.db_engine.sync_engine, "before_cursor_execute", counted)
-        assert small.status_code == large.status_code == 200
-        assert small_count == large_count
-        assert large_count <= 3
-        assert len(large.json()["items"]) == 4
 
 
 def test_p31_category_preview_commit_is_atomic_and_replayable() -> None:
@@ -448,55 +304,6 @@ def test_p31_category_preview_commit_is_atomic_and_replayable() -> None:
         )
         assert replay.status_code == 200
         assert replay.json() == commit.json()
-
-        split_root = _category(client, auth, "Split root")
-        split_transaction = _expense(
-            client, auth, str(account["id"]), category_id=str(split_root["id"])
-        )
-        split_preview = client.post(
-            f"/api/v1/categories/{split_root['id']}/split-preview",
-            headers=auth,
-            json={
-                "root_expected_version": split_root["version"],
-                "children": [
-                    {
-                        "name": "One",
-                        "direction": "expense",
-                        "icon": "tag",
-                        "color_hex": "#123456",
-                        "aliases": [],
-                        "examples": [],
-                    },
-                    {
-                        "name": "Two",
-                        "direction": "expense",
-                        "icon": "tag",
-                        "color_hex": "#654321",
-                        "aliases": [],
-                        "examples": [],
-                    },
-                ],
-            },
-        )
-        assert split_preview.status_code == 200, split_preview.text
-        split_commit = client.post(
-            f"/api/v1/categories/{split_root['id']}/split-commit",
-            headers={**auth, "Idempotency-Key": str(uuid4())},
-            json={
-                "preview_token": split_preview.json()["preview_token"],
-                "assignments": [{"transaction_id": split_transaction["id"], "child_name": "One"}],
-            },
-        )
-        assert split_commit.status_code == 200, split_commit.text
-        one_id = next(
-            item["id"] for item in split_commit.json()["categories"] if item["name"] == "One"
-        )
-        assert (
-            client.get(f"/api/v1/transactions/{split_transaction['id']}", headers=auth).json()[
-                "category_id"
-            ]
-            == one_id
-        )
 
 
 @pytest.mark.parametrize(
@@ -592,161 +399,6 @@ def test_p31_merge_preview_stales_for_any_captured_child_set_change(mutation: st
         assert unchanged.status_code == 200
         assert unchanged.json()["category_id"] == source["id"]
         assert unchanged.json()["version"] == transaction["version"]
-
-
-@pytest.mark.parametrize("mutation", ["add", "delete", "archive"])
-def test_p31_split_preview_stales_for_any_captured_child_set_change(mutation: str) -> None:
-    app, auth = _app()
-    with TestClient(app) as client:
-        account = _account(client, auth)
-        root = _category(client, auth, f"Split root {mutation}")
-        existing_child = _category(
-            client, auth, f"Split child {mutation}", parent_id=str(root["id"])
-        )
-        transaction = _expense(client, auth, str(account["id"]), category_id=str(root["id"]))
-        preview = client.post(
-            f"/api/v1/categories/{root['id']}/split-preview",
-            headers=auth,
-            json={
-                "root_expected_version": root["version"],
-                "children": [
-                    {
-                        "name": "Split one",
-                        "direction": "expense",
-                        "icon": "tag",
-                        "color_hex": "#123456",
-                        "aliases": [],
-                        "examples": [],
-                    },
-                    {
-                        "name": "Split two",
-                        "direction": "expense",
-                        "icon": "tag",
-                        "color_hex": "#654321",
-                        "aliases": [],
-                        "examples": [],
-                    },
-                ],
-            },
-        )
-        assert preview.status_code == 200, preview.text
-        if mutation == "add":
-            _category(client, auth, "Split added child", parent_id=str(root["id"]))
-        elif mutation == "delete":
-            deleted = client.delete(
-                f"/api/v1/categories/{existing_child['id']}?expected_version={existing_child['version']}",
-                headers=auth,
-            )
-            assert deleted.status_code == 204, deleted.text
-        else:
-            archived = client.post(
-                f"/api/v1/categories/{existing_child['id']}/archive",
-                headers=auth,
-                json={"expected_version": existing_child["version"]},
-            )
-            assert archived.status_code == 200, archived.text
-        before_commit = _transform_write_counts()
-        rejected = client.post(
-            f"/api/v1/categories/{root['id']}/split-commit",
-            headers={**auth, "Idempotency-Key": str(uuid4())},
-            json={
-                "preview_token": preview.json()["preview_token"],
-                "assignments": [{"transaction_id": transaction["id"], "child_name": "Split one"}],
-            },
-        )
-        assert rejected.status_code == 409, rejected.text
-        assert rejected.json()["error"]["code"] == "category_preview_stale"
-        assert _transform_write_counts() == before_commit
-        unchanged = client.get(f"/api/v1/transactions/{transaction['id']}", headers=auth)
-        assert unchanged.status_code == 200
-        assert unchanged.json()["category_id"] == root["id"]
-        assert unchanged.json()["version"] == transaction["version"]
-
-
-def test_p31_merchant_identifier_normalization_has_stable_bounds_errors() -> None:
-    app, auth = _app()
-    boundary = "\ufdfa" * 13
-    too_long = "\ufdfa" * 14
-    with TestClient(app) as client:
-        created = client.post(
-            "/api/v1/merchants",
-            headers=auth,
-            json={"name": boundary, "aliases": ["\uff33\uff48\uff4f\uff50"]},
-        )
-        assert created.status_code == 201, created.text
-        normalized_boundary = unicodedata.normalize("NFKC", boundary).casefold()
-        assert _merchant_identifier_keys(created.json()["id"]) == ["shop", normalized_boundary]
-        assert len(normalized_boundary) == 234
-
-        long_name = client.post(
-            "/api/v1/merchants",
-            headers=auth,
-            json={"name": too_long, "aliases": []},
-        )
-        assert long_name.status_code == 422, long_name.text
-        assert long_name.json()["error"]["code"] == "merchant_identifier_too_long"
-        assert long_name.json()["error"]["details"] == {"field": "name", "max_length": 240}
-
-        long_alias = client.post(
-            "/api/v1/merchants",
-            headers=auth,
-            json={"name": "ordinary unicode Café", "aliases": [too_long]},
-        )
-        assert long_alias.status_code == 422, long_alias.text
-        assert long_alias.json()["error"]["code"] == "merchant_identifier_too_long"
-        assert long_alias.json()["error"]["details"] == {
-            "field": "aliases[0]",
-            "max_length": 240,
-        }
-
-        before_update = client.get(f"/api/v1/merchants/{created.json()['id']}", headers=auth)
-        rejected_update = client.patch(
-            f"/api/v1/merchants/{created.json()['id']}",
-            headers=auth,
-            json={"expected_version": before_update.json()["version"], "aliases": [too_long]},
-        )
-        assert rejected_update.status_code == 422, rejected_update.text
-        assert rejected_update.json()["error"]["code"] == "merchant_identifier_too_long"
-        assert client.get(f"/api/v1/merchants/{created.json()['id']}", headers=auth).json() == (
-            before_update.json()
-        )
-
-
-def test_mapping_release_recreate_never_accepts_old_version():
-    app, auth = _app()
-    with TestClient(app) as client:
-        account = _account(client, auth)
-        transaction = _expense(client, auth, str(account["id"]))
-        merchant = client.post(
-            "/api/v1/merchants", headers=auth, json={"name": "ABA merchant", "aliases": []}
-        ).json()
-        path = f"/api/v1/transactions/{transaction['id']}/merchant-mapping"
-        original_key = str(uuid4())
-        payload = {"merchant_id": merchant["id"]}
-        first = client.put(path, headers={**auth, "Idempotency-Key": original_key}, json=payload)
-        assert first.status_code == 200, first.text
-        version = first.json()["mapping"]["mapping_version"]
-        release = client.request(
-            "DELETE",
-            path,
-            headers={**auth, "Idempotency-Key": str(uuid4())},
-            json={"expected_mapping_version": version},
-        )
-        assert release.status_code == 200, release.text
-        recreated = client.put(
-            path, headers={**auth, "Idempotency-Key": str(uuid4())}, json=payload
-        )
-        assert recreated.status_code == 200, recreated.text
-        assert recreated.json()["mapping"]["mapping_version"] > version
-        stale = client.request(
-            "DELETE",
-            path,
-            headers={**auth, "Idempotency-Key": str(uuid4())},
-            json={"expected_mapping_version": version},
-        )
-        assert stale.status_code == 409, stale.text
-        replay = client.put(path, headers={**auth, "Idempotency-Key": original_key}, json=payload)
-        assert replay.json() == first.json()
 
 
 def test_creation_receipt_is_original_snapshot_and_no_store():

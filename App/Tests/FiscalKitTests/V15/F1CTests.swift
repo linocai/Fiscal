@@ -1,3 +1,4 @@
+@testable import FiscalPreviewSupportmacOS
 import Foundation
 import Testing
 @testable import FiscalKit
@@ -16,33 +17,17 @@ import Testing
         #expect(receipt.action == "merge" && receipt.reclassifiedTransactionCount == 4)
         #expect((await transport.lastRequest())?.headers["Idempotency-Key"] != nil)
     }
-    @Test("merchant query and mapping carry backend pagination/idempotency/version semantics") @MainActor func merchant() async throws {
-        let transport = V15F1CFixtureTransport(); let services = V15Services(transport: transport)
-        let page = try await services.merchants.list(query: "咖啡", cursor: "opaque", limit: 30); #expect(page.items.first?.name.contains("咖啡") == true)
-        let receipt = try await services.merchants.confirmMapping(transactionID: V15F1CFixtures.transactionID, request: .init(merchantID: V15F1CFixtures.merchantID, expectedMappingVersion: 2), idempotencyKey: UUID())
-        #expect(receipt.mapping?.mappingVersion == 2 && receipt.transactionVersion == 3)
-    }
     @Test("offline master data rejects mutation") @MainActor func offline() async {
         let model = V15MasterDataModel(services: V15F1CFixtures.services(), offlineSnapshotAt: .now)
         await model.load(); model.accountName = "新账户"; await model.saveAccount()
         #expect(model.receipt?.contains("离线") == true)
     }
-    @Test("split uses one preview token and an idempotent commit") @MainActor func split() async throws {
-        let transport = V15F1CFixtureTransport(); let services = V15Services(transport: transport)
-        let preview = try await services.categories.splitPreview(rootID: V15F1CFixtures.categoryID, request: .init(rootExpectedVersion: 2, children: [.init(name: "子分类一", direction: "expense", parentID: V15F1CFixtures.categoryID, icon: "tag", colorHex: "#008C8A"), .init(name: "子分类二", direction: "expense", parentID: V15F1CFixtures.categoryID, icon: "tag", colorHex: "#008C8A")]))
-        let receipt = try await services.categories.commitSplit(rootID: V15F1CFixtures.categoryID, request: .init(previewToken: preview.previewToken, assignments: [.init(transactionID: V15F1CFixtures.transactionID, childName: "子分类一")]), idempotencyKey: UUID())
-        #expect(receipt.action == "split")
-    }
-    @Test("merge and split response-unknown retries keep payload-bound key; input and dismiss invalidate preview") @MainActor func transformRetryLifecycle() async {
+    @Test("merge response-unknown retry keeps payload-bound key and dismiss invalidates preview") @MainActor func transformRetryLifecycle() async {
         let transport = V15F1CFixtureTransport(unknownTransform: true); let model = V15MasterDataModel(services: V15Services(transport: transport))
-        await model.load(); model.selectCategory(model.visibleCategories.first); await model.previewMerge(targetID: V15F1CFixtures.categoryTargetID); await model.commitMerge(); await model.commitMerge()
+        await model.load(); model.selectCategory(model.visibleCategories.first); await model.previewMerge(targetID: V15F1CFixtures.categoryTargetID); _ = await model.commitMerge(); _ = await model.commitMerge()
         let mergeKeys = await transport.idempotencyKeys(path: "categories/\(V15F1CFixtures.categoryID)/merge-commit")
         #expect(mergeKeys.count == 2 && mergeKeys[0] == mergeKeys[1] && model.transformPreview != nil)
         model.invalidatePreview(); #expect(model.transformPreview == nil)
-        await model.previewSplit(); await model.commitSplit(); await model.commitSplit()
-        let splitKeys = await transport.idempotencyKeys(path: "categories/\(V15F1CFixtures.categoryID)/split-commit")
-        #expect(splitKeys.count == 2 && splitKeys[0] == splitKeys[1] && model.splitPreview != nil)
-        model.splitChildNames[0] = "已变更"; model.invalidatePreview(); #expect(model.splitPreview == nil)
     }
     @Test("merge preview initializes every child mapping, commits untouched defaults, and blocks empty targets") @MainActor func mergeChildMappingDefaults() async {
         let transport = V15F1CFixtureTransport(mergePreviewData: V15F1CFixtures.multiChildPreview)
@@ -63,7 +48,7 @@ import Testing
         #expect(empty.transformFieldIssues.contains(where: { $0.code == "child_mapping_required" }))
         #expect((await emptyTransport.paths()).filter { $0.hasSuffix("/merge-commit") }.isEmpty)
     }
-    @Test("merge and split preview conflicts reload once, require fresh preview, and do not replay") @MainActor func transformPreviewConflictTakeover() async {
+    @Test("merge preview conflicts reload once, require fresh preview, and do not replay") @MainActor func transformPreviewConflictTakeover() async {
         let transport = F1CConflictTransport(previewConflict: true)
         let model = V15MasterDataModel(services: V15Services(transport: transport))
         await model.load(); model.selectCategory(model.visibleCategories.first)
@@ -74,19 +59,12 @@ import Testing
         #expect(!(await model.commitMerge()))
         #expect((await transport.mutationPaths()).filter { $0.hasSuffix("/merge-commit") }.isEmpty)
         await model.reloadAfterTransformConflict()
-        #expect(await transport.reloadCount() >= 6)
-        model.beginTransformFlow(); await model.previewSplit()
-        #expect(model.splitPreview == nil && model.transformRequiresRepreview)
-        #expect((await transport.mutationPaths()).filter { $0.hasSuffix("/split-preview") }.count == 1)
-        #expect(!(await model.commitSplit()))
-        #expect((await transport.mutationPaths()).filter { $0.hasSuffix("/split-commit") }.isEmpty)
+        #expect(await transport.reloadCount() >= 4)
     }
     @Test("preview transport, offline, and failed conflict reload retain a visible transform failure") @MainActor func transformPreviewFailuresAreExplicit() async {
         let transport = F1CConflictTransport(previewTransportFailure: true)
         let model = V15MasterDataModel(services: V15Services(transport: transport))
         await model.load(); model.selectCategory(model.visibleCategories.first); await model.previewMerge(targetID: V15F1CFixtures.categoryTargetID)
-        #expect(model.transformFailure?.kind == .transport && model.transformMessage?.contains("预览") == true)
-        model.beginTransformFlow(); await model.previewSplit()
         #expect(model.transformFailure?.kind == .transport && model.transformMessage?.contains("预览") == true)
 
         let offline = V15MasterDataModel(services: V15F1CFixtures.services(), offlineSnapshotAt: .now)
@@ -95,29 +73,16 @@ import Testing
 
         let failing = F1CConflictTransport(failReload: true, previewConflict: true)
         let blocked = V15MasterDataModel(services: V15Services(transport: failing))
-        await blocked.load(); blocked.selectCategory(blocked.visibleCategories.first); await blocked.previewSplit()
+        await blocked.load(); blocked.selectCategory(blocked.visibleCategories.first); await blocked.previewMerge(targetID: V15F1CFixtures.categoryTargetID)
         #expect(blocked.writesRequireExplicitReload && blocked.transformMessage?.contains("重新读取失败") == true)
         await blocked.retryTransformPreview()
-        #expect((await failing.mutationPaths()).filter { $0.hasSuffix("/split-preview") }.count == 1)
-        #expect(!(await blocked.commitSplit()))
+        #expect((await failing.mutationPaths()).filter { $0.hasSuffix("/merge-preview") }.count == 1)
+        #expect(!(await blocked.commitMerge()))
     }
     @Test("reorder conflict reloads authoritative order state") @MainActor func reorderConflictReloads() async {
         let transport = V15F1CFixtureTransport(conflict: true); let model = V15MasterDataModel(services: V15Services(transport: transport))
         await model.load(); await model.reorderAccounts(moving: V15F1CFixtures.accountID, after: nil)
         #expect((await transport.paths()).filter { $0 == "accounts/order-state" }.count >= 2)
-    }
-    @Test("mapping unknown reads facts; release retry preserves its idempotency key") @MainActor func mappingUnknownLifecycle() async {
-        let transport = V15F1CFixtureTransport(unknownMapping: true); let model = V15MasterDataModel(services: V15Services(transport: transport))
-        await model.load(); model.selectMerchant(model.merchants.first); model.mappingTransactionID = V15F1CFixtures.transactionID.uuidString; await model.loadMapping(); await model.confirmMapping()
-        #expect(model.receipt?.contains("已确认商户关联保存成功") == true && model.mapping?.mappingVersion == 2)
-        await model.releaseMapping(); await model.releaseMapping()
-        let keys = await transport.idempotencyKeys(path: "transactions/\(V15F1CFixtures.transactionID)/merchant-mapping")
-        #expect(keys.count == 3 && keys[1] == keys[2] && model.receipt?.contains("没有重复操作") == true)
-    }
-    @Test("merchant next-page failure preserves first page and exposes local retry state") @MainActor func merchantPageFailurePreservesRows() async {
-        let model = V15MasterDataModel(services: V15Services(transport: V15F1CFixtureTransport(merchantPageFailure: true)))
-        await model.load(); let first = model.merchants.map(\.id); await model.loadNextMerchants()
-        #expect(model.merchants.map(\.id) == first && model.merchantPageError != nil && !model.isLoadingMerchants)
     }
     @Test("master-data save is enabled only for a valid changed draft") @MainActor func saveDraftGate() async {
         let model = V15MasterDataModel(services: V15F1CFixtures.services())
@@ -150,17 +115,6 @@ import Testing
         model.categoryColor = "not-a-color"
         #expect(model.saveDisabledReason?.code == "category_color_invalid")
 
-        model.selectedSection = .merchants
-        model.selectedMerchantID = nil
-        model.merchantName = "   "
-        model.merchantAliases = ""
-        #expect(model.saveDisabledReason?.code == "merchant_name_required")
-        model.merchantName = "新商户"
-        #expect(model.saveDisabledReason == nil)
-        model.selectMerchant(model.merchants.first)
-        #expect(model.saveDisabledReason?.code == "no_changes")
-        model.merchantAliases += "、新别名"
-        #expect(model.saveDisabledReason == nil)
     }
     @Test("master-data field issues are routed only to their matching field") func fieldIssueRouting() {
         let issues: [V15FieldIssue] = [
@@ -205,7 +159,7 @@ import Testing
         #expect(model.fieldIssues.isEmpty)
         #expect(model.receipt?.contains("已保存") == true)
     }
-    @Test("offline snapshot copy is deterministic Chinese Shanghai time") func offlineSnapshotCopy() {
+    @Test("offline snapshot copy is deterministic Chinese Shanghai time") @MainActor func offlineSnapshotCopy() {
         #expect(V15OfflineReadOnlyBanner.snapshotLabel(for: Date(timeIntervalSince1970: 1_786_464_000)) == "2026年8月12日 00:00")
     }
     @Test("credit account request only uses backend cycle modes and carries positive-opening dates") func creditAccountWireContract() throws {
@@ -235,13 +189,6 @@ import Testing
         #expect((await transport.accountGetCount()) == 1)
         #expect(model.receipt?.contains("没有重复保存") == true)
     }
-    @Test("unknown merchant patch is confirmed only by matching GET facts") @MainActor func unknownMerchantPatchApplied() async {
-        let transport = F1CUnknownMerchantTransport(); let model = V15MasterDataModel(services: V15Services(transport: transport))
-        await model.load(); model.selectMerchant(model.merchants.first); await model.saveMerchant()
-        #expect(await transport.patchCount() == 1)
-        #expect(await transport.getCount() == 1)
-        #expect(model.receipt?.contains("已确认商户") == true)
-    }
     @Test("unknown category patch with failed readback remains unconfirmed and is not repeated") @MainActor func unknownCategoryReadbackFailed() async {
         let transport = F1CUnknownCategoryTransport(); let model = V15MasterDataModel(services: V15Services(transport: transport))
         await model.load(); model.selectCategory(model.visibleCategories.first); model.categoryName = "新版分类"; await model.saveCategory()
@@ -249,17 +196,10 @@ import Testing
         #expect(await transport.getCount() == 1)
         #expect(model.receipt?.contains("暂时无法确认本次更改") == true)
     }
-    @Test("unknown merchant creation refreshes but never guesses an ID or repeats POST") @MainActor func unknownMerchantCreateRefreshesWithoutRetry() async {
-        let transport = F1CUnknownMerchantCreateTransport(); let model = V15MasterDataModel(services: V15Services(transport: transport))
-        await model.load(); model.selectedMerchantID = nil; model.merchantName = "新商户"; await model.saveMerchant()
-        #expect(await transport.createCount() == 1)
-        #expect(await transport.listCount() >= 2)
-        #expect(model.receipt?.contains("新建结果暂时不明") == true)
-    }
     @Test("offline guards every owned write entry before transport") @MainActor func offlineGuards() async {
         let transport = F1COfflineTransport(); let model = V15MasterDataModel(services: V15Services(transport: transport), offlineSnapshotAt: .now)
-        await model.load(); model.selectAccount(model.visibleAccounts.first); model.selectCategory(model.visibleCategories.first); model.selectMerchant(model.merchants.first); model.mappingTransactionID = V15F1CFixtures.transactionID.uuidString; await transport.resetWrites()
-        await model.saveAccount(); await model.archiveOrRestoreAccount(); await model.saveCategory(); await model.archiveOrRestoreCategory(); await model.saveMerchant(); await model.reorderAccounts(moving: V15F1CFixtures.accountID, after: nil); await model.reorderCategories(moving: V15F1CFixtures.categoryID, after: nil); await model.commitMerge(); await model.commitSplit(); await model.confirmMapping(); await model.releaseMapping()
+        await model.load(); model.selectAccount(model.visibleAccounts.first); model.selectCategory(model.visibleCategories.first); await transport.resetWrites()
+        await model.saveAccount(); await model.archiveOrRestoreAccount(); await model.saveCategory(); await model.archiveOrRestoreCategory(); await model.reorderAccounts(moving: V15F1CFixtures.accountID, after: nil); await model.reorderCategories(moving: V15F1CFixtures.categoryID, after: nil); _ = await model.commitMerge()
         #expect(await transport.writeCount() == 0)
     }
     @Test("account and category conflicts retain field comparisons until explicit reload and never replay") @MainActor func mutationConflictTakeover() async {
@@ -283,21 +223,18 @@ import Testing
         await blocked.saveAccount()
         #expect((await failing.mutationPaths()).count == 1)
     }
-    @Test("merge and split conflicts invalidate tokens, reload, and require a fresh preview") @MainActor func transformConflictTakeover() async {
+    @Test("merge conflicts invalidate tokens, reload, and require a fresh preview") @MainActor func transformConflictTakeover() async {
         let transport = F1CConflictTransport(); let model = V15MasterDataModel(services: V15Services(transport: transport))
         await model.load(); model.selectCategory(model.visibleCategories.first)
-        await model.previewMerge(targetID: V15F1CFixtures.categoryTargetID); await model.commitMerge(); await model.commitMerge()
+        await model.previewMerge(targetID: V15F1CFixtures.categoryTargetID); _ = await model.commitMerge(); _ = await model.commitMerge()
         #expect(model.transformPreview == nil && model.transformRequiresRepreview)
         #expect((await transport.mutationPaths()).filter { $0.hasSuffix("merge-commit") }.count == 1)
         #expect(model.transformMessage?.contains("重新读取") == true)
         await model.previewMerge(targetID: V15F1CFixtures.categoryTargetID); #expect(model.transformPreview != nil && !model.transformRequiresRepreview)
-        model.beginTransformFlow(); await model.previewSplit(); await model.commitSplit(); await model.commitSplit()
-        #expect(model.splitPreview == nil && model.transformRequiresRepreview)
-        #expect((await transport.mutationPaths()).filter { $0.hasSuffix("split-commit") }.count == 1)
     }
     @Test("transform state never reuses ordinary receipt, conflict, or field issues") @MainActor func transformStateIsIndependent() async {
         let model = V15MasterDataModel(services: V15F1CFixtures.services())
-        await model.load(); model.selectMerchant(model.merchants.first); await model.saveMerchant()
+        await model.load(); model.selectAccount(model.visibleAccounts.first); model.accountName += " 更新"; await model.saveAccount()
         #expect(model.receipt != nil)
         model.selectCategory(model.visibleCategories.first); model.categoryName = ""; await model.saveCategory()
         #expect(!model.fieldIssues.isEmpty)
@@ -310,7 +247,7 @@ import Testing
         #expect(V15MasterDataModel.reorderHint(canMove: false, down: false).contains("首位"))
         #expect(V15MasterDataModel.reorderHint(canMove: false, down: true).contains("末位"))
     }
-    @Test("unknown account, category, and merchant creates remain locked after editing until identity is confirmed") @MainActor func unknownCreateLocksEachEntity() async {
+    @Test("unknown account and category creates remain locked after editing until identity is confirmed") @MainActor func unknownCreateLocksEachEntity() async {
         let accountTransport = F1CUnknownCreateTransport(entity: .account); let account = V15MasterDataModel(services: V15Services(transport: accountTransport))
         await account.load(); account.selectedSection = .accounts; account.accountName = "新账户"; await account.saveAccount(); await account.saveAccount()
         #expect(await accountTransport.createCount() == 1 && account.saveDisabledReason?.code == "create_response_unknown")
@@ -321,10 +258,6 @@ import Testing
         #expect(await categoryTransport.createCount() == 1 && category.saveDisabledReason?.code == "create_response_unknown")
         category.categoryColor = "#113355"; await category.saveCategory(); #expect(await categoryTransport.createCount() == 1)
 
-        let merchantTransport = F1CUnknownCreateTransport(entity: .merchant); let merchant = V15MasterDataModel(services: V15Services(transport: merchantTransport))
-        await merchant.load(); merchant.selectedSection = .merchants; merchant.merchantName = "新商户"; merchant.merchantAliases = "甲、乙"; await merchant.saveMerchant(); await merchant.saveMerchant()
-        #expect(await merchantTransport.createCount() == 1 && merchant.saveDisabledReason?.code == "create_response_unknown")
-        merchant.merchantAliases = "甲、乙、丙"; await merchant.saveMerchant(); #expect(await merchantTransport.createCount() == 1)
     }
     @Test("unknown create remains locked after a list reload without identity proof") @MainActor func unknownCreateExplicitReload() async {
         let transport = F1CUnknownCreateTransport(entity: .account); let model = V15MasterDataModel(services: V15Services(transport: transport))
@@ -354,7 +287,7 @@ import Testing
 
 actor F1COfflineTransport: V15Transporting {
     private var writes = 0
-    func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response { if request.method != "GET" { writes += 1; throw V15Failure(kind: .transport, message: "unexpected write") }; let data: Data; switch request.path { case "accounts/order-state": data = V15F1CFixtures.accountState; case "categories": data = V15F1CFixtures.categories; case "merchants": data = V15F1CFixtures.merchantPage; default: data = V15F1CFixtures.mapping }; return try V15FixtureCodec.decoder.decode(Response.self, from: data) }
+    func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response { if request.method != "GET" { writes += 1; throw V15Failure(kind: .transport, message: "unexpected write") }; let data: Data; switch request.path { case "accounts/order-state": data = V15F1CFixtures.accountState; case "accounts": data = Data("[\(V15F1CFixtures.account),\(V15F1CFixtures.accountTwo)]".utf8); case "categories": data = V15F1CFixtures.categories; default: throw V15Failure(kind: .transport, message: "unexpected read: \(request.path)") }; return try V15FixtureCodec.decoder.decode(Response.self, from: data) }
     func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data { Data() }; func resetWrites() { writes = 0 }; func writeCount() -> Int { writes }
 }
 
@@ -366,7 +299,6 @@ actor F1CUnknownAccountTransport: V15Transporting {
         case ("accounts/order-state", "GET"): data = V15F1CFixtures.accountState
         case ("accounts", "GET"): data = Data("[\(V15F1CFixtures.account),\(V15F1CFixtures.accountTwo)]".utf8)
         case ("categories", "GET"): data = V15F1CFixtures.categories
-        case ("merchants", "GET"): data = V15F1CFixtures.merchantPage
         case ("accounts/\(V15F1CFixtures.accountID)", "PATCH"): patches += 1; throw V15Failure(kind: .responseUnknown, message: "lost")
         case ("accounts/\(V15F1CFixtures.accountID)", "GET"): gets += 1; data = Data(V15F1CFixtures.account.utf8)
         default: throw V15Failure(kind: .transport, code: "unexpected", message: request.path)
@@ -377,25 +309,6 @@ actor F1CUnknownAccountTransport: V15Transporting {
     func patchCount() -> Int { patches }; func accountGetCount() -> Int { gets }
 }
 
-actor F1CUnknownMerchantTransport: V15Transporting {
-    private var patches = 0; private var gets = 0
-    func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
-        let data: Data
-        switch (request.path, request.method) {
-        case ("accounts/order-state", "GET"): data = V15F1CFixtures.accountState
-        case ("accounts", "GET"): data = Data("[\(V15F1CFixtures.account),\(V15F1CFixtures.accountTwo)]".utf8)
-        case ("categories", "GET"): data = V15F1CFixtures.categories
-        case ("merchants", "GET"): data = V15F1CFixtures.merchantPage
-        case ("merchants/\(V15F1CFixtures.merchantID)", "PATCH"): patches += 1; throw V15Failure(kind: .responseUnknown, message: "lost")
-        case ("merchants/\(V15F1CFixtures.merchantID)", "GET"): gets += 1; data = Data(V15F1CFixtures.merchant.replacingOccurrences(of: "\"version\":2", with: "\"version\":3").utf8)
-        default: throw V15Failure(kind: .transport, code: "unexpected", message: request.path)
-        }
-        return try V15FixtureCodec.decoder.decode(Response.self, from: data)
-    }
-    func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data { Data() }
-    func patchCount() -> Int { patches }; func getCount() -> Int { gets }
-}
-
 actor F1CUnknownCategoryTransport: V15Transporting {
     private var patches = 0; private var gets = 0
     func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
@@ -404,7 +317,6 @@ actor F1CUnknownCategoryTransport: V15Transporting {
         case ("accounts/order-state", "GET"): data = V15F1CFixtures.accountState
         case ("accounts", "GET"): data = Data("[\(V15F1CFixtures.account),\(V15F1CFixtures.accountTwo)]".utf8)
         case ("categories", "GET"): data = V15F1CFixtures.categories
-        case ("merchants", "GET"): data = V15F1CFixtures.merchantPage
         case ("categories/\(V15F1CFixtures.categoryID)", "PATCH"): patches += 1; throw V15Failure(kind: .responseUnknown, message: "lost")
         case ("categories/\(V15F1CFixtures.categoryID)", "GET"): gets += 1; throw V15Failure(kind: .transport, message: "readback unavailable")
         default: throw V15Failure(kind: .transport, code: "unexpected", message: request.path)
@@ -415,38 +327,19 @@ actor F1CUnknownCategoryTransport: V15Transporting {
     func patchCount() -> Int { patches }; func getCount() -> Int { gets }
 }
 
-actor F1CUnknownMerchantCreateTransport: V15Transporting {
-    private var creates = 0; private var lists = 0
-    func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
-        let data: Data
-        switch (request.path, request.method) {
-        case ("accounts/order-state", "GET"): data = V15F1CFixtures.accountState
-        case ("accounts", "GET"): data = Data("[\(V15F1CFixtures.account),\(V15F1CFixtures.accountTwo)]".utf8)
-        case ("categories", "GET"): data = V15F1CFixtures.categories
-        case ("merchants", "GET"): lists += 1; data = V15F1CFixtures.merchantPage
-        case ("merchants", "POST"): creates += 1; throw V15Failure(kind: .responseUnknown, message: "lost")
-        default: throw V15Failure(kind: .transport, code: "unexpected", message: request.path)
-        }
-        return try V15FixtureCodec.decoder.decode(Response.self, from: data)
-    }
-    func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data { Data() }
-    func createCount() -> Int { creates }; func listCount() -> Int { lists }
-}
-
 actor F1CUnknownCreateTransport: V15Transporting {
-    enum Entity { case account, category, merchant }
+    enum Entity { case account, category }
     private let entity: Entity; private let failReloadAfterCreate: Bool
     private var creates = 0; private var created = false
     init(entity: Entity, failReloadAfterCreate: Bool = false) { self.entity = entity; self.failReloadAfterCreate = failReloadAfterCreate }
     func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
-        if created && failReloadAfterCreate && request.method == "GET" && ["accounts", "categories", "merchants"].contains(request.path) { throw V15Failure(kind: .transport, message: "reload unavailable") }
-        if request.method == "POST" && ((entity == .account && request.path == "accounts") || (entity == .category && request.path == "categories") || (entity == .merchant && request.path == "merchants")) { creates += 1; created = true; throw V15Failure(kind: .responseUnknown, message: "lost") }
+        if created && failReloadAfterCreate && request.method == "GET" && ["accounts", "categories"].contains(request.path) { throw V15Failure(kind: .transport, message: "reload unavailable") }
+        if request.method == "POST" && ((entity == .account && request.path == "accounts") || (entity == .category && request.path == "categories")) { creates += 1; created = true; throw V15Failure(kind: .responseUnknown, message: "lost") }
         let data: Data
         switch request.path {
         case "accounts/order-state": data = V15F1CFixtures.accountState
         case "accounts": data = Data("[\(V15F1CFixtures.account),\(V15F1CFixtures.accountTwo)]".utf8)
         case "categories": data = V15F1CFixtures.categories
-        case "merchants": data = V15F1CFixtures.merchantPage
         default: throw V15Failure(kind: .transport, code: "unexpected", message: request.path)
         }
         return try V15FixtureCodec.decoder.decode(Response.self, from: data)
@@ -463,7 +356,6 @@ actor F1CAccountCreateBodyTransport: V15Transporting {
         case ("accounts/order-state", "GET"): data = V15F1CFixtures.accountState
         case ("accounts", "GET"): data = Data("[\(V15F1CFixtures.account),\(V15F1CFixtures.accountTwo)]".utf8)
         case ("categories", "GET"): data = V15F1CFixtures.categories
-        case ("merchants", "GET"): data = V15F1CFixtures.merchantPage
         case ("accounts", "POST"):
             if let body { bodies.append(body) }
             data = Data(V15F1CFixtures.account.utf8)
@@ -486,7 +378,7 @@ actor F1CConflictTransport: V15Transporting {
     private var reloads = 0
     init(failReload: Bool = false, previewConflict: Bool = false, previewTransportFailure: Bool = false) { self.failReload = failReload; self.previewConflict = previewConflict; self.previewTransportFailure = previewTransportFailure }
     func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
-        if didMutate && failReload && request.method == "GET" && ["accounts", "categories", "merchants"].contains(request.path) {
+        if didMutate && failReload && request.method == "GET" && ["accounts", "categories"].contains(request.path) {
             throw V15Failure(kind: .transport, message: "reload unavailable")
         }
         let data: Data
@@ -500,7 +392,6 @@ actor F1CConflictTransport: V15Transporting {
             reloads += 1
             let category = categoryArchived ? V15F1CFixtures.archivedCategory : V15F1CFixtures.category
             data = Data("[\(category),\(V15F1CFixtures.targetCategory)]".utf8)
-        case ("merchants", "GET"): reloads += 1; data = V15F1CFixtures.merchantPage
         case ("accounts/\(V15F1CFixtures.accountID)", "PATCH"), ("accounts/\(V15F1CFixtures.accountID)/archive", "POST"), ("accounts/\(V15F1CFixtures.accountID)/restore", "POST"):
             writes.append(request.path); didMutate = true
             if request.path.hasSuffix("/archive") { accountArchived = true }
@@ -516,12 +407,7 @@ actor F1CConflictTransport: V15Transporting {
             if previewConflict { didMutate = true; throw conflict }
             if previewTransportFailure { throw V15Failure(kind: .transport, message: "合并预览网络失败") }
             data = V15F1CFixtures.preview
-        case ("categories/\(V15F1CFixtures.categoryID)/split-preview", "POST"):
-            writes.append(request.path)
-            if previewConflict { didMutate = true; throw conflict }
-            if previewTransportFailure { throw V15Failure(kind: .transport, message: "拆分预览网络失败") }
-            data = V15F1CFixtures.splitPreview
-        case ("categories/\(V15F1CFixtures.categoryID)/merge-commit", "POST"), ("categories/\(V15F1CFixtures.categoryID)/split-commit", "POST"):
+        case ("categories/\(V15F1CFixtures.categoryID)/merge-commit", "POST"):
             writes.append(request.path); didMutate = true; throw conflict
         default: throw V15Failure(kind: .transport, code: "unexpected", message: request.path)
         }

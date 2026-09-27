@@ -13,7 +13,6 @@ from fiscal_api.api.p3_schemas import TransactionDraft
 from fiscal_api.api.p6_schemas import (
     ReimbursementAllocationDraft,
     ReimbursementClaimDraft,
-    ReimbursementPartyDraft,
     ReimbursementReceiptDraft,
 )
 from fiscal_api.api.p13_schemas import (
@@ -58,7 +57,7 @@ async def session() -> AsyncIterator[AsyncSession]:
                 "TRUNCATE cash_flow_system_overrides, reimbursement_operations, "
                 "reimbursement_receipt_revisions, reimbursement_claim_revisions, "
                 "reimbursement_receipt_allocations, reimbursement_receipts, "
-                "reimbursement_allocations, reimbursement_parties, reimbursement_claims, "
+                "reimbursement_allocations, reimbursement_claims, "
                 "cash_flow_item_revisions, "
                 "cash_flow_items, cash_flow_series, "
                 "transaction_revisions, postings, transactions, credit_cycles, categories, "
@@ -218,29 +217,22 @@ async def test_reimbursement_override_never_freezes_current_fact_amount(
     claim = await reimbursements.create(
         ReimbursementClaimDraft(
             title="差旅报销",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="示例公司",
-                    expected_date=date(2026, 8, 20),
-                    allocations=[
-                        ReimbursementAllocationDraft(transaction_id=expense.id, amount_minor=30_000)
-                    ],
-                )
-            ],
+            counterparty_name="示例公司",
+            expected_date=date(2026, 8, 20),
+            expenses=[ReimbursementAllocationDraft(transaction_id=expense.id, amount_minor=30000)],
         ),
         uuid4(),
     )
     claim = await reimbursements.lifecycle(claim.id, claim.version, "submit")
-    party = claim.parties[0]
     cash_flow = CashFlowService(session)
     original = next(
-        item for item in (await cash_flow.active()).items if item.system_reference_id == party.id
+        item for item in (await cash_flow.active()).items if item.system_reference_id == claim.id
     )
     assert original.planned_amount_minor == 30_000
 
     overridden = await cash_flow.update_system(
         CashFlowSystemKind.REIMBURSEMENT,
-        party.id,
+        claim.id,
         CashFlowSystemReplace(
             title="更清晰的报销标题",
             planned_amount_minor=1,
@@ -251,7 +243,7 @@ async def test_reimbursement_override_never_freezes_current_fact_amount(
     )
     assert overridden.planned_amount_minor == 30_000
     stored = await session.scalar(
-        select(CashFlowSystemOverride).where(CashFlowSystemOverride.system_reference_id == party.id)
+        select(CashFlowSystemOverride).where(CashFlowSystemOverride.system_reference_id == claim.id)
     )
     assert stored is not None and stored.planned_amount_minor is None
 
@@ -259,8 +251,7 @@ async def test_reimbursement_override_never_freezes_current_fact_amount(
         claim.id,
         ReimbursementReceiptDraft(
             expected_claim_version=claim.version,
-            party_id=party.id,
-            amount_minor=10_000,
+            amount_minor=10000,
             received_at=datetime.now(UTC) - timedelta(seconds=1),
             destination_account_id=account.id,
             title="部分到账",
@@ -268,7 +259,7 @@ async def test_reimbursement_override_never_freezes_current_fact_amount(
         uuid4(),
     )
     refreshed = next(
-        item for item in (await cash_flow.active()).items if item.system_reference_id == party.id
+        item for item in (await cash_flow.active()).items if item.system_reference_id == claim.id
     )
     assert refreshed.title == "更清晰的报销标题"
     assert refreshed.expected_date == date(2026, 8, 23)
@@ -279,14 +270,14 @@ async def test_reimbursement_override_never_freezes_current_fact_amount(
     stored.planned_amount_minor = 9_999
     await session.commit()
     legacy_read = next(
-        item for item in (await cash_flow.active()).items if item.system_reference_id == party.id
+        item for item in (await cash_flow.active()).items if item.system_reference_id == claim.id
     )
     assert legacy_read.planned_amount_minor == 20_000
 
     with pytest.raises(APIError) as error:
         await cash_flow.update_system(
             CashFlowSystemKind.REIMBURSEMENT,
-            party.id,
+            claim.id,
             CashFlowSystemReplace(
                 title="更清晰的报销标题",
                 planned_amount_minor=8_888,
@@ -300,7 +291,7 @@ async def test_reimbursement_override_never_freezes_current_fact_amount(
     stored.status = "completed"
     await session.commit()
     still_active = next(
-        item for item in (await cash_flow.active()).items if item.system_reference_id == party.id
+        item for item in (await cash_flow.active()).items if item.system_reference_id == claim.id
     )
     assert still_active.planned_amount_minor == 20_000
     assert still_active.remaining_amount_minor == 20_000

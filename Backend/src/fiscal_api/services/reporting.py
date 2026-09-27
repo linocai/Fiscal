@@ -16,7 +16,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fiscal_api.api.p3_schemas import TransactionResponse
-from fiscal_api.api.p6_schemas import ReimbursementClaimResponse, ReimbursementReceiptResponse
+from fiscal_api.api.p6_schemas import (
+    ReimbursementClaimResponse,
+    ReimbursementReceiptResponse,
+    adapt_legacy_reimbursement_snapshot,
+)
 from fiscal_api.api.p7_schemas import (
     CashAccountFact,
     CashFacts,
@@ -72,9 +76,7 @@ from fiscal_api.api.p34_schemas import (
     MIN_REPORT_YEAR,
     SUPPORTED_REPORT_YEAR_RANGE,
     PeriodReport,
-    PeriodReportDrillDownItem,
     PeriodReportDrillDownItemV2,
-    PeriodReportDrillDownPage,
     PeriodReportDrillDownPageV2,
     PeriodReportV2,
     ReportAccountBalance,
@@ -514,16 +516,15 @@ class ReportingService:
         )
         reimbursement_events = [
             KnownFutureEvent(
-                source_type=KnownFutureSourceType.REIMBURSEMENT_PARTY,
-                source_id=row.party_id,
+                source_type=KnownFutureSourceType.REIMBURSEMENT_CLAIM,
+                source_id=row.claim_id,
                 date=row.expected_date,
                 direction=KnownFutureDirection.INFLOW,
                 amount_minor=row.outstanding_minor,
                 certainty=KnownFutureCertainty.EXPECTED,
-                title=f"{row.party_name} 预计报销",
-                deep_link=f"fiscal://reimbursements/{row.claim_id}/parties/{row.party_id}",
+                title=f"{row.counterparty_name} 预计报销",
+                deep_link=f"fiscal://reimbursements/{row.claim_id}",
                 claim_id=row.claim_id,
-                party_id=row.party_id,
             )
             for row in reimbursement_rows
         ]
@@ -638,8 +639,8 @@ class ReportingService:
         items: list[FactsDrillDownItem] = [
             ReimbursementOutstandingFact(
                 claim_id=claim_id,
-                party_id=party_id,
-                party_name=party_name,
+                expense_transaction_id=expense_transaction_id,
+                counterparty_name=counterparty_name,
                 expected_date=expected_date,
                 expected_minor=expected_minor,
                 received_minor=received_minor,
@@ -649,9 +650,9 @@ class ReportingService:
             )
             for (
                 _allocation_id,
+                expense_transaction_id,
                 claim_id,
-                party_id,
-                party_name,
+                counterparty_name,
                 expected_date,
                 expected_minor,
                 received_minor,
@@ -708,7 +709,7 @@ class ReportingService:
             and f.cancelled_at is None
             and f.submitted_at is not None
             and f.expected_date is None
-            and f.party_id not in overrides
+            and f.claim_id not in overrides
         )
         manual_overdue: list[int] = []
         for item in await CashFlowRepository(self.session).active():
@@ -777,7 +778,7 @@ class ReportingService:
             for o in await CashFlowRepository(self.session).system_overrides()
             if o.system_kind == "reimbursement"
         }
-        party_values: dict[UUID, tuple[ReimbursementFact, int]] = {}
+        claim_values: dict[UUID, tuple[ReimbursementFact, int]] = {}
         for fact in await self.repository.reimbursement_facts():
             if (
                 fact.claim_voided_at is not None
@@ -791,8 +792,8 @@ class ReportingService:
             )
             if outstanding <= 0:
                 continue
-            current = party_values.get(fact.party_id)
-            party_values[fact.party_id] = (
+            current = claim_values.get(fact.claim_id)
+            claim_values[fact.claim_id] = (
                 fact,
                 outstanding
                 if current is None
@@ -801,26 +802,25 @@ class ReportingService:
                     label="reimbursement party future outstanding",
                 ),
             )
-        for fact, outstanding in party_values.values():
+        for fact, outstanding in claim_values.values():
             expected_date = (
-                overrides[fact.party_id].expected_date
-                if fact.party_id in overrides
+                overrides[fact.claim_id].expected_date
+                if fact.claim_id in overrides
                 else fact.expected_date
             )
             if expected_date is None or not window_start <= expected_date <= window_end:
                 continue
             events.append(
                 KnownFutureEvent(
-                    source_type=KnownFutureSourceType.REIMBURSEMENT_PARTY,
-                    source_id=fact.party_id,
+                    source_type=KnownFutureSourceType.REIMBURSEMENT_CLAIM,
+                    source_id=fact.claim_id,
                     date=expected_date,
                     direction=KnownFutureDirection.INFLOW,
                     amount_minor=outstanding,
                     certainty=KnownFutureCertainty.EXPECTED,
-                    title=f"{fact.party_name} 预计报销",
-                    deep_link=(f"fiscal://reimbursements/{fact.claim_id}/parties/{fact.party_id}"),
+                    title=f"{fact.counterparty_name} 预计报销",
+                    deep_link=f"fiscal://reimbursements/{fact.claim_id}",
                     claim_id=fact.claim_id,
-                    party_id=fact.party_id,
                 )
             )
 
@@ -983,7 +983,7 @@ class ReportingService:
             if source_type is KnownFutureSourceType.CREDIT_CYCLE and key_parts[1] != "outflow":
                 raise ValueError
             if (
-                source_type is KnownFutureSourceType.REIMBURSEMENT_PARTY
+                source_type is KnownFutureSourceType.REIMBURSEMENT_CLAIM
                 and key_parts[1] != "inflow"
             ):
                 raise ValueError
@@ -1013,36 +1013,14 @@ class ReportingService:
         self,
     ) -> tuple[CompletenessFacts, list[CompletenessIssueFact]]:
         (
-            unresolved_import_count,
-            failed_import_count,
             uncategorized_transaction_count,
             uncategorized_amount_minor,
         ) = await self.repository.facts_completeness_counts()
         facts = CompletenessFacts(
-            unresolved_import_count=unresolved_import_count,
-            failed_import_count=failed_import_count,
             uncategorized_transaction_count=uncategorized_transaction_count,
             uncategorized_transaction_amount_minor=uncategorized_amount_minor,
         )
         items: list[CompletenessIssueFact] = []
-        if facts.unresolved_import_count:
-            items.append(
-                CompletenessIssueFact(
-                    issue_type=CompletenessIssueType.UNRESOLVED_IMPORTS,
-                    count=facts.unresolved_import_count,
-                    read_path="/api/v1/reports/facts/drill-down?scope=completeness_issues",
-                    deep_link="fiscal://reports/facts/completeness/imports",
-                )
-            )
-        if facts.failed_import_count:
-            items.append(
-                CompletenessIssueFact(
-                    issue_type=CompletenessIssueType.FAILED_IMPORTS,
-                    count=facts.failed_import_count,
-                    read_path="/api/v1/reports/facts/drill-down?scope=completeness_issues",
-                    deep_link="fiscal://reports/facts/completeness/imports",
-                )
-            )
         if facts.uncategorized_transaction_count:
             items.append(
                 CompletenessIssueFact(
@@ -1366,30 +1344,6 @@ class ReportingService:
         )
         return ReportDrillDownPage(items=items, next_cursor=next_cursor)
 
-    async def monthly_report(
-        self, *, period: str, expected_data_revision: int | None = None
-    ) -> PeriodReport:
-        start, end = self._month_range(period)
-        return await self._period_report(
-            ReportPeriodKind.MONTH,
-            period,
-            start,
-            end,
-            expected_data_revision=expected_data_revision,
-        )
-
-    async def yearly_report(
-        self, *, period: str, expected_data_revision: int | None = None
-    ) -> PeriodReport:
-        start, end = self._period_bounds(ReportPeriodKind.YEAR, period)
-        return await self._period_report(
-            ReportPeriodKind.YEAR,
-            period,
-            start,
-            end,
-            expected_data_revision=expected_data_revision,
-        )
-
     async def monthly_report_v2(
         self, *, period: str, expected_data_revision: int | None = None
     ) -> PeriodReportV2:
@@ -1412,110 +1366,6 @@ class ReportingService:
             start,
             end,
             expected_data_revision=expected_data_revision,
-        )
-
-    async def period_report_drill_down(
-        self,
-        *,
-        period_kind: ReportPeriodKind,
-        period: str,
-        expected_data_revision: int,
-        category_id: UUID | None,
-        account_id: UUID | None,
-        merchant_id: UUID | None,
-        source: TransactionSource | None,
-        cursor: str | None,
-        limit: int,
-    ) -> PeriodReportDrillDownPage:
-        if not 1 <= limit <= 100:
-            invalid("invalid_period_report_limit", "limit must be between 1 and 100")
-        start, end = self._period_bounds(period_kind, period)
-        cursor_time, cursor_id = self._decode_period_report_cursor(
-            cursor,
-            period_kind=period_kind,
-            period=period,
-            expected_data_revision=expected_data_revision,
-            category_id=category_id,
-            account_id=account_id,
-            merchant_id=merchant_id,
-            source=source,
-        )
-        revision_before = await self._data_revision()
-        if revision_before != expected_data_revision:
-            self._period_report_changed(
-                expected_data_revision,
-                revision_before,
-                period_kind=period_kind,
-                period=period,
-                drill_down=True,
-            )
-        occurred_from, occurred_to = self._bounds(start, end)
-        page = await self.repository.period_ledger_page(
-            occurred_from=occurred_from,
-            occurred_to_exclusive=occurred_to,
-            category_id=category_id,
-            account_id=account_id,
-            merchant_id=merchant_id,
-            source=source.value if source is not None else None,
-            cursor_time=cursor_time,
-            cursor_id=cursor_id,
-            limit=limit,
-        )
-        category_by_id = await self.repository.categories()
-        accounts = await self.repository.accounts()
-        merchant_by_transaction = await self._merchant_by_transaction({item.id for item in page})
-        facts = await self._facts_for_transactions(
-            [item for item in page[:limit] if item.kind in SPENDING_KINDS]
-        )
-        spending_by_id = {item.transaction.id: item for item in facts}
-        items = [
-            self._period_drill_down_item(
-                transaction,
-                categories=category_by_id,
-                accounts=accounts,
-                selected_account_id=account_id,
-                merchant=merchant_by_transaction.get(transaction.id),
-                spending=spending_by_id.get(transaction.id),
-            )
-            for transaction in page[:limit]
-        ]
-        next_cursor = (
-            self._encode_period_report_cursor(
-                period_kind=period_kind,
-                period=period,
-                expected_data_revision=expected_data_revision,
-                category_id=category_id,
-                account_id=account_id,
-                merchant_id=merchant_id,
-                source=source,
-                occurred_at=page[limit - 1].occurred_at,
-                transaction_id=page[limit - 1].id,
-            )
-            if len(page) > limit
-            else None
-        )
-        await self._restart_facts_read_boundary()
-        revision_after = await self._data_revision()
-        if revision_after != expected_data_revision:
-            self._period_report_changed(
-                expected_data_revision,
-                revision_after,
-                period_kind=period_kind,
-                period=period,
-                drill_down=True,
-            )
-        meta = self._period_report_meta(
-            period_kind, period, start, end, data_revision=revision_after
-        )
-        return PeriodReportDrillDownPage(
-            meta=meta,
-            dimension=ReportDrillDownDimension.LEDGER,
-            category_id=category_id,
-            account_id=account_id,
-            merchant_id=merchant_id,
-            source=source,
-            items=items,
-            next_cursor=next_cursor,
         )
 
     async def period_report_drill_down_v2(
@@ -1622,55 +1472,6 @@ class ReportingService:
             items=items,
             next_cursor=next_cursor,
         )
-
-    async def _period_report(
-        self,
-        period_kind: ReportPeriodKind,
-        period: str,
-        start: date,
-        end: date,
-        *,
-        expected_data_revision: int | None = None,
-    ) -> PeriodReport:
-        """Construct a report in one read-revision boundary, retrying once only.
-
-        A report intentionally is not persisted as a mutable snapshot.  It is
-        re-derived from the formal ledger, and a concurrent formal write yields
-        either a wholly old/new read or a safe conflict--never a mixed export.
-        """
-        for attempt in range(2):
-            revision_before = await self._data_revision()
-            if expected_data_revision is not None and revision_before != expected_data_revision:
-                self._period_report_changed(
-                    expected_data_revision,
-                    revision_before,
-                    period_kind=period_kind,
-                    period=period,
-                )
-            report = await self._build_period_report(
-                period_kind, period, start, end, revision_before
-            )
-            await self._restart_facts_read_boundary()
-            revision_after = await self._data_revision()
-            if revision_after == revision_before:
-                self._require_available_legacy_balances(report)
-                return report
-            if expected_data_revision is not None:
-                self._period_report_changed(
-                    expected_data_revision,
-                    revision_after,
-                    period_kind=period_kind,
-                    period=period,
-                )
-            if attempt == 0:
-                continue
-            self._period_report_changed(
-                revision_before,
-                revision_after,
-                period_kind=period_kind,
-                period=period,
-            )
-        raise AssertionError("unreachable")
 
     async def _period_report_v2(
         self,
@@ -1876,12 +1677,10 @@ class ReportingService:
             merchants=merchant_rows,
             sources=source_rows,
             completeness=ReportCompleteness(
-                unresolved_import_count=counts[0],
-                failed_import_count=counts[1],
-                uncategorized_transaction_count=counts[2],
+                uncategorized_transaction_count=counts[0],
             ),
             drill_down_path=(
-                "/api/v1/reports/period-drill-down?"
+                "/api/v1/reports/v2/period-drill-down?"
                 f"period_kind={period_kind.value}&period={period}&expected_data_revision={data_revision}"
             ),
         )
@@ -2023,14 +1822,15 @@ class ReportingService:
         allocation_sources: dict[UUID, UUID] = {}
         allocation_amounts: dict[UUID, int] = {}
         for claim_id, snapshot in claim_snapshots:
-            response = ReimbursementClaimResponse.model_validate(snapshot)
+            response = ReimbursementClaimResponse.model_validate(
+                adapt_legacy_reimbursement_snapshot(snapshot)
+            )
             if response.voided_at is not None or response.cancelled_at is not None:
                 continue
             claims[claim_id] = response
-            for party in response.parties:
-                for allocation in party.allocations:
-                    allocation_sources[allocation.id] = allocation.transaction_id
-                    allocation_amounts[allocation.id] = allocation.amount_minor
+            for allocation in response.expenses:
+                allocation_sources[allocation.id] = allocation.transaction_id
+                allocation_amounts[allocation.id] = allocation.amount_minor
         source_transactions = await self.repository.period_transaction_snapshots(
             transaction_ids=set(allocation_sources.values()), recorded_before=recorded_before
         )
@@ -2059,7 +1859,9 @@ class ReportingService:
         receipt_transaction_ids: set[UUID] = set()
         parsed_receipts: list[ReimbursementReceiptResponse] = []
         for snapshot in receipt_snapshots:
-            receipt = ReimbursementReceiptResponse.model_validate(snapshot)
+            receipt = ReimbursementReceiptResponse.model_validate(
+                {key: value for key, value in snapshot.items() if key != "party_id"}
+            )
             if receipt.claim_id in claims and receipt.voided_at is None:
                 parsed_receipts.append(receipt)
                 receipt_transaction_ids.add(receipt.transaction.id)
@@ -2339,50 +2141,6 @@ class ReportingService:
             .where(uuid_membership(TransactionMerchantMapping.transaction_id, transaction_ids))
         )
         return {transaction_id: merchant for transaction_id, merchant in rows.tuples()}
-
-    @classmethod
-    def _period_drill_down_item(
-        cls,
-        transaction: LedgerTransaction,
-        *,
-        categories: dict[UUID, Category],
-        accounts: dict[UUID, Account],
-        selected_account_id: UUID | None = None,
-        merchant: Merchant | None,
-        spending: _SpendingFact | None,
-    ) -> PeriodReportDrillDownItem:
-        external_cash = 0
-        if transaction.kind != TransactionKind.TRANSFER.value and transaction.voided_at is None:
-            external_cash = checked_int64(
-                sum(
-                    posting.amount_minor
-                    for posting in transaction.postings
-                    if posting.account_id in accounts
-                    and accounts[posting.account_id].kind in {"cash", "debit"}
-                    and (selected_account_id is None or posting.account_id == selected_account_id)
-                    and transaction.category_id not in cls._excluded_category_ids(categories)
-                ),
-                label="period drill-down transaction amount",
-            )
-        return PeriodReportDrillDownItem(
-            transaction_id=transaction.id,
-            occurred_at=transaction.occurred_at,
-            business_date=cls._business_date(transaction.occurred_at),
-            kind=TransactionKind(transaction.kind),
-            source=TransactionSource(transaction.source),
-            category_id=transaction.category_id,
-            category_name=(
-                categories[transaction.category_id].name
-                if transaction.category_id is not None and transaction.category_id in categories
-                else None
-            ),
-            merchant_id=merchant.id if merchant else None,
-            merchant_name=merchant.name if merchant else None,
-            external_cash_amount_minor=external_cash,
-            gross_consumption_minor=spending.gross if spending else 0,
-            merchant_refund_minor=spending.refund if spending else 0,
-            net_consumption_minor=spending.net if spending else 0,
-        )
 
     @classmethod
     def _period_drill_down_item_v2(
@@ -2764,13 +2522,13 @@ class ReportingService:
                     cycle_id=cycle.id,
                 )
             )
-        party_values: dict[UUID, tuple[ReimbursementFact, int]] = {}
+        claim_values: dict[UUID, tuple[ReimbursementFact, int]] = {}
         for fact in await self.repository.reimbursement_facts():
             if fact.claim_voided_at is not None or fact.cancelled_at is not None:
                 continue
             if fact.submitted_at is None:
                 continue
-            current = party_values.get(fact.party_id)
+            current = claim_values.get(fact.claim_id)
             outstanding = checked_int64(
                 fact.allocated_minor - fact.received_minor, label="reimbursement outstanding"
             )
@@ -2783,8 +2541,8 @@ class ReportingService:
                     current[1] + outstanding, label="party reimbursement outstanding"
                 )
             )
-            party_values[fact.party_id] = (fact, total)
-        for fact, outstanding in party_values.values():
+            claim_values[fact.claim_id] = (fact, total)
+        for fact, outstanding in claim_values.values():
             if fact.expected_date is None:
                 undated = checked_int64(undated + outstanding, label="undated reimbursement")
             elif today <= fact.expected_date < date_to_exclusive:
@@ -2793,15 +2551,14 @@ class ReportingService:
                 )
                 events.append(
                     ForecastEvent(
-                        source_id=fact.party_id,
+                        source_id=fact.claim_id,
                         date=fact.expected_date,
                         direction=ForecastDirection.INFLOW,
                         amount_minor=outstanding,
                         basis=ForecastBasis.EXPECTED_RECEIPT,
                         certainty=ForecastCertainty.EXPECTED,
-                        title=f"{fact.party_name} 预计报销",
+                        title=f"{fact.counterparty_name} 预计报销",
                         claim_id=fact.claim_id,
-                        party_id=fact.party_id,
                     )
                 )
         events.sort(key=lambda item: (item.date, item.direction.value, item.source_id))

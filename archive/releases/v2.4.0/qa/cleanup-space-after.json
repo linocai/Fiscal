@@ -1,0 +1,9 @@
+{
+  "captured_at": "2026-09-26T10:30:58.747141+00:00",
+  "build_test_runs_bytes": 99893911,
+  "build_v240_bytes": 1115903,
+  "disk_free_bytes": 62094942208,
+  "test_runs_logical_reduction_bytes": 590181799,
+  "v240_logical_reduction_bytes": 41087762,
+  "disk_free_change_bytes": 676360192
+}

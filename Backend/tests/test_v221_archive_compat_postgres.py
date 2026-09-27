@@ -131,6 +131,8 @@ asyncio.run(main())
         "cash_flow_settlement_links",
         "credit_payoff_links",
         "credit_payoff_operations",
+        "reimbursement_claims.counterparty_name",
+        "reimbursement_claims.expected_date",
     ]
     assert json.dumps([manifest, payload], sort_keys=True) == source_snapshot
 

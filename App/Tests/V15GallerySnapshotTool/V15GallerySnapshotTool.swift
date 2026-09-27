@@ -1,3 +1,4 @@
+import FiscalPreviewSupportmacOS
 import AppKit
 import FiscalKit
 import SwiftUI
@@ -35,50 +36,19 @@ private struct V15GallerySnapshotTool {
             try renderF4A(to: output)
             return
         }
-        if environment["FISCAL_V15_SNAPSHOT_SCOPE"] == "f3g" {
-            try renderF3G(to: output)
-            return
-        }
 
-        for fixture in V15GalleryFixture.allCases {
-            try render(V15GalleryShell(fixture: fixture, density: .comfortable), to: output.appendingPathComponent("macos-\(fixture.id)-light.png"), colorScheme: .light, size: CGSize(width: 1240, height: 760))
-            try render(V15GalleryShell(fixture: fixture, density: .compact), to: output.appendingPathComponent("macos-\(fixture.id)-dark-compact.png"), colorScheme: .dark, size: CGSize(width: 900, height: 680))
-        }
-        try render(V15GalleryShell(fixture: .preview, density: .comfortable), to: output.appendingPathComponent("macos-preview-dark-comfortable.png"), colorScheme: .dark, size: CGSize(width: 1240, height: 760))
+        let workspace = V15GalleryShell(arguments: ["V15GallerySnapshotTool"])
+        try render(workspace, to: output.appendingPathComponent("macos-workspace-light.png"), colorScheme: .light, size: CGSize(width: 1240, height: 760), settlingDelay: 1.2)
+        try render(workspace, to: output.appendingPathComponent("macos-workspace-dark.png"), colorScheme: .dark, size: CGSize(width: 900, height: 680), settlingDelay: 1.2)
+        try render(workspace, to: output.appendingPathComponent("macos-workspace-ax5.png"), colorScheme: .light, size: CGSize(width: 1240, height: 980), dynamicTypeSize: .accessibility5, settlingDelay: 1.2)
         let f1ARecord = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f1a-route", "record-valid"])
         try render(f1ARecord, to: output.appendingPathComponent("f1a-macos-record-light.png"), colorScheme: .light, size: CGSize(width: 1240, height: 760))
         try render(f1ARecord, to: output.appendingPathComponent("f1a-macos-record-dark.png"), colorScheme: .dark, size: CGSize(width: 1240, height: 760))
         try render(f1ARecord, to: output.appendingPathComponent("f1a-macos-record-ax5.png"), colorScheme: .light, size: CGSize(width: 1240, height: 980), dynamicTypeSize: .accessibility5)
-        let f1BLedger = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f1b-route", "ledger"])
-        try render(f1BLedger, to: output.appendingPathComponent("f1b-macos-ledger-light.png"), colorScheme: .light, size: CGSize(width: 1240, height: 760))
-        try render(f1BLedger, to: output.appendingPathComponent("f1b-macos-ledger-dark.png"), colorScheme: .dark, size: CGSize(width: 1240, height: 760))
-        try render(f1BLedger, to: output.appendingPathComponent("f1b-macos-ledger-ax5.png"), colorScheme: .light, size: CGSize(width: 1240, height: 980), dynamicTypeSize: .accessibility5)
-        let f1BDetail = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f1b-route", "ledger-detail"])
-        try render(f1BDetail, to: output.appendingPathComponent("f1b-macos-ledger-detail-light.png"), colorScheme: .light, size: CGSize(width: 1240, height: 760))
-        try render(f1BDetail, to: output.appendingPathComponent("f1b-macos-ledger-detail-dark.png"), colorScheme: .dark, size: CGSize(width: 1240, height: 760))
         let f1CMaster = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f1c-route", "master"])
         try render(f1CMaster, to: output.appendingPathComponent("f1c-macos-master-light.png"), colorScheme: .light, size: CGSize(width: 1240, height: 760))
         try render(f1CMaster, to: output.appendingPathComponent("f1c-macos-master-dark.png"), colorScheme: .dark, size: CGSize(width: 1240, height: 760))
         try render(f1CMaster, to: output.appendingPathComponent("f1c-macos-master-ax5.png"), colorScheme: .light, size: CGSize(width: 1240, height: 980), dynamicTypeSize: .accessibility5)
-        let f2CRoutes: [(route: String, style: String, colorScheme: ColorScheme, size: CGSize, dynamicTypeSize: DynamicTypeSize)] = [
-            ("today", "light-comfortable", .light, CGSize(width: 1240, height: 760), .large),
-            ("today-zero-future", "dark-compact", .dark, CGSize(width: 820, height: 900), .large),
-            ("today-long", "light-comfortable", .light, CGSize(width: 1240, height: 760), .large),
-            ("today-long", "dark-compact", .dark, CGSize(width: 820, height: 900), .accessibility5),
-            ("today-offline", "light-comfortable", .light, CGSize(width: 1240, height: 760), .large),
-            ("today-offline", "dark-compact", .dark, CGSize(width: 820, height: 900), .large),
-            ("today-conflict", "light-comfortable", .light, CGSize(width: 1240, height: 760), .large),
-            ("today-conflict", "dark-compact", .dark, CGSize(width: 820, height: 900), .large),
-            ("today-scope-error", "light-comfortable", .light, CGSize(width: 1240, height: 760), .large),
-            ("today-scope-error", "dark-compact", .dark, CGSize(width: 820, height: 900), .large),
-            ("today-unknown", "light-comfortable", .light, CGSize(width: 1240, height: 760), .large),
-            ("today-unknown", "dark-compact", .dark, CGSize(width: 820, height: 900), .large)
-        ]
-        for scene in f2CRoutes {
-            let route = scene.route
-            let today = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f2c-route", route])
-            try render(today, to: output.appendingPathComponent("f2c-macos-\(route)-\(scene.style).png"), colorScheme: scene.colorScheme, size: scene.size, dynamicTypeSize: scene.dynamicTypeSize)
-        }
         let f3ARoutes: [(String, String, ColorScheme, CGSize, DynamicTypeSize)] = [
             ("timeline", "light", .light, CGSize(width: 1240, height: 760), .large),
             ("timeline", "dark", .dark, CGSize(width: 900, height: 760), .large),
@@ -171,53 +141,15 @@ private struct V15GallerySnapshotTool {
             ("ai-response-unknown-read-failure", "response-unknown-read-failure", .dark, CGSize(width: 1180, height: 820), .large),
             ("ai-page-error", "page-error", .light, CGSize(width: 1440, height: 900), .large),
             ("ai-cash-flow", "cash-flow-review", .light, CGSize(width: 1440, height: 980), .large),
-            ("ai-create-unknown-settings-transport-after-safe", "stable-create-recovery", .light, CGSize(width: 1440, height: 980), .large),
-            ("ai-settings-violation", "d3-contract-error", .dark, CGSize(width: 1180, height: 820), .large)
+            ("ai-create-unknown-settings-transport-after-safe", "stable-create-recovery", .light, CGSize(width: 1440, height: 980), .large)
         ]
         for (route, style, scheme, size, type) in f3FRoutes {
             let proposals = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f3f-route", route])
             try render(proposals, to: output.appendingPathComponent("f3f-mac-\(style).png"), colorScheme: scheme, size: size, dynamicTypeSize: type, settlingDelay: 1.5)
         }
-        let f3GRoutes: [(String, String, ColorScheme, CGSize, DynamicTypeSize)] = [
-            ("statement-import-intake", "intake", .light, CGSize(width: 1440, height: 900), .large),
-            ("statement-import", "dark-workbench", .dark, CGSize(width: 1180, height: 820), .large),
-            ("statement-import-page", "masked-page", .light, CGSize(width: 1440, height: 900), .large),
-            ("statement-import-page-error", "page-error", .dark, CGSize(width: 1180, height: 820), .large),
-            ("statement-import-resolution-recovery", "resolution-readback", .light, CGSize(width: 1440, height: 900), .large),
-            ("statement-import-review", "review", .dark, CGSize(width: 1180, height: 820), .large),
-            ("statement-import-preview", "preview", .light, CGSize(width: 1440, height: 900), .large),
-            ("statement-import-preview-error", "preview-retry", .dark, CGSize(width: 1180, height: 820), .large),
-            ("statement-import-unresolved", "unresolved", .light, CGSize(width: 1440, height: 900), .large),
-            ("statement-import-source-unavailable", "source-unavailable", .dark, CGSize(width: 1180, height: 820), .large),
-            ("statement-import-partial", "partial-receipt", .light, CGSize(width: 1440, height: 900), .large),
-            ("statement-import-unknown", "response-unknown", .dark, CGSize(width: 1180, height: 820), .large),
-            ("statement-import-provider-unknown", "request-bound-cancel", .light, CGSize(width: 1440, height: 900), .large),
-            ("statement-import-paged-filtered", "pagination-filter", .light, CGSize(width: 1440, height: 900), .large),
-            ("statement-import-future-workbench", "future-status-read-only", .dark, CGSize(width: 1180, height: 820), .large),
-            ("statement-import-offline", "offline-ax5", .light, CGSize(width: 1440, height: 980), .accessibility5)
-        ]
-        for (route, style, scheme, size, type) in f3GRoutes {
-            let statementImport = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f3g-route", route])
-            try render(statementImport, to: output.appendingPathComponent("f3g-mac-\(style).png"), colorScheme: scheme, size: size, dynamicTypeSize: type, settlingDelay: 8)
-        }
         try renderF4A(to: output)
         try renderF4B(to: output)
         try renderF4C(to: output)
-    }
-
-    @MainActor
-    private static func renderF3G(to output: URL) throws {
-        let routes: [(String, String, ColorScheme, CGSize, DynamicTypeSize)] = [
-            ("statement-import", "workbench-light", .light, CGSize(width: 1440, height: 900), .large),
-            ("statement-import", "workbench-dark", .dark, CGSize(width: 1180, height: 820), .large),
-            ("statement-import-source-unavailable", "evidence-degraded", .light, CGSize(width: 1180, height: 820), .large),
-            ("statement-import-partial", "partial-receipt", .dark, CGSize(width: 1440, height: 900), .accessibility5),
-            ("statement-import-preview", "preview", .light, CGSize(width: 1440, height: 900), .large)
-        ]
-        for (route, style, scheme, size, type) in routes {
-            let workbench = V15GalleryShell(arguments: ["V15GallerySnapshotTool", "--v15-f3g-route", route])
-            try render(workbench, to: output.appendingPathComponent("f3g-mac-\(style).png"), colorScheme: scheme, size: size, dynamicTypeSize: type, settlingDelay: 1.2)
-        }
     }
 
     @MainActor
@@ -341,7 +273,7 @@ private struct V15GallerySnapshotTool {
             ("future", "f3a", "timeline"), ("credit", "f3b1", "credit"),
             ("installments", "f3b2", "installments"), ("reimbursements", "f3c", "reimbursements"),
             ("cash-flow", "f3d", "cash-flow"), ("ai", "f3f", "ai"),
-            ("import", "f3g", "statement-import"), ("analysis", "f4a", "reports-spending"),
+            ("analysis", "f4a", "reports-spending"),
             ("security", "f4c", "archive")
         ]
         for (name, family, route) in scenes {

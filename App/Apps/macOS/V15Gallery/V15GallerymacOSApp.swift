@@ -1,3 +1,4 @@
+import FiscalPreviewSupportmacOS
 import AppKit
 import FiscalKit
 import SwiftUI

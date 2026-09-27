@@ -14,7 +14,6 @@ from fiscal_api.api.p31_schemas import (
 from fiscal_api.db.models import (
     CashFlowItem,
     LedgerTransaction,
-    StatementImportTransactionProvenance,
     TransactionMerchantMapping,
     TransactionRevision,
 )
@@ -67,25 +66,6 @@ class TransactionHistoryService:
                 recorded_at=transaction.created_at,
             )
         ]
-        statement_links = list(
-            (
-                await self.session.scalars(
-                    select(StatementImportTransactionProvenance).where(
-                        StatementImportTransactionProvenance.transaction_id == transaction_id
-                    )
-                )
-            ).all()
-        )
-        links.extend(
-            TransactionProvenanceLink(
-                source_type="statement_import_confirmation",
-                target_type="statement_import",
-                target_id=item.statement_import_id,
-                deep_link=f"fiscal://statement-imports/{item.statement_import_id}",
-                recorded_at=item.created_at,
-            )
-            for item in statement_links
-        )
         cash_flow_items = list(
             (
                 await self.session.scalars(

@@ -1,35 +1,44 @@
 import SwiftUI
 
 public struct V15RecordView: View {
+    private enum InputMode: Hashable { case manual, assisted }
     @State private var editorPresented = false
     @State private var model: V15RecordModel
+    @State private var inputMode: InputMode
+    private let services: V15Services
+    private let initialProposalID: UUID?
     private let presentsEditorDirectly: Bool
     private let onCommitted: (V15RecordModel.CommitOutcome) -> Void
     @Environment(\.dismiss) private var dismiss
-    public init(services: V15Services, prefilled: Bool = false, repaymentPrefilled: Bool = false, occurredOn: Date = Date(), initialKind: V15ManualTransactionKind? = nil, initialCreditAccountID: UUID? = nil, presentsEditorDirectly: Bool = false, onCommitted: @escaping (V15RecordModel.CommitOutcome) -> Void = { _ in }) {
+    public init(services: V15Services, occurredOn: Date = Date(), initialKind: V15ManualTransactionKind? = nil, initialCreditAccountID: UUID? = nil, initialProposalID: UUID? = nil, presentsEditorDirectly: Bool = false, onCommitted: @escaping (V15RecordModel.CommitOutcome) -> Void = { _ in }) {
         let record = V15RecordModel(services: services, occurredOn: occurredOn)
-        if prefilled { record.title = "午餐"; record.amountText = "12.80"; record.accountID = V15F1AFixtures.accountID; record.categoryID = V15F1AFixtures.categoryID }
-        if repaymentPrefilled {
-            record.kind = .repayment
-            record.title = "信用卡还款"
-            record.amountText = "12.80"
-            record.accountID = V15F1AFixtures.accountID
-            record.destinationAccountID = V15F1AFixtures.creditID
-            record.creditCycleID = V15F1AFixtures.creditCycleID
-        }
         if let initialKind {
             record.kind = initialKind
             if initialKind == .borrowing { record.accountID = initialCreditAccountID; record.title = "借入" }
             if initialKind == .repayment { record.destinationAccountID = initialCreditAccountID; record.title = "还款" }
         }
         _model = State(initialValue: record)
+        _inputMode = State(initialValue: initialProposalID == nil ? .manual : .assisted)
+        self.services = services
+        self.initialProposalID = initialProposalID
+        self.presentsEditorDirectly = presentsEditorDirectly
+        self.onCommitted = onCommitted
+    }
+    public init(model: V15RecordModel, services: V15Services, presentsEditorDirectly: Bool = false, onCommitted: @escaping (V15RecordModel.CommitOutcome) -> Void = { _ in }) {
+        _model = State(initialValue: model)
+        _inputMode = State(initialValue: .manual)
+        self.services = services
+        initialProposalID = nil
         self.presentsEditorDirectly = presentsEditorDirectly
         self.onCommitted = onCommitted
     }
     public var body: some View {
 #if os(iOS)
-        Group {
-            if presentsEditorDirectly {
+        VStack(spacing: 0) {
+            inputModePicker
+            if inputMode == .assisted {
+                V15AIProposalView(services: services, initialProposalID: initialProposalID, onClose: { dismiss() })
+            } else if presentsEditorDirectly {
                 NavigationStack {
                     V15RecordEditor(model: model, onCommitted: onCommitted)
                         .toolbar {
@@ -43,17 +52,36 @@ public struct V15RecordView: View {
                         Text("保存后会显示最终金额、账户和分录。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                     }.padding(V15Spacing.lg).v15IOSScreenCanvas().navigationTitle("录入")
                 }
-            }
         }
+        }
+        .background(V15Palette.canvas.color.ignoresSafeArea())
         .sheet(isPresented: $editorPresented, onDismiss: { model.dismiss() }) { V15RecordEditor(model: model, onCommitted: onCommitted).presentationDetents([.large]).accessibilityIdentifier("v15.f1a.record.sheet") }
         .accessibilityIdentifier("v15.f1a.record.ios")
 #else
-        V15RecordEditor(model: model, onCommitted: onCommitted)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(V15Palette.paper.color)
-            .accessibilityIdentifier("v15.f1a.record.macos")
+        VStack(spacing: 0) {
+            inputModePicker
+            if inputMode == .assisted {
+                V15AIProposalMacView(services: services, initialProposalID: initialProposalID)
+            } else {
+                V15RecordEditor(model: model, onCommitted: onCommitted)
+                    .frame(maxWidth: 720)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+        }
+        .background(V15Palette.paper.color)
+        .accessibilityIdentifier("v15.f1a.record.macos")
 #endif
+    }
+
+    private var inputModePicker: some View {
+        Picker("录入方式", selection: $inputMode) {
+            Text("手工记账").tag(InputMode.manual)
+            Text("文字与截图识别").tag(InputMode.assisted)
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, V15Spacing.md)
+        .padding(.vertical, V15Spacing.sm)
+        .accessibilityIdentifier("v15.record.input-mode")
     }
 }
 

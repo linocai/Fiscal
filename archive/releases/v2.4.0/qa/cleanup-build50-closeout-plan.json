@@ -1,0 +1,429 @@
+{
+  "schema": 1,
+  "root": "/Users/linotsai/Lino/Fiscal",
+  "keep": [
+    {
+      "path": "build/ios27-compat-20260920/core-tests-isolated/tests.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "da62125b4d57903214a49525658eff221d04ab8e01c7954eae184611cd92cf76",
+        "inode": 167397697,
+        "device": 16777234,
+        "logical_bytes": 1033873,
+        "allocated_bytes": 5074944
+      }
+    },
+    {
+      "path": "build/ios27-compat-20260920/gallery-ui/tests.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "fd7cbbd5361fb5fab2db2ffbe195b02af5f54594e107c5f536b243bce947c854",
+        "inode": 167390075,
+        "device": 16777234,
+        "logical_bytes": 5511680,
+        "allocated_bytes": 5677056
+      }
+    },
+    {
+      "path": "build/ios27-compat-20260920/ios26-fixed/tests.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "3927b0aca18e033fe4afdef1f178f4bc8c400cbd31500fedd82fd5ca66bd0456",
+        "inode": 167401685,
+        "device": 16777234,
+        "logical_bytes": 524655,
+        "allocated_bytes": 651264
+      }
+    },
+    {
+      "path": "build/ios27-compat-20260920/root-ui-fixed/tests.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "6ba55350bf320793fc49e8387be2a758b784eaa65c49cbce4baadcb9ac6e1a2e",
+        "inode": 167388757,
+        "device": 16777234,
+        "logical_bytes": 3761014,
+        "allocated_bytes": 3948544
+      }
+    },
+    {
+      "path": "build/release-v2.2.0-41/mac-wide-passed.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "a105ae913559c5bdd0891c4c93185950d9e0f9e45b2604f705122b1823caa864",
+        "inode": 155838716,
+        "device": 16777234,
+        "logical_bytes": 1834425,
+        "allocated_bytes": 1970176
+      }
+    },
+    {
+      "path": "build/release-v2.2.0-41/units.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "e82c724c611f7eedc33c891beb37fc940960fd0e461ab23f60b3827b15ed899a",
+        "inode": 155839326,
+        "device": 16777234,
+        "logical_bytes": 297258,
+        "allocated_bytes": 487424
+      }
+    },
+    {
+      "path": "build/test-runs/chart48-axis-final/tests.xcresult",
+      "reason": "既有 Build48 历史轴线证据，不属本轮删除范围",
+      "fingerprint": {
+        "sha256": "b325bfc56ddb9705d074525edbbe4a4d91829676e09b9904dda5a78980052602",
+        "inode": 169184377,
+        "device": 16777234,
+        "logical_bytes": 1172872,
+        "allocated_bytes": 1294336
+      }
+    },
+    {
+      "path": "build/test-runs/chart48-macos-final/tests.xcresult",
+      "reason": "既有 Build48 宽屏失败原件，保留历史差异来源",
+      "fingerprint": {
+        "sha256": "f41aa052dbf0746f652a2d31440b07f2d7bda1e0f74b7f06e380e5a4a8535824",
+        "inode": 169167834,
+        "device": 16777234,
+        "logical_bytes": 84888112,
+        "allocated_bytes": 91025408
+      }
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-final-second/tests.xcresult",
+      "reason": "Build49 最终 329/329 Swift 业务回归",
+      "fingerprint": {
+        "sha256": "c3fc28b6e8d0a0d0a837e65e3f6c0550d66fee0ffb68f3da27bea6c31dece630",
+        "inode": 173694854,
+        "device": 16777234,
+        "logical_bytes": 822942,
+        "allocated_bytes": 3784704
+      }
+    },
+    {
+      "path": "build/test-runs/v240-gallery-ios-build49-acceptance/tests.xcresult",
+      "reason": "Build49 最终 iOS 未来来源/多费用/AI/CSV 5/5",
+      "fingerprint": {
+        "sha256": "b08988b0445e716a3674280cecef729a7136efba91ea529cb96862f043ad079b",
+        "inode": 173735150,
+        "device": 16777234,
+        "logical_bytes": 2923717,
+        "allocated_bytes": 3072000
+      }
+    },
+    {
+      "path": "build/test-runs/v240-gallery-macos-final/tests.xcresult",
+      "reason": "Build49 macOS 报销与 CSV 3/3",
+      "fingerprint": {
+        "sha256": "577e8a97cfe82592b150f27b73c75ffeffab685fcda3b067983bc7b494b01007",
+        "inode": 173718434,
+        "device": 16777234,
+        "logical_bytes": 867270,
+        "allocated_bytes": 999424
+      }
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-build49-acceptance/tests.xcresult",
+      "reason": "Build49 最终原子录入呈现修复后正式 iOS 三空间、账户与 OCR 设置 3/3 及截图",
+      "fingerprint": {
+        "sha256": "0ee910be6e7e2108fbd53439b09280c1e4db040b20f68db9d58ca4fa0afbbb68",
+        "inode": 173736261,
+        "device": 16777234,
+        "logical_bytes": 1226227,
+        "allocated_bytes": 1359872
+      }
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-deeplink-verified/tests.xcresult",
+      "reason": "Build49 冷热 URL/不同草稿/错误目标 2/2",
+      "fingerprint": {
+        "sha256": "db0f949a83b326e014f557946e804eadab77e9f532443e0d1c9aa3565ce6c990",
+        "inode": 173733725,
+        "device": 16777234,
+        "logical_bytes": 429174,
+        "allocated_bytes": 557056
+      }
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-macos-final/tests.xcresult",
+      "reason": "Build49 正式 macOS 三空间、宽屏画布与账户 4/4 及截图",
+      "fingerprint": {
+        "sha256": "d2525eb6030e1f59ab06ee8a57a6ab2ae6781d6c628cae20446bfd8f4e407c91",
+        "inode": 173722261,
+        "device": 16777234,
+        "logical_bytes": 2748619,
+        "allocated_bytes": 2908160
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-ios-root-final.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "d02803bb2922ce224cfe53f8ededa3070deb2e581cd50edab4b7a9d01798840a",
+        "inode": 155805837,
+        "device": 16777234,
+        "logical_bytes": 4087779,
+        "allocated_bytes": 4255744
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-mac-navigation-final.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "2931d303cd20fe7821bfda11d84add8ec8ce66e7bf3e6ea640172e59126f6cda",
+        "inode": 155810047,
+        "device": 16777234,
+        "logical_bytes": 719139,
+        "allocated_bytes": 835584
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/fix-mac-root-final.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "e7b1e5a689cf5ca7d5895869d734a6b33804ae85f950f803dff93c7a8048ad48",
+        "inode": 155804202,
+        "device": 16777234,
+        "logical_bytes": 2820829,
+        "allocated_bytes": 2981888
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/full-fiscalkit-tests-final.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "0d485fa886b01b5b356826bdd618f7a2edf531de971344ce233015ec9febecd5",
+        "inode": 155746108,
+        "device": 16777234,
+        "logical_bytes": 787136,
+        "allocated_bytes": 4091904
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-gallery-r3.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "fe1f6f780270479c039e78b2d565075ad50150da1577124d5e3e1502b79bc70b",
+        "inode": 155742281,
+        "device": 16777234,
+        "logical_bytes": 899098,
+        "allocated_bytes": 1032192
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-reduced-effects.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "8cba3cf2b83f25f1da0968ce3edc444b9f3b748b46664acc3b6a57ec7a88005c",
+        "inode": 155744260,
+        "device": 16777234,
+        "logical_bytes": 655558,
+        "allocated_bytes": 778240
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/ios-root-r3.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "1121dc50210ee31d771a3c337d68f6e190a597271a71b5e045c6e75e91e5fa47",
+        "inode": 155743333,
+        "device": 16777234,
+        "logical_bytes": 3535360,
+        "allocated_bytes": 3735552
+      }
+    },
+    {
+      "path": "build/v2.2.0-qa/mac-gallery-final.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "bd598dd7fc699c93364a994623f090453e4c07206b721c29e44c1a894f8cf728",
+        "inode": 155710593,
+        "device": 16777234,
+        "logical_bytes": 123099483,
+        "allocated_bytes": 128843776
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/fiscalkit-2.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "f5f450c1d83acf3eedcf7ec93005b63cbf51300ef1dd10fc63297343cb6ae5e1",
+        "inode": 161756047,
+        "device": 16777234,
+        "logical_bytes": 841752,
+        "allocated_bytes": 4472832
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/ios-ui-2.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "6bdc445523a1722e365d8566d4c4ef1fe139630de39c580549c3c083d0276ca5",
+        "inode": 162032136,
+        "device": 16777234,
+        "logical_bytes": 1249731,
+        "allocated_bytes": 1388544
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/mac-ui-2.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "93ace44dbc79759033c4952bf98ca6e677a572b4113d540114770ad43a679157",
+        "inode": 162025566,
+        "device": 16777234,
+        "logical_bytes": 207146689,
+        "allocated_bytes": 214343680
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/mac-ui-3.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "933378da9cd4b9cd1588dce9643a16961d6245d83fd68c52e730af39b65f474f",
+        "inode": 162031393,
+        "device": 16777234,
+        "logical_bytes": 1816486,
+        "allocated_bytes": 1953792
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/qa/macos-final.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "d7d7036f8989c1f59a3980f6aacd6e9d8f7316c605aa848dcfba0c56aefeb3b6",
+        "inode": 162034483,
+        "device": 16777234,
+        "logical_bytes": 302115,
+        "allocated_bytes": 512000
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/repair/client-full-4.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "0049d2834966af9255aabcdfe528f6f9bf6388b0e27b18d8ec31b9df584b358c",
+        "inode": 162279109,
+        "device": 16777234,
+        "logical_bytes": 914299,
+        "allocated_bytes": 5025792
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-real-receipt-3.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "8929a5402c06e24521af45876f38bff2b31325d5b4b6dbd2db8e9acfd8bc6ff0",
+        "inode": 162296148,
+        "device": 16777234,
+        "logical_bytes": 470226,
+        "allocated_bytes": 589824
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-ui-4.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "c24909e5f9ee7c7e1ee8bfb48d6654cc56bf9b00433427538d2a335f38c73532",
+        "inode": 162280685,
+        "device": 16777234,
+        "logical_bytes": 319655707,
+        "allocated_bytes": 326930432
+      }
+    },
+    {
+      "path": "build/v2.3.0-43/repair/mac-ui-5.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "deb1ea7f7ff3d66b39ef6c74abc47a7faec783d5da9abb1eb3d1c95a90b59fa1",
+        "inode": 162285836,
+        "device": 16777234,
+        "logical_bytes": 211259322,
+        "allocated_bytes": 218521600
+      }
+    },
+    {
+      "path": "build/v2.3.0-44/client-tests/tests.xcresult",
+      "reason": "既有历史验收结果，非 Build49 本轮产物；保留原件，不在本轮回收",
+      "fingerprint": {
+        "sha256": "851b79b20a0fe5c149886a83e6d73f982568629d9d4393493c676f525af47aff",
+        "inode": 162691393,
+        "device": 16777234,
+        "logical_bytes": 915190,
+        "allocated_bytes": 5025792
+      }
+    },
+    {
+      "path": "build/test-runs/v240-build50-fiscalkit-verified/tests.xcresult",
+      "reason": "Build50 final regression or native merchant confirmation evidence",
+      "fingerprint": {
+        "sha256": "9233759520ebb3d07286910f91fc9f5a086c938c04d15c5ecf5c468970f372e9",
+        "inode": 173880129,
+        "device": 16777234,
+        "logical_bytes": 826412,
+        "allocated_bytes": 3833856
+      }
+    },
+    {
+      "path": "build/test-runs/v240-build50-merchant-lifecycle/tests.xcresult",
+      "reason": "Build50 final regression or native merchant confirmation evidence",
+      "fingerprint": {
+        "sha256": "227d22db6503b69661ff2f63803642c54ceac0b9048989fb76b95e2d3a5c292c",
+        "inode": 174029039,
+        "device": 16777234,
+        "logical_bytes": 277633,
+        "allocated_bytes": 417792
+      }
+    },
+    {
+      "path": "build/test-runs/v240-build50-merchant-macos-final/tests.xcresult",
+      "reason": "Build50 final regression or native merchant confirmation evidence",
+      "fingerprint": {
+        "sha256": "35734663342369282c84f6cf0fdfcccce03cec8f9ee83c24d3da80d1a6d21cd2",
+        "inode": 174029550,
+        "device": 16777234,
+        "logical_bytes": 1017886,
+        "allocated_bytes": 1134592
+      }
+    },
+    {
+      "path": "build/test-runs/v240-build50-merchant-ios-final/tests.xcresult",
+      "reason": "Build50 final regression or native merchant confirmation evidence",
+      "fingerprint": {
+        "sha256": "ecf3368f15d4b6ed51ed8cac9640f22e97d94001e5d2650e443f013d793045bc",
+        "inode": 174029870,
+        "device": 16777234,
+        "logical_bytes": 611034,
+        "allocated_bytes": 737280
+      }
+    }
+  ],
+  "delete": [
+    {
+      "path": "build/v240/build50/ios-failure/8A1D28C6-515F-4C3A-8F3C-935B0508B9F1.png",
+      "reason": "Superseded first UI failure screenshot exported before export manifest collision; final passing screenshot retained in xcresult",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/build50.md",
+          "fingerprint": {
+            "sha256": "69501047ec51f712e610e991b3d9e2bd3accee274b1ca86b0af884cff83c261c",
+            "inode": 174029457,
+            "device": 16777234,
+            "logical_bytes": 2151,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "1cb01c9c4ecfe71d733ae656127bedede96bcc18738c48f5f515a843ee34f006",
+        "inode": 174028921,
+        "device": 16777234,
+        "logical_bytes": 301054,
+        "allocated_bytes": 303104
+      }
+    }
+  ],
+  "status": "planned",
+  "planned_at": "2026-09-27T02:39:13.963611+00:00"
+}

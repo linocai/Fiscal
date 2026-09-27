@@ -39,11 +39,9 @@ from fiscal_api.db.models import (
     ReimbursementAllocation,
     ReimbursementClaim,
     ReimbursementClaimRevision,
-    ReimbursementParty,
     ReimbursementReceipt,
     ReimbursementReceiptAllocation,
     ReimbursementReceiptRevision,
-    StatementImport,
     TransactionMerchantMapping,
     TransactionRevision,
 )
@@ -73,8 +71,7 @@ class ReimbursementFact:
     allocation_id: UUID
     source_transaction_id: UUID
     claim_id: UUID
-    party_id: UUID
-    party_name: str
+    counterparty_name: str
     expected_date: date | None
     submitted_at: datetime | None
     cancelled_at: datetime | None
@@ -86,8 +83,7 @@ class ReimbursementFact:
 @dataclass(frozen=True)
 class FutureReimbursementRow:
     claim_id: UUID
-    party_id: UUID
-    party_name: str
+    counterparty_name: str
     expected_date: date
     outstanding_minor: int
 
@@ -604,7 +600,7 @@ class ReportingRepository:
         limit: int,
     ) -> list[FutureReimbursementRow]:
         """Return a bounded page without aggregating historical non-candidates."""
-        # Reimbursement parties have no cash-account identity. An account
+        # Reimbursement claims have no cash-account identity. An account
         # scoped timeline therefore has no eligible reimbursement candidates;
         # return before constructing aggregates rather than leaking them into
         # an account-filtered page.
@@ -613,23 +609,21 @@ class ReportingRepository:
         receipt_tx = aliased(LedgerTransaction)
         # Apply every source-independent timeline predicate before the costly
         # allocation / receipt aggregates.  In particular, the global cursor
-        # tuple is applied to the party key itself, so a candidate cannot move
+        # tuple is applied to the claim key itself, so a candidate cannot move
         # across pages just because its outstanding amount is later calculated.
         effective_date = func.coalesce(
-            CashFlowSystemOverride.expected_date, ReimbursementParty.expected_date
+            CashFlowSystemOverride.expected_date, ReimbursementClaim.expected_date
         )
         candidates = (
             select(
                 ReimbursementClaim.id.label("claim_id"),
-                ReimbursementParty.id.label("party_id"),
-                ReimbursementParty.name.label("party_name"),
+                ReimbursementClaim.counterparty_name.label("counterparty_name"),
                 effective_date.label("expected_date"),
             )
-            .select_from(ReimbursementParty)
-            .join(ReimbursementClaim, ReimbursementClaim.id == ReimbursementParty.claim_id)
+            .select_from(ReimbursementClaim)
             .outerjoin(
                 CashFlowSystemOverride,
-                (CashFlowSystemOverride.system_reference_id == ReimbursementParty.id)
+                (CashFlowSystemOverride.system_reference_id == ReimbursementClaim.id)
                 & (CashFlowSystemOverride.system_kind == "reimbursement"),
             )
             .where(
@@ -640,37 +634,33 @@ class ReportingRepository:
                 _future_after(
                     date_column=cast(ColumnElement[date], effective_date),
                     direction_column=literal("inflow"),
-                    source_type="reimbursement_party",
-                    source_id_column=sql_cast(ReimbursementParty.id, String),
+                    source_type="reimbursement_claim",
+                    source_id_column=sql_cast(ReimbursementClaim.id, String),
                     cursor=cursor,
                 ),
             )
             .cte("future_reimbursement_candidates")
         )
-        allocated_by_party = (
+        allocated_by_claim = (
             select(
                 ReimbursementAllocation.claim_id.label("claim_id"),
-                ReimbursementAllocation.party_id.label("party_id"),
                 func.sum(ReimbursementAllocation.amount_minor).label("allocated_minor"),
             )
             .join(
                 candidates,
-                (candidates.c.claim_id == ReimbursementAllocation.claim_id)
-                & (candidates.c.party_id == ReimbursementAllocation.party_id),
+                candidates.c.claim_id == ReimbursementAllocation.claim_id,
             )
-            .group_by(ReimbursementAllocation.claim_id, ReimbursementAllocation.party_id)
+            .group_by(ReimbursementAllocation.claim_id)
             .subquery()
         )
-        received_by_party = (
+        received_by_claim = (
             select(
                 ReimbursementAllocation.claim_id.label("claim_id"),
-                ReimbursementAllocation.party_id.label("party_id"),
                 func.sum(ReimbursementReceiptAllocation.amount_minor).label("received_minor"),
             )
             .join(
                 candidates,
-                (candidates.c.claim_id == ReimbursementAllocation.claim_id)
-                & (candidates.c.party_id == ReimbursementAllocation.party_id),
+                candidates.c.claim_id == ReimbursementAllocation.claim_id,
             )
             .join(
                 ReimbursementReceiptAllocation,
@@ -682,48 +672,44 @@ class ReportingRepository:
             )
             .join(receipt_tx, receipt_tx.id == ReimbursementReceipt.transaction_id)
             .where(receipt_tx.voided_at.is_(None))
-            .group_by(ReimbursementAllocation.claim_id, ReimbursementAllocation.party_id)
+            .group_by(ReimbursementAllocation.claim_id)
             .subquery()
         )
-        received_minor = func.coalesce(received_by_party.c.received_minor, 0)
-        outstanding = (allocated_by_party.c.allocated_minor - received_minor).label(
+        received_minor = func.coalesce(received_by_claim.c.received_minor, 0)
+        outstanding = (allocated_by_claim.c.allocated_minor - received_minor).label(
             "outstanding_minor"
         )
         statement = (
             select(
                 candidates.c.claim_id,
-                candidates.c.party_id,
-                candidates.c.party_name,
+                candidates.c.counterparty_name,
                 candidates.c.expected_date,
-                allocated_by_party.c.allocated_minor,
+                allocated_by_claim.c.allocated_minor,
                 received_minor,
             )
             .select_from(candidates)
             .join(
-                allocated_by_party,
-                (allocated_by_party.c.claim_id == candidates.c.claim_id)
-                & (allocated_by_party.c.party_id == candidates.c.party_id),
+                allocated_by_claim,
+                allocated_by_claim.c.claim_id == candidates.c.claim_id,
             )
             .outerjoin(
-                received_by_party,
-                (received_by_party.c.claim_id == allocated_by_party.c.claim_id)
-                & (received_by_party.c.party_id == allocated_by_party.c.party_id),
+                received_by_claim,
+                received_by_claim.c.claim_id == allocated_by_claim.c.claim_id,
             )
             .where(outstanding > 0)
-            .order_by(candidates.c.expected_date, sql_cast(candidates.c.party_id, String))
+            .order_by(candidates.c.expected_date, sql_cast(candidates.c.claim_id, String))
             .limit(limit + 1)
         )
         return [
             FutureReimbursementRow(
                 claim_id=claim_id,
-                party_id=party_id,
-                party_name=party_name,
+                counterparty_name=counterparty_name,
                 expected_date=expected_date,
                 outstanding_minor=checked_int64(
                     int(outstanding_minor), label="future reimbursement outstanding"
                 ),
             )
-            for claim_id, party_id, party_name, expected_date, allocated_minor, received_minor in (
+            for claim_id, counterparty_name, expected_date, allocated_minor, received_minor in (
                 await self.session.execute(statement)
             ).all()
             if (
@@ -786,9 +772,8 @@ class ReportingRepository:
                 ReimbursementAllocation.id,
                 ReimbursementAllocation.transaction_id,
                 ReimbursementClaim.id,
-                ReimbursementParty.id,
-                ReimbursementParty.name,
-                ReimbursementParty.expected_date,
+                ReimbursementClaim.counterparty_name,
+                ReimbursementClaim.expected_date,
                 ReimbursementClaim.submitted_at,
                 ReimbursementClaim.cancelled_at,
                 ReimbursementClaim.voided_at,
@@ -796,7 +781,6 @@ class ReportingRepository:
                 received,
             )
             .join(ReimbursementClaim, ReimbursementClaim.id == ReimbursementAllocation.claim_id)
-            .join(ReimbursementParty, ReimbursementParty.id == ReimbursementAllocation.party_id)
             .outerjoin(
                 ReimbursementReceiptAllocation,
                 ReimbursementReceiptAllocation.allocation_id == ReimbursementAllocation.id,
@@ -809,7 +793,6 @@ class ReportingRepository:
             .group_by(
                 ReimbursementAllocation.id,
                 ReimbursementClaim.id,
-                ReimbursementParty.id,
             )
         )
         if source_ids is not None:
@@ -824,8 +807,7 @@ class ReportingRepository:
                 allocation_id=allocation_id,
                 source_transaction_id=transaction_id,
                 claim_id=claim_id,
-                party_id=party_id,
-                party_name=party_name,
+                counterparty_name=counterparty_name,
                 expected_date=expected_date,
                 submitted_at=submitted_at,
                 cancelled_at=cancelled_at,
@@ -837,8 +819,7 @@ class ReportingRepository:
                 allocation_id,
                 transaction_id,
                 claim_id,
-                party_id,
-                party_name,
+                counterparty_name,
                 expected_date,
                 submitted_at,
                 cancelled_at,
@@ -868,16 +849,15 @@ class ReportingRepository:
         return (
             select(
                 ReimbursementAllocation.id.label("allocation_id"),
+                ReimbursementAllocation.transaction_id.label("expense_transaction_id"),
                 ReimbursementClaim.id.label("claim_id"),
-                ReimbursementParty.id.label("party_id"),
-                ReimbursementParty.name.label("party_name"),
-                ReimbursementParty.expected_date.label("expected_date"),
+                ReimbursementClaim.counterparty_name.label("counterparty_name"),
+                ReimbursementClaim.expected_date.label("expected_date"),
                 expected,
                 received,
                 outstanding,
             )
             .join(ReimbursementClaim, ReimbursementClaim.id == ReimbursementAllocation.claim_id)
-            .join(ReimbursementParty, ReimbursementParty.id == ReimbursementAllocation.party_id)
             .outerjoin(
                 ReimbursementReceiptAllocation,
                 ReimbursementReceiptAllocation.allocation_id == ReimbursementAllocation.id,
@@ -887,7 +867,7 @@ class ReportingRepository:
                 ReimbursementReceipt.id == ReimbursementReceiptAllocation.receipt_id,
             )
             .outerjoin(receipt_tx, receipt_tx.id == ReimbursementReceipt.transaction_id)
-            .group_by(ReimbursementAllocation.id, ReimbursementClaim.id, ReimbursementParty.id)
+            .group_by(ReimbursementAllocation.id, ReimbursementClaim.id)
             .having(outstanding > 0)
         )
 
@@ -901,9 +881,9 @@ class ReportingRepository:
         return [
             (
                 allocation_id,
+                expense_transaction_id,
                 claim_id,
-                party_id,
-                party_name,
+                counterparty_name,
                 expected_date,
                 checked_int64(int(expected_minor), label="facts reimbursement expected amount"),
                 checked_int64(int(received_minor), label="facts reimbursement received amount"),
@@ -913,9 +893,9 @@ class ReportingRepository:
             )
             for (
                 allocation_id,
+                expense_transaction_id,
                 claim_id,
-                party_id,
-                party_name,
+                counterparty_name,
                 expected_date,
                 expected_minor,
                 received_minor,
@@ -930,24 +910,7 @@ class ReportingRepository:
         )
         return checked_int64(int(value or 0), label="facts reimbursement total")
 
-    async def facts_completeness_counts(self) -> tuple[int, int, int, int]:
-        unresolved_import_count = await self.session.scalar(
-            select(func.count(StatementImport.id)).where(
-                StatementImport.status.in_(
-                    [
-                        "created",
-                        "extracting",
-                        "parsing",
-                        "review_required",
-                        "ready_to_confirm",
-                        "partially_confirmed",
-                    ]
-                )
-            )
-        )
-        failed_import_count = await self.session.scalar(
-            select(func.count(StatementImport.id)).where(StatementImport.status == "failed")
-        )
+    async def facts_completeness_counts(self) -> tuple[int, int]:
         uncategorized_count = await self.session.scalar(
             select(func.count(LedgerTransaction.id)).where(
                 LedgerTransaction.voided_at.is_(None),
@@ -970,8 +933,6 @@ class ReportingRepository:
             )
         )
         return (
-            checked_int64(int(unresolved_import_count or 0), label="facts unresolved import count"),
-            checked_int64(int(failed_import_count or 0), label="facts failed import count"),
             checked_int64(
                 int(uncategorized_count or 0), label="facts uncategorized transaction count"
             ),

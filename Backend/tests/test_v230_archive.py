@@ -7,6 +7,7 @@ import pytest
 
 from fiscal_api.db.base import Base
 from fiscal_api.services.archive import (
+    _RETIRED_V240_TABLES,
     CURRENT_DATABASE_REVISION,
     ArchiveError,
     ArchiveService,
@@ -15,10 +16,20 @@ from fiscal_api.services.archive import (
 )
 
 
-@pytest.mark.parametrize("source", ["20260831_0038", "20260910_0039"])
+@pytest.mark.parametrize(
+    "source",
+    [
+        "20260831_0038",
+        "20260910_0039",
+        "20260912_0040",
+        "20260922_0041",
+    ],
+)
 def test_legacy_archive_source_validation_and_empty_domain_adaptation(source):
     new_tables = {"cash_flow_settlement_links", "credit_payoff_operations", "credit_payoff_links"}
-    entities = {t.name: [] for t in _archive_tables(Base.metadata) if t.name not in new_tables}
+    omitted = new_tables if source in {"20260831_0038", "20260910_0039"} else set()
+    entities = {t.name: [] for t in _archive_tables(Base.metadata) if t.name not in omitted}
+    entities.update({name: [] for name in _RETIRED_V240_TABLES})
     payload = {"entities": entities, "data_revision": 1}
     manifest = {
         "database_revision": source,
@@ -32,9 +43,28 @@ def test_legacy_archive_source_validation_and_empty_domain_adaptation(source):
     assert report["original_archive_unchanged"]
     assert (manifest, payload) == original
     malformed = deepcopy(payload)
-    malformed["entities"]["credit_payoff_operations"] = []
+    if omitted:
+        malformed["entities"]["credit_payoff_operations"] = []
+    else:
+        del malformed["entities"]["credit_payoff_operations"]
     with pytest.raises(ArchiveError):
         ArchiveService.adapt_to_current(manifest, malformed)
+
+
+def test_0041_nonempty_pdf_archive_is_rejected_without_mutating_original():
+    entities = {t.name: [] for t in _archive_tables(Base.metadata)}
+    entities.update({name: [] for name in _RETIRED_V240_TABLES})
+    entities["statement_imports"] = [{"id": str(uuid4())}]
+    payload = {"entities": entities, "data_revision": 1}
+    manifest = {
+        "database_revision": "20260922_0041",
+        "data_revision": 1,
+        "entity_counts": {name: len(rows) for name, rows in entities.items()},
+    }
+    original = deepcopy((manifest, payload))
+    with pytest.raises(ArchiveError, match="nonempty PDF import history"):
+        ArchiveService.adapt_to_current(manifest, payload)
+    assert (manifest, payload) == original
 
 
 def test_legacy_cashflow_backfill_retains_superseded_and_rejects_ambiguous():

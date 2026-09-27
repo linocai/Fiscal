@@ -1,3 +1,4 @@
+@testable import FiscalPreviewSupportmacOS
 import Foundation
 import Testing
 @testable import FiscalKit
@@ -15,7 +16,7 @@ struct F3CTests {
 
     @MainActor private func fillClaim(_ model: V15ReimbursementModel) {
         model.claimTitle = "八月差旅报销"
-        model.partyName = "示例公司"
+        model.counterpartyName = "示例公司"
         if let candidate = model.candidates.first(where: { $0.transactionID == V15F3CFixtures.candidateID }) { model.chooseCandidate(candidate) }
         model.expectedDateText = "2026-08-20"
     }
@@ -51,9 +52,9 @@ struct F3CTests {
     @Test("validation arrays and domain reason objects preserve exact field paths")
     func fieldPathMapping() {
         let array = APIErrorDetail(code: "validation_error", message: "字段错误", details: .array([
-            .object(["loc": .array([.string("body"), .string("parties"), .integer(0), .string("allocations"), .integer(0), .string("amount_minor")]), "msg": .string("金额不可用")])
+            .object(["loc": .array([.string("body"), .string("expenses"), .integer(0), .string("amount_minor")]), "msg": .string("金额不可用")])
         ]), requestID: "f3c-a")
-        #expect(V15ErrorMapper.map(.domain(status: 422, detail: array)).fieldIssues.first?.fieldPath == "parties[0].allocations[0].amount_minor")
+        #expect(V15ErrorMapper.map(.domain(status: 422, detail: array)).fieldIssues.first?.fieldPath == "expenses[0].amount_minor")
         let object = APIErrorDetail(code: "account_inactive", message: "账户不可用", details: .object(["reason": .string("account_inactive"), "field_path": .string("destination_account_id")]), requestID: "f3c-b")
         let issue = V15ErrorMapper.map(.domain(status: 422, detail: object)).fieldIssues.first
         #expect(issue == .init(code: "account_inactive", message: "账户不可用", fieldPath: "destination_account_id"))
@@ -68,19 +69,19 @@ struct F3CTests {
 
         let claim = try V15FixtureCodec.decoder.decode(V15ReimbursementClaim.self, from: Data(V15F3CFixtures.claim().utf8))
         let receipt = try V15FixtureCodec.decoder.decode(V15ReimbursementReceipt.self, from: Data(V15F3CFixtures.receipt().utf8))
-        let parties = claim.parties.map { party in V15ReimbursementPartyDraft(id: party.id, name: party.name, expectedDate: party.expectedDate, note: party.note, allocations: party.allocations.map { .init(id: $0.id, transactionID: $0.transactionID, amountMinor: $0.amountMinor) }) }
+        let expenses = claim.expenses.map { V15ReimbursementExpenseDraft(id: $0.id, transactionID: $0.transactionID, amountMinor: $0.amountMinor) }
         let receiptDate = try #require(ISO8601DateFormatter().date(from: "2026-08-15T04:00:00Z"))
-        let claimPreviewRequest = V15ReimbursementClaimPreviewRequest(title: claim.title, note: claim.note, parties: parties, expectedVersion: 3)
+        let claimPreviewRequest = V15ReimbursementClaimPreviewRequest(title: claim.title, note: claim.note, counterpartyName: claim.counterpartyName, expectedDate: claim.expectedDate, expenses: expenses, expectedVersion: 3)
         _ = try await service.previewClaim(claimID: claim.id, request: claimPreviewRequest)
-        _ = try await service.commitClaimReplacement(claimID: claim.id, request: .init(title: claim.title, note: claim.note, parties: parties, expectedVersion: 3, previewToken: V15F3CFixtures.previewID), idempotencyKey: UUID())
+        _ = try await service.commitClaimReplacement(claimID: claim.id, request: .init(title: claim.title, note: claim.note, counterpartyName: claim.counterpartyName, expectedDate: claim.expectedDate, expenses: expenses, expectedVersion: 3, previewToken: V15F3CFixtures.previewID), idempotencyKey: UUID())
         _ = try await service.previewCancellation(claimID: claim.id, request: .init(expectedVersion: 3))
         _ = try await service.commitCancellation(claimID: claim.id, request: .init(expectedVersion: 3, previewToken: V15F3CFixtures.previewID), idempotencyKey: UUID())
-        let receiptDraft = V15ReimbursementReceiptDraft(expectedClaimVersion: 3, partyID: V15F3CFixtures.partyID, amountMinor: 18_000, receivedAt: receiptDate, destinationAccountID: V15F3CFixtures.accountID, title: "公司回款")
+        let receiptDraft = V15ReimbursementReceiptDraft(expectedClaimVersion: 3, amountMinor: 18_000, receivedAt: receiptDate, destinationAccountID: V15F3CFixtures.accountID, title: "公司回款")
         _ = try await service.previewReceipt(claimID: claim.id, request: receiptDraft)
-        _ = try await service.createReceipt(claimID: claim.id, request: .init(expectedClaimVersion: 3, partyID: V15F3CFixtures.partyID, amountMinor: 18_000, receivedAt: receiptDate, destinationAccountID: V15F3CFixtures.accountID, title: "公司回款", previewToken: V15F3CFixtures.previewID), idempotencyKey: UUID())
-        let replacement = V15ReimbursementReceiptReplacePreviewRequest(expectedClaimVersion: 3, partyID: receipt.partyID, amountMinor: receipt.amountMinor, receivedAt: receipt.receivedAt, destinationAccountID: receipt.destinationAccountID, title: receipt.title, note: receipt.note, expectedReceiptVersion: 1)
+        _ = try await service.createReceipt(claimID: claim.id, request: .init(expectedClaimVersion: 3, amountMinor: 18_000, receivedAt: receiptDate, destinationAccountID: V15F3CFixtures.accountID, title: "公司回款", previewToken: V15F3CFixtures.previewID), idempotencyKey: UUID())
+        let replacement = V15ReimbursementReceiptReplacePreviewRequest(expectedClaimVersion: 3, amountMinor: receipt.amountMinor, receivedAt: receipt.receivedAt, destinationAccountID: receipt.destinationAccountID, title: receipt.title, note: receipt.note, expectedReceiptVersion: 1)
         _ = try await service.previewReceiptReplacement(receiptID: receipt.id, request: replacement)
-        _ = try await service.replaceReceipt(receiptID: receipt.id, request: .init(expectedClaimVersion: 3, partyID: receipt.partyID, amountMinor: receipt.amountMinor, receivedAt: receipt.receivedAt, destinationAccountID: receipt.destinationAccountID, title: receipt.title, note: receipt.note, expectedReceiptVersion: 1, previewToken: V15F3CFixtures.previewID), idempotencyKey: UUID())
+        _ = try await service.replaceReceipt(receiptID: receipt.id, request: .init(expectedClaimVersion: 3, amountMinor: receipt.amountMinor, receivedAt: receipt.receivedAt, destinationAccountID: receipt.destinationAccountID, title: receipt.title, note: receipt.note, expectedReceiptVersion: 1, previewToken: V15F3CFixtures.previewID), idempotencyKey: UUID())
         _ = try await service.submit(claimID: claim.id, request: .init(expectedVersion: 3))
         _ = try await service.voidReceipt(receiptID: receipt.id, request: .init(expectedClaimVersion: 3, expectedReceiptVersion: 1))
 
@@ -103,25 +104,51 @@ struct F3CTests {
         let transport = F3CTransport(mode: .normal)
         let model = await loadedModel(transport)
         await model.openNewClaim()
-        #expect(Set(model.createClaimDisabledReasons.compactMap(\.fieldPath)).isSuperset(of: ["title", "parties[0].name", "parties[0].allocations[0].transaction_id"]))
+        #expect(Set(model.createClaimDisabledReasons.compactMap(\.fieldPath)).isSuperset(of: ["title", "counterparty_name", "expenses[0].transaction_id"]))
         #expect(model.visibleNewClaimIssues.isEmpty)
         model.claimTitle = "临时标题"; model.claimTitle = ""
         #expect(model.visibleNewClaimIssues.contains { $0.fieldPath == "title" })
-        #expect(!model.visibleNewClaimIssues.contains { $0.fieldPath == "parties[0].name" })
+        #expect(!model.visibleNewClaimIssues.contains { $0.fieldPath == "counterparty_name" })
         fillClaim(model)
-        #expect(model.selectedCandidate?.categoryID == nil)
-        #expect(model.allocationAmountText == "300.00")
+        #expect(model.selectedCandidates.first?.categoryID == nil)
+        #expect(model.expenseAmountText(for: V15F3CFixtures.candidateID) == "300.00")
         model.expectedDateText = "2026/08/20"
-        #expect(model.createClaimDisabledReasons.contains { $0.fieldPath == "parties[0].expected_date" })
+        #expect(model.createClaimDisabledReasons.contains { $0.fieldPath == "expected_date" })
         model.expectedDateText = "2026-08-20"
         #expect(model.canCreateClaim)
         await model.createClaim()
         #expect(model.newClaimPhase == .succeeded)
         let wire = try #require(await transport.recordedWires().last { $0.method == "POST" && $0.path == "reimbursement-claims" })
         let body = try V15FixtureCodec.decoder.decode(V15ReimbursementClaimDraft.self, from: Data(wire.body.utf8))
-        #expect(body.parties.first?.allocations.first?.transactionID == V15F3CFixtures.candidateID)
-        #expect(body.parties.first?.allocations.first?.amountMinor == 30_000)
-        #expect(body.parties.first?.expectedDate == "2026-08-20")
+        #expect(body.expenses.first?.transactionID == V15F3CFixtures.candidateID)
+        #expect(body.expenses.first?.amountMinor == 30_000)
+        #expect(body.expectedDate == "2026-08-20")
+    }
+
+    @MainActor @Test("one claim keeps independent amounts for multiple expenses")
+    func multipleExpensesInOneClaim() async throws {
+        let transport = F3CTransport(mode: .normal)
+        let model = await loadedModel(transport)
+        await model.openNewClaim()
+        fillClaim(model)
+        let secondID = UUID(uuidString: "00000000-0000-0000-0000-00000000C314")!
+        let secondData = Data(V15F3CFixtures.candidates.replacingOccurrences(
+            of: V15F3CFixtures.candidateID.uuidString,
+            with: secondID.uuidString
+        ).utf8)
+        let secondPage = try V15FixtureCodec.decoder.decode(V15Page<V15ReimbursementCandidate>.self, from: secondData)
+        let second = try #require(secondPage.items.first)
+        model.chooseCandidate(second)
+        model.chooseCandidate(second)
+        #expect(model.selectedCandidates.count == 2)
+        model.setExpenseAmountText("20.00", for: secondID)
+        #expect(model.expenseAmountText(for: V15F3CFixtures.candidateID) == "300.00")
+        #expect(model.canCreateClaim)
+        await model.createClaim()
+        let wire = try #require(await transport.recordedWires().last { $0.method == "POST" && $0.path == "reimbursement-claims" })
+        let draft = try V15FixtureCodec.decoder.decode(V15ReimbursementClaimDraft.self, from: Data(wire.body.utf8))
+        #expect(draft.expenses.map(\.transactionID) == [V15F3CFixtures.candidateID, secondID])
+        #expect(draft.expenses.map(\.amountMinor) == [30_000, 2_000])
     }
 
     @MainActor @Test("candidate and receipt-account loading empty error retry stay independently actionable")
@@ -129,7 +156,7 @@ struct F3CTests {
         let candidateFailure = await loadedModel(F3CTransport(mode: .candidateErrorThenSuccess))
         await candidateFailure.openNewClaim()
         if case .failed = candidateFailure.candidatesPhase {} else { Issue.record("expected candidate failure") }
-        #expect(candidateFailure.createClaimDisabledReasons.contains { $0.fieldPath == "parties[0].allocations[0].transaction_id" })
+        #expect(candidateFailure.createClaimDisabledReasons.contains { $0.fieldPath == "expenses[0].transaction_id" })
         await candidateFailure.retryCandidates()
         #expect(candidateFailure.candidatesPhase == .loaded)
 
@@ -553,8 +580,8 @@ struct F3CTests {
         await model.openNewClaim(preselecting: V15F3CFixtures.candidateID)
 
         #expect(model.newClaimSheetVisible)
-        #expect(model.selectedCandidate?.transactionID == V15F3CFixtures.candidateID)
-        #expect(model.allocationAmountText == "300.00")
+        #expect(model.selectedCandidates.first?.transactionID == V15F3CFixtures.candidateID)
+        #expect(model.expenseAmountText(for: V15F3CFixtures.candidateID) == "300.00")
         #expect(model.newClaimPhase == .ready)
         #expect(await transport.requestedCursors() == [nil, "candidate-page-2"])
     }
@@ -565,7 +592,7 @@ struct F3CTests {
         let model = V15ReimbursementModel(services: V15Services(transport: transport))
         await model.openNewClaim(preselecting: V15F3CFixtures.candidateID)
 
-        #expect(model.selectedCandidate == nil)
+        #expect(model.selectedCandidates.isEmpty)
         #expect(model.newClaimServerIssues.contains { $0.code == "initial_reimbursement_candidate_not_found" })
         if case .failed(let failure) = model.newClaimPhase {
             #expect(failure.code == "initial_reimbursement_candidate_not_found")

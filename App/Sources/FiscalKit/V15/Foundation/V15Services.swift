@@ -254,7 +254,6 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
     public let creditCycles: V15CreditCycleReadService
     public let reports: V15ReportsService
     public let archives: V15ArchiveService
-    public let merchants: V15MerchantService
     public let categories: V15CategoryTransformService
     public let payoff: V15CreditPayoffService
     public let credit: V15CreditService
@@ -262,7 +261,6 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
     public let installments: V15InstallmentService
     public let cashFlow: V15CashFlowService
     public let ai: V15AIService
-    public let statementImports: V15StatementImportService
     public let deepLinks: V15DeepLinkReadService
     public let actions: V15FormalActionService
     public let pendingWrites: V15PendingWriteStore
@@ -287,9 +285,6 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
         creditCycles = .init(transport: transport)
         reports = .init(transport: transport)
         archives = .init(transport: transport)
-        merchants = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
-        })
         categories = .init(transport: transport, writable: { [weak revisionStore] in
             guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
@@ -309,9 +304,6 @@ public struct V15ArchiveArtifact: Sendable, Equatable {
             guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         ai = .init(transport: transport, writable: { [weak revisionStore] in
-            guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
-        })
-        statementImports = .init(transport: transport, writable: { [weak revisionStore] in
             guard revisionStore?.offlineSnapshotAt == nil else { throw V15Failure(kind: .offlineReadOnly, code: "offline_read_only", message: "离线时只可查看，无法提交更改。") }
         })
         deepLinks = .init(transport: transport)
@@ -425,6 +417,17 @@ public struct V15MasterDataReadService: Sendable {
 public struct V15LedgerCreateService: Sendable {
     private let transport: any V15Transporting; private let writable: @MainActor @Sendable () throws -> Void
     init(transport: any V15Transporting, writable: @escaping @MainActor @Sendable () throws -> Void) { self.transport = transport; self.writable = writable }
+    func merchantMapping(transactionID: UUID) async throws -> V15MerchantMappingState {
+        try await transport.send(.init(path: "transactions/\(transactionID)/merchant-mapping", readCachePolicy: .reloadIgnoringCache), body: nil)
+    }
+    func confirmMerchant(transactionID: UUID, request: V15MerchantMappingRequest, key: UUID) async throws -> V15MerchantMappingReceipt {
+        try await writable()
+        return try await transport.send(.init(path: "transactions/\(transactionID)/merchant-mapping", method: "PUT", headers: ["Idempotency-Key": key.uuidString]), body: try V15BodyEncoder.encode(request))
+    }
+    func releaseMerchant(transactionID: UUID, version: Int, key: UUID) async throws -> V15MerchantMappingReceipt {
+        try await writable()
+        return try await transport.send(.init(path: "transactions/\(transactionID)/merchant-mapping", method: "DELETE", headers: ["Idempotency-Key": key.uuidString]), body: .object(["expected_mapping_version": .integer(Int64(version))]))
+    }
     /// A write may have reached the server even when no response can be used.
     /// Callers must read back facts and revisions before offering another write.
     /// Request encoding failures are deterministic and intentionally excluded.
@@ -616,28 +619,13 @@ public struct V15ArchiveService: Sendable {
     }
 }
 
-public struct V15MerchantService: Sendable {
-    private let transport: any V15Transporting; private let writable: @MainActor @Sendable () throws -> Void
-    init(transport: any V15Transporting, writable: @escaping @MainActor @Sendable () throws -> Void) { self.transport = transport; self.writable = writable }
-    public func list(query search: String? = nil, cursor: String? = nil, limit: Int = 50, includeArchived: Bool = false) async throws -> V15Page<V15Merchant> { var query = [URLQueryItem(name: "limit", value: String(limit)), .init(name: "include_archived", value: String(includeArchived))]; if let search, !search.isEmpty { query.append(.init(name: "query", value: search)) }; if let cursor { query.append(.init(name: "cursor", value: cursor)) }; return try await transport.send(.init(path: "merchants", query: query), body: nil) }
-    public func get(id: UUID) async throws -> V15Merchant { try await transport.send(.init(path: "merchants/\(id)"), body: nil) }
-    public func create(_ draft: V15MerchantDraft) async throws -> V15Merchant { try await writable(); return try await transport.send(.init(path: "merchants", method: "POST"), body: try V15BodyEncoder.encode(draft)) }
-    public func patch(id: UUID, patch: V15MerchantPatch) async throws -> V15Merchant { try await writable(); return try await transport.send(.init(path: "merchants/\(id)", method: "PATCH"), body: try V15BodyEncoder.encode(patch)) }
-    public func history(transactionID: UUID, cursor: String? = nil) async throws -> V15Page<V15JSONRecord> { var query: [URLQueryItem] = []; if let cursor { query.append(.init(name: "cursor", value: cursor)) }; return try await transport.send(.init(path: "transactions/\(transactionID)/revisions", query: query), body: nil) }
-    public func mapping(transactionID: UUID) async throws -> V15MerchantMapping? { try await transport.send(.init(path: "transactions/\(transactionID)/merchant-mapping"), body: nil) }
-    public func confirmMapping(transactionID: UUID, request: V15MerchantMappingRequest, idempotencyKey: UUID) async throws -> V15MerchantMappingReceipt { try await writable(); return try await transport.send(.init(path: "transactions/\(transactionID)/merchant-mapping", method: "PUT", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(request)) }
-    public func releaseMapping(transactionID: UUID, request: V15MerchantMappingReleaseRequest, idempotencyKey: UUID) async throws -> V15MerchantMappingReceipt { try await writable(); return try await transport.send(.init(path: "transactions/\(transactionID)/merchant-mapping", method: "DELETE", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(request)) }
-}
-
 public struct V15JSONRecord: Codable, Sendable { public let values: JSONValue; public init(from decoder: Decoder) throws { values = try JSONValue(from: decoder) }; public func encode(to encoder: Encoder) throws { try values.encode(to: encoder) } }
 
 public struct V15CategoryTransformService: Sendable {
     private let transport: any V15Transporting; private let writable: @MainActor @Sendable () throws -> Void
     init(transport: any V15Transporting, writable: @escaping @MainActor @Sendable () throws -> Void) { self.transport = transport; self.writable = writable }
     public func mergePreview(sourceID: UUID, request: V15CategoryMergePreviewRequest) async throws -> V15CategoryMergePreview { try await writable(); return try await transport.send(.init(path: "categories/\(sourceID)/merge-preview", method: "POST"), body: try V15BodyEncoder.encode(request)) }
-    public func splitPreview(rootID: UUID, request: V15CategorySplitPreviewRequest) async throws -> V15CategorySplitPreview { try await writable(); return try await transport.send(.init(path: "categories/\(rootID)/split-preview", method: "POST"), body: try V15BodyEncoder.encode(request)) }
     public func commitMerge(sourceID: UUID, request: V15CategoryMergeCommitRequest, idempotencyKey: UUID) async throws -> V15CategoryTransformReceipt { try await writable(); return try await transport.send(.init(path: "categories/\(sourceID)/merge-commit", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(request)) }
-    public func commitSplit(rootID: UUID, request: V15CategorySplitCommitRequest, idempotencyKey: UUID) async throws -> V15CategoryTransformReceipt { try await writable(); return try await transport.send(.init(path: "categories/\(rootID)/split-commit", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(request)) }
 }
 
 public struct V15CreditService: Sendable {
@@ -732,68 +720,6 @@ public struct V15InstallmentService: Sendable {
     public func settleEarly(planID: UUID, request: V15InstallmentSettlementRequest, idempotencyKey: UUID) async throws -> V15InstallmentSettlementResult { try await writable(); return try await transport.send(.init(path: "installment-plans/\(planID)/settle-early", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(request)) }
     public func cancelFuture(planID: UUID, request: V15InstallmentActionRequest, idempotencyKey: UUID) async throws -> V15InstallmentCancellationResult { try await writable(); return try await transport.send(.init(path: "installment-plans/\(planID)/cancel-future", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(request)) }
     public func reverseSettlement(planID: UUID, request: V15InstallmentActionRequest, idempotencyKey: UUID) async throws -> V15InstallmentReverseSettlementResult { try await writable(); return try await transport.send(.init(path: "installment-plans/\(planID)/reverse-settlement", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(request)) }
-}
-
-public struct V15StatementImportService: Sendable {
-    private let transport: any V15Transporting; private let writable: @MainActor @Sendable () throws -> Void
-    init(transport: any V15Transporting, writable: @escaping @MainActor @Sendable () throws -> Void) { self.transport = transport; self.writable = writable }
-    public func register(_ request: V15StatementImportRegistration) async throws -> V15StatementImportRegistrationResponse {
-        try await writable(); return try await transport.send(.init(path: "statement-imports", method: "POST"), body: try V15BodyEncoder.encode(request))
-    }
-    public func statement(id: UUID, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15StatementImport {
-        try await transport.send(.init(path: "statement-imports/\(id)", readCachePolicy: readCachePolicy), body: nil)
-    }
-    public func startExtraction(importID: UUID, expectedVersion: Int) async throws -> V15StatementImportAttempt {
-        try await writable(); return try await transport.send(.init(path: "statement-imports/\(importID)/attempts", method: "POST"), body: try V15BodyEncoder.encode(V15StatementImportVersionRequest(expectedVersion: expectedVersion)))
-    }
-    public func submitEvidence(importID: UUID, request: V15StatementEvidenceSubmission) async throws -> V15StatementEvidenceResponse {
-        try await writable(); return try await transport.send(.init(path: "statement-imports/\(importID)/evidence", method: "POST"), body: try V15BodyEncoder.encode(request))
-    }
-    public func fail(importID: UUID, expectedVersion: Int, code: String) async throws -> V15StatementImport {
-        try await writable(); return try await transport.send(.init(path: "statement-imports/\(importID)/fail", method: "POST"), body: try V15BodyEncoder.encode(V15StatementImportFailureRequest(expectedVersion: expectedVersion, errorCode: code)))
-    }
-    public func abandon(importID: UUID, expectedVersion: Int) async throws -> V15StatementImport {
-        try await writable(); return try await transport.send(.init(path: "statement-imports/\(importID)/abandon", method: "POST"), body: try V15BodyEncoder.encode(V15StatementImportVersionRequest(expectedVersion: expectedVersion)))
-    }
-    public func providerAuthorization(importID: UUID, readCachePolicy: V15ReadCachePolicy = .reloadIgnoringCache) async throws -> V15StatementProviderAuthorizationPreview { try await transport.send(.init(path: "statement-imports/\(importID)/provider-authorization", readCachePolicy: .reloadIgnoringCache), body: nil) }
-    public func recovery(importID: UUID, readCachePolicy: V15ReadCachePolicy = .reloadIgnoringCache) async throws -> V15StatementRecovery { try await transport.send(.init(path: "statement-imports/\(importID)/recovery", readCachePolicy: .reloadIgnoringCache), body: nil) }
-    public func providerAttemptReceipt(importID: UUID, idempotencyKey: UUID, readCachePolicy: V15ReadCachePolicy = .reloadIgnoringCache) async throws -> V15StatementProviderAttempt { try await transport.send(.init(path: "statement-imports/\(importID)/provider-attempts/by-idempotency/\(idempotencyKey)", readCachePolicy: .reloadIgnoringCache), body: nil) }
-    public func providerAttempt(importID: UUID, request: V15StatementProviderAttemptCreate, idempotencyKey: UUID) async throws -> V15StatementProviderAttempt { try await writable(); return try await transport.send(.init(path: "statement-imports/\(importID)/provider-attempts", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(request)) }
-    public func validationRun(importID: UUID, request: V15StatementValidationRunCreate) async throws -> V15StatementReview {
-        try await writable(); return try await transport.send(.init(path: "statement-imports/\(importID)/validation-runs", method: "POST"), body: try V15BodyEncoder.encode(request))
-    }
-    public func workbench(importID: UUID, cursor: Int = 0, limit: Int = 100, filters: V15StatementWorkbenchFilter? = nil, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15StatementWorkbench {
-        guard cursor >= 0, (1...200).contains(limit) else { throw V15Failure(kind: .decoding, code: "invalid_statement_page", message: "账单复核分页参数无效。") }
-        var query = [URLQueryItem(name: "cursor", value: String(cursor)), URLQueryItem(name: "limit", value: String(limit))]
-        if let filters { query.append(.init(name: "filters", value: String(data: try V15BodyEncoder.data(filters), encoding: .utf8))) }
-        return try await transport.send(.init(path: "statement-imports/\(importID)/review-workbench", query: query, readCachePolicy: readCachePolicy), body: nil)
-    }
-    public func workbenchPage(importID: UUID, pageNumber: Int, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15StatementWorkbenchPage {
-        guard pageNumber > 0 else { throw V15Failure(kind: .decoding, code: "invalid_statement_page", message: "账单页码无效。") }
-        return try await transport.send(.init(path: "statement-imports/\(importID)/review-workbench/pages/\(pageNumber)", readCachePolicy: readCachePolicy), body: nil)
-    }
-    public func putResolution(importID: UUID, rowID: UUID, request: V15StatementDraftResolutionPut) async throws -> V15StatementReview {
-        if case .unknown = request.resolution { throw V15Failure(kind: .decoding, code: "unknown_statement_resolution", message: "未知方案不能写入。") }
-        try await writable(); return try await transport.send(.init(path: "statement-imports/\(importID)/rows/\(rowID)/draft-resolution", method: "PUT"), body: try V15BodyEncoder.encode(request))
-    }
-    public func finalCreateDraft(importID: UUID, rowID: UUID, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15StatementFinalCreateDraft {
-        try await transport.send(.init(path: "statement-imports/\(importID)/rows/\(rowID)/final-create-draft", readCachePolicy: readCachePolicy), body: nil)
-    }
-    public func putFinalCreateDraft(importID: UUID, rowID: UUID, request: V15StatementFinalCreateDraftPut) async throws -> V15StatementFinalCreateDraft {
-        try await writable(); return try await transport.send(.init(path: "statement-imports/\(importID)/rows/\(rowID)/final-create-draft", method: "PUT"), body: try V15BodyEncoder.encode(request))
-    }
-    public func confirmationPreview(importID: UUID, rowIDs: [UUID]) async throws -> V15StatementConfirmationPreview {
-        guard !rowIDs.isEmpty, Set(rowIDs).count == rowIDs.count else { throw V15Failure(kind: .decoding, code: "invalid_statement_selection", message: "请选择且仅选择一次要确认的行。") }
-        return try await transport.send(.init(path: "statement-imports/\(importID)/confirmation-preview", method: "POST"), body: try V15BodyEncoder.encode(V15StatementConfirmationPreviewRequest(rowIDs: rowIDs)))
-    }
-    /// The preview's request is the only confirmed payload accepted here. The
-    /// caller cannot construct versions from visible rows.
-    public func confirm(importID: UUID, serverRequest: V15StatementConfirmRequest, idempotencyKey: UUID) async throws -> V15StatementConfirmationReceipt {
-        try await writable(); return try await transport.send(.init(path: "statement-imports/\(importID)/confirm", method: "POST", headers: ["Idempotency-Key": idempotencyKey.uuidString]), body: try V15BodyEncoder.encode(serverRequest))
-    }
-    public func confirmationReceipt(importID: UUID, idempotencyKey: UUID, readCachePolicy: V15ReadCachePolicy = .standard) async throws -> V15StatementConfirmationReceipt {
-        try await transport.send(.init(path: "statement-imports/\(importID)/confirmation-receipt", headers: ["Idempotency-Key": idempotencyKey.uuidString], readCachePolicy: readCachePolicy), body: nil)
-    }
 }
 
 /// Deep links resolved by P30-B are reads, never instructions to perform a

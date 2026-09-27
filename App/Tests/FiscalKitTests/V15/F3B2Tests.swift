@@ -1,3 +1,4 @@
+@testable import FiscalPreviewSupportmacOS
 import Foundation
 import Testing
 @testable import FiscalKit

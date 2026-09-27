@@ -172,17 +172,7 @@ private struct V15FutureEventRow: View {
     private var certaintyColor: Color { switch event.certainty { case .exactDue, .confirmed: V15Palette.teal.color; case .scheduled: V15Palette.provisionalMarker.color; case .expected: V15Palette.ink.color.opacity(0.48) } }
     private var certainty: String { switch event.certainty { case .exactDue: "到期日已确认"; case .confirmed: "已确认"; case .expected: "预计（尚未确认）"; case .scheduled: "已排期" } }
     private var direction: String { event.direction == .inflow ? "流入" : "流出" }
-    private var source: String { switch event.sourceType { case .creditCycle: "信用账期"; case .reimbursementParty: "报销对象"; case .cashFlowItem: "现金流事项" } }
+    private var source: String { switch event.sourceType { case .creditCycle: "信用账期"; case .reimbursementClaim: "报销待收"; case .cashFlowItem: "现金流事项" } }
 }
 
-/// Gallery-only deterministic evidence for the real model's local page-error
-/// state.  The production route reaches the same state through `loadNextPage`;
-/// this variant lets the snapshot renderer capture it without racing its
-/// short off-screen RunLoop.
-struct V15FutureTimelineMacPageErrorEvidence: View {
-    private let event = V15FutureEvent(sourceType: .creditCycle, sourceID: V15F3AFixtures.creditID, date: "2026-08-20", direction: .outflow, amountMinor: 922_337_203_685_477_580, certainty: .exactDue, title: "超长中文信用账期到期事项，用于确认无截断展示", deepLink: "fiscal://credit/cycles/\(V15F3AFixtures.creditID.uuidString)", accountID: V15F3AFixtures.accountID, claimID: nil, partyID: nil, cycleID: V15F3AFixtures.creditID)
-    var body: some View { HSplitView { VStack(alignment: .leading, spacing: V15Spacing.md) { Text("已知未来").font(V15Typography.surfaceTitle); Text("只读时间线").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)); ForEach([7,30,60,90], id: \.self) { Text("未来 \($0) 天").padding(V15Spacing.sm).frame(maxWidth: .infinity, alignment: .leading).background($0 == 30 ? V15Palette.selected.color : .clear, in: RoundedRectangle(cornerRadius: V15Radius.control)) }; Spacer() }.padding(V15Spacing.md).frame(minWidth: 190)
-        ScrollView { VStack(alignment: .leading, spacing: V15Spacing.md) { Text("未来日程").font(V15Typography.cardTitle); Text("上海业务日").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)); V15FutureEventRow(event: event); V15ActionButton("读取下一页", kind: .secondary) {}.accessibilityIdentifier("v15.f3a.next"); V15ServiceErrorState(message: "暂时无法读取更多未来事项。") {}.accessibilityIdentifier("v15.f3a.page-error") }.padding(V15Spacing.md) }.frame(minWidth: 390)
-        VStack(alignment: .leading, spacing: V15Spacing.md) { Text("详情").font(V15Typography.cardTitle); Spacer(); V15EmptyState(title: "选择一个未来事项", explanation: "这里显示只读详情。"); Spacer() }.padding(V15Spacing.md).frame(minWidth: 280) }.background(V15Palette.paper.color).accessibilityIdentifier("v15.f3a.timeline.macos") }
-}
 #endif

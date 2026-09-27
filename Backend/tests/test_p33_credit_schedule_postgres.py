@@ -16,8 +16,6 @@ from fiscal_api.db.models import (
     InstallmentLedgerLink,
     InstallmentPeriod,
     InstallmentPlan,
-    StatementImport,
-    StatementImportRow,
 )
 from fiscal_api.db.session import create_engine, create_session_factory
 from fiscal_api.main import create_app
@@ -173,37 +171,6 @@ def _add_ai_cycle_reference(cycle_id: str) -> None:
                         target="transaction",
                         status="pending",
                         credit_cycle_id=UUID(cycle_id),
-                    )
-                )
-                await session.commit()
-        finally:
-            await engine.dispose()
-
-    asyncio.run(add())
-
-
-def _add_statement_cycle_candidate(cycle_id: str) -> None:
-    async def add() -> None:
-        assert TEST_DATABASE_URL is not None
-        engine = create_engine(TEST_DATABASE_URL)
-        try:
-            factory = create_session_factory(engine)
-            async with factory() as session:
-                statement_import = StatementImport(
-                    document_sha256=(uuid4().hex * 2)[:64],
-                    byte_size=1,
-                    page_count=1,
-                    mime_type="application/pdf",
-                    display_name="statement.pdf",
-                    status="created",
-                )
-                session.add(statement_import)
-                await session.flush()
-                session.add(
-                    StatementImportRow(
-                        statement_import_id=statement_import.id,
-                        row_number=1,
-                        credit_cycle_id_candidate=UUID(cycle_id),
                     )
                 )
                 await session.commit()
@@ -700,66 +667,6 @@ def test_p33_ai_cycle_reference_preserves_old_cycle_and_new_reference_stales_pre
         )
         assert next_preview.status_code == 200, next_preview.text
         _add_ai_cycle_reference(moved.json()["credit_cycle_id"])
-        before_commit = _revision()
-        stale = client.post(
-            f"/api/v1/credit-accounts/{account['id']}/schedule-change",
-            headers={**auth, "Idempotency-Key": str(uuid4())},
-            json={
-                **_due_only_payload(refreshed, due_day=26),
-                "preview_token": next_preview.json()["preview_token"],
-            },
-        )
-        assert stale.status_code == 409, stale.text
-        assert stale.json()["error"]["code"] == "credit_schedule_preview_stale"
-        assert _revision() == before_commit
-
-
-def test_p33_statement_cycle_candidate_preserves_old_cycle_and_stales_preview() -> None:
-    app, auth = _app()
-    with TestClient(app) as client:
-        account = _credit_account(client, auth)
-        category = _category(client, auth)
-        purchase = _purchase(client, auth, str(account["id"]), str(category["id"]))
-        _add_statement_cycle_candidate(str(purchase["credit_cycle_id"]))
-        preview = client.post(
-            f"/api/v1/credit-accounts/{account['id']}/schedule-change-preview",
-            headers=auth,
-            json=_preview_payload(account),
-        )
-        assert preview.status_code == 200, preview.text
-        committed = client.post(
-            f"/api/v1/credit-accounts/{account['id']}/schedule-change",
-            headers={**auth, "Idempotency-Key": str(uuid4())},
-            json={**_preview_payload(account), "preview_token": preview.json()["preview_token"]},
-        )
-        assert committed.status_code == 200, committed.text
-        moved = client.get(f"/api/v1/transactions/{purchase['id']}", headers=auth)
-        assert moved.json()["credit_cycle_id"] != purchase["credit_cycle_id"]
-        assert (
-            client.get(
-                f"/api/v1/credit-cycles/{purchase['credit_cycle_id']}", headers=auth
-            ).status_code
-            == 200
-        )
-        future = client.get(
-            "/api/v1/reports/future-events",
-            headers=auth,
-            params={"window_days": 90, "account_id": account["id"]},
-        )
-        assert [
-            item["source_id"]
-            for item in future.json()["items"]
-            if item["source_type"] == "credit_cycle"
-        ] == [moved.json()["credit_cycle_id"]]
-
-        refreshed = client.get(f"/api/v1/accounts/{account['id']}", headers=auth).json()
-        next_preview = client.post(
-            f"/api/v1/credit-accounts/{account['id']}/schedule-change-preview",
-            headers=auth,
-            json=_due_only_payload(refreshed, due_day=26),
-        )
-        assert next_preview.status_code == 200, next_preview.text
-        _add_statement_cycle_candidate(moved.json()["credit_cycle_id"])
         before_commit = _revision()
         stale = client.post(
             f"/api/v1/credit-accounts/{account['id']}/schedule-change",

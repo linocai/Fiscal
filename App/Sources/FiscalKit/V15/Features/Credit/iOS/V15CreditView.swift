@@ -5,16 +5,12 @@ public struct V15CreditView: View {
     @State private var showsPayoff = false
     @State private var recordKind: V15ManualTransactionKind?
     @State private var model: V15CreditModel
-    private let initialGalleryScenario: String?
-    private let fixtureReconnectAction: (() -> Void)?
     private let initialCycle: V15CreditCycle?
     private let initialAccountID: UUID?
     @State private var initialContextFailure: V15Failure?
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, initialGalleryScenario: String? = nil, fixtureReconnectAction: (() -> Void)? = nil, initialCycle: V15CreditCycle? = nil, initialAccountID: UUID? = nil) {
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, offlineSnapshotProvider: (@MainActor @Sendable () -> Date?)? = nil, initialCycle: V15CreditCycle? = nil, initialAccountID: UUID? = nil) {
         self.services = services; _model = State(initialValue: .init(services: services, offlineSnapshotAt: offlineSnapshotAt, offlineSnapshotProvider: offlineSnapshotProvider))
         _initialContextFailure = State(initialValue: nil)
-        self.initialGalleryScenario = initialGalleryScenario
-        self.fixtureReconnectAction = fixtureReconnectAction
         self.initialCycle = initialCycle
         self.initialAccountID = initialAccountID
     }
@@ -81,12 +77,6 @@ public struct V15CreditView: View {
             }
             await model.selectAccount(account)
         }
-        guard let scenario = initialGalleryScenario else { return }
-        if scenario == "credit-page-error" { await model.loadNextCycles(); return }
-        guard ["credit-expired", "credit-disabled", "credit-conflict", "credit-field-error"].contains(scenario) else { return }
-        model.openScheduleSheet(); model.cycleMode = .statementDayCutoff; model.statementDayText = "25"; model.dueDayText = "10"
-        await model.requestSchedulePreview()
-        if scenario == "credit-conflict" { await model.commitSchedule() }
     }
 
     private var initialContextMayResolve: Bool {
@@ -333,9 +323,6 @@ public struct V15CreditView: View {
             Button("放弃同一键恢复并刷新账户") { model.abandonUnknownAttempt() }
                 .disabled(model.unknownReadbackPhase == .loading)
                 .accessibilityIdentifier("v15.f3b1.schedule.unknown.abandon")
-            if let fixtureReconnectAction {
-                Button("恢复连接") { fixtureReconnectAction() }.accessibilityIdentifier("v15.f3b1.fixture.reconnect")
-            }
         }
         case .conflict(let conflict): V15Section("账期已变化") { Text(conflict.message).font(V15Typography.secondary); if let error = model.scheduleReloadError { Text(error.message).font(V15Typography.secondary).foregroundStyle(V15Palette.danger.color).accessibilityIdentifier("v15.f3b1.schedule.conflict.reload-error") }; Button("刷新账户后重新预览") { Task { await model.reloadAfterConflict() } }.accessibilityIdentifier("v15.f3b1.schedule.conflict.reload") }.accessibilityIdentifier("v15.f3b1.schedule.conflict")
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.requestSchedulePreview() } }.accessibilityIdentifier("v15.f3b1.schedule.error")

@@ -4,21 +4,31 @@ import SwiftUI
 public struct V15ReimbursementMacView: View {
     @State private var model: V15ReimbursementModel
     @State private var inspectorMode: InspectorMode = .claim
-    private let initialGalleryScenario: String?
     private let initialClaim: V15ReimbursementClaim?
     private let initialClaimID: UUID?
-    private let initialPartyID: UUID?
     private let initialTransactionID: UUID?
+    private let initialReceiptReplacementID: UUID?
+    private let preparesOwnModel: Bool
 
     private enum InspectorMode: Equatable { case claim, claimReplacement, receiptActions(UUID), receiptReplacement(UUID) }
 
-    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialGalleryScenario: String? = nil, initialClaim: V15ReimbursementClaim? = nil, initialClaimID: UUID? = nil, initialPartyID: UUID? = nil, initialTransactionID: UUID? = nil) {
+    public init(services: V15Services, offlineSnapshotAt: Date? = nil, initialClaim: V15ReimbursementClaim? = nil, initialClaimID: UUID? = nil, initialTransactionID: UUID? = nil) {
         _model = State(initialValue: V15ReimbursementModel(services: services, offlineSnapshotAt: offlineSnapshotAt))
-        self.initialGalleryScenario = initialGalleryScenario
         self.initialClaim = initialClaim
         self.initialClaimID = initialClaimID
-        self.initialPartyID = initialPartyID
         self.initialTransactionID = initialTransactionID
+        initialReceiptReplacementID = nil
+        preparesOwnModel = true
+    }
+
+    public init(model: V15ReimbursementModel, initialReceiptReplacementID: UUID? = nil) {
+        _model = State(initialValue: model)
+        _inspectorMode = State(initialValue: initialReceiptReplacementID.map(InspectorMode.receiptReplacement) ?? .claim)
+        initialClaim = nil
+        initialClaimID = nil
+        initialTransactionID = nil
+        self.initialReceiptReplacementID = initialReceiptReplacementID
+        preparesOwnModel = false
     }
 
     public var body: some View {
@@ -36,6 +46,7 @@ public struct V15ReimbursementMacView: View {
         }
         .v22PageCanvas()
         .task {
+            guard preparesOwnModel else { return }
             if let initialClaim {
                 await model.openClaim(initialClaim, readCachePolicy: .reloadIgnoringCache)
             } else if let initialClaimID {
@@ -44,7 +55,9 @@ public struct V15ReimbursementMacView: View {
                 if model.phase == .idle { await model.load() }
                 if let initialTransactionID { await model.openNewClaim(preselecting: initialTransactionID) }
             }
-            if let initialGalleryScenario { await prepareGalleryScenario(initialGalleryScenario) }
+        }
+        .onChange(of: initialReceiptReplacementID) { _, id in
+            if let id { inspectorMode = .receiptReplacement(id) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("v15.f3c.reimbursements.macos")
@@ -83,7 +96,7 @@ public struct V15ReimbursementMacView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: V15Spacing.lg) {
                     HStack(alignment: .firstTextBaseline) {
-                        VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(claim.title).font(V15Typography.surfaceTitle); Text("\(claim.status.displayName) · \(claim.partyCount) 位当事人").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
+                        VStack(alignment: .leading, spacing: V15Spacing.xxs) { Text(claim.title).font(V15Typography.surfaceTitle); Text("\(claim.status.displayName) · \(claim.counterpartyName)").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
                         Spacer(); VStack(alignment: .trailing, spacing: 2) { Text("未到账").font(V15Typography.label).foregroundStyle(V15Palette.ink.color.opacity(0.62)); Text(money(claim.outstandingMinor)).font(V15Typography.moneyLarge).foregroundStyle(V15Palette.teal.color).monospacedDigit() }
                     }
                     V15Section("报销进度") {
@@ -96,12 +109,12 @@ public struct V15ReimbursementMacView: View {
                             .font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)).fixedSize(horizontal: false, vertical: true)
                     }.accessibilityIdentifier("v15.f3c.mac.amount-matrix")
                     if !claim.status.isKnown { V15EmptyState(title: "暂时无法识别此状态", explanation: "当前只供查看，不能修改。") }
-                    V15Section("当事人与分摊", detail: "\(claim.partyCount) 位") {
-                        ForEach(claim.parties, id: \.id) { party in
+                    V15Section("关联费用", detail: "\(claim.expenseCount) 笔") {
+                        ForEach(claim.expenses, id: \.id) { expense in
                             VStack(alignment: .leading, spacing: V15Spacing.xs) {
-                                HStack { Text(party.name).font(V15Typography.body.weight(.semibold)); Spacer(); Text("未到账 \(money(party.outstandingMinor))").font(V15Typography.money).monospacedDigit() }
-                                ForEach(party.allocations, id: \.id) { allocation in Text("\(allocation.expenseTitle) · 分摊 \(money(allocation.amountMinor)) · 已到账 \(money(allocation.receivedMinor))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
-                            }.padding(V15Spacing.md).background(initialPartyID == party.id ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
+                                HStack { Text(expense.expenseTitle).font(V15Typography.body.weight(.semibold)); Spacer(); Text(money(expense.amountMinor)).font(V15Typography.money).monospacedDigit() }
+                                Text("已到账 \(money(expense.receivedMinor)) · 未到账 \(money(expense.outstandingMinor))").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                            }.padding(V15Spacing.md).background(V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
                         }
                     }
                     V15Section("到账历史", detail: "\(model.receipts.count) 笔") {
@@ -117,7 +130,7 @@ public struct V15ReimbursementMacView: View {
                     }
                 }.padding(V15Spacing.lg)
             }.accessibilityElement(children: .contain).accessibilityIdentifier("v15.f3c.mac.detail")
-        } else { V15EmptyState(title: "选择一张报销单", explanation: "中间会显示金额分配和到账历史。") }
+        } else { V15EmptyState(title: "选择一张报销单", explanation: "中间会显示费用和到账历史。") }
     }
 
     @ViewBuilder private var inspector: some View {
@@ -192,7 +205,7 @@ public struct V15ReimbursementMacView: View {
         VStack(alignment: .leading, spacing: V15Spacing.md) {
             HStack { Text("修改到账记录").font(V15Typography.cardTitle); Spacer(); Button("返回") { inspectorMode = .receiptActions(id) } }
             if let receipt = model.receipts.first(where: { $0.id == id }) {
-                Text("沿用原当事人与收款账户；金额、日期和标题需要重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
+                Text("沿用原收款账户；金额、日期和标题需要重新预览。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
                 V22FormSection("修改到账信息") {
                 V15AmountInput(text: Binding(get: { model.receiptReplacementAmountText }, set: { model.receiptReplacementAmountText = $0 }), issues: fieldIssues(model.secondaryIssues, path: "amount_minor"), accessibilityIdentifier: "v15.f3c.mac.receipt.replace.amount")
                 V15Field("到账标题", text: Binding(get: { model.receiptReplacementTitle }, set: { model.receiptReplacementTitle = $0 }), issues: fieldIssues(model.secondaryIssues, path: "title")).accessibilityIdentifier("v15.f3c.mac.receipt.replace.title")
@@ -284,16 +297,31 @@ public struct V15ReimbursementMacView: View {
             editorBanner(model.newClaimPhase, issues: model.newClaimServerIssues)
             V22FormSection("报销信息") {
             V15Field("标题", text: Binding(get: { model.claimTitle }, set: { model.claimTitle = $0 }), prompt: "例如：八月差旅", issues: fieldIssues(model.visibleNewClaimIssues, path: "title")).accessibilityIdentifier("v15.f3c.mac.claim.title")
-            V15Field("当事人", text: Binding(get: { model.partyName }, set: { model.partyName = $0 }), prompt: "例如：公司", issues: fieldIssues(model.visibleNewClaimIssues, path: "parties[0].name")).accessibilityIdentifier("v15.f3c.mac.claim.party")
-            V15Field("预计日期", text: Binding(get: { model.expectedDateText }, set: { model.expectedDateText = $0 }), prompt: "YYYY-MM-DD", issues: fieldIssues(model.visibleNewClaimIssues, path: "parties[0].expected_date")).accessibilityIdentifier("v15.f3c.mac.claim.date")
+            V15Field("报销对象", text: Binding(get: { model.counterpartyName }, set: { model.counterpartyName = $0 }), prompt: "例如：公司", issues: fieldIssues(model.visibleNewClaimIssues, path: "counterparty_name")).accessibilityIdentifier("v15.f3c.mac.claim.counterparty")
+            V15Field("预计日期", text: Binding(get: { model.expectedDateText }, set: { model.expectedDateText = $0 }), prompt: "YYYY-MM-DD", issues: fieldIssues(model.visibleNewClaimIssues, path: "expected_date")).accessibilityIdentifier("v15.f3c.mac.claim.date")
             }
             V22FormSection("选择垫付") {
             V15SearchField(text: Binding(get: { model.candidateQuery }, set: { model.candidateQuery = $0 })).accessibilityIdentifier("v15.f3c.mac.candidates.query")
             V15ActionButton("读取候选", kind: .secondary) { Task { await model.retryCandidates() } }.accessibilityIdentifier("v15.f3c.mac.candidates.load")
             candidateInspector
             }
-            V22FormSection("本次申报金额") {
-                V15AmountInput(text: Binding(get: { model.allocationAmountText }, set: { model.allocationAmountText = $0 }), issues: fieldIssues(model.visibleNewClaimIssues, path: "parties[0].allocations[0].amount_minor"), accessibilityIdentifier: "v15.f3c.mac.claim.amount")
+            V22FormSection("本次申报费用") {
+                ForEach(model.selectedCandidates.indices, id: \.self) { index in
+                    let candidate = model.selectedCandidates[index]
+                    VStack(alignment: .leading, spacing: V15Spacing.xs) {
+                        HStack {
+                            Text(candidate.title).font(V15Typography.body.weight(.semibold))
+                            Spacer()
+                            Button("移除") { model.removeCandidate(candidate.transactionID) }
+                                .accessibilityIdentifier("v15.f3c.mac.claim.expense.remove.\(candidate.transactionID)")
+                        }
+                        V15AmountInput(
+                            text: Binding(get: { model.expenseAmountText(for: candidate.transactionID) }, set: { model.setExpenseAmountText($0, for: candidate.transactionID) }),
+                            issues: fieldIssues(model.visibleNewClaimIssues, path: "expenses[\(index)].amount_minor"),
+                            accessibilityIdentifier: "v15.f3c.mac.claim.amount.\(index)"
+                        )
+                    }
+                }
             }
             V15ActionButton("创建报销单", disabledReasons: model.createClaimDisabledReasons, showsDisabledReasons: false) { Task { await model.createClaim() } }.accessibilityIdentifier("v15.f3c.mac.claim.create")
             if model.hasRecoverableCreateAttempt && model.newClaimPhase == .unknown {
@@ -311,7 +339,7 @@ public struct V15ReimbursementMacView: View {
         case .empty: V15EmptyState(title: "没有垫付候选", explanation: "调整搜索条件后重试。", actionTitle: "重试") { Task { await model.retryCandidates() } }.accessibilityIdentifier("v15.f3c.mac.candidates.empty")
         case .failed(let failure): V15ServiceErrorState(message: failure.message) { Task { await model.retryCandidates() } }.accessibilityIdentifier("v15.f3c.mac.candidates.error")
         case .loaded:
-            ForEach(model.candidates, id: \.transactionID) { candidate in Button { model.chooseCandidate(candidate) } label: { VStack(alignment: .leading) { HStack { Text(candidate.title); Spacer(); Text(money(candidate.availableMinor)).monospacedDigit() }; Text(candidate.categoryID == nil ? "未分类 · 可以报销" : candidate.businessDate).font(V15Typography.secondary); ForEach(candidate.eligibility.reasonDetails, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(V15Palette.teal.color) } }.padding(V15Spacing.sm).background(model.selectedCandidate?.transactionID == candidate.transactionID ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }.buttonStyle(.plain).disabled(!candidate.eligibility.eligible).accessibilityIdentifier("v15.f3c.mac.candidate.\(candidate.transactionID)") }
+            ForEach(model.candidates, id: \.transactionID) { candidate in Button { model.chooseCandidate(candidate) } label: { VStack(alignment: .leading) { HStack { Text(candidate.title); Spacer(); Text(money(candidate.availableMinor)).monospacedDigit() }; Text(candidate.categoryID == nil ? "未分类 · 可以报销" : candidate.businessDate).font(V15Typography.secondary); ForEach(candidate.eligibility.reasonDetails, id: \.code) { Text($0.message).font(V15Typography.secondary).foregroundStyle(V15Palette.teal.color) } }.padding(V15Spacing.sm).background(model.selectedCandidates.contains(where: { $0.transactionID == candidate.transactionID }) ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }.buttonStyle(.plain).disabled(!candidate.eligibility.eligible).accessibilityIdentifier("v15.f3c.mac.candidate.\(candidate.transactionID)") }
         }
     }
 
@@ -320,7 +348,7 @@ public struct V15ReimbursementMacView: View {
             HStack { Text("登记到账").font(V15Typography.cardTitle); Spacer(); Button("关闭") { model.dismissReceipt() }.accessibilityIdentifier("v15.f3c.mac.receipt.close") }
             editorBanner(model.receiptPhase, issues: model.receiptServerIssues)
             if let claim = model.selectedClaim {
-                ForEach(claim.parties, id: \.id) { party in Button { model.chooseParty(party.id) } label: { HStack { Text(party.name); Spacer(); Text(money(party.outstandingMinor)).monospacedDigit() }.padding(V15Spacing.sm).background(model.selectedPartyID == party.id ? V15Palette.selected.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control)) }.buttonStyle(.plain).disabled(party.outstandingMinor <= 0).accessibilityIdentifier("v15.f3c.mac.receipt.party.\(party.id)") }
+                Text("\(claim.counterpartyName) · 待收 \(money(claim.outstandingMinor))").font(V15Typography.secondary)
             }
             V22FormSection("本次到账") {
                 V15AmountInput(text: Binding(get: { model.receiptAmountText }, set: { model.receiptAmountText = $0 }), issues: fieldIssues(model.receiptIssues, path: "amount_minor"), accessibilityIdentifier: "v15.f3c.mac.receipt.amount")
@@ -329,7 +357,7 @@ public struct V15ReimbursementMacView: View {
                 accountInspector
             }
             V15ActionButton("预览到账影响", kind: .secondary, disabledReasons: model.receiptPreviewDisabledReasons) { Task { await model.previewReceipt() } }.accessibilityIdentifier("v15.f3c.mac.receipt.preview")
-            if let preview = model.receiptPreview { V15PreviewState(version: "到账预览") { Text("已到账 \(money(preview.claimReceivedBeforeMinor)) → \(money(preview.claimReceivedAfterMinor))；将保存 \(preview.persistedAllocations.count) 条分配。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3c.mac.receipt.preview.result") }
+            if let preview = model.receiptPreview { V15PreviewState(version: "到账预览") { Text("已到账 \(money(preview.claimReceivedBeforeMinor)) → \(money(preview.claimReceivedAfterMinor))。").font(V15Typography.secondary) }.accessibilityIdentifier("v15.f3c.mac.receipt.preview.result") }
             V15ActionButton("确认登记到账", disabledReasons: model.receiptCommitDisabledReasons) { Task { await model.commitReceipt() } }.accessibilityIdentifier("v15.f3c.mac.receipt.commit")
             if model.hasRecoverableReceiptAttempt && model.receiptPhase == .unknown {
                 HStack(alignment: .top) {
@@ -373,34 +401,5 @@ public struct V15ReimbursementMacView: View {
         switch action { case .submit: "提交报销单"; case .retractSubmission: "撤回提交"; case .reopen: "重新打开"; case .void: "作废报销单"; case .restore: "恢复报销单"; case .archive: "归档报销单"; case .unarchive: "取消归档" }
     }
     private func claimActionKind(_ action: V15ReimbursementModel.DirectClaimAction) -> V15ButtonKind { [.void, .archive].contains(action) ? .destructive : .secondary }
-    @MainActor private func prepareGalleryScenario(_ scenario: String) async {
-        switch scenario {
-        case "reimbursements-claim-new":
-            await model.openNewClaim(); model.claimTitle = "八月差旅报销"; model.partyName = "示例公司"
-            if let candidate = model.candidates.first(where: { $0.eligibility.eligible && $0.categoryID == nil }) { model.chooseCandidate(candidate) }
-        case "reimbursements-claim-reasons":
-            await model.openNewClaim()
-        case "reimbursements-receipt-loading", "reimbursements-receipt-empty", "reimbursements-receipt-retry":
-            await model.openReceipt()
-        case "reimbursements-invalid-valid":
-            await model.openReceipt(); model.receiptTitle = ""; model.receiptAmountText = "180.001"; model.receiptDateText = "9999-12-31"
-        case "reimbursements-preview":
-            await model.openReceipt(); await model.previewReceipt()
-        case "reimbursements-receipt-replace":
-            if let receipt = model.receipts.first { model.openReceiptReplacement(receipt); inspectorMode = .receiptReplacement(receipt.id) }
-        case "reimbursements-conflict":
-            await model.openReceipt(); await model.previewReceipt()
-        case "reimbursements-success":
-            await model.openReceipt(); await model.previewReceipt(); await model.commitReceipt()
-        case "reimbursements-receipt-refresh-failure":
-            await model.openReceipt(); await model.previewReceipt(); await model.commitReceipt()
-        case "reimbursements-receipt-unknown":
-            await model.openReceipt(); await model.previewReceipt(); await model.commitReceipt()
-        case "reimbursements-direct-readback":
-            await model.performDirectClaim(.void)
-        default:
-            break
-        }
-    }
 }
 #endif

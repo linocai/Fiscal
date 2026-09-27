@@ -47,8 +47,8 @@ public struct V15Facts: Codable, Sendable {
     public struct Credit: Codable, Sendable { public let currentDebtMinor: V15MinorUnits; public let scope: V15DrillDownScope?; enum CodingKeys: String, CodingKey { case currentDebtMinor = "current_debt_minor", scope } }
     public struct Reimbursements: Codable, Sendable { public let outstandingMinor: V15MinorUnits; public let scope: V15DrillDownScope?; enum CodingKeys: String, CodingKey { case outstandingMinor = "outstanding_minor", scope } }
     public struct Completeness: Codable, Sendable {
-        public let unresolvedImportCount: Int; public let failedImportCount: Int; public let uncategorizedTransactionCount: Int; public let uncategorizedTransactionAmountMinor: V15MinorUnits; public let scope: V15DrillDownScope?
-        enum CodingKeys: String, CodingKey { case unresolvedImportCount = "unresolved_import_count", failedImportCount = "failed_import_count", uncategorizedTransactionCount = "uncategorized_transaction_count", uncategorizedTransactionAmountMinor = "uncategorized_transaction_amount_minor", scope }
+        public let uncategorizedTransactionCount: Int; public let uncategorizedTransactionAmountMinor: V15MinorUnits; public let scope: V15DrillDownScope?
+        enum CodingKeys: String, CodingKey { case uncategorizedTransactionCount = "uncategorized_transaction_count", uncategorizedTransactionAmountMinor = "uncategorized_transaction_amount_minor", scope }
     }
     public struct FutureTotals: Codable, Sendable, Equatable {
         public let exactDueOutflowMinor: V15MinorUnits; public let confirmedOutflowMinor: V15MinorUnits; public let expectedOutflowMinor: V15MinorUnits; public let scheduledOutflowMinor: V15MinorUnits; public let confirmedInflowMinor: V15MinorUnits; public let expectedInflowMinor: V15MinorUnits; public let scheduledInflowMinor: V15MinorUnits; public let afterConfirmedOutflowMinor: V15MinorUnits
@@ -68,11 +68,9 @@ public struct V15Facts: Codable, Sendable {
 
 public enum V15FactDrillDownItem: Decodable, Sendable, Equatable {
     public enum CompletenessIssueType: Sendable, Equatable, Decodable {
-        case unresolvedImports, failedImports, uncategorizedTransactions, unknown(String)
+        case uncategorizedTransactions, unknown(String)
         public init(from decoder: Decoder) throws {
             switch try decoder.singleValueContainer().decode(String.self) {
-            case "unresolved_imports": self = .unresolvedImports
-            case "failed_imports": self = .failedImports
             case "uncategorized_transactions": self = .uncategorizedTransactions
             case let value: self = .unknown(value)
             }
@@ -89,9 +87,9 @@ public enum V15FactDrillDownItem: Decodable, Sendable, Equatable {
         enum CodingKeys: String, CodingKey { case itemType = "item_type", cycleID = "cycle_id", accountID = "account_id", accountName = "account_name", dueDate = "due_date", amountDueMinor = "amount_due_minor", repaidMinor = "repaid_minor", remainingMinor = "remaining_minor", readPath = "read_path", deepLink = "deep_link" }
     }
     public struct ReimbursementOutstanding: Decodable, Sendable, Equatable, Identifiable {
-        public let itemType: String; public let claimID: UUID; public let partyID: UUID; public let partyName: String; public let expectedDate: String?; public let expectedMinor: V15MinorUnits; public let receivedMinor: V15MinorUnits; public let outstandingMinor: V15MinorUnits; public let readPath: String; public let deepLink: String
-        public var id: UUID { partyID }
-        enum CodingKeys: String, CodingKey { case itemType = "item_type", claimID = "claim_id", partyID = "party_id", partyName = "party_name", expectedDate = "expected_date", expectedMinor = "expected_minor", receivedMinor = "received_minor", outstandingMinor = "outstanding_minor", readPath = "read_path", deepLink = "deep_link" }
+        public let itemType: String; public let claimID: UUID; public let expenseTransactionID: UUID; public let counterpartyName: String; public let expectedDate: String?; public let expectedMinor: V15MinorUnits; public let receivedMinor: V15MinorUnits; public let outstandingMinor: V15MinorUnits; public let readPath: String; public let deepLink: String
+        public var id: UUID { expenseTransactionID }
+        enum CodingKeys: String, CodingKey { case itemType = "item_type", claimID = "claim_id", expenseTransactionID = "expense_transaction_id", counterpartyName = "counterparty_name", expectedDate = "expected_date", expectedMinor = "expected_minor", receivedMinor = "received_minor", outstandingMinor = "outstanding_minor", readPath = "read_path", deepLink = "deep_link" }
     }
     public struct CompletenessIssue: Decodable, Sendable, Equatable, Identifiable {
         public let itemType: String; public let issueType: CompletenessIssueType; public let count: Int; public let amountMinor: V15MinorUnits?; public let readPath: String; public let deepLink: String
@@ -128,7 +126,7 @@ public struct V15FactDrillDown: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case meta, scope, items; case nextCursor = "next_cursor" }
 }
 
-public enum V15FutureEventSource: String, Codable, Sendable, Equatable, CaseIterable { case creditCycle = "credit_cycle", reimbursementParty = "reimbursement_party", cashFlowItem = "cash_flow_item" }
+public enum V15FutureEventSource: String, Codable, Sendable, Equatable, CaseIterable { case creditCycle = "credit_cycle", reimbursementClaim = "reimbursement_claim", cashFlowItem = "cash_flow_item" }
 public enum V15FutureEventDirection: String, Codable, Sendable, Equatable { case inflow, outflow }
 public enum V15FutureEventCertainty: String, Codable, Sendable, Equatable, CaseIterable { case exactDue = "exact_due", confirmed, expected, scheduled }
 
@@ -148,9 +146,8 @@ public struct V15FutureEvent: Codable, Sendable, Equatable, Identifiable {
     public let deepLink: String
     public let accountID: UUID?
     public let claimID: UUID?
-    public let partyID: UUID?
     public let cycleID: UUID?
-    enum CodingKeys: String, CodingKey { case sourceType = "source_type", sourceID = "source_id", date, direction; case amountMinor = "amount_minor"; case certainty, title; case deepLink = "deep_link"; case accountID = "account_id", claimID = "claim_id", partyID = "party_id", cycleID = "cycle_id" }
+    enum CodingKeys: String, CodingKey { case sourceType = "source_type", sourceID = "source_id", date, direction; case amountMinor = "amount_minor"; case certainty, title; case deepLink = "deep_link"; case accountID = "account_id", claimID = "claim_id", cycleID = "cycle_id" }
 }
 
 public struct V15FutureEvents: Codable, Sendable {
@@ -196,8 +193,8 @@ public enum V15ReportPeriod: Sendable, Equatable, Hashable { case month(V15Repor
     public var kind: V15ReportPeriodKind { switch self { case .month: .month; case .year: .year } }
     public var rawValue: String { switch self { case .month(let value): value.rawValue; case .year(let value): value.rawValue } }
 }
-public enum V15ReportArtifactFormat: String, Sendable, Equatable { case csv, pdf
-    var accept: String { self == .pdf ? "application/pdf" : "text/csv" }
+public enum V15ReportArtifactFormat: String, Sendable, Equatable { case csv
+    var accept: String { "text/csv" }
 }
 
 public struct V15ReportMeta: Codable, Sendable, Equatable {
@@ -217,7 +214,7 @@ public struct V15PeriodReport: Codable, Sendable {
     public struct InstallmentGroup: Codable, Sendable, Identifiable { public var id: String { month }; public let month: String; public let principalScheduledGrossMinor: V15MinorUnits; public let feeScheduledGrossMinor: V15MinorUnits; public let totalScheduledGrossMinor: V15MinorUnits; public let periodCount: Int; enum CodingKeys: String, CodingKey { case month, principalScheduledGrossMinor = "principal_scheduled_gross_minor", feeScheduledGrossMinor = "fee_scheduled_gross_minor", totalScheduledGrossMinor = "total_scheduled_gross_minor", periodCount = "period_count" } }
     public struct Merchant: Codable, Sendable { public let merchantID: UUID?; public let merchantName: String; public let netConsumptionMinor: V15MinorUnits; public let transactionCount: Int; enum CodingKeys: String, CodingKey { case merchantID = "merchant_id", merchantName = "merchant_name", netConsumptionMinor = "net_consumption_minor", transactionCount = "transaction_count" } }
     public struct Source: Codable, Sendable { public let source: V15ReportTransactionSource; public let transactionCount: Int; enum CodingKeys: String, CodingKey { case source; case transactionCount = "transaction_count" } }
-    public struct Completeness: Codable, Sendable { public let unresolvedImportCount: Int; public let failedImportCount: Int; public let uncategorizedTransactionCount: Int; enum CodingKeys: String, CodingKey { case unresolvedImportCount = "unresolved_import_count", failedImportCount = "failed_import_count", uncategorizedTransactionCount = "uncategorized_transaction_count" } }
+    public struct Completeness: Codable, Sendable { public let uncategorizedTransactionCount: Int; enum CodingKeys: String, CodingKey { case uncategorizedTransactionCount = "uncategorized_transaction_count" } }
     public let meta: V15ReportMeta
     public let summary: Summary
     public let accounts: [Account]
@@ -452,13 +449,9 @@ public struct V15CategoryDependency: Codable, Sendable, Equatable { public let c
 public struct V15CategoryChildMappingRequirement: Codable, Sendable, Equatable { public let sourceChildID: UUID; public let sourceChildName: String; public let targetChildIDs: [UUID]; enum CodingKeys: String, CodingKey { case sourceChildID = "source_child_id", sourceChildName = "source_child_name", targetChildIDs = "target_child_ids" } }
 public struct V15CategoryMergePreviewRequest: Codable, Sendable, Equatable { public let targetID: UUID; public let sourceExpectedVersion: Int; public let targetExpectedVersion: Int; public init(targetID: UUID, sourceExpectedVersion: Int, targetExpectedVersion: Int) { self.targetID = targetID; self.sourceExpectedVersion = sourceExpectedVersion; self.targetExpectedVersion = targetExpectedVersion }; enum CodingKeys: String, CodingKey { case targetID = "target_id", sourceExpectedVersion = "source_expected_version", targetExpectedVersion = "target_expected_version" } }
 public struct V15CategoryDraft: Codable, Sendable, Equatable { public let name: String; public let direction: String; public let parentID: UUID?; public let icon: String; public let colorHex: String; public let aliases: [String]; public let examples: [String]; public let isBalanceAdjustment: Bool; public init(name: String, direction: String, parentID: UUID? = nil, icon: String, colorHex: String, aliases: [String] = [], examples: [String] = [], isBalanceAdjustment: Bool = false) { self.name = name; self.direction = direction; self.parentID = parentID; self.icon = icon; self.colorHex = colorHex; self.aliases = aliases; self.examples = examples; self.isBalanceAdjustment = isBalanceAdjustment }; enum CodingKeys: String, CodingKey { case name, direction, parentID = "parent_id", icon, colorHex = "color_hex", aliases, examples, isBalanceAdjustment = "is_balance_adjustment" } }
-public struct V15CategorySplitPreviewRequest: Codable, Sendable, Equatable { public let rootExpectedVersion: Int; public let children: [V15CategoryDraft]; public init(rootExpectedVersion: Int, children: [V15CategoryDraft]) { self.rootExpectedVersion = rootExpectedVersion; self.children = children }; enum CodingKeys: String, CodingKey { case rootExpectedVersion = "root_expected_version", children } }
 public struct V15CategoryMergePreview: Codable, Sendable, Equatable { public let previewToken: UUID; public let source: V15CategoryDependency; public let targetID: UUID; public let childMappingRequirements: [V15CategoryChildMappingRequirement]; public let atomic: Bool; enum CodingKeys: String, CodingKey { case previewToken = "preview_token", source, targetID = "target_id", childMappingRequirements = "child_mapping_requirements", atomic } }
-public struct V15CategorySplitPreview: Codable, Sendable, Equatable { public let previewToken: UUID; public let root: V15CategoryDependency; public let requiredTransactionIDs: [UUID]; public let childNames: [String]; public let atomic: Bool; enum CodingKeys: String, CodingKey { case previewToken = "preview_token", root, requiredTransactionIDs = "required_transaction_ids", childNames = "child_names", atomic } }
 public struct V15CategoryChildMapping: Codable, Sendable, Equatable { public let sourceChildID: UUID; public let targetChildID: UUID; public init(sourceChildID: UUID, targetChildID: UUID) { self.sourceChildID = sourceChildID; self.targetChildID = targetChildID }; enum CodingKeys: String, CodingKey { case sourceChildID = "source_child_id", targetChildID = "target_child_id" } }
 public struct V15CategoryMergeCommitRequest: Codable, Sendable, Equatable { public let previewToken: UUID; public let childMappings: [V15CategoryChildMapping]; public init(previewToken: UUID, childMappings: [V15CategoryChildMapping] = []) { self.previewToken = previewToken; self.childMappings = childMappings }; enum CodingKeys: String, CodingKey { case previewToken = "preview_token", childMappings = "child_mappings" } }
-public struct V15CategorySplitAssignment: Codable, Sendable, Equatable { public let transactionID: UUID; public let childName: String; public init(transactionID: UUID, childName: String) { self.transactionID = transactionID; self.childName = childName }; enum CodingKeys: String, CodingKey { case transactionID = "transaction_id", childName = "child_name" } }
-public struct V15CategorySplitCommitRequest: Codable, Sendable, Equatable { public let previewToken: UUID; public let assignments: [V15CategorySplitAssignment]; public init(previewToken: UUID, assignments: [V15CategorySplitAssignment]) { self.previewToken = previewToken; self.assignments = assignments }; enum CodingKeys: String, CodingKey { case previewToken = "preview_token", assignments } }
 public struct V15CategoryResponse: Codable, Sendable, Equatable, Identifiable { public let id: UUID; public let name: String; public let direction: String; public let parentID: UUID?; public let icon: String; public let colorHex: String; public let aliases: [String]; public let examples: [String]; public let isBalanceAdjustment: Bool; public let sortOrder: Int; public let archivedAt: Date?; public let usageCount: Int; public let version: Int; public let createdAt: Date; public let updatedAt: Date; public let children: [V15CategoryResponse]; enum CodingKeys: String, CodingKey { case id, name, direction, parentID = "parent_id", icon, colorHex = "color_hex", aliases, examples, isBalanceAdjustment = "is_balance_adjustment", sortOrder = "sort_order", archivedAt = "archived_at", usageCount = "usage_count", version, createdAt = "created_at", updatedAt = "updated_at", children } }
 public struct V15CategoryTransformReceipt: Codable, Sendable, Equatable { public let action: String; public let categories: [V15CategoryResponse]; public let reclassifiedTransactionCount: Int; enum CodingKeys: String, CodingKey { case action, categories; case reclassifiedTransactionCount = "reclassified_transaction_count" } }
 
@@ -467,23 +460,19 @@ public struct V15CategoryTransformReceipt: Codable, Sendable, Equatable { public
 public struct V15CreditScheduleChangeRequest: Codable, Sendable, Equatable { public let expectedVersion: Int; public let cycleMode: String; public let statementDay: Int; public let dueDay: Int; public init(expectedVersion: Int, cycleMode: String, statementDay: Int, dueDay: Int) { self.expectedVersion = expectedVersion; self.cycleMode = cycleMode; self.statementDay = statementDay; self.dueDay = dueDay }; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", cycleMode = "cycle_mode", statementDay = "statement_day", dueDay = "due_day" } }
 public struct V15CreditScheduleChangeCommitRequest: Codable, Sendable, Equatable { public let expectedVersion: Int; public let cycleMode: String; public let statementDay: Int; public let dueDay: Int; public let previewToken: UUID; public init(expectedVersion: Int, cycleMode: String, statementDay: Int, dueDay: Int, previewToken: UUID) { self.expectedVersion = expectedVersion; self.cycleMode = cycleMode; self.statementDay = statementDay; self.dueDay = dueDay; self.previewToken = previewToken }; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", cycleMode = "cycle_mode", statementDay = "statement_day", dueDay = "due_day", previewToken = "preview_token" } }
 
-public struct V15ReimbursementAllocationDraft: Codable, Sendable, Equatable { public let id: UUID?; public let transactionID: UUID; public let amountMinor: V15MinorUnits; public init(id: UUID? = nil, transactionID: UUID, amountMinor: V15MinorUnits) { self.id = id; self.transactionID = transactionID; self.amountMinor = amountMinor }; enum CodingKeys: String, CodingKey { case id, transactionID = "transaction_id", amountMinor = "amount_minor" } }
-public struct V15ReimbursementPartyDraft: Codable, Sendable, Equatable { public let id: UUID?; public let name: String; public let expectedDate: String?; public let note: String?; public let allocations: [V15ReimbursementAllocationDraft]; public init(id: UUID? = nil, name: String, expectedDate: String? = nil, note: String? = nil, allocations: [V15ReimbursementAllocationDraft]) { self.id = id; self.name = name; self.expectedDate = expectedDate; self.note = note; self.allocations = allocations }; enum CodingKeys: String, CodingKey { case id, name, expectedDate = "expected_date", note, allocations } }
-public struct V15ReimbursementClaimDraft: Codable, Sendable, Equatable { public let title: String; public let note: String?; public let parties: [V15ReimbursementPartyDraft]; public init(title: String, note: String? = nil, parties: [V15ReimbursementPartyDraft]) { self.title = title; self.note = note; self.parties = parties } }
-public struct V15ReimbursementClaimPreviewRequest: Codable, Sendable, Equatable { public let title: String; public let note: String?; public let parties: [V15ReimbursementPartyDraft]; public let expectedVersion: Int; public init(title: String, note: String? = nil, parties: [V15ReimbursementPartyDraft], expectedVersion: Int) { self.title = title; self.note = note; self.parties = parties; self.expectedVersion = expectedVersion }; enum CodingKeys: String, CodingKey { case title, note, parties, expectedVersion = "expected_version" } }
-public struct V15ReimbursementClaimCommitRequest: Codable, Sendable, Equatable { public let title: String; public let note: String?; public let parties: [V15ReimbursementPartyDraft]; public let expectedVersion: Int; public let previewToken: UUID; public init(title: String, note: String? = nil, parties: [V15ReimbursementPartyDraft], expectedVersion: Int, previewToken: UUID) { self.title = title; self.note = note; self.parties = parties; self.expectedVersion = expectedVersion; self.previewToken = previewToken }; enum CodingKeys: String, CodingKey { case title, note, parties, expectedVersion = "expected_version", previewToken = "preview_token" } }
+public struct V15ReimbursementExpenseDraft: Codable, Sendable, Equatable { public let id: UUID?; public let transactionID: UUID; public let amountMinor: V15MinorUnits; public init(id: UUID? = nil, transactionID: UUID, amountMinor: V15MinorUnits) { self.id = id; self.transactionID = transactionID; self.amountMinor = amountMinor }; enum CodingKeys: String, CodingKey { case id, transactionID = "transaction_id", amountMinor = "amount_minor" } }
+public struct V15ReimbursementClaimDraft: Codable, Sendable, Equatable { public let title: String; public let note: String?; public let counterpartyName: String; public let expectedDate: String?; public let expenses: [V15ReimbursementExpenseDraft]; public init(title: String, note: String? = nil, counterpartyName: String, expectedDate: String? = nil, expenses: [V15ReimbursementExpenseDraft]) { self.title = title; self.note = note; self.counterpartyName = counterpartyName; self.expectedDate = expectedDate; self.expenses = expenses }; enum CodingKeys: String, CodingKey { case title, note, counterpartyName = "counterparty_name", expectedDate = "expected_date", expenses } }
+public struct V15ReimbursementClaimPreviewRequest: Codable, Sendable, Equatable { public let title: String; public let note: String?; public let counterpartyName: String; public let expectedDate: String?; public let expenses: [V15ReimbursementExpenseDraft]; public let expectedVersion: Int; public init(title: String, note: String? = nil, counterpartyName: String, expectedDate: String? = nil, expenses: [V15ReimbursementExpenseDraft], expectedVersion: Int) { self.title = title; self.note = note; self.counterpartyName = counterpartyName; self.expectedDate = expectedDate; self.expenses = expenses; self.expectedVersion = expectedVersion }; enum CodingKeys: String, CodingKey { case title, note, counterpartyName = "counterparty_name", expectedDate = "expected_date", expenses, expectedVersion = "expected_version" } }
+public struct V15ReimbursementClaimCommitRequest: Codable, Sendable, Equatable { public let title: String; public let note: String?; public let counterpartyName: String; public let expectedDate: String?; public let expenses: [V15ReimbursementExpenseDraft]; public let expectedVersion: Int; public let previewToken: UUID; public init(title: String, note: String? = nil, counterpartyName: String, expectedDate: String? = nil, expenses: [V15ReimbursementExpenseDraft], expectedVersion: Int, previewToken: UUID) { self.title = title; self.note = note; self.counterpartyName = counterpartyName; self.expectedDate = expectedDate; self.expenses = expenses; self.expectedVersion = expectedVersion; self.previewToken = previewToken }; enum CodingKeys: String, CodingKey { case title, note, counterpartyName = "counterparty_name", expectedDate = "expected_date", expenses, expectedVersion = "expected_version", previewToken = "preview_token" } }
 public struct V15ReimbursementVersionRequest: Codable, Sendable, Equatable { public let expectedVersion: Int; public init(expectedVersion: Int) { self.expectedVersion = expectedVersion }; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version" } }
 public struct V15ReimbursementCancelCommitRequest: Codable, Sendable, Equatable { public let expectedVersion: Int; public let previewToken: UUID; public init(expectedVersion: Int, previewToken: UUID) { self.expectedVersion = expectedVersion; self.previewToken = previewToken }; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", previewToken = "preview_token" } }
-public struct V15ReimbursementReceiptDraft: Codable, Sendable, Equatable { public let expectedClaimVersion: Int; public let partyID: UUID; public let amountMinor: V15MinorUnits; public let receivedAt: Date; public let destinationAccountID: UUID; public let title: String; public let note: String?; public init(expectedClaimVersion: Int, partyID: UUID, amountMinor: V15MinorUnits, receivedAt: Date, destinationAccountID: UUID, title: String, note: String? = nil) { self.expectedClaimVersion = expectedClaimVersion; self.partyID = partyID; self.amountMinor = amountMinor; self.receivedAt = receivedAt; self.destinationAccountID = destinationAccountID; self.title = title; self.note = note }; enum CodingKeys: String, CodingKey { case expectedClaimVersion = "expected_claim_version", partyID = "party_id", amountMinor = "amount_minor", receivedAt = "received_at", destinationAccountID = "destination_account_id", title, note } }
-public struct V15ReimbursementReceiptReplacePreviewRequest: Codable, Sendable, Equatable { public let expectedClaimVersion: Int; public let partyID: UUID; public let amountMinor: V15MinorUnits; public let receivedAt: Date; public let destinationAccountID: UUID; public let title: String; public let note: String?; public let expectedReceiptVersion: Int; public init(expectedClaimVersion: Int, partyID: UUID, amountMinor: V15MinorUnits, receivedAt: Date, destinationAccountID: UUID, title: String, note: String? = nil, expectedReceiptVersion: Int) { self.expectedClaimVersion = expectedClaimVersion; self.partyID = partyID; self.amountMinor = amountMinor; self.receivedAt = receivedAt; self.destinationAccountID = destinationAccountID; self.title = title; self.note = note; self.expectedReceiptVersion = expectedReceiptVersion }; enum CodingKeys: String, CodingKey { case expectedClaimVersion = "expected_claim_version", partyID = "party_id", amountMinor = "amount_minor", receivedAt = "received_at", destinationAccountID = "destination_account_id", title, note, expectedReceiptVersion = "expected_receipt_version" } }
-public struct V15ReimbursementReceiptReplaceCommitRequest: Codable, Sendable, Equatable { public let expectedClaimVersion: Int; public let partyID: UUID; public let amountMinor: V15MinorUnits; public let receivedAt: Date; public let destinationAccountID: UUID; public let title: String; public let note: String?; public let expectedReceiptVersion: Int; public let previewToken: UUID; public init(expectedClaimVersion: Int, partyID: UUID, amountMinor: V15MinorUnits, receivedAt: Date, destinationAccountID: UUID, title: String, note: String? = nil, expectedReceiptVersion: Int, previewToken: UUID) { self.expectedClaimVersion = expectedClaimVersion; self.partyID = partyID; self.amountMinor = amountMinor; self.receivedAt = receivedAt; self.destinationAccountID = destinationAccountID; self.title = title; self.note = note; self.expectedReceiptVersion = expectedReceiptVersion; self.previewToken = previewToken }; enum CodingKeys: String, CodingKey { case expectedClaimVersion = "expected_claim_version", partyID = "party_id", amountMinor = "amount_minor", receivedAt = "received_at", destinationAccountID = "destination_account_id", title, note, expectedReceiptVersion = "expected_receipt_version", previewToken = "preview_token" } }
-public struct V15ReimbursementReceiptCreateCommitRequest: Codable, Sendable, Equatable { public let expectedClaimVersion: Int; public let partyID: UUID; public let amountMinor: V15MinorUnits; public let receivedAt: Date; public let destinationAccountID: UUID; public let title: String; public let note: String?; public let previewToken: UUID; public init(expectedClaimVersion: Int, partyID: UUID, amountMinor: V15MinorUnits, receivedAt: Date, destinationAccountID: UUID, title: String, note: String? = nil, previewToken: UUID) { self.expectedClaimVersion = expectedClaimVersion; self.partyID = partyID; self.amountMinor = amountMinor; self.receivedAt = receivedAt; self.destinationAccountID = destinationAccountID; self.title = title; self.note = note; self.previewToken = previewToken }; enum CodingKeys: String, CodingKey { case expectedClaimVersion = "expected_claim_version", partyID = "party_id", amountMinor = "amount_minor", receivedAt = "received_at", destinationAccountID = "destination_account_id", title, note, previewToken = "preview_token" } }
+public struct V15ReimbursementReceiptDraft: Codable, Sendable, Equatable { public let expectedClaimVersion: Int; public let amountMinor: V15MinorUnits; public let receivedAt: Date; public let destinationAccountID: UUID; public let title: String; public let note: String?; public init(expectedClaimVersion: Int, amountMinor: V15MinorUnits, receivedAt: Date, destinationAccountID: UUID, title: String, note: String? = nil) { self.expectedClaimVersion = expectedClaimVersion; self.amountMinor = amountMinor; self.receivedAt = receivedAt; self.destinationAccountID = destinationAccountID; self.title = title; self.note = note }; enum CodingKeys: String, CodingKey { case expectedClaimVersion = "expected_claim_version", amountMinor = "amount_minor", receivedAt = "received_at", destinationAccountID = "destination_account_id", title, note } }
+public struct V15ReimbursementReceiptReplacePreviewRequest: Codable, Sendable, Equatable { public let expectedClaimVersion: Int; public let amountMinor: V15MinorUnits; public let receivedAt: Date; public let destinationAccountID: UUID; public let title: String; public let note: String?; public let expectedReceiptVersion: Int; public init(expectedClaimVersion: Int, amountMinor: V15MinorUnits, receivedAt: Date, destinationAccountID: UUID, title: String, note: String? = nil, expectedReceiptVersion: Int) { self.expectedClaimVersion = expectedClaimVersion; self.amountMinor = amountMinor; self.receivedAt = receivedAt; self.destinationAccountID = destinationAccountID; self.title = title; self.note = note; self.expectedReceiptVersion = expectedReceiptVersion }; enum CodingKeys: String, CodingKey { case expectedClaimVersion = "expected_claim_version", amountMinor = "amount_minor", receivedAt = "received_at", destinationAccountID = "destination_account_id", title, note, expectedReceiptVersion = "expected_receipt_version" } }
+public struct V15ReimbursementReceiptReplaceCommitRequest: Codable, Sendable, Equatable { public let expectedClaimVersion: Int; public let amountMinor: V15MinorUnits; public let receivedAt: Date; public let destinationAccountID: UUID; public let title: String; public let note: String?; public let expectedReceiptVersion: Int; public let previewToken: UUID; public init(expectedClaimVersion: Int, amountMinor: V15MinorUnits, receivedAt: Date, destinationAccountID: UUID, title: String, note: String? = nil, expectedReceiptVersion: Int, previewToken: UUID) { self.expectedClaimVersion = expectedClaimVersion; self.amountMinor = amountMinor; self.receivedAt = receivedAt; self.destinationAccountID = destinationAccountID; self.title = title; self.note = note; self.expectedReceiptVersion = expectedReceiptVersion; self.previewToken = previewToken }; enum CodingKeys: String, CodingKey { case expectedClaimVersion = "expected_claim_version", amountMinor = "amount_minor", receivedAt = "received_at", destinationAccountID = "destination_account_id", title, note, expectedReceiptVersion = "expected_receipt_version", previewToken = "preview_token" } }
+public struct V15ReimbursementReceiptCreateCommitRequest: Codable, Sendable, Equatable { public let expectedClaimVersion: Int; public let amountMinor: V15MinorUnits; public let receivedAt: Date; public let destinationAccountID: UUID; public let title: String; public let note: String?; public let previewToken: UUID; public init(expectedClaimVersion: Int, amountMinor: V15MinorUnits, receivedAt: Date, destinationAccountID: UUID, title: String, note: String? = nil, previewToken: UUID) { self.expectedClaimVersion = expectedClaimVersion; self.amountMinor = amountMinor; self.receivedAt = receivedAt; self.destinationAccountID = destinationAccountID; self.title = title; self.note = note; self.previewToken = previewToken }; enum CodingKeys: String, CodingKey { case expectedClaimVersion = "expected_claim_version", amountMinor = "amount_minor", receivedAt = "received_at", destinationAccountID = "destination_account_id", title, note, previewToken = "preview_token" } }
 public struct V15ReimbursementReceiptVersionRequest: Codable, Sendable, Equatable { public let expectedClaimVersion: Int; public let expectedReceiptVersion: Int; public init(expectedClaimVersion: Int, expectedReceiptVersion: Int) { self.expectedClaimVersion = expectedClaimVersion; self.expectedReceiptVersion = expectedReceiptVersion }; enum CodingKeys: String, CodingKey { case expectedClaimVersion = "expected_claim_version", expectedReceiptVersion = "expected_receipt_version" } }
 public struct V15InstallmentActionRequest: Codable, Sendable, Equatable { public let expectedVersion: Int; public let occurredAt: Date; public init(expectedVersion: Int, occurredAt: Date) { self.expectedVersion = expectedVersion; self.occurredAt = occurredAt }; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", occurredAt = "occurred_at" } }
 public struct V15InstallmentSettlementRequest: Codable, Sendable, Equatable { public let expectedVersion: Int; public let occurredAt: Date; public let paymentAccountID: UUID; public let targetStatementDate: String; public init(expectedVersion: Int, occurredAt: Date, paymentAccountID: UUID, targetStatementDate: String) { self.expectedVersion = expectedVersion; self.occurredAt = occurredAt; self.paymentAccountID = paymentAccountID; self.targetStatementDate = targetStatementDate }; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", occurredAt = "occurred_at", paymentAccountID = "payment_account_id", targetStatementDate = "target_statement_date" } }
-public struct V15StatementProviderAuthorization: Codable, Sendable, Equatable { public let configurationRevision: String?; public let confirmed: Bool; public let provider: String; public let providerModel: String; public let promptVersion: String; public let schemaVersion: String; public let evidenceSHA256: String; public let pageNumbers: [Int]; public let rowCount: Int; public let redactionVersion: String; public let redactionCount: Int; public init(confirmed: Bool, provider: String, providerModel: String, promptVersion: String, schemaVersion: String, evidenceSHA256: String, pageNumbers: [Int], rowCount: Int, redactionVersion: String, redactionCount: Int, configurationRevision: String? = nil) { self.configurationRevision = configurationRevision; self.confirmed = confirmed; self.provider = provider; self.providerModel = providerModel; self.promptVersion = promptVersion; self.schemaVersion = schemaVersion; self.evidenceSHA256 = evidenceSHA256; self.pageNumbers = pageNumbers; self.rowCount = rowCount; self.redactionVersion = redactionVersion; self.redactionCount = redactionCount }; enum CodingKeys: String, CodingKey { case configurationRevision = "configuration_revision"; case confirmed, provider, providerModel = "provider_model", promptVersion = "prompt_version", schemaVersion = "schema_version", evidenceSHA256 = "evidence_sha256", pageNumbers = "page_numbers", rowCount = "row_count", redactionVersion = "redaction_version", redactionCount = "redaction_count" } }
-public struct V15StatementProviderAttemptCreate: Codable, Sendable, Equatable { public let expectedVersion: Int; public let evidenceSHA256: String; public let authorization: V15StatementProviderAuthorization; public init(expectedVersion: Int, evidenceSHA256: String, authorization: V15StatementProviderAuthorization) { self.expectedVersion = expectedVersion; self.evidenceSHA256 = evidenceSHA256; self.authorization = authorization }; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", evidenceSHA256 = "evidence_sha256", authorization } }
-
 public struct V15MutationReceipt: Codable, Sendable, Equatable {
     public let action: String?
     public let dataRevision: Int64?
@@ -491,50 +480,130 @@ public struct V15MutationReceipt: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey { case action; case dataRevision = "data_revision"; case receiptID = "receipt_id" }
 }
 
-public struct V15StatementProviderAttempt: Decodable, Sendable, Equatable {
-    public let providerAttemptID: String; public let attemptID: String; public let providerStatus: String; public let candidateCount: Int; public let replay: Bool; public let executionScope: String
-    public let providerSnapshotID: UUID?
-    public let batch: V15StatementImport
-    enum CodingKeys: String, CodingKey { case providerAttemptID = "provider_attempt_id", attemptID = "attempt_id", providerStatus = "provider_status", candidateCount = "candidate_count", replay, executionScope = "execution_scope", providerSnapshotID = "provider_snapshot_id" }
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        providerAttemptID = try c.decode(String.self, forKey: .providerAttemptID)
-        attemptID = try c.decode(String.self, forKey: .attemptID)
-        providerStatus = try c.decode(String.self, forKey: .providerStatus)
-        candidateCount = try c.decode(Int.self, forKey: .candidateCount)
-        replay = try c.decode(Bool.self, forKey: .replay)
-        executionScope = try c.decode(String.self, forKey: .executionScope)
-        providerSnapshotID = try c.decodeIfPresent(UUID.self, forKey: .providerSnapshotID)
-        batch = try V15StatementImport(from: decoder)
-    }
-    public var isRequestBound: Bool { executionScope == "request_bound" }
-}
-
-public struct V15StatementProviderAuthorizationPreview: Codable, Sendable, Equatable {
-    public let batchVersion: Int; public let configured: Bool
-    public let provider: String?; public let providerModel: String?; public let promptVersion: String?; public let schemaVersion: String?; public let configurationRevision: String?
-    public let evidenceSHA256: String?; public let pageNumbers: [Int]; public let rowCount: Int; public let redactionCount: Int; public let redactionVersion: String; public let description: String
-    enum CodingKeys: String, CodingKey { case configured, provider, description, batchVersion = "batch_version", providerModel = "provider_model", promptVersion = "prompt_version", schemaVersion = "schema_version", configurationRevision = "configuration_revision", evidenceSHA256 = "evidence_sha256", pageNumbers = "page_numbers", rowCount = "row_count", redactionCount = "redaction_count", redactionVersion = "redaction_version" }
-}
-public struct V15StatementRecovery: Decodable, Sendable, Equatable {
-    public let batch: V15StatementImport; public let nextAction: String; public let evidenceSHA256: String?; public let rowCount: Int
-    public let activeAttemptID: UUID?; public let providerAttemptID: UUID?; public let providerStatus: String?; public let providerSnapshotID: UUID?; public let validationRunID: UUID?
-    public let hasConfirmedRows: Bool; public let confirmationStatus: String?; public let failureReason: String?
-    enum CodingKeys: String, CodingKey { case batch, nextAction = "next_action", evidenceSHA256 = "evidence_sha256", rowCount = "row_count", activeAttemptID = "active_attempt_id", providerAttemptID = "provider_attempt_id", providerStatus = "provider_status", providerSnapshotID = "provider_snapshot_id", validationRunID = "validation_run_id", hasConfirmedRows = "has_confirmed_rows", confirmationStatus = "confirmation_status", failureReason = "failure_reason" }
-}
-
-public struct V15Merchant: Codable, Sendable, Equatable, Identifiable {
-    public let id: UUID; public let name: String; public let aliases: [String]; public let version: Int
-    public let archivedAt: Date?; public let createdAt: Date; public let updatedAt: Date
-    enum CodingKeys: String, CodingKey { case id, name, aliases, version; case archivedAt = "archived_at", createdAt = "created_at", updatedAt = "updated_at" }
-}
-
 // MARK: - Reimbursement preview effects (P30-C/P33)
 
 public struct V15Posting: Codable, Sendable, Equatable { public let id: UUID; public let accountID: UUID; public let role: String; public let amountMinor: V15MinorUnits; public let position: Int; enum CodingKeys: String, CodingKey { case id, accountID = "account_id", role, amountMinor = "amount_minor", position } }
 public struct V15InstallmentRelation: Codable, Sendable, Equatable { public let planID: UUID; public let role: String; public let planTitle: String; public let planStatus: String; enum CodingKeys: String, CodingKey { case planID = "plan_id", role, planTitle = "plan_title", planStatus = "plan_status" } }
-public struct V15ReimbursementRelation: Codable, Sendable, Equatable { public let role: String; public let claimID: UUID; public let claimTitle: String; public let claimStatus: String; public let partyID: UUID?; public let partyName: String?; public let receiptID: UUID?; public let allocatedMinor: V15MinorUnits; public let receivedMinor: V15MinorUnits; public let outstandingMinor: V15MinorUnits; enum CodingKeys: String, CodingKey { case role, claimID = "claim_id", claimTitle = "claim_title", claimStatus = "claim_status", partyID = "party_id", partyName = "party_name", receiptID = "receipt_id", allocatedMinor = "allocated_minor", receivedMinor = "received_minor", outstandingMinor = "outstanding_minor" } }
+public struct V15ReimbursementRelation: Codable, Sendable, Equatable { public let role: String; public let claimID: UUID; public let claimTitle: String; public let claimStatus: String; public let counterpartyName: String; public let receiptID: UUID?; public let allocatedMinor: V15MinorUnits; public let receivedMinor: V15MinorUnits; public let outstandingMinor: V15MinorUnits; enum CodingKeys: String, CodingKey { case role, claimID = "claim_id", claimTitle = "claim_title", claimStatus = "claim_status", counterpartyName = "counterparty_name", receiptID = "receipt_id", allocatedMinor = "allocated_minor", receivedMinor = "received_minor", outstandingMinor = "outstanding_minor" } }
 public struct V15Transaction: Codable, Sendable, Equatable { public let id: UUID; public let kind: String; public let amountMinor: V15MinorUnits; public let occurredAt: Date; public let businessDate: String; public let title: String; public let note: String?; public let categoryID: UUID?; public let accountID: UUID?; public let destinationAccountID: UUID?; public let creditCycleID: UUID?; public let source: String; public let postings: [V15Posting]; public let version: Int; public let voidedAt: Date?; public let createdAt: Date; public let updatedAt: Date; public let installmentPlanID: UUID?; public let installmentRelation: V15InstallmentRelation?; public let reimbursementRelations: [V15ReimbursementRelation]; public let availableActions: [V15AvailableAction]; enum CodingKeys: String, CodingKey { case id, kind, amountMinor = "amount_minor", occurredAt = "occurred_at", businessDate = "business_date", title, note, categoryID = "category_id", accountID = "account_id", destinationAccountID = "destination_account_id", creditCycleID = "credit_cycle_id", source, postings, version, voidedAt = "voided_at", createdAt = "created_at", updatedAt = "updated_at", installmentPlanID = "installment_plan_id", installmentRelation = "installment_relation", reimbursementRelations = "reimbursement_relations", availableActions = "available_actions" } }
+
+/// The same account compatibility decision is used by manual and parsed drafts.
+public enum V15TransactionReferenceRules {
+    public static func allowsSource(_ id: UUID?, kind: V15ManualTransactionKind, accounts: [V15AccountResponse]) -> Bool {
+        guard let id else { return true }
+        guard let account = accounts.first(where: { $0.id == id && $0.isActive }) else { return false }
+        switch kind {
+        case .expense, .income, .transfer, .repayment: return account.kind == .cash || account.kind == .debit
+        case .creditPurchase: return account.kind == .credit && account.cycleMode != "on_demand"
+        case .borrowing: return account.kind == .credit && account.cycleMode == "on_demand"
+        }
+    }
+
+    public static func allowsDestination(_ id: UUID?, kind: V15ManualTransactionKind, sourceID: UUID?, accounts: [V15AccountResponse]) -> Bool {
+        guard let id else { return true }
+        guard let account = accounts.first(where: { $0.id == id && $0.isActive }) else { return false }
+        switch kind {
+        case .transfer, .borrowing: return (account.kind == .cash || account.kind == .debit) && id != sourceID
+        case .repayment: return account.kind == .credit && id != sourceID
+        case .expense, .income, .creditPurchase: return false
+        }
+    }
+}
+
+/// Common financial field rules for a manual entry and an AI proposal review.
+/// Callers keep their own workflow gates (offline preview, human confirmation,
+/// or cash-flow-only kinds) but cannot disagree about a transaction draft.
+enum V15TransactionDraftRules {
+    struct Result {
+        let amountMinor: Int64?
+        let title: String
+        let note: String?
+        let issues: [V15FieldIssue]
+    }
+
+    static func validate(
+        kind: V15ManualTransactionKind, amountText: String, title: String, note: String,
+        accountID: UUID?, categoryID: UUID?, destinationAccountID: UUID?, creditCycleID: UUID?,
+        accounts: [V15AccountResponse], categories: [V15CategoryResponse], creditCycles: [V15CreditCycle],
+        creditCyclesLoading: Bool = false, fieldPathPrefix: String = ""
+    ) -> Result {
+        let amount = CNYAmountParser.minorUnits(amountText)
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let canonicalNote = note.isEmpty ? nil : note
+        var issues: [V15FieldIssue] = []
+        func issue(_ code: String, _ message: String, _ field: String) {
+            issues.append(.init(code: code, message: message, fieldPath: fieldPathPrefix + field))
+        }
+        if title.isEmpty { issue("title_required", "请填写账目名称。", "title") }
+        if title.count > 120 { issue("title_too_long", "账目名称最多 120 个字符。", "title") }
+        if note.count > 500 { issue("note_too_long", "备注最多 500 个字符。", "note") }
+        if amount == nil || amount ?? 0 <= 0 { issue("amount_invalid", "金额须为大于 0 的元金额，且最多两位小数。", "amount_minor") }
+
+        let source = accounts.first { $0.id == accountID && $0.isActive }
+        let destination = accounts.first { $0.id == destinationAccountID && $0.isActive }
+        let category = findCategory(categoryID, in: categories)
+        let sourceIsCash = source?.kind == .cash || source?.kind == .debit
+        let destinationIsCash = destination?.kind == .cash || destination?.kind == .debit
+        let onDemand = destination?.kind == .credit && destination?.cycleMode == "on_demand"
+        func rejectCategoryOrCycle(allowsCycle: Bool = false) {
+            if categoryID != nil { issue("category_not_allowed", "此类型不使用分类。", "category_id") }
+            if !allowsCycle && creditCycleID != nil { issue("credit_cycle_not_allowed", "此类型不使用信用账期。", "credit_cycle_id") }
+        }
+        func checkCategory(_ direction: V15CategoryDirection) {
+            if categoryID != nil && (category?.direction != direction.rawValue || category?.archivedAt != nil) {
+                issue("category_unavailable", "所选分类不可用于此类型，请重新选择。", "category_id")
+            }
+        }
+        switch kind {
+        case .expense, .income:
+            if !sourceIsCash { issue("cash_or_debit_account_required", "收支需要选择现金或借记账户。", "account_id") }
+            if destinationAccountID != nil { issue("destination_not_allowed", "此类型不使用目标账户。", "destination_account_id") }
+            if creditCycleID != nil { issue("credit_cycle_not_allowed", "此类型不使用信用账期。", "credit_cycle_id") }
+            checkCategory(kind == .income ? .income : .expense)
+        case .creditPurchase:
+            if source?.kind != .credit || source?.cycleMode == "on_demand" { issue("credit_account_required", "信用卡消费需要选择信用账户。", "account_id") }
+            if destinationAccountID != nil { issue("destination_not_allowed", "信用卡消费不使用目标账户。", "destination_account_id") }
+            if creditCycleID != nil { issue("credit_cycle_server_owned", "信用卡消费账期会按消费日期自动确定。", "credit_cycle_id") }
+            checkCategory(.expense)
+        case .transfer:
+            if !sourceIsCash { issue("source_account_type", "转出账户必须是现金或借记账户。", "account_id") }
+            if !destinationIsCash { issue("destination_account_type", "转入账户必须是现金或借记账户。", "destination_account_id") }
+            if accountID != nil && accountID == destinationAccountID { issue("transfer_same_account", "转出与转入账户不能相同。", "destination_account_id") }
+            rejectCategoryOrCycle()
+        case .borrowing:
+            if source?.kind != .credit || source?.cycleMode != "on_demand" { issue("on_demand_required", "借入来源必须是随借随还信用账户。", "account_id") }
+            if !destinationIsCash { issue("borrowing_destination_type", "请选择实际收到借款的现金或借记账户。", "destination_account_id") }
+            if accountID != nil && accountID == destinationAccountID { issue("same_account", "借款与收款账户不能相同。", "destination_account_id") }
+            rejectCategoryOrCycle()
+        case .repayment:
+            if !sourceIsCash { issue("repayment_source_type", "还款账户必须是现金或借记账户。", "account_id") }
+            if destination?.kind != .credit { issue("repayment_destination_type", "还款目标必须是信用账户。", "destination_account_id") }
+            if onDemand {
+                if creditCycleID != nil { issue("credit_cycle_not_allowed", "随借随还不选择账期。", "credit_cycle_id") }
+            } else if creditCyclesLoading { issue("credit_cycles_loading", "正在加载可用信用账期。", "credit_cycle_id") }
+            else if creditCycleID == nil { issue("credit_cycle_required", "请选择可用的信用账期。", "credit_cycle_id") }
+            else if !creditCycles.contains(where: { $0.id == creditCycleID && $0.accountID == destinationAccountID && $0.status != .settled && $0.status != .unknown }) {
+                issue("credit_cycle_unavailable", "所选信用账期不可用，请重新选择。", "credit_cycle_id")
+            }
+            let remaining = onDemand ? destination.map { max($0.currentBalanceMinor, 0) } : creditCycles.first(where: { $0.id == creditCycleID && $0.accountID == destinationAccountID })?.remainingMinor
+            if let remaining, let amount, amount > remaining {
+                issue("repayment_exceeds_remaining", V15RepaymentAmountMessage.exceeded(remaining: remaining, input: amount), "amount_minor")
+            }
+            rejectCategoryOrCycle(allowsCycle: !onDemand)
+        }
+        return .init(amountMinor: amount.flatMap { $0 > 0 ? $0 : nil }, title: title, note: canonicalNote, issues: issues)
+    }
+
+    private static func findCategory(_ id: UUID?, in categories: [V15CategoryResponse]) -> V15CategoryResponse? {
+        guard let id else { return nil }
+        for category in categories {
+            if category.id == id { return category }
+            if let child = findCategory(id, in: category.children) { return child }
+        }
+        return nil
+    }
+}
 
 // MARK: - F1-A bootstrap, master-data read, and manual ledger contracts
 
@@ -612,13 +681,6 @@ public enum V15CategoryDirection: String, Codable, Sendable, Equatable { case in
 }
 public struct V15CategoryPatch: Codable, Sendable, Equatable { public let expectedVersion: Int; public let name: String?; public let direction: String?; public let icon: String?; public let colorHex: String?; public init(expectedVersion: Int, name: String? = nil, direction: String? = nil, icon: String? = nil, colorHex: String? = nil) { self.expectedVersion = expectedVersion; self.name = name; self.direction = direction; self.icon = icon; self.colorHex = colorHex }; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", name, direction, icon; case colorHex = "color_hex" } }
 public struct V15CategoryOrderState: Codable, Sendable, Equatable { public let parentID: UUID?; public let direction: V15CategoryDirection; public let items: [V15CategoryResponse]; public let listRevision: String; enum CodingKeys: String, CodingKey { case parentID = "parent_id", direction, items; case listRevision = "list_revision" } }
-public struct V15MerchantDraft: Codable, Sendable, Equatable { public let name: String; public let aliases: [String]; public init(name: String, aliases: [String] = []) { self.name = name; self.aliases = aliases } }
-public struct V15MerchantPatch: Codable, Sendable, Equatable { public let expectedVersion: Int; public let name: String?; public let aliases: [String]?; public init(expectedVersion: Int, name: String? = nil, aliases: [String]? = nil) { self.expectedVersion = expectedVersion; self.name = name; self.aliases = aliases }; enum CodingKeys: String, CodingKey { case expectedVersion = "expected_version", name, aliases } }
-public struct V15MerchantMapping: Codable, Sendable, Equatable { public let transactionID: UUID; public let merchant: V15Merchant; public let mappingVersion: Int; public let confirmedAt: Date; public let provenance: String; enum CodingKeys: String, CodingKey { case transactionID = "transaction_id", merchant; case mappingVersion = "mapping_version", confirmedAt = "confirmed_at", provenance } }
-public struct V15MerchantMappingRequest: Codable, Sendable, Equatable { public let merchantID: UUID; public let expectedMappingVersion: Int?; public init(merchantID: UUID, expectedMappingVersion: Int? = nil) { self.merchantID = merchantID; self.expectedMappingVersion = expectedMappingVersion }; enum CodingKeys: String, CodingKey { case merchantID = "merchant_id", expectedMappingVersion = "expected_mapping_version" } }
-public struct V15MerchantMappingReleaseRequest: Codable, Sendable, Equatable { public let expectedMappingVersion: Int; public init(expectedMappingVersion: Int) { self.expectedMappingVersion = expectedMappingVersion }; enum CodingKeys: String, CodingKey { case expectedMappingVersion = "expected_mapping_version" } }
-public struct V15MerchantMappingReceipt: Codable, Sendable, Equatable { public let action: String; public let mapping: V15MerchantMapping?; public let transactionVersion: Int; enum CodingKeys: String, CodingKey { case action, mapping; case transactionVersion = "transaction_version" } }
-
 public enum V15ManualTransactionKind: String, Codable, CaseIterable, Sendable, Equatable, Identifiable { case expense, income, transfer, creditPurchase = "credit_purchase", repayment, borrowing
     public var id: String { rawValue }
     public var displayName: String { switch self { case .expense: "支出"; case .income: "收入"; case .transfer: "转账"; case .creditPurchase: "信用卡消费"; case .borrowing: "借入"; case .repayment: "还款" } }
@@ -779,10 +841,9 @@ public struct V15CreditAccountInstallmentTeaser: Codable, Sendable, Equatable {
     public let nextPeriod: V15CreditCycleInstallmentPeriod?
     enum CodingKeys: String, CodingKey { case planID = "plan_id", title, status, installmentCount = "installment_count", futureCount = "future_count", futureScheduledGrossMinor = "future_scheduled_gross_minor", nextPeriod = "next_period" }
 }
-public struct V15ReimbursementAllocation: Codable, Sendable, Equatable { public let id: UUID; public let transactionID: UUID; public let expenseTitle: String; public let expenseAmountMinor: V15MinorUnits; public let amountMinor: V15MinorUnits; public let receivedMinor: V15MinorUnits; public let outstandingMinor: V15MinorUnits; public let locked: Bool; public let position: Int; enum CodingKeys: String, CodingKey { case id, transactionID = "transaction_id", expenseTitle = "expense_title", expenseAmountMinor = "expense_amount_minor", amountMinor = "amount_minor", receivedMinor = "received_minor", outstandingMinor = "outstanding_minor", locked, position } }
-public struct V15ReimbursementParty: Codable, Sendable, Equatable { public let id: UUID; public let name: String; public let expectedDate: String?; public let note: String?; public let claimedMinor: V15MinorUnits; public let receivedMinor: V15MinorUnits; public let outstandingMinor: V15MinorUnits; public let status: String; public let position: Int; public let allocations: [V15ReimbursementAllocation]; enum CodingKeys: String, CodingKey { case id, name, expectedDate = "expected_date", note, claimedMinor = "claimed_minor", receivedMinor = "received_minor", outstandingMinor = "outstanding_minor", status, position, allocations } }
+public struct V15ReimbursementExpense: Codable, Sendable, Equatable { public let id: UUID; public let transactionID: UUID; public let expenseTitle: String; public let expenseAmountMinor: V15MinorUnits; public let amountMinor: V15MinorUnits; public let receivedMinor: V15MinorUnits; public let outstandingMinor: V15MinorUnits; public let locked: Bool; public let position: Int; enum CodingKeys: String, CodingKey { case id, transactionID = "transaction_id", expenseTitle = "expense_title", expenseAmountMinor = "expense_amount_minor", amountMinor = "amount_minor", receivedMinor = "received_minor", outstandingMinor = "outstanding_minor", locked, position } }
 public struct V15ReimbursementReceiptAllocation: Codable, Sendable, Equatable { public let id: UUID; public let allocationID: UUID; public let amountMinor: V15MinorUnits; public let position: Int; enum CodingKeys: String, CodingKey { case id, allocationID = "allocation_id", amountMinor = "amount_minor", position } }
-public struct V15ReimbursementReceipt: Codable, Sendable, Equatable { public let id: UUID; public let claimID: UUID; public let partyID: UUID; public let amountMinor: V15MinorUnits; public let receivedAt: Date; public let destinationAccountID: UUID; public let title: String; public let note: String?; public let transaction: V15Transaction; public let allocations: [V15ReimbursementReceiptAllocation]; public let version: Int; public let voidedAt: Date?; public let createdAt: Date; public let updatedAt: Date; enum CodingKeys: String, CodingKey { case id, claimID = "claim_id", partyID = "party_id", amountMinor = "amount_minor", receivedAt = "received_at", destinationAccountID = "destination_account_id", title, note, transaction, allocations, version, voidedAt = "voided_at", createdAt = "created_at", updatedAt = "updated_at" } }
+public struct V15ReimbursementReceipt: Codable, Sendable, Equatable { public let id: UUID; public let claimID: UUID; public let amountMinor: V15MinorUnits; public let receivedAt: Date; public let destinationAccountID: UUID; public let title: String; public let note: String?; public let transaction: V15Transaction; public let allocations: [V15ReimbursementReceiptAllocation]; public let version: Int; public let voidedAt: Date?; public let createdAt: Date; public let updatedAt: Date; enum CodingKeys: String, CodingKey { case id, claimID = "claim_id", amountMinor = "amount_minor", receivedAt = "received_at", destinationAccountID = "destination_account_id", title, note, transaction, allocations, version, voidedAt = "voided_at", createdAt = "created_at", updatedAt = "updated_at" } }
 public enum V15ReimbursementClaimStatus: Sendable, Equatable, Hashable, Codable {
     case draft, pending, partialReceived, received, cancelled, partiallyReceivedCancelled, unknown(String)
     public init(from decoder: Decoder) throws { let value = try decoder.singleValueContainer().decode(String.self); switch value { case "draft": self = .draft; case "pending": self = .pending; case "partial_received": self = .partialReceived; case "received": self = .received; case "cancelled": self = .cancelled; case "partially_received_cancelled": self = .partiallyReceivedCancelled; default: self = .unknown(value) } }
@@ -791,10 +852,10 @@ public enum V15ReimbursementClaimStatus: Sendable, Equatable, Hashable, Codable 
     public var displayName: String { switch self { case .draft: "草稿"; case .pending: "待到账"; case .partialReceived: "部分到账"; case .received: "已到账"; case .cancelled: "已取消"; case .partiallyReceivedCancelled: "部分到账后取消"; case .unknown: "暂时无法识别" } }
     public var isKnown: Bool { if case .unknown = self { false } else { true } }
 }
-public struct V15ReimbursementClaim: Codable, Sendable, Equatable { public let id: UUID; public let title: String; public let note: String?; public let status: V15ReimbursementClaimStatus; public let totalClaimedMinor: V15MinorUnits; public let receivedMinor: V15MinorUnits; public let outstandingMinor: V15MinorUnits; public let expenseCount: Int; public let partyCount: Int; public let receiptCount: Int; public let parties: [V15ReimbursementParty]; public let latestReceipt: V15ReimbursementReceipt?; public let version: Int; public let submittedAt: Date?; public let cancelledAt: Date?; public let voidedAt: Date?; public let archivedAt: Date?; public let createdAt: Date; public let updatedAt: Date; enum CodingKeys: String, CodingKey { case id, title, note, status, totalClaimedMinor = "total_claimed_minor", receivedMinor = "received_minor", outstandingMinor = "outstanding_minor", expenseCount = "expense_count", partyCount = "party_count", receiptCount = "receipt_count", parties, latestReceipt = "latest_receipt", version, submittedAt = "submitted_at", cancelledAt = "cancelled_at", voidedAt = "voided_at", archivedAt = "archived_at", createdAt = "created_at", updatedAt = "updated_at" } }
+public struct V15ReimbursementClaim: Codable, Sendable, Equatable { public let id: UUID; public let title: String; public let note: String?; public let status: V15ReimbursementClaimStatus; public let totalClaimedMinor: V15MinorUnits; public let receivedMinor: V15MinorUnits; public let outstandingMinor: V15MinorUnits; public let expenseCount: Int; public let receiptCount: Int; public let counterpartyName: String; public let expectedDate: String?; public let expenses: [V15ReimbursementExpense]; public let latestReceipt: V15ReimbursementReceipt?; public let version: Int; public let submittedAt: Date?; public let cancelledAt: Date?; public let voidedAt: Date?; public let archivedAt: Date?; public let createdAt: Date; public let updatedAt: Date; enum CodingKeys: String, CodingKey { case id, title, note, status, totalClaimedMinor = "total_claimed_minor", receivedMinor = "received_minor", outstandingMinor = "outstanding_minor", expenseCount = "expense_count", receiptCount = "receipt_count", counterpartyName = "counterparty_name", expectedDate = "expected_date", expenses, latestReceipt = "latest_receipt", version, submittedAt = "submitted_at", cancelledAt = "cancelled_at", voidedAt = "voided_at", archivedAt = "archived_at", createdAt = "created_at", updatedAt = "updated_at" } }
 public struct V15ReimbursementClaimPreview: Codable, Sendable { public let previewToken: UUID; public let inputDigest: String; public let claimVersion: Int; public let receiptVersion: Int?; public let current: V15ReimbursementClaim; public let proposed: V15ReimbursementClaim; public let releasedMinor: V15MinorUnits; public let newlyClaimedMinor: V15MinorUnits; public let warnings: [String]; enum CodingKeys: String, CodingKey { case previewToken = "preview_token", inputDigest = "input_digest", claimVersion = "claim_version", receiptVersion = "receipt_version", current, proposed, releasedMinor = "released_minor", newlyClaimedMinor = "newly_claimed_minor", warnings } }
 public struct V15ReimbursementCancelPreview: Codable, Sendable { public let previewToken: UUID; public let inputDigest: String; public let claimVersion: Int; public let receiptVersion: Int?; public let current: V15ReimbursementClaim; public let proposedStatus: String; public let releasedMinor: V15MinorUnits; public let retainedReceivedMinor: V15MinorUnits; enum CodingKeys: String, CodingKey { case previewToken = "preview_token", inputDigest = "input_digest", claimVersion = "claim_version", receiptVersion = "receipt_version", current, proposedStatus = "proposed_status", releasedMinor = "released_minor", retainedReceivedMinor = "retained_received_minor" } }
-public struct V15ReimbursementReceiptPreview: Codable, Sendable { public let previewToken: UUID; public let inputDigest: String; public let claimVersion: Int; public let receiptVersion: Int?; public let claimBefore: V15ReimbursementClaim; public let claimAfter: V15ReimbursementClaim; public let partyID: UUID; public let amountMinor: V15MinorUnits; public let partyReceivedBeforeMinor: V15MinorUnits; public let partyReceivedAfterMinor: V15MinorUnits; public let claimReceivedBeforeMinor: V15MinorUnits; public let claimReceivedAfterMinor: V15MinorUnits; public let persistedAllocations: [V15ReimbursementReceiptAllocation]; enum CodingKeys: String, CodingKey { case previewToken = "preview_token", inputDigest = "input_digest", claimVersion = "claim_version", receiptVersion = "receipt_version", claimBefore = "claim_before", claimAfter = "claim_after", partyID = "party_id", amountMinor = "amount_minor", partyReceivedBeforeMinor = "party_received_before_minor", partyReceivedAfterMinor = "party_received_after_minor", claimReceivedBeforeMinor = "claim_received_before_minor", claimReceivedAfterMinor = "claim_received_after_minor", persistedAllocations = "persisted_allocations" } }
+public struct V15ReimbursementReceiptPreview: Codable, Sendable { public let previewToken: UUID; public let inputDigest: String; public let claimVersion: Int; public let receiptVersion: Int?; public let claimBefore: V15ReimbursementClaim; public let claimAfter: V15ReimbursementClaim; public let amountMinor: V15MinorUnits; public let claimReceivedBeforeMinor: V15MinorUnits; public let claimReceivedAfterMinor: V15MinorUnits; public let persistedAllocations: [V15ReimbursementReceiptAllocation]; enum CodingKeys: String, CodingKey { case previewToken = "preview_token", inputDigest = "input_digest", claimVersion = "claim_version", receiptVersion = "receipt_version", claimBefore = "claim_before", claimAfter = "claim_after", amountMinor = "amount_minor", claimReceivedBeforeMinor = "claim_received_before_minor", claimReceivedAfterMinor = "claim_received_after_minor", persistedAllocations = "persisted_allocations" } }
 
 /// Missing on older servers stays unavailable; no fallback formula is valid.
 public struct V15Disposable: Codable, Sendable, Equatable {

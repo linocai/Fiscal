@@ -72,7 +72,6 @@ class ScheduleChangePlan:
     periods: list[Any]
     plans: list[Any]
     ai_proposals: list[Any]
-    statement_rows: list[Any]
     purchase_schedules: dict[UUID, CreditSchedule]
     reference_schedules: dict[UUID, CreditSchedule]
     affected_previews: list[CreditScheduleAffectedCycle]
@@ -491,7 +490,6 @@ class CreditService:
         today = self._today()
         affected_ids = [item.id for item in affected]
         ai_proposals = await self.repository.ai_proposals_for_cycles(affected_ids)
-        statement_rows = await self.repository.statement_rows_for_cycles(affected_ids)
         transactions = await self.repository.transactions_for_cycles(affected_ids)
         periods = await self.repository.periods_for_cycles(affected_ids)
         plans = await self.repository.plans_for_start_cycles(affected_ids)
@@ -600,7 +598,6 @@ class CreditService:
             periods=periods,
             plans=plans,
             ai_proposals=ai_proposals,
-            statement_rows=statement_rows,
             purchase_schedules=purchase_schedules,
             reference_schedules=reference_schedules,
             affected_previews=previews,
@@ -780,9 +777,6 @@ class CreditService:
             "periods": [self._period_dependency(item) for item in plan.periods],
             "plans": [self._plan_dependency(item) for item in plan.plans],
             "ai_proposals": [self._proposal_dependency(item) for item in plan.ai_proposals],
-            "statement_import_rows": [
-                self._statement_row_dependency(item) for item in plan.statement_rows
-            ],
             "affected_cycle_ids": [
                 str(item.id) for item in plan.all_cycles if item.id in affected_cycle_ids
             ],
@@ -831,16 +825,6 @@ class CreditService:
             "credit_cycle_id": str(proposal.credit_cycle_id),
             "status": proposal.status,
             "updated_at": proposal.updated_at.isoformat(),
-        }
-
-    @staticmethod
-    def _statement_row_dependency(row: Any) -> dict[str, object]:
-        return {
-            "id": str(row.id),
-            "version": row.version,
-            "credit_cycle_id_candidate": str(row.credit_cycle_id_candidate),
-            "confirmed_at": row.confirmed_at.isoformat() if row.confirmed_at else None,
-            "updated_at": row.updated_at.isoformat(),
         }
 
     async def _required_preview(

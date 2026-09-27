@@ -2,11 +2,21 @@ import CryptoKit
 import Foundation
 
 public protocol AIInputCreating: Sendable {
-  func create(source: AIProposalSource, text: String, idempotencyKey: UUID) async throws
-    -> AIProposalDTO
+  func create(source: V15AIProposalSource, text: String, idempotencyKey: UUID) async throws
+    -> V15AIProposal
 }
 
-extension RemoteAIProposalRepository: AIInputCreating {}
+public actor RemoteV15AIInputRepository: AIInputCreating {
+  private let transport: APITransport
+  public init(transport: APITransport) { self.transport = transport }
+
+  public func create(source: V15AIProposalSource, text: String, idempotencyKey: UUID) async throws -> V15AIProposal {
+    try await transport.request(
+      "ai/proposals", method: "POST",
+      headers: ["Idempotency-Key": idempotencyKey.uuidString],
+      body: V15AIProposalCreate(source: source, text: text))
+  }
+}
 
 public protocol AIInputRetryKeyStoring: Sendable {
   func key(for fingerprint: String) async -> UUID
@@ -56,7 +66,7 @@ public actor AIInputSubmissionService {
     self.retryKeys = retryKeys
   }
 
-  public func submit(source: AIProposalSource, text rawText: String) async throws -> AIProposalDTO {
+  public func submit(source: V15AIProposalSource, text rawText: String) async throws -> V15AIProposal {
     let text = Self.normalized(rawText)
     guard !text.isEmpty else { throw AIInputError.emptyText }
     guard text.count <= 2_000 else { throw AIInputError.textTooLong }
@@ -84,7 +94,7 @@ public actor AIInputSubmissionService {
       .joined(separator: "\n")
   }
 
-  public static func fingerprint(source: AIProposalSource, text: String) -> String {
+  public static func fingerprint(source: V15AIProposalSource, text: String) -> String {
     let digest = SHA256.hash(data: Data("\(source.rawValue)\u{0}\(text)".utf8))
     return digest.map { String(format: "%02x", $0) }.joined()
   }
@@ -136,11 +146,11 @@ public enum AIInputFeedback {
     return "本次记账没有完成，请稍后重试。"
   }
 
-  public static func success(for proposal: AIProposalDTO) -> String {
+  public static func success(for proposal: V15AIProposal) -> String {
     switch proposal.status {
     case .executed: proposal.target == .cashFlow
       ? "已创建未来现金流：\(proposal.title ?? "新计划")。"
-      : "已自动记账：\(proposal.title ?? "新流水")。"
+      : "记账已完成：\(proposal.title ?? "新流水")。"
     case .pending: proposal.target == .cashFlow
       ? "已生成未来现金流提案，请人工确认。"
       : "已加入 AI 待确认，请在 Fiscal 中检查。"
@@ -148,6 +158,7 @@ public enum AIInputFeedback {
     case .failed: "识别失败，已保留在 AI 队列中。"
     case .ignored: "该提案已忽略。"
     case .undone: "该提案对应的流水已撤销。"
+    case .unknown: "识别结果状态需要在 Fiscal 中核对。"
     }
   }
 }

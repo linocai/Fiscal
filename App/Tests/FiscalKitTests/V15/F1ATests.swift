@@ -1,3 +1,4 @@
+@testable import FiscalPreviewSupportmacOS
 import Foundation
 import Testing
 
@@ -31,7 +32,7 @@ struct F1ATests {
         #expect(wire?["account_id"] as? String == V15F1AFixtures.accountID.uuidString)
     }
 
-    @Test("system, passphrase, provider, and quality facts use their exact backend contracts")
+    @Test("system, passphrase, and provider facts use their exact backend contracts")
     @MainActor func settingsAndSystemRoutes() async throws {
         let transport = F1AControlledTransport()
         let services = V15Services(transport: transport)
@@ -55,9 +56,6 @@ struct F1ATests {
         #expect(provider.apiKeyConfigured && provider.baseURL == "https://ai.example.test/v1")
         #expect((await transport.lastRequest())?.path == "ai/provider-settings")
 
-        let quality = try await services.ai.qualityMetrics()
-        #expect(quality.rows.first?.pending == 1 && quality.rows.first?.total == 8)
-        #expect((await transport.lastRequest())?.path == "ai/quality/metrics")
     }
 
     @Test("formal action previews and commits preserve tokens, keys, and fresh receipt reads")

@@ -330,23 +330,11 @@ public final class V15RecordModel {
     }
 
     private func isAllowedSource(_ id: UUID?, for kind: V15ManualTransactionKind) -> Bool {
-        guard let id else { return true }
-        guard let account = accounts.first(where: { $0.id == id }) else { return false }
-        switch kind {
-        case .expense, .income, .transfer, .repayment: return account.kind == .cash || account.kind == .debit
-        case .creditPurchase: return account.kind == .credit && account.cycleMode != "on_demand"
-        case .borrowing: return account.kind == .credit && account.cycleMode == "on_demand"
-        }
+        V15TransactionReferenceRules.allowsSource(id, kind: kind, accounts: accounts)
     }
 
     private func isAllowedDestination(_ id: UUID?, for kind: V15ManualTransactionKind, sourceID: UUID?) -> Bool {
-        guard let id else { return true }
-        guard let account = accounts.first(where: { $0.id == id }) else { return false }
-        switch kind {
-        case .transfer, .borrowing: return (account.kind == .cash || account.kind == .debit) && id != sourceID
-        case .repayment: return account.kind == .credit
-        case .expense, .income, .creditPurchase: return false
-        }
+        V15TransactionReferenceRules.allowsDestination(id, kind: kind, sourceID: sourceID, accounts: accounts)
     }
 
     private func invalidateCreditCycles() {
@@ -369,8 +357,9 @@ public final class V15RecordModel {
     private func flatten(_ source: [V15CategoryResponse]) -> [V15CategoryResponse] { source + source.flatMap { flatten($0.children) } }
 
     private func request() -> V15TransactionCreateRequest? {
-        guard let amount = CNYAmountParser.minorUnits(amountText), amount > 0 else { return nil }
-        return .init(kind: kind, amountMinor: amount, occurredAt: shanghaiInstant(occurredOn), title: title.trimmingCharacters(in: .whitespacesAndNewlines), note: note.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty, accountID: accountID, categoryID: categoryID, destinationAccountID: destinationAccountID, creditCycleID: creditCycleID)
+        let draft = sharedDraftValidation()
+        guard draft.issues.isEmpty, let amount = draft.amountMinor else { return nil }
+        return .init(kind: kind, amountMinor: amount, occurredAt: shanghaiInstant(occurredOn), title: draft.title, note: draft.note, accountID: accountID, categoryID: categoryID, destinationAccountID: destinationAccountID, creditCycleID: creditCycleID)
     }
 
     private func payloadIdentity(for request: V15TransactionCreateRequest) -> String? {
@@ -382,65 +371,19 @@ public final class V15RecordModel {
     }
 
     private func validate() {
-        var issues: [V15FieldIssue] = []
-        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { issues.append(.init(code: "title_required", message: "请填写账目名称。", fieldPath: "title")) }
-        guard let amount = CNYAmountParser.minorUnits(amountText), amount > 0 else {
-            issues.append(.init(code: "amount_invalid", message: "金额须为大于 0 的元金额，且最多两位小数。", fieldPath: "amount_minor")); localIssues = issues; return
-        }
-        _ = amount
-        let selected = accounts.first { $0.id == accountID }
-        let destination = accounts.first { $0.id == destinationAccountID }
-        let category = categories.first { $0.id == categoryID }
-        switch kind {
-        case .expense, .income:
-            if selected?.kind != .cash && selected?.kind != .debit { issues.append(.init(code: "cash_or_debit_account_required", message: "收支需要选择现金或借记账户。", fieldPath: "account_id")) }
-            if destinationAccountID != nil { issues.append(.init(code: "destination_not_allowed", message: "此类型不使用目标账户。", fieldPath: "destination_account_id")) }
-            if creditCycleID != nil { issues.append(.init(code: "credit_cycle_not_allowed", message: "此类型不使用信用账期。", fieldPath: "credit_cycle_id")) }
-            validateCategory(category, expected: categoryDirection, issues: &issues)
-        case .creditPurchase:
-            if selected?.kind != .credit || selected?.cycleMode == "on_demand" { issues.append(.init(code: "credit_account_required", message: "信用卡消费需要选择信用账户。", fieldPath: "account_id")) }
-            if destinationAccountID != nil { issues.append(.init(code: "destination_not_allowed", message: "信用卡消费不使用目标账户。", fieldPath: "destination_account_id")) }
-            if creditCycleID != nil { issues.append(.init(code: "credit_cycle_server_owned", message: "信用卡消费账期会按消费日期自动确定。", fieldPath: "credit_cycle_id")) }
-            validateCategory(category, expected: .expense, issues: &issues)
-        case .transfer:
-            if selected?.kind != .cash && selected?.kind != .debit { issues.append(.init(code: "source_account_type", message: "转出账户必须是现金或借记账户。", fieldPath: "account_id")) }
-            if destination?.kind != .cash && destination?.kind != .debit { issues.append(.init(code: "destination_account_type", message: "转入账户必须是现金或借记账户。", fieldPath: "destination_account_id")) }
-            if accountID != nil && accountID == destinationAccountID { issues.append(.init(code: "transfer_same_account", message: "转出与转入账户不能相同。", fieldPath: "destination_account_id")) }
-            validateNoCategoryOrCycle(&issues)
-        case .borrowing:
-            if selected?.kind != .credit || selected?.cycleMode != "on_demand" { issues.append(.init(code: "on_demand_required", message: "借入来源必须是随借随还信用账户。", fieldPath: "account_id")) }
-            if destination?.kind != .cash && destination?.kind != .debit { issues.append(.init(code: "borrowing_destination_type", message: "请选择实际收到借款的现金或借记账户。", fieldPath: "destination_account_id")) }
-            if accountID == destinationAccountID { issues.append(.init(code: "same_account", message: "借款与收款账户不能相同。", fieldPath: "destination_account_id")) }
-            validateNoCategoryOrCycle(&issues)
-        case .repayment:
-            if selected?.kind != .cash && selected?.kind != .debit { issues.append(.init(code: "repayment_source_type", message: "还款账户必须是现金或借记账户。", fieldPath: "account_id")) }
-            if destination?.kind != .credit { issues.append(.init(code: "repayment_destination_type", message: "还款目标必须是信用账户。", fieldPath: "destination_account_id")) }
-            if isOnDemandRepayment {
-                if creditCycleID != nil { issues.append(.init(code: "credit_cycle_not_allowed", message: "随借随还不选择账期。", fieldPath: "credit_cycle_id")) }
-            } else if creditCyclePhase == .loading { issues.append(.init(code: "credit_cycles_loading", message: "正在加载可用信用账期。", fieldPath: "credit_cycle_id")) }
-            else if creditCycleID == nil { issues.append(.init(code: "credit_cycle_required", message: "请选择可用的信用账期。", fieldPath: "credit_cycle_id")) }
-            else if creditCycles.first(where: { $0.id == creditCycleID && $0.accountID == destinationAccountID }) == nil { issues.append(.init(code: "credit_cycle_unavailable", message: "所选信用账期不可用，请重新选择。", fieldPath: "credit_cycle_id")) }
-            if let remaining = repaymentRemainingMinor, amount > remaining {
-                issues.append(.init(code: "repayment_exceeds_remaining", message: V15RepaymentAmountMessage.exceeded(remaining: remaining, input: amount), fieldPath: "amount_minor"))
-            }
-            validateNoCategoryOrCycle(&issues, allowsCycle: !isOnDemandRepayment)
-        }
+        var issues = sharedDraftValidation().issues
         if isOffline && kind == .repayment {
             issues.append(.init(code: "preview_requires_network", message: "需要联网：还款前必须先读取最新账期。", fieldPath: nil))
         }
         localIssues = issues
     }
 
-    private func validateCategory(_ category: V15CategoryResponse?, expected: V15CategoryDirection?, issues: inout [V15FieldIssue]) {
-        guard categoryID != nil else { return }
-        guard let expected, let category, category.direction == expected.rawValue else {
-            issues.append(.init(code: "category_unavailable", message: "所选分类不可用于此类型，请重新选择。", fieldPath: "category_id")); return
-        }
-    }
-
-    private func validateNoCategoryOrCycle(_ issues: inout [V15FieldIssue], allowsCycle: Bool = false) {
-        if categoryID != nil { issues.append(.init(code: "category_not_allowed", message: "此类型不使用分类。", fieldPath: "category_id")) }
-        if !allowsCycle && creditCycleID != nil { issues.append(.init(code: "credit_cycle_not_allowed", message: "此类型不使用信用账期。", fieldPath: "credit_cycle_id")) }
+    private func sharedDraftValidation() -> V15TransactionDraftRules.Result {
+        V15TransactionDraftRules.validate(
+            kind: kind, amountText: amountText, title: title, note: note,
+            accountID: accountID, categoryID: categoryID, destinationAccountID: destinationAccountID, creditCycleID: creditCycleID,
+            accounts: accounts, categories: categories, creditCycles: creditCycles,
+            creditCyclesLoading: creditCyclePhase == .loading)
     }
 
     private func shanghaiInstant(_ date: Date) -> Date {
@@ -451,5 +394,3 @@ public final class V15RecordModel {
 
     private func message(for error: Error) -> String { (error as? V15Failure)?.message ?? "暂时无法取得数据。" }
 }
-
-private extension String { var nilIfEmpty: String? { isEmpty ? nil : self } }

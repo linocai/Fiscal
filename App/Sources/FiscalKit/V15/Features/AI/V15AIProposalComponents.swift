@@ -60,7 +60,6 @@ struct V15AIProposalRow: View {
 
 struct V15AIProposalDetail: View {
     let proposal: V15AIProposal
-    let events: [V15AIQualityEvent]
 #if os(macOS)
     @State private var evidenceExpanded = false
 #endif
@@ -123,28 +122,6 @@ struct V15AIProposalDetail: View {
                 }.accessibilityIdentifier("v15.f3f.proposal-error")
             }
 
-            V15Section("你的修改") {
-                if let diff = proposal.finalFieldDiff, !diff.isEmpty {
-                    ForEach(diff.keys.sorted(), id: \.self) { key in
-                        HStack(alignment: .top) { Text(Self.fieldLabel(key)).font(V15Typography.secondary.weight(.semibold)); Spacer(); Text(Self.diffSummary(diff[key])).font(V15Typography.secondary).multilineTextAlignment(.trailing) }
-                    }
-                } else {
-                    Text(proposal.qualityStatus == .historicalUnavailable ? "历史记录没有可用的识别详情。" : "尚未保存修改。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66))
-                }
-            }.accessibilityIdentifier("v15.f3f.diff")
-
-            V15Section("处理记录") {
-                if events.isEmpty { Text("暂时没有处理记录。").font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
-                ForEach(events) { event in
-                    HStack(alignment: .top, spacing: V15Spacing.sm) {
-                        Circle().fill(V15Palette.teal.color).frame(width: 7, height: 7).padding(.top, 6)
-                        VStack(alignment: .leading, spacing: V15Spacing.xxs) {
-                            Text(Self.eventLabel(event.eventType)).font(V15Typography.body.weight(.medium))
-                            if let reason = Self.eventReason(event) { Text(reason).font(V15Typography.secondary).foregroundStyle(V15Palette.ink.color.opacity(0.66)) }
-                        }
-                    }
-                }
-            }.accessibilityIdentifier("v15.f3f.quality-events")
         }
     }
 
@@ -161,24 +138,6 @@ struct V15AIProposalDetail: View {
         .background(needsReview ? V15Palette.warningSurface.color : V15Palette.card.color, in: RoundedRectangle(cornerRadius: V15Radius.control))
     }
     private static func fieldLabel(_ raw: String) -> String { ["kind": "类型", "amount_minor": "金额", "occurred_at": "时间", "title": "标题", "note": "备注", "account_id": "账户", "category_id": "分类", "destination_account_id": "目标账户", "credit_cycle_id": "账期", "target": "目标" ][raw] ?? "其他内容" }
-    private static func diffSummary(_ value: V15AIEventValue?) -> String { guard case .object(let object)? = value else { return "已修改" }; return "\(scalar(object["from"])) → \(scalar(object["to"]))" }
-    private static func scalar(_ value: V15AIEventValue?) -> String { switch value { case .string(let value): value; case .integer(let value): String(value); case .decimal(let value): "\(value)"; case .bool(let value): value ? "true" : "false"; case .null: "空"; case .array, .object: "结构化内容"; case nil: "空" } }
-    private static func eventLabel(_ value: V15AIQualityEventType) -> String { switch value { case .parsed: "已解析"; case .confirmUnchanged: "确认时未修改"; case .confirmEdited: "确认时已修改"; case .ignored: "已忽略"; case .executeFailed: "记账失败"; case .historicalAutomaticExecute: "历史自动处理（只读）"; case .manualExecute: "已记账"; case .undone: "已撤销"; case .providerRetry: "已重试解析"; case .finalFailure: "最终失败"; case .unknown: "其他事件" } }
-    private static func eventReason(_ event: V15AIQualityEvent) -> String? {
-        guard let reason = event.reason else { return nil }
-        return switch reason {
-        case "ai_provider_not_configured": "AI 服务尚未配置。"
-        case "ai_provider_unavailable", "ai_provider_upstream_failure": "AI 服务端当时暂时异常。"
-        case "ai_provider_rate_limited": "AI 服务当时请求较多。"
-        case "ai_provider_timeout": "AI 服务当时响应超时。"
-        case "ai_provider_connection_failed": "当时无法连接 AI 服务。"
-        case "ai_provider_configuration_rejected": "AI 服务当时拒绝了当前配置。"
-        case "ai_provider_invalid_response": "AI 服务当时返回了无法识别的内容。"
-        case "ai_processing_cancelled": "本次解析已取消。"
-        default:
-            event.eventType == .executeFailed ? "本次记账未能完成。" : "本次处理未能完成。"
-        }
-    }
 }
 
 struct V15AIMutationSurface: View {

@@ -1,0 +1,192 @@
+{
+  "keep": [
+    {
+      "path": "build/test-runs/chart48-axis-final/tests.xcresult",
+      "reason": "既有 Build48 历史轴线证据，不属本轮删除范围"
+    },
+    {
+      "path": "build/test-runs/chart48-macos-final/tests.xcresult",
+      "reason": "既有 Build48 宽屏失败原件，保留历史差异来源"
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-final-second/tests.xcresult",
+      "reason": "Build49 最终 329/329 Swift 业务回归"
+    },
+    {
+      "path": "build/test-runs/v240-gallery-ios-build49-acceptance/tests.xcresult",
+      "reason": "Build49 最终 iOS 未来来源/多费用/AI/CSV 5/5"
+    },
+    {
+      "path": "build/test-runs/v240-gallery-macos-final/tests.xcresult",
+      "reason": "Build49 macOS 报销与 CSV 3/3"
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-deeplink-verified/tests.xcresult",
+      "reason": "Build49 冷热 URL/不同草稿/错误目标 2/2"
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-build49-acceptance/tests.xcresult",
+      "reason": "Build49 最终原子录入呈现修复后正式 iOS 三空间、账户与 OCR 设置 3/3 及截图"
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-macos-final/tests.xcresult",
+      "reason": "Build49 正式 macOS 三空间、宽屏画布与账户 4/4 及截图"
+    }
+  ],
+  "delete": [
+    {
+      "path": "build/test-runs/v240-fiscalkit-fifth/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-first/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-fourth/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-second/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-sixth/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-third/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-gallery-ios-final/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-gallery-ios-multi-final/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-gallery-ios-multi-retry/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-gallery-ios-multi-verified/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-core/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-core-second/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-deeplink/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-deeplink-final/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-macos-first/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-wide-canvas-verified/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/98CD094D-2F5F-41F9-BB83-5D354C741611.mp4",
+      "reason": "定位阶段按需导出的重复媒体，原始测试结果及故障摘要已保留",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/v240/wide-screenshots/23F0E248-D1EF-42ED-89D6-AD916A88BD28.png",
+      "reason": "定位阶段按需导出的重复媒体，原始测试结果及故障摘要已保留",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/v240/wide-screenshots/75B45B28-3EFD-4F25-BD8A-594F5AD13D66.png",
+      "reason": "定位阶段按需导出的重复媒体，原始测试结果及故障摘要已保留",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/v240/wide-screenshots/7A087742-03A4-4CB3-9658-A5280E509361.png",
+      "reason": "定位阶段按需导出的重复媒体，原始测试结果及故障摘要已保留",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/v240/wide-screenshots/F6024BD5-1F17-4187-9BD7-C28497DA5B9B.png",
+      "reason": "定位阶段按需导出的重复媒体，原始测试结果及故障摘要已保留",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-final/tests.xcresult",
+      "reason": "原子录入呈现修复前结果已由 Build49 最终通过范围替代",
+      "evidence": [
+        "archive/releases/v2.4.0/qa/apple-build49.md"
+      ]
+    }
+  ]
+}

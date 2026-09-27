@@ -149,7 +149,6 @@ public enum V15MacLayout {
     public static let toolbarHeight: CGFloat = 56
 
     public static let compactAIWidths: (spine: CGFloat, detail: CGFloat, inspector: CGFloat) = (210, 390, 290)
-    public static let compactStatementImportWidths: (evidence: CGFloat, rows: CGFloat, inspector: CGFloat) = (190, 400, 290)
     public static let compactReimbursementWidths: (spine: CGFloat, detail: CGFloat, inspector: CGFloat) = (220, 390, 300)
     public static let compactInstallmentWidths: (spine: CGFloat, schedule: CGFloat, inspector: CGFloat) = (210, 380, 300)
 
@@ -159,9 +158,8 @@ public enum V15MacLayout {
     public static var widestCompactModuleMinimumWidth: CGFloat {
         let reimbursement = compactReimbursementWidths.spine + compactReimbursementWidths.detail + compactReimbursementWidths.inspector + 2
         let ai = compactAIWidths.spine + compactAIWidths.detail + compactAIWidths.inspector + 2
-        let statement = compactStatementImportWidths.evidence + compactStatementImportWidths.rows + compactStatementImportWidths.inspector + 2
         let installment = compactInstallmentWidths.spine + compactInstallmentWidths.schedule + compactInstallmentWidths.inspector + 2
-        return max(reimbursement, ai, statement, installment)
+        return max(reimbursement, ai, installment)
     }
 }
 

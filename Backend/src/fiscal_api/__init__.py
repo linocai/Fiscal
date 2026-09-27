@@ -1,3 +1,3 @@
 """Fiscal API package."""
 
-__version__ = "0.1.0"
+__version__ = "2.4.0"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Any, cast
 from uuid import UUID
 
 from pydantic import Field, StrictInt, field_validator
@@ -19,16 +19,16 @@ class ReimbursementAllocationDraft(APIModel):
     amount_minor: PositiveMinor
 
 
-class ReimbursementPartyDraft(APIModel):
-    id: UUID | None = None
-    name: str = Field(min_length=1, max_length=120)
-    expected_date: date | None = None
+class ReimbursementClaimDraft(APIModel):
+    title: str = Field(min_length=1, max_length=120)
     note: str | None = Field(default=None, max_length=500)
-    allocations: list[ReimbursementAllocationDraft] = Field(min_length=1)
+    counterparty_name: str = Field(min_length=1, max_length=120)
+    expected_date: date | None = None
+    expenses: list[ReimbursementAllocationDraft] = Field(min_length=1)
 
-    @field_validator("name", mode="before")
+    @field_validator("title", mode="before")
     @classmethod
-    def trim_name(cls, value: str) -> str:
+    def trim_title(cls, value: str) -> str:
         return clean_required(value)
 
     @field_validator("note", mode="before")
@@ -36,10 +36,14 @@ class ReimbursementPartyDraft(APIModel):
     def trim_note(cls, value: str | None) -> str | None:
         return clean_note(value)
 
+    @field_validator("counterparty_name", mode="before")
+    @classmethod
+    def trim_counterparty_name(cls, value: str) -> str:
+        return clean_required(value)
+
     @field_validator("expected_date", mode="before")
     @classmethod
     def strict_expected_date(cls, value: date | str | None) -> date | str | None:
-        """Accept only an ISO local business date, never a timestamp."""
         if value is None or (isinstance(value, date) and not isinstance(value, datetime)):
             return value
         if not isinstance(value, str):
@@ -51,22 +55,6 @@ class ReimbursementPartyDraft(APIModel):
         if parsed.isoformat() != value:
             raise ValueError("expected_date must be an ISO date (YYYY-MM-DD)")
         return value
-
-
-class ReimbursementClaimDraft(APIModel):
-    title: str = Field(min_length=1, max_length=120)
-    note: str | None = Field(default=None, max_length=500)
-    parties: list[ReimbursementPartyDraft] = Field(min_length=1)
-
-    @field_validator("title", mode="before")
-    @classmethod
-    def trim_title(cls, value: str) -> str:
-        return clean_required(value)
-
-    @field_validator("note", mode="before")
-    @classmethod
-    def trim_note(cls, value: str | None) -> str | None:
-        return clean_note(value)
 
 
 class ReimbursementClaimReplace(ReimbursementClaimDraft):
@@ -97,19 +85,6 @@ class ReimbursementAllocationResponse(APIModel):
     position: int
 
 
-class ReimbursementPartyResponse(APIModel):
-    id: UUID
-    name: str
-    expected_date: date | None
-    note: str | None
-    claimed_minor: int
-    received_minor: int
-    outstanding_minor: int
-    status: str
-    position: int
-    allocations: list[ReimbursementAllocationResponse]
-
-
 class ReimbursementReceiptAllocationResponse(APIModel):
     id: UUID
     allocation_id: UUID
@@ -120,7 +95,6 @@ class ReimbursementReceiptAllocationResponse(APIModel):
 class ReimbursementReceiptResponse(APIModel):
     id: UUID
     claim_id: UUID
-    party_id: UUID
     amount_minor: int
     received_at: datetime
     destination_account_id: UUID
@@ -138,14 +112,15 @@ class ReimbursementClaimResponse(APIModel):
     id: UUID
     title: str
     note: str | None
+    counterparty_name: str
+    expected_date: date | None
     status: ReimbursementClaimStatus
     total_claimed_minor: int
     received_minor: int
     outstanding_minor: int
     expense_count: int
-    party_count: int
     receipt_count: int
-    parties: list[ReimbursementPartyResponse]
+    expenses: list[ReimbursementAllocationResponse]
     latest_receipt: ReimbursementReceiptResponse | None
     version: int
     submitted_at: datetime | None
@@ -154,6 +129,32 @@ class ReimbursementClaimResponse(APIModel):
     archived_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+def adapt_legacy_reimbursement_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Read old single-party financial revisions without changing stored history."""
+    if "parties" not in snapshot:
+        return snapshot
+    raw_parties = cast(object, snapshot["parties"])
+    if not isinstance(raw_parties, list):
+        raise ValueError("Legacy reimbursement revision is not a single-counterparty claim")
+    parties = cast(list[dict[str, Any]], raw_parties)
+    if len(parties) > 1:
+        raise ValueError("Legacy reimbursement revision is not a single-counterparty claim")
+    party = parties[0] if parties else None
+    converted = {
+        key: value for key, value in snapshot.items() if key not in {"parties", "party_count"}
+    }
+    converted["counterparty_name"] = party["name"] if party else converted["title"]
+    converted["expected_date"] = party["expected_date"] if party else None
+    converted["expenses"] = party["allocations"] if party else []
+    latest = converted.get("latest_receipt")
+    if isinstance(latest, dict):
+        latest = cast(dict[str, Any], latest)
+        converted["latest_receipt"] = {
+            key: value for key, value in latest.items() if key != "party_id"
+        }
+    return converted
 
 
 class ReimbursementClaimPage(APIModel):
@@ -191,7 +192,6 @@ class ReimbursementCancelPreview(APIModel):
 
 class ReimbursementReceiptDraft(APIModel):
     expected_claim_version: StrictInt = Field(ge=1)
-    party_id: UUID
     amount_minor: PositiveMinor
     received_at: datetime
     destination_account_id: UUID
@@ -240,10 +240,7 @@ class ReimbursementReceiptPreview(APIModel):
     receipt_version: int | None = None
     claim_before: ReimbursementClaimResponse
     claim_after: ReimbursementClaimResponse
-    party_id: UUID
     amount_minor: int
-    party_received_before_minor: int
-    party_received_after_minor: int
     claim_received_before_minor: int
     claim_received_after_minor: int
     persisted_allocations: list[ReimbursementReceiptAllocationResponse]

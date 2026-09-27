@@ -1,3 +1,4 @@
+@testable import FiscalPreviewSupportmacOS
 import CryptoKit
 import Foundation
 import Testing
@@ -38,6 +39,33 @@ struct V221ClientTests {
         let otherScope = V15PendingWriteStore(scope: "server-b|profile-a", persistence: persistence)
         #expect(otherScope.storageFailure != nil)
         #expect(throws: V15Failure.self) { try otherScope.markInFlight(id) }
+    }
+
+    @Test @MainActor func retiredStatementImportDoesNotBlockCoreJournalOrReplay() async throws {
+        let memory = JournalMemory()
+        let persistence = V15JournalPersistence(read: { memory.data }, write: { memory.data = $0 })
+        let store = V15PendingWriteStore(scope: "test", persistence: persistence)
+        let coreID = UUID()
+        _ = try store.prepare(kind: .transactionCreate, title: "core", payload: .object(["title": .string("core")]), idempotencyKey: coreID)
+        let seed = try #require(memory.data)
+        var rows = try #require(JSONSerialization.jsonObject(with: seed) as? [[String: Any]])
+        var retired = try #require(rows.first)
+        let retiredID = UUID()
+        retired["id"] = retiredID.uuidString
+        retired["kind"] = "statementConfirmation"
+        retired["status"] = "outcomeUnknown"
+        retired["title"] = "旧账单确认"
+        rows.append(retired)
+        memory.data = try JSONSerialization.data(withJSONObject: rows)
+
+        let restarted = V15PendingWriteStore(scope: "test", persistence: persistence)
+        #expect(restarted.storageFailure == nil)
+        #expect(restarted.item(coreID) != nil)
+        #expect(restarted.item(retiredID)?.status == .requiresDecision)
+        #expect(restarted.item(retiredID)?.message?.contains("不会自动重放") == true)
+        let services = V15Services(transport: JournalTransport(), pendingWrites: restarted)
+        #expect(!(await restarted.replayUnknown(retiredID, using: services)))
+        #expect(restarted.item(retiredID)?.status == .requiresDecision)
     }
 
     @Test @MainActor func storageFailureNeverSends() async {
@@ -123,7 +151,7 @@ struct V221ClientTests {
         let revision = DataRevisionStore(defaults: nil)
         let client = APITransport(baseURL: URL(string: "https://upgrade.example")!, session: session, token: token,
             responseCache: HTTPResponseCache(), offlineSnapshots: reopened, revisionStore: revision)
-        let page: TransactionPage = try await client.request("transactions")
+        let page: V15Page<V15JSONRecord> = try await client.request("transactions")
         #expect(page.items.isEmpty)
         #expect(revision.offlineSnapshotAt != nil)
     }

@@ -1,4 +1,3 @@
-import asyncio
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from os import environ
@@ -13,14 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from fiscal_api.api.p2_schemas import AccountDraft, CategoryDraft
 from fiscal_api.api.p3_schemas import MAX_MINOR_UNITS, TransactionDraft
 from fiscal_api.api.p8_schemas import (
-    AIExecutionPolicyReplace,
     AIFieldConfidences,
     AIParseRequest,
     AIProposalCreate,
     AIProviderResult,
     AIProviderSettingsReplace,
     AISettingsReplace,
-    AIShadowEvaluationCreate,
 )
 from fiscal_api.core.config import Settings
 from fiscal_api.core.errors import APIError
@@ -30,7 +27,6 @@ from fiscal_api.db.models import (
     AccountKind,
     AILearningRule,
     AIProposal,
-    AIQualityEvent,
     AISettings,
     CashFlowItem,
     CategoryDirection,
@@ -114,7 +110,7 @@ async def session() -> AsyncIterator[AsyncSession]:
                 "cash_flow_series, reimbursement_operations, "
                 "reimbursement_receipt_revisions, reimbursement_claim_revisions, "
                 "reimbursement_receipt_allocations, reimbursement_receipts, "
-                "reimbursement_allocations, reimbursement_parties, reimbursement_claims, "
+                "reimbursement_allocations, reimbursement_claims, "
                 "installment_plan_revisions, installment_ledger_links, installment_operations, "
                 "installment_periods, installment_plans, transaction_revisions, postings, "
                 "transactions, credit_cycles, categories, accounts CASCADE"
@@ -123,10 +119,9 @@ async def session() -> AsyncIterator[AsyncSession]:
         await connection.execute(
             text(
                 "INSERT INTO ai_settings "
-                "(id,auto_execute_enabled,ocr_source_enabled,shortcut_text_source_enabled,"
-                "auto_execute_limit_minor,minimum_confidence_bps,"
+                "(id,ocr_source_enabled,shortcut_text_source_enabled,prompt_version,"
                 "version,created_at,updated_at) "
-                "VALUES (1,false,false,false,100000,9000,1,now(),now())"
+                "VALUES (1,false,false,'p23-v1',1,now(),now())"
             )
         )
     async with factory() as value:
@@ -163,20 +158,6 @@ async def test_active_device_updates_encrypted_provider_configuration(
         "secret-provider-key"
     )
     assert (await service.get_settings()).provider_configured
-    assert (await service.get_settings()).auto_execute_enabled is False
-    assert (await service.get_settings()).effective_auto_execute is False
-
-    shadow = await service.record_shadow_evaluation(
-        AIShadowEvaluationCreate(
-            model="provider-model-v2",
-            prompt_version="p23-v1",
-            corpus_fingerprint="a" * 64,
-            sample_size=30,
-            passed_cases=30,
-            evaluator_version="p23-test",
-        )
-    )
-    assert shadow.sample_size == 30
     retained = await service.update_provider_settings(
         AIProviderSettingsReplace(
             base_url="https://api.example.com/v1",
@@ -319,12 +300,13 @@ async def test_unedited_ai_undo_is_exactly_replayable(session: AsyncSession) -> 
     assert revisions_after == revisions_before
 
 
-async def test_p23_snapshots_events_metrics_and_two_evidence_rule(session: AsyncSession) -> None:
+async def test_confirmation_learns_recognition_rules_without_auto_execution(
+    session: AsyncSession,
+) -> None:
     account_id, expense_id, _income_id = await seed(session)
     service = AIService(session, FakeProvider())
     first, _ = await service.create(AIProposalCreate(source="text", text="稳定商户 20 元"), uuid4())
-    assert first.quality_status == "available"
-    assert first.initial_parse_snapshot is not None
+    assert first.status == "pending"
     edited = await service.edit(
         first.id,
         TransactionDraft(
@@ -338,10 +320,7 @@ async def test_p23_snapshots_events_metrics_and_two_evidence_rule(session: Async
         first.version,
     )
     executed = await service.execute(edited.id, edited.version)
-    assert executed.proposal.final_field_diff is not None
-    assert "amount_minor" in executed.proposal.final_field_diff
-    events = await service.quality_events(first.id)
-    assert [event.event_type for event in events] == ["parsed", "confirm_edited", "manual_execute"]
+    assert executed.transaction is not None
 
     second, _ = await service.create(
         AIProposalCreate(source="text", text="稳定商户 20 元 again"), uuid4()
@@ -359,16 +338,12 @@ async def test_p23_snapshots_events_metrics_and_two_evidence_rule(session: Async
         second.version,
     )
     await service.execute(second_edit.id, second_edit.version)
-    rules = await service.rules()
+    rules = list((await session.scalars(select(AILearningRule))).all())
     assert {rule.rule_kind for rule in rules} == {
         "merchant_category",
         "title_account",
         "category_alias",
     }
-    metrics = await service.quality_metrics()
-    assert sum(row.total for row in metrics.rows) == 2
-    assert all(row.total == row.pending + row.terminal_outcomes for row in metrics.rows)
-    assert await session.scalar(select(AIQualityEvent)) is not None
     assert await session.scalar(select(AILearningRule)) is not None
 
 
@@ -384,11 +359,8 @@ async def test_p9_sources_require_settings_and_replay_after_disable(
     settings = await service.get_settings()
     enabled = await service.update_settings(
         AISettingsReplace(
-            auto_execute_enabled=False,
             ocr_source_enabled=True,
             shortcut_text_source_enabled=True,
-            auto_execute_limit_minor=100_000,
-            minimum_confidence_bps=9_000,
             expected_version=settings.version,
         )
     )
@@ -403,11 +375,8 @@ async def test_p9_sources_require_settings_and_replay_after_disable(
 
     await service.update_settings(
         AISettingsReplace(
-            auto_execute_enabled=False,
             ocr_source_enabled=False,
             shortcut_text_source_enabled=False,
-            auto_execute_limit_minor=100_000,
-            minimum_confidence_bps=9_000,
             expected_version=enabled.version,
         )
     )
@@ -416,277 +385,6 @@ async def test_p9_sources_require_settings_and_replay_after_disable(
     with pytest.raises(APIError) as newly_disabled:
         await service.create(AIProposalCreate(source="ocr", text="晚餐 30 元"), uuid4())
     assert newly_disabled.value.code == "ai_source_disabled"
-
-
-async def test_d3_nonautomatic_settings_and_tighter_policy_remain_writable(
-    session: AsyncSession,
-) -> None:
-    await seed(session)
-    service = AIService(session, FakeProvider())
-    current = await service.get_settings()
-    tightened = await service.update_settings(
-        AISettingsReplace(
-            auto_execute_enabled=False,
-            ocr_source_enabled=True,
-            shortcut_text_source_enabled=True,
-            auto_execute_limit_minor=90_000,
-            minimum_confidence_bps=9_100,
-            expected_version=current.version,
-        )
-    )
-    assert tightened.auto_execute_enabled is False
-    assert tightened.effective_auto_execute is False
-    assert tightened.ocr_source_enabled and tightened.shortcut_text_source_enabled
-
-    policy = await service.replace_policy(
-        AIExecutionPolicyReplace(
-            auto_execute_enabled=False,
-            auto_execute_limit_minor=80_000,
-            minimum_confidence_bps=9_200,
-            minimum_sample_size=30,
-            change_reason="D3 tighter compatibility policy",
-        )
-    )
-    assert policy.auto_execute_enabled is False
-    assert policy.minimum_sample_size == 30
-    assert (await service.get_settings()).auto_execute_enabled is False
-
-    with pytest.raises(APIError) as enabled:
-        await service.update_settings(
-            AISettingsReplace(
-                auto_execute_enabled=True,
-                ocr_source_enabled=True,
-                shortcut_text_source_enabled=True,
-                auto_execute_limit_minor=80_000,
-                minimum_confidence_bps=9_200,
-                expected_version=(await service.get_settings()).version,
-                confirm_relaxation=True,
-            )
-        )
-    assert enabled.value.code == "ai_auto_execute_retired"
-
-    with pytest.raises(APIError) as policy_relaxation:
-        await service.replace_policy(
-            AIExecutionPolicyReplace(
-                auto_execute_enabled=False,
-                auto_execute_limit_minor=90_000,
-                minimum_confidence_bps=9_200,
-                minimum_sample_size=30,
-                change_reason="legacy relaxation attempt",
-                confirm_relaxation=True,
-            )
-        )
-    assert policy_relaxation.value.code == "ai_auto_execute_retired"
-
-    await session.rollback()
-    with pytest.raises(APIError) as sample_relaxation:
-        await service.replace_policy(
-            AIExecutionPolicyReplace(
-                auto_execute_enabled=False,
-                auto_execute_limit_minor=80_000,
-                minimum_confidence_bps=9_200,
-                minimum_sample_size=1,
-                change_reason="legacy sample relaxation attempt",
-            )
-        )
-    assert sample_relaxation.value.code == "ai_auto_execute_retired"
-
-
-async def test_d3_policy_scopes_use_independent_fail_closed_baselines(
-    session: AsyncSession,
-) -> None:
-    service = AIService(session, FakeProvider())
-    text_policy = await service.replace_policy(
-        AIExecutionPolicyReplace(
-            source="text",
-            transaction_kind="expense",
-            auto_execute_enabled=False,
-            auto_execute_limit_minor=80_000,
-            minimum_confidence_bps=9_200,
-            minimum_sample_size=40,
-            change_reason="tight text scope",
-        )
-    )
-    assert text_policy.minimum_sample_size == 40
-
-    # This first OCR policy is looser than the unrelated text scope but still
-    # tighter than global settings, so cross-scope history must not reject it.
-    ocr_policy = await service.replace_policy(
-        AIExecutionPolicyReplace(
-            source="ocr",
-            transaction_kind="expense",
-            auto_execute_enabled=False,
-            auto_execute_limit_minor=90_000,
-            minimum_confidence_bps=9_100,
-            minimum_sample_size=30,
-            change_reason="independent OCR scope",
-        )
-    )
-    assert ocr_policy.minimum_sample_size == 30
-
-    text_all_kinds = await service.replace_policy(
-        AIExecutionPolicyReplace(
-            source="text",
-            transaction_kind=None,
-            auto_execute_enabled=False,
-            auto_execute_limit_minor=90_000,
-            minimum_confidence_bps=9_100,
-            minimum_sample_size=30,
-            change_reason="NULL kind is its own exact scope",
-        )
-    )
-    assert text_all_kinds.transaction_kind is None
-    assert text_all_kinds.minimum_sample_size == 30
-
-    with pytest.raises(APIError) as first_scope_relaxation:
-        await service.replace_policy(
-            AIExecutionPolicyReplace(
-                source="shortcut_text",
-                transaction_kind="expense",
-                auto_execute_enabled=False,
-                auto_execute_limit_minor=100_000,
-                minimum_confidence_bps=9_000,
-                minimum_sample_size=1,
-                change_reason="first scope cannot lower sample baseline",
-            )
-        )
-    assert first_scope_relaxation.value.code == "ai_auto_execute_retired"
-    await session.rollback()
-
-    tightened = await service.replace_policy(
-        AIExecutionPolicyReplace(
-            source="text",
-            transaction_kind="expense",
-            auto_execute_enabled=False,
-            auto_execute_limit_minor=70_000,
-            minimum_confidence_bps=9_300,
-            minimum_sample_size=50,
-            change_reason="tighten exact text scope",
-        )
-    )
-    assert tightened.minimum_sample_size == 50
-
-    with pytest.raises(APIError) as same_scope_relaxation:
-        await service.replace_policy(
-            AIExecutionPolicyReplace(
-                source="text",
-                transaction_kind="expense",
-                auto_execute_enabled=False,
-                auto_execute_limit_minor=70_000,
-                minimum_confidence_bps=9_300,
-                minimum_sample_size=30,
-                change_reason="cannot lower exact-scope sample history",
-            )
-        )
-    assert same_scope_relaxation.value.code == "ai_auto_execute_retired"
-    await session.rollback()
-
-    policies = await service.policies()
-    assert all(policy.auto_execute_enabled is False for policy in policies)
-    assert [policy.version for policy in policies] == [4, 3, 2, 1]
-    assert [
-        policy.minimum_sample_size
-        for policy in policies
-        if policy.source == "text" and policy.transaction_kind == "expense"
-    ] == [50, 40]
-
-
-async def test_d3_concurrent_and_stale_writes_cannot_bypass_retirement(
-    session: AsyncSession,
-) -> None:
-    assert TEST_DATABASE_URL is not None
-    service = AIService(session, FakeProvider())
-    stale = await service.get_settings()
-    baseline = await service.replace_policy(
-        AIExecutionPolicyReplace(
-            auto_execute_enabled=False,
-            auto_execute_limit_minor=80_000,
-            minimum_confidence_bps=9_200,
-            minimum_sample_size=30,
-            change_reason="D3 concurrent baseline",
-        )
-    )
-    assert baseline.auto_execute_enabled is False
-
-    scoped_baseline = await service.replace_policy(
-        AIExecutionPolicyReplace(
-            source="text",
-            transaction_kind="expense",
-            auto_execute_enabled=False,
-            auto_execute_limit_minor=70_000,
-            minimum_confidence_bps=9_300,
-            minimum_sample_size=30,
-            change_reason="D3 concurrent scope baseline",
-        )
-    )
-    assert scoped_baseline.minimum_sample_size == 30
-
-    with pytest.raises(APIError) as stale_enable:
-        await service.update_settings(
-            AISettingsReplace(
-                auto_execute_enabled=True,
-                ocr_source_enabled=False,
-                shortcut_text_source_enabled=False,
-                auto_execute_limit_minor=80_000,
-                minimum_confidence_bps=9_200,
-                expected_version=stale.version,
-            )
-        )
-    assert stale_enable.value.code == "ai_auto_execute_retired"
-    await session.rollback()
-
-    engine = create_async_engine(TEST_DATABASE_URL)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-
-    async def replace(
-        limit: int, confidence: int, sample_size: int, reason: str
-    ) -> tuple[str, int, int]:
-        async with factory() as concurrent_session:
-            concurrent_service = AIService(concurrent_session, FakeProvider())
-            try:
-                response = await concurrent_service.replace_policy(
-                    AIExecutionPolicyReplace(
-                        source="text",
-                        transaction_kind="expense",
-                        auto_execute_enabled=False,
-                        auto_execute_limit_minor=limit,
-                        minimum_confidence_bps=confidence,
-                        minimum_sample_size=sample_size,
-                        change_reason=reason,
-                    )
-                )
-                return (
-                    "accepted",
-                    response.auto_execute_limit_minor,
-                    response.minimum_sample_size,
-                )
-            except APIError as error:
-                return error.code, limit, sample_size
-
-    try:
-        results = await asyncio.gather(
-            replace(60_000, 9_400, 40, "concurrent exact-scope tightening"),
-            replace(70_000, 9_300, 1, "concurrent legacy sample relaxation"),
-        )
-    finally:
-        await engine.dispose()
-
-    assert sorted(results) == [
-        ("accepted", 60_000, 40),
-        ("ai_auto_execute_retired", 70_000, 1),
-    ]
-    current = await AIService(session, FakeProvider()).get_settings()
-    assert current.auto_execute_enabled is False
-    assert current.effective_auto_execute is False
-    assert current.auto_execute_limit_minor == 80_000
-    assert current.minimum_confidence_bps == 9_200
-    policies = await AIService(session, FakeProvider()).policies()
-    same_scope = [
-        policy
-        for policy in policies
-        if policy.source == "text" and policy.transaction_kind == "expense"
-    ]
-    assert [policy.minimum_sample_size for policy in same_scope] == [40, 30]
 
 
 async def test_ignore_and_failed_retry_state_machine(session: AsyncSession) -> None:
@@ -708,7 +406,7 @@ async def test_ignore_and_failed_retry_state_machine(session: AsyncSession) -> N
     assert await service.get(ignored.id) == ignored
 
 
-async def test_unposted_proposals_delete_with_events_but_executed_history_is_protected(
+async def test_unposted_proposals_delete_but_executed_history_is_protected(
     session: AsyncSession,
 ) -> None:
     await seed(session)
@@ -717,20 +415,7 @@ async def test_unposted_proposals_delete_with_events_but_executed_history_is_pro
     pending, _ = await service.create(
         AIProposalCreate(source="text", text="误录待确认内容"), uuid4()
     )
-    events = await service.quality_events(pending.id)
-    assert events
-    with pytest.raises(DBAPIError, match="ai_quality_events are immutable"):
-        await session.execute(
-            text("DELETE FROM ai_quality_events WHERE id = :event_id"),
-            {"event_id": events[0].id},
-        )
-        await session.commit()
-    await session.rollback()
     await service.delete(pending.id, pending.version)
-    assert (
-        await session.scalar(select(AIQualityEvent).where(AIQualityEvent.proposal_id == pending.id))
-        is None
-    )
     with pytest.raises(APIError) as missing:
         await service.get(pending.id)
     assert missing.value.code == "ai_proposal_not_found"

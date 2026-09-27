@@ -17,7 +17,6 @@ from fiscal_api.api.p5_schemas import InstallmentActionRequest, InstallmentCreat
 from fiscal_api.api.p6_schemas import (
     ReimbursementAllocationDraft,
     ReimbursementClaimDraft,
-    ReimbursementPartyDraft,
     ReimbursementReceiptDraft,
 )
 from fiscal_api.api.p7_schemas import (
@@ -41,10 +40,6 @@ from fiscal_api.db.models import (
     Posting,
     ReimbursementAllocation,
     ReimbursementClaim,
-    ReimbursementParty,
-    ReimbursementReceipt,
-    ReimbursementReceiptAllocation,
-    StatementImport,
     TransactionKind,
 )
 from fiscal_api.main import create_app
@@ -71,7 +66,7 @@ async def session() -> AsyncIterator[AsyncSession]:
             text(
                 "TRUNCATE reimbursement_operations, reimbursement_receipt_revisions, "
                 "reimbursement_claim_revisions, reimbursement_receipt_allocations, "
-                "reimbursement_receipts, reimbursement_allocations, reimbursement_parties, "
+                "reimbursement_receipts, reimbursement_allocations, "
                 "reimbursement_claims, installment_plan_revisions, installment_ledger_links, "
                 "installment_operations, installment_periods, installment_plans, "
                 "transaction_revisions, postings, transactions, credit_cycles, categories, "
@@ -207,17 +202,10 @@ async def seed_reporting(session: AsyncSession):  # type: ignore[no-untyped-def]
     claim = await ReimbursementService(session).create(
         ReimbursementClaimDraft(
             title="工作餐报销",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="公司",
-                    expected_date=date(2026, 7, 20),
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=reimbursable.id,
-                            amount_minor=600,
-                        )
-                    ],
-                )
+            counterparty_name="公司",
+            expected_date=date(2026, 7, 20),
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=reimbursable.id, amount_minor=600)
             ],
         ),
         uuid4(),
@@ -361,8 +349,6 @@ async def test_facts_are_recomputable_and_project_each_credit_cycle_once(
     assert facts.cash.current_balance_minor == 24_300
     assert facts.credit.current_debt_minor == 1_500
     assert facts.reimbursements.outstanding_minor == 600
-    assert facts.completeness.unresolved_import_count == 0
-    assert facts.completeness.failed_import_count == 0
     assert facts.completeness.uncategorized_transaction_count == 0
     assert facts.completeness.uncategorized_transaction_amount_minor == 0
     assert "open_reconciliation_difference_count" not in facts.completeness.model_dump()
@@ -370,7 +356,7 @@ async def test_facts_are_recomputable_and_project_each_credit_cycle_once(
     assert facts.completeness.scope is not None
     # The service exposes the current public schema.  Legacy route serialization
     # adds its transition-only keys after this model boundary.
-    period_report = await reports.monthly_report(period="2026-07")
+    period_report = await reports.monthly_report_v2(period="2026-07")
     assert "open_reconciliation_difference_count" not in period_report.completeness.model_dump()
     assert facts.future.model_dump() == {
         "exact_due_outflow_minor": 1_500,
@@ -513,7 +499,7 @@ async def test_future_events_uses_bounded_merge_keyset_and_account_filter(
 
     first = await reports.future_events(window_days=30, account_id=None, cursor=None, limit=1)
     assert len(first.items) == 1
-    assert first.items[0].source_type is KnownFutureSourceType.REIMBURSEMENT_PARTY
+    assert first.items[0].source_type is KnownFutureSourceType.REIMBURSEMENT_CLAIM
     assert first.next_cursor is not None
     second = await reports.future_events(
         window_days=30, account_id=None, cursor=first.next_cursor, limit=1
@@ -541,7 +527,7 @@ async def test_future_events_uses_bounded_merge_keyset_and_account_filter(
     assert stale.value.code == "future_events_scope_changed"
 
 
-async def test_future_reimbursement_page_aggregates_receipts_without_join_multiplication(
+async def test_future_reimbursement_page_aggregates_multiple_expenses_and_receipts(
     session: AsyncSession,
 ) -> None:
     bank = await AccountService(session).create(
@@ -556,251 +542,86 @@ async def test_future_reimbursement_page_aggregates_receipts_without_join_multip
         )
     )
     ledger = TransactionService(session)
-
-    async def expense(amount_minor: int, title: str):  # type: ignore[no-untyped-def]
-        return await ledger.create(
+    expenses = [
+        await ledger.create(
             TransactionDraft(
                 kind=TransactionKind.EXPENSE,
-                amount_minor=amount_minor,
+                amount_minor=amount,
                 occurred_at=datetime(2026, 7, 15, 1, tzinfo=UTC),
-                title=title,
+                title=f"报销费用 {index}",
                 account_id=bank.id,
                 category_id=category.id,
             ),
             uuid4(),
         )
-
-    alpha_one, alpha_two, beta = (
-        await expense(8_000, "甲方第一笔"),
-        await expense(2_000, "甲方第二笔"),
-        await expense(4_000, "乙方费用"),
-    )
-    reimbursements = ReimbursementService(session)
-    claim = await reimbursements.create(
+        for index, amount in enumerate((8_000, 2_000, 4_000))
+    ]
+    service = ReimbursementService(session)
+    claim = await service.create(
         ReimbursementClaimDraft(
             title="多笔回款聚合",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="甲方",
-                    expected_date=date(2026, 7, 16),
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=alpha_one.id, amount_minor=8_000
-                        ),
-                        ReimbursementAllocationDraft(
-                            transaction_id=alpha_two.id, amount_minor=2_000
-                        ),
-                    ],
-                ),
-                ReimbursementPartyDraft(
-                    name="乙方",
-                    expected_date=date(2026, 7, 17),
-                    allocations=[
-                        ReimbursementAllocationDraft(transaction_id=beta.id, amount_minor=4_000)
-                    ],
-                ),
+            counterparty_name="公司",
+            expected_date=date(2026, 7, 16),
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=expense.id, amount_minor=amount)
+                for expense, amount in zip(expenses, (8_000, 2_000, 4_000), strict=True)
             ],
         ),
         uuid4(),
     )
-    claim = await reimbursements.lifecycle(claim.id, claim.version, "submit")
-
-    async def receipt(party_id, amount_minor: int, title: str):  # type: ignore[no-untyped-def]
-        nonlocal claim
-        response = await reimbursements.create_receipt(
+    claim = await service.lifecycle(claim.id, claim.version, "submit")
+    for amount in (3_000, 2_000):
+        await service.create_receipt(
             claim.id,
             ReimbursementReceiptDraft(
                 expected_claim_version=claim.version,
-                party_id=party_id,
-                amount_minor=amount_minor,
+                amount_minor=amount,
                 received_at=datetime(2026, 7, 15, 2, tzinfo=UTC),
                 destination_account_id=bank.id,
-                title=title,
+                title="公司回款",
             ),
             uuid4(),
         )
-        claim = await reimbursements.get(claim.id)
-        return response
-
-    alpha_id, beta_id = claim.parties[0].id, claim.parties[1].id
-    alpha_first = await receipt(alpha_id, 3_000, "甲方首笔")
-    alpha_second = await receipt(alpha_id, 2_000, "甲方第二笔")
-    assert alpha_first.allocations[0].allocation_id == alpha_second.allocations[0].allocation_id
-    voided_beta = await receipt(beta_id, 1_000, "乙方作废回款")
-    await reimbursements.receipt_lifecycle(
-        voided_beta.id, claim.version, voided_beta.version, "void"
-    )
-    claim = await reimbursements.get(claim.id)
+        claim = await service.get(claim.id)
     reports = ReportingService(session, facts_today=date(2026, 7, 15))
     assert (await reports.facts(window_days=7)).reimbursements.outstanding_minor == 9_000
-
-    # These receipt-heavy historical parties are deliberately outside the
-    # seven-day window. The future query must not bring their allocation rows
-    # into either aggregate before it applies the candidate-party CTE.
-    historical_allocations: list[ReimbursementAllocation] = []
-    historical_transactions: list[LedgerTransaction] = []
-    historical_receipts: list[ReimbursementReceipt] = []
-    historical_receipt_allocations: list[ReimbursementReceiptAllocation] = []
-    for index in range(80):
-        historical_claim_id = uuid4()
-        historical_party_id = uuid4()
-        historical_allocation_id = uuid4()
-        historical_transaction_id = uuid4()
-        historical_receipt_id = uuid4()
-        historical_receipt_allocation_id = uuid4()
-        session.add_all(
-            [
-                ReimbursementClaim(
-                    id=historical_claim_id,
-                    title=f"历史噪声 {index}",
-                    submitted_at=datetime(2020, 1, 1, tzinfo=UTC),
-                    create_idempotency_key=uuid4(),
-                    create_request_hash="0" * 64,
-                ),
-                ReimbursementParty(
-                    id=historical_party_id,
-                    claim_id=historical_claim_id,
-                    name=f"历史方 {index}",
-                    expected_date=date(2020, 1, 1),
-                    position=0,
-                ),
-            ]
-        )
-        historical_allocations.append(
-            ReimbursementAllocation(
-                id=historical_allocation_id,
-                claim_id=historical_claim_id,
-                party_id=historical_party_id,
-                transaction_id=alpha_one.id,
-                amount_minor=8_000,
-                position=0,
-            )
-        )
-        historical_transactions.append(
-            LedgerTransaction(
-                id=historical_transaction_id,
-                kind=TransactionKind.REIMBURSEMENT_RECEIPT,
-                occurred_at=datetime(2020, 1, 1, tzinfo=UTC),
-                title=f"历史回款 {index}",
-                source="system",
-                idempotency_key=uuid4(),
-                request_hash="0" * 64,
-            )
-        )
-        historical_receipts.append(
-            ReimbursementReceipt(
-                id=historical_receipt_id,
-                claim_id=historical_claim_id,
-                party_id=historical_party_id,
-                transaction_id=historical_transaction_id,
-            )
-        )
-        historical_receipt_allocations.append(
-            ReimbursementReceiptAllocation(
-                id=historical_receipt_allocation_id,
-                receipt_id=historical_receipt_id,
-                allocation_id=historical_allocation_id,
-                amount_minor=1_000,
-                position=0,
-            )
-        )
-    await session.flush()
-    session.add_all([*historical_allocations, *historical_transactions])
-    await session.flush()
-    session.add_all(historical_receipts)
-    await session.flush()
-    session.add_all(historical_receipt_allocations)
-    await session.flush()
-
-    engine = session.bind
-    assert engine is not None
-    statements: list[tuple[str, object]] = []
-
-    def counted(
-        _conn: object,
-        _cursor: object,
-        statement: str,
-        parameters: object,
-        *_args: object,
-    ) -> None:
-        statements.append((statement, parameters))
-
-    event.listen(engine.sync_engine, "before_cursor_execute", counted)
-    try:
-        first = await reports.future_events(window_days=7, account_id=None, cursor=None, limit=1)
-    finally:
-        event.remove(engine.sync_engine, "before_cursor_execute", counted)
-    second = await reports.future_events(
-        window_days=7, account_id=None, cursor=first.next_cursor, limit=1
-    )
-    reimbursement_items = [*first.items, *second.items]
-    assert [(item.party_id, item.amount_minor) for item in reimbursement_items] == [
-        (alpha_id, 5_000),
-        (beta_id, 4_000),
+    page = await reports.future_events(window_days=7, account_id=None, cursor=None, limit=10)
+    reimbursements = [
+        item for item in page.items if item.source_type is KnownFutureSourceType.REIMBURSEMENT_CLAIM
     ]
-    assert sum(item.amount_minor for item in reimbursement_items) == 9_000
-    assert len(statements) <= 6
-    assert any(
-        "reimbursement_allocations" in statement
-        and "LIMIT" in statement.upper()
-        and 2 in parameters
-        for statement, parameters in statements
-    )
-    reimbursement_sql = next(
-        statement.lower()
-        for statement, _parameters in statements
-        if "reimbursement_allocations" in statement
-    )
-    assert "future_reimbursement_candidates as" in reimbursement_sql
-    assert reimbursement_sql.count("join future_reimbursement_candidates") == 2
-    await receipt(alpha_id, 5_000, "甲方结清")
-    settled_alpha = await reports.future_events(
-        window_days=7, account_id=None, cursor=None, limit=10
-    )
-    assert [(item.party_id, item.amount_minor) for item in settled_alpha.items] == [
-        (beta_id, 4_000)
-    ]
+    assert [(item.source_id, item.amount_minor) for item in reimbursements] == [(claim.id, 9_000)]
+    assert reimbursements[0].deep_link == f"fiscal://reimbursements/{claim.id}"
 
 
-async def test_facts_completeness_separates_pending_and_failed_imports(
+async def test_facts_completeness_tracks_uncategorized_transactions(
     session: AsyncSession,
 ) -> None:
-    session.add_all(
-        [
-            StatementImport(
-                document_sha256=uuid4().hex * 2,
-                byte_size=1,
-                page_count=1,
-                mime_type="application/pdf",
-                display_name="statement.pdf",
-                status="review_required",
-            ),
-            StatementImport(
-                document_sha256=uuid4().hex * 2,
-                byte_size=1,
-                page_count=1,
-                mime_type="application/pdf",
-                display_name="statement.pdf",
-                status="failed",
-            ),
-        ]
+    bank = await AccountService(session).create(
+        AccountDraft(name="未分类账户", kind=AccountKind.DEBIT, opening_balance_minor=10_000)
     )
-    await session.commit()
-
+    await TransactionService(session).create(
+        TransactionDraft(
+            kind=TransactionKind.EXPENSE,
+            amount_minor=300,
+            occurred_at=datetime(2026, 7, 15, 1, tzinfo=UTC),
+            title="待分类",
+            account_id=bank.id,
+        ),
+        uuid4(),
+    )
     reports = ReportingService(session, facts_today=date(2026, 7, 15))
     facts = await reports.facts(window_days=30)
-
-    assert facts.completeness.unresolved_import_count == 1
-    assert facts.completeness.failed_import_count == 1
-    assert facts.completeness.scope is not None
+    assert facts.completeness.uncategorized_transaction_count == 1
+    assert facts.completeness.uncategorized_transaction_amount_minor == 300
     completeness = await reports.facts_drill_down(
         scope_type=FactsDrillDownScopeType.COMPLETENESS_ISSUES,
         expected_data_revision=facts.meta.data_revision,
         cursor=None,
         limit=50,
     )
-    issue_counts = {item.issue_type.value: item.count for item in completeness.items}
-    assert issue_counts == {"unresolved_imports": 1, "failed_imports": 1}
+    assert [(item.issue_type.value, item.count) for item in completeness.items] == [
+        ("uncategorized_transactions", 1)
+    ]
 
 
 async def test_facts_drill_down_does_not_read_full_facts_snapshot(
@@ -969,10 +790,10 @@ async def test_facts_reimbursement_aggregate_overflow_is_a_stable_domain_error(
     # write-side aggregate guard to exercise the read-side legacy-data boundary.
     for index, transaction_id in enumerate(source_ids):
         claim_id = uuid4()
-        party_id = uuid4()
         claim = ReimbursementClaim(
             id=claim_id,
             title=f"P32 报销溢出单 {index}",
+            counterparty_name=f"P32 主体 {index}",
             note=None,
             submitted_at=datetime(2026, 7, 15, tzinfo=UTC),
             cancelled_at=None,
@@ -981,19 +802,10 @@ async def test_facts_reimbursement_aggregate_overflow_is_a_stable_domain_error(
             create_idempotency_key=uuid4(),
             create_request_hash="0" * 64,
         )
-        party = ReimbursementParty(
-            id=party_id,
-            claim_id=claim_id,
-            name=f"P32 主体 {index}",
-            expected_date=None,
-            note=None,
-            position=0,
-        )
-        session.add_all([claim, party])
+        session.add(claim)
         await session.flush()
         allocation = ReimbursementAllocation(
             claim_id=claim_id,
-            party_id=party_id,
             transaction_id=transaction_id,
             amount_minor=INT64_MAX,
             position=0,
@@ -1453,15 +1265,9 @@ async def test_partial_receipt_cancel_and_future_day_thirty_exclusion(
     claim = await reimbursements.create(
         ReimbursementClaimDraft(
             title="部分到账",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="公司",
-                    expected_date=date(2026, 7, 15),
-                    allocations=[
-                        ReimbursementAllocationDraft(transaction_id=expense.id, amount_minor=8_000)
-                    ],
-                )
-            ],
+            counterparty_name="公司",
+            expected_date=date(2026, 7, 15),
+            expenses=[ReimbursementAllocationDraft(transaction_id=expense.id, amount_minor=8000)],
         ),
         uuid4(),
     )
@@ -1470,8 +1276,7 @@ async def test_partial_receipt_cancel_and_future_day_thirty_exclusion(
         claim.id,
         ReimbursementReceiptDraft(
             expected_claim_version=claim.version,
-            party_id=claim.parties[0].id,
-            amount_minor=3_000,
+            amount_minor=3000,
             received_at=datetime(2026, 7, 15, 8, tzinfo=UTC),
             destination_account_id=bank.id,
             title="首笔回款",
@@ -1481,16 +1286,10 @@ async def test_partial_receipt_cancel_and_future_day_thirty_exclusion(
     boundary = await reimbursements.create(
         ReimbursementClaimDraft(
             title="第三十天",
-            parties=[
-                ReimbursementPartyDraft(
-                    name="客户",
-                    expected_date=date(2026, 8, 14),
-                    allocations=[
-                        ReimbursementAllocationDraft(
-                            transaction_id=excluded_expense.id, amount_minor=100
-                        )
-                    ],
-                )
+            counterparty_name="客户",
+            expected_date=date(2026, 8, 14),
+            expenses=[
+                ReimbursementAllocationDraft(transaction_id=excluded_expense.id, amount_minor=100)
             ],
         ),
         uuid4(),

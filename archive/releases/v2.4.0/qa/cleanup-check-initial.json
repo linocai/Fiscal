@@ -1,0 +1,34 @@
+{
+  "status": "pending",
+  "unclassified_artifacts": [
+    "build/v2.2.0-qa/mac-gallery-final.xcresult",
+    "build/v2.2.0-qa/ios-reduced-effects.xcresult",
+    "build/v2.2.0-qa/fix-mac-navigation-final.xcresult",
+    "build/v2.2.0-qa/ios-root-r3.xcresult",
+    "build/v2.2.0-qa/full-fiscalkit-tests-final.xcresult",
+    "build/v2.2.0-qa/fix-mac-root-final.xcresult",
+    "build/v2.2.0-qa/fix-ios-root-final.xcresult",
+    "build/v2.2.0-qa/ios-gallery-r3.xcresult",
+    "build/ios27-compat-20260920/core-tests-isolated/tests.xcresult",
+    "build/ios27-compat-20260920/gallery-ui/tests.xcresult",
+    "build/ios27-compat-20260920/root-ui-fixed/tests.xcresult",
+    "build/ios27-compat-20260920/ios26-fixed/tests.xcresult",
+    "build/v2.3.0-43/qa/fiscalkit-2.xcresult",
+    "build/v2.3.0-43/qa/ios-ui-2.xcresult",
+    "build/v2.3.0-43/qa/macos-final.xcresult",
+    "build/v2.3.0-43/qa/mac-ui-3.xcresult",
+    "build/v2.3.0-43/qa/mac-ui-2.xcresult",
+    "build/v2.3.0-43/repair/mac-ui-4.xcresult",
+    "build/v2.3.0-43/repair/mac-ui-5.xcresult",
+    "build/v2.3.0-43/repair/mac-real-receipt-3.xcresult",
+    "build/v2.3.0-43/repair/client-full-4.xcresult",
+    "build/v2.3.0-44/client-tests/tests.xcresult",
+    "build/release-v2.2.0-41/mac-wide-passed.xcresult",
+    "build/release-v2.2.0-41/units.xcresult"
+  ],
+  "unclosed_runs": [
+    "build/test-runs/v240-fiscalkit-final/run.json"
+  ],
+  "changed_retained_evidence": [],
+  "remaining_deletions": []
+}

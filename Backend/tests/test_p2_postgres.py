@@ -196,7 +196,7 @@ async def test_category_hierarchy_nested_list_reorder_and_safe_delete(
     assert restored.archived_at is None
 
 
-async def test_category_split_merge_conflict_children_and_optimistic_versions(
+async def test_category_merge_conflict_children_and_optimistic_versions(
     session: AsyncSession,
 ) -> None:
     service = CategoryService(session)
@@ -218,26 +218,11 @@ async def test_category_split_merge_conflict_children_and_optimistic_versions(
     assert (await service.get(source_unique.id)).parent_id == target.id
     assert (await service.get(target_same.id)).archived_at is None
 
-    root = await service.create(category_draft("拆分根"))
-    children = await service.split(
-        root_id=root.id,
-        root_expected_version=root.version,
-        drafts=[category_draft("甲"), category_draft("乙")],
-    )
-    assert [child.parent_id for child in children] == [root.id, root.id]
-    with pytest.raises(APIError) as stale:
-        await service.split(
-            root_id=root.id,
-            root_expected_version=root.version,
-            drafts=[category_draft("丙"), category_draft("丁")],
-        )
-    assert_error(stale, "resource_version_conflict")
-
     with pytest.raises(APIError) as direction_with_children:
         await service.update(
-            root.id,
+            target.id,
             CategoryPatch(
-                expected_version=(await service.get(root.id)).version,
+                expected_version=(await service.get(target.id)).version,
                 direction=CategoryDirection.INCOME,
             ),
         )

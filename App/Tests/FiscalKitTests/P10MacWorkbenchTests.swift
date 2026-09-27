@@ -1,38 +1,7 @@
+@testable import FiscalPreviewSupportmacOS
 import Foundation
 import Testing
 @testable import FiscalKit
-
-@Suite("FiscalKit P10 macOS workbench contracts")
-struct P10MacWorkbenchTests {
-  @Test("Batch classification encodes the frozen atomic request shape")
-  func batchClassificationEncoding() throws {
-    let transactionID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
-    let categoryID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
-    let request = TransactionBatchClassificationRequest(
-      items: [
-        TransactionBatchClassificationItem(
-          transactionID: transactionID,
-          expectedVersion: 7)
-      ],
-      categoryID: categoryID)
-
-    let object = try #require(
-      JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
-    let items = try #require(object["items"] as? [[String: Any]])
-
-    #expect(object["category_id"] as? String == categoryID.uuidString)
-    #expect(items.count == 1)
-    #expect(items[0]["transaction_id"] as? String == transactionID.uuidString)
-    #expect(items[0]["expected_version"] as? Int == 7)
-  }
-
-  @Test("Classification filters keep the frozen raw query values")
-  func classificationRawValues() {
-    #expect(TransactionClassificationFilter.all.rawValue == "all")
-    #expect(TransactionClassificationFilter.categorized.rawValue == "categorized")
-    #expect(TransactionClassificationFilter.uncategorized.rawValue == "uncategorized")
-  }
-}
 
 @Suite("v1.7 macOS ledger context")
 struct V151MacLedgerScopeTests {
@@ -115,32 +84,4 @@ struct V151MacLedgerScopeTests {
     #expect(V151MacLedgerSearch.committedQuery(from: "午餐") == "午餐")
     #expect(V151MacLedgerSearch.committedQuery(from: "") == nil)
   }
-}
-
-private actor V151MacLedgerScopeTransport: V15Transporting {
-  private var request: V15Request?
-
-  func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
-    self.request = request
-    guard request.path == "transactions", request.method == "GET" else {
-      throw V15Failure(kind: .transport, code: "unexpected_request", message: "Unexpected quick-fix fixture request.")
-    }
-    let isUncategorized = request.query.contains(.init(name: "classification", value: "uncategorized"))
-    let data: Data
-    if isUncategorized {
-      data = Data(#"{"items":[],"next_cursor":null}"#.utf8)
-    } else {
-      data = Data(
-        #"{"items":[#DETAIL#],"next_cursor":null}"#
-          .replacingOccurrences(of: "#DETAIL#", with: String(decoding: V15F1BFixtures.detail, as: UTF8.self))
-          .utf8)
-    }
-    return try V15FixtureCodec.decoder.decode(Response.self, from: data)
-  }
-
-  func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data {
-    throw V15Failure(kind: .transport, code: "unexpected_artifact", message: "No artifact in quick-fix fixture.")
-  }
-
-  func lastRequest() -> V15Request? { request }
 }

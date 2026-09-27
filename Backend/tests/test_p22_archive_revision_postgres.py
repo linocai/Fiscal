@@ -297,11 +297,8 @@ def test_p22_archive_restore_allows_only_fresh_migration_seed(
                 session.add(
                     AISettings(
                         id=1,
-                        auto_execute_enabled=False,
                         ocr_source_enabled=False,
                         shortcut_text_source_enabled=False,
-                        auto_execute_limit_minor=100_000,
-                        minimum_confidence_bps=9_000,
                         provider_kind=None,
                         provider_base_url=None,
                         provider_model=None,
@@ -378,7 +375,7 @@ def test_p22_archive_restore_allows_only_fresh_migration_seed(
 
     try:
         for case in ("success", "changed_seed", "data_revision", "other_data"):
-            name = f"fiscal_p22_seed_{uuid4().hex}"
+            name = f"fiscal_v240_p22_seed_{uuid4().hex}"
             fresh_url = _fresh_database_url(name)
             asyncio.run(_create_database(name))
             try:
@@ -753,11 +750,8 @@ def test_p22_archive_round_trip_rejects_tampering_and_secrets() -> None:
                 await connection.execute(
                     AISettings.__table__.insert().values(
                         id=1,
-                        auto_execute_enabled=False,
                         ocr_source_enabled=False,
                         shortcut_text_source_enabled=False,
-                        auto_execute_limit_minor=100_000,
-                        minimum_confidence_bps=9_000,
                         provider_kind=None,
                         provider_base_url=None,
                         provider_model=None,

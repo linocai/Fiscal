@@ -1,0 +1,30 @@
+{
+  "status": "complete",
+  "deleted": [
+    "build/test-runs/v240-fiscalkit-fifth/tests.xcresult",
+    "build/test-runs/v240-fiscalkit-first/tests.xcresult",
+    "build/test-runs/v240-fiscalkit-fourth/tests.xcresult",
+    "build/test-runs/v240-fiscalkit-second/tests.xcresult",
+    "build/test-runs/v240-fiscalkit-sixth/tests.xcresult",
+    "build/test-runs/v240-fiscalkit-third/tests.xcresult",
+    "build/test-runs/v240-gallery-ios-final/tests.xcresult",
+    "build/test-runs/v240-gallery-ios-multi-final/tests.xcresult",
+    "build/test-runs/v240-gallery-ios-multi-retry/tests.xcresult",
+    "build/test-runs/v240-gallery-ios-multi-verified/tests.xcresult",
+    "build/test-runs/v240-rootsmoke-ios-core/tests.xcresult",
+    "build/test-runs/v240-rootsmoke-ios-core-second/tests.xcresult",
+    "build/test-runs/v240-rootsmoke-ios-deeplink/tests.xcresult",
+    "build/test-runs/v240-rootsmoke-ios-deeplink-final/tests.xcresult",
+    "build/test-runs/v240-rootsmoke-macos-first/tests.xcresult",
+    "build/test-runs/v240-wide-canvas-verified/tests.xcresult",
+    "build/v240/f3c-test-attachments/98CD094D-2F5F-41F9-BB83-5D354C741611.mp4",
+    "build/v240/wide-screenshots/23F0E248-D1EF-42ED-89D6-AD916A88BD28.png",
+    "build/v240/wide-screenshots/75B45B28-3EFD-4F25-BD8A-594F5AD13D66.png",
+    "build/v240/wide-screenshots/7A087742-03A4-4CB3-9658-A5280E509361.png",
+    "build/v240/wide-screenshots/F6024BD5-1F17-4187-9BD7-C28497DA5B9B.png",
+    "build/test-runs/v240-rootsmoke-ios-final/tests.xcresult"
+  ],
+  "planned_allocated_bytes": 680894464,
+  "retained_evidence_verified": true,
+  "completed_at": "2026-09-26T10:25:20.138363+00:00"
+}

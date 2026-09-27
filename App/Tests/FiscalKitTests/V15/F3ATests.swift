@@ -1,3 +1,4 @@
+@testable import FiscalPreviewSupportmacOS
 import Foundation
 import Testing
 
@@ -50,11 +51,11 @@ struct F3ATests {
     @Test("event-aware locators and authoritative account filters stay local and race-safe")
     @MainActor func strictLocatorsAndAccountOptionRaces() async throws {
         let transport = F3ATransport(mode: .normal); let model = V15FutureTimelineModel(services: V15Services(transport: transport))
-        await model.reload(); let credit = try #require(model.events.first(where: { $0.sourceType == .creditCycle })); let party = try #require(model.events.first(where: { $0.sourceType == .reimbursementParty })); let cash = try #require(model.events.first(where: { $0.sourceType == .cashFlowItem }))
+        await model.reload(); let credit = try #require(model.events.first(where: { $0.sourceType == .creditCycle })); let claimEvent = try #require(model.events.first(where: { $0.sourceType == .reimbursementClaim })); let cash = try #require(model.events.first(where: { $0.sourceType == .cashFlowItem }))
         #expect(V15FutureTimelineModel.isSafeLocator(credit.deepLink.lowercased(), event: credit))
-        #expect(V15FutureTimelineModel.isSafeLocator(party.deepLink.lowercased(), event: party))
+        #expect(V15FutureTimelineModel.isSafeLocator(claimEvent.deepLink.lowercased(), event: claimEvent))
         #expect(V15FutureTimelineModel.isSafeLocator(cash.deepLink.lowercased(), event: cash))
-        for raw in ["fiscal://reimbursements/\(V15F3AFixtures.creditID)/parties/\(V15F3AFixtures.partyID)", "fiscal://reimbursements/\(V15F3AFixtures.claimID)/parties/\(V15F3AFixtures.creditID)", "fiscal://reimbursements/\(V15F3AFixtures.claimID)/parties/\(V15F3AFixtures.partyID)?x=1", "fiscal://reimbursements/\(V15F3AFixtures.claimID)/parties/\(V15F3AFixtures.partyID)#x", "fiscal://reimbursements/parties/\(V15F3AFixtures.partyID)"] { #expect(!V15FutureTimelineModel.isSafeLocator(raw, event: party)) }
+        for raw in ["fiscal://reimbursements/\(V15F3AFixtures.creditID)", "fiscal://reimbursements/\(V15F3AFixtures.claimID)?x=1", "fiscal://reimbursements/\(V15F3AFixtures.claimID)#x", "fiscal://reimbursements/invalid"] { #expect(!V15FutureTimelineModel.isSafeLocator(raw, event: claimEvent)) }
         let count = (await transport.allRequests()).count
         var unsafe = model.events[0]; unsafe = try! V15FixtureCodec.decoder.decode(V15FutureEvent.self, from: Data("{\"source_type\":\"credit_cycle\",\"source_id\":\"\(V15F3AFixtures.creditID.uuidString)\",\"date\":\"2026-08-20\",\"direction\":\"outflow\",\"amount_minor\":1,\"certainty\":\"exact_due\",\"title\":\"x\",\"deep_link\":\"fiscal://credit/cycles/\(V15F3AFixtures.creditID.uuidString)?unsafe=1\"}".utf8))
         model.openInspector(unsafe)
@@ -87,13 +88,13 @@ struct F3ATests {
         let model = V15FutureTimelineModel(services: V15Services(transport: transport))
         await model.reload()
         let credit = try #require(model.events.first(where: { $0.sourceType == .creditCycle }))
-        let party = try #require(model.events.first(where: { $0.sourceType == .reimbursementParty }))
+        let claimEvent = try #require(model.events.first(where: { $0.sourceType == .reimbursementClaim }))
         let cash = try #require(model.events.first(where: { $0.sourceType == .cashFlowItem }))
 
         guard case .creditCycle(let cycle) = await model.resolveOpenTarget(credit) else { Issue.record("credit owner read must produce a cycle"); return }
         #expect(cycle.id == credit.sourceID && cycle.accountID == credit.accountID)
-        guard case .reimbursementParty(let claim, let partyID) = await model.resolveOpenTarget(party) else { Issue.record("reimbursement owner read must produce a claim party"); return }
-        #expect(claim.id == party.claimID && partyID == party.sourceID)
+        guard case .reimbursementClaim(let claim) = await model.resolveOpenTarget(claimEvent) else { Issue.record("reimbursement owner read must produce a claim"); return }
+        #expect(claim.id == claimEvent.claimID && claim.id == claimEvent.sourceID)
         guard case .cashFlowItem(let item) = await model.resolveOpenTarget(cash) else { Issue.record("cash-flow owner read must produce a manual item"); return }
         #expect(item.manualItemID == cash.sourceID)
 
@@ -138,7 +139,7 @@ struct F3ATests {
         let race = V15FutureTimelineModel(services: V15Services(transport: F3ATransport(mode: .openRace)))
         await race.reload()
         let credit = try #require(race.events.first(where: { $0.sourceType == .creditCycle }))
-        let replacement = try #require(race.events.first(where: { $0.sourceType == .reimbursementParty }))
+        let replacement = try #require(race.events.first(where: { $0.sourceType == .reimbursementClaim }))
 
         race.openInspector(credit)
         let oldRead = Task { await race.resolveOpenTarget(credit) }

@@ -1,3 +1,4 @@
+@testable import FiscalPreviewSupportmacOS
 import Foundation
 import Testing
 @testable import FiscalKit
@@ -10,27 +11,20 @@ struct F3FTests {
         return model
     }
 
-    @Test("D3 settings are false-only and provider configuration cannot change the effective result")
+    @Test("AI settings expose only source switches and provider configuration")
     func settingsContract() throws {
-        let decoder = V15FixtureCodec.decoder
-        let safe = try decoder.decode(V15AISettings.self, from: Data(V15F3FFixtures.settings().utf8))
-        #expect(safe.providerConfigured)
-        #expect(!safe.autoExecuteEnabled)
-        #expect(!safe.effectiveAutoExecute)
-        do {
-            _ = try decoder.decode(V15AISettings.self, from: Data(V15F3FFixtures.settings(autoExecute: true, effectiveAutoExecute: true).utf8))
-            Issue.record("A D3 true response must be rejected as a typed contract violation")
-        } catch let failure as V15Failure {
-            #expect(failure.code == "ai_settings_contract_violation")
-        }
+        let data = Data(V15F3FFixtures.settings().utf8)
+        let settings = try V15FixtureCodec.decoder.decode(V15AISettings.self, from: data)
+        #expect(settings.providerConfigured && settings.ocrSourceEnabled && settings.shortcutTextSourceEnabled)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["auto_execute_enabled"] == nil && object["quality_status"] == nil)
     }
 
-    @Test("Status, snapshots and quality events remain forward-readable but unknown state is display-only")
+    @Test("Proposal statuses remain forward-readable but unknown state is display-only")
     @MainActor func forwardFacts() async throws {
         let proposal = try V15FixtureCodec.decoder.decode(V15AIProposal.self, from: Data(V15F3FFixtures.proposal(id: V15F3FFixtures.unknownID, status: "future_review").utf8))
         #expect(proposal.status == .unknown("future_review"))
         #expect(proposal.isDisplayOnly)
-        #expect(proposal.initialParseSnapshot?["amount_minor"] == .integer(13_200))
         let model = await loaded()
         let reasons = model.actionReasons(.execute, proposal: proposal)
         #expect(reasons.contains { $0.code == "ai_unknown_read_only" })
@@ -50,7 +44,6 @@ struct F3FTests {
         let transport = F3FTransport(mode: .normal)
         let services = V15Services(transport: transport)
         _ = try await services.ai.proposals(status: .pending, cursor: "opaque", limit: 20)
-        _ = try await services.ai.qualityEvents(proposalID: V15F3FFixtures.pendingID)
         let draft = V15TransactionCreateRequest(kind: .expense, amountMinor: 13_200, occurredAt: Date(timeIntervalSince1970: 1_786_854_600), title: "人工确认", accountID: V15F3FFixtures.cashAccountID)
         _ = try await services.ai.replace(id: V15F3FFixtures.pendingID, request: .init(draft: draft, expectedVersion: 2))
         _ = try await services.ai.undo(id: V15F3FFixtures.executedID, expectedVersion: 5, expectedTransactionVersion: 3)
@@ -128,24 +121,23 @@ struct F3FTests {
         #expect(!model.hasStableCreateRecovery)
     }
 
-    @Test("D3-sticky settings never authorize stable replay and abandon only clears the local attempt")
-    @MainActor func stableCreateRecoveryD3StickyAbandon() async {
-        let transport = F3FTransport(mode: .createUnknownSettingsViolationAfterSafe)
+    @Test("Unavailable settings block stable replay; abandon only clears the local attempt")
+    @MainActor func stableCreateRecoveryAfterSettingsFailure() async {
+        let transport = F3FTransport(mode: .createUnknownSettingsTransportAfterSafe)
         let model = await loaded(transport)
         model.inputText = "午餐 132 元"
         await model.create()
         let writesBefore = await transport.mutationWires().count
         await model.load()
-        await model.load()
         #expect(model.hasStableCreateRecovery)
-        #expect(model.unknownCreateRetryReasons.contains { $0.code == "ai_d3_contract_violation" })
+        #expect(model.unknownCreateRetryReasons.contains { $0.code == "ai_settings_unavailable" })
         await model.retryUnknownCreate()
         #expect((await transport.mutationWires()).count == writesBefore)
         #expect(model.unknownCreateAbandonReasons.isEmpty)
         model.abandonUnknownCreate()
         #expect(!model.hasStableCreateRecovery)
-        #expect(model.settingsSafetyReason?.code == "ai_d3_contract_violation")
-        #expect(model.createReasons.contains { $0.code == "ai_d3_contract_violation" })
+        #expect(model.inputText == "午餐 132 元")
+        #expect(model.createReasons.contains { $0.code == "ai_settings_unavailable" })
         #expect((await transport.mutationWires()).count == writesBefore)
     }
 
@@ -592,119 +584,81 @@ struct F3FTests {
         #expect(pageModel.proposals.count == 4)
     }
 
-    @Test("A later D3 settings violation clears trusted review state and locks every mutation for this session")
-    @MainActor func laterSettingsViolationFailsClosed() async throws {
-        let transport = F3FTransport(mode: .settingsViolationAfterSafe)
-        let model = await loaded(transport)
-        let pending = try #require(model.selectedProposal)
-        model.openReview(pending); model.categoryID = V15F3FFixtures.expenseCategoryID
-        await model.confirmDraft()
-        #expect(model.reviewConfirmed)
-        let writesBeforeViolation = await transport.mutationWires().count
-
-        await model.load()
-        #expect(model.settings == nil)
-        #expect(model.settingsContractViolation?.code == "ai_settings_contract_violation")
-        #expect(!model.reviewConfirmed)
-        #expect(model.settingsSafetyReason?.code == "ai_d3_contract_violation")
-        #expect(model.confirmReasons.contains { $0.code == "ai_d3_contract_violation" })
-        #expect(model.actionReasons(.execute, proposal: try #require(model.selectedProposal)).contains { $0.code == "ai_d3_contract_violation" })
-
-        model.inputText = "不得建立"
-        await model.create()
-        await model.confirmDraft()
-        await model.execute()
-        await model.ignore()
-        let failed = try #require(model.proposals.first { $0.id == V15F3FFixtures.failedID })
-        await model.select(failed); await model.retryParsing()
-        let executed = try #require(model.proposals.first { $0.id == V15F3FFixtures.executedID })
-        await model.select(executed); await model.undo()
-        #expect((await transport.mutationWires()).count == writesBeforeViolation)
-
-        await model.load()
-        #expect(model.settings == nil)
-        #expect(model.settingsContractViolation?.code == "ai_settings_contract_violation")
-        #expect((await transport.mutationWires()).count == writesBeforeViolation)
-    }
-
-    @Test("Settings transport failure also clears stale settings, while only typed D3 errors become sticky violations")
-    @MainActor func settingsFailureAndTypedViolationClassification() async throws {
+    @Test("Settings transport failure clears stale settings and blocks writes")
+    @MainActor func settingsFailureBlocksWrites() async {
         let transport = F3FTransport(mode: .settingsTransportAfterSafe)
         let model = await loaded(transport)
         await model.load()
         #expect(model.settings == nil)
-        #expect(model.settingsContractViolation == nil)
         #expect(model.createReasons.contains { $0.code == "ai_settings_unavailable" })
         model.inputText = "不得建立"
         await model.create()
         #expect(await transport.mutationWires().isEmpty)
+    }
 
-        for settings in [
-            V15F3FFixtures.settings(autoExecute: true),
-            V15F3FFixtures.settings(effectiveAutoExecute: true)
-        ] {
-            do {
-                _ = try V15FixtureCodec.decoder.decode(V15AISettings.self, from: Data(settings.utf8))
-                Issue.record("false-only settings must reject either true field")
-            } catch let failure as V15Failure {
-                #expect(failure.code == "ai_settings_contract_violation")
-            }
+    @Test("Source settings save uses the current version and an unknown result requires refresh")
+    @MainActor func sourceSettingsSaveAndUnknownGate() async throws {
+        let transport = AISourceSettingsTransport()
+        let model = V15SettingsOverviewModel(services: V15Services(transport: transport))
+        await model.load()
+        #expect(model.aiSettings?.version == 4)
+        await model.updateAISources(ocrSourceEnabled: false, shortcutTextSourceEnabled: true)
+        #expect(model.aiSettings?.version == 5 && model.aiSettings?.ocrSourceEnabled == false)
+        let body = try #require(await transport.lastBody())
+        #expect(body["expected_version"] == .integer(4))
+        #expect(body["ocr_source_enabled"] == .bool(false))
+        #expect(body["shortcut_text_source_enabled"] == .bool(true))
+        #expect(Set(body.keys) == ["expected_version", "ocr_source_enabled", "shortcut_text_source_enabled"])
+
+        let unknownTransport = AISourceSettingsTransport(unknown: true)
+        let unknown = V15SettingsOverviewModel(services: V15Services(transport: unknownTransport))
+        await unknown.load()
+        await unknown.updateAISources(ocrSourceEnabled: false, shortcutTextSourceEnabled: true)
+        #expect(unknown.aiSettings == nil && unknown.aiSourceSaveMessage?.contains("核对") == true)
+        await unknown.updateAISources(ocrSourceEnabled: false, shortcutTextSourceEnabled: true)
+        #expect(await unknownTransport.writeCount() == 1)
+
+        let unreadableTransport = AISourceSettingsTransport(unreadableResponse: true)
+        let unreadable = V15SettingsOverviewModel(services: V15Services(transport: unreadableTransport))
+        await unreadable.load()
+        await unreadable.updateAISources(ocrSourceEnabled: false, shortcutTextSourceEnabled: true)
+        #expect(unreadable.aiSettings == nil && unreadable.aiSourceSaveMessage?.contains("核对") == true)
+        await unreadable.updateAISources(ocrSourceEnabled: false, shortcutTextSourceEnabled: true)
+        #expect(await unreadableTransport.writeCount() == 1)
+
+        let failedTransport = AISourceSettingsTransport(fail: true)
+        let failed = V15SettingsOverviewModel(services: V15Services(transport: failedTransport))
+        await failed.load()
+        await failed.updateAISources(ocrSourceEnabled: false, shortcutTextSourceEnabled: true)
+        #expect(failed.aiSettings?.version == 4 && failed.aiSettings?.ocrSourceEnabled == true)
+        #expect(failed.failures["ai_settings"]?.kind == .transport)
+    }
+}
+
+private actor AISourceSettingsTransport: V15Transporting {
+    private let unknown: Bool
+    private let unreadableResponse: Bool
+    private let fail: Bool
+    private var writes = 0
+    private var body: JSONValue?
+    init(unknown: Bool = false, unreadableResponse: Bool = false, fail: Bool = false) {
+        self.unknown = unknown; self.unreadableResponse = unreadableResponse; self.fail = fail
+    }
+    func send<Response: Decodable & Sendable>(_ request: V15Request, body: JSONValue?) async throws -> Response {
+        guard request.path == "ai/settings" else { throw V15Failure(kind: .transport, message: "fixture omits unrelated settings facts") }
+        if request.method == "PUT" {
+            writes += 1
+            self.body = body
+            if unknown { throw V15Failure(kind: .responseUnknown, message: "lost response") }
+            if unreadableResponse { throw V15Failure(kind: .decoding, message: "unreadable committed response") }
+            if fail { throw V15Failure(kind: .transport, message: "transport failed before commit", isDefinitiveRejection: true) }
         }
-        do {
-            _ = try V15FixtureCodec.decoder.decode(V15AISettings.self, from: Data("{\"auto_execute_enabled\":false}".utf8))
-            Issue.record("ordinary malformed JSON must still fail")
-        } catch let failure as V15Failure {
-            Issue.record("ordinary JSON decode must not be labelled D3: \(failure)")
-        } catch { }
+        let version = request.method == "PUT" ? 5 : 4
+        let ocr = request.method == "PUT" ? "false" : "true"
+        let json = "{\"ocr_source_enabled\":\(ocr),\"shortcut_text_source_enabled\":true,\"provider_configured\":true,\"version\":\(version),\"created_at\":\"2026-08-01T00:00:00Z\",\"updated_at\":\"2026-08-16T00:00:00Z\"}"
+        return try V15FixtureCodec.decoder.decode(Response.self, from: Data(json.utf8))
     }
-
-    @Test("Unknown attempts survive the D3 gate only for GET recovery and old safe loads cannot unlock it")
-    @MainActor func settingsViolationPreservesReadOnlyRecoveryAndWinsRaces() async throws {
-        let directTransport = F3FTransport(mode: .directUnknownSettingsViolationAfterSafe)
-        let direct = await loaded(directTransport)
-        let proposal = try #require(direct.selectedProposal)
-        direct.openReview(proposal); direct.categoryID = V15F3FFixtures.expenseCategoryID
-        await direct.confirmDraft()
-        #expect(direct.hasUnknownDirect)
-        let writesBefore = await directTransport.mutationWires().count
-        await direct.load()
-        #expect(direct.hasUnknownDirect)
-        #expect(direct.settingsSafetyReason?.code == "ai_d3_contract_violation")
-        let readsBefore = await directTransport.allRequests().filter { $0.method == "GET" && $0.path == "ai/proposals/\(proposal.id)" }.count
-        await direct.recoverUnknownDirect()
-        let readsAfter = await directTransport.allRequests().filter { $0.method == "GET" && $0.path == "ai/proposals/\(proposal.id)" }.count
-        #expect(readsAfter == readsBefore + 1)
-        #expect((await directTransport.mutationWires()).count == writesBefore)
-
-        let createTransport = F3FTransport(mode: .createUnknownSettingsViolationAfterSafe)
-        let create = await loaded(createTransport)
-        create.inputText = "未知新建"
-        await create.create()
-        #expect(create.hasUnknownCreate)
-        let createWrites = await createTransport.mutationWires().count
-        await create.load()
-        await create.retryUnknownCreate()
-        #expect((await createTransport.mutationWires()).count == createWrites)
-
-        let raceTransport = F3FTransport(mode: .settingsViolationRace)
-        let race = V15AIProposalModel(services: V15Services(transport: raceTransport))
-        async let oldSafe: Void = race.load()
-        try await Task.sleep(for: .milliseconds(20))
-        await race.load()
-        _ = await oldSafe
-        #expect(race.settings == nil)
-        #expect(race.settingsContractViolation?.code == "ai_settings_contract_violation")
-    }
-
-    @Test("Settings contract violation fails the whole surface and leaves writes locked")
-    @MainActor func settingsViolation() async {
-        let transport = F3FTransport(mode: .settingsViolation)
-        let model = await loaded(transport)
-        guard case .failed(let failure) = model.phase else { Issue.record("Expected typed D3 failure"); return }
-        #expect(failure.kind == .decoding)
-        model.inputText = "不得发送"
-        #expect(model.createReasons.contains { $0.code == "ai_d3_contract_violation" })
-        await model.create()
-        #expect(await transport.mutationWires().isEmpty)
-    }
+    func fetchArtifact(_ request: V15Request, accept: String) async throws -> Data { Data() }
+    func lastBody() -> [String: JSONValue]? { guard case .object(let values) = body else { return nil }; return values }
+    func writeCount() -> Int { writes }
 }

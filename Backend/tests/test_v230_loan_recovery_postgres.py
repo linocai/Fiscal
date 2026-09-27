@@ -99,12 +99,12 @@ async def test_recovers_principal_monthly_cycles_and_payment_without_spending(
         today=date(2026, 9, 22),
     )
     assert flow.inflow_minor == 0 and flow.outflow_minor == 253300
-    previous = await reporting.monthly_report(period="2026-08")
+    previous = await reporting.monthly_report_v2(period="2026-08")
     assert previous.summary.credit_debt_at_period_end_minor == 0
     password = str(uuid4())
     archive, _ = await ArchiveService(session).export(password=password, include_ai_raw=False)
     manifest, payload = ArchiveService.open(archive, password=password)
-    assert manifest["database_revision"] == "20260922_0041"
+    assert manifest["database_revision"] == "20260926_0042"
     assert any(t["kind"] == "loan_principal" for t in payload["entities"]["transactions"])
     replay = await recover_loan(session, request, key)
     assert replay["repayment_id"] == receipt["repayment_id"] and replay["replayed"]

@@ -1,0 +1,604 @@
+{
+  "schema": 1,
+  "root": "/Users/linotsai/Lino/Fiscal",
+  "keep": [
+    {
+      "path": "build/test-runs/chart48-axis-final/tests.xcresult",
+      "reason": "既有 Build48 历史轴线证据，不属本轮删除范围",
+      "fingerprint": {
+        "sha256": "b325bfc56ddb9705d074525edbbe4a4d91829676e09b9904dda5a78980052602",
+        "inode": 169184377,
+        "device": 16777234,
+        "logical_bytes": 1172872,
+        "allocated_bytes": 1294336
+      }
+    },
+    {
+      "path": "build/test-runs/chart48-macos-final/tests.xcresult",
+      "reason": "既有 Build48 宽屏失败原件，保留历史差异来源",
+      "fingerprint": {
+        "sha256": "f41aa052dbf0746f652a2d31440b07f2d7bda1e0f74b7f06e380e5a4a8535824",
+        "inode": 169167834,
+        "device": 16777234,
+        "logical_bytes": 84888112,
+        "allocated_bytes": 91025408
+      }
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-final-second/tests.xcresult",
+      "reason": "Build49 最终 329/329 Swift 业务回归",
+      "fingerprint": {
+        "sha256": "c3fc28b6e8d0a0d0a837e65e3f6c0550d66fee0ffb68f3da27bea6c31dece630",
+        "inode": 173694854,
+        "device": 16777234,
+        "logical_bytes": 822942,
+        "allocated_bytes": 3784704
+      }
+    },
+    {
+      "path": "build/test-runs/v240-gallery-ios-build49-acceptance/tests.xcresult",
+      "reason": "Build49 最终 iOS 未来来源/多费用/AI/CSV 5/5",
+      "fingerprint": {
+        "sha256": "b08988b0445e716a3674280cecef729a7136efba91ea529cb96862f043ad079b",
+        "inode": 173735150,
+        "device": 16777234,
+        "logical_bytes": 2923717,
+        "allocated_bytes": 3072000
+      }
+    },
+    {
+      "path": "build/test-runs/v240-gallery-macos-final/tests.xcresult",
+      "reason": "Build49 macOS 报销与 CSV 3/3",
+      "fingerprint": {
+        "sha256": "577e8a97cfe82592b150f27b73c75ffeffab685fcda3b067983bc7b494b01007",
+        "inode": 173718434,
+        "device": 16777234,
+        "logical_bytes": 867270,
+        "allocated_bytes": 999424
+      }
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-deeplink-verified/tests.xcresult",
+      "reason": "Build49 冷热 URL/不同草稿/错误目标 2/2",
+      "fingerprint": {
+        "sha256": "db0f949a83b326e014f557946e804eadab77e9f532443e0d1c9aa3565ce6c990",
+        "inode": 173733725,
+        "device": 16777234,
+        "logical_bytes": 429174,
+        "allocated_bytes": 557056
+      }
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-build49-acceptance/tests.xcresult",
+      "reason": "Build49 最终原子录入呈现修复后正式 iOS 三空间、账户与 OCR 设置 3/3 及截图",
+      "fingerprint": {
+        "sha256": "0ee910be6e7e2108fbd53439b09280c1e4db040b20f68db9d58ca4fa0afbbb68",
+        "inode": 173736261,
+        "device": 16777234,
+        "logical_bytes": 1226227,
+        "allocated_bytes": 1359872
+      }
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-macos-final/tests.xcresult",
+      "reason": "Build49 正式 macOS 三空间、宽屏画布与账户 4/4 及截图",
+      "fingerprint": {
+        "sha256": "d2525eb6030e1f59ab06ee8a57a6ab2ae6781d6c628cae20446bfd8f4e407c91",
+        "inode": 173722261,
+        "device": 16777234,
+        "logical_bytes": 2748619,
+        "allocated_bytes": 2908160
+      }
+    }
+  ],
+  "delete": [
+    {
+      "path": "build/test-runs/v240-fiscalkit-fifth/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "3aa5cb07cfd83c1a0b1fbb19a6d0b3f0b5884085f945cbb60eb8917ad61d6825",
+        "inode": 173141822,
+        "device": 16777234,
+        "logical_bytes": 801346,
+        "allocated_bytes": 3756032
+      }
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-first/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "c9ea87ff461ee34206f3782863f25744e1e1613ab183318a2d8b698650375517",
+        "inode": 172994447,
+        "device": 16777234,
+        "logical_bytes": 261446,
+        "allocated_bytes": 323584
+      }
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-fourth/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "28c90d591c1370c0cc3dcfacbab33e41c16066e0285f02ca9168ae0ff2074b7b",
+        "inode": 173017079,
+        "device": 16777234,
+        "logical_bytes": 68654212,
+        "allocated_bytes": 77545472
+      }
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-second/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "dae9acce2dca00b57da08657afe17f8f54b4309880703649919e5d19745635eb",
+        "inode": 172997706,
+        "device": 16777234,
+        "logical_bytes": 261120,
+        "allocated_bytes": 323584
+      }
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-sixth/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "353414a948a51adaa703728b1fbe7762135d7e5c2202f25f4a50d7a028655b07",
+        "inode": 173368663,
+        "device": 16777234,
+        "logical_bytes": 823732,
+        "allocated_bytes": 3784704
+      }
+    },
+    {
+      "path": "build/test-runs/v240-fiscalkit-third/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "be38ada074e0c2b05960e7988cd1520d608f1f0b6cbb65df09380b5b67b5c362",
+        "inode": 173000757,
+        "device": 16777234,
+        "logical_bytes": 273054,
+        "allocated_bytes": 335872
+      }
+    },
+    {
+      "path": "build/test-runs/v240-gallery-ios-final/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "1e5f59a0f15fcf16f364e3443423f8f6e793831afc8ce60a31243defd921a685",
+        "inode": 173707691,
+        "device": 16777234,
+        "logical_bytes": 59930917,
+        "allocated_bytes": 65064960
+      }
+    },
+    {
+      "path": "build/test-runs/v240-gallery-ios-multi-final/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "0203fc4c248e9ab0fec0f2b44a8f63a91730bf2e9af88488ead9180964f12711",
+        "inode": 173719450,
+        "device": 16777234,
+        "logical_bytes": 84266272,
+        "allocated_bytes": 89300992
+      }
+    },
+    {
+      "path": "build/test-runs/v240-gallery-ios-multi-retry/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "c69e3e2e44e31fc8425eda6b42cf997ac5b29d0269369a0e223721a40c737510",
+        "inode": 173714788,
+        "device": 16777234,
+        "logical_bytes": 84490423,
+        "allocated_bytes": 89788416
+      }
+    },
+    {
+      "path": "build/test-runs/v240-gallery-ios-multi-verified/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "ae4162314ece5bc7c7ae984d6a727287d7b9c247ab0c397fca253d4b934b6b8c",
+        "inode": 173723552,
+        "device": 16777234,
+        "logical_bytes": 971495,
+        "allocated_bytes": 1089536
+      }
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-core/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "18688d6e2d6d23a56da2749b994c0730c008cdc0a0d38cbc98dcfe544d516740",
+        "inode": 173167231,
+        "device": 16777234,
+        "logical_bytes": 61732726,
+        "allocated_bytes": 67014656
+      }
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-core-second/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "a11c623f5c48d4702d83ed11ae3e9ab2986e8b6e858b0fd7af51fe1c4f992610",
+        "inode": 173199327,
+        "device": 16777234,
+        "logical_bytes": 1236166,
+        "allocated_bytes": 1368064
+      }
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-deeplink/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "55828e3e63d8a0e89777b34683926db0f297da6fdd861acf774041a86a64b75e",
+        "inode": 173726642,
+        "device": 16777234,
+        "logical_bytes": 55123892,
+        "allocated_bytes": 60248064
+      }
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-deeplink-final/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "c9e060d172af5b7c89794b4260a215af357f7536650fc997a080a7b17a5aba1e",
+        "inode": 173730633,
+        "device": 16777234,
+        "logical_bytes": 68845188,
+        "allocated_bytes": 73670656
+      }
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-macos-first/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "7bff434de742dcf8a8c341104142eaa8eac0a7f0fbb815b0e58ce3f81ca79171",
+        "inode": 173001257,
+        "device": 16777234,
+        "logical_bytes": 100507152,
+        "allocated_bytes": 106762240
+      }
+    },
+    {
+      "path": "build/test-runs/v240-wide-canvas-verified/tests.xcresult",
+      "reason": "该运行已由 Build49 最终通过范围替代，保留运行摘要与修复说明",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "26ea1629539c07b491b269008a76ceead1503bc50849f0f4066735e7626d9efa",
+        "inode": 173035491,
+        "device": 16777234,
+        "logical_bytes": 2062396,
+        "allocated_bytes": 2199552
+      }
+    },
+    {
+      "path": "build/v240/f3c-test-attachments/98CD094D-2F5F-41F9-BB83-5D354C741611.mp4",
+      "reason": "定位阶段按需导出的重复媒体，原始测试结果及故障摘要已保留",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "32f9edde3e16d6c0877beb04ebed73fc46c5169cc807c82cb90dc3f63909d3c9",
+        "inode": 173718366,
+        "device": 16777234,
+        "logical_bytes": 35250974,
+        "allocated_bytes": 35254272
+      }
+    },
+    {
+      "path": "build/v240/wide-screenshots/23F0E248-D1EF-42ED-89D6-AD916A88BD28.png",
+      "reason": "定位阶段按需导出的重复媒体，原始测试结果及故障摘要已保留",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "bd4d5db1e6f94af1c5ce9f22e01ce6dae7ea3c91d8ea0c9595e45603d61a8df0",
+        "inode": 173016811,
+        "device": 16777234,
+        "logical_bytes": 469709,
+        "allocated_bytes": 471040
+      }
+    },
+    {
+      "path": "build/v240/wide-screenshots/75B45B28-3EFD-4F25-BD8A-594F5AD13D66.png",
+      "reason": "定位阶段按需导出的重复媒体，原始测试结果及故障摘要已保留",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "251fb1d443b7ab7072219287b1f8cfde9717f066ba3b8921790d6060627b767c",
+        "inode": 173016808,
+        "device": 16777234,
+        "logical_bytes": 386097,
+        "allocated_bytes": 389120
+      }
+    },
+    {
+      "path": "build/v240/wide-screenshots/7A087742-03A4-4CB3-9658-A5280E509361.png",
+      "reason": "定位阶段按需导出的重复媒体，原始测试结果及故障摘要已保留",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "301a86067832e3fac8fdb639751145fc127bb4b4a614c3c39db321b220be0e05",
+        "inode": 173016810,
+        "device": 16777234,
+        "logical_bytes": 330168,
+        "allocated_bytes": 331776
+      }
+    },
+    {
+      "path": "build/v240/wide-screenshots/F6024BD5-1F17-4187-9BD7-C28497DA5B9B.png",
+      "reason": "定位阶段按需导出的重复媒体，原始测试结果及故障摘要已保留",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "87e5592966eec9453e1e74d045928eb7f3039119937f30baf34add0ee234f881",
+        "inode": 173016809,
+        "device": 16777234,
+        "logical_bytes": 505400,
+        "allocated_bytes": 507904
+      }
+    },
+    {
+      "path": "build/test-runs/v240-rootsmoke-ios-final/tests.xcresult",
+      "reason": "原子录入呈现修复前结果已由 Build49 最终通过范围替代",
+      "evidence": [
+        {
+          "path": "archive/releases/v2.4.0/qa/apple-build49.md",
+          "fingerprint": {
+            "sha256": "5394a242b2a067d7496472de983d28c7c2483628244ae18697df0916ed5dd3fa",
+            "inode": 173736088,
+            "device": 16777234,
+            "logical_bytes": 3541,
+            "allocated_bytes": 4096
+          }
+        }
+      ],
+      "fingerprint": {
+        "sha256": "a75024100b1f29fc2f668a8bf9c0020eaa81dc4ca32bd27c6102a04168255413",
+        "inode": 173724351,
+        "device": 16777234,
+        "logical_bytes": 1229625,
+        "allocated_bytes": 1363968
+      }
+    }
+  ],
+  "status": "planned",
+  "planned_at": "2026-09-26T10:24:55.603943+00:00"
+}
