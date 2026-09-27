@@ -24,6 +24,7 @@ from fiscal_api.api.p10_schemas import (
     BatchCategoryResponse,
     TransactionClassification,
 )
+from fiscal_api.api.reimbursement_types import adapt_legacy_transaction_snapshot
 from fiscal_api.core.errors import APIError
 from fiscal_api.core.time import BUSINESS_TIMEZONE, UTC, ensure_utc, utc_now
 from fiscal_api.db.models import (
@@ -167,7 +168,7 @@ class TransactionService:
             snapshot = await self.repository.created_snapshot(existing.id)
             if snapshot is None:
                 raise RuntimeError("created transaction revision is missing")
-            return TransactionResponse.model_validate(snapshot)
+            return TransactionResponse.model_validate(adapt_legacy_transaction_snapshot(snapshot))
 
         postings, category, cycle_id = await self._validated_postings(draft)
         await self._check_repayment_amount(draft)
@@ -213,7 +214,7 @@ class TransactionService:
         snapshot = await self.repository.created_snapshot(transaction.id)
         if snapshot is None:
             conflict("transaction_receipt_unavailable", "The creation receipt is unavailable")
-        return TransactionResponse.model_validate(snapshot)
+        return TransactionResponse.model_validate(adapt_legacy_transaction_snapshot(snapshot))
 
     async def get(self, transaction_id: UUID) -> TransactionResponse:
         transaction = await self._required(transaction_id)

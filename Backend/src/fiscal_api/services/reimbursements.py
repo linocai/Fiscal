@@ -33,6 +33,8 @@ from fiscal_api.api.p6_schemas import (
     ReimbursementReceiptReplace,
     ReimbursementReceiptResponse,
     ReimbursementSummary,
+    adapt_legacy_reimbursement_receipt_snapshot,
+    adapt_legacy_reimbursement_snapshot,
 )
 from fiscal_api.core.time import BUSINESS_TIMEZONE, UTC, ensure_utc, utc_now
 from fiscal_api.db.models import (
@@ -104,7 +106,9 @@ class ReimbursementService:
             )
             if snapshot is None:
                 raise RuntimeError("created reimbursement snapshot missing")
-            return ReimbursementClaimResponse.model_validate(snapshot)
+            return ReimbursementClaimResponse.model_validate(
+                adapt_legacy_reimbursement_snapshot(snapshot)
+            )
         claim = ReimbursementClaim(
             title=draft.title,
             note=draft.note,
@@ -1301,7 +1305,12 @@ class ReimbursementService:
             or existing.result_snapshot is None
         ):
             conflict("idempotency_key_reused", "The idempotency key was already used")
-        return response_type.model_validate(existing.result_snapshot)
+        snapshot = existing.result_snapshot
+        if response_type is ReimbursementClaimResponse:
+            snapshot = adapt_legacy_reimbursement_snapshot(snapshot)
+        else:
+            snapshot = adapt_legacy_reimbursement_receipt_snapshot(snapshot)
+        return response_type.model_validate(snapshot)
 
     def _record_operation(
         self,

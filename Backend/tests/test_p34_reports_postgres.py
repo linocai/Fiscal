@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import json
+from copy import deepcopy
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from io import StringIO
@@ -946,3 +948,243 @@ def test_p36_report_v2_adds_auditable_dimensions() -> None:
         assert stale_drill.status_code == stale_export.status_code == 409
         assert stale_drill.json()["error"]["code"] == "period_report_changed"
         assert stale_export.json()["error"]["code"] == "period_report_changed"
+
+
+def test_p34_old_party_shaped_revisions_report_and_restore(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """0041 revision JSON, including nested receipt relations, stays readable."""
+    app, auth = _app()
+    with TestClient(app) as client:
+        account = _account(client, auth, name="Legacy revision account")
+        category = _category(client, auth)
+        expense = _transaction(
+            client,
+            auth,
+            {
+                "kind": "expense",
+                "amount_minor": 1_200,
+                "occurred_at": "2024-02-28T12:00:00+08:00",
+                "title": "Legacy revision expense",
+                "account_id": account["id"],
+                "category_id": category["id"],
+            },
+        )
+        created = client.post(
+            "/api/v1/reimbursement-claims",
+            headers={**auth, "Idempotency-Key": str(uuid4())},
+            json={
+                "title": "Legacy revision claim",
+                "counterparty_name": "Synthetic payer",
+                "expenses": [{"transaction_id": expense["id"], "amount_minor": 1_200}],
+            },
+        )
+        assert created.status_code == 201, created.text
+        claim = created.json()
+        receipt = _post_receipt(
+            client,
+            auth,
+            claim=claim,
+            amount_minor=600,
+            received_at="2024-03-10T12:00:00+08:00",
+            destination_account_id=account["id"],
+        )
+        current_claim = client.get(f"/api/v1/reimbursement-claims/{claim['id']}", headers=auth)
+        assert current_claim.status_code == 200, current_claim.text
+        claim = current_claim.json()
+
+        asyncio.run(
+            _record_reimbursement_revision_at(
+                claim_id=claim["id"],
+                claim_version=claim["version"],
+                claim_at=datetime(2024, 3, 10, 5, tzinfo=UTC),
+                receipt_id=receipt["id"],
+                receipt_version=receipt["version"],
+                receipt_at=datetime(2024, 3, 10, 5, tzinfo=UTC),
+                transaction_id=receipt["transaction"]["id"],
+                transaction_version=receipt["transaction"]["version"],
+                transaction_at=datetime(2024, 3, 10, 5, tzinfo=UTC),
+            )
+        )
+        asyncio.run(
+            _record_reimbursement_revision_at(
+                claim_id=claim["id"],
+                claim_version=claim["version"],
+                claim_at=datetime(2024, 3, 10, 5, tzinfo=UTC),
+                transaction_id=expense["id"],
+                transaction_version=expense["version"],
+                transaction_at=datetime(2024, 2, 28, 5, tzinfo=UTC),
+            )
+        )
+
+        revision_rows = (
+            (
+                "claim",
+                text(
+                    "SELECT id,snapshot FROM reimbursement_claim_revisions "
+                    "WHERE claim_id=:identifier AND version=:version"
+                ),
+                text(
+                    "UPDATE reimbursement_claim_revisions "
+                    "SET snapshot=CAST(:snapshot AS jsonb) WHERE id=:id"
+                ),
+                claim["id"],
+                claim["version"],
+            ),
+            (
+                "receipt",
+                text(
+                    "SELECT id,snapshot FROM reimbursement_receipt_revisions "
+                    "WHERE receipt_id=:identifier AND version=:version"
+                ),
+                text(
+                    "UPDATE reimbursement_receipt_revisions "
+                    "SET snapshot=CAST(:snapshot AS jsonb) WHERE id=:id"
+                ),
+                receipt["id"],
+                receipt["version"],
+            ),
+            (
+                "transaction",
+                text(
+                    "SELECT id,snapshot FROM transaction_revisions "
+                    "WHERE transaction_id=:identifier AND version=:version"
+                ),
+                text(
+                    "UPDATE transaction_revisions "
+                    "SET snapshot=CAST(:snapshot AS jsonb) WHERE id=:id"
+                ),
+                receipt["transaction"]["id"],
+                receipt["transaction"]["version"],
+            ),
+        )
+
+        async def rewrite_synthetic_revisions() -> tuple[dict[str, object], ...]:
+            assert TEST_DATABASE_URL is not None
+            engine = create_async_engine(TEST_DATABASE_URL)
+            party_id = str(uuid4())
+
+            def old_transaction(value: dict[str, object]) -> dict[str, object]:
+                copied = deepcopy(value)
+                relations = copied["reimbursement_relations"]
+                assert isinstance(relations, list)
+                if not relations:
+                    latest = claim["latest_receipt"]
+                    assert isinstance(latest, dict)
+                    nested = latest["transaction"]["reimbursement_relations"]
+                    assert isinstance(nested, list) and nested
+                    relations = deepcopy(nested)
+                    copied["reimbursement_relations"] = relations
+                for relation in relations:
+                    assert isinstance(relation, dict)
+                    relation["party_id"] = party_id
+                    relation["party_name"] = relation.pop("counterparty_name")
+                return copied
+
+            try:
+                async with engine.begin() as connection:
+                    selected = []
+                    for kind, select_sql, update_sql, identifier, version in revision_rows:
+                        row = (
+                            await connection.execute(
+                                select_sql,
+                                {"identifier": identifier, "version": version},
+                            )
+                        ).one()
+                        snapshot = deepcopy(row.snapshot)
+                        if kind == "claim":
+                            snapshot["parties"] = [
+                                {
+                                    "id": party_id,
+                                    "name": snapshot.pop("counterparty_name"),
+                                    "expected_date": snapshot.pop("expected_date"),
+                                    "allocations": snapshot.pop("expenses"),
+                                }
+                            ]
+                            snapshot["party_count"] = 1
+                            latest = snapshot["latest_receipt"]
+                            assert isinstance(latest, dict)
+                            latest["party_id"] = party_id
+                            latest["transaction"] = old_transaction(latest["transaction"])
+                        elif kind == "receipt":
+                            snapshot["party_id"] = party_id
+                            snapshot["transaction"] = old_transaction(snapshot["transaction"])
+                        else:
+                            snapshot = old_transaction(snapshot)
+                        await connection.execute(
+                            update_sql, {"snapshot": json.dumps(snapshot), "id": row.id}
+                        )
+                        selected.append(snapshot)
+                    return tuple(selected)
+            finally:
+                await engine.dispose()
+
+        legacy_snapshots = asyncio.run(rewrite_synthetic_revisions())
+        monthly = client.get("/api/v1/reports/v2/monthly/2024-03", headers=auth)
+        yearly = client.get("/api/v1/reports/v2/yearly/2024", headers=auth)
+        csv_export = client.get(
+            "/api/v1/reports/v2/monthly/2024-03/export.csv"
+            f"?expected_data_revision={monthly.json()['meta']['data_revision']}",
+            headers=auth,
+        )
+        assert monthly.status_code == yearly.status_code == csv_export.status_code == 200
+        assert monthly.json()["summary"]["reimbursement_outstanding_at_period_end_minor"] == 600
+        assert yearly.json()["summary"]["reimbursement_outstanding_at_period_end_minor"] == 600
+        assert csv_export.headers["content-type"].startswith("text/csv")
+
+        password = uuid4().hex + uuid4().hex
+        exported = client.post(
+            "/api/v1/archives/export",
+            headers=auth,
+            json={"password": password, "include_ai_raw": False},
+        )
+        assert exported.status_code == 200, exported.text
+        manifest, payload = ArchiveService.open(exported.content, password=password)
+
+        async def read_original_revisions() -> tuple[dict[str, object], ...]:
+            assert TEST_DATABASE_URL is not None
+            engine = create_async_engine(TEST_DATABASE_URL)
+            try:
+                async with engine.connect() as connection:
+                    snapshots = []
+                    for _kind, select_sql, _update_sql, identifier, version in revision_rows:
+                        row = (
+                            await connection.execute(
+                                select_sql, {"identifier": identifier, "version": version}
+                            )
+                        ).one()
+                        snapshot = row.snapshot
+                        assert isinstance(snapshot, dict)
+                        snapshots.append(snapshot)
+                    return tuple(snapshots)
+            finally:
+                await engine.dispose()
+
+        assert asyncio.run(read_original_revisions()) == legacy_snapshots
+
+    target_name = f"fiscal_p34_legacy_revision_{uuid4().hex}"
+    target_url = _fresh_database_url(target_name)
+    asyncio.run(_create_database(target_name))
+    try:
+        monkeypatch.setenv("FISCAL_DATABASE_URL", target_url)
+        get_settings.cache_clear()
+        command.upgrade(_alembic_config(), "head")
+
+        async def restore_and_report() -> int:
+            engine = create_engine(target_url)
+            try:
+                async with engine.begin() as connection:
+                    await ArchiveService.restore_empty_target(
+                        connection, manifest=manifest, payload=payload
+                    )
+                async with create_session_factory(engine)() as session:
+                    report = await ReportingService(session).monthly_report_v2(period="2024-03")
+                    return report.summary.reimbursement_outstanding_at_period_end_minor
+            finally:
+                await engine.dispose()
+
+        assert asyncio.run(restore_and_report()) == 600
+    finally:
+        asyncio.run(_drop_database(target_name))
+        monkeypatch.setenv("FISCAL_DATABASE_URL", TEST_DATABASE_URL)
+        get_settings.cache_clear()

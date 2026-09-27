@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import Field, StrictInt, field_validator
 
 from fiscal_api.api.p3_schemas import APIModel, TransactionResponse, clean_note, clean_required
+from fiscal_api.api.reimbursement_types import adapt_legacy_transaction_snapshot
 from fiscal_api.db.models import AccountKind, ReimbursementClaimStatus
 
 MAX_MINOR = 9_223_372_036_854_775_807
@@ -131,29 +132,40 @@ class ReimbursementClaimResponse(APIModel):
     updated_at: datetime
 
 
+def adapt_legacy_reimbursement_receipt_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Read an old receipt revision with its nested transaction relation."""
+    converted = {key: value for key, value in snapshot.items() if key != "party_id"}
+    transaction = converted.get("transaction")
+    if isinstance(transaction, dict):
+        converted["transaction"] = adapt_legacy_transaction_snapshot(
+            cast(dict[str, Any], transaction)
+        )
+    return converted
+
+
 def adapt_legacy_reimbursement_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Read old single-party financial revisions without changing stored history."""
-    if "parties" not in snapshot:
-        return snapshot
-    raw_parties = cast(object, snapshot["parties"])
-    if not isinstance(raw_parties, list):
-        raise ValueError("Legacy reimbursement revision is not a single-counterparty claim")
-    parties = cast(list[dict[str, Any]], raw_parties)
-    if len(parties) > 1:
-        raise ValueError("Legacy reimbursement revision is not a single-counterparty claim")
-    party = parties[0] if parties else None
-    converted = {
-        key: value for key, value in snapshot.items() if key not in {"parties", "party_count"}
-    }
-    converted["counterparty_name"] = party["name"] if party else converted["title"]
-    converted["expected_date"] = party["expected_date"] if party else None
-    converted["expenses"] = party["allocations"] if party else []
+    if "parties" in snapshot:
+        raw_parties = cast(object, snapshot["parties"])
+        if not isinstance(raw_parties, list):
+            raise ValueError("Legacy reimbursement revision is not a single-counterparty claim")
+        parties = cast(list[dict[str, Any]], raw_parties)
+        if len(parties) > 1:
+            raise ValueError("Legacy reimbursement revision is not a single-counterparty claim")
+        party = parties[0] if parties else None
+        converted = {
+            key: value for key, value in snapshot.items() if key not in {"parties", "party_count"}
+        }
+        converted["counterparty_name"] = party["name"] if party else converted["title"]
+        converted["expected_date"] = party["expected_date"] if party else None
+        converted["expenses"] = party["allocations"] if party else []
+    else:
+        converted = dict(snapshot)
     latest = converted.get("latest_receipt")
     if isinstance(latest, dict):
-        latest = cast(dict[str, Any], latest)
-        converted["latest_receipt"] = {
-            key: value for key, value in latest.items() if key != "party_id"
-        }
+        converted["latest_receipt"] = adapt_legacy_reimbursement_receipt_snapshot(
+            cast(dict[str, Any], latest)
+        )
     return converted
 
 

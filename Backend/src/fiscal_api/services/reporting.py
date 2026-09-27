@@ -19,6 +19,7 @@ from fiscal_api.api.p3_schemas import TransactionResponse
 from fiscal_api.api.p6_schemas import (
     ReimbursementClaimResponse,
     ReimbursementReceiptResponse,
+    adapt_legacy_reimbursement_receipt_snapshot,
     adapt_legacy_reimbursement_snapshot,
 )
 from fiscal_api.api.p7_schemas import (
@@ -96,6 +97,7 @@ from fiscal_api.api.p34_schemas import (
 from fiscal_api.api.p34_schemas import (
     ReportMetaV2 as PeriodReportMetaV2,
 )
+from fiscal_api.api.reimbursement_types import adapt_legacy_transaction_snapshot
 from fiscal_api.core.time import BUSINESS_TIMEZONE, UTC, utc_now
 from fiscal_api.db.models import (
     Account,
@@ -1839,7 +1841,9 @@ class ReportingService:
             snapshot = source_transactions.get(transaction_id)
             if snapshot is None:
                 continue
-            transaction = TransactionResponse.model_validate(snapshot)
+            transaction = TransactionResponse.model_validate(
+                adapt_legacy_transaction_snapshot(snapshot)
+            )
             if transaction.id != transaction_id:
                 invalid("invalid_reporting_projection", "Transaction revision identity mismatch")
             if transaction.kind not in {TransactionKind.EXPENSE, TransactionKind.CREDIT_PURCHASE}:
@@ -1860,7 +1864,7 @@ class ReportingService:
         parsed_receipts: list[ReimbursementReceiptResponse] = []
         for snapshot in receipt_snapshots:
             receipt = ReimbursementReceiptResponse.model_validate(
-                {key: value for key, value in snapshot.items() if key != "party_id"}
+                adapt_legacy_reimbursement_receipt_snapshot(snapshot)
             )
             if receipt.claim_id in claims and receipt.voided_at is None:
                 parsed_receipts.append(receipt)
@@ -1872,7 +1876,9 @@ class ReportingService:
             snapshot = receipt_transactions.get(receipt.transaction.id)
             if snapshot is None:
                 continue
-            transaction = TransactionResponse.model_validate(snapshot)
+            transaction = TransactionResponse.model_validate(
+                adapt_legacy_transaction_snapshot(snapshot)
+            )
             if transaction.id != receipt.transaction.id:
                 invalid(
                     "invalid_reporting_projection", "Receipt transaction revision identity mismatch"
