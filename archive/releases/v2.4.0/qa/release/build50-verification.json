@@ -1,0 +1,67 @@
+{
+  "source_commit": "0bd45b25d1ef0f41af9dfe40a225d477022b4da6",
+  "tag": "v2.4.0-build50",
+  "tag_object": "815c6be975156b3782c2eda07f4183d454671208",
+  "macOS": {
+    "bundle_id": "com.linotsai.fiscal.mac",
+    "version": "2.4.0",
+    "build": "50",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "executable_sha256": "b72d4a25828f9f565748d52f836449be20b46f9b0bb59a078aac572d780b898b",
+    "uuids": {
+      "x86_64": "F89D6B1C-3075-3190-AB30-ABABD2438A72",
+      "arm64": "E2161B50-BA1F-33FD-A97A-386B5C3FAFAC"
+    },
+    "minimum_os": "27.0",
+    "api_base_url": "https://fiscal.linotsai.top",
+    "signature_verification": "strict source and extracted archive",
+    "framework_uuids": {
+      "x86_64": "00F13660-5A44-32FE-A28E-204AAC00C8D0",
+      "arm64": "C98FF552-4E57-3D89-92E5-892865A084E4"
+    },
+    "artifact": "Fiscal-macOS-v2.4.0-build50.zip"
+  },
+  "iOS": {
+    "bundle_id": "com.linotsai.fiscal",
+    "version": "2.4.0",
+    "build": "50",
+    "architectures": [
+      "arm64"
+    ],
+    "executable_sha256": "50cdff94771d204ad30ece4ab313fa8dfd5591265301bf5264c429f9a4311cee",
+    "uuids": {
+      "arm64": "678F7AB0-4638-31CE-B925-B2D47F181F41"
+    },
+    "minimum_os": "27.0",
+    "api_base_url": "https://fiscal.linotsai.top",
+    "signature_verification": "strict device app and framework; no IPA generated",
+    "framework_uuids": {
+      "arm64": "2B910FF3-2FAD-32FB-B16D-63CD98CCB881"
+    },
+    "effective_keychain_access_group": "HX73DFL88G.com.linotsai.fiscal",
+    "keychain_group_source": "application-identifier default",
+    "entitlements_verified": [
+      "application-identifier",
+      "team-identifier",
+      "keychain-access-groups",
+      "get-task-allow"
+    ],
+    "profile": {
+      "uuid": "21bfd4df-a7b0-4e81-8f4b-d52f35f56834",
+      "name": "iOS Team Provisioning Profile: *",
+      "expiration": "2027-09-20T11:21:57",
+      "registered_devices": 4
+    },
+    "artifact": null,
+    "device_app_path": "/Users/linotsai/Library/Developer/Xcode/DerivedData/Fiscal-gxhyzwdownkctphiwckdkhzmywou/Build/Products/Release-iphoneos/Fiscal.app"
+  },
+  "artifacts": {
+    "Fiscal-iOS-v2.4.0-build50-dSYMs.zip": "b356b3c7c9e22c7305897dc434ab8df9859a36eff9653e843ef75fa505fed0a2",
+    "Fiscal-macOS-v2.4.0-build50-dSYMs.zip": "731b9fd1ce7820721423d269bc59db6f6ec3e3308c092be2d09ec02a6e3cbc80",
+    "Fiscal-macOS-v2.4.0-build50.zip": "a5f01dfa8e4c4563a1da64615343f08ba8acea37d1b9362481c86213869eeee1",
+    "RELEASE.txt": "0ba6dfde663e0322a5e8acc2df792e463e3a54d9ec631b3d5d4a3203481dda72"
+  }
+}

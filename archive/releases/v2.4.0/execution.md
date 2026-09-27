@@ -203,3 +203,7 @@ Preview/Commit: 沿用 expected version、input digest、preview_token 绑定
 - 验证/资源已完成，详细证据集中在 [Build50 QA](qa/build50.md)：后端 438/438，客户端全量 335/335 与最终定向 6/6，双端真实商户 UI 各 1/1，最终正式 App Debug 双端构建成功；独立 reviewer 判定两 P2 关闭，最终 editor 生命周期微调另经复查无 finding。
 - 真实 UI 验证发现保存后的全局刷新会使 iOS 嵌套编辑器提前消失；将刷新延后至关闭编辑器，保持成功回执可见，原断言重跑通过。商户别名输入仅追加新值，不把旧商户全部别名随更正转移。
 - `cleanup-build50-check.json` complete；清理被替代的 4 份结果包、3 份截图导出及 12 份临时副本/合成文件，保留最终验收原件和每轮摘要。唯一隔离库已删除，系统临时文件与任务进程复查为空，用户 AGENTS/六 scheme 7/7 不变。未提交、推送、部署或换装。
+
+## 12. 2026-09-27 一条龙发布与 Build51 兼容修复
+
+用户追加授权完整发布。Build50冻结 `0bd45b25`，首次迁移和备份恢复通过，但正式月报只读验收发现旧claim/receipt revision内嵌transaction关系仍为party字段。Build51冻结 `b006ed90`，七文件修复与回归经独立复查（内容指纹 `680042b5604ce02da2b30705b68da55aa540199a77d1cbc9686989e7de98ce01`），仅纯读适配旧JSON，不改历史快照或金额，不放松当前响应模型；补齐旧操作回执同类边界。后端全量441/441、0skip；三组签名Release构建与生产月报/年报/CSV、Mac正式总览及分析通过。具体源码标签、备份恢复、签名与资源证据集中在 [发布记录](RELEASE_STATE.md)，不复制发布流水。

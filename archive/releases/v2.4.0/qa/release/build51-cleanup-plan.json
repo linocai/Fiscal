@@ -1,0 +1,22 @@
+{
+  "/Users/linotsai/Lino/Fiscal/build/release-v2.4.0-51/source": {
+    "sha256": "75b0777bfe6beeb6aff668702dc5b6b80015c3cbdea91289c1ae6f06693cc9d3",
+    "allocated_bytes": 5885952
+  },
+  "/Users/linotsai/Lino/Fiscal/build/release-v2.4.0-51/staging": {
+    "sha256": "72e4bb7d122bd995abb8d3ca93fdfe47b00e657a21152d5677c9188c72970ff6",
+    "allocated_bytes": 219013120
+  },
+  "/Users/linotsai/Lino/Fiscal/build/release-v2.4.0-50/source": {
+    "sha256": "d88a6e922aef23541335c6d355b775b4c9da81c6fd4d87a4afde1ad9a25b0d8f",
+    "allocated_bytes": 5885952
+  },
+  "/Users/linotsai/Lino/Fiscal/build/release-v2.4.0-50/staging": {
+    "sha256": "e209f6e556d3bbe964c0275456f9f06572877e4ed709cae18b7482d0fe8ad582",
+    "allocated_bytes": 219013120
+  },
+  "/Users/linotsai/Lino/Fiscal/build/release-v2.4.0-50/artifacts": {
+    "sha256": "4dd68db2377dd0e9e010e7b21f3824bf831de12398dc07c41fe05a0c08d28be4",
+    "allocated_bytes": 51281920
+  }
+}

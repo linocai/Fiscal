@@ -1,0 +1,31 @@
+{
+  "status": "complete",
+  "deleted_paths_absent": true,
+  "protected_user_files_unchanged": 7,
+  "release50_allocated_bytes_after": 802816,
+  "release51_allocated_bytes_after": 52785152,
+  "planned_removal_allocated_bytes": 501080064,
+  "system_temporary_inventory": {
+    "roots": [
+      "/private/tmp",
+      "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T"
+    ],
+    "matching_project_entries": [
+      {
+        "path": "/var/folders/_v/s6hfcbrj5v3fyxk8jzwh7ft00000gn/T/FiscalV15Exports",
+        "bytes": 0,
+        "reason": "App-owned empty export runtime directory; retained"
+      }
+    ],
+    "scope": "Project-attributed names only; shared system caches excluded",
+    "removed_transfer_bundles": {
+      "verified_absent": [
+        "/private/tmp/fiscal-v240-build50-0bd45b25.bundle",
+        "/private/tmp/fiscal-v240-build51-b006ed90.bundle"
+      ],
+      "allocated_bytes_removed": 137306112,
+      "evidence": "backend-production.md"
+    }
+  },
+  "remote_cleanup": "complete; see backend-production.md"
+}

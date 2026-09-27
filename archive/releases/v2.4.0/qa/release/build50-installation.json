@@ -1,0 +1,11 @@
+{
+  "installed": "/Applications/Fiscal.app",
+  "version": "2.4.0",
+  "build": "50",
+  "mac_executable_sha256": "b72d4a25828f9f565748d52f836449be20b46f9b0bb59a078aac572d780b898b",
+  "backup": "/Applications/Fiscal-v2.3.0-build48-backup-20260927-120318.app",
+  "backup_executable_sha256": "f86cc3dfbe649d71fd9a6d11e204bc5d1ce378e609b9b9f9e670332816e98559",
+  "ios_delivery": "Xcode device build ready; no IPA",
+  "installed_at": "2026-09-27T12:03:19.412609+08:00",
+  "launch_and_live_read": "pending"
+}

@@ -1,0 +1,6 @@
+{
+  "source_commit": "b006ed906fb150a996499bdcbecd82063ee71723",
+  "exported_app_files_verified": 172,
+  "reviewed_backend_files_sha256": "680042b5604ce02da2b30705b68da55aa540199a77d1cbc9686989e7de98ce01",
+  "review_result": "No findings; final full PG and deployed verification pending"
+}

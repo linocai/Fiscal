@@ -1,0 +1,18 @@
+{
+  "installed": "/Applications/Fiscal.app",
+  "version": "2.4.0",
+  "build": "51",
+  "mac_executable_sha256": "8728af8bacedb3aa7bf5bdfa87324ed856cad08f5980c29f172cfb3b8fb56070",
+  "backup": "/Applications/Fiscal-v2.4.0-build50-backup-20260927-122541.app",
+  "backup_executable_sha256": "b72d4a25828f9f565748d52f836449be20b46f9b0bb59a078aac572d780b898b",
+  "ios_delivery": "Xcode device build ready; no IPA",
+  "installed_at": "2026-09-27T12:25:42.334491+08:00",
+  "launch_and_live_read": "passed",
+  "process_count": 1,
+  "ui_checked": [
+    "overview 30-day forecast and current monthly totals loaded",
+    "Financial Analysis current month overview loaded",
+    "returned to overview"
+  ],
+  "production_postflight": "qa/production-postflight.json"
+}
