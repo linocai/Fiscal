@@ -32,6 +32,9 @@
       <li>Agent 用 <code>Authorization: Session &lt;session_token&gt;</code> 调用 MCP 工具。会话空闲 2 小时失效，最长 8 小时；验证码每 30 秒变化不会中断已建立的会话。</li>
       <li>读取、分析和暂存账单可以直接完成。真正提交到账本前，Agent 为本次请求创建 <code>operation</code> challenge，用户再次输入一次验证码；该写入授权只允许匹配的请求使用一次，有效 30 分钟。</li>
     </ol>
+    <p>写入授权的 <code>request_digest</code> 是提交工具参数的稳定 SHA-256：对去掉
+      <code>confirmation_token</code> 后的参数对象，与工具名一起组成
+      <code>{"arguments":&lt;args&gt;,"tool":"fiscal_commit_import_batch"}</code>，使用 UTF-8、按键名排序、无空格的 JSON 序列化后计算 SHA-256。</p>
   </div>
   <div class="card">
     <h2>Agent 应遵守的边界</h2>
