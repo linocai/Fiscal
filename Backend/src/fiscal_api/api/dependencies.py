@@ -17,6 +17,7 @@ from fiscal_api.services.cash_flow import CashFlowService
 from fiscal_api.services.categories import CategoryService
 from fiscal_api.services.credit import CreditService
 from fiscal_api.services.credit_payoffs import CreditPayoffService
+from fiscal_api.services.import_batches import ImportBatchService
 from fiscal_api.services.installments import InstallmentService
 from fiscal_api.services.merchant_mapping import MerchantMappingService
 from fiscal_api.services.migrations import MigrationRunService
@@ -108,6 +109,13 @@ def get_installment_service(session: SessionDependency) -> InstallmentService:
     return InstallmentService(session)
 
 
+def get_import_batch_service(
+    session: SessionDependency,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ImportBatchService:
+    return ImportBatchService(session, settings)
+
+
 def get_reimbursement_service(session: SessionDependency) -> ReimbursementService:
     return ReimbursementService(session)
 
@@ -162,6 +170,7 @@ TransactionHistoryServiceDependency = Annotated[
 ]
 CreditServiceDependency = Annotated[CreditService, Depends(get_credit_service)]
 InstallmentServiceDependency = Annotated[InstallmentService, Depends(get_installment_service)]
+ImportBatchServiceDependency = Annotated[ImportBatchService, Depends(get_import_batch_service)]
 ReimbursementServiceDependency = Annotated[ReimbursementService, Depends(get_reimbursement_service)]
 ReportingServiceDependency = Annotated[ReportingService, Depends(get_reporting_service)]
 MigrationRunServiceDependency = Annotated[MigrationRunService, Depends(get_migration_run_service)]

@@ -45,6 +45,40 @@ class TransactionRepository:
             .options(selectinload(LedgerTransaction.postings))
         )
 
+    async def possible_duplicate(
+        self,
+        *,
+        kind: TransactionKind,
+        amount_minor: int,
+        occurred_at: datetime,
+        title: str,
+        account_id: UUID | None,
+        category_id: UUID | None,
+    ) -> LedgerTransaction | None:
+        """Find a live ledger row with the same user-visible import identity."""
+        posting_filters = [func.abs(Posting.amount_minor) == amount_minor]
+        if account_id is not None:
+            posting_filters.append(Posting.account_id == account_id)
+        statement = (
+            select(LedgerTransaction)
+            .where(
+                LedgerTransaction.kind == kind.value,
+                LedgerTransaction.occurred_at == occurred_at,
+                LedgerTransaction.title == title,
+                LedgerTransaction.category_id == category_id,
+                LedgerTransaction.voided_at.is_(None),
+                exists(
+                    select(Posting.id).where(
+                        Posting.transaction_id == LedgerTransaction.id,
+                        *posting_filters,
+                    )
+                ),
+            )
+            .order_by(LedgerTransaction.id)
+            .limit(1)
+        )
+        return await self.session.scalar(statement)
+
     async def created_snapshot(self, transaction_id: UUID) -> dict[str, object] | None:
         return await self.session.scalar(
             select(TransactionRevision.snapshot).where(

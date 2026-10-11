@@ -118,6 +118,15 @@ class TransactionService:
             commit=commit,
         )
 
+    async def validate_draft(self, draft: TransactionDraft) -> None:
+        """Validate a draft's references and economic constraints without posting it.
+
+        Import workflows use a savepoint around this method so any lazily-created
+        credit cycle is rolled back before the batch is committed.
+        """
+        await self._validated_postings(draft)
+        await self._check_repayment_amount(draft)
+
     async def create_legacy_import(
         self,
         draft: TransactionDraft,

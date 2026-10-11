@@ -33,6 +33,7 @@ from fiscal_api.db.models.credit import (
     CreditScheduleChangePreview,
 )
 from fiscal_api.db.models.credit_payoff import CreditPayoffLink, CreditPayoffOperation
+from fiscal_api.db.models.import_batch import ImportBatch, ImportBatchSource, ImportBatchStatus
 from fiscal_api.db.models.installment import (
     InstallmentLedgerLink,
     InstallmentLedgerRole,
@@ -113,6 +114,9 @@ __all__ = [
     "CreditScheduleChangeOperation",
     "CreditScheduleChangePreview",
     "DataRevision",
+    "ImportBatch",
+    "ImportBatchSource",
+    "ImportBatchStatus",
     "InstallmentLedgerLink",
     "InstallmentLedgerRole",
     "InstallmentOperation",

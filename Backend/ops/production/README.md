@@ -37,7 +37,33 @@ The default is exactly uv `0.11.16` at `/opt/fiscal/tools/uv/bin/uv`. Installati
 
 The host bootstrap installs `production.env.example` only when `/etc/fiscal/fiscal.env` does not exist; reruns preserve it. Replace every `CHANGE_ME` value directly on the server. Generate the independent token pepper with at least 32 random bytes, for example `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'`. Generate a different application database password of at least 32 characters and put the percent-encoded value in `FISCAL_DATABASE_URL`.
 
-Do not paste secrets into Git, shell arguments, deployment manifests, support logs or screenshots. Never print the completed environment file.
+Do not paste secrets into Git, shell arguments, deployment manifests, support logs or screenshots. Never print the completed environment file. Add a separate random `FISCAL_IMPORT_CONFIRMATION_SECRET`; keep it unset or short while only read/stage access is being trialled. The API deliberately fails closed for batch commit until this value has at least 32 bytes.
+
+## Agent-first service boundary
+
+The native app remains frozen at Build51. The additive 0043 migration creates
+the import-batch boundary used by the independent MCP process and Web console;
+it does not replace the ledger tables or add a second transaction store.
+
+The deployment handoff is intentionally split:
+
+1. Deploy `Backend/` through the existing backup → migration → readiness path.
+2. Confirm the API is serving `/api/v1` and that `FISCAL_IMPORT_CONFIRMATION_SECRET`
+   is present only if trusted commit access is planned.
+3. Build `Web/` and serve its static `dist/` files. Replace the untracked
+   `runtime-config.js` on the static host with the API/MCP addresses and safe
+   scopes from `Web/public/runtime-config.example.js`; never put a key in it.
+4. On the Agent host, run `MCP/scripts/preflight.py` against an untracked copy
+   of `MCP/ops/fiscal-mcp.env.example`, then start the stdio process for the
+   Agent. Grant `commit:imports` only after the operator has completed a real
+   bill review and wants that write capability.
+
+These files prepare the handoff; they do not prove a migration, secret, key,
+DNS/TLS, CORS, or real bill flow. Those remain operator acceptance steps. If a
+batch change needs to be backed out, use the existing application rollback only
+when the target release has the same Alembic head. Never downgrade 0043 over
+live ledger data; restore the verified pre-migration database according to the
+existing recovery procedure instead.
 
 ### 3. Bootstrap the dedicated PostgreSQL database and roles
 

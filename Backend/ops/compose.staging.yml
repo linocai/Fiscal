@@ -26,6 +26,8 @@ services:
     environment:
       FISCAL_ENVIRONMENT: staging
       FISCAL_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-fiscal}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in Backend/ops/staging.env}@postgres:5432/${POSTGRES_DB:-fiscal}
+      FISCAL_TOKEN_PEPPER: ${FISCAL_TOKEN_PEPPER:?set FISCAL_TOKEN_PEPPER in Backend/ops/staging.env}
+      FISCAL_IMPORT_CONFIRMATION_SECRET: ${FISCAL_IMPORT_CONFIRMATION_SECRET:?set FISCAL_IMPORT_CONFIRMATION_SECRET in Backend/ops/staging.env}
     depends_on:
       postgres:
         condition: service_healthy

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://fiscal:fiscal@localhost:5432/fiscal"
     token_pepper: SecretStr | None = None
     token_pepper_version: int = 1
+    import_confirmation_secret: SecretStr | None = None
     passphrase_kdf_iterations: int = 600_000
     rate_limit_read_per_minute: int = 120
     rate_limit_write_per_minute: int = 30

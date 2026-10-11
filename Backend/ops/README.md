@@ -48,6 +48,12 @@ docker compose --env-file Backend/ops/staging.env -f Backend/ops/compose.staging
 
 Caddy obtains and renews HTTPS certificates after DNS and ports are correct. Only Caddy publishes host ports; the API and PostgreSQL stay on the private Compose network.
 
+The staging API now receives `FISCAL_TOKEN_PEPPER` and
+`FISCAL_IMPORT_CONFIRMATION_SECRET` from the untracked environment file. The
+second secret may be a fresh random value while only read/stage scopes are
+used; it must be shared with the MCP process before enabling `commit:imports`.
+The MCP boundary check is documented in [`../../MCP/scripts/README.md`](../../MCP/scripts/README.md).
+
 Verify the public liveness endpoint and the protected status endpoint using the paths documented by the backend:
 
 ```sh

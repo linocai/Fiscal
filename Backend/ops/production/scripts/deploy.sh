@@ -108,7 +108,7 @@ log "running release verification gates without production database access"
     die "uv.lock contains direct PyPI sources; regenerate it against the approved mirror"
   fi
   unset FISCAL_DATABASE_URL FISCAL_TEST_DATABASE_URL
-  unset FISCAL_TOKEN_PEPPER FISCAL_AI_PROVIDER_API_KEY
+  unset FISCAL_TOKEN_PEPPER FISCAL_IMPORT_CONFIRMATION_SECRET FISCAL_AI_PROVIDER_API_KEY
   export UV_DEFAULT_INDEX="${FISCAL_PYPI_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}"
   export UV_HTTP_TIMEOUT="${FISCAL_UV_HTTP_TIMEOUT_SECONDS:-60}"
   "$uv_bin" venv --relocatable .venv
