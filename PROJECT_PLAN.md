@@ -42,6 +42,7 @@
 - 阶段四远程 MCP 工程已实现并部署到 HZ：新增 JSON-RPC HTTP/ASGI transport、Bearer 注入、session header、CORS 白名单、请求体上限、健康检查；HZ 上 systemd active、loopback 8050、DNS、Let's Encrypt、Nginx HTTPS 和 NB 只读 smoke 均通过；未开放 `commit:imports`。
 - 网页控制台已部署到 HZ `/opt/fiscal-web/current`，`console.fiscal.linotsai.top` DNS、Let's Encrypt、Nginx HTTPS 和同源 `/api/v1` 只读代理 smoke 均通过。
 - 网页默认 fetch 上下文热修已部署到 `/opt/fiscal-web/releases/20261011-web-4bb08594`；截图中的 `Illegal invocation` 已由 HTTP/MCP adapter 共同修复，公网页面与鉴权接口 smoke 通过。
+- Web 凭证入口已补强：HTTP 页面可接受 `fiscal_ak_v1_...` 个人 key 或 Fiscal 访问口令（同源 `/auth/session` 换取内存 key），自动去除 `Bearer` 前缀；MCP key 仍与网页 REST 凭证隔离。新包 `/opt/fiscal-web/releases/20261011-web-935c2b3b` smoke 通过。
 - Backend 0043 已部署到 NB：生产 release `/opt/fiscal/releases/53906818483e`，Alembic `20261010_0043`，迁移前后备份、171 项测试/272 项 PostgreSQL 缺失跳过、readiness、重启及 `/import-batches` 只读 smoke 均通过；没有真实批次写入。
 - 工作区原有用户未提交的 `AGENTS.md` 与 scheme 改动已保留；本轮只新增独立目录和计划记录。
 
@@ -91,3 +92,4 @@
 - 2026-10-11：Web 控制台生产静态包、DNS、Let's Encrypt、Nginx HTTPS 与同源只读 API 代理部署完成；[Web 记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)。
 - 2026-10-11：Backend 0043 生产迁移、备份、重启及网页批次接口修复完成；[后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)。
 - 2026-10-11：Web `fetch` 上下文热修重新构建并部署，公网鉴权与批次/账本只读 smoke 通过；[Web 记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)。
+- 2026-10-11：Web 凭证入口修正并重新部署，支持访问口令换取页面内存 key，公网认证与批次 smoke 通过；[Web 记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)。

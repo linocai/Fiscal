@@ -57,6 +57,11 @@ type JsonObject = Record<string, unknown>;
 
 const boundFetch: typeof fetch = (input, init) => globalThis.fetch(input, init);
 
+const normalizeCredentialInput = (value: string): string =>
+  value.trim().replace(/^Bearer\s+/i, "").replace(/^([\"'])(.*)\1$/, "$2").trim();
+
+const looksLikeAccessKey = (value: string): boolean => value.startsWith("fiscal_ak_v1_");
+
 const isObject = (value: unknown): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -271,14 +276,15 @@ const toBase64 = (buffer: ArrayBuffer): string => {
 
 class HttpRequestClient {
   readonly baseUrl: string;
-  readonly apiKey?: string;
+  private apiKey?: string;
   readonly batchPath?: string;
   readonly scopes: AccessScope[];
   private readonly fetchImpl: typeof fetch;
+  private passphraseAttempted = false;
 
   constructor(options: HttpFiscalAdapterOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
-    this.apiKey = options.apiKey;
+    this.apiKey = options.apiKey ? normalizeCredentialInput(options.apiKey) : undefined;
     this.batchPath = options.batchPath?.replace(/\/$/, "");
     this.scopes = options.scopes ?? [];
     this.fetchImpl = options.fetchImpl ?? boundFetch;
@@ -288,11 +294,32 @@ class HttpRequestClient {
     return this.apiKey ? { Accept: "application/json", Authorization: `Bearer ${this.apiKey}` } : { Accept: "application/json" };
   }
 
-  async json(path: string, init: RequestInit = {}): Promise<{ body: unknown; headers: Headers }> {
-    const response = await this.fetchImpl(`${this.baseUrl}/${path.replace(/^\//, "")}`, {
+  private async request(path: string, init: RequestInit = {}): Promise<Response> {
+    const url = `${this.baseUrl}/${path.replace(/^\//, "")}`;
+    const request = () => this.fetchImpl(url, {
       ...init,
       headers: { ...this.headers(), ...(init.headers ?? {}) },
     });
+    let response = await request();
+    if (response.status !== 401 || !this.apiKey || looksLikeAccessKey(this.apiKey) || this.passphraseAttempted) return response;
+
+    this.passphraseAttempted = true;
+    const sessionResponse = await this.fetchImpl(`${this.baseUrl}/auth/session`, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ passphrase: this.apiKey }),
+    });
+    if (!sessionResponse.ok) return response;
+    const sessionBody = (await sessionResponse.json()) as unknown;
+    const minted = isObject(sessionBody) ? stringValue(sessionBody.access_key) : undefined;
+    if (!minted) return response;
+    this.apiKey = minted;
+    response = await request();
+    return response;
+  }
+
+  async json(path: string, init: RequestInit = {}): Promise<{ body: unknown; headers: Headers }> {
+    const response = await this.request(path, init);
     const text = await response.text();
     let body: unknown = undefined;
     if (text) {
@@ -312,7 +339,7 @@ class HttpRequestClient {
   }
 
   async csv(path: string): Promise<{ bytes: ArrayBuffer; headers: Headers }> {
-    const response = await this.fetchImpl(`${this.baseUrl}/${path.replace(/^\//, "")}`, { headers: this.headers() });
+    const response = await this.request(path);
     if (!response.ok) throw new FiscalApiError("backend_error", `Fiscal export failed (${response.status}).`, response.status);
     return { bytes: await response.arrayBuffer(), headers: response.headers };
   }

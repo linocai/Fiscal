@@ -52,6 +52,9 @@ MCP 模式还需要 `endpoint`，批次列表可按现有契约配置
 来自不入库的运行时注入，不能写进静态文件、Vite `VITE_*` 变量、URL、
 localStorage 或 cookie。底层 adapter 仍可单独构造：
 
+HTTP 模式的页面提示也接受 Fiscal 访问口令，并通过 `/auth/session` 换取当前页面内存中的
+API key；MCP key 不能用于网页 REST 路由，粘贴 `Bearer ...` 时页面会自动去掉前缀。
+
 ```ts
 import { createHttpAdapter, createMcpHttpAdapter } from "./src/api/adapter";
 

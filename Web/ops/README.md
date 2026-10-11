@@ -16,8 +16,10 @@ certificate, and the Nginx site in `nginx/fiscal-web.conf`. The production
 runtime config is `runtime-config.production.js`; copy it to the deployed
 `dist/runtime-config.js` after building. It is deliberately secret-free.
 
-The console prompts for a Fiscal access key in the current page session. Start
-with `read:reports,read:ledger,stage:imports,export:reports`; the current MCP
-key is suitable for Agent requests, while the Web console uses the user's
-Fiscal API access key for the proxied REST routes. The page's confirmation
-button still requires the backend's one-time confirmation credential.
+The console prompts for a Fiscal API access key in the current page session.
+For HTTP mode it also accepts the personal Fiscal access passphrase and mints a
+session key through `/auth/session`; the passphrase and minted key remain in
+page memory only. Do not enter the MCP key here: it is for Agent
+requests, while the Web console uses the user's Fiscal API access key for the
+proxied REST routes. The page's confirmation button still requires the
+backend's one-time confirmation credential.

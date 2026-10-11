@@ -34,7 +34,13 @@
 - 新静态包已部署到 HZ `/opt/fiscal-web/releases/20261011-web-4bb08594`，`/opt/fiscal-web/current` 已原子切换；包 SHA-256 为 `4bb0859497aab5fe5dd3b36a1d22129abd1bc1b8345e1dcd78af6cfb79a48094`。
 - 公网 smoke：首页 200、`runtime-config.js` 200 且无 secret、未认证 auth 401；使用 Keychain access key 的 auth/status、import-batches 和 transactions 均 200。
 
+## 2026-10-11 凭证入口修正
+
+- 用户刷新后已越过前端 `fetch` 错误，但页面显示 `The access key is invalid or has been revoked`。当前有效 Keychain 个人 key 访问同一公网 `/auth/status` 返回 200，故后端、Nginx 和数据库连接正常；截图中的输入凭证不是当前有效的个人 REST key，或使用了 MCP key/旧 key/访问口令。
+- HTTP Web adapter 现在会规范化可选的 `Bearer ` 前缀；输入非 `fiscal_ak_v1_...` 形式的凭证时，首次 401 会尝试通过同源 `/auth/session` 将 Fiscal 访问口令换成本页内存中的个人 API key。MCP key 仍不会用于 REST 路由。
+- 新静态包已部署到 HZ `/opt/fiscal-web/releases/20261011-web-935c2b3b`，包 SHA-256 为 `935c2b3bd3628b317d175af1e3bcb3210c1c371b626893a9ede7ca77e3975034`；公网首页、运行时配置、认证和批次接口 smoke 通过。
+
 ## 边界
 
 - HZ 只保存静态 Web 发布物和 Nginx 配置，不保存账本数据库。
-- Web 使用 Fiscal API access key；MCP key 不能直接作为网页 REST access key。批次确认按钮仍要求后端一次性 confirmation credential，Agent MCP key 的 scopes 不因此扩大。
+- Web 使用 Fiscal API access key；HTTP 页面也可用访问口令换取本页内存中的 API key，MCP key 不能直接作为网页 REST access key。批次确认按钮仍要求后端一次性 confirmation credential，Agent MCP key 的 scopes 不因此扩大。

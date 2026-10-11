@@ -44,7 +44,10 @@ function ephemeralKey(runtime: FiscalRuntimeConfig): string {
     return injected;
   }
   if (sessionKey) return sessionKey;
-  const entered = window.prompt("请输入本次 Fiscal 会话密钥（只驻留当前页面内存）")?.trim();
+  const prompt = runtime.mode === "http"
+    ? "请输入 Fiscal API access key（fiscal_ak_v1_...）；也可输入 Fiscal 访问口令。不要输入 MCP key 或 Bearer 前缀。"
+    : "请输入本次 Fiscal MCP 会话密钥（只驻留当前页面内存）";
+  const entered = window.prompt(prompt)?.trim();
   if (!entered) throw new FiscalApiError("configuration_missing", "没有提供本次会话密钥。");
   sessionKey = entered;
   return entered;
