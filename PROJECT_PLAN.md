@@ -42,7 +42,7 @@
 - 阶段四远程 MCP 工程已实现并部署到 HZ：新增 JSON-RPC HTTP/ASGI transport、TOTP session/operation challenge、Bearer 兼容、session header、CORS 白名单、请求体上限、健康检查；HZ 上 systemd active、loopback 8050、DNS、Let's Encrypt、Nginx HTTPS、NB 连接和公网读写授权 smoke 均通过；未写入真实批次。
 - 网页控制台已部署到 HZ `/opt/fiscal-web/current`，`console.fiscal.linotsai.top` DNS、Let's Encrypt、Nginx HTTPS 和同源 `/api/v1` 只读代理 smoke 均通过。
 - 网页默认 fetch 上下文热修已部署到 `/opt/fiscal-web/releases/20261011-web-4bb08594`；截图中的 `Illegal invocation` 已由 HTTP/MCP adapter 共同修复，公网页面与鉴权接口 smoke 通过。
-- Web 凭证入口已补强：原控制台保留内存凭证兼容；新公开 `/agent/` 说明、`/agent/approve/` 批准页和 `/.well-known/fiscal-agent.json` 不包含密钥，面向 TOTP Session 流程。新包 `/opt/fiscal-web/releases/20261011-web-totp-d050198` smoke 通过。
+- Web 凭证入口已补强：原控制台保留内存凭证兼容；新公开 `/agent/` 说明、`/agent/approve/` 批准页和 `/.well-known/fiscal-agent.json` 不包含密钥，面向 TOTP Session 流程；discovery 已公开 request digest 规则。新包 `/opt/fiscal-web/releases/20261011-web-totp-c1bf49a` smoke 通过。
 - Backend 0043 已部署到 NB：生产 release `/opt/fiscal/releases/53906818483e`，Alembic `20261010_0043`，迁移前后备份、171 项测试/272 项 PostgreSQL 缺失跳过、readiness、重启及 `/import-batches` 只读 smoke 均通过；没有真实批次写入。
 - 工作区原有用户未提交的 `AGENTS.md` 与 scheme 改动已保留；本轮只新增独立目录和计划记录。
 
