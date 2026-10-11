@@ -48,7 +48,7 @@
 
 ## 当前 Plan
 
-阶段四远程 MCP、TOTP Session 与公共 Agent 接入见 [TOTP 执行记录](archive/plans/2026-10-11-fiscal-totp-session_execution.md)；网页上线见 [Web 控制台记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)；Backend 0043 生产部署见 [后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)；阶段三工程包见 [阶段三记录](archive/plans/2026-10-10-agent-first-mcp-web_phase3_execution.md)，阶段二施工见 [阶段二记录](archive/plans/2026-10-10-agent-first-mcp-web_phase2_execution.md)。下一步由用户扫码并完成真实账单暂存/校验/忽略/提交闭环；原生业务源码未修改。
+阶段四远程 MCP、TOTP Session 与公共 Agent 接入见 [TOTP 执行记录](archive/plans/2026-10-11-fiscal-totp-session_execution.md)；网页上线见 [Web 控制台记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)；Backend 0043 生产部署见 [后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)；阶段三工程包见 [阶段三记录](archive/plans/2026-10-10-agent-first-mcp-web_phase3_execution.md)，阶段二施工见 [阶段二记录](archive/plans/2026-10-10-agent-first-mcp-web_phase2_execution.md)。用户已完成 Authenticator 绑定，下一步只剩真实账单暂存/校验/忽略/提交闭环；原生业务源码未修改。
 
 ## Backlog
 

@@ -1,7 +1,7 @@
 # Fiscal TOTP Session 与公共 Agent 接入执行记录
 
 日期：2026-10-11（Asia/Shanghai）  
-状态：工程实现、HZ/NB 部署和公网 smoke 完成；真实账单写入仍由用户按新 SOP 验收。
+状态：工程实现、HZ/NB 部署、公网 smoke 和用户 Authenticator 绑定完成；真实账单写入仍由用户按新 SOP 验收。
 
 ## 目标与决定
 
