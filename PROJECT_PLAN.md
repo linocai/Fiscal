@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 更新：2026-10-11（Asia/Shanghai，Agent-first 改造）｜当前发布：**V2.4.0（51）**｜下一阶段目标版本：**待定**｜状态：**MCP、Web 与 Backend 0043 均已上线，待用户做真实业务验收**
+> 更新：2026-10-11（Asia/Shanghai，Agent-first 改造）｜当前发布：**V2.4.0（51）**｜下一阶段目标版本：**待定**｜状态：**原生 App 已冻结，项目进入暂停维护；MCP 生产链路保留**
 
 ## 概述
 
@@ -21,7 +21,7 @@
 - 后端和数据库继续作为唯一账本事实源；MCP 只调用 service 层，不直连数据库，不暴露任意 CRUD/SQL。网页不复制财务规则。
 - Agent 以导入批次工作；批次先生成待确认候选，校验、幂等、版本、撤销和审计沿用现有 AI proposal/ledger 语义，默认不自动直写。
 - 第一阶段网页只保留待确认、月度报告、账本搜索、设置/导出；Agent 密钥按读、暂存、提交、导出 scope 分层，支持撤销和轮换。
-- 原生 App 冻结期间保留源码、Build51 安装包和回退能力；连续完成真实月度闭环后再决定是否归档发布入口。
+- 原生 App 已冻结：源码、Build51 安装包和回退能力已归档；后续业务入口统一走远程 MCP。
 - 远程 MCP 网关只部署在 HZ，通过 HTTPS 转发到 NB 上唯一的 Fiscal API；HZ 不保存账本数据库、不开放 MCP loopback 端口。Agent 通过 Google Authenticator challenge 获取 Session，写入再用一次性 operation approval；个人 API key 仅作人工 break-glass。
 
 ## 当前状态
@@ -45,10 +45,11 @@
 - Web 凭证入口已补强：原控制台保留内存凭证兼容；新公开 `/agent/` 说明、`/agent/approve/` 批准页和 `/.well-known/fiscal-agent.json` 不包含密钥，面向 TOTP Session 流程；discovery 已公开 request digest 规则。新包 `/opt/fiscal-web/releases/20261011-web-totp-c1bf49a` smoke 通过。
 - Backend 0043 已部署到 NB：生产 release `/opt/fiscal/releases/53906818483e`，Alembic `20261010_0043`，迁移前后备份、171 项测试/272 项 PostgreSQL 缺失跳过、readiness、重启及 `/import-batches` 只读 smoke 均通过；没有真实批次写入。
 - 工作区原有用户未提交的 `AGENTS.md` 与 scheme 改动已保留；本轮只新增独立目录和计划记录。
+- 2026-10-11 完成 Fiscal 工程归档与云端收口：本地保留源码、Build51 发布物、Git 历史和脱敏部署快照；HZ 保留现役 MCP 与其 TOTP Web 支撑页，NB 保留现役 Backend 与 PostgreSQL；旧发布目录已清理，数据库及备份未触碰。详见 [暂停归档记录](archive/plans/2026-10-11-fiscal-pause_archive_execution.md)。
 
 ## 当前 Plan
 
-阶段四远程 MCP、TOTP Session 与公共 Agent 接入见 [TOTP 执行记录](archive/plans/2026-10-11-fiscal-totp-session_execution.md)；网页上线见 [Web 控制台记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)；Backend 0043 生产部署见 [后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)；阶段三工程包见 [阶段三记录](archive/plans/2026-10-10-agent-first-mcp-web_phase3_execution.md)，阶段二施工见 [阶段二记录](archive/plans/2026-10-10-agent-first-mcp-web_phase2_execution.md)。用户已完成 Authenticator 绑定，下一步只剩真实账单暂存/校验/忽略/提交闭环；原生业务源码未修改。
+阶段四远程 MCP、TOTP Session 与公共 Agent 接入见 [TOTP 执行记录](archive/plans/2026-10-11-fiscal-totp-session_execution.md)；网页上线见 [Web 控制台记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)；Backend 0043 生产部署见 [后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)；阶段三工程包见 [阶段三记录](archive/plans/2026-10-10-agent-first-mcp-web_phase3_execution.md)，阶段二施工见 [阶段二记录](archive/plans/2026-10-10-agent-first-mcp-web_phase2_execution.md)。用户已完成 Authenticator 绑定；原生业务源码冻结，后续只通过远程 MCP 完成账单暂存/校验/忽略/提交和分析。MCP 的 TOTP 批准页依赖现役 Web 静态支撑页，不能随意删除。
 
 ## Backlog
 
@@ -94,3 +95,4 @@
 - 2026-10-11：Web `fetch` 上下文热修重新构建并部署，公网鉴权与批次/账本只读 smoke 通过；[Web 记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)。
 - 2026-10-11：Web 凭证入口修正并重新部署，支持访问口令换取页面内存 key，公网认证与批次 smoke 通过；[Web 记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)。
 - 2026-10-11：简化认证方案落地；公共 Agent 说明/discovery、Google Authenticator Session、一次性写入授权及 HZ/NB 部署完成；[执行记录](archive/plans/2026-10-11-fiscal-totp-session_execution.md)。
+- 2026-10-11：原生 App 冻结、工程与发布物归档、HZ/NB 旧发布目录清理完成；数据库、备份和现役 MCP 链路保留；[暂停归档记录](archive/plans/2026-10-11-fiscal-pause_archive_execution.md)。

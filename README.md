@@ -1,6 +1,6 @@
 # Fiscal
 
-Fiscal is a private, single-user personal-finance application for iOS 27 and macOS 27. Its canonical CNY ledger covers accounts, credit cycles, installments, reimbursements, reports, AI/OCR capture, and manually reviewed PDF statement imports. The current source targets version `2.3.0 (46)`; iOS installation is performed through Xcode. Product scope and the current stop point live in [`PROJECT_PLAN.md`](PROJECT_PLAN.md); release manifests live under [`archive/releases/`](archive/releases/).
+Fiscal is a private, single-user personal-finance ledger. The native iOS/macOS client is frozen at Build 51; the active operating surface is the remote MCP gateway backed by the existing FastAPI/PostgreSQL ledger and its minimal TOTP approval/discovery Web pages. Product scope and the pause point live in [`PROJECT_PLAN.md`](PROJECT_PLAN.md); release and archive records live under [`archive/`](archive/).
 
 ## Repository map
 
@@ -12,7 +12,7 @@ Fiscal is a private, single-user personal-finance application for iOS 27 and mac
 
 ## Toolchain
 
-- Xcode 26.6
+- Xcode 27+
 - Swift 6.3.3 in Swift 6 language mode with complete strict concurrency
 - Minimum iOS 27 / macOS 27
 - Python 3.12 managed by `uv`
@@ -105,3 +105,7 @@ See [`Backend/ops/README.md`](Backend/ops/README.md) for local PostgreSQL and st
 - Prior signed release: [`archive/releases/v2.2.0/RELEASE_STATE.md`](archive/releases/v2.2.0/RELEASE_STATE.md) (build 40).
 - Prior full QA history: [`archive/releases/v1.5.0/qa/frontend/f5-results.md`](archive/releases/v1.5.0/qa/frontend/f5-results.md).
 - Historical contracts and QA: [`archive/README.md`](archive/README.md).
+
+## 当前运行方式
+
+原生 App 已冻结并作为历史发布物归档。日常账单导入、校验、提交和分析统一通过 `https://mcp.fiscal.linotsai.top/mcp` 完成；MCP 通过 TOTP Session 调用现有 Backend/PostgreSQL 账本。Web 站点只保留 Agent discovery、公开接入说明和 TOTP 批准页，是 MCP 鉴权链路的支撑页面。归档和云端收口边界见 [`archive/plans/2026-10-11-fiscal-pause_archive_execution.md`](archive/plans/2026-10-11-fiscal-pause_archive_execution.md)。

@@ -6,6 +6,7 @@ release evidence and design provenance.
 - `audits/` — completed code and frontend audits.
 - `design/` — source artwork and the original prototype handoff.
 - `plans/` — superseded or long-range planning records.
+- `plans/2026-10-11-fiscal-pause_archive_execution.md` — native App freeze, local archive and cloud release cleanup boundary.
 - `releases/v1.0-v1.3/` — historical contracts, QA results, and screenshots.
 - `releases/v1.4.0/` — the v1.4 release manifest and P24–P29 evidence.
 - `releases/v1.5.1/` — signed and locally installed v1.5.1 release evidence.
