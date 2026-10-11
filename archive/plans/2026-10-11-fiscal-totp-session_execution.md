@@ -25,7 +25,7 @@
 - `PYTHONPATH=MCP/src python3.14 -m unittest discover -s MCP/tests -v`：26 passed。
 - Web `npm ci --no-audit --no-fund && npm run build`：通过。
 - HZ preflight：production shape passed，HTTPS backend、TOTP、session scopes、TTL、approval URL、confirmation secret 均通过。
-- HZ release：`/opt/fiscal-mcp/releases/20261011-totp-d050198`；systemd active/enabled，loopback `8050`。
+- HZ release：`/opt/fiscal-mcp/releases/20261011-totp-429b342`；systemd active/enabled，loopback `8050`；owner break-glass commit path covered by regression test。
 - Web release：`/opt/fiscal-web/releases/20261011-web-totp-c1bf49a`；Nginx reload 后公开 Agent 页、批准页和 discovery 均 200，discovery 已包含 request digest 规则。
 - 公网 TOTP session smoke：health、initialize、tools/list（9 tools）、月报读取通过。
 - 公网 operation smoke：一次性 operation 授权被 MCP 接受，随后在不存在的 batch 上由后端返回业务错误；未产生真实账本写入。
