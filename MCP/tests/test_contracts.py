@@ -126,6 +126,27 @@ class FiscalMCPContractTests(unittest.TestCase):
             )
         self.assertEqual(caught.exception.code, "invalid_confirmation")
 
+    def test_owner_break_glass_key_can_commit_without_totp_operation(self) -> None:
+        break_glass = "owner-break-glass-key-0123456789"
+        self.registry.register(break_glass, list(Scope), label="owner-break-glass")
+        batch = self.invoke(
+            "fiscal_create_import_batch",
+            {
+                "source": "structured",
+                "original_content_sha256": "c" * 64,
+                "candidates": [self.candidate("break-glass-row")],
+                "idempotency_key": "import-break-glass",
+            },
+            key=break_glass,
+        )
+        self.invoke("fiscal_validate_import_batch", {"batch_id": batch["batch_id"], "expected_version": 1}, key=break_glass)
+        committed = self.invoke(
+            "fiscal_commit_import_batch",
+            {"batch_id": batch["batch_id"], "expected_version": 2, "idempotency_key": "commit-break-glass"},
+            key=break_glass,
+        )
+        self.assertEqual(committed["batch"]["status"], "committed")
+
     def test_candidate_contract_rejects_unknown_or_naive_datetime(self) -> None:
         base = {
             "source": "text",
