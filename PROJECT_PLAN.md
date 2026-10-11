@@ -1,11 +1,11 @@
 # Fiscal · PROJECT_PLAN
 
-> 更新：2026-09-27（Asia/Shanghai）｜目标：**V2.4.0（51）**｜状态：**Build51 一条龙发布完成**
+> 更新：2026-10-11（Asia/Shanghai，Agent-first 改造）｜当前发布：**V2.4.0（51）**｜下一阶段目标版本：**待定**｜状态：**MCP、Web 与 Backend 0043 均已上线，待用户做真实业务验收**
 
 ## 概述
 
-将 Fiscal 收敛为个人记账、账户与真实负债、近期资金安排。用户已确认完全取消 PDF 账单导入与多人报销分摊，明确保留手机截图 OCR，其余按本轮精简方案实施。
-Build49 完成精简，Build50 修复独立复审两项 P2；一条龙发布真实读取发现的旧快照兼容遗漏在 Build51 闭环。交付与恢复证据见 [发布记录](archive/releases/v2.4.0/RELEASE_STATE.md)，产品契约见 [执行记录](archive/releases/v2.4.0/execution.md)。
+将 Fiscal 从需要用户主动打开的原生记账 App 转为 **Fiscal Ledger Service + MCP Server + Web Console**：Agent 负责周期性批量整理账单，网页负责待确认、月底分析、查询和导出，后端与数据库继续作为唯一事实源。iOS/macOS 以 Build51 为冻结基线，不再新增产品功能。
+用户已确认完全取消 PDF 账单导入与多人报销分摊，明确保留手机截图 OCR，其余按本轮精简方案实施。Build49 完成精简，Build50 修复独立复审两项 P2；一条龙发布真实读取发现的旧快照兼容遗漏在 Build51 闭环。交付与恢复证据见 [发布记录](archive/releases/v2.4.0/RELEASE_STATE.md)，产品契约见 [执行记录](archive/releases/v2.4.0/execution.md)。本轮方案详见 [Agent-first 改造方案](archive/plans/2026-10-10-agent-first-mcp-web.md)。
 
 ## 稳定技术决定
 
@@ -18,6 +18,11 @@ Build49 完成精简，Build50 修复独立复审两项 P2；一条龙发布真�
 - 未来 30 天为上海今日至 +29 天，现金与储蓄加剩余流入减剩余流出；同 revision、不重复统计来源事项，未知日期/逾期/缺口单列。
 - 报表只留当前 v2 月/年报及 CSV，保留必要分析与交易追溯；取消 PDF 导出、分类拆分及独立复杂商户管理，保留分类合并、名称与识别映射。
 - 旧运行接口随 2.4 同步升级契约退役；历史枚举、金额事实、原始归档不篡改。迁移遇到不能无损转换的数据明确拒绝，不静默删账。
+- 后端和数据库继续作为唯一账本事实源；MCP 只调用 service 层，不直连数据库，不暴露任意 CRUD/SQL。网页不复制财务规则。
+- Agent 以导入批次工作；批次先生成待确认候选，校验、幂等、版本、撤销和审计沿用现有 AI proposal/ledger 语义，默认不自动直写。
+- 第一阶段网页只保留待确认、月度报告、账本搜索、设置/导出；Agent 密钥按读、暂存、提交、导出 scope 分层，支持撤销和轮换。
+- 原生 App 冻结期间保留源码、Build51 安装包和回退能力；连续完成真实月度闭环后再决定是否归档发布入口。
+- 远程 MCP 网关只部署在 HZ，通过 HTTPS 转发到 NB 上唯一的 Fiscal API；HZ 不保存账本数据库、不开放 MCP loopback 端口，Agent 通过 Bearer Key 和 scope 接入。
 
 ## 当前状态
 
@@ -30,14 +35,40 @@ Build49 完成精简，Build50 修复独立复审两项 P2；一条龙发布真�
 - iOS 签名设备构建已就绪，由用户通过 Xcode 安装；未生成 IPA。最新设备支持审计两台现用手机均通过，`pending_devices=[]`。
 - 本地构建临时副本和被替代Build50 ZIP已回收，测试资源check complete；保留正式Build51包/符号、iOS构建、回退App、生产恢复集和最终证据。远端暂存及本地传输bundle均已精确回收并核验。原有AGENTS与六份scheme 7/7不变。
 - 精简后的正式源码统计见 [Build50统计](archive/releases/v2.4.0/qa/build50-metrics.json)：净少82文件、19,981物理行，OpenAPI188→145；Build51仅追加旧快照兼容与回归，不扩大功能。
+- 第一阶段独立骨架已建立：新增 `MCP/`（9 个工具契约、stdio JSON-RPC、scope/API key、确认凭证、HTTP/Mock adapter、审计和测试）与 `Web/`（待确认、月报、账本、设置/导出四页及 mock adapter）。
+- 第二阶段本地实现已完成：后端新增 `import_batches` 持久化、幂等/版本校验、隔离校验、原子提交/忽略路由及 0043 迁移；MCP HTTP adapter 和 Web HTTP/MCP live adapter 已接入，原生 App 业务源码未修改。
+- 阶段二验证已在一次性本地 PostgreSQL 库完成迁移与真实闭环：创建 → 校验 → HMAC 确认提交 → 重放只返回同一结果；生产只读/暂存边界见 0043 部署记录，未写入真实账单。
+- 阶段三工程收尾已完成：staging/production 环境示例接入 token pepper 与批次确认密钥，MCP 提供无网络 preflight 和 stdio 运行模板，Web 静态包支持宿主覆盖 `runtime-config.js` 选择 HTTP/MCP 并保持会话密钥只在内存；回滚/迁移/人工验收边界写入运维文档。
+- 阶段四远程 MCP 工程已实现并部署到 HZ：新增 JSON-RPC HTTP/ASGI transport、Bearer 注入、session header、CORS 白名单、请求体上限、健康检查；HZ 上 systemd active、loopback 8050、DNS、Let's Encrypt、Nginx HTTPS 和 NB 只读 smoke 均通过；未开放 `commit:imports`。
+- 网页控制台已部署到 HZ `/opt/fiscal-web/current`，`console.fiscal.linotsai.top` DNS、Let's Encrypt、Nginx HTTPS 和同源 `/api/v1` 只读代理 smoke 均通过。
+- Backend 0043 已部署到 NB：生产 release `/opt/fiscal/releases/53906818483e`，Alembic `20261010_0043`，迁移前后备份、171 项测试/272 项 PostgreSQL 缺失跳过、readiness、重启及 `/import-batches` 只读 smoke 均通过；没有真实批次写入。
+- 工作区原有用户未提交的 `AGENTS.md` 与 scheme 改动已保留；本轮只新增独立目录和计划记录。
 
 ## 当前 Plan
 
-本轮无未完成施工；发布功能、备份恢复、签名、Mac换装及本地/远端资源核验全部通过。iOS最终设备安装由用户完成。
+阶段四当前施工与验证见 [远程 MCP 记录](archive/plans/2026-10-11-agent-first-remote-mcp_execution.md)；网页上线见 [Web 控制台记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)；Backend 0043 生产部署见 [后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)；阶段三工程包见 [阶段三记录](archive/plans/2026-10-10-agent-first-mcp-web_phase3_execution.md)，阶段二施工见 [阶段二记录](archive/plans/2026-10-10-agent-first-mcp-web_phase2_execution.md)。下一步由用户从网页和多个 Agent 完成真实账单暂存/校验/忽略闭环；当前未启用 `commit:imports`、未修改原生业务源码。
 
 ## Backlog
 
-真机选图、通知横幅及快捷指令交互仍未新增验证；iOS 最终安装由用户通过 Xcode 完成。
+### Agent-first 改造（当前优先）
+
+- **批次导入契约**：导入批次及其状态、版本、指纹、校验错误、交易回执和审计已落地；正式账本仍由既有 TransactionService 写入，不建立第二套账本。
+- **MCP 层**：先提供月报/年报/账本搜索/导出，再提供创建、查看、校验、忽略和受控提交批次的工具；密钥按 scope 管理。
+- **网页控制台**：实现待确认、月度报告、账本搜索、设置/导出四个入口；先只读，再接入整批确认。
+- **第一阶段验收**：Mock、隔离后端和生产 `/import-batches` 只读入口已覆盖契约边界；真实一周批次、生产月报/年报/CSV 一致性与密钥轮换留待用户验收。
+- **非目标**：不删除原生 App、不删除历史数据、不开放任意 CRUD/SQL、不做多用户和新的复杂财务规则。
+
+其中独立契约、MCP stdio 入口、Mock 批次生命周期、真实后端批次写入与 Web live adapter 已完成；MCP、Web 与 Backend 0043 已生产部署并通过公网只读 smoke，真实账单月度闭环和 `commit:imports` 开放仍未执行。
+
+### 原生端冻结期间暂缓
+
+2026-10-02 用户反馈，以下问题已在 Mac 现场核实，但随原生端冻结暂不施工；若网页/Agent 试运行后仍有真实需求，再单独立项。
+
+- **计划收支入口可发现性**：当前“管理现金流计划”藏在交易流水最底部。提供稳定、明显的入口，不随流水长度或月份筛选难以找到；用户无需先滚完整个交易列表。
+- **跨月未完成计划持续可见**：逾期计划仍在管理页，但从总览/时间线的未来日期范围消失，“未来事项”又混放逾期记录。明确区分“逾期待处理”和未来计划，未完成事项跨月后仍可发现、打开与处理；不因日期过去自动完成或取消，也不把逾期金额直接混入未来30天预测。
+- **关联已有账目的操作直达**：目前需“查看确认影响 → 确认本次 → 兑现入账 → 关联已有账目”，用户难以找到。让计划详情明确提供关联已有收入/支出的入口，必要状态确认在同一流程解释清楚；关联后更新计划完成进度，不重复创建交易或改变既有金额，部分完成保留剩余计划。
+- **未来还款事项直达还款**：信用账单详情目前仅提示“请到还款页面处理”，缺少跳转。点击未来还款事项可进入对应信用账户/账期的还款流程，允许按实际还款日期提前登记，保留金额、付款账户及影响预览校验；操作后刷新未来待还金额。区分“还本期/部分还款”与“整个账户及未来分期提前结清”，后者进入既有全额结清流程，不把未来分期当作普通现金流直接入账。
+- 真机选图、通知横幅及快捷指令交互仍未新增验证；iOS 最终安装由用户通过 Xcode 完成。
 
 ## 里程碑索引
 
@@ -53,3 +84,8 @@ Build49 完成精简，Build50 修复独立复审两项 P2；一条龙发布真�
 - 2026-09-27：V2.4.0（50）独立复审两项 P2 修复、复查及资源收尾完成，未发布；[验证记录](archive/releases/v2.4.0/qa/build50.md)。
 
 - 2026-09-27：V2.4.0（51）旧历史快照兼容修复、441项回归、独立复查、后端升级与双端签名交付；[发布记录](archive/releases/v2.4.0/RELEASE_STATE.md)。
+- 2026-10-10：Agent-first 阶段一、阶段二本地实现；新增 MCP/Web 独立层、原子导入批次与 0043 迁移，未部署；[阶段二记录](archive/plans/2026-10-10-agent-first-mcp-web_phase2_execution.md)。
+- 2026-10-10：Agent-first 阶段三工程收尾；完成环境注入、MCP preflight、Web runtime 配置和部署/回滚交接，未部署；[阶段三记录](archive/plans/2026-10-10-agent-first-mcp-web_phase3_execution.md)。
+- 2026-10-11：Agent-first 阶段四远程 MCP 工程实现、HZ systemd/Nginx/TLS 部署及公网只读 smoke 完成；[远程 MCP 记录](archive/plans/2026-10-11-agent-first-remote-mcp_execution.md)。
+- 2026-10-11：Web 控制台生产静态包、DNS、Let's Encrypt、Nginx HTTPS 与同源只读 API 代理部署完成；[Web 记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)。
+- 2026-10-11：Backend 0043 生产迁移、备份、重启及网页批次接口修复完成；[后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)。
