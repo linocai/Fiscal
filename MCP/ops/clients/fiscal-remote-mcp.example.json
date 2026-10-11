@@ -1,0 +1,6 @@
+{
+  "name": "fiscal",
+  "transport": "streamable-http",
+  "url": "https://mcp.fiscal.linotsai.top/mcp",
+  "authorization": "Bearer ${FISCAL_MCP_API_KEY}"
+}

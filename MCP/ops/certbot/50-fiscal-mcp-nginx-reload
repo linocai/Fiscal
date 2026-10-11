@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+case "${RENEWED_LINEAGE:-}" in
+  /etc/letsencrypt/live/mcp.fiscal.linotsai.top)
+    systemctl reload nginx
+    ;;
+esac

@@ -1,0 +1,446 @@
+"""Backend adapters used by the MCP service.
+
+The HTTP adapter talks to existing Fiscal routes for read/export operations.
+Batch endpoints are configurable because Build51 does not yet expose a batch
+resource.  Until that backend contract exists, the mock adapter provides a
+complete deterministic fixture for local MCP/Web work.
+"""
+
+from __future__ import annotations
+
+import copy
+import hashlib
+import json
+import uuid
+from dataclasses import dataclass, field
+from typing import Any, Mapping, Protocol
+
+try:  # httpx is the only runtime dependency beyond Python's stdlib.
+    import httpx as _httpx
+except ImportError:  # pragma: no cover - exercised only in dependency-less installs
+    httpx: Any = None
+else:
+    httpx: Any = _httpx
+
+from .contracts import BatchStatus
+from .errors import FiscalMCPError
+
+
+class FiscalBackendAdapter(Protocol):
+    async def get_monthly_report(self, period: str) -> dict[str, Any]: ...
+
+    async def get_yearly_report(self, year: str) -> dict[str, Any]: ...
+
+    async def search_ledger(self, filters: Mapping[str, Any]) -> dict[str, Any]: ...
+
+    async def list_import_batches(self, filters: Mapping[str, Any] | None = None) -> dict[str, Any]: ...
+
+    async def create_import_batch(self, payload: Mapping[str, Any]) -> dict[str, Any]: ...
+
+    async def get_import_batch(self, batch_id: str) -> dict[str, Any]: ...
+
+    async def validate_import_batch(self, batch_id: str, expected_version: int) -> dict[str, Any]: ...
+
+    async def commit_import_batch(
+        self, batch_id: str, expected_version: int, confirmation_token: str, idempotency_key: str
+    ) -> dict[str, Any]: ...
+
+    async def ignore_import_batch(
+        self, batch_id: str, expected_version: int, reason: str | None
+    ) -> dict[str, Any]: ...
+
+    async def export_report(
+        self, period_kind: str, period: str, export_format: str
+    ) -> dict[str, Any]: ...
+
+
+class BackendAdapterError(FiscalMCPError):
+    """A safe error returned when the configured backend cannot be reached."""
+
+
+class HttpFiscalBackendAdapter:
+    """Translate stable MCP calls to existing Fiscal HTTP routes.
+
+    ``batch_path`` is intentionally opt-in.  Build51 has proposal endpoints,
+    but no atomic import-batch endpoint.  Calling a proposal endpoint once per
+    row would break batch idempotency, so this adapter fails clearly until a
+    backend batch route is available.
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        backend_token: str | None = None,
+        timeout_seconds: float = 15.0,
+        batch_path: str | None = None,
+        client: Any | None = None,
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.backend_token = backend_token
+        self.batch_path = batch_path
+        self._client = client
+        self.timeout_seconds = timeout_seconds
+
+    @staticmethod
+    def _revision_from(value: Any) -> int | None:
+        """Read a revision only when the backend explicitly supplies one.
+
+        Build51 responses use ``meta.data_revision`` while a future batch
+        endpoint may put it at the top level or in a response header.  The
+        adapter accepts all of those shapes without inventing a revision.
+        """
+
+        candidates: list[Any] = []
+        if isinstance(value, Mapping):
+            candidates.extend(
+                (
+                    value.get("data_revision"),
+                    value.get("dataRevision"),
+                    value.get("revision"),
+                )
+            )
+            meta = value.get("meta")
+            if isinstance(meta, Mapping):
+                candidates.extend((meta.get("data_revision"), meta.get("dataRevision"), meta.get("revision")))
+        for candidate in candidates:
+            if isinstance(candidate, bool):
+                continue
+            if isinstance(candidate, int) and candidate >= 0:
+                return candidate
+            if isinstance(candidate, str) and candidate.isdigit():
+                return int(candidate)
+        return None
+
+    @classmethod
+    def _attach_header_revision(cls, body: Any, headers: Mapping[str, Any]) -> Any:
+        """Expose an explicit revision header without changing other fields."""
+
+        if not isinstance(body, dict) or cls._revision_from(body) is not None:
+            return body
+        revision: int | None = None
+        for name, value in headers.items():
+            if name.lower() in {"x-fiscal-data-revision", "x-data-revision", "x-fiscal-revision"}:
+                revision = cls._revision_from({"data_revision": value})
+                if revision is not None:
+                    break
+        if revision is None:
+            return body
+        result = dict(body)
+        meta = result.get("meta")
+        if isinstance(meta, dict):
+            result["meta"] = {**meta, "data_revision": revision}
+        else:
+            result["data_revision"] = revision
+        return result
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"Accept": "application/json"}
+        if self.backend_token:
+            headers["Authorization"] = f"Bearer {self.backend_token}"
+        return headers
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        json_body: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> Any:
+        if httpx is None and self._client is None:
+            raise BackendAdapterError("backend_dependency_missing", "Install MCP runtime dependencies first.")
+        url = f"{self.base_url}/{path.lstrip('/')}"
+        own_client = self._client is None
+        client: Any
+        if own_client:
+            if httpx is None:  # defensive guard for dependency-less installs
+                raise BackendAdapterError("backend_dependency_missing", "Install MCP runtime dependencies first.")
+            client = httpx.AsyncClient(timeout=self.timeout_seconds)
+        else:
+            client = self._client
+        try:
+            response = await client.request(
+                method,
+                url,
+                headers={**self._headers(), **dict(headers or {})},
+                params=dict(params or {}),
+                json=json_body,
+            )
+            if response.status_code >= 400:
+                # Preserve only the backend's public error code when present.
+                body: Any = None
+                try:
+                    body = response.json()
+                except (ValueError, json.JSONDecodeError):
+                    pass
+                code_value = None
+                if isinstance(body, dict):
+                    code_value = body.get("code")
+                    error_body = body.get("error")
+                    if code_value is None and isinstance(error_body, dict):
+                        code_value = error_body.get("code")
+                code = code_value if isinstance(code_value, str) else "backend_error"
+                raise BackendAdapterError(code, f"Fiscal backend request failed ({response.status_code}).")
+            if response.headers.get("content-type", "").startswith("text/csv"):
+                return {
+                    "_csv_content": response.content,
+                    "_headers": {key.lower(): value for key, value in response.headers.items()},
+                }
+            return self._attach_header_revision(response.json(), response.headers)
+        except BackendAdapterError:
+            raise
+        except Exception as exc:
+            raise BackendAdapterError("backend_unavailable", "Fiscal backend is unavailable.") from exc
+        finally:
+            if own_client:
+                await client.aclose()
+
+    async def get_monthly_report(self, period: str) -> dict[str, Any]:
+        return await self._request("GET", f"/reports/v2/monthly/{period}")
+
+    async def get_yearly_report(self, year: str) -> dict[str, Any]:
+        return await self._request("GET", f"/reports/v2/yearly/{year}")
+
+    async def search_ledger(self, filters: Mapping[str, Any]) -> dict[str, Any]:
+        return await self._request("GET", "/transactions", params=filters)
+
+    async def list_import_batches(self, filters: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        """List import batches when the optional batch API is enabled.
+
+        A backend may return either an object envelope or a bare JSON array;
+        preserving the envelope while wrapping an array in ``items`` gives Web
+        a stable collection boundary without guessing any candidate fields.
+        """
+
+        result = await self._request("GET", self._require_batch_path(), params=filters)
+        if isinstance(result, list):
+            return {"items": result}
+        if not isinstance(result, dict):
+            raise BackendAdapterError("backend_contract_mismatch", "Fiscal batch API returned an invalid collection.")
+        return result
+
+    def _require_batch_path(self) -> str:
+        if not self.batch_path:
+            raise BackendAdapterError(
+                "batch_api_unavailable",
+                "Fiscal Build51 has no import-batch API; configure a compatible batch_path first.",
+            )
+        return self.batch_path.rstrip("/")
+
+    @staticmethod
+    def _batch_contract(value: Any) -> dict[str, Any]:
+        """Adapt the backend's UUID ``id`` to the stable MCP ``batch_id`` field."""
+        if not isinstance(value, dict):
+            raise BackendAdapterError("backend_contract_mismatch", "Fiscal batch API returned an invalid object.")
+        result = dict(value)
+        if "batch_id" not in result and isinstance(result.get("id"), (str, int)):
+            result["batch_id"] = str(result["id"])
+        return result
+
+    async def create_import_batch(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return self._batch_contract(await self._request("POST", self._require_batch_path(), json_body=payload))
+
+    async def get_import_batch(self, batch_id: str) -> dict[str, Any]:
+        return self._batch_contract(await self._request("GET", f"{self._require_batch_path()}/{batch_id}"))
+
+    async def validate_import_batch(self, batch_id: str, expected_version: int) -> dict[str, Any]:
+        return self._batch_contract(await self._request(
+            "POST",
+            f"{self._require_batch_path()}/{batch_id}/validate",
+            json_body={"expected_version": expected_version},
+        ))
+
+    async def commit_import_batch(
+        self, batch_id: str, expected_version: int, confirmation_token: str, idempotency_key: str
+    ) -> dict[str, Any]:
+        return self._batch_contract(await self._request(
+            "POST",
+            f"{self._require_batch_path()}/{batch_id}/commit",
+            json_body={
+                "expected_version": expected_version,
+                "confirmation_token": confirmation_token,
+                "idempotency_key": idempotency_key,
+            },
+            headers={"Idempotency-Key": idempotency_key},
+        ))
+
+    async def ignore_import_batch(
+        self, batch_id: str, expected_version: int, reason: str | None
+    ) -> dict[str, Any]:
+        return self._batch_contract(await self._request(
+            "POST",
+            f"{self._require_batch_path()}/{batch_id}/ignore",
+            json_body={"expected_version": expected_version, "reason": reason},
+        ))
+
+    async def export_report(self, period_kind: str, period: str, export_format: str) -> dict[str, Any]:
+        if export_format != "csv":
+            raise BackendAdapterError("unsupported_export", "Only CSV export is supported in phase one.")
+        path = f"/reports/v2/{'monthly' if period_kind == 'month' else 'yearly'}/{period}/export.csv"
+        response = await self._request("GET", path)
+        if not isinstance(response, dict) or not isinstance(response.get("_csv_content"), bytes):
+            raise BackendAdapterError("backend_error", "Fiscal backend returned an invalid export.")
+        # A short-lived URL is a later web concern; MCP returns an inline
+        # base64-safe text reference so no large content is placed in logs.
+        import base64
+
+        headers = response.get("_headers", {})
+        revision = headers.get("x-fiscal-data-revision") if isinstance(headers, dict) else None
+        try:
+            data_revision = int(revision) if revision is not None else None
+        except (TypeError, ValueError):
+            data_revision = None
+        return {
+            "format": "csv",
+            "period": period,
+            "data_revision": data_revision,
+            "content_base64": base64.b64encode(response["_csv_content"]).decode("ascii"),
+        }
+
+
+@dataclass(slots=True)
+class MockFiscalBackendAdapter:
+    """Deterministic fixture adapter for tests and local MCP development."""
+
+    monthly_reports: dict[str, dict[str, Any]] = field(default_factory=dict)
+    yearly_reports: dict[str, dict[str, Any]] = field(default_factory=dict)
+    ledger_items: list[dict[str, Any]] = field(default_factory=list)
+    data_revision: int = 1
+    _batches: dict[str, dict[str, Any]] = field(default_factory=dict, init=False, repr=False)
+    _batch_idempotency: dict[str, str] = field(default_factory=dict, init=False, repr=False)
+    _batch_idempotency_payloads: dict[str, str] = field(default_factory=dict, init=False, repr=False)
+    _commit_idempotency: dict[str, dict[str, Any]] = field(default_factory=dict, init=False, repr=False)
+    _commit_idempotency_context: dict[str, tuple[str, int]] = field(default_factory=dict, init=False, repr=False)
+
+    async def get_monthly_report(self, period: str) -> dict[str, Any]:
+        return copy.deepcopy(self.monthly_reports.get(period, {"meta": {"period": period, "data_revision": self.data_revision}, "summary": {}, "categories": []}))
+
+    async def get_yearly_report(self, year: str) -> dict[str, Any]:
+        return copy.deepcopy(self.yearly_reports.get(year, {"meta": {"period": year, "data_revision": self.data_revision}, "summary": {}, "categories": []}))
+
+    async def search_ledger(self, filters: Mapping[str, Any]) -> dict[str, Any]:
+        items = copy.deepcopy(self.ledger_items)
+        query = filters.get("query")
+        if isinstance(query, str) and query:
+            items = [item for item in items if query.casefold() in json.dumps(item, ensure_ascii=False).casefold()]
+        limit = int(filters.get("limit", 50))
+        return {"items": items[:limit], "next_cursor": None, "data_revision": self.data_revision}
+
+    async def list_import_batches(self, filters: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        statuses = filters.get("status") if isinstance(filters, Mapping) else None
+        allowed = {str(status) for status in statuses} if isinstance(statuses, (list, tuple, set)) else None
+        items = [batch for batch in self._batches.values() if allowed is None or batch["status"] in allowed]
+        return {"items": copy.deepcopy(items), "data_revision": self.data_revision}
+
+    async def create_import_batch(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        idem = str(payload["idempotency_key"])
+        request_fingerprint = hashlib.sha256(
+            json.dumps(dict(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+        existing_id = self._batch_idempotency.get(idem)
+        if existing_id:
+            if self._batch_idempotency_payloads.get(idem) != request_fingerprint:
+                raise FiscalMCPError("idempotency_conflict", "The batch idempotency key was already used with different input.")
+            return copy.deepcopy(self._batches[existing_id])
+        batch_id = f"batch-{uuid.uuid5(uuid.NAMESPACE_URL, idem)}"
+        batch = {
+            "batch_id": batch_id,
+            "status": BatchStatus.PENDING.value,
+            "source": payload["source"],
+            "original_content_sha256": payload["original_content_sha256"],
+            "candidates": copy.deepcopy(payload["candidates"]),
+            "validation": None,
+            "version": 1,
+            "data_revision": self.data_revision,
+            "audit": [{"action": "created", "version": 1}],
+        }
+        self._batch_idempotency[idem] = batch_id
+        self._batch_idempotency_payloads[idem] = request_fingerprint
+        self._batches[batch_id] = batch
+        return copy.deepcopy(batch)
+
+    def _batch(self, batch_id: str) -> dict[str, Any]:
+        batch = self._batches.get(batch_id)
+        if batch is None:
+            raise FiscalMCPError("batch_not_found", "Import batch was not found.")
+        return batch
+
+    def _check_version(self, batch: dict[str, Any], expected_version: int) -> None:
+        if batch["version"] != expected_version:
+            raise FiscalMCPError(
+                "stale_batch_version",
+                "Import batch changed; reload it before retrying.",
+                {"expected_version": expected_version, "current_version": batch["version"]},
+            )
+
+    async def get_import_batch(self, batch_id: str) -> dict[str, Any]:
+        return copy.deepcopy(self._batch(batch_id))
+
+    async def validate_import_batch(self, batch_id: str, expected_version: int) -> dict[str, Any]:
+        batch = self._batch(batch_id)
+        self._check_version(batch, expected_version)
+        seen: set[tuple[Any, ...]] = set()
+        duplicates: list[str] = []
+        missing: list[dict[str, Any]] = []
+        for candidate in batch["candidates"]:
+            key = (candidate.get("occurred_at"), candidate.get("amount_minor"), candidate.get("title"))
+            if key in seen:
+                duplicates.append(candidate["client_id"])
+            seen.add(key)
+            fields = [field for field in ("account_id", "category_id") if not candidate.get(field)]
+            if fields:
+                missing.append({"client_id": candidate["client_id"], "fields": fields})
+        validation = {"duplicates": duplicates, "missing_fields": missing, "writable_count": len(batch["candidates"]) - len(duplicates) - len(missing), "validated_at": "fixture"}
+        batch["validation"] = validation
+        batch["status"] = BatchStatus.VALIDATED.value
+        batch["version"] += 1
+        batch["audit"].append({"action": "validated", "version": batch["version"]})
+        return copy.deepcopy(batch)
+
+    async def commit_import_batch(
+        self, batch_id: str, expected_version: int, confirmation_token: str, idempotency_key: str
+    ) -> dict[str, Any]:
+        replay = self._commit_idempotency.get(idempotency_key)
+        if replay is not None:
+            if self._commit_idempotency_context.get(idempotency_key) != (batch_id, expected_version):
+                raise FiscalMCPError("idempotency_conflict", "The commit idempotency key was already used for another batch.")
+            return copy.deepcopy(replay)
+        batch = self._batch(batch_id)
+        self._check_version(batch, expected_version)
+        if batch["status"] != BatchStatus.VALIDATED.value:
+            raise FiscalMCPError("batch_not_validated", "Validate the import batch before committing it.")
+        validation = batch["validation"] or {}
+        if validation.get("missing_fields") or validation.get("duplicates"):
+            raise FiscalMCPError("batch_has_conflicts", "Resolve missing fields and duplicates before committing.")
+        self.data_revision += 1
+        transactions = []
+        for candidate in batch["candidates"]:
+            transaction_key = f"{batch_id}:{candidate['client_id']}"
+            transaction = {"id": f"tx-{uuid.uuid5(uuid.NAMESPACE_URL, transaction_key)}", **copy.deepcopy(candidate)}
+            transactions.append(transaction)
+            self.ledger_items.append(transaction)
+        batch["status"] = BatchStatus.COMMITTED.value
+        batch["version"] += 1
+        batch["data_revision"] = self.data_revision
+        batch["audit"].append({"action": "committed", "version": batch["version"], "data_revision": self.data_revision})
+        result = {"batch": copy.deepcopy(batch), "transactions": transactions, "skipped": [], "data_revision": self.data_revision}
+        self._commit_idempotency[idempotency_key] = copy.deepcopy(result)
+        self._commit_idempotency_context[idempotency_key] = (batch_id, expected_version)
+        return result
+
+    async def ignore_import_batch(self, batch_id: str, expected_version: int, reason: str | None) -> dict[str, Any]:
+        batch = self._batch(batch_id)
+        self._check_version(batch, expected_version)
+        if batch["status"] in {BatchStatus.COMMITTED.value, BatchStatus.IGNORED.value}:
+            return copy.deepcopy(batch)
+        batch["status"] = BatchStatus.IGNORED.value
+        batch["version"] += 1
+        batch["audit"].append({"action": "ignored", "version": batch["version"], "reason": reason})
+        return copy.deepcopy(batch)
+
+    async def export_report(self, period_kind: str, period: str, export_format: str) -> dict[str, Any]:
+        report = self.monthly_reports.get(period) if period_kind == "month" else self.yearly_reports.get(period)
+        return {"format": export_format, "period": period, "data_revision": self.data_revision, "content": json.dumps(report or {}, ensure_ascii=False)}
+

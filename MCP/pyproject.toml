@@ -1,0 +1,25 @@
+[project]
+name = "fiscal-ledger-mcp"
+version = "0.1.0"
+description = "Independent MCP boundary for the Fiscal ledger service"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28,<1",
+    "uvicorn>=0.30,<1",
+]
+
+[project.scripts]
+fiscal-mcp = "fiscal_mcp.__main__:main"
+fiscal-mcp-http = "fiscal_mcp.http_server:main"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fiscal_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
