@@ -22,7 +22,7 @@
 - Agent 以导入批次工作；批次先生成待确认候选，校验、幂等、版本、撤销和审计沿用现有 AI proposal/ledger 语义，默认不自动直写。
 - 第一阶段网页只保留待确认、月度报告、账本搜索、设置/导出；Agent 密钥按读、暂存、提交、导出 scope 分层，支持撤销和轮换。
 - 原生 App 冻结期间保留源码、Build51 安装包和回退能力；连续完成真实月度闭环后再决定是否归档发布入口。
-- 远程 MCP 网关只部署在 HZ，通过 HTTPS 转发到 NB 上唯一的 Fiscal API；HZ 不保存账本数据库、不开放 MCP loopback 端口，Agent 通过 Bearer Key 和 scope 接入。
+- 远程 MCP 网关只部署在 HZ，通过 HTTPS 转发到 NB 上唯一的 Fiscal API；HZ 不保存账本数据库、不开放 MCP loopback 端口。Agent 通过 Google Authenticator challenge 获取 Session，写入再用一次性 operation approval；个人 API key 仅作人工 break-glass。
 
 ## 当前状态
 
@@ -39,25 +39,25 @@
 - 第二阶段本地实现已完成：后端新增 `import_batches` 持久化、幂等/版本校验、隔离校验、原子提交/忽略路由及 0043 迁移；MCP HTTP adapter 和 Web HTTP/MCP live adapter 已接入，原生 App 业务源码未修改。
 - 阶段二验证已在一次性本地 PostgreSQL 库完成迁移与真实闭环：创建 → 校验 → HMAC 确认提交 → 重放只返回同一结果；生产只读/暂存边界见 0043 部署记录，未写入真实账单。
 - 阶段三工程收尾已完成：staging/production 环境示例接入 token pepper 与批次确认密钥，MCP 提供无网络 preflight 和 stdio 运行模板，Web 静态包支持宿主覆盖 `runtime-config.js` 选择 HTTP/MCP 并保持会话密钥只在内存；回滚/迁移/人工验收边界写入运维文档。
-- 阶段四远程 MCP 工程已实现并部署到 HZ：新增 JSON-RPC HTTP/ASGI transport、Bearer 注入、session header、CORS 白名单、请求体上限、健康检查；HZ 上 systemd active、loopback 8050、DNS、Let's Encrypt、Nginx HTTPS 和 NB 只读 smoke 均通过；未开放 `commit:imports`。
+- 阶段四远程 MCP 工程已实现并部署到 HZ：新增 JSON-RPC HTTP/ASGI transport、TOTP session/operation challenge、Bearer 兼容、session header、CORS 白名单、请求体上限、健康检查；HZ 上 systemd active、loopback 8050、DNS、Let's Encrypt、Nginx HTTPS、NB 连接和公网读写授权 smoke 均通过；未写入真实批次。
 - 网页控制台已部署到 HZ `/opt/fiscal-web/current`，`console.fiscal.linotsai.top` DNS、Let's Encrypt、Nginx HTTPS 和同源 `/api/v1` 只读代理 smoke 均通过。
 - 网页默认 fetch 上下文热修已部署到 `/opt/fiscal-web/releases/20261011-web-4bb08594`；截图中的 `Illegal invocation` 已由 HTTP/MCP adapter 共同修复，公网页面与鉴权接口 smoke 通过。
-- Web 凭证入口已补强：HTTP 页面可接受 `fiscal_ak_v1_...` 个人 key 或 Fiscal 访问口令（同源 `/auth/session` 换取内存 key），自动去除 `Bearer` 前缀；MCP key 仍与网页 REST 凭证隔离。新包 `/opt/fiscal-web/releases/20261011-web-935c2b3b` smoke 通过。
+- Web 凭证入口已补强：原控制台保留内存凭证兼容；新公开 `/agent/` 说明、`/agent/approve/` 批准页和 `/.well-known/fiscal-agent.json` 不包含密钥，面向 TOTP Session 流程。新包 `/opt/fiscal-web/releases/20261011-web-totp-d050198` smoke 通过。
 - Backend 0043 已部署到 NB：生产 release `/opt/fiscal/releases/53906818483e`，Alembic `20261010_0043`，迁移前后备份、171 项测试/272 项 PostgreSQL 缺失跳过、readiness、重启及 `/import-batches` 只读 smoke 均通过；没有真实批次写入。
 - 工作区原有用户未提交的 `AGENTS.md` 与 scheme 改动已保留；本轮只新增独立目录和计划记录。
 
 ## 当前 Plan
 
-阶段四当前施工与验证见 [远程 MCP 记录](archive/plans/2026-10-11-agent-first-remote-mcp_execution.md)；网页上线见 [Web 控制台记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)；Backend 0043 生产部署见 [后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)；阶段三工程包见 [阶段三记录](archive/plans/2026-10-10-agent-first-mcp-web_phase3_execution.md)，阶段二施工见 [阶段二记录](archive/plans/2026-10-10-agent-first-mcp-web_phase2_execution.md)。下一步由用户从网页和多个 Agent 完成真实账单暂存/校验/忽略闭环；当前未启用 `commit:imports`、未修改原生业务源码。
+阶段四远程 MCP、TOTP Session 与公共 Agent 接入见 [TOTP 执行记录](archive/plans/2026-10-11-fiscal-totp-session_execution.md)；网页上线见 [Web 控制台记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)；Backend 0043 生产部署见 [后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)；阶段三工程包见 [阶段三记录](archive/plans/2026-10-10-agent-first-mcp-web_phase3_execution.md)，阶段二施工见 [阶段二记录](archive/plans/2026-10-10-agent-first-mcp-web_phase2_execution.md)。下一步由用户扫码并完成真实账单暂存/校验/忽略/提交闭环；原生业务源码未修改。
 
 ## Backlog
 
 ### Agent-first 改造（当前优先）
 
 - **批次导入契约**：导入批次及其状态、版本、指纹、校验错误、交易回执和审计已落地；正式账本仍由既有 TransactionService 写入，不建立第二套账本。
-- **MCP 层**：先提供月报/年报/账本搜索/导出，再提供创建、查看、校验、忽略和受控提交批次的工具；密钥按 scope 管理。
+- **MCP 层**：月报/年报/账本搜索/导出、批次创建/查看/校验/忽略和受控提交已由 TOTP Session 与一次性 operation approval 保护；Bearer 只作兼容/人工 break-glass。
 - **网页控制台**：实现待确认、月度报告、账本搜索、设置/导出四个入口；先只读，再接入整批确认。
-- **第一阶段验收**：Mock、隔离后端和生产 `/import-batches` 只读入口已覆盖契约边界；真实一周批次、生产月报/年报/CSV 一致性与密钥轮换留待用户验收。
+- **第一阶段验收**：Mock、隔离后端、生产 `/import-batches` 和 TOTP challenge/session/operation 公网 smoke 已覆盖契约边界；真实一周批次、生产月报/年报/CSV 一致性与扫码后首轮业务闭环留待用户验收。
 - **非目标**：不删除原生 App、不删除历史数据、不开放任意 CRUD/SQL、不做多用户和新的复杂财务规则。
 
 其中独立契约、MCP stdio 入口、Mock 批次生命周期、真实后端批次写入与 Web live adapter 已完成；MCP、Web 与 Backend 0043 已生产部署并通过公网只读 smoke，真实账单月度闭环和 `commit:imports` 开放仍未执行。
@@ -93,3 +93,4 @@
 - 2026-10-11：Backend 0043 生产迁移、备份、重启及网页批次接口修复完成；[后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)。
 - 2026-10-11：Web `fetch` 上下文热修重新构建并部署，公网鉴权与批次/账本只读 smoke 通过；[Web 记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)。
 - 2026-10-11：Web 凭证入口修正并重新部署，支持访问口令换取页面内存 key，公网认证与批次 smoke 通过；[Web 记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)。
+- 2026-10-11：简化认证方案落地；公共 Agent 说明/discovery、Google Authenticator Session、一次性写入授权及 HZ/NB 部署完成；[执行记录](archive/plans/2026-10-11-fiscal-totp-session_execution.md)。
