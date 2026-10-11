@@ -8,9 +8,9 @@ from datetime import datetime, timezone
 from typing import Any, Mapping
 
 from .adapter import FiscalBackendAdapter
-from .auth import ApiKeyRecord, ApiKeyRegistry
+from .auth import ApiKeyRecord, ApiKeyRegistry, TotpSessionRegistry, request_digest
 from .confirmation import ConfirmationVerifier
-from .contracts import ToolDefinition, tool_definitions, validate_tool_arguments
+from .contracts import Scope, ToolDefinition, tool_definitions, validate_tool_arguments
 from .errors import FiscalMCPError
 
 
@@ -56,6 +56,7 @@ class FiscalMCPService:
     adapter: FiscalBackendAdapter
     key_registry: ApiKeyRegistry
     confirmation_verifier: ConfirmationVerifier
+    sessions: TotpSessionRegistry | None = None
     audit: AuditLog = field(default_factory=AuditLog)
     definitions: tuple[ToolDefinition, ...] = field(default_factory=tool_definitions)
 
@@ -87,12 +88,48 @@ class FiscalMCPService:
             )
         )
 
-    async def invoke(self, name: str, arguments: Any, *, api_key: str | None) -> dict[str, Any]:
+    async def invoke(
+        self,
+        name: str,
+        arguments: Any,
+        *,
+        api_key: str | None,
+        session_token: str | None = None,
+        operation_token: str | None = None,
+    ) -> dict[str, Any]:
         definition = self.definition(name)
         principal: ApiKeyRecord | None = None
         try:
-            principal = self.key_registry.require(api_key, definition.scope)
+            session_based = session_token is not None
+            if session_based:
+                if self.sessions is None:
+                    raise FiscalMCPError("unauthorized", "Authenticator sessions are not configured.")
+                required_scope = None if definition.scope is Scope.COMMIT_IMPORTS else definition.scope
+                session = self.sessions.resolve(session_token, required_scope=required_scope)
+                principal = ApiKeyRecord(
+                    session.token_fingerprint,
+                    session.scopes,
+                    label=session.label,
+                    expires_at=session.absolute_expires_at,
+                    created_at=session.issued_at,
+                )
+            else:
+                principal = self.key_registry.require(api_key, definition.scope)
             values = validate_tool_arguments(name, arguments)
+            if name == "fiscal_commit_import_batch":
+                if session_based:
+                    assert self.sessions is not None
+                    self.sessions.consume_operation(
+                        operation_token,
+                        session_token,
+                        request_digest(name, arguments if isinstance(arguments, Mapping) else {}),
+                    )
+                    values = dict(values)
+                    values["confirmation_token"] = self.confirmation_verifier.mint(
+                        batch_id=values["batch_id"], expected_version=values["expected_version"]
+                    )
+                elif "confirmation_token" not in values:
+                    raise FiscalMCPError("confirmation_required", "A confirmation credential is required for this commit.")
             result = await self._invoke_adapter(name, values)
             details: dict[str, Any] = {}
             if name == "fiscal_create_import_batch":

@@ -175,16 +175,16 @@ def tool_definitions() -> tuple[ToolDefinition, ...]:
         ),
         ToolDefinition(
             "fiscal_commit_import_batch",
-            "Commit a validated batch after explicit confirmation; requires a confirmation credential.",
+            "Commit a validated batch after a fresh user-approved write operation.",
             Scope.COMMIT_IMPORTS,
             _object_schema(
                 {
                     "batch_id": {"type": "string", "minLength": 1},
                     "expected_version": {"type": "integer", "minimum": 1},
-                    "confirmation_token": {"type": "string", "minLength": 16, "maxLength": 512},
+                    "confirmation_token": {"type": "string", "minLength": 16, "maxLength": 512, "description": "Legacy manual credential; TOTP sessions leave this out."},
                     "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
                 },
-                ["batch_id", "expected_version", "confirmation_token", "idempotency_key"],
+                ["batch_id", "expected_version", "idempotency_key"],
             ),
         ),
         ToolDefinition(
@@ -356,13 +356,17 @@ def validate_tool_arguments(name: str, arguments: Any) -> dict[str, Any]:
             assert expected is not None
             result["expected_version"] = expected
         if name == "fiscal_commit_import_batch":
-            token = _required_str(values, "confirmation_token", max_length=512)
-            if len(token) < 16:
-                raise invalid_params("confirmation_token is too short", field="confirmation_token")
+            token = values.get("confirmation_token")
+            if token is not None:
+                if not isinstance(token, str) or len(token.strip()) < 16 or len(token) > 512:
+                    raise invalid_params("confirmation_token must be at least 16 characters", field="confirmation_token")
+                token = token.strip()
             key = _required_str(values, "idempotency_key", max_length=128)
             if len(key) < 8:
                 raise invalid_params("idempotency_key must be at least 8 characters", field="idempotency_key")
-            result.update({"confirmation_token": token, "idempotency_key": key})
+            result["idempotency_key"] = key
+            if token is not None:
+                result["confirmation_token"] = token
         if name == "fiscal_ignore_import_batch" and values.get("reason") is not None:
             reason = values["reason"]
             if not isinstance(reason, str) or len(reason) > 240:

@@ -20,6 +20,10 @@ def valid_values() -> dict[str, str]:
         "FISCAL_BATCH_API_PATH": "/import-batches",
         "FISCAL_MCP_API_KEY": "agent-key-0123456789",
         "FISCAL_MCP_API_SCOPES": "read:reports,read:ledger,stage:imports,export:reports",
+        "FISCAL_MCP_TOTP_SECRET": "JBSWY3DPEHPK3PXP",
+        "FISCAL_MCP_SESSION_SCOPES": "read:reports,read:ledger,stage:imports,export:reports",
+        "FISCAL_MCP_CONFIRMATION_SECRET": "confirmation-secret-0123456789-0123456789",
+        "FISCAL_MCP_APPROVAL_URL": "https://console.fiscal.invalid/agent/approve",
         "FISCAL_MCP_USE_MOCK": "0",
         "FISCAL_MCP_HTTP_PATH": "/mcp",
         "FISCAL_MCP_HEALTH_PATH": "/health",
@@ -32,7 +36,7 @@ class PreflightTests(unittest.TestCase):
     def test_valid_stage_configuration_has_secret_free_summary(self) -> None:
         summary = preflight.validate(valid_values(), target="staging")
         self.assertEqual(summary["backend_url"], "https://fiscal.invalid/api/v1")
-        self.assertEqual(summary["commit_confirmation"], "not required")
+        self.assertEqual(summary["commit_confirmation"], "configured")
         self.assertEqual(summary["bind"], "127.0.0.1:8050")
         self.assertNotIn("backend-token", repr(summary))
 

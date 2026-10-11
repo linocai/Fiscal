@@ -2,5 +2,11 @@
   "name": "fiscal",
   "transport": "streamable-http",
   "url": "https://mcp.fiscal.linotsai.top/mcp",
-  "authorization": "Bearer ${FISCAL_MCP_API_KEY}"
+  "discovery": "https://console.fiscal.linotsai.top/.well-known/fiscal-agent.json",
+  "session": {
+    "challenge": "POST https://mcp.fiscal.linotsai.top/auth/challenges",
+    "approval_url_from_response": true,
+    "poll_header": "X-Fiscal-Poll-Token",
+    "authorization": "Session ${FISCAL_SESSION_TOKEN}"
+  }
 }

@@ -16,6 +16,8 @@ import secrets
 from collections.abc import Awaitable, Callable, Iterable
 from typing import Any
 
+from .contracts import Scope
+from .errors import FiscalMCPError
 from .server import MCPServer, build_default_server
 
 ASGIMessage = dict[str, Any]
@@ -25,6 +27,8 @@ Receive = Callable[[], Awaitable[ASGIMessage]]
 MAX_BODY_BYTES = 1_048_576
 DEFAULT_PATH = "/mcp"
 DEFAULT_HEALTH_PATH = "/health"
+DEFAULT_AUTH_PATH = "/auth/challenges"
+DEFAULT_APPROVAL_URL = "https://console.fiscal.linotsai.top/agent/approve"
 
 
 def _headers(scope: dict[str, Any]) -> dict[str, str]:
@@ -55,12 +59,14 @@ class MCPHTTPApplication:
         health_path: str = DEFAULT_HEALTH_PATH,
         allowed_origins: Iterable[str] = (),
         max_body_bytes: int = MAX_BODY_BYTES,
+        approval_url: str = DEFAULT_APPROVAL_URL,
     ) -> None:
         self.server = server
         self.path = "/" + path.strip("/") if path.strip("/") else DEFAULT_PATH
         self.health_path = "/" + health_path.strip("/") if health_path.strip("/") else DEFAULT_HEALTH_PATH
         self.allowed_origins = frozenset(origin.strip() for origin in allowed_origins if origin.strip())
         self.max_body_bytes = max_body_bytes
+        self.approval_url = approval_url.rstrip("/")
 
     async def __call__(self, scope: dict[str, Any], receive: Receive, send: Send) -> None:
         if scope.get("type") != "http":
@@ -72,7 +78,24 @@ class MCPHTTPApplication:
         path = str(scope.get("path", ""))
 
         if path == self.health_path and method == "GET":
-            await self._respond(send, 200, {"service": "fiscal-mcp", "status": "ok"}, cors=cors)
+            sessions = self.server.sessions
+            await self._respond(
+                send,
+                200,
+                {
+                    "service": "fiscal-mcp",
+                    "status": "ok",
+                    "auth_mode": "totp_session",
+                    "totp_configured": bool(sessions and sessions.configured),
+                    "session_idle_seconds": sessions.idle_seconds if sessions else None,
+                    "session_absolute_seconds": sessions.absolute_seconds if sessions else None,
+                    "write_operation_seconds": sessions.operation_seconds if sessions else None,
+                },
+                cors=cors,
+            )
+            return
+        if path.startswith(DEFAULT_AUTH_PATH):
+            await self._handle_auth_route(scope, request_headers, method, path, receive, send, cors)
             return
         if path != self.path:
             await self._respond(send, 404, {"error": "not_found"}, cors=cors)
@@ -84,14 +107,14 @@ class MCPHTTPApplication:
             await self._respond(send, 405, {"error": "method_not_allowed"}, cors=cors, extra_headers=(("allow", "POST"),))
             return
 
-        token = self._bearer_token(request_headers.get("authorization"))
+        auth_scheme, token = self._authorization(request_headers.get("authorization"))
         if token is None:
             await self._respond(
                 send,
                 401,
-                {"error": "unauthorized", "message": "A Fiscal MCP bearer key is required."},
+                {"error": "unauthorized", "message": "A Fiscal MCP Bearer or Session credential is required."},
                 cors=cors,
-                extra_headers=(("www-authenticate", 'Bearer realm="fiscal-mcp"'),),
+                extra_headers=(("www-authenticate", 'Bearer realm="fiscal-mcp", Session realm="fiscal-mcp"'),),
             )
             await self._drain(receive)
             return
@@ -106,7 +129,7 @@ class MCPHTTPApplication:
             await self._respond(send, 400, MCPServer._error(None, -32700, "Invalid JSON."), cors=cors)
             return
 
-        responses = await self._handle_payload(payload, token)
+        responses = await self._handle_payload(payload, auth_scheme, token)
         if responses is None:
             await self._respond(send, 202, None, cors=cors)
             return
@@ -117,7 +140,7 @@ class MCPHTTPApplication:
             extra.append(("mcp-session-id", session_id))
         await self._respond(send, 200, result, cors=cors, extra_headers=extra)
 
-    async def _handle_payload(self, payload: Any, token: str) -> list[dict[str, Any]] | None:
+    async def _handle_payload(self, payload: Any, scheme: str, token: str) -> list[dict[str, Any]] | None:
         if isinstance(payload, list):
             if not payload:
                 return [MCPServer._error(None, -32600, "Invalid JSON-RPC request.")]
@@ -129,32 +152,149 @@ class MCPHTTPApplication:
             if not isinstance(message, dict):
                 responses.append(MCPServer._error(None, -32600, "Invalid JSON-RPC request."))
                 continue
-            authenticated = self._with_bearer(message, token)
+            authenticated = self._with_auth(message, scheme, token)
             response = await self.server.handle_message(authenticated)
             if response is not None:
                 responses.append(response)
         return responses or None
 
     @staticmethod
-    def _with_bearer(message: dict[str, Any], token: str) -> dict[str, Any]:
+    def _with_auth(message: dict[str, Any], scheme: str, token: str) -> dict[str, Any]:
         if message.get("method") != "tools/call":
             return message
         params = message.get("params")
         params = dict(params) if isinstance(params, dict) else {}
         meta = params.get("_meta")
         meta = dict(meta) if isinstance(meta, dict) else {}
-        meta["fiscal_api_key"] = token
+        if scheme == "session":
+            meta["fiscal_session_token"] = token
+        else:
+            meta["fiscal_api_key"] = token
         params["_meta"] = meta
         return {**message, "params": params}
 
     @staticmethod
-    def _bearer_token(value: str | None) -> str | None:
+    def _authorization(value: str | None) -> tuple[str, str | None]:
         if not value:
-            return None
+            return "", None
         scheme, separator, token = value.partition(" ")
-        if not separator or scheme.lower() != "bearer" or not token.strip():
-            return None
-        return token.strip()
+        normalized = scheme.lower()
+        if not separator or normalized not in {"bearer", "session"} or not token.strip():
+            return "", None
+        return normalized, token.strip()
+
+    async def _handle_auth_route(
+        self,
+        scope: dict[str, Any],
+        request_headers: dict[str, str],
+        method: str,
+        path: str,
+        receive: Receive,
+        send: Send,
+        cors: tuple[tuple[str, str], ...],
+    ) -> None:
+        if method == "OPTIONS":
+            await self._respond(send, 204, None, cors=cors, allow_options=True)
+            return
+        sessions = self.server.sessions
+        if sessions is None:
+            await self._respond(send, 503, {"error": "totp_unconfigured"}, cors=cors)
+            return
+        segments = [segment for segment in path.split("/") if segment]
+        if segments == ["auth", "challenges"] and method == "POST":
+            try:
+                payload = await self._read_json(receive, request_headers.get("content-length"))
+                scheme, token = self._authorization(request_headers.get("authorization"))
+                kind = payload.get("kind", "session")
+                requested_scopes = payload.get("scopes")
+                if requested_scopes is not None and not isinstance(requested_scopes, list):
+                    raise FiscalMCPError("invalid_challenge", "scopes must be an array.")
+                if kind == "operation":
+                    if scheme != "session" or token is None:
+                        raise FiscalMCPError("session_required", "A live Session credential is required for a write approval.")
+                    if payload.get("scope", Scope.COMMIT_IMPORTS.value) != Scope.COMMIT_IMPORTS.value:
+                        raise FiscalMCPError("invalid_scope", "Only commit:imports can be approved as an operation.")
+                digest = payload.get("request_digest")
+                if digest is not None and (not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdefABCDEF" for c in digest)):
+                    raise FiscalMCPError("invalid_challenge", "request_digest must be a SHA-256 hex digest.")
+                challenge, poll_token = sessions.create_challenge(
+                    kind=kind,
+                    requested_scopes=requested_scopes,
+                    label=str(payload.get("client_label", "agent")),
+                    intent=str(payload.get("intent", "")),
+                    request_digest_value=digest,
+                    session_token=token if scheme == "session" else None,
+                )
+                await self._respond(
+                    send,
+                    201,
+                    {
+                        "challenge_id": challenge.challenge_id,
+                        "poll_token": poll_token,
+                        "kind": challenge.kind,
+                        "expires_at": challenge.expires_at.isoformat(),
+                        "approval_url": f"{self.approval_url}?challenge={challenge.challenge_id}",
+                    },
+                    cors=cors,
+                )
+            except BodyTooLarge:
+                await self._respond(send, 413, {"error": "request_too_large"}, cors=cors)
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                await self._respond(send, 400, {"error": "invalid_json"}, cors=cors)
+            except FiscalMCPError as error:
+                await self._respond(send, self._auth_status(error), {"error": error.as_dict()}, cors=cors)
+            return
+        if len(segments) == 3 and segments[:2] == ["auth", "challenges"] and segments[2] and method == "GET":
+            poll_token = request_headers.get("x-fiscal-poll-token", "")
+            try:
+                result = sessions.poll(segments[2], poll_token)
+                await self._respond(send, 200, result, cors=cors)
+            except FiscalMCPError as error:
+                await self._respond(send, self._auth_status(error), {"error": error.as_dict()}, cors=cors)
+            return
+        if len(segments) == 4 and segments[:2] == ["auth", "challenges"] and segments[3] == "approve" and method == "POST":
+            try:
+                payload = await self._read_json(receive, request_headers.get("content-length"))
+                code = payload.get("totp")
+                forwarded = request_headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+                source = forwarded or str((scope.get("client") or ("unknown", 0))[0])
+                challenge = sessions.approve(segments[2], code, source=source)
+                await self._respond(
+                    send,
+                    200,
+                    {
+                        "challenge_id": challenge.challenge_id,
+                        "status": "approved",
+                        "kind": challenge.kind,
+                        "expires_at": challenge.expires_at.isoformat(),
+                    },
+                    cors=cors,
+                )
+            except BodyTooLarge:
+                await self._respond(send, 413, {"error": "request_too_large"}, cors=cors)
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                await self._respond(send, 400, {"error": "invalid_json"}, cors=cors)
+            except FiscalMCPError as error:
+                await self._respond(send, self._auth_status(error), {"error": error.as_dict()}, cors=cors)
+            return
+        await self._respond(send, 404, {"error": "not_found"}, cors=cors)
+
+    async def _read_json(self, receive: Receive, content_length: str | None) -> dict[str, Any]:
+        raw_body = await self._read_body(receive, content_length)
+        payload = json.loads(raw_body)
+        if not isinstance(payload, dict):
+            raise FiscalMCPError("invalid_json", "The JSON body must be an object.")
+        return payload
+
+    @staticmethod
+    def _auth_status(error: FiscalMCPError) -> int:
+        if error.code in {"unauthorized", "session_required", "session_expired"}:
+            return 401
+        if error.code == "auth_rate_limited":
+            return 429
+        if error.code == "totp_unconfigured":
+            return 503
+        return 400
 
     async def _read_body(self, receive: Receive, content_length: str | None) -> bytes:
         if content_length is not None:
@@ -203,8 +343,8 @@ class MCPHTTPApplication:
             return ()
         return (
             ("access-control-allow-origin", origin),
-            ("access-control-allow-headers", "Authorization, Content-Type, MCP-Protocol-Version, Mcp-Session-Id"),
-            ("access-control-allow-methods", "POST, OPTIONS"),
+            ("access-control-allow-headers", "Authorization, Content-Type, MCP-Protocol-Version, Mcp-Session-Id, X-Fiscal-Poll-Token"),
+            ("access-control-allow-methods", "GET, POST, OPTIONS"),
             ("vary", "Origin"),
         )
 
@@ -239,6 +379,7 @@ def build_http_app() -> MCPHTTPApplication:
         path=os.environ.get("FISCAL_MCP_HTTP_PATH", DEFAULT_PATH),
         health_path=os.environ.get("FISCAL_MCP_HEALTH_PATH", DEFAULT_HEALTH_PATH),
         allowed_origins=raw_origins.split(","),
+        approval_url=os.environ.get("FISCAL_MCP_APPROVAL_URL", DEFAULT_APPROVAL_URL),
     )
 
 

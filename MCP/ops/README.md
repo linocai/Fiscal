@@ -9,10 +9,12 @@ Agent -> https://mcp.fiscal.linotsai.top/mcp -> HZ Nginx
       -> https://fiscal.linotsai.top/api/v1 (NB Fiscal API)
 ```
 
-The gateway accepts JSON-RPC POST requests with an `Authorization: Bearer ...`
-header, returns MCP JSON-RPC responses, and keeps the existing tool/scope
-contract. It also exposes an unauthenticated `/health` liveness response. Port
-8050 remains loopback-only; do not add a public firewall rule for it.
+The gateway accepts JSON-RPC POST requests with either the legacy
+`Authorization: Bearer ...` header or the normal
+`Authorization: Session ...` header. Sessions are issued through the TOTP
+challenge routes and last two hours idle / eight hours absolute. It also
+exposes an unauthenticated `/health` liveness response. Port 8050 remains
+loopback-only; do not add a public firewall rule for it.
 
 ## Build the HZ release
 
@@ -68,23 +70,25 @@ release.
 
 ## Multi-terminal Agent configuration
 
-Every terminal uses the same URL and an Agent key with the smallest required
-scopes. Start with:
+Every terminal uses the same URL and the public discovery document. No
+per-Agent key is provisioned. Start a session with:
 
 ```text
-read:reports,read:ledger,stage:imports,export:reports
+POST https://mcp.fiscal.linotsai.top/auth/challenges
+{"kind":"session","scopes":["read:reports","read:ledger","stage:imports","export:reports"]}
 ```
 
-Keep `commit:imports` disabled until the first real weekly/monthly loop has
-been accepted. Each Agent client should keep the key in its own secret store;
-do not place it in a shared public config, URL, browser localStorage, or chat
-history. The generic connection shape is in `clients/fiscal-remote-mcp.example.json`;
-client-specific JSON/YAML syntax may differ.
+Send the returned `approval_url` to the owner. After approval, poll the
+challenge with `X-Fiscal-Poll-Token`, then use the returned Session token for
+MCP. Keep `commit:imports` out of the session scopes; a commit requires a
+second operation challenge bound to the exact request digest. The generic
+connection shape is in `clients/fiscal-remote-mcp.example.json`; client-specific
+JSON/YAML syntax may differ.
 
 After configuring a terminal, verify `initialize`, `tools/list`, a monthly
 report read, and a harmless ledger search. Then use one staged batch to verify
-the full confirmation path. The key is sent on every HTTP request; a gateway
-restart clears only its in-memory audit ring, not Fiscal ledger data.
+the full approval path. A gateway restart clears active in-memory sessions and
+challenges, but never touches Fiscal ledger data.
 
 ## HZ operator acceptance
 

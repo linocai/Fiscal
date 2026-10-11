@@ -1,0 +1,26 @@
+{
+  "service": "Fiscal",
+  "protocol": "MCP over Streamable HTTP",
+  "human_url": "https://console.fiscal.linotsai.top/agent/",
+  "mcp_endpoint": "https://mcp.fiscal.linotsai.top/mcp",
+  "auth": {
+    "challenge_endpoint": "https://mcp.fiscal.linotsai.top/auth/challenges",
+    "approval_url": "https://console.fiscal.linotsai.top/agent/approve/",
+    "poll_method": "GET",
+    "poll_header": "X-Fiscal-Poll-Token",
+    "session_scheme": "Session",
+    "session_idle_seconds": 7200,
+    "session_absolute_seconds": 28800,
+    "write_operation_seconds": 1800,
+    "challenge_seconds": 600
+  },
+  "session_scopes": ["read:reports", "read:ledger", "stage:imports", "export:reports"],
+  "write_scope": "commit:imports",
+  "write_requires_fresh_totp": true,
+  "personal_break_glass_key": "manual_only",
+  "security": {
+    "totp": "Google Authenticator compatible 6-digit TOTP",
+    "secrets_in_document": false,
+    "agent_keys": "not_used"
+  }
+}

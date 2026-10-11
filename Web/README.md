@@ -2,6 +2,11 @@
 
 Fiscal Ledger Console 是 Agent-first 网页控制台。它只依赖 `FiscalApiAdapter`，默认使用本地 mock 数据；第二阶段提供可配置的 HTTP 和 JSON-RPC MCP adapter，不需要改页面组件。
 
+公开的 Agent 接入说明位于 `/agent/`，机器可读 discovery 位于
+`/.well-known/fiscal-agent.json`。这两份静态资源不包含密钥。Agent 通过
+MCP 网关的 TOTP challenge 获取短期 Session；网页的 `/agent/approve/` 页面
+只负责让用户输入当前 Google Authenticator 验证码。
+
 ## 本地运行
 
 ```bash

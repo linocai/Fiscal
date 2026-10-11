@@ -9,6 +9,7 @@ prove that an access token is valid. Those are the operator's acceptance steps.
 from __future__ import annotations
 
 import argparse
+import base64
 import os
 import sys
 from pathlib import Path
@@ -86,7 +87,12 @@ def validate(values: Mapping[str, str], *, target: str) -> dict[str, str]:
             raise ConfigError("FISCAL_BACKEND_URL must point at the /api/v1 API root")
         _required(values, "FISCAL_BACKEND_TOKEN", minimum=16)
 
-    _required(values, "FISCAL_MCP_API_KEY", minimum=16)
+    legacy_key = values.get("FISCAL_MCP_API_KEY", "").strip()
+    if legacy_key and len(legacy_key) < 16:
+        raise ConfigError("FISCAL_MCP_API_KEY must be at least 16 characters when configured")
+    break_glass = values.get("FISCAL_MCP_BREAK_GLASS_KEY", "").strip()
+    if break_glass and len(break_glass) < 16:
+        raise ConfigError("FISCAL_MCP_BREAK_GLASS_KEY must be at least 16 characters when configured")
     batch_path = values.get("FISCAL_BATCH_API_PATH", "").strip()
     if not mock_enabled and batch_path != "/import-batches":
         raise ConfigError("FISCAL_BATCH_API_PATH must be /import-batches")
@@ -122,10 +128,43 @@ def validate(values: Mapping[str, str], *, target: str) -> dict[str, str]:
     if len(scopes) != len(set(scopes)):
         raise ConfigError("FISCAL_MCP_API_SCOPES must not contain duplicates")
 
-    if "commit:imports" in scopes:
-        _required(values, "FISCAL_MCP_CONFIRMATION_SECRET", minimum=32)
-        if values.get("FISCAL_MCP_CONFIRMATION_SECRET", "") == values.get("FISCAL_BACKEND_TOKEN", ""):
-            raise ConfigError("FISCAL_MCP_CONFIRMATION_SECRET must be independent from FISCAL_BACKEND_TOKEN")
+    totp_secret = _required(values, "FISCAL_MCP_TOTP_SECRET", minimum=16)
+    try:
+        base64.b32decode("".join(totp_secret.split()).upper() + "=" * (-len("".join(totp_secret.split())) % 8), casefold=True)
+    except (ValueError, base64.binascii.Error):
+        raise ConfigError("FISCAL_MCP_TOTP_SECRET must be base32") from None
+
+    session_scopes = [scope.strip() for scope in values.get("FISCAL_MCP_SESSION_SCOPES", "").split(",") if scope.strip()]
+    if not session_scopes:
+        raise ConfigError("FISCAL_MCP_SESSION_SCOPES must explicitly list at least one scope")
+    unknown_session = sorted(set(session_scopes) - (ALLOWED_SCOPES - {"commit:imports"}))
+    if unknown_session:
+        raise ConfigError(f"FISCAL_MCP_SESSION_SCOPES contains unsupported scopes: {', '.join(unknown_session)}")
+    if len(session_scopes) != len(set(session_scopes)):
+        raise ConfigError("FISCAL_MCP_SESSION_SCOPES must not contain duplicates")
+
+    confirmation_secret = _required(values, "FISCAL_MCP_CONFIRMATION_SECRET", minimum=32)
+    if confirmation_secret == values.get("FISCAL_BACKEND_TOKEN", ""):
+        raise ConfigError("FISCAL_MCP_CONFIRMATION_SECRET must be independent from FISCAL_BACKEND_TOKEN")
+
+    approval_url = values.get("FISCAL_MCP_APPROVAL_URL", "https://console.fiscal.linotsai.top/agent/approve").strip()
+    parsed_approval = urlparse(approval_url)
+    if parsed_approval.scheme != "https" or not parsed_approval.netloc or parsed_approval.query or parsed_approval.fragment:
+        raise ConfigError("FISCAL_MCP_APPROVAL_URL must be an HTTPS URL without query or fragment")
+
+    try:
+        idle_seconds = int(values.get("FISCAL_MCP_SESSION_IDLE_SECONDS", "7200"))
+        absolute_seconds = int(values.get("FISCAL_MCP_SESSION_MAX_SECONDS", "28800"))
+        operation_seconds = int(values.get("FISCAL_MCP_OPERATION_SECONDS", "1800"))
+        challenge_seconds = int(values.get("FISCAL_MCP_CHALLENGE_SECONDS", "600"))
+    except ValueError:
+        raise ConfigError("TOTP session durations must be integers") from None
+    if not 60 <= idle_seconds < absolute_seconds <= 86_400:
+        raise ConfigError("TOTP session idle/max durations must satisfy 60 <= idle < max <= 86400")
+    if not 60 <= operation_seconds <= 7_200:
+        raise ConfigError("FISCAL_MCP_OPERATION_SECONDS must be between 60 and 7200")
+    if not 60 <= challenge_seconds <= 3_600:
+        raise ConfigError("FISCAL_MCP_CHALLENGE_SECONDS must be between 60 and 3600")
 
     return {
         "target": target,
@@ -133,8 +172,12 @@ def validate(values: Mapping[str, str], *, target: str) -> dict[str, str]:
         "batch_api_path": batch_path or "not used by mock adapter",
         "bind": f"{bind_host}:{bind_port}",
         "scopes": ",".join(scopes),
+        "session_scopes": ",".join(session_scopes),
         "mock": "enabled" if mock_enabled else "disabled",
-        "commit_confirmation": "configured" if "commit:imports" in scopes else "not required",
+        "totp": "configured",
+        "session_ttl": f"idle={idle_seconds}s absolute={absolute_seconds}s",
+        "write_approval": f"operation={operation_seconds}s challenge={challenge_seconds}s",
+        "commit_confirmation": "configured",
     }
 
 
@@ -159,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"MCP preflight failed: {error}", file=sys.stderr)
         return 1
     print("MCP preflight passed (configuration shape only; no network call made).")
-    for key in ("target", "backend_url", "batch_api_path", "bind", "scopes", "mock", "commit_confirmation"):
+    for key in ("target", "backend_url", "batch_api_path", "bind", "scopes", "session_scopes", "mock", "totp", "session_ttl", "write_approval", "commit_confirmation"):
         print(f"{key}={summary[key]}")
     return 0
 

@@ -3,7 +3,9 @@
 The implementation uses only JSON-RPC messages and keeps the Fiscal tool
 contract in :mod:`fiscal_mcp.contracts`; no backend or database code is
 imported.  It is suitable for local Agent clients today and can sit behind an
-HTTP MCP transport later without changing the service layer.
+HTTP MCP transport later without changing the service layer. Remote clients
+normally use the TOTP session boundary; legacy bearer keys remain available
+only for controlled break-glass or compatibility use.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ import sys
 from typing import Any, TextIO
 
 from .adapter import HttpFiscalBackendAdapter, MockFiscalBackendAdapter
-from .auth import ApiKeyRegistry
+from .auth import ApiKeyRegistry, TotpSessionRegistry
 from .confirmation import HMACConfirmationVerifier
 from .errors import FiscalMCPError
 from .service import FiscalMCPService
@@ -25,9 +27,16 @@ SERVER_VERSION = "0.1.0"
 
 
 class MCPServer:
-    def __init__(self, service: FiscalMCPService, *, static_api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        service: FiscalMCPService,
+        *,
+        static_api_key: str | None = None,
+        sessions: TotpSessionRegistry | None = None,
+    ) -> None:
         self.service = service
         self.static_api_key = static_api_key
+        self.sessions = sessions or service.sessions
 
     async def handle_message(self, message: Any) -> dict[str, Any] | None:
         if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
@@ -67,10 +76,22 @@ class MCPServer:
             return self._error(request_id, -32602, "tools/call requires a tool name.")
         meta = params.get("_meta")
         presented_key = self.static_api_key
+        session_token = None
+        operation_token = None
         if isinstance(meta, dict) and isinstance(meta.get("fiscal_api_key"), str):
             presented_key = meta["fiscal_api_key"]
+        if isinstance(meta, dict) and isinstance(meta.get("fiscal_session_token"), str):
+            session_token = meta["fiscal_session_token"]
+        if isinstance(meta, dict) and isinstance(meta.get("fiscal_operation_token"), str):
+            operation_token = meta["fiscal_operation_token"]
         try:
-            result = await self.service.invoke(name, arguments, api_key=presented_key)
+            result = await self.service.invoke(
+                name,
+                arguments,
+                api_key=presented_key,
+                session_token=session_token,
+                operation_token=operation_token,
+            )
             return self._success(request_id, self._tool_result(result))
         except FiscalMCPError as error:
             return self._success(request_id, self._tool_error(error))
@@ -106,12 +127,29 @@ def build_default_server() -> MCPServer:
             batch_path=os.environ.get("FISCAL_BATCH_API_PATH"),
         )
     secret = os.environ.get("FISCAL_MCP_CONFIRMATION_SECRET")
+    session_scopes = [
+        value.strip()
+        for value in os.environ.get(
+            "FISCAL_MCP_SESSION_SCOPES",
+            "read:reports,read:ledger,stage:imports,export:reports",
+        ).split(",")
+        if value.strip()
+    ]
+    sessions = TotpSessionRegistry(
+        os.environ.get("FISCAL_MCP_TOTP_SECRET"),
+        default_scopes=session_scopes,
+        idle_seconds=int(os.environ.get("FISCAL_MCP_SESSION_IDLE_SECONDS", "7200")),
+        absolute_seconds=int(os.environ.get("FISCAL_MCP_SESSION_MAX_SECONDS", "28800")),
+        operation_seconds=int(os.environ.get("FISCAL_MCP_OPERATION_SECONDS", "1800")),
+        challenge_seconds=int(os.environ.get("FISCAL_MCP_CHALLENGE_SECONDS", "600")),
+    )
     service = FiscalMCPService(
         adapter=adapter,
         key_registry=registry,
         confirmation_verifier=HMACConfirmationVerifier(secret),
+        sessions=sessions,
     )
-    return MCPServer(service, static_api_key=static_key)
+    return MCPServer(service, static_api_key=static_key, sessions=sessions)
 
 
 async def run_stdio(server: MCPServer, *, stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:

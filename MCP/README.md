@@ -7,6 +7,31 @@ HTTP report/ledger/export and atomic import-batch routes through
 `HttpFiscalBackendAdapter`; `MockFiscalBackendAdapter` provides a deterministic
 local fixture for contract and Web work.
 
+## Authentication model
+
+Remote Agents do not receive a per-Agent key. They read the public Agent
+instructions at `https://console.fiscal.linotsai.top/agent/`, create a session
+challenge at `POST https://mcp.fiscal.linotsai.top/auth/challenges`, and send
+the returned approval URL to the owner. The owner enters the current Google
+Authenticator code on the approval page. The Agent polls with
+`X-Fiscal-Poll-Token`, then uses `Authorization: Session <token>` for MCP
+calls. The session lasts two hours after its last request and at most eight
+hours; the 30-second TOTP rotation does not interrupt it.
+
+Creating or committing a batch is split into two actions. Staging and
+validation use the session. Before `fiscal_commit_import_batch`, the Agent
+creates an `operation` challenge bound to the SHA-256 request digest. A second
+Authenticator approval issues a single-use operation token valid for 30
+minutes. The gateway then mints the backend confirmation credential internally.
+
+The personal Fiscal API key remains a manual break-glass credential. It is not
+published in discovery, not requested from Agents, and not used as an automatic
+fallback. Legacy bearer keys can still be enabled for controlled compatibility
+clients.
+
+The machine-readable contract is at
+`https://console.fiscal.linotsai.top/.well-known/fiscal-agent.json`.
+
 ## Run locally
 
 From the repository root (no installation required):
@@ -18,12 +43,10 @@ PYTHONPATH=MCP/src FISCAL_MCP_USE_MOCK=1 \
   python -m fiscal_mcp
 ```
 
-The process speaks newline-delimited JSON-RPC on stdin/stdout.  It implements
-the MCP `initialize`, `tools/list`, `tools/call`, and `ping` methods.  A client
-may present a key per call in `params._meta.fiscal_api_key`; otherwise the
-configured `FISCAL_MCP_API_KEY` is used.  Keys are never included in responses
-or audit details.  A missing key intentionally makes every tool call return
-`unauthorized`.
+The process speaks newline-delimited JSON-RPC on stdin/stdout. It implements
+the MCP `initialize`, `tools/list`, `tools/call`, and `ping` methods. The local
+stdio example uses a legacy bearer key; the remote HTTP gateway uses the TOTP
+session flow above.
 
 For an existing HTTP backend:
 
@@ -50,15 +73,15 @@ python3 MCP/scripts/preflight.py \
   --env-file /path/to/fiscal-mcp.env --target staging
 ```
 
-The check validates the HTTPS `/api/v1` root, explicit batch path, key shape,
-scope names, mock-mode policy and the independent confirmation secret required
-by `commit:imports`. It does not contact Fiscal or prove a token, migration,
+The check validates the HTTPS `/api/v1` root, explicit batch path, TOTP secret,
+session scopes and lifetimes, approval URL, mock-mode policy and the independent
+confirmation secret. It does not contact Fiscal or prove a token, migration,
 DNS/TLS certificate or real bill flow. The package supports local stdio and the
-HZ remote HTTP gateway; the Agent client owns only the remote key.
+HZ remote HTTP gateway; the Agent does not own a permanent key.
 
 For the HZ gateway, install the service and Nginx assets in `ops/` and expose
-the configured `/mcp` path through HTTPS. The gateway injects the HTTPS bearer
-key into the existing scope boundary and never gives an Agent database access.
+`/mcp`, `/auth/challenges` and `/health` through HTTPS. The gateway never gives
+an Agent database access.
 
 The adapter forwards `expected_version`, `confirmation_token`, and the commit
 `idempotency_key` in the commit body and repeats the idempotency key in the
@@ -91,17 +114,19 @@ candidate rows, and an idempotency key.  It never writes a formal transaction.
 Each candidate has a caller-owned `client_id`; duplicate detection and missing
 field questions are returned by validation.
 
-Commit requires all of:
+Legacy bearer commits require all of:
 
 1. `commit:imports` on the caller key;
 2. the current `expected_version`;
 3. an opaque confirmation credential tied to batch and version;
 4. a commit `idempotency_key`.
 
-The included `HMACConfirmationVerifier` defines the boundary for a Web console
-to mint a credential (`v1.<batch_id>.<version>.<signature>`).  It refuses all
-commits when `FISCAL_MCP_CONFIRMATION_SECRET` is absent.  The fixture tests may
-use `NoopConfirmationVerifier`; never deploy that verifier.
+The included `HMACConfirmationVerifier` defines the internal credential format
+(`v1.<batch_id>.<version>.<signature>`). TOTP session commits do not accept a
+caller-supplied confirmation token: the gateway mints it only after a matching
+one-time operation approval. It refuses all commits when
+`FISCAL_MCP_CONFIRMATION_SECRET` is absent. The fixture tests may use
+`NoopConfirmationVerifier`; never deploy that verifier.
 
 ## Tests
 

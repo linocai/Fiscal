@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import base64
+import hashlib
+import hmac
 import unittest
+from datetime import datetime, timezone
 from typing import Any
 
-from fiscal_mcp.auth import ApiKeyRegistry
-from fiscal_mcp.confirmation import NoopConfirmationVerifier
+from fiscal_mcp.auth import ApiKeyRegistry, TotpSessionRegistry, request_digest
+from fiscal_mcp.confirmation import HMACConfirmationVerifier, NoopConfirmationVerifier
 from fiscal_mcp.contracts import Scope
 from fiscal_mcp.http_server import MCPHTTPApplication
 from fiscal_mcp.server import MCPServer
@@ -14,13 +18,22 @@ from fiscal_mcp.adapter import MockFiscalBackendAdapter
 
 
 KEY = "agent-key-0123456789-abcdef"
+TOTP_SECRET = "JBSWY3DPEHPK3PXP"
+
+
+def current_totp() -> str:
+    counter = int(datetime.now(timezone.utc).timestamp()) // 30
+    digest = hmac.new(base64.b32decode(TOTP_SECRET), counter.to_bytes(8, "big"), hashlib.sha1).digest()
+    number = (int.from_bytes(digest[digest[-1] & 0x0F :][:4], "big") & 0x7FFFFFFF) % 1_000_000
+    return f"{number:06d}"
 
 
 def build_app() -> MCPHTTPApplication:
     registry = ApiKeyRegistry()
     registry.register(KEY, list(Scope), label="test")
-    service = FiscalMCPService(MockFiscalBackendAdapter(), registry, NoopConfirmationVerifier())
-    return MCPHTTPApplication(MCPServer(service), allowed_origins=("https://console.invalid",))
+    sessions = TotpSessionRegistry(TOTP_SECRET, default_scopes=(scope for scope in Scope if scope is not Scope.COMMIT_IMPORTS))
+    service = FiscalMCPService(MockFiscalBackendAdapter(), registry, HMACConfirmationVerifier("test-confirmation-secret"), sessions=sessions)
+    return MCPHTTPApplication(MCPServer(service, sessions=sessions), allowed_origins=("https://console.invalid",))
 
 
 async def request(
@@ -31,6 +44,7 @@ async def request(
     *,
     authorization: str | None = None,
     origin: str | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> tuple[int, dict[str, str], bytes]:
     body = b"" if payload is None else json.dumps(payload).encode("utf-8")
     headers: list[tuple[bytes, bytes]] = [(b"content-length", str(len(body)).encode("ascii"))]
@@ -38,6 +52,8 @@ async def request(
         headers.append((b"authorization", authorization.encode("latin-1")))
     if origin is not None:
         headers.append((b"origin", origin.encode("latin-1")))
+    for key, value in (extra_headers or {}).items():
+        headers.append((key.lower().encode("latin-1"), value.encode("latin-1")))
     messages = [{"type": "http.request", "body": body, "more_body": False}]
     sent: list[dict[str, Any]] = []
 
@@ -99,6 +115,68 @@ class MCPHTTPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status, 200)
         response = json.loads(body)
         self.assertEqual(response["result"]["structuredContent"]["meta"]["period"], "2026-10")
+
+    async def test_totp_session_challenge_and_agent_call(self) -> None:
+        app = build_app()
+        status, _, body = await request(
+            app,
+            "POST",
+            "/auth/challenges",
+            {"kind": "session", "client_label": "test-agent", "scopes": ["read:reports"]},
+            origin="https://console.invalid",
+        )
+        self.assertEqual(status, 201)
+        challenge = json.loads(body)
+        status, _, _ = await request(
+            app,
+            "POST",
+            f"/auth/challenges/{challenge['challenge_id']}/approve",
+            {"totp": current_totp()},
+            origin="https://console.invalid",
+        )
+        self.assertEqual(status, 200)
+        status, _, body = await request(
+            app,
+            "GET",
+            f"/auth/challenges/{challenge['challenge_id']}",
+            extra_headers={"X-Fiscal-Poll-Token": challenge["poll_token"]},
+        )
+        self.assertEqual(status, 200)
+        session_token = json.loads(body)["session_token"]
+        status, _, body = await request(
+            app,
+            "POST",
+            "/mcp",
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "fiscal_get_monthly_report", "arguments": {"period": "2026-10"}}},
+            authorization=f"Session {session_token}",
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["result"]["structuredContent"]["meta"]["period"], "2026-10")
+
+    async def test_operation_challenge_is_required_for_commit(self) -> None:
+        app = build_app()
+        status, _, body = await request(app, "POST", "/auth/challenges", {"kind": "session"})
+        session_challenge = json.loads(body)
+        await request(app, "POST", f"/auth/challenges/{session_challenge['challenge_id']}/approve", {"totp": current_totp()})
+        _, _, body = await request(app, "GET", f"/auth/challenges/{session_challenge['challenge_id']}", extra_headers={"X-Fiscal-Poll-Token": session_challenge["poll_token"]})
+        session_token = json.loads(body)["session_token"]
+        args = {"batch_id": "batch-missing", "expected_version": 1, "idempotency_key": "commit-1234"}
+        digest = request_digest("fiscal_commit_import_batch", args)
+        status, _, body = await request(
+            app,
+            "POST",
+            "/auth/challenges",
+            {"kind": "operation", "scope": "commit:imports", "request_digest": digest, "intent": "commit reviewed batch"},
+            authorization=f"Session {session_token}",
+        )
+        self.assertEqual(status, 201)
+        operation_challenge = json.loads(body)
+        await request(app, "POST", f"/auth/challenges/{operation_challenge['challenge_id']}/approve", {"totp": current_totp()})
+        _, _, body = await request(app, "GET", f"/auth/challenges/{operation_challenge['challenge_id']}", extra_headers={"X-Fiscal-Poll-Token": operation_challenge["poll_token"]})
+        operation_token = json.loads(body)["operation_token"]
+        status, _, body = await request(app, "POST", "/mcp", {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "fiscal_commit_import_batch", "arguments": args, "_meta": {"fiscal_operation_token": operation_token}}}, authorization=f"Session {session_token}")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["result"]["structuredContent"]["error"]["code"], "batch_not_found")
 
     async def test_unknown_path_and_oversized_body_are_bounded(self) -> None:
         app = build_app()

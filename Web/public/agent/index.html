@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Fiscal Agent 接入说明</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#f4f7f3; color:#17352b; }
+    main { max-width: 860px; margin: 48px auto; padding: 0 22px 64px; }
+    .card { background:#fff; border:1px solid #dfe9e1; border-radius:18px; padding:26px 30px; margin:18px 0; box-shadow:0 6px 24px #17352b0d; }
+    h1 { margin:0 0 8px; font-size:32px; } h2 { margin-top:0; font-size:20px; }
+    code { background:#edf3ee; padding:2px 5px; border-radius:5px; word-break:break-all; }
+    pre { overflow:auto; background:#12231d; color:#e7f6eb; padding:16px; border-radius:12px; }
+    a { color:#1d7254; } li { margin:9px 0; line-height:1.55; }
+    .note { border-left:4px solid #e2a044; padding-left:14px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h1>Fiscal Agent 接入说明</h1>
+    <p>这是 Fiscal 给联网 Agent 使用的公开说明页。页面不包含任何密钥、账单或个人数据。</p>
+    <p><strong>MCP endpoint：</strong> <code>https://mcp.fiscal.linotsai.top/mcp</code></p>
+    <p><strong>机器配置：</strong> <a href="/.well-known/fiscal-agent.json">/.well-known/fiscal-agent.json</a></p>
+  </div>
+  <div class="card">
+    <h2>标准使用顺序</h2>
+    <ol>
+      <li>Agent 读取本页或 discovery JSON，使用 <code>POST /auth/challenges</code> 创建 <code>session</code> challenge。</li>
+      <li>Agent 把返回的 <code>approval_url</code> 发给用户；用户打开页面，用 Google Authenticator 输入当前 6 位验证码。</li>
+      <li>Agent 使用返回的 <code>X-Fiscal-Poll-Token</code> 轮询 challenge，拿到短期 <code>Session</code> token。</li>
+      <li>Agent 用 <code>Authorization: Session &lt;session_token&gt;</code> 调用 MCP 工具。会话空闲 2 小时失效，最长 8 小时；验证码每 30 秒变化不会中断已建立的会话。</li>
+      <li>读取、分析和暂存账单可以直接完成。真正提交到账本前，Agent 为本次请求创建 <code>operation</code> challenge，用户再次输入一次验证码；该写入授权只允许匹配的请求使用一次，有效 30 分钟。</li>
+    </ol>
+  </div>
+  <div class="card">
+    <h2>Agent 应遵守的边界</h2>
+    <ul>
+      <li>只向用户索取 Google Authenticator 当前验证码，不索取或记录个人 Fiscal API key。</li>
+      <li>验证码、Session token、poll token 和 operation token 都不得写入日志、账单备注或公开回答。</li>
+      <li>先导入、校验、展示摘要，再请求用户批准最终写入；不要跳过预览。</li>
+      <li>个人 Fiscal API key 是人工使用的 break-glass 兜底钥匙，不属于 Agent 自动流程。</li>
+    </ul>
+    <p class="note">如果 Session 过期，重新创建 session challenge 即可；不需要重新配置 Agent。</p>
+  </div>
+  <div class="card">
+    <h2>用户批准页面</h2>
+    <p><a href="/agent/approve/">打开 TOTP 批准页面</a>。只有持有本页链接并且能提供当前验证码的人才能批准操作。</p>
+  </div>
+</main>
+</body>
+</html>
