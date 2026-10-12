@@ -1,7 +1,7 @@
 # Fiscal Ledger MCP
 
 This directory contains the independent Agent-facing MCP boundary for Fiscal.
-It is deliberately separate from `Backend/` and `App/`.  The server does not
+It is deliberately separate from `Backend/`.  The server does not
 import Fiscal's backend code or connect to its database.  It calls the existing
 HTTP report/ledger/export and atomic import-batch routes through
 `HttpFiscalBackendAdapter`; `MockFiscalBackendAdapter` provides a deterministic

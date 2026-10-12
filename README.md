@@ -1,20 +1,18 @@
 # Fiscal
 
-Fiscal is a private, single-user personal-finance ledger. The native iOS/macOS client is frozen at Build 51; the active operating surface is the remote MCP gateway backed by the existing FastAPI/PostgreSQL ledger and its minimal TOTP approval/discovery Web pages. Product scope and the pause point live in [`PROJECT_PLAN.md`](PROJECT_PLAN.md); release and archive records live under [`archive/`](archive/).
+Fiscal is a private, single-user personal-finance ledger. The native iOS/macOS client (Build 51) is retired; the active operating surface is the remote MCP gateway backed by the existing FastAPI/PostgreSQL ledger and its minimal TOTP approval/discovery Web pages. Product scope and the pause point live in [`PROJECT_PLAN.md`](PROJECT_PLAN.md); release and archive records live under [`archive/`](archive/).
 
 ## Repository map
 
-- `App/` — native SwiftUI iOS/macOS applications and shared `FiscalKit`.
+- `MCP/` — remote MCP gateway (JSON-RPC over HTTP/stdio, TOTP sessions, operation approvals) deployed on HZ.
 - `Backend/` — FastAPI, SQLAlchemy, Alembic, PostgreSQL, the unified ledger, and `ops/` deployment tooling.
+- `Web/` — Agent discovery, TOTP approval pages (required by MCP) and the Web console.
 - `archive/` — historical audits, design sources, plans, release contracts, QA results, and screenshots.
 - `AGENTS.md` — repository-specific engineering rules and verification gates.
 - `PROJECT_PLAN.md` — current product position, invariants, risks, and next authorized work.
 
 ## Toolchain
 
-- Xcode 27+
-- Swift 6.3.3 in Swift 6 language mode with complete strict concurrency
-- Minimum iOS 27 / macOS 27
 - Python 3.12 managed by `uv`
 - PostgreSQL 16+ in production (the full local migration suite is also exercised on PostgreSQL 14)
 - Docker Compose v2 for local/staging infrastructure
@@ -61,39 +59,9 @@ uv run --frozen pytest
 uv run --frozen alembic upgrade head --sql
 ```
 
-## Apple applications
+## Native applications (retired)
 
-Generate the Xcode project and run the two build gates:
-
-```sh
-cd App
-xcodegen generate
-xcodebuild \
-  -project Fiscal.xcodeproj \
-  -scheme FiscaliOS \
-  -destination 'generic/platform=iOS Simulator' \
-  build
-xcodebuild \
-  -project Fiscal.xcodeproj \
-  -scheme FiscalmacOS \
-  -destination 'platform=macOS,arch=arm64' \
-  test
-```
-
-The debug API base URL is `http://127.0.0.1:8000`, with local-network transport enabled only for development. Release builds use `https://fiscal.linotsai.top`. A production client receives a generated access key after the user verifies the personal access passphrase; it stores that opaque key in Keychain. Do not use the local integration key as a production credential.
-
-With the local integration API running and seeded, run the authenticated iOS navigation/data acceptance tests on an available simulator:
-
-```sh
-xcodebuild \
-  -project Fiscal.xcodeproj \
-  -scheme FiscaliOS \
-  -destination 'platform=iOS Simulator,id=<SIMULATOR_UDID>' \
-  test
-```
-
-The shared scheme injects a local-only access-key fixture for UI tests; it is
-never a production credential.
+The native iOS/macOS client was retired on 2026-10-12. Its full source is preserved at the immutable tag `native-app-final` (`git checkout native-app-final -- App`); the frozen Build 51 release artifacts are archived outside the repository as recorded in [`archive/plans/2026-10-12-native-app-retirement.md`](archive/plans/2026-10-12-native-app-retirement.md).
 
 ## Infrastructure
 
@@ -101,11 +69,9 @@ See [`Backend/ops/README.md`](Backend/ops/README.md) for local PostgreSQL and st
 
 ## Release evidence
 
-- Current signed release and local-install manifest: [`archive/releases/v2.2.0/build41/RELEASE_STATE.md`](archive/releases/v2.2.0/build41/RELEASE_STATE.md).
-- Prior signed release: [`archive/releases/v2.2.0/RELEASE_STATE.md`](archive/releases/v2.2.0/RELEASE_STATE.md) (build 40).
-- Prior full QA history: [`archive/releases/v1.5.0/qa/frontend/f5-results.md`](archive/releases/v1.5.0/qa/frontend/f5-results.md).
+- Last native release (V2.4.0 Build 51): [`archive/releases/v2.4.0/RELEASE_STATE.md`](archive/releases/v2.4.0/RELEASE_STATE.md).
 - Historical contracts and QA: [`archive/README.md`](archive/README.md).
 
 ## 当前运行方式
 
-原生 App 已冻结并作为历史发布物归档。日常账单导入、校验、提交和分析统一通过 `https://mcp.fiscal.linotsai.top/mcp` 完成；MCP 通过 TOTP Session 调用现有 Backend/PostgreSQL 账本。Web 站点只保留 Agent discovery、公开接入说明和 TOTP 批准页，是 MCP 鉴权链路的支撑页面。归档和云端收口边界见 [`archive/plans/2026-10-11-fiscal-pause_archive_execution.md`](archive/plans/2026-10-11-fiscal-pause_archive_execution.md)。
+原生 App 已退役并移出仓库（tag `native-app-final`）。日常账单导入、校验、提交和分析统一通过 `https://mcp.fiscal.linotsai.top/mcp` 完成；MCP 通过 TOTP Session 调用现有 Backend/PostgreSQL 账本。Web 站点提供 Agent discovery、公开接入说明和 TOTP 批准页（MCP 鉴权链路必需），网页控制台继续保留。云端收口见 [`archive/plans/2026-10-11-fiscal-pause_archive_execution.md`](archive/plans/2026-10-11-fiscal-pause_archive_execution.md)，仓库退役与本地归档位置见 [`archive/plans/2026-10-12-native-app-retirement.md`](archive/plans/2026-10-12-native-app-retirement.md)。

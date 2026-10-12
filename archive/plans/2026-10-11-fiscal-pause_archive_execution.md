@@ -8,7 +8,7 @@
 
 ## 本地归档
 
-归档目录：`/Users/linotsai/文稿/Codex/2026-10-11-fiscal-archive/`
+归档目录：`/Users/linotsai/文稿/Claude/Fiscal-archive/2026-10-11-pause/`（原记录写作 `~/文稿/Codex/2026-10-11-fiscal-archive/`，实际生成于 `~/Downloads/`，2026-10-12 迁至现址并复核 SHA256）
 
 - `packages/Fiscal-source-worktree.zip`：源码、文档、运维模板和当前工作树快照；排除虚拟环境、依赖缓存、`node_modules`、生成的 `dist` 和历史 `build` 目录。
 - `packages/Fiscal-release-artifacts-build51.zip`：冻结的原生 App Build 51 发布物、dSYM、校验值和验证元数据。
