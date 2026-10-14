@@ -339,7 +339,7 @@ asyncio.run(run())
         )
         assert conversion["source_database_revision"] == "20260922_0041"
         assert conversion["original_archive_unchanged"] is True
-        assert converted_manifest["database_revision"] == "20260926_0042"
+        assert converted_manifest["database_revision"] == "20261010_0043"
         claim = next(
             row
             for row in converted_payload["entities"]["reimbursement_claims"]

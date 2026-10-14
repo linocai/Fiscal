@@ -7,12 +7,15 @@ import pytest
 
 from fiscal_api.db.base import Base
 from fiscal_api.services.archive import (
+    _AI_REDACTED_RAW_INPUT,
     _RETIRED_V240_TABLES,
+    _V43_TABLES,
     CURRENT_DATABASE_REVISION,
     ArchiveError,
     ArchiveService,
     _archive_tables,
     _legacy_cash_flow_links,
+    _redact_candidate_source_text,
 )
 
 
@@ -23,13 +26,16 @@ from fiscal_api.services.archive import (
         "20260910_0039",
         "20260912_0040",
         "20260922_0041",
+        "20260926_0042",
     ],
 )
 def test_legacy_archive_source_validation_and_empty_domain_adaptation(source):
     new_tables = {"cash_flow_settlement_links", "credit_payoff_operations", "credit_payoff_links"}
     omitted = new_tables if source in {"20260831_0038", "20260910_0039"} else set()
+    omitted = omitted | _V43_TABLES
     entities = {t.name: [] for t in _archive_tables(Base.metadata) if t.name not in omitted}
-    entities.update({name: [] for name in _RETIRED_V240_TABLES})
+    if source != "20260926_0042":
+        entities.update({name: [] for name in _RETIRED_V240_TABLES})
     payload = {"entities": entities, "data_revision": 1}
     manifest = {
         "database_revision": source,
@@ -40,10 +46,12 @@ def test_legacy_archive_source_validation_and_empty_domain_adaptation(source):
     converted, content, report = ArchiveService.adapt_to_current(manifest, payload)
     assert converted["database_revision"] == CURRENT_DATABASE_REVISION
     assert new_tables <= content["entities"].keys()
+    assert content["entities"]["import_batches"] == []
+    assert "import_batches" in report["added_fields"]
     assert report["original_archive_unchanged"]
     assert (manifest, payload) == original
     malformed = deepcopy(payload)
-    if omitted:
+    if omitted - _V43_TABLES:
         malformed["entities"]["credit_payoff_operations"] = []
     else:
         del malformed["entities"]["credit_payoff_operations"]
@@ -51,8 +59,32 @@ def test_legacy_archive_source_validation_and_empty_domain_adaptation(source):
         ArchiveService.adapt_to_current(manifest, malformed)
 
 
-def test_0041_nonempty_pdf_archive_is_rejected_without_mutating_original():
+def test_pre_0043_archive_must_not_carry_import_batches():
     entities = {t.name: [] for t in _archive_tables(Base.metadata)}
+    manifest = {
+        "database_revision": "20260926_0042",
+        "data_revision": 1,
+        "entity_counts": {k: 0 for k in entities},
+    }
+    with pytest.raises(ArchiveError, match="entity set"):
+        ArchiveService.adapt_to_current(manifest, {"entities": entities, "data_revision": 1})
+
+
+def test_import_batch_source_text_follows_ai_raw_policy():
+    candidates = [
+        {"client_id": "a", "title": "午饭", "source_text": "10/14 午饭 32.5"},
+        {"client_id": "b", "title": "地铁"},
+    ]
+    redacted = _redact_candidate_source_text(candidates)
+    assert redacted == [
+        {"client_id": "a", "title": "午饭", "source_text": _AI_REDACTED_RAW_INPUT},
+        {"client_id": "b", "title": "地铁"},
+    ]
+    assert candidates[0]["source_text"] == "10/14 午饭 32.5"
+
+
+def test_0041_nonempty_pdf_archive_is_rejected_without_mutating_original():
+    entities = {t.name: [] for t in _archive_tables(Base.metadata) if t.name not in _V43_TABLES}
     entities.update({name: [] for name in _RETIRED_V240_TABLES})
     entities["statement_imports"] = [{"id": str(uuid4())}]
     payload = {"entities": entities, "data_revision": 1}

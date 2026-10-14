@@ -43,7 +43,11 @@ assert (
 ARCHIVE_MAGIC = b"FISCAL-ARCHIVE-V1\n"
 ARCHIVE_SCHEMA = "fiscal-archive-v1"
 API_SCHEMA = "fiscal-api-v1"
-CURRENT_DATABASE_REVISION = "20260926_0042"
+CURRENT_DATABASE_REVISION = "20261010_0043"
+V42_DATABASE_REVISION = "20260926_0042"
+# Agent import batches are audit receipts added in 0043; older archives restore
+# with an empty collection.
+_V43_TABLES = {"import_batches"}
 V41_DATABASE_REVISION = "20260922_0041"
 V40_DATABASE_REVISION = "20260912_0040"
 PREVIOUS_DATABASE_REVISION = "20260910_0039"
@@ -301,6 +305,19 @@ def _adapt_v240_entities(entities: dict[str, Any]) -> None:
             row.pop(name)
 
 
+def _redact_candidate_source_text(candidates: object) -> object:
+    """Apply the AI raw-input policy to Agent candidates' original text."""
+    if not isinstance(candidates, list):
+        return candidates
+    redacted: list[object] = []
+    for candidate in cast(list[object], candidates):
+        if isinstance(candidate, dict) and candidate.get("source_text") is not None:
+            candidate = {**cast(dict[str, object], candidate)}
+            candidate["source_text"] = _AI_REDACTED_RAW_INPUT
+        redacted.append(candidate)
+    return redacted
+
+
 class ArchiveService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -321,6 +338,8 @@ class ArchiveService:
                             values[column] = None
                     if table.name == "ai_proposals" and not include_ai_raw:
                         values["raw_input"] = _AI_REDACTED_RAW_INPUT
+                    if table.name == "import_batches" and not include_ai_raw:
+                        values["candidates"] = _redact_candidate_source_text(values["candidates"])
                     for table_name, column_name in _EXCLUDED_FOREIGN_KEY_COLUMNS:
                         if table.name == table_name:
                             values[column_name] = None
@@ -447,6 +466,7 @@ class ArchiveService:
         revision = manifest.get("database_revision")
         if revision not in {
             CURRENT_DATABASE_REVISION,
+            V42_DATABASE_REVISION,
             V41_DATABASE_REVISION,
             V40_DATABASE_REVISION,
             PREVIOUS_DATABASE_REVISION,
@@ -464,7 +484,10 @@ class ArchiveService:
         if not isinstance(entities, dict) or not isinstance(manifest.get("entity_counts"), dict):
             raise ArchiveError("archive payload shape is invalid")
         allowed = {table.name for table in _archive_tables(Base.metadata)}
+        pre_v240 = revision not in {CURRENT_DATABASE_REVISION, V42_DATABASE_REVISION}
         if revision != CURRENT_DATABASE_REVISION:
+            allowed -= _V43_TABLES
+        if pre_v240:
             allowed |= _RETIRED_V240_TABLES
         if revision in {PREVIOUS_DATABASE_REVISION, LEGACY_DATABASE_REVISION}:
             allowed -= _V40_TABLES
@@ -481,7 +504,7 @@ class ArchiveService:
                 raise ArchiveError("archive entity counts do not match manifest")
             if table_name in Base.metadata.tables:
                 columns = {column.name for column in Base.metadata.tables[table_name].columns}
-                if revision != CURRENT_DATABASE_REVISION:
+                if pre_v240:
                     columns |= _LEGACY_COLUMN_ADDITIONS.get(table_name, set())
                     columns -= _LEGACY_COLUMN_REMOVALS.get(table_name, set())
             elif table_name in _LEGACY_RETIRED_COLUMNS:
@@ -529,12 +552,17 @@ class ArchiveService:
                 entities[name] = []
             entities["cash_flow_settlement_links"] = _legacy_cash_flow_links(entities)
             added.extend(sorted(_V40_TABLES))
-        if source != CURRENT_DATABASE_REVISION:
+        if source not in {CURRENT_DATABASE_REVISION, V42_DATABASE_REVISION}:
             entities = _json_object(converted_payload["entities"], error="invalid entities")
             _adapt_v240_entities(entities)
             added.extend(
                 ["reimbursement_claims.counterparty_name", "reimbursement_claims.expected_date"]
             )
+        if source != CURRENT_DATABASE_REVISION:
+            entities = _json_object(converted_payload["entities"], error="invalid entities")
+            for name in sorted(_V43_TABLES):
+                entities[name] = []
+            added.extend(sorted(_V43_TABLES))
             converted_manifest["database_revision"] = CURRENT_DATABASE_REVISION
             converted_manifest["entity_counts"] = {
                 name: len(cast(list[object], rows)) for name, rows in entities.items()
