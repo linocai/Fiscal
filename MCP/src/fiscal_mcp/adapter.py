@@ -31,6 +31,12 @@ class FiscalBackendAdapter(Protocol):
 
     async def get_yearly_report(self, year: str) -> dict[str, Any]: ...
 
+    async def list_accounts(self, include_archived: bool) -> list[dict[str, Any]]: ...
+
+    async def list_categories(self, direction: str | None, include_archived: bool) -> list[dict[str, Any]]: ...
+
+    async def list_credit_cycles(self, account_id: str, cursor: str | None) -> dict[str, Any]: ...
+
     async def search_ledger(self, filters: Mapping[str, Any]) -> dict[str, Any]: ...
 
     async def list_import_batches(self, filters: Mapping[str, Any] | None = None) -> dict[str, Any]: ...
@@ -56,6 +62,48 @@ class FiscalBackendAdapter(Protocol):
 
 class BackendAdapterError(FiscalMCPError):
     """A safe error returned when the configured backend cannot be reached."""
+
+
+# Reports use as-of balances so a ledger that starts mid-year returns data plus
+# per-account balance status instead of a 409.
+REPORT_HEADERS = {"X-Fiscal-Report-Balance-Semantics": "as-of-v1"}
+MAX_ERROR_DETAILS_BYTES = 4_096
+
+
+def backend_outcome_known(error: FiscalMCPError) -> bool:
+    """True when the backend answered with a definite 4xx rejection."""
+
+    status = (error.details or {}).get("http_status")
+    return isinstance(status, int) and 400 <= status < 500
+
+
+def _backend_error(status_code: int, body: Any) -> BackendAdapterError:
+    """Translate a backend error envelope into a public MCP error.
+
+    4xx responses are business rejections whose message and details are part
+    of the backend's public API, so they pass through (size-capped).  5xx keeps
+    a generic message so internals never leak.
+    """
+
+    error_body = body.get("error") if isinstance(body, dict) else None
+    source = error_body if isinstance(error_body, dict) else body if isinstance(body, dict) else {}
+    code = source.get("code") if isinstance(source.get("code"), str) else "backend_error"
+    details: dict[str, Any] = {"http_status": status_code}
+    if status_code >= 500:
+        return BackendAdapterError(code, f"Fiscal backend request failed ({status_code}).", details)
+    message = source.get("message")
+    if not isinstance(message, str) or not message.strip():
+        message = f"Fiscal backend request failed ({status_code})."
+    backend_details = source.get("details")
+    if backend_details is not None:
+        encoded = json.dumps(backend_details, ensure_ascii=False, default=str)
+        if len(encoded.encode("utf-8")) <= MAX_ERROR_DETAILS_BYTES:
+            details["backend_details"] = backend_details
+        else:
+            details["backend_details_truncated"] = True
+    if isinstance(source.get("request_id"), str):
+        details["request_id"] = source["request_id"]
+    return BackendAdapterError(code, message[:500], details)
 
 
 class HttpFiscalBackendAdapter:
@@ -169,20 +217,12 @@ class HttpFiscalBackendAdapter:
                 json=json_body,
             )
             if response.status_code >= 400:
-                # Preserve only the backend's public error code when present.
                 body: Any = None
                 try:
                     body = response.json()
                 except (ValueError, json.JSONDecodeError):
                     pass
-                code_value = None
-                if isinstance(body, dict):
-                    code_value = body.get("code")
-                    error_body = body.get("error")
-                    if code_value is None and isinstance(error_body, dict):
-                        code_value = error_body.get("code")
-                code = code_value if isinstance(code_value, str) else "backend_error"
-                raise BackendAdapterError(code, f"Fiscal backend request failed ({response.status_code}).")
+                raise _backend_error(response.status_code, body)
             if response.headers.get("content-type", "").startswith("text/csv"):
                 return {
                     "_csv_content": response.content,
@@ -198,10 +238,34 @@ class HttpFiscalBackendAdapter:
                 await client.aclose()
 
     async def get_monthly_report(self, period: str) -> dict[str, Any]:
-        return await self._request("GET", f"/reports/v2/monthly/{period}")
+        return await self._request("GET", f"/reports/v2/monthly/{period}", headers=REPORT_HEADERS)
 
     async def get_yearly_report(self, year: str) -> dict[str, Any]:
-        return await self._request("GET", f"/reports/v2/yearly/{year}")
+        return await self._request("GET", f"/reports/v2/yearly/{year}", headers=REPORT_HEADERS)
+
+    async def list_accounts(self, include_archived: bool) -> list[dict[str, Any]]:
+        result = await self._request("GET", "/accounts", params={"include_archived": str(include_archived).lower()})
+        if not isinstance(result, list):
+            raise BackendAdapterError("backend_contract_mismatch", "Fiscal accounts API returned an invalid list.")
+        return result
+
+    async def list_categories(self, direction: str | None, include_archived: bool) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"include_archived": str(include_archived).lower()}
+        if direction:
+            params["direction"] = direction
+        result = await self._request("GET", "/categories", params=params)
+        if not isinstance(result, list):
+            raise BackendAdapterError("backend_contract_mismatch", "Fiscal categories API returned an invalid list.")
+        return result
+
+    async def list_credit_cycles(self, account_id: str, cursor: str | None) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": 100}
+        if cursor:
+            params["cursor"] = cursor
+        result = await self._request("GET", f"/credit-accounts/{account_id}/cycles", params=params)
+        if not isinstance(result, dict):
+            raise BackendAdapterError("backend_contract_mismatch", "Fiscal credit cycle API returned an invalid page.")
+        return result
 
     async def search_ledger(self, filters: Mapping[str, Any]) -> dict[str, Any]:
         return await self._request("GET", "/transactions", params=filters)
@@ -279,7 +343,7 @@ class HttpFiscalBackendAdapter:
         if export_format != "csv":
             raise BackendAdapterError("unsupported_export", "Only CSV export is supported in phase one.")
         path = f"/reports/v2/{'monthly' if period_kind == 'month' else 'yearly'}/{period}/export.csv"
-        response = await self._request("GET", path)
+        response = await self._request("GET", path, headers=REPORT_HEADERS)
         if not isinstance(response, dict) or not isinstance(response.get("_csv_content"), bytes):
             raise BackendAdapterError("backend_error", "Fiscal backend returned an invalid export.")
         # A short-lived URL is a later web concern; MCP returns an inline
@@ -307,6 +371,9 @@ class MockFiscalBackendAdapter:
     monthly_reports: dict[str, dict[str, Any]] = field(default_factory=dict)
     yearly_reports: dict[str, dict[str, Any]] = field(default_factory=dict)
     ledger_items: list[dict[str, Any]] = field(default_factory=list)
+    accounts: list[dict[str, Any]] = field(default_factory=list)
+    categories: list[dict[str, Any]] = field(default_factory=list)
+    credit_cycles: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     data_revision: int = 1
     _batches: dict[str, dict[str, Any]] = field(default_factory=dict, init=False, repr=False)
     _batch_idempotency: dict[str, str] = field(default_factory=dict, init=False, repr=False)
@@ -319,6 +386,21 @@ class MockFiscalBackendAdapter:
 
     async def get_yearly_report(self, year: str) -> dict[str, Any]:
         return copy.deepcopy(self.yearly_reports.get(year, {"meta": {"period": year, "data_revision": self.data_revision}, "summary": {}, "categories": []}))
+
+    async def list_accounts(self, include_archived: bool) -> list[dict[str, Any]]:
+        return copy.deepcopy([item for item in self.accounts if include_archived or not item.get("archived_at")])
+
+    async def list_categories(self, direction: str | None, include_archived: bool) -> list[dict[str, Any]]:
+        return copy.deepcopy(
+            [
+                item
+                for item in self.categories
+                if (include_archived or not item.get("archived_at")) and (direction is None or item.get("direction") == direction)
+            ]
+        )
+
+    async def list_credit_cycles(self, account_id: str, cursor: str | None) -> dict[str, Any]:
+        return {"items": copy.deepcopy(self.credit_cycles.get(account_id, [])), "next_cursor": None}
 
     async def search_ledger(self, filters: Mapping[str, Any]) -> dict[str, Any]:
         items = copy.deepcopy(self.ledger_items)

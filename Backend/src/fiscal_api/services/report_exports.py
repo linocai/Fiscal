@@ -68,7 +68,7 @@ def report_csv(report: PeriodReportV2) -> bytes:
     """Render a user-facing report without exposing internal contract fields."""
     buffer = StringIO(newline="")
     writer = csv.writer(buffer, lineterminator="\r\n")
-    writer.writerow(["分类", "项目", "对象", "金额（元）", "数量", "说明"])
+    writer.writerow(["章节", "项目", "对象", "金额（元）", "数量", "说明"])
     meta = report.meta
     for label, value in (
         ("报表类型", "月度报表" if meta.period_kind.value == "month" else "年度报表"),

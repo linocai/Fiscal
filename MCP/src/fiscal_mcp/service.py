@@ -7,8 +7,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from .adapter import FiscalBackendAdapter
-from .auth import ApiKeyRecord, ApiKeyRegistry, TotpSessionRegistry, request_digest
+from .adapter import FiscalBackendAdapter, backend_outcome_known
+from .auth import ApiKeyRecord, ApiKeyRegistry, OperationGrant, TotpSessionRegistry, request_digest
 from .confirmation import ConfirmationVerifier
 from .contracts import Scope, ToolDefinition, tool_definitions, validate_tool_arguments
 from .errors import FiscalMCPError
@@ -99,6 +99,7 @@ class FiscalMCPService:
     ) -> dict[str, Any]:
         definition = self.definition(name)
         principal: ApiKeyRecord | None = None
+        grant: OperationGrant | None = None
         try:
             session_based = session_token is not None
             if session_based:
@@ -116,27 +117,38 @@ class FiscalMCPService:
             else:
                 principal = self.key_registry.require(api_key, definition.scope)
             values = validate_tool_arguments(name, arguments)
-            if name == "fiscal_commit_import_batch":
-                if session_based:
-                    assert self.sessions is not None
-                    self.sessions.consume_operation(
-                        operation_token,
-                        session_token,
-                        request_digest(name, arguments if isinstance(arguments, Mapping) else {}),
-                    )
-                    values = dict(values)
-                    values["confirmation_token"] = self.confirmation_verifier.mint(
-                        batch_id=values["batch_id"], expected_version=values["expected_version"]
-                    )
-                elif "confirmation_token" not in values:
-                    if principal is not None and principal.label == "owner-break-glass":
+            if name == "fiscal_commit_import_batch" and session_based:
+                assert self.sessions is not None
+                grant = self.sessions.reserve_operation(
+                    operation_token,
+                    session_token,
+                    request_digest(name, arguments if isinstance(arguments, Mapping) else {}),
+                )
+            try:
+                if name == "fiscal_commit_import_batch":
+                    if grant is not None:
                         values = dict(values)
                         values["confirmation_token"] = self.confirmation_verifier.mint(
                             batch_id=values["batch_id"], expected_version=values["expected_version"]
                         )
-                    else:
-                        raise FiscalMCPError("confirmation_required", "A confirmation credential is required for this commit.")
-            result = await self._invoke_adapter(name, values)
+                    elif "confirmation_token" not in values:
+                        if principal is not None and principal.label == "owner-break-glass":
+                            values = dict(values)
+                            values["confirmation_token"] = self.confirmation_verifier.mint(
+                                batch_id=values["batch_id"], expected_version=values["expected_version"]
+                            )
+                        else:
+                            raise FiscalMCPError("confirmation_required", "A confirmation credential is required for this commit.")
+                result = await self._invoke_adapter(name, values)
+            except FiscalMCPError as error:
+                # A definite backend rejection consumes the write approval; an
+                # unknown outcome releases it so the idempotent commit can be retried.
+                self._finish_operation(grant, used=backend_outcome_known(error))
+                raise
+            except Exception:
+                self._finish_operation(grant, used=False)
+                raise
+            self._finish_operation(grant, used=True)
             details: dict[str, Any] = {}
             if name == "fiscal_create_import_batch":
                 details = {"batch_id": result.get("batch_id"), "candidate_count": len(values["candidates"])}
@@ -154,11 +166,20 @@ class FiscalMCPService:
             self._record(action=name, tool=name, principal=principal, outcome="error", details={"error_code": "backend_error"})
             raise FiscalMCPError("backend_error", "Fiscal backend request failed.") from error
 
+    @staticmethod
+    def _finish_operation(grant: OperationGrant | None, *, used: bool) -> None:
+        if grant is not None:
+            TotpSessionRegistry.finish_operation(grant, used=used)
+
     async def _invoke_adapter(self, name: str, values: Mapping[str, Any]) -> dict[str, Any]:
         if name == "fiscal_get_monthly_report":
             return await self.adapter.get_monthly_report(values["period"])
         if name == "fiscal_get_yearly_report":
             return await self.adapter.get_yearly_report(values["year"])
+        if name == "fiscal_list_accounts":
+            return await self._list_accounts(values["include_archived"])
+        if name == "fiscal_list_categories":
+            return await self._list_categories(values.get("direction"), values["include_archived"])
         if name == "fiscal_search_ledger":
             return await self.adapter.search_ledger(values)
         if name == "fiscal_create_import_batch":
@@ -187,3 +208,70 @@ class FiscalMCPService:
             return await self.adapter.export_report(values["period_kind"], values["period"], values["format"])
         raise FiscalMCPError("unknown_tool", f"Unknown Fiscal MCP tool {name!r}.")
 
+
+    async def _list_accounts(self, include_archived: bool) -> dict[str, Any]:
+        items: list[dict[str, Any]] = []
+        for account in await self.adapter.list_accounts(include_archived):
+            item = {key: account.get(key) for key in ACCOUNT_FIELDS}
+            if account.get("kind") == "credit" and account.get("cycle_mode") not in (None, "on_demand"):
+                item["open_cycles"] = await self._open_cycles(str(account["id"]))
+            items.append(item)
+        return {"items": items}
+
+    async def _open_cycles(self, account_id: str) -> list[dict[str, Any]]:
+        """Unsettled cycles a repayment can target, oldest due date first."""
+
+        cycles: list[dict[str, Any]] = []
+        cursor: str | None = None
+        for _ in range(MAX_CYCLE_PAGES):
+            page = await self.adapter.list_credit_cycles(account_id, cursor)
+            for cycle in page.get("items") or []:
+                if isinstance(cycle, Mapping) and cycle.get("status") != "settled":
+                    entry = {key: cycle.get(key) for key in CYCLE_FIELDS}
+                    entry["cycle_id"] = str(cycle.get("id"))
+                    cycles.append(entry)
+            cursor = page.get("next_cursor")
+            if not cursor:
+                break
+        return sorted(cycles, key=lambda entry: str(entry.get("due_date") or ""))
+
+    async def _list_categories(self, direction: str | None, include_archived: bool) -> dict[str, Any]:
+        items: list[dict[str, Any]] = []
+
+        def flatten(nodes: Any) -> None:
+            for node in nodes or []:
+                if isinstance(node, Mapping):
+                    items.append({key: node.get(key) for key in CATEGORY_FIELDS})
+                    flatten(node.get("children"))
+
+        flatten(await self.adapter.list_categories(direction, include_archived))
+        return {"items": items}
+
+
+ACCOUNT_FIELDS = (
+    "id",
+    "name",
+    "kind",
+    "institution",
+    "last_four",
+    "cycle_mode",
+    "statement_day",
+    "due_day",
+    "opening_balance_as_of_date",
+    "current_balance_minor",
+    "credit_limit_minor",
+    "archived_at",
+)
+CYCLE_FIELDS = (
+    "period_start",
+    "period_end",
+    "statement_date",
+    "due_date",
+    "amount_due_minor",
+    "repaid_minor",
+    "remaining_minor",
+    "status",
+    "is_overdue",
+)
+CATEGORY_FIELDS = ("id", "name", "direction", "parent_id", "aliases", "is_balance_adjustment", "archived_at")
+MAX_CYCLE_PAGES = 10

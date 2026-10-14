@@ -233,7 +233,7 @@ class MCPHTTPApplication:
                         "poll_token": poll_token,
                         "kind": challenge.kind,
                         "expires_at": challenge.expires_at.isoformat(),
-                        "approval_url": f"{self.approval_url}?challenge={challenge.challenge_id}",
+                        "approval_url": f"{self.approval_url}/?challenge={challenge.challenge_id}",
                     },
                     cors=cors,
                 )

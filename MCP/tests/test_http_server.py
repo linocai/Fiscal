@@ -127,6 +127,7 @@ class MCPHTTPTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(status, 201)
         challenge = json.loads(body)
+        self.assertIn("/agent/approve/?challenge=", challenge["approval_url"])
         status, _, _ = await request(
             app,
             "POST",

@@ -33,6 +33,10 @@ CANDIDATE_PROPERTIES: dict[str, Any] = {
     "account_id": {"type": ["string", "null"]},
     "category_id": {"type": ["string", "null"]},
     "destination_account_id": {"type": ["string", "null"]},
+    "credit_cycle_id": {
+        "type": ["string", "null"],
+        "description": "Required for repayments to fixed-cycle credit accounts; pick from fiscal_list_accounts open_cycles.",
+    },
     "field_confidences": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 10000}},
     "overall_confidence_bps": {"type": "integer", "minimum": 0, "maximum": 10000},
     "missing_fields": {"type": "array", "items": {"type": "string"}, "maxItems": 8},
@@ -112,6 +116,24 @@ def tool_definitions() -> tuple[ToolDefinition, ...]:
             _object_schema(
                 {"year": {"type": "string", "pattern": r"^\d{4}$"}},
                 ["year"],
+            ),
+        ),
+        ToolDefinition(
+            "fiscal_list_accounts",
+            "List Fiscal accounts with IDs, kind and cycle mode; fixed-cycle credit accounts include unsettled cycles.",
+            Scope.READ_LEDGER,
+            _object_schema({"include_archived": {"type": "boolean", "default": False}}, []),
+        ),
+        ToolDefinition(
+            "fiscal_list_categories",
+            "List Fiscal categories with IDs, direction, parent and aliases for classifying candidates.",
+            Scope.READ_LEDGER,
+            _object_schema(
+                {
+                    "direction": {"type": "string", "enum": ["income", "expense"]},
+                    "include_archived": {"type": "boolean", "default": False},
+                },
+                [],
             ),
         ),
         ToolDefinition(
@@ -278,7 +300,7 @@ def _validate_candidate(value: Any, index: int) -> dict[str, Any]:
         raise invalid_params("occurred_at must be an ISO date-time", field=f"candidates[{index}].occurred_at") from exc
     if parsed_occurred_at.tzinfo is None or parsed_occurred_at.utcoffset() is None:
         raise invalid_params("occurred_at must include a timezone", field=f"candidates[{index}].occurred_at")
-    for key in ("account_id", "category_id", "destination_account_id"):
+    for key in ("account_id", "category_id", "destination_account_id", "credit_cycle_id"):
         if candidate.get(key) is not None:
             _required_str(candidate, key, max_length=120)
     if candidate.get("note") is not None:
@@ -307,6 +329,17 @@ def validate_tool_arguments(name: str, arguments: Any) -> dict[str, Any]:
         if not YEAR_RE.fullmatch(year):
             raise invalid_params("year must use YYYY", field="year")
         return {"year": year}
+    if name in {"fiscal_list_accounts", "fiscal_list_categories"}:
+        include_archived = values.get("include_archived", False)
+        if not isinstance(include_archived, bool):
+            raise invalid_params("include_archived must be a boolean", field="include_archived")
+        listing: dict[str, Any] = {"include_archived": include_archived}
+        if name == "fiscal_list_categories" and values.get("direction") is not None:
+            direction = values["direction"]
+            if direction not in {"income", "expense"}:
+                raise invalid_params("direction must be income or expense", field="direction")
+            listing["direction"] = direction
+        return listing
     if name == "fiscal_search_ledger":
         result: dict[str, Any] = {}
         for key in ("date_from", "date_to"):

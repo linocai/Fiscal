@@ -15,10 +15,53 @@
     "challenge_seconds": 600,
     "operation": {
       "scope": "commit:imports",
-      "request_digest": "sha256(UTF-8 JSON sort_keys=true separators=(',',':') of {arguments:<args>,tool:fiscal_commit_import_batch}; omit confirmation_token)"
-    }
+      "request_digest": "sha256 hex of UTF-8 JSON {\"arguments\":<args>,\"tool\":\"fiscal_commit_import_batch\"}; sort_keys=true, separators=(',',':'), ensure_ascii=false (non-ASCII not escaped); omit confirmation_token",
+      "token_location": "tools/call params._meta.fiscal_operation_token",
+      "error_codes": [
+        "operation_token_missing",
+        "operation_invalid",
+        "operation_mismatch",
+        "operation_expired",
+        "operation_used",
+        "operation_in_progress"
+      ],
+      "retry": "definite backend 4xx consumes the approval; unknown outcome (network/5xx) keeps it for an identical retry"
+    },
+    "challenge_request": {
+      "method": "POST",
+      "body": {
+        "kind": "session | operation",
+        "client_label": "string (optional)",
+        "intent": "string (optional)",
+        "scopes": "array (optional, session only)",
+        "scope": "commit:imports (operation only)",
+        "request_digest": "sha256 hex (operation only)"
+      },
+      "operation_requires_header": "Authorization: Session <session_token>",
+      "response_fields": [
+        "challenge_id",
+        "poll_token",
+        "kind",
+        "expires_at",
+        "approval_url"
+      ]
+    },
+    "poll_url": "https://mcp.fiscal.linotsai.top/auth/challenges/{challenge_id}",
+    "poll_response_fields": [
+      "challenge_id",
+      "kind",
+      "status (pending|approved)",
+      "expires_at",
+      "session_token | operation_token"
+    ],
+    "restart_invalidates_tokens": true
   },
-  "session_scopes": ["read:reports", "read:ledger", "stage:imports", "export:reports"],
+  "session_scopes": [
+    "read:reports",
+    "read:ledger",
+    "stage:imports",
+    "export:reports"
+  ],
   "write_scope": "commit:imports",
   "write_requires_fresh_totp": true,
   "personal_break_glass_key": "manual_only",
@@ -26,5 +69,20 @@
     "totp": "Google Authenticator compatible 6-digit TOTP",
     "secrets_in_document": false,
     "agent_keys": "not_used"
-  }
+  },
+  "tools": [
+    "fiscal_get_monthly_report",
+    "fiscal_get_yearly_report",
+    "fiscal_list_accounts",
+    "fiscal_list_categories",
+    "fiscal_search_ledger",
+    "fiscal_create_import_batch",
+    "fiscal_get_import_batch",
+    "fiscal_validate_import_batch",
+    "fiscal_commit_import_batch",
+    "fiscal_ignore_import_batch",
+    "fiscal_export_report"
+  ],
+  "amounts": "integer minor units (fen); occurred_at must include a timezone",
+  "repayment_cycles": "repayments to fixed-cycle credit accounts require credit_cycle_id from fiscal_list_accounts open_cycles[].cycle_id"
 }

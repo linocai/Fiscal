@@ -186,6 +186,7 @@ class OperationGrant:
     request_digest: str
     expires_at: datetime
     used_at: datetime | None = None
+    in_use: bool = False
 
 
 @dataclass(slots=True)
@@ -368,22 +369,51 @@ class TotpSessionRegistry:
         )
         return token
 
-    def consume_operation(
+    def reserve_operation(
         self,
         token: str | None,
         session_token: str,
         request_digest_value: str,
         *,
         now: datetime | None = None,
-    ) -> None:
+    ) -> OperationGrant:
+        """Lock a write approval for one in-flight request.
+
+        The caller must then ``finish_operation``: ``used=True`` once the
+        backend gave a definite answer, ``used=False`` when the outcome is
+        unknown so the same idempotent request can be retried without a new
+        Authenticator code.
+        """
+
         current = now or datetime.now(timezone.utc)
         session = self.resolve(session_token, now=current)
-        grant = self._operations.get(_fingerprint(token or ""))
-        if grant is None or grant.used_at is not None or current >= grant.expires_at:
-            raise FiscalMCPError("operation_expired", "The write approval has expired or was already used.")
+        if not token:
+            raise FiscalMCPError(
+                "operation_token_missing",
+                "No write approval was presented; pass it as params._meta.fiscal_operation_token.",
+            )
+        grant = self._operations.get(_fingerprint(token))
+        if grant is None:
+            raise FiscalMCPError(
+                "operation_invalid",
+                "The write approval is unknown; it may predate a gateway restart. Request a new approval.",
+            )
+        if grant.used_at is not None:
+            raise FiscalMCPError("operation_used", "The write approval was already used; request a new approval.")
+        if current >= grant.expires_at:
+            raise FiscalMCPError("operation_expired", "The write approval has expired; request a new approval.")
         if grant.session_fingerprint != session.token_fingerprint or grant.request_digest != request_digest_value:
-            raise FiscalMCPError("operation_mismatch", "The write approval does not match this request.")
-        grant.used_at = current
+            raise FiscalMCPError("operation_mismatch", "The write approval does not match this session or request.")
+        if grant.in_use:
+            raise FiscalMCPError("operation_in_progress", "This write approval is already being used by another request.")
+        grant.in_use = True
+        return grant
+
+    @staticmethod
+    def finish_operation(grant: OperationGrant, *, used: bool, now: datetime | None = None) -> None:
+        grant.in_use = False
+        if used:
+            grant.used_at = now or datetime.now(timezone.utc)
 
     def poll(self, challenge_id: str, poll_token: str, *, now: datetime | None = None) -> dict[str, object]:
         current = now or datetime.now(timezone.utc)

@@ -363,7 +363,7 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
             sum(
                 int(Decimal(row["金额（元）"]) * 100)
                 for row in csv_rows
-                if row["分类"] == "分类" and row["项目"] == "净消费"
+                if row["章节"] == "分类" and row["项目"] == "净消费"
             )
             == report["summary"]["net_consumption_minor"]
         )
@@ -393,7 +393,7 @@ def test_p34_month_year_drilldown_and_exports_share_one_ledger_contract() -> Non
             assert f"-r{revision}" not in bound.headers["content-disposition"]
             if extension == "csv":
                 exported_text = bound.content.decode("utf-8-sig")
-                assert "分类,项目,对象,金额（元）,数量,说明" in exported_text
+                assert "章节,项目,对象,金额（元）,数量,说明" in exported_text
                 for internal in (
                     "data_revision",
                     "report_schema_version",

@@ -1551,7 +1551,9 @@ class ReportingService:
                 break
             cursor += timedelta(days=1)
 
-        debt = await self.debt(as_of=end)
+        # Cycle status is judged as of today for a period still in progress so an
+        # upcoming due date inside the month is not reported as overdue.
+        debt = await self.debt(as_of=min(end, self._today()))
         debt_cycles = [
             cycle
             for cycle in debt.cycles

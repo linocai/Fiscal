@@ -28,13 +28,83 @@
     <ol>
       <li>Agent 读取本页或 discovery JSON，使用 <code>POST /auth/challenges</code> 创建 <code>session</code> challenge。</li>
       <li>Agent 把返回的 <code>approval_url</code> 发给用户；用户打开页面，用 Google Authenticator 输入当前 6 位验证码。</li>
-      <li>Agent 使用返回的 <code>X-Fiscal-Poll-Token</code> 轮询 challenge，拿到短期 <code>Session</code> token。</li>
-      <li>Agent 用 <code>Authorization: Session &lt;session_token&gt;</code> 调用 MCP 工具。会话空闲 2 小时失效，最长 8 小时；验证码每 30 秒变化不会中断已建立的会话。</li>
+      <li>Agent 使用返回的 <code>poll_token</code> 作为 <code>X-Fiscal-Poll-Token</code> 轮询 challenge，拿到短期 <code>session_token</code>。</li>
+      <li>Agent 用 <code>Authorization: Session &lt;session_token&gt;</code> 调用 MCP（<code>initialize</code>、<code>tools/list</code>、<code>tools/call</code> 都需要）。会话空闲 2 小时失效，最长 8 小时；验证码每 30 秒变化不会中断已建立的会话。</li>
       <li>读取、分析和暂存账单可以直接完成。真正提交到账本前，Agent 为本次请求创建 <code>operation</code> challenge，用户再次输入一次验证码；该写入授权只允许匹配的请求使用一次，有效 30 分钟。</li>
     </ol>
-    <p>写入授权的 <code>request_digest</code> 是提交工具参数的稳定 SHA-256：对去掉
-      <code>confirmation_token</code> 后的参数对象，与工具名一起组成
-      <code>{"arguments":&lt;args&gt;,"tool":"fiscal_commit_import_batch"}</code>，使用 UTF-8、按键名排序、无空格的 JSON 序列化后计算 SHA-256。</p>
+    <p class="note">网关重启或发布后，所有 Session 与未使用的写入授权都会失效（返回 <code>session_expired</code> / <code>operation_invalid</code>）；重新创建 challenge 即可。</p>
+  </div>
+  <div class="card">
+    <h2>1. 创建 session challenge</h2>
+<pre>POST https://mcp.fiscal.linotsai.top/auth/challenges
+Content-Type: application/json
+
+{"kind": "session", "client_label": "my-agent", "intent": "整理本周账单"}
+
+201 Created
+{"challenge_id": "fiscal_challenge_v1_…", "poll_token": "fiscal_challenge_v1_…",
+ "kind": "session", "expires_at": "2026-10-14T12:10:00+00:00",
+ "approval_url": "https://console.fiscal.linotsai.top/agent/approve/?challenge=fiscal_challenge_v1_…"}</pre>
+    <p><code>scopes</code> 可选，默认即全部 Session 权限：<code>read:reports</code>、<code>read:ledger</code>、<code>stage:imports</code>、<code>export:reports</code>。challenge 10 分钟内有效。</p>
+  </div>
+  <div class="card">
+    <h2>2. 轮询拿 token</h2>
+<pre>GET https://mcp.fiscal.linotsai.top/auth/challenges/{challenge_id}
+X-Fiscal-Poll-Token: {poll_token}
+
+200 OK  {"challenge_id": "…", "kind": "session", "status": "pending", "expires_at": "…"}
+200 OK  {"challenge_id": "…", "kind": "session", "status": "approved", "expires_at": "…",
+         "session_token": "fiscal_session_v1_…"}</pre>
+    <p>operation challenge 批准后返回的是 <code>operation_token</code>。建议每 3–5 秒轮询一次。</p>
+  </div>
+  <div class="card">
+    <h2>3. 调用工具</h2>
+<pre>POST https://mcp.fiscal.linotsai.top/mcp
+Authorization: Session fiscal_session_v1_…
+Content-Type: application/json
+
+{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+ "params": {"name": "fiscal_list_accounts", "arguments": {}}}</pre>
+    <ul>
+      <li>金额字段 <code>amount_minor</code> 是<strong>整数分</strong>（12.34 元 = <code>1234</code>）；<code>occurred_at</code> 必须带时区，例如 <code>2026-10-14T12:00:00+08:00</code>。</li>
+      <li>先用 <code>fiscal_list_accounts</code> / <code>fiscal_list_categories</code> 拿到账户与分类 ID，再生成候选。</li>
+      <li>还款到固定账期信用账户（<code>cycle_mode</code> 不是 <code>on_demand</code>）时，候选必须带 <code>credit_cycle_id</code>，从该账户的 <code>open_cycles[].cycle_id</code> 里选；随借随还账户不要带。</li>
+      <li>工具错误以 <code>isError: true</code> 返回，<code>error.code</code>、<code>error.message</code> 来自后端；<code>error.details.http_status</code> 与 <code>backend_details</code> 帮助定位原因。</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>4. 提交前的写入授权</h2>
+    <p>先算 <code>request_digest</code>：把<strong>将要发送的提交参数</strong>（不含 <code>confirmation_token</code>）与工具名组成
+      <code>{"arguments":&lt;args&gt;,"tool":"fiscal_commit_import_batch"}</code>，用 UTF-8、按键名排序、无空格、<strong>不转义非 ASCII 字符</strong>的 JSON 序列化（Python：<code>json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))</code>）后取 SHA-256 十六进制。</p>
+<pre>序列化结果：
+{"arguments":{"batch_id":"3f6c1d2e-8a4b-4c1e-9f00-2b7d5e6a9c10","expected_version":2,"idempotency_key":"commit-2026w42-01"},"tool":"fiscal_commit_import_batch"}
+request_digest = e86efbf7e4c592ae17d55011737f73b5a2e14925c981e68d59abe5b14ef37d98</pre>
+<pre>POST https://mcp.fiscal.linotsai.top/auth/challenges
+Authorization: Session fiscal_session_v1_…
+Content-Type: application/json
+
+{"kind": "operation", "scope": "commit:imports",
+ "request_digest": "e86efbf7…7d98", "intent": "提交本周 12 笔，合计 1,234.56 元"}</pre>
+    <p>用户批准、轮询拿到 <code>operation_token</code> 后，原样发送同一组参数，token 放在 <code>params._meta.fiscal_operation_token</code>：</p>
+<pre>{"jsonrpc": "2.0", "id": 7, "method": "tools/call",
+ "params": {"name": "fiscal_commit_import_batch",
+            "arguments": {"batch_id": "3f6c1d2e-8a4b-4c1e-9f00-2b7d5e6a9c10",
+                          "expected_version": 2, "idempotency_key": "commit-2026w42-01"},
+            "_meta": {"fiscal_operation_token": "fiscal_operation_v1_…"}}}</pre>
+    <ul>
+      <li><code>operation_token_missing</code>：没带 token 或放错位置。<code>operation_invalid</code>：token 未知（可能网关已重启）。<code>operation_mismatch</code>：参数或 Session 与批准时不一致，参数改动后必须重新申请。<code>operation_expired</code> / <code>operation_used</code>：过期或已用过。</li>
+      <li>后端明确拒绝（4xx，例如版本冲突）会消耗本次授权；网络错误或后端 5xx 结果未知时授权保留，30 分钟内可用<strong>完全相同</strong>的参数重试（提交本身幂等）。</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>工具一览</h2>
+    <ul>
+      <li><code>fiscal_get_monthly_report</code> / <code>fiscal_get_yearly_report</code>：月报、年报；余额未知的账户带 <code>opening_balance_status</code> 等状态字段。</li>
+      <li><code>fiscal_list_accounts</code> / <code>fiscal_list_categories</code>：账户（含固定账期信用账户的未结清账期）与分类。</li>
+      <li><code>fiscal_search_ledger</code>：分页搜索已入账交易。</li>
+      <li><code>fiscal_create_import_batch</code> → <code>fiscal_validate_import_batch</code> → <code>fiscal_commit_import_batch</code>；不要的批次用 <code>fiscal_ignore_import_batch</code>；<code>fiscal_get_import_batch</code> 查看状态与校验错误。</li>
+      <li><code>fiscal_export_report</code>：月度或年度 CSV（base64）。</li>
+    </ul>
   </div>
   <div class="card">
     <h2>Agent 应遵守的边界</h2>
