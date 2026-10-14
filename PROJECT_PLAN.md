@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 更新：2026-10-12（Asia/Shanghai，原生 App 退役）｜当前发布：**V2.4.0（51）**｜下一阶段目标版本：**待定**｜状态：**原生 App 已退役移出仓库，项目暂停维护；MCP 生产链路保留**
+> 更新：2026-10-14（Asia/Shanghai，Build52 MCP 验收修复上线）｜当前发布：**V2.4.0（52）**｜下一阶段目标版本：**待定**｜状态：**Agent-first 运行；原生 App 已退役，业务入口为远程 MCP**
 
 ## 概述
 
@@ -26,30 +26,20 @@
 
 ## 当前状态
 
-- **V2.4.0（51）已上线并换装 Mac**：源码 `b006ed906fb150a996499bdcbecd82063ee71723`，不可变 `v2.4.0-build51` 已推送；后端同 revision / `20260926_0042`。发布证据见 [发布记录](archive/releases/v2.4.0/RELEASE_STATE.md)。
-- 累计审查覆盖实际旧客户端 `825705e`、旧后端 `db95c13` 至本次发布；实施基线 `2d5cc84`，Build49 精简、Build50 两 P2 修复及 Build51 旧历史快照兼容分别复查。
-- Build50 上线读取发现旧报销快照中嵌套交易关系仍有旧字段；Build51 统一纯读适配，保留原 JSON、金额与现行严格契约，月报/年报/CSV 生产读取已恢复。
-- Build51 后端隔离 PostgreSQL **441/441、0 skip**，静态检查通过；旧快照月报/年报/CSV/归档恢复回归通过，独立复查无 finding。
-- 客户端功能验证沿用未改业务源码的 Build50：全量335/335、定向6/6、双端商户UI各1/1；Build51 最终三组 Release 构建、签名、架构、dSYM 与 ZIP 解包核验通过。Mac单实例启动，总览及财务分析真实读取通过。
-- 0041→0042 迁移前后备份及隔离恢复已验证；Build51 再部署16张金融/历史表完整指纹及 data_revision 不变，服务与4个timer恢复正常。0042 无 downgrade，旧版回退必须用验证过的0041整库恢复集。
-- iOS 签名设备构建已就绪，由用户通过 Xcode 安装；未生成 IPA。最新设备支持审计两台现用手机均通过，`pending_devices=[]`。
-- 本地构建临时副本和被替代Build50 ZIP已回收，测试资源check complete；保留正式Build51包/符号、iOS构建、回退App、生产恢复集和最终证据。远端暂存及本地传输bundle均已精确回收并核验。
-- 精简后的正式源码统计见 [Build50统计](archive/releases/v2.4.0/qa/build50-metrics.json)：净少82文件、19,981物理行，OpenAPI188→145；Build51仅追加旧快照兼容与回归，不扩大功能。
-- 第一阶段独立骨架已建立：新增 `MCP/`（9 个工具契约、stdio JSON-RPC、scope/API key、确认凭证、HTTP/Mock adapter、审计和测试）与 `Web/`（待确认、月报、账本、设置/导出四页及 mock adapter）。
-- 第二阶段本地实现已完成：后端新增 `import_batches` 持久化、幂等/版本校验、隔离校验、原子提交/忽略路由及 0043 迁移；MCP HTTP adapter 和 Web HTTP/MCP live adapter 已接入，原生 App 业务源码未修改。
-- 阶段二验证已在一次性本地 PostgreSQL 库完成迁移与真实闭环：创建 → 校验 → HMAC 确认提交 → 重放只返回同一结果；生产只读/暂存边界见 0043 部署记录，未写入真实账单。
-- 阶段三工程收尾已完成：staging/production 环境示例接入 token pepper 与批次确认密钥，MCP 提供无网络 preflight 和 stdio 运行模板，Web 静态包支持宿主覆盖 `runtime-config.js` 选择 HTTP/MCP 并保持会话密钥只在内存；回滚/迁移/人工验收边界写入运维文档。
-- 阶段四远程 MCP 工程已实现并部署到 HZ：新增 JSON-RPC HTTP/ASGI transport、TOTP session/operation challenge、Bearer 兼容、session header、CORS 白名单、请求体上限、健康检查；HZ 上 systemd active、loopback 8050、DNS、Let's Encrypt、Nginx HTTPS、NB 连接和公网读写授权 smoke 均通过；未写入真实批次。
-- 网页控制台已部署到 HZ `/opt/fiscal-web/current`，`console.fiscal.linotsai.top` DNS、Let's Encrypt、Nginx HTTPS 和同源 `/api/v1` 只读代理 smoke 均通过。
-- 网页默认 fetch 上下文热修已部署到 `/opt/fiscal-web/releases/20261011-web-4bb08594`；截图中的 `Illegal invocation` 已由 HTTP/MCP adapter 共同修复，公网页面与鉴权接口 smoke 通过。
-- Web 凭证入口已补强：原控制台保留内存凭证兼容；新公开 `/agent/` 说明、`/agent/approve/` 批准页和 `/.well-known/fiscal-agent.json` 不包含密钥，面向 TOTP Session 流程；discovery 已公开 request digest 规则。新包 `/opt/fiscal-web/releases/20261011-web-totp-c1bf49a` smoke 通过。
-- Backend 0043 已部署到 NB：生产 release `/opt/fiscal/releases/53906818483e`，Alembic `20261010_0043`，迁移前后备份、171 项测试/272 项 PostgreSQL 缺失跳过、readiness、重启及 `/import-batches` 只读 smoke 均通过；没有真实批次写入。
-- 2026-10-11 完成 Fiscal 工程归档与云端收口：本地保留源码、Build51 发布物、Git 历史和脱敏部署快照；HZ 保留现役 MCP 与其 TOTP Web 支撑页，NB 保留现役 Backend 与 PostgreSQL；旧发布目录已清理，数据库及备份未触碰。详见 [暂停归档记录](archive/plans/2026-10-11-fiscal-pause_archive_execution.md)。
-- 2026-10-12 原生 App 退役：`App/`、`scripts/`、两份旧前端计划移出仓库（tag `native-app-final` 可恢复），设计稿与最终 build 树打包至 `~/文稿/Claude/Fiscal-archive/`，网页控制台按用户决定保留。详见 [退役记录](archive/plans/2026-10-12-native-app-retirement.md)。
+- **V2.4.0（52）已上线**（2026-10-14，tag `v2.4.0-build52` → `0958d48`）：修复记账 Agent 首次验收 12 项问题中的 10 项（年报 as-of 口径、还款 `credit_cycle_id`、账户/分类列表工具、当月账期逾期误判、错误透传、写入授权三态与错误码、公开文档等）。详见 [Build52 记录](archive/plans/2026-10-14-mcp-acceptance-build52_execution.md)。
+- 线上组成：NB Backend release `/opt/fiscal/releases/6876d204738b`（`0958d48` Backend 快照），Alembic `20261010_0043`；HZ MCP `releases/20261014-build52-0958d48`（`serverInfo 0.1.0+build52`，11 工具）；HZ Web `releases/20261014-web-build52-0958d48`。上一版 release 均保留可回退。
+- 远程 MCP、TOTP Session 与一次性写入授权链路见 [TOTP 执行记录](archive/plans/2026-10-11-fiscal-totp-session_execution.md)；Backend 0043 导入批次见 [后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)；Web 部署见 [Web 记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)。
+- 真实账本尚无经 MCP 提交的批次；首轮一周闭环待记账 Agent 用新 Session 复跑（Build52 部署重启已清空旧 Session）。
+- **已知遗留**：archive 服务不识别 `20261010_0043`，全量 PostgreSQL 回归 18 项归档/恢复测试失败（0043 上线时未跑 PG 全量）；需修复后再做归档恢复演练。
+- 控制台 `runtime-config.js` 线上为 `mode: "mock"`，与 `Web/ops/runtime-config.production.js`（http）不一致，待用户决定；`/agent/`、批准页与 discovery 不受影响。
+- 0042 无 downgrade，回退到 0041 前版本必须用验证过的整库恢复集；Build52 无迁移，前后备份 `fiscal-20261014T1234{29,31}Z.dump` 已验证。
+- 原生 App 2026-10-12 退役（tag `native-app-final`，本地归档 `~/文稿/Claude/Fiscal-archive/`），见 [退役记录](archive/plans/2026-10-12-native-app-retirement.md)；V2.4.0（51）客户端发布证据见 [发布记录](archive/releases/v2.4.0/RELEASE_STATE.md)。
+- TOTP 绑定临时材料仍在 `~/文稿/Codex/2026-10-11-fiscal-totp/`，首轮真实验收后由用户删除。
 
 ## 当前 Plan
 
-阶段四远程 MCP、TOTP Session 与公共 Agent 接入见 [TOTP 执行记录](archive/plans/2026-10-11-fiscal-totp-session_execution.md)；网页上线见 [Web 控制台记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)；Backend 0043 生产部署见 [后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)；阶段三工程包见 [阶段三记录](archive/plans/2026-10-10-agent-first-mcp-web_phase3_execution.md)，阶段二施工见 [阶段二记录](archive/plans/2026-10-10-agent-first-mcp-web_phase2_execution.md)。用户已完成 Authenticator 绑定；原生 App 已退役，后续只通过远程 MCP 完成账单暂存/校验/忽略/提交和分析。MCP 的 TOTP 批准页依赖现役 Web 静态支撑页，不能随意删除。
+1. **记账 Agent 复跑验收**：新 Session 下年报/年度 CSV 200 且 revision 与月报一致；`fiscal_list_accounts`/`fiscal_list_categories` 可直接用于候选；一周账单暂存→校验→operation 授权提交，提交后月报/年报/CSV 一致。
+2. **archive 0043 兼容**：归档导出/恢复支持 `import_batches`，本地 PostgreSQL 全量回归归零失败后再部署。
 
 ## Backlog
 
@@ -60,6 +50,8 @@
 - **网页控制台**：实现待确认、月度报告、账本搜索、设置/导出四个入口；先只读，再接入整批确认。
 - **第一阶段验收**：Mock、隔离后端、生产 `/import-batches` 和 TOTP challenge/session/operation 公网 smoke 已覆盖契约边界；真实一周批次、生产月报/年报/CSV 一致性与扫码后首轮业务闭环留待用户验收。
 - **非目标**：不删除原生 App、不删除历史数据、不开放任意 CRUD/SQL、不做多用户和新的复杂财务规则。
+- **标准 MCP 授权**（验收 #11）：让标准 MCP 客户端原生接入（OAuth 或免鉴权的 session 申请工具），需单独立项。
+- **Session 持久化**（验收 #10）：当前 Session/授权在网关内存，重启即失效；单进程自用暂可接受。
 
 其中独立契约、MCP stdio 入口、Mock 批次生命周期、真实后端批次写入与 Web live adapter 已完成；MCP、Web 与 Backend 0043 已生产部署并通过公网只读 smoke，真实账单月度闭环和 `commit:imports` 开放仍未执行。
 
@@ -91,3 +83,4 @@
 - 2026-10-11：简化认证方案落地；公共 Agent 说明/discovery、Google Authenticator Session、一次性写入授权及 HZ/NB 部署完成；[执行记录](archive/plans/2026-10-11-fiscal-totp-session_execution.md)。
 - 2026-10-11：原生 App 冻结、工程与发布物归档、HZ/NB 旧发布目录清理完成；数据库、备份和现役 MCP 链路保留；[暂停归档记录](archive/plans/2026-10-11-fiscal-pause_archive_execution.md)。
 - 2026-10-12：原生 App 退役移出仓库（tag `native-app-final`），本地归档迁至 `~/文稿/Claude/Fiscal-archive/`；[退役记录](archive/plans/2026-10-12-native-app-retirement.md)。
+- 2026-10-14：V2.4.0（52）MCP 首次验收问题修复，NB/HZ 上线；[Build52 记录](archive/plans/2026-10-14-mcp-acceptance-build52_execution.md)。
