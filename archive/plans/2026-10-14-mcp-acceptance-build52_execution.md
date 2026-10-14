@@ -39,3 +39,18 @@
 2. 修复 archive 服务对 0043 的兼容（备份恢复链路，需全量 PostgreSQL 回归）。
 3. 核实控制台 `runtime-config.js` 应为 mock 还是 http（用户决定）。
 4. Backlog：标准 MCP 授权（#11）、Session 持久化（#10）。
+
+## Build53：archive 支持 0043（同日）
+
+- 根因：0043 上线时 `services/archive.py` 的 `CURRENT_DATABASE_REVISION` 仍为 0042，归档导出会用自身库版本校验失败——生产归档导出接口与恢复演练自 10-11 起不可用；当时后端只跑了无 PostgreSQL 的 171 项，未暴露。
+- 修复（提交 `5dc3349`，tag `v2.4.0-build53`）：当前版本 0043、新增 0042 来源；`import_batches` 作为 Agent 写入审计回执纳入归档，候选 `source_text` 在 `include_ai_raw=false` 时按 AI 原文策略脱敏；0042 及更早归档适配时补空 `import_batches`，0042 不再走 V2.4 退役表适配。
+- 验证：一次性本地 PostgreSQL 全量 **448 passed / 0 failed**（原 18 项归档失败全部恢复），ruff check/format、pyright 0 错误；新增 `test_build53_archive_import_batches_postgres.py` 与 0042 来源/脱敏单测。
+- 部署：NB 快照 `2a0c8d92aaa9961c723c3fd0609a46323112abe1`，`deploy.sh --apply --public-smoke` 通过（NB 门禁 174 passed / 274 skipped），release `/opt/fiscal/releases/2a0c8d92aaa9`，无迁移；前后备份 `fiscal-20261014T125821Z.dump`、`fiscal-20261014T125822Z.dump` 已验证；生产 release 内 archive 声明版本与 Alembic 均为 `20261010_0043`。未对生产真实账本做归档导出（避免落地加密账本副本），以本地全量回归为证据。
+- 回退：`/opt/fiscal/current` 指回 `releases/6876d204738b`（Build52）。
+
+## 资源收尾（2026-10-14 21:05）
+
+- NB：删除本轮部署源/上传包/日志，删除被两次替换的 release `53906818483e`（释放约 28 MiB）；保留现役 `2a0c8d92aaa9` 与回退 `6876d204738b`；本日 4 份数据库备份按项目规则保护未动。
+- HZ：`/tmp` 上传包已删；MCP/Web 各保留现役 Build52 与上一版回退 release。
+- 本地：一次性 PostgreSQL 已停止并删除，scratchpad 265M → 0；无残留监听/进程；工作区干净。
+- 非本轮遗留（未动，待用户决定）：NB `/home/deploy` 下 `fiscal.env.migration`（疑似生产 env 副本，受保护）、若干 `fiscal-source-*-partial.tar.gz`、`fiscal-rehearsal-20260829`。

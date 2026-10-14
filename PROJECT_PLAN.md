@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 更新：2026-10-14（Asia/Shanghai，Build52 MCP 验收修复上线）｜当前发布：**V2.4.0（52）**｜下一阶段目标版本：**待定**｜状态：**Agent-first 运行；原生 App 已退役，业务入口为远程 MCP**
+> 更新：2026-10-14（Asia/Shanghai，Build53 归档兼容上线）｜当前发布：**V2.4.0（53）**｜下一阶段目标版本：**待定**｜状态：**Agent-first 运行；原生 App 已退役，业务入口为远程 MCP**
 
 ## 概述
 
@@ -27,10 +27,10 @@
 ## 当前状态
 
 - **V2.4.0（52）已上线**（2026-10-14，tag `v2.4.0-build52` → `0958d48`）：修复记账 Agent 首次验收 12 项问题中的 10 项（年报 as-of 口径、还款 `credit_cycle_id`、账户/分类列表工具、当月账期逾期误判、错误透传、写入授权三态与错误码、公开文档等）。详见 [Build52 记录](archive/plans/2026-10-14-mcp-acceptance-build52_execution.md)。
-- 线上组成：NB Backend release `/opt/fiscal/releases/6876d204738b`（`0958d48` Backend 快照），Alembic `20261010_0043`；HZ MCP `releases/20261014-build52-0958d48`（`serverInfo 0.1.0+build52`，11 工具）；HZ Web `releases/20261014-web-build52-0958d48`。上一版 release 均保留可回退。
+- **Build53**（tag `v2.4.0-build53` → `5dc3349`）：archive 支持 0043 并归档 `import_batches`，修复自 10-11 起不可用的归档导出/恢复；本地 PostgreSQL 全量 448/448。
+- 线上组成：NB Backend release `/opt/fiscal/releases/2a0c8d92aaa9`（`5dc3349` Backend 快照，回退 `6876d204738b`），Alembic `20261010_0043`；HZ MCP `releases/20261014-build52-0958d48`（`serverInfo 0.1.0+build52`，11 工具）；HZ Web `releases/20261014-web-build52-0958d48`。上一版 release 均保留可回退。
 - 远程 MCP、TOTP Session 与一次性写入授权链路见 [TOTP 执行记录](archive/plans/2026-10-11-fiscal-totp-session_execution.md)；Backend 0043 导入批次见 [后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)；Web 部署见 [Web 记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)。
 - 真实账本尚无经 MCP 提交的批次；首轮一周闭环待记账 Agent 用新 Session 复跑（Build52 部署重启已清空旧 Session）。
-- **已知遗留**：archive 服务不识别 `20261010_0043`，全量 PostgreSQL 回归 18 项归档/恢复测试失败（0043 上线时未跑 PG 全量）；需修复后再做归档恢复演练。
 - 控制台 `runtime-config.js` 线上为 `mode: "mock"`，与 `Web/ops/runtime-config.production.js`（http）不一致，待用户决定；`/agent/`、批准页与 discovery 不受影响。
 - 0042 无 downgrade，回退到 0041 前版本必须用验证过的整库恢复集；Build52 无迁移，前后备份 `fiscal-20261014T1234{29,31}Z.dump` 已验证。
 - 原生 App 2026-10-12 退役（tag `native-app-final`，本地归档 `~/文稿/Claude/Fiscal-archive/`），见 [退役记录](archive/plans/2026-10-12-native-app-retirement.md)；V2.4.0（51）客户端发布证据见 [发布记录](archive/releases/v2.4.0/RELEASE_STATE.md)。
@@ -39,7 +39,7 @@
 ## 当前 Plan
 
 1. **记账 Agent 复跑验收**：新 Session 下年报/年度 CSV 200 且 revision 与月报一致；`fiscal_list_accounts`/`fiscal_list_categories` 可直接用于候选；一周账单暂存→校验→operation 授权提交，提交后月报/年报/CSV 一致。
-2. **archive 0043 兼容**：归档导出/恢复支持 `import_batches`，本地 PostgreSQL 全量回归归零失败后再部署。
+2. **归档恢复演练**：Build53 后在隔离库做一次生产归档导出→恢复演练，确认 `import_batches` 往返。
 
 ## Backlog
 
@@ -84,3 +84,4 @@
 - 2026-10-11：原生 App 冻结、工程与发布物归档、HZ/NB 旧发布目录清理完成；数据库、备份和现役 MCP 链路保留；[暂停归档记录](archive/plans/2026-10-11-fiscal-pause_archive_execution.md)。
 - 2026-10-12：原生 App 退役移出仓库（tag `native-app-final`），本地归档迁至 `~/文稿/Claude/Fiscal-archive/`；[退役记录](archive/plans/2026-10-12-native-app-retirement.md)。
 - 2026-10-14：V2.4.0（52）MCP 首次验收问题修复，NB/HZ 上线；[Build52 记录](archive/plans/2026-10-14-mcp-acceptance-build52_execution.md)。
+- 2026-10-14：V2.4.0（53）archive 支持 0043 并上线 NB，资源收尾完成；[同一记录 §Build53](archive/plans/2026-10-14-mcp-acceptance-build52_execution.md#build53archive-支持-0043同日)。
