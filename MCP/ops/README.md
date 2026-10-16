@@ -78,10 +78,11 @@ POST https://mcp.fiscal.linotsai.top/auth/challenges
 {"kind":"session","scopes":["read:reports","read:ledger","stage:imports","export:reports"]}
 ```
 
-Send the returned `approval_url` to the owner. After approval, poll the
-challenge with `X-Fiscal-Poll-Token`, then use the returned Session token for
-MCP. Keep `commit:imports` out of the session scopes; a commit requires a
-second operation challenge bound to the exact request digest. The generic
+Tell the owner the returned `pairing_code`; they approve it on the fixed
+`approval_url` page. After approval, poll the challenge with
+`X-Fiscal-Poll-Token`, then use the returned Session token for MCP. Keep
+`commit:imports` out of the session scopes; commits require a `write_window`
+challenge that, once approved, allows the session to commit for 30 minutes. The generic
 connection shape is in `clients/fiscal-remote-mcp.example.json`; client-specific
 JSON/YAML syntax may differ.
 

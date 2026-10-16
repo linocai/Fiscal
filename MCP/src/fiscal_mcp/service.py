@@ -7,8 +7,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from .adapter import FiscalBackendAdapter, backend_outcome_known
-from .auth import ApiKeyRecord, ApiKeyRegistry, OperationGrant, TotpSessionRegistry, request_digest
+from .adapter import FiscalBackendAdapter
+from .auth import ApiKeyRecord, ApiKeyRegistry, TotpSessionRegistry
 from .confirmation import ConfirmationVerifier
 from .contracts import Scope, ToolDefinition, tool_definitions, validate_tool_arguments
 from .errors import FiscalMCPError
@@ -95,11 +95,9 @@ class FiscalMCPService:
         *,
         api_key: str | None,
         session_token: str | None = None,
-        operation_token: str | None = None,
     ) -> dict[str, Any]:
         definition = self.definition(name)
         principal: ApiKeyRecord | None = None
-        grant: OperationGrant | None = None
         try:
             session_based = session_token is not None
             if session_based:
@@ -117,38 +115,23 @@ class FiscalMCPService:
             else:
                 principal = self.key_registry.require(api_key, definition.scope)
             values = validate_tool_arguments(name, arguments)
-            if name == "fiscal_commit_import_batch" and session_based:
-                assert self.sessions is not None
-                grant = self.sessions.reserve_operation(
-                    operation_token,
-                    session_token,
-                    request_digest(name, arguments if isinstance(arguments, Mapping) else {}),
-                )
-            try:
-                if name == "fiscal_commit_import_batch":
-                    if grant is not None:
+            if name == "fiscal_commit_import_batch":
+                if session_based:
+                    assert self.sessions is not None
+                    self.sessions.require_write_window(session_token)
+                    values = dict(values)
+                    values["confirmation_token"] = self.confirmation_verifier.mint(
+                        batch_id=values["batch_id"], expected_version=values["expected_version"]
+                    )
+                elif "confirmation_token" not in values:
+                    if principal is not None and principal.label == "owner-break-glass":
                         values = dict(values)
                         values["confirmation_token"] = self.confirmation_verifier.mint(
                             batch_id=values["batch_id"], expected_version=values["expected_version"]
                         )
-                    elif "confirmation_token" not in values:
-                        if principal is not None and principal.label == "owner-break-glass":
-                            values = dict(values)
-                            values["confirmation_token"] = self.confirmation_verifier.mint(
-                                batch_id=values["batch_id"], expected_version=values["expected_version"]
-                            )
-                        else:
-                            raise FiscalMCPError("confirmation_required", "A confirmation credential is required for this commit.")
-                result = await self._invoke_adapter(name, values)
-            except FiscalMCPError as error:
-                # A definite backend rejection consumes the write approval; an
-                # unknown outcome releases it so the idempotent commit can be retried.
-                self._finish_operation(grant, used=backend_outcome_known(error))
-                raise
-            except Exception:
-                self._finish_operation(grant, used=False)
-                raise
-            self._finish_operation(grant, used=True)
+                    else:
+                        raise FiscalMCPError("confirmation_required", "A confirmation credential is required for this commit.")
+            result = await self._invoke_adapter(name, values)
             details: dict[str, Any] = {}
             if name == "fiscal_create_import_batch":
                 details = {"batch_id": result.get("batch_id"), "candidate_count": len(values["candidates"])}
@@ -165,11 +148,6 @@ class FiscalMCPService:
         except Exception as error:  # Adapter exceptions must not leak internals.
             self._record(action=name, tool=name, principal=principal, outcome="error", details={"error_code": "backend_error"})
             raise FiscalMCPError("backend_error", "Fiscal backend request failed.") from error
-
-    @staticmethod
-    def _finish_operation(grant: OperationGrant | None, *, used: bool) -> None:
-        if grant is not None:
-            TotpSessionRegistry.finish_operation(grant, used=used)
 
     async def _invoke_adapter(self, name: str, values: Mapping[str, Any]) -> dict[str, Any]:
         if name == "fiscal_get_monthly_report":

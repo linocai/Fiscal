@@ -77,20 +77,16 @@ class MCPServer:
         meta = params.get("_meta")
         presented_key = self.static_api_key
         session_token = None
-        operation_token = None
         if isinstance(meta, dict) and isinstance(meta.get("fiscal_api_key"), str):
             presented_key = meta["fiscal_api_key"]
         if isinstance(meta, dict) and isinstance(meta.get("fiscal_session_token"), str):
             session_token = meta["fiscal_session_token"]
-        if isinstance(meta, dict) and isinstance(meta.get("fiscal_operation_token"), str):
-            operation_token = meta["fiscal_operation_token"]
         try:
             result = await self.service.invoke(
                 name,
                 arguments,
                 api_key=presented_key,
                 session_token=session_token,
-                operation_token=operation_token,
             )
             return self._success(request_id, self._tool_result(result))
         except FiscalMCPError as error:

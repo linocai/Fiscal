@@ -11,40 +11,24 @@
     "session_scheme": "Session",
     "session_idle_seconds": 7200,
     "session_absolute_seconds": 28800,
-    "write_operation_seconds": 1800,
     "challenge_seconds": 600,
-    "operation": {
-      "scope": "commit:imports",
-      "request_digest": "sha256 hex of UTF-8 JSON {\"arguments\":<args>,\"tool\":\"fiscal_commit_import_batch\"}; sort_keys=true, separators=(',',':'), ensure_ascii=false (non-ASCII not escaped); omit confirmation_token",
-      "token_location": "tools/call params._meta.fiscal_operation_token",
-      "error_codes": [
-        "operation_token_missing",
-        "operation_invalid",
-        "operation_mismatch",
-        "operation_expired",
-        "operation_used",
-        "operation_in_progress"
-      ],
-      "retry": "definite backend 4xx consumes the approval; unknown outcome (network/5xx) keeps it for an identical retry"
-    },
     "challenge_request": {
       "method": "POST",
       "body": {
-        "kind": "session | operation",
+        "kind": "session | write_window",
         "client_label": "string (optional)",
-        "intent": "string (optional)",
-        "scopes": "array (optional, session only)",
-        "scope": "commit:imports (operation only)",
-        "request_digest": "sha256 hex (operation only)"
+        "intent": "string (optional, shown publicly on the approval page)",
+        "scopes": "array (optional, session only)"
       },
-      "operation_requires_header": "Authorization: Session <session_token>",
       "response_fields": [
         "challenge_id",
         "poll_token",
         "kind",
         "expires_at",
+        "pairing_code",
         "approval_url"
-      ]
+      ],
+      "write_window_requires_header": "Authorization: Session <session_token>"
     },
     "poll_url": "https://mcp.fiscal.linotsai.top/auth/challenges/{challenge_id}",
     "poll_response_fields": [
@@ -52,10 +36,20 @@
       "kind",
       "status (pending|approved)",
       "expires_at",
-      "session_token | operation_token"
+      "pairing_code",
+      "session_token (session)",
+      "write_window_expires_at (write_window)"
     ],
     "restart_invalidates_tokens": true,
-    "expired_session": "any /mcp request (initialize, tools/list, ping, tools/call) returns HTTP 401 with error.code=session_expired"
+    "expired_session": "any /mcp request (initialize, tools/list, ping, tools/call) returns HTTP 401 with error.code=session_expired",
+    "approval_flow": "fixed URL; tell the owner the pairing_code to approve; page lists pending requests via GET /auth/challenges/pending",
+    "write_window": {
+      "scope": "commit:imports",
+      "seconds": 1800,
+      "bound_to": "requesting session",
+      "commit_without_window_error": "write_window_required"
+    },
+    "max_pending_challenges": 5
   },
   "session_scopes": [
     "read:reports",
@@ -64,7 +58,7 @@
     "export:reports"
   ],
   "write_scope": "commit:imports",
-  "write_requires_fresh_totp": true,
+  "write_requires_fresh_totp": "once per 30-minute write window",
   "personal_break_glass_key": "manual_only",
   "security": {
     "totp": "Google Authenticator compatible 6-digit TOTP",

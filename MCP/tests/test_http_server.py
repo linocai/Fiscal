@@ -8,7 +8,7 @@ import unittest
 from datetime import datetime, timezone
 from typing import Any
 
-from fiscal_mcp.auth import ApiKeyRegistry, TotpSessionRegistry, request_digest
+from fiscal_mcp.auth import ApiKeyRegistry, TotpSessionRegistry
 from fiscal_mcp.confirmation import HMACConfirmationVerifier, NoopConfirmationVerifier
 from fiscal_mcp.contracts import Scope
 from fiscal_mcp.http_server import MCPHTTPApplication
@@ -140,7 +140,7 @@ class MCPHTTPTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(status, 201)
         challenge = json.loads(body)
-        self.assertIn("/agent/approve/?challenge=", challenge["approval_url"])
+        self.assertTrue(challenge["approval_url"].endswith("/agent/approve/"))
         status, _, _ = await request(
             app,
             "POST",
@@ -167,29 +167,33 @@ class MCPHTTPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body)["result"]["structuredContent"]["meta"]["period"], "2026-10")
 
-    async def test_operation_challenge_is_required_for_commit(self) -> None:
+    async def test_fixed_approval_page_lists_pending_and_window_opens_commits(self) -> None:
         app = build_app()
-        status, _, body = await request(app, "POST", "/auth/challenges", {"kind": "session"})
+        status, _, body = await request(app, "GET", "/auth/challenges/pending", origin="https://console.invalid")
+        self.assertEqual((status, json.loads(body)), (200, {"items": []}))
+        _, _, body = await request(app, "POST", "/auth/challenges", {"kind": "session", "client_label": "记账 Agent"})
         session_challenge = json.loads(body)
-        await request(app, "POST", f"/auth/challenges/{session_challenge['challenge_id']}/approve", {"totp": current_totp()})
+        self.assertTrue(session_challenge["approval_url"].endswith("/agent/approve/"))
+        _, _, body = await request(app, "GET", "/auth/challenges/pending")
+        [pending] = json.loads(body)["items"]
+        self.assertEqual(pending["pairing_code"], session_challenge["pairing_code"])
+        self.assertNotIn("poll_token", pending)
+        await request(app, "POST", f"/auth/challenges/{pending['challenge_id']}/approve", {"totp": current_totp()})
         _, _, body = await request(app, "GET", f"/auth/challenges/{session_challenge['challenge_id']}", extra_headers={"X-Fiscal-Poll-Token": session_challenge["poll_token"]})
         session_token = json.loads(body)["session_token"]
         args = {"batch_id": "batch-missing", "expected_version": 1, "idempotency_key": "commit-1234"}
-        digest = request_digest("fiscal_commit_import_batch", args)
-        status, _, body = await request(
-            app,
-            "POST",
-            "/auth/challenges",
-            {"kind": "operation", "scope": "commit:imports", "request_digest": digest, "intent": "commit reviewed batch"},
-            authorization=f"Session {session_token}",
-        )
+        call = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "fiscal_commit_import_batch", "arguments": args}}
+        _, _, body = await request(app, "POST", "/mcp", call, authorization=f"Session {session_token}")
+        self.assertEqual(json.loads(body)["result"]["structuredContent"]["error"]["code"], "write_window_required")
+        status, _, _ = await request(app, "POST", "/auth/challenges", {"kind": "write_window"})
+        self.assertEqual(status, 401)
+        status, _, body = await request(app, "POST", "/auth/challenges", {"kind": "write_window", "intent": "提交本周账单"}, authorization=f"Session {session_token}")
         self.assertEqual(status, 201)
-        operation_challenge = json.loads(body)
-        await request(app, "POST", f"/auth/challenges/{operation_challenge['challenge_id']}/approve", {"totp": current_totp()})
-        _, _, body = await request(app, "GET", f"/auth/challenges/{operation_challenge['challenge_id']}", extra_headers={"X-Fiscal-Poll-Token": operation_challenge["poll_token"]})
-        operation_token = json.loads(body)["operation_token"]
-        status, _, body = await request(app, "POST", "/mcp", {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "fiscal_commit_import_batch", "arguments": args, "_meta": {"fiscal_operation_token": operation_token}}}, authorization=f"Session {session_token}")
-        self.assertEqual(status, 200)
+        window = json.loads(body)
+        await request(app, "POST", f"/auth/challenges/{window['challenge_id']}/approve", {"totp": current_totp()})
+        _, _, body = await request(app, "GET", f"/auth/challenges/{window['challenge_id']}", extra_headers={"X-Fiscal-Poll-Token": window["poll_token"]})
+        self.assertIn("write_window_expires_at", json.loads(body))
+        _, _, body = await request(app, "POST", "/mcp", call, authorization=f"Session {session_token}")
         self.assertEqual(json.loads(body)["result"]["structuredContent"]["error"]["code"], "batch_not_found")
 
     async def test_unknown_path_and_oversized_body_are_bounded(self) -> None:

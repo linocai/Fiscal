@@ -2,7 +2,8 @@
 
 Legacy bearer keys are accepted as opaque values and only their SHA-256
 fingerprints are retained. The normal remote flow uses a Google Authenticator
-challenge to issue a bounded session and a one-time write operation grant.
+challenge to issue a bounded session; a second approval opens a short write
+window on that session.
 """
 
 from __future__ import annotations
@@ -11,11 +12,10 @@ import hashlib
 import hmac
 import os
 import base64
-import json
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable, Mapping
+from typing import Iterable
 
 from .contracts import Scope
 from .errors import FiscalMCPError, missing_scope
@@ -23,16 +23,6 @@ from .errors import FiscalMCPError, missing_scope
 
 def _fingerprint(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
-def request_digest(tool: str, arguments: Mapping[str, Any]) -> str:
-    """Return the stable digest bound to a write approval challenge."""
-
-    canonical_arguments = dict(arguments)
-    if tool == "fiscal_commit_import_batch":
-        canonical_arguments.pop("confirmation_token", None)
-    body = json.dumps({"tool": tool, "arguments": canonical_arguments}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
 def _totp_digest(secret: str, counter: int) -> bytes:
@@ -164,29 +154,21 @@ class AuthSession:
     issued_at: datetime
     last_seen_at: datetime
     absolute_expires_at: datetime
+    write_until: datetime | None = None
 
     def usable(self, now: datetime, idle_seconds: int) -> bool:
         return now < self.absolute_expires_at and now < self.last_seen_at + timedelta(seconds=idle_seconds)
 
     def as_metadata(self, *, now: datetime, idle_seconds: int) -> dict[str, object]:
         idle_expires_at = self.last_seen_at + timedelta(seconds=idle_seconds)
+        write_open = self.write_until is not None and now < self.write_until
         return {
             "session_expires_at": min(idle_expires_at, self.absolute_expires_at).isoformat(),
             "absolute_expires_at": self.absolute_expires_at.isoformat(),
+            "write_window_expires_at": self.write_until.isoformat() if write_open and self.write_until else None,
             "scopes": sorted(scope.value for scope in self.scopes),
             "label": self.label,
         }
-
-
-@dataclass(slots=True)
-class OperationGrant:
-    token_fingerprint: str
-    session_fingerprint: str
-    scope: Scope
-    request_digest: str
-    expires_at: datetime
-    used_at: datetime | None = None
-    in_use: bool = False
 
 
 @dataclass(slots=True)
@@ -197,7 +179,7 @@ class AuthChallenge:
     scopes: frozenset[Scope]
     label: str
     intent: str
-    request_digest: str | None
+    pairing_code: str
     session_fingerprint: str | None
     created_at: datetime
     expires_at: datetime
@@ -205,8 +187,13 @@ class AuthChallenge:
     approved_at: datetime | None = None
 
 
+PAIRING_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+MAX_PENDING_CHALLENGES = 5
+WRITE_WINDOW_KINDS = {"write_window", "operation"}  # "operation" is the pre-Build54 name
+
+
 class TotpSessionRegistry:
-    """In-memory TOTP challenge, session and one-time operation boundary."""
+    """In-memory TOTP challenge, session and write-window boundary."""
 
     def __init__(
         self,
@@ -227,7 +214,6 @@ class TotpSessionRegistry:
         self.operation_seconds = operation_seconds
         self.challenge_seconds = challenge_seconds
         self._sessions: dict[str, AuthSession] = {}
-        self._operations: dict[str, OperationGrant] = {}
         self._challenges: dict[str, AuthChallenge] = {}
         self._failed_attempts: dict[str, list[datetime]] = {}
 
@@ -238,10 +224,6 @@ class TotpSessionRegistry:
     @staticmethod
     def _token() -> str:
         return f"fiscal_session_v1_{secrets.token_urlsafe(32)}"
-
-    @staticmethod
-    def _operation_token() -> str:
-        return f"fiscal_operation_v1_{secrets.token_urlsafe(32)}"
 
     @staticmethod
     def _challenge_token() -> str:
@@ -267,6 +249,11 @@ class TotpSessionRegistry:
             raise FiscalMCPError("invalid_scope", "The requested session scope is not enabled.")
         return values
 
+    def _pending(self, now: datetime) -> list[AuthChallenge]:
+        for challenge_id in [key for key, value in self._challenges.items() if now >= value.expires_at]:
+            del self._challenges[challenge_id]
+        return [value for value in self._challenges.values() if value.approved_at is None]
+
     def create_challenge(
         self,
         *,
@@ -274,28 +261,26 @@ class TotpSessionRegistry:
         requested_scopes: Iterable[Scope | str] | None = None,
         label: str = "",
         intent: str = "",
-        request_digest_value: str | None = None,
         session_token: str | None = None,
         now: datetime | None = None,
     ) -> tuple[AuthChallenge, str]:
         current = now or datetime.now(timezone.utc)
         if not self.configured:
             raise FiscalMCPError("totp_unconfigured", "Authenticator approval is not configured.")
-        if kind not in {"session", "operation"}:
-            raise FiscalMCPError("invalid_challenge", "Challenge kind must be session or operation.")
-        if kind == "session":
+        if kind in WRITE_WINDOW_KINDS:
+            if not session_token:
+                raise FiscalMCPError("session_required", "A live session is required to open a write window.")
+            session = self.resolve(session_token, now=current)
+            kind = "write_window"
+            scopes = frozenset({Scope.COMMIT_IMPORTS})
+            session_fingerprint: str | None = session.token_fingerprint
+        elif kind == "session":
             scopes = self._scopes(requested_scopes)
             session_fingerprint = None
-            if request_digest_value:
-                raise FiscalMCPError("invalid_challenge", "Session challenges do not accept a request digest.")
         else:
-            if not session_token:
-                raise FiscalMCPError("session_required", "A live session is required for a write approval.")
-            session = self.resolve(session_token, now=current)
-            scopes = frozenset({Scope.COMMIT_IMPORTS})
-            session_fingerprint = session.token_fingerprint
-            if not request_digest_value or len(request_digest_value) != 64:
-                raise FiscalMCPError("invalid_challenge", "A write approval requires a request digest.")
+            raise FiscalMCPError("invalid_challenge", "Challenge kind must be session or write_window.")
+        if len(self._pending(current)) >= MAX_PENDING_CHALLENGES:
+            raise FiscalMCPError("too_many_pending", "Too many approvals are waiting; try again later.")
         challenge_id = self._challenge_token()
         poll_token = self._challenge_token()
         challenge = AuthChallenge(
@@ -305,7 +290,7 @@ class TotpSessionRegistry:
             scopes=scopes,
             label=label[:120],
             intent=intent[:500],
-            request_digest=request_digest_value,
+            pairing_code="".join(secrets.choice(PAIRING_ALPHABET) for _ in range(4)),
             session_fingerprint=session_fingerprint,
             created_at=current,
             expires_at=current + timedelta(seconds=self.challenge_seconds),
@@ -313,24 +298,40 @@ class TotpSessionRegistry:
         self._challenges[challenge_id] = challenge
         return challenge, poll_token
 
+    def pending(self, *, now: datetime | None = None) -> list[dict[str, object]]:
+        """Public, secret-free view of approvals waiting for the owner."""
+        current = now or datetime.now(timezone.utc)
+        return [
+            {
+                "challenge_id": item.challenge_id,
+                "kind": item.kind,
+                "client_label": item.label,
+                "intent": item.intent,
+                "pairing_code": item.pairing_code,
+                "created_at": item.created_at.isoformat(),
+                "expires_at": item.expires_at.isoformat(),
+            }
+            for item in sorted(self._pending(current), key=lambda value: value.created_at)
+        ]
+
     def approve(self, challenge_id: str, code: str, *, source: str = "unknown", now: datetime | None = None) -> AuthChallenge:
         current = now or datetime.now(timezone.utc)
         challenge = self._challenges.get(challenge_id)
         if challenge is None or current >= challenge.expires_at:
             raise FiscalMCPError("challenge_expired", "This approval challenge has expired.")
-        if challenge.result_token:
+        if challenge.approved_at is not None:
             return challenge
         self._check_rate(source, current)
         if not verify_totp(self.secret, code, now=current):
             self._failed(source, current)
             raise FiscalMCPError("invalid_totp", "The Authenticator code is invalid or expired.")
         if challenge.kind == "session":
-            token = self._issue_session(challenge.scopes, challenge.label, current)
+            challenge.result_token = self._issue_session(challenge.scopes, challenge.label, current)
         else:
-            if not challenge.session_fingerprint or not challenge.request_digest:
-                raise FiscalMCPError("invalid_challenge", "This write approval challenge is incomplete.")
-            token = self._issue_operation(challenge.session_fingerprint, challenge.request_digest, current)
-        challenge.result_token = token
+            session = self._sessions.get(challenge.session_fingerprint or "")
+            if session is None or not session.usable(current, self.idle_seconds):
+                raise FiscalMCPError("session_expired", "The requesting session has expired; request a new session.")
+            session.write_until = current + timedelta(seconds=self.operation_seconds)
         challenge.approved_at = current
         return challenge
 
@@ -358,78 +359,36 @@ class TotpSessionRegistry:
         session.last_seen_at = current
         return session
 
-    def _issue_operation(self, session_fingerprint: str, request_digest_value: str, now: datetime) -> str:
-        token = self._operation_token()
-        self._operations[_fingerprint(token)] = OperationGrant(
-            token_fingerprint=_fingerprint(token),
-            session_fingerprint=session_fingerprint,
-            scope=Scope.COMMIT_IMPORTS,
-            request_digest=request_digest_value,
-            expires_at=now + timedelta(seconds=self.operation_seconds),
-        )
-        return token
-
-    def reserve_operation(
-        self,
-        token: str | None,
-        session_token: str,
-        request_digest_value: str,
-        *,
-        now: datetime | None = None,
-    ) -> OperationGrant:
-        """Lock a write approval for one in-flight request.
-
-        The caller must then ``finish_operation``: ``used=True`` once the
-        backend gave a definite answer, ``used=False`` when the outcome is
-        unknown so the same idempotent request can be retried without a new
-        Authenticator code.
-        """
-
+    def require_write_window(self, token: str | None, *, now: datetime | None = None) -> AuthSession:
         current = now or datetime.now(timezone.utc)
-        session = self.resolve(session_token, now=current)
-        if not token:
+        session = self.resolve(token, now=current)
+        if session.write_until is None or current >= session.write_until:
             raise FiscalMCPError(
-                "operation_token_missing",
-                "No write approval was presented; pass it as params._meta.fiscal_operation_token.",
+                "write_window_required",
+                "No open write window; create a write_window challenge and have the owner approve it.",
             )
-        grant = self._operations.get(_fingerprint(token))
-        if grant is None:
-            raise FiscalMCPError(
-                "operation_invalid",
-                "The write approval is unknown; it may predate a gateway restart. Request a new approval.",
-            )
-        if grant.used_at is not None:
-            raise FiscalMCPError("operation_used", "The write approval was already used; request a new approval.")
-        if current >= grant.expires_at:
-            raise FiscalMCPError("operation_expired", "The write approval has expired; request a new approval.")
-        if grant.session_fingerprint != session.token_fingerprint or grant.request_digest != request_digest_value:
-            raise FiscalMCPError("operation_mismatch", "The write approval does not match this session or request.")
-        if grant.in_use:
-            raise FiscalMCPError("operation_in_progress", "This write approval is already being used by another request.")
-        grant.in_use = True
-        return grant
-
-    @staticmethod
-    def finish_operation(grant: OperationGrant, *, used: bool, now: datetime | None = None) -> None:
-        grant.in_use = False
-        if used:
-            grant.used_at = now or datetime.now(timezone.utc)
+        return session
 
     def poll(self, challenge_id: str, poll_token: str, *, now: datetime | None = None) -> dict[str, object]:
         current = now or datetime.now(timezone.utc)
         challenge = self._challenges.get(challenge_id)
         if challenge is None or not hmac.compare_digest(challenge.poll_fingerprint, _fingerprint(poll_token)):
             raise FiscalMCPError("challenge_not_found", "The approval challenge is invalid or expired.")
-        if current >= challenge.expires_at and not challenge.result_token:
+        if current >= challenge.expires_at and challenge.approved_at is None:
             raise FiscalMCPError("challenge_expired", "This approval challenge has expired.")
         result: dict[str, object] = {
             "challenge_id": challenge.challenge_id,
-            "status": "approved" if challenge.result_token else "pending",
+            "status": "approved" if challenge.approved_at else "pending",
             "expires_at": challenge.expires_at.isoformat(),
             "kind": challenge.kind,
+            "pairing_code": challenge.pairing_code,
         }
-        if challenge.result_token:
-            result["session_token" if challenge.kind == "session" else "operation_token"] = challenge.result_token
+        if challenge.approved_at and challenge.kind == "session":
+            result["session_token"] = challenge.result_token
+        if challenge.approved_at and challenge.kind == "write_window":
+            session = self._sessions.get(challenge.session_fingerprint or "")
+            if session is not None and session.write_until is not None:
+                result["write_window_expires_at"] = session.write_until.isoformat()
         return result
 
     def session_metadata(self, token: str, *, now: datetime | None = None) -> dict[str, object]:

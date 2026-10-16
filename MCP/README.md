@@ -20,9 +20,12 @@ hours; the 30-second TOTP rotation does not interrupt it.
 
 Creating or committing a batch is split into two actions. Staging and
 validation use the session. Before `fiscal_commit_import_batch`, the Agent
-creates an `operation` challenge bound to the SHA-256 request digest. A second
-Authenticator approval issues a single-use operation token valid for 30
-minutes. The gateway then mints the backend confirmation credential internally.
+creates a `write_window` challenge with its session. A second Authenticator
+approval opens a 30-minute write window on that session; every commit in the
+window is accepted without another approval, and the gateway mints the backend
+confirmation credential internally. Approvals happen on the fixed page
+`/agent/approve/`, which lists pending challenges with a 4-character pairing
+code the Agent relays to the owner.
 
 The personal Fiscal API key remains a manual break-glass credential. It is not
 published in discovery, not requested from Agents, and not used as an automatic
@@ -123,8 +126,8 @@ Legacy bearer commits require all of:
 
 The included `HMACConfirmationVerifier` defines the internal credential format
 (`v1.<batch_id>.<version>.<signature>`). TOTP session commits do not accept a
-caller-supplied confirmation token: the gateway mints it only after a matching
-one-time operation approval. It refuses all commits when
+caller-supplied confirmation token: the gateway mints it only while the
+session's write window is open. It refuses all commits when
 `FISCAL_MCP_CONFIRMATION_SECRET` is absent. The fixture tests may use
 `NoopConfirmationVerifier`; never deploy that verifier.
 

@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 import unittest
 
-from fiscal_mcp.adapter import BackendAdapterError, HttpFiscalBackendAdapter, MockFiscalBackendAdapter
-from fiscal_mcp.auth import ApiKeyRegistry, TotpSessionRegistry, request_digest
+from fiscal_mcp.adapter import HttpFiscalBackendAdapter, MockFiscalBackendAdapter
+from fiscal_mcp.auth import ApiKeyRegistry, TotpSessionRegistry
 from fiscal_mcp.confirmation import HMACConfirmationVerifier
 from fiscal_mcp.contracts import Scope, content_fingerprint
 from fiscal_mcp.errors import FiscalMCPError
@@ -220,77 +220,53 @@ class FiscalMCPContractTests(unittest.TestCase):
         self.assertEqual(result["result"]["structuredContent"]["meta"]["period"], "2026")
 
 
-class FailingCommitAdapter(MockFiscalBackendAdapter):
-    error: FiscalMCPError | None = None
-
-    async def commit_import_batch(self, batch_id, expected_version, confirmation_token, idempotency_key):
-        if self.error is not None:
-            raise self.error
-        return await MockFiscalBackendAdapter.commit_import_batch(self, batch_id, expected_version, confirmation_token, idempotency_key)
-
-
 class SessionCommitTests(unittest.TestCase):
     SECRET = "JBSWY3DPEHPK3PXP"
 
     def setUp(self) -> None:
+        from datetime import datetime, timezone
+
         from test_auth import totp
 
         self.totp = totp
-        self.adapter = FailingCommitAdapter()
+        self.adapter = MockFiscalBackendAdapter()
         self.sessions = TotpSessionRegistry(self.SECRET, default_scopes=[scope for scope in Scope if scope is not Scope.COMMIT_IMPORTS])
         self.service = FiscalMCPService(self.adapter, ApiKeyRegistry(), HMACConfirmationVerifier("test-confirmation-secret"), sessions=self.sessions)
-        from datetime import datetime, timezone
-
         now = datetime.now(timezone.utc)
         challenge, _ = self.sessions.create_challenge(kind="session", now=now)
         self.sessions.approve(challenge.challenge_id, totp(self.SECRET, now), now=now)
         self.session = challenge.result_token
-        batch = self.call("fiscal_create_import_batch", {"source": "structured", "original_content_sha256": "e" * 64, "candidates": [{"client_id": "row-1", "kind": "expense", "amount_minor": 1234, "occurred_at": "2026-10-01T12:00:00+08:00", "title": "Coffee", "account_id": "account-1", "category_id": "category-1"}], "idempotency_key": "import-session-01"})
-        self.call("fiscal_validate_import_batch", {"batch_id": batch["batch_id"], "expected_version": 1})
-        self.args = {"batch_id": batch["batch_id"], "expected_version": 2, "idempotency_key": "commit-session-01"}
 
-    def call(self, tool, args, operation=None):
-        return run(self.service.invoke(tool, args, api_key=None, session_token=self.session, operation_token=operation))
+    def call(self, tool, args):
+        return run(self.service.invoke(tool, args, api_key=None, session_token=self.session))
 
-    def operation(self) -> str:
+    def validated_batch(self, key: str) -> dict:
+        candidate = {"client_id": "row-1", "kind": "expense", "amount_minor": 1234, "occurred_at": "2026-10-01T12:00:00+08:00", "title": f"Coffee {key}", "account_id": "account-1", "category_id": "category-1"}
+        batch = self.call("fiscal_create_import_batch", {"source": "structured", "original_content_sha256": "e" * 64, "candidates": [candidate], "idempotency_key": f"import-{key}"})
+        return self.call("fiscal_validate_import_batch", {"batch_id": batch["batch_id"], "expected_version": 1})
+
+    def open_window(self) -> None:
         from datetime import datetime, timezone
 
         now = datetime.now(timezone.utc)
-        digest = request_digest("fiscal_commit_import_batch", self.args)
-        challenge, poll = self.sessions.create_challenge(kind="operation", session_token=self.session, request_digest_value=digest, now=now)
+        challenge, _ = self.sessions.create_challenge(kind="write_window", session_token=self.session, now=now)
         self.sessions.approve(challenge.challenge_id, self.totp(self.SECRET, now), now=now)
-        return self.sessions.poll(challenge.challenge_id, poll, now=now)["operation_token"]
 
-    def test_unknown_backend_outcome_releases_approval_for_retry(self) -> None:
-        token = self.operation()
-        self.adapter.error = BackendAdapterError("backend_unavailable", "Fiscal backend is unavailable.")
-        with self.assertRaises(FiscalMCPError):
-            self.call("fiscal_commit_import_batch", self.args, token)
-        self.adapter.error = BackendAdapterError("internal_error", "failed", {"http_status": 502})
-        with self.assertRaises(FiscalMCPError):
-            self.call("fiscal_commit_import_batch", self.args, token)
-        self.adapter.error = None
-        committed = self.call("fiscal_commit_import_batch", self.args, token)
-        self.assertEqual(committed["batch"]["status"], "committed")
+    def test_commit_requires_an_open_write_window(self) -> None:
+        batch = self.validated_batch("closed-01")
         with self.assertRaises(FiscalMCPError) as caught:
-            self.call("fiscal_commit_import_batch", self.args, token)
-        self.assertEqual(caught.exception.code, "operation_used")
+            self.call("fiscal_commit_import_batch", {"batch_id": batch["batch_id"], "expected_version": 2, "idempotency_key": "commit-closed-01"})
+        self.assertEqual(caught.exception.code, "write_window_required")
 
-    def test_definite_backend_rejection_consumes_approval(self) -> None:
-        token = self.operation()
-        self.adapter.error = BackendAdapterError("version_conflict", "stale", {"http_status": 409})
-        with self.assertRaises(FiscalMCPError) as caught:
-            self.call("fiscal_commit_import_batch", self.args, token)
-        self.assertEqual(caught.exception.code, "version_conflict")
-        self.adapter.error = None
-        with self.assertRaises(FiscalMCPError) as caught:
-            self.call("fiscal_commit_import_batch", self.args, token)
-        self.assertEqual(caught.exception.code, "operation_used")
-
-    def test_missing_operation_token_is_reported_as_missing(self) -> None:
-        with self.assertRaises(FiscalMCPError) as caught:
-            self.call("fiscal_commit_import_batch", self.args)
-        self.assertEqual(caught.exception.code, "operation_token_missing")
+    def test_one_window_covers_several_commits_and_retries(self) -> None:
+        self.open_window()
+        for key in ("window-01", "window-02"):
+            batch = self.validated_batch(key)
+            args = {"batch_id": batch["batch_id"], "expected_version": 2, "idempotency_key": f"commit-{key}"}
+            committed = self.call("fiscal_commit_import_batch", args)
+            self.assertEqual(committed["batch"]["status"], "committed")
+            self.assertEqual(self.call("fiscal_commit_import_batch", args), committed)
+        self.assertEqual(len(self.adapter.ledger_items), 2)
 
 
 class RecordingClient:

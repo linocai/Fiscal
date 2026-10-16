@@ -6,7 +6,9 @@ import hmac
 import unittest
 from datetime import datetime, timezone
 
-from fiscal_mcp.auth import TotpSessionRegistry, request_digest
+from datetime import timedelta
+
+from fiscal_mcp.auth import MAX_PENDING_CHALLENGES, TotpSessionRegistry
 from fiscal_mcp.contracts import Scope
 from fiscal_mcp.errors import FiscalMCPError
 
@@ -56,47 +58,62 @@ class TotpSessionTests(unittest.TestCase):
         with self.assertRaisesRegex(FiscalMCPError, "expired"):
             registry.resolve(token, now=NOW.replace(hour=12, minute=1))
 
-    def approved_operation(self, registry: TotpSessionRegistry, arguments: dict) -> tuple[str, str, str]:
+    def session(self, registry: TotpSessionRegistry) -> str:
         challenge, _ = registry.create_challenge(kind="session", now=NOW)
         registry.approve(challenge.challenge_id, totp(SECRET, NOW), now=NOW)
-        session_token = challenge.result_token
-        digest = request_digest("fiscal_commit_import_batch", arguments)
-        operation, poll = registry.create_challenge(
-            kind="operation", session_token=session_token, request_digest_value=digest, now=NOW
-        )
-        registry.approve(operation.challenge_id, totp(SECRET, NOW), now=NOW)
-        operation_token = registry.poll(operation.challenge_id, poll, now=NOW)["operation_token"]
-        return session_token, operation_token, digest
+        assert challenge.result_token is not None
+        return challenge.result_token
 
     def assert_code(self, code: str, call) -> None:
         with self.assertRaises(FiscalMCPError) as caught:
             call()
         self.assertEqual(caught.exception.code, code)
 
-    def test_operation_is_bound_to_request_and_single_use(self) -> None:
+    def test_write_window_opens_for_thirty_minutes_on_the_requesting_session(self) -> None:
         registry = self.make_registry()
-        arguments = {"batch_id": "batch-1", "expected_version": 2, "idempotency_key": "commit-1234"}
-        session_token, operation_token, digest = self.approved_operation(registry, arguments)
-        self.assert_code("operation_token_missing", lambda: registry.reserve_operation(None, session_token, digest, now=NOW))
-        self.assert_code("operation_invalid", lambda: registry.reserve_operation("fiscal_operation_v1_unknown", session_token, digest, now=NOW))
-        self.assert_code("operation_mismatch", lambda: registry.reserve_operation(operation_token, session_token, "0" * 64, now=NOW))
-        grant = registry.reserve_operation(operation_token, session_token, digest, now=NOW)
-        self.assert_code("operation_in_progress", lambda: registry.reserve_operation(operation_token, session_token, digest, now=NOW))
-        registry.finish_operation(grant, used=True, now=NOW)
-        self.assert_code("operation_used", lambda: registry.reserve_operation(operation_token, session_token, digest, now=NOW))
+        session_token = self.session(registry)
+        other_token = self.session(registry)
+        self.assert_code("write_window_required", lambda: registry.require_write_window(session_token, now=NOW))
+        window, poll = registry.create_challenge(kind="write_window", session_token=session_token, intent="提交本周账单", now=NOW)
+        self.assertEqual(registry.poll(window.challenge_id, poll, now=NOW)["status"], "pending")
+        registry.approve(window.challenge_id, totp(SECRET, NOW), now=NOW)
+        polled = registry.poll(window.challenge_id, poll, now=NOW)
+        self.assertEqual(polled["status"], "approved")
+        self.assertNotIn("session_token", polled)
+        self.assertEqual(polled["write_window_expires_at"], (NOW + timedelta(minutes=30)).isoformat())
+        for minute in (0, 15, 29):
+            registry.require_write_window(session_token, now=NOW + timedelta(minutes=minute))
+        self.assert_code("write_window_required", lambda: registry.require_write_window(other_token, now=NOW))
+        self.assert_code(
+            "write_window_required",
+            lambda: registry.require_write_window(session_token, now=NOW + timedelta(minutes=30)),
+        )
+        self.assertIsNone(registry.session_metadata(session_token, now=NOW + timedelta(minutes=31))["write_window_expires_at"])
 
-    def test_released_operation_can_retry_until_expiry(self) -> None:
+    def test_legacy_operation_kind_opens_a_window_and_requires_a_session(self) -> None:
         registry = self.make_registry()
-        arguments = {"batch_id": "batch-1", "expected_version": 2, "idempotency_key": "commit-1234"}
-        session_token, operation_token, digest = self.approved_operation(registry, arguments)
-        grant = registry.reserve_operation(operation_token, session_token, digest, now=NOW)
-        registry.finish_operation(grant, used=False)
-        retry = registry.reserve_operation(operation_token, session_token, digest, now=NOW)
-        self.assertIs(retry, grant)
-        registry.finish_operation(retry, used=False)
-        later = NOW.replace(minute=31)
-        registry.resolve(session_token, now=NOW.replace(minute=30))
-        self.assert_code("operation_expired", lambda: registry.reserve_operation(operation_token, session_token, digest, now=later))
+        self.assert_code("session_required", lambda: registry.create_challenge(kind="write_window", now=NOW))
+        session_token = self.session(registry)
+        legacy, _ = registry.create_challenge(kind="operation", session_token=session_token, now=NOW)
+        self.assertEqual(legacy.kind, "write_window")
+
+    def test_pending_list_is_secret_free_and_bounded(self) -> None:
+        registry = self.make_registry()
+        self.assertEqual(registry.pending(now=NOW), [])
+        challenge, poll = registry.create_challenge(kind="session", label="agent", intent="整理账单", now=NOW)
+        [item] = registry.pending(now=NOW)
+        self.assertEqual(item["pairing_code"], challenge.pairing_code)
+        self.assertRegex(challenge.pairing_code, r"^[A-Z2-9]{4}$")
+        self.assertEqual(set(item), {"challenge_id", "kind", "client_label", "intent", "pairing_code", "created_at", "expires_at"})
+        self.assertNotIn(poll, str(item))
+        registry.approve(challenge.challenge_id, totp(SECRET, NOW), now=NOW)
+        self.assertEqual(registry.pending(now=NOW), [])
+        for _ in range(MAX_PENDING_CHALLENGES):
+            registry.create_challenge(kind="session", now=NOW)
+        self.assert_code("too_many_pending", lambda: registry.create_challenge(kind="session", now=NOW))
+        later = NOW + timedelta(minutes=11)
+        self.assertEqual(registry.pending(now=later), [])
+        registry.create_challenge(kind="session", now=later)
 
     def test_commit_scope_cannot_be_session_scope(self) -> None:
         registry = self.make_registry()

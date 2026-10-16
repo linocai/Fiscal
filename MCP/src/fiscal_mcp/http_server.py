@@ -16,6 +16,7 @@ import secrets
 from collections.abc import Awaitable, Callable, Iterable
 from typing import Any
 
+from .auth import WRITE_WINDOW_KINDS
 from .contracts import Scope
 from .errors import FiscalMCPError
 from .server import MCPServer, build_default_server
@@ -230,20 +231,16 @@ class MCPHTTPApplication:
                 requested_scopes = payload.get("scopes")
                 if requested_scopes is not None and not isinstance(requested_scopes, list):
                     raise FiscalMCPError("invalid_challenge", "scopes must be an array.")
-                if kind == "operation":
+                if kind in WRITE_WINDOW_KINDS:
                     if scheme != "session" or token is None:
-                        raise FiscalMCPError("session_required", "A live Session credential is required for a write approval.")
+                        raise FiscalMCPError("session_required", "A live Session credential is required to open a write window.")
                     if payload.get("scope", Scope.COMMIT_IMPORTS.value) != Scope.COMMIT_IMPORTS.value:
-                        raise FiscalMCPError("invalid_scope", "Only commit:imports can be approved as an operation.")
-                digest = payload.get("request_digest")
-                if digest is not None and (not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdefABCDEF" for c in digest)):
-                    raise FiscalMCPError("invalid_challenge", "request_digest must be a SHA-256 hex digest.")
+                        raise FiscalMCPError("invalid_scope", "Only commit:imports can be opened as a write window.")
                 challenge, poll_token = sessions.create_challenge(
                     kind=kind,
                     requested_scopes=requested_scopes,
                     label=str(payload.get("client_label", "agent")),
                     intent=str(payload.get("intent", "")),
-                    request_digest_value=digest,
                     session_token=token if scheme == "session" else None,
                 )
                 await self._respond(
@@ -254,7 +251,8 @@ class MCPHTTPApplication:
                         "poll_token": poll_token,
                         "kind": challenge.kind,
                         "expires_at": challenge.expires_at.isoformat(),
-                        "approval_url": f"{self.approval_url}/?challenge={challenge.challenge_id}",
+                        "pairing_code": challenge.pairing_code,
+                        "approval_url": f"{self.approval_url}/",
                     },
                     cors=cors,
                 )
@@ -264,6 +262,9 @@ class MCPHTTPApplication:
                 await self._respond(send, 400, {"error": "invalid_json"}, cors=cors)
             except FiscalMCPError as error:
                 await self._respond(send, self._auth_status(error), {"error": error.as_dict()}, cors=cors)
+            return
+        if segments == ["auth", "challenges", "pending"] and method == "GET":
+            await self._respond(send, 200, {"items": sessions.pending()}, cors=cors)
             return
         if len(segments) == 3 and segments[:2] == ["auth", "challenges"] and segments[2] and method == "GET":
             poll_token = request_headers.get("x-fiscal-poll-token", "")
@@ -311,7 +312,7 @@ class MCPHTTPApplication:
     def _auth_status(error: FiscalMCPError) -> int:
         if error.code in {"unauthorized", "session_required", "session_expired"}:
             return 401
-        if error.code == "auth_rate_limited":
+        if error.code in {"auth_rate_limited", "too_many_pending"}:
             return 429
         if error.code == "totp_unconfigured":
             return 503

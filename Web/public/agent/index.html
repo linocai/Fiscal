@@ -26,13 +26,13 @@
   <div class="card">
     <h2>标准使用顺序</h2>
     <ol>
-      <li>Agent 读取本页或 discovery JSON，使用 <code>POST /auth/challenges</code> 创建 <code>session</code> challenge。</li>
-      <li>Agent 把返回的 <code>approval_url</code> 发给用户；用户打开页面，用 Google Authenticator 输入当前 6 位验证码。</li>
-      <li>Agent 使用返回的 <code>poll_token</code> 作为 <code>X-Fiscal-Poll-Token</code> 轮询 challenge，拿到短期 <code>session_token</code>。</li>
-      <li>Agent 用 <code>Authorization: Session &lt;session_token&gt;</code> 调用 MCP（<code>initialize</code>、<code>tools/list</code>、<code>tools/call</code> 都校验）。Session 失效或未知时任何 <code>/mcp</code> 请求都返回 HTTP 401、<code>error.code</code> 为 <code>session_expired</code>，可用 <code>ping</code> 低成本探测。会话空闲 2 小时失效，最长 8 小时；验证码每 30 秒变化不会中断已建立的会话。</li>
-      <li>读取、分析和暂存账单可以直接完成。真正提交到账本前，Agent 为本次请求创建 <code>operation</code> challenge，用户再次输入一次验证码；该写入授权只允许匹配的请求使用一次，有效 30 分钟。</li>
+      <li>Agent 读取本页或 discovery JSON，使用 <code>POST /auth/challenges</code> 创建 <code>session</code> 申请，拿到 4 位 <code>pairing_code</code>。</li>
+      <li>Agent 告诉用户：“请在批准页批准配对码 XXXX”。批准页是固定网址 <code>https://console.fiscal.linotsai.top/agent/approve/</code>，用户输入 Google Authenticator 当前 6 位验证码。</li>
+      <li>Agent 使用返回的 <code>poll_token</code> 作为 <code>X-Fiscal-Poll-Token</code> 轮询申请，拿到短期 <code>session_token</code>。</li>
+      <li>Agent 用 <code>Authorization: Session &lt;session_token&gt;</code> 调用 MCP（<code>initialize</code>、<code>tools/list</code>、<code>tools/call</code> 都校验）。Session 失效或未知时任何 <code>/mcp</code> 请求都返回 HTTP 401、<code>error.code</code> 为 <code>session_expired</code>，可用 <code>ping</code> 低成本探测。会话空闲 2 小时失效，最长 8 小时。</li>
+      <li>读取、分析和暂存账单可以直接完成。要提交到账本时，Agent 用当前 Session 创建 <code>write_window</code> 申请，用户在同一批准页再批准一次；之后 <strong>30 分钟</strong>内该 Session 的所有提交都不再需要批准。</li>
     </ol>
-    <p class="note">网关重启或发布后，所有 Session 与未使用的写入授权都会失效（返回 <code>session_expired</code> / <code>operation_invalid</code>）；重新创建 challenge 即可。</p>
+    <p class="note">网关重启或发布后，所有 Session 与写入窗口都会失效（返回 <code>session_expired</code>）；重新创建申请即可。批准页同时最多显示 5 条待批准申请。</p>
   </div>
   <div class="card">
     <h2>1. 创建 session challenge</h2>
@@ -43,9 +43,9 @@ Content-Type: application/json
 
 201 Created
 {"challenge_id": "fiscal_challenge_v1_…", "poll_token": "fiscal_challenge_v1_…",
- "kind": "session", "expires_at": "2026-10-14T12:10:00+00:00",
- "approval_url": "https://console.fiscal.linotsai.top/agent/approve/?challenge=fiscal_challenge_v1_…"}</pre>
-    <p><code>scopes</code> 可选，默认即全部 Session 权限：<code>read:reports</code>、<code>read:ledger</code>、<code>stage:imports</code>、<code>export:reports</code>。challenge 10 分钟内有效。</p>
+ "kind": "session", "expires_at": "2026-10-16T12:10:00+00:00", "pairing_code": "K7P2",
+ "approval_url": "https://console.fiscal.linotsai.top/agent/approve/"}</pre>
+    <p><code>scopes</code> 可选，默认即全部 Session 权限：<code>read:reports</code>、<code>read:ledger</code>、<code>stage:imports</code>、<code>export:reports</code>。申请 10 分钟内有效；待批准申请过多时返回 429 <code>too_many_pending</code>。<code>intent</code> 会公开显示在批准页上，不要写入账单明细或个人信息。</p>
   </div>
   <div class="card">
     <h2>2. 轮询拿 token</h2>
@@ -55,7 +55,7 @@ X-Fiscal-Poll-Token: {poll_token}
 200 OK  {"challenge_id": "…", "kind": "session", "status": "pending", "expires_at": "…"}
 200 OK  {"challenge_id": "…", "kind": "session", "status": "approved", "expires_at": "…",
          "session_token": "fiscal_session_v1_…"}</pre>
-    <p>operation challenge 批准后返回的是 <code>operation_token</code>。建议每 3–5 秒轮询一次。</p>
+    <p><code>write_window</code> 申请批准后返回 <code>write_window_expires_at</code>，不返回 token。建议每 3–5 秒轮询一次。</p>
   </div>
   <div class="card">
     <h2>3. 调用工具</h2>
@@ -73,27 +73,22 @@ Content-Type: application/json
     </ul>
   </div>
   <div class="card">
-    <h2>4. 提交前的写入授权</h2>
-    <p>先算 <code>request_digest</code>：把<strong>将要发送的提交参数</strong>（不含 <code>confirmation_token</code>）与工具名组成
-      <code>{"arguments":&lt;args&gt;,"tool":"fiscal_commit_import_batch"}</code>，用 UTF-8、按键名排序、无空格、<strong>不转义非 ASCII 字符</strong>的 JSON 序列化（Python：<code>json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))</code>）后取 SHA-256 十六进制。</p>
-<pre>序列化结果：
-{"arguments":{"batch_id":"3f6c1d2e-8a4b-4c1e-9f00-2b7d5e6a9c10","expected_version":2,"idempotency_key":"commit-2026w42-01"},"tool":"fiscal_commit_import_batch"}
-request_digest = e86efbf7e4c592ae17d55011737f73b5a2e14925c981e68d59abe5b14ef37d98</pre>
+    <h2>4. 开启写入窗口再提交</h2>
 <pre>POST https://mcp.fiscal.linotsai.top/auth/challenges
 Authorization: Session fiscal_session_v1_…
 Content-Type: application/json
 
-{"kind": "operation", "scope": "commit:imports",
- "request_digest": "e86efbf7…7d98", "intent": "提交本周 12 笔，合计 1,234.56 元"}</pre>
-    <p>用户批准、轮询拿到 <code>operation_token</code> 后，原样发送同一组参数，token 放在 <code>params._meta.fiscal_operation_token</code>：</p>
+{"kind": "write_window", "intent": "提交本周 12 笔"}
+
+201 Created  {"challenge_id": "…", "poll_token": "…", "kind": "write_window", "pairing_code": "R4MZ", …}</pre>
+    <p>用户批准后，同一个 Session 在 30 分钟内直接调用提交工具，参数里不需要任何授权字段：</p>
 <pre>{"jsonrpc": "2.0", "id": 7, "method": "tools/call",
  "params": {"name": "fiscal_commit_import_batch",
             "arguments": {"batch_id": "3f6c1d2e-8a4b-4c1e-9f00-2b7d5e6a9c10",
-                          "expected_version": 2, "idempotency_key": "commit-2026w42-01"},
-            "_meta": {"fiscal_operation_token": "fiscal_operation_v1_…"}}}</pre>
+                          "expected_version": 2, "idempotency_key": "commit-2026w42-01"}}}</pre>
     <ul>
-      <li><code>operation_token_missing</code>：没带 token 或放错位置。<code>operation_invalid</code>：token 未知（可能网关已重启）。<code>operation_mismatch</code>：参数或 Session 与批准时不一致，参数改动后必须重新申请。<code>operation_expired</code> / <code>operation_used</code>：过期或已用过。</li>
-      <li>后端明确拒绝（4xx，例如版本冲突）会消耗本次授权；网络错误或后端 5xx 结果未知时授权保留，30 分钟内可用<strong>完全相同</strong>的参数重试（提交本身幂等）。</li>
+      <li>窗口未开或已过期时提交返回 <code>write_window_required</code>，重新申请写入窗口即可。窗口只属于发起它的 Session。</li>
+      <li>提交是幂等的：网络错误或后端 5xx 时，用<strong>完全相同</strong>的参数（同一 <code>idempotency_key</code>）重试，不会重复入账。</li>
     </ul>
   </div>
   <div class="card">
@@ -110,15 +105,15 @@ Content-Type: application/json
     <h2>Agent 应遵守的边界</h2>
     <ul>
       <li>只向用户索取 Google Authenticator 当前验证码，不索取或记录个人 Fiscal API key。</li>
-      <li>验证码、Session token、poll token 和 operation token 都不得写入日志、账单备注或公开回答。</li>
-      <li>先导入、校验、展示摘要，再请求用户批准最终写入；不要跳过预览。</li>
+      <li>验证码、Session token 和 poll token 都不得写入日志、账单备注或公开回答。</li>
+      <li>先导入、校验、展示摘要并得到用户确认，再申请写入窗口；窗口内也只提交用户已确认的批次。</li>
       <li>个人 Fiscal API key 是人工使用的 break-glass 兜底钥匙，不属于 Agent 自动流程。</li>
     </ul>
     <p class="note">如果 Session 过期，重新创建 session challenge 即可；不需要重新配置 Agent。</p>
   </div>
   <div class="card">
     <h2>用户批准页面</h2>
-    <p><a href="/agent/approve/">打开 TOTP 批准页面</a>。只有持有本页链接并且能提供当前验证码的人才能批准操作。</p>
+    <p><a href="/agent/approve/">打开 TOTP 批准页面</a>（固定网址，可加入书签）。页面只在有待批准申请时显示输入框；只有能提供当前验证码的人才能批准操作。</p>
   </div>
 </main>
 </body>

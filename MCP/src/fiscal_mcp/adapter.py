@@ -70,13 +70,6 @@ REPORT_HEADERS = {"X-Fiscal-Report-Balance-Semantics": "as-of-v1"}
 MAX_ERROR_DETAILS_BYTES = 4_096
 
 
-def backend_outcome_known(error: FiscalMCPError) -> bool:
-    """True when the backend answered with a definite 4xx rejection."""
-
-    status = (error.details or {}).get("http_status")
-    return isinstance(status, int) and 400 <= status < 500
-
-
 def _backend_error(status_code: int, body: Any) -> BackendAdapterError:
     """Translate a backend error envelope into a public MCP error.
 
