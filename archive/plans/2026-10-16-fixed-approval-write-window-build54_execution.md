@@ -24,3 +24,10 @@
 
 - 回退：HZ `current` 指回 `releases/20261014-build52-0958d48` / `20261014-web-build52-0958d48` 并重启 `fiscal-mcp`（旧流程要求逐请求授权）。
 - 资源：删除 HZ 上传包与被两次替换的 `20261011-totp-429b342`、`20261011-web-totp-c1bf49a`（约 22 MiB）；本地预览服务已停、临时 launch 配置与构建包已删，scratchpad 无本轮残留。
+
+## Build55：Agent 新建账户与分类（同日快修）
+
+- 用户需求：经 MCP 新增钱包/账户与账单分类。新增 `fiscal_create_account`（cash/debit/credit，期初整数分，信用账户额度/账单日/还款日/账期模式/期初日期）与 `fiscal_create_category`（收支方向、上级、别名、示例，图标默认 `tag`、颜色默认 `#6B7280`），scope `commit:imports`，与提交共用 30 分钟写入窗口；未知字段拒绝，业务规则与重名由后端校验。只做新建，不做改名/归档/删除。
+- 验证：MCP 单测 38/38；本地一次性 PostgreSQL + 真实 Backend app 端到端：无窗口 `write_window_required`；建微信零钱（cash，123.45 元）、招行信用卡（statement_day_cutoff 5/23）、咖啡分类（含别名）及子分类成功并可列出；有期初欠款但缺日期的信用账户返回后端 422 `invalid_account_configuration`；重名返回 `account_name_conflict`。
+- 上线：tag `v2.4.0-build55` → `6ae1a3e`；HZ MCP `releases/20261016-build55-6ae1a3e`（`serverInfo 0.1.0+build55`，preflight 通过），Web `releases/20261016-web-build55-6ae1a3e`；公网 discovery 13 工具、窗口覆盖提交与两个新建工具，health/pending 200，过期 Session 401。后端未变。
+- 回退与资源：回退指向 Build54 release；删除 HZ 上传包与 Build52 release（约 22 MiB），本地临时库与构建包已删。
