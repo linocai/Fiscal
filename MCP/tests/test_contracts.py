@@ -50,6 +50,8 @@ class FiscalMCPContractTests(unittest.TestCase):
                 "fiscal_get_yearly_report",
                 "fiscal_list_accounts",
                 "fiscal_list_categories",
+                "fiscal_create_account",
+                "fiscal_create_category",
                 "fiscal_search_ledger",
                 "fiscal_create_import_batch",
                 "fiscal_get_import_batch",
@@ -257,6 +259,38 @@ class SessionCommitTests(unittest.TestCase):
         with self.assertRaises(FiscalMCPError) as caught:
             self.call("fiscal_commit_import_batch", {"batch_id": batch["batch_id"], "expected_version": 2, "idempotency_key": "commit-closed-01"})
         self.assertEqual(caught.exception.code, "write_window_required")
+
+    def test_master_data_creation_requires_window_and_validates_shape(self) -> None:
+        account = {"name": "微信零钱", "kind": "cash", "opening_balance_minor": 12_345}
+        category = {"name": "咖啡", "direction": "expense", "aliases": ["瑞幸", "星巴克"]}
+        for tool, args in (("fiscal_create_account", account), ("fiscal_create_category", category)):
+            with self.assertRaises(FiscalMCPError) as caught:
+                self.call(tool, args)
+            self.assertEqual(caught.exception.code, "write_window_required")
+        self.open_window()
+        created = self.call("fiscal_create_account", account)
+        self.assertEqual((created["name"], created["kind"]), ("微信零钱", "cash"))
+        self.assertIn("id", created)
+        self.assertEqual(self.adapter.accounts[0]["opening_balance_minor"], 12_345)
+        created_category = self.call("fiscal_create_category", category)
+        self.assertEqual(created_category["aliases"], ["瑞幸", "星巴克"])
+        self.assertEqual((self.adapter.categories[0]["icon"], self.adapter.categories[0]["color_hex"]), ("tag", "#6B7280"))
+        listed = self.call("fiscal_list_accounts", {})["items"]
+        self.assertEqual([item["name"] for item in listed], ["微信零钱"])
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_create_account", account)
+        self.assertEqual(caught.exception.code, "account_name_conflict")
+        for tool, bad in (
+            ("fiscal_create_account", {**account, "name": "x", "opening_balance_minor": "12.34"}),
+            ("fiscal_create_account", {**account, "name": "y", "kind": "wallet"}),
+            ("fiscal_create_account", {**account, "name": "z", "statement_day": 31}),
+            ("fiscal_create_account", {**account, "name": "w", "balance": 1}),
+            ("fiscal_create_category", {**category, "name": "k", "color_hex": "red"}),
+            ("fiscal_create_category", {**category, "name": "m", "direction": "transfer"}),
+        ):
+            with self.assertRaises(FiscalMCPError) as caught:
+                self.call(tool, bad)
+            self.assertEqual(caught.exception.code, "invalid_params", bad)
 
     def test_one_window_covers_several_commits_and_retries(self) -> None:
         self.open_window()

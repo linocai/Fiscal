@@ -44,6 +44,30 @@ CANDIDATE_PROPERTIES: dict[str, Any] = {
 }
 
 
+ACCOUNT_PROPERTIES: dict[str, Any] = {
+    "name": {"type": "string", "minLength": 1, "maxLength": 80},
+    "kind": {"type": "string", "enum": ["cash", "debit", "credit"], "description": "cash for wallets such as WeChat/Alipay balance, debit for bank cards, credit for credit cards/loans."},
+    "opening_balance_minor": {"type": "integer", "description": "Integer fen. Positive debt for credit accounts."},
+    "institution": {"type": ["string", "null"], "maxLength": 80},
+    "last_four": {"type": ["string", "null"], "pattern": r"^[0-9]{4}$"},
+    "credit_limit_minor": {"type": ["integer", "null"], "minimum": 1},
+    "statement_day": {"type": ["integer", "null"], "minimum": 1, "maximum": 28},
+    "due_day": {"type": ["integer", "null"], "minimum": 1, "maximum": 28},
+    "cycle_mode": {"type": ["string", "null"], "enum": ["statement_day_cutoff", "previous_calendar_month", "on_demand", None]},
+    "opening_balance_as_of_date": {"type": ["string", "null"], "format": "date"},
+    "opening_due_date": {"type": ["string", "null"], "format": "date"},
+}
+CATEGORY_PROPERTIES: dict[str, Any] = {
+    "name": {"type": "string", "minLength": 1, "maxLength": 80},
+    "direction": {"type": "string", "enum": ["income", "expense"]},
+    "parent_id": {"type": ["string", "null"]},
+    "icon": {"type": "string", "maxLength": 80, "default": "tag"},
+    "color_hex": {"type": "string", "pattern": r"^#[0-9A-Fa-f]{6}$", "default": "#6B7280"},
+    "aliases": {"type": "array", "items": {"type": "string", "maxLength": 80}, "maxItems": 20},
+    "examples": {"type": "array", "items": {"type": "string", "maxLength": 80}, "maxItems": 20},
+}
+
+
 class Scope(str, Enum):
     READ_REPORTS = "read:reports"
     READ_LEDGER = "read:ledger"
@@ -135,6 +159,18 @@ def tool_definitions() -> tuple[ToolDefinition, ...]:
                 },
                 [],
             ),
+        ),
+        ToolDefinition(
+            "fiscal_create_account",
+            "Create a Fiscal account (wallet, bank card or credit account); requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema(ACCOUNT_PROPERTIES, ["name", "kind", "opening_balance_minor"]),
+        ),
+        ToolDefinition(
+            "fiscal_create_category",
+            "Create an income or expense category; aliases/examples improve classification. Requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema(CATEGORY_PROPERTIES, ["name", "direction"]),
         ),
         ToolDefinition(
             "fiscal_search_ledger",
@@ -315,6 +351,66 @@ def _validate_candidate(value: Any, index: int) -> dict[str, Any]:
     return candidate
 
 
+def _reject_unknown(values: Mapping[str, Any], allowed: Mapping[str, Any]) -> None:
+    unknown = sorted(set(values) - set(allowed))
+    if unknown:
+        raise invalid_params(f"unsupported fields: {', '.join(unknown)}", field="arguments")
+
+
+def _optional_int(values: Mapping[str, Any], key: str, *, low: int, high: int | None = None) -> None:
+    value = values.get(key)
+    if value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, int) or value < low or (high is not None and value > high):
+        raise invalid_params(f"{key} is out of range", field=key)
+
+
+def _validate_account(values: Mapping[str, Any]) -> dict[str, Any]:
+    """Shape checks only; the backend owns account rules such as credit opening dates."""
+    _reject_unknown(values, ACCOUNT_PROPERTIES)
+    result = {key: values[key] for key in ACCOUNT_PROPERTIES if values.get(key) is not None}
+    result["name"] = _required_str(values, "name", max_length=80)
+    if values.get("kind") not in {"cash", "debit", "credit"}:
+        raise invalid_params("kind must be cash, debit or credit", field="kind")
+    opening = values.get("opening_balance_minor")
+    if isinstance(opening, bool) or not isinstance(opening, int):
+        raise invalid_params("opening_balance_minor must be an integer amount in fen", field="opening_balance_minor")
+    _optional_int(values, "credit_limit_minor", low=1)
+    _optional_int(values, "statement_day", low=1, high=28)
+    _optional_int(values, "due_day", low=1, high=28)
+    for key in ("opening_balance_as_of_date", "opening_due_date"):
+        _optional_date(values, key)
+    for key in ("institution", "last_four", "cycle_mode"):
+        if values.get(key) is not None:
+            _required_str(values, key, max_length=80)
+    return result
+
+
+def _validate_category(values: Mapping[str, Any]) -> dict[str, Any]:
+    _reject_unknown(values, CATEGORY_PROPERTIES)
+    result: dict[str, Any] = {
+        "name": _required_str(values, "name", max_length=80),
+        "icon": values.get("icon") or "tag",
+        "color_hex": values.get("color_hex") or "#6B7280",
+        "aliases": values.get("aliases") or [],
+        "examples": values.get("examples") or [],
+    }
+    if values.get("direction") not in {"income", "expense"}:
+        raise invalid_params("direction must be income or expense", field="direction")
+    result["direction"] = values["direction"]
+    if values.get("parent_id") is not None:
+        result["parent_id"] = _required_str(values, "parent_id", max_length=120)
+    if not isinstance(result["icon"], str) or len(result["icon"]) > 80:
+        raise invalid_params("icon must be at most 80 characters", field="icon")
+    if not isinstance(result["color_hex"], str) or not re.fullmatch(r"#[0-9A-Fa-f]{6}", result["color_hex"]):
+        raise invalid_params("color_hex must look like #RRGGBB", field="color_hex")
+    for key in ("aliases", "examples"):
+        items = result[key]
+        if not isinstance(items, list) or len(items) > 20 or not all(isinstance(item, str) and 0 < len(item.strip()) <= 80 for item in items):
+            raise invalid_params(f"{key} must be up to 20 non-empty strings", field=key)
+    return result
+
+
 def validate_tool_arguments(name: str, arguments: Any) -> dict[str, Any]:
     """Validate and normalise arguments for one public tool."""
 
@@ -340,6 +436,10 @@ def validate_tool_arguments(name: str, arguments: Any) -> dict[str, Any]:
                 raise invalid_params("direction must be income or expense", field="direction")
             listing["direction"] = direction
         return listing
+    if name == "fiscal_create_account":
+        return _validate_account(values)
+    if name == "fiscal_create_category":
+        return _validate_category(values)
     if name == "fiscal_search_ledger":
         result: dict[str, Any] = {}
         for key in ("date_from", "date_to"):

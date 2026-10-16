@@ -47,7 +47,12 @@
       "scope": "commit:imports",
       "seconds": 1800,
       "bound_to": "requesting session",
-      "commit_without_window_error": "write_window_required"
+      "commit_without_window_error": "write_window_required",
+      "covers": [
+        "fiscal_commit_import_batch",
+        "fiscal_create_account",
+        "fiscal_create_category"
+      ]
     },
     "max_pending_challenges": 5
   },
@@ -70,6 +75,8 @@
     "fiscal_get_yearly_report",
     "fiscal_list_accounts",
     "fiscal_list_categories",
+    "fiscal_create_account",
+    "fiscal_create_category",
     "fiscal_search_ledger",
     "fiscal_create_import_batch",
     "fiscal_get_import_batch",

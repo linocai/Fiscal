@@ -37,6 +37,10 @@ class FiscalBackendAdapter(Protocol):
 
     async def list_credit_cycles(self, account_id: str, cursor: str | None) -> dict[str, Any]: ...
 
+    async def create_account(self, payload: Mapping[str, Any]) -> dict[str, Any]: ...
+
+    async def create_category(self, payload: Mapping[str, Any]) -> dict[str, Any]: ...
+
     async def search_ledger(self, filters: Mapping[str, Any]) -> dict[str, Any]: ...
 
     async def list_import_batches(self, filters: Mapping[str, Any] | None = None) -> dict[str, Any]: ...
@@ -251,6 +255,12 @@ class HttpFiscalBackendAdapter:
             raise BackendAdapterError("backend_contract_mismatch", "Fiscal categories API returned an invalid list.")
         return result
 
+    async def create_account(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return await self._request("POST", "/accounts", json_body=payload)
+
+    async def create_category(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return await self._request("POST", "/categories", json_body=payload)
+
     async def list_credit_cycles(self, account_id: str, cursor: str | None) -> dict[str, Any]:
         params: dict[str, Any] = {"limit": 100}
         if cursor:
@@ -394,6 +404,19 @@ class MockFiscalBackendAdapter:
 
     async def list_credit_cycles(self, account_id: str, cursor: str | None) -> dict[str, Any]:
         return {"items": copy.deepcopy(self.credit_cycles.get(account_id, [])), "next_cursor": None}
+
+    def _create_named(self, rows: list[dict[str, Any]], payload: Mapping[str, Any], code: str) -> dict[str, Any]:
+        if any(row.get("name", "").casefold() == str(payload["name"]).casefold() and not row.get("archived_at") for row in rows):
+            raise FiscalMCPError(code, "A record with this name already exists.", {"http_status": 409})
+        row = {"id": str(uuid.uuid4()), "archived_at": None, **copy.deepcopy(dict(payload))}
+        rows.append(row)
+        return copy.deepcopy(row)
+
+    async def create_account(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return self._create_named(self.accounts, payload, "account_name_conflict")
+
+    async def create_category(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return self._create_named(self.categories, payload, "category_name_conflict")
 
     async def search_ledger(self, filters: Mapping[str, Any]) -> dict[str, Any]:
         items = copy.deepcopy(self.ledger_items)

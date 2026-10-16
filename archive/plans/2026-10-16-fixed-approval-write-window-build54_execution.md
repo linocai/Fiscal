@@ -17,7 +17,7 @@
 
 ## 验证
 
-- MCP 单测 39/39；Web 构建通过。本地 mock 网关 + 浏览器全流程：空列表无输入框、申请自动出现且配对码一致、页面批准后列表清空、无窗口提交 `write_window_required`、开窗后两笔提交无需再批、过期 Session `tools/list` 401、手机宽度正常；预览中发现并修复空列表停在“正在读取”的初始状态 bug。
+- MCP 单测 37/37（交付时误报为 39/39，2026-10-16 更正）；Web 构建通过。本地 mock 网关 + 浏览器全流程：空列表无输入框、申请自动出现且配对码一致、页面批准后列表清空、无窗口提交 `write_window_required`、开窗后两笔提交无需再批、过期 Session `tools/list` 401、手机宽度正常；预览中发现并修复空列表停在“正在读取”的初始状态 bug。
 - 生产：HZ MCP `releases/20261016-build54-8a36ff9`（`serverInfo 0.1.0+build54`，preflight 通过，重启后 health ok）；Web `releases/20261016-web-build54-8a36ff9`（沿用线上 `runtime-config.js`）。公网：页面与 discovery 200；pending 200 且 CORS 允许 console；过期 Session `tools/list` 401；无 Session 申请写入窗口 401；线上批准页空列表无输入框。后端未变。
 
 ## 回退与资源

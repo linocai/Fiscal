@@ -115,10 +115,11 @@ class FiscalMCPService:
             else:
                 principal = self.key_registry.require(api_key, definition.scope)
             values = validate_tool_arguments(name, arguments)
+            if session_based and definition.scope is Scope.COMMIT_IMPORTS:
+                assert self.sessions is not None
+                self.sessions.require_write_window(session_token)
             if name == "fiscal_commit_import_batch":
                 if session_based:
-                    assert self.sessions is not None
-                    self.sessions.require_write_window(session_token)
                     values = dict(values)
                     values["confirmation_token"] = self.confirmation_verifier.mint(
                         batch_id=values["batch_id"], expected_version=values["expected_version"]
@@ -135,6 +136,8 @@ class FiscalMCPService:
             details: dict[str, Any] = {}
             if name == "fiscal_create_import_batch":
                 details = {"batch_id": result.get("batch_id"), "candidate_count": len(values["candidates"])}
+            elif name in {"fiscal_create_account", "fiscal_create_category"}:
+                details = {"created_id": result.get("id")}
             elif "batch_id" in values:
                 details = {"batch_id": values["batch_id"]}
             self._record(action=name, tool=name, principal=principal, outcome="success", details=details)
@@ -158,6 +161,12 @@ class FiscalMCPService:
             return await self._list_accounts(values["include_archived"])
         if name == "fiscal_list_categories":
             return await self._list_categories(values.get("direction"), values["include_archived"])
+        if name == "fiscal_create_account":
+            account = await self.adapter.create_account(values)
+            return {key: account.get(key) for key in ACCOUNT_FIELDS}
+        if name == "fiscal_create_category":
+            category = await self.adapter.create_category(values)
+            return {key: category.get(key) for key in CATEGORY_FIELDS}
         if name == "fiscal_search_ledger":
             return await self.adapter.search_ledger(values)
         if name == "fiscal_create_import_batch":

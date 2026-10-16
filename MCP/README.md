@@ -23,7 +23,8 @@ validation use the session. Before `fiscal_commit_import_batch`, the Agent
 creates a `write_window` challenge with its session. A second Authenticator
 approval opens a 30-minute write window on that session; every commit in the
 window is accepted without another approval, and the gateway mints the backend
-confirmation credential internally. Approvals happen on the fixed page
+confirmation credential internally. `fiscal_create_account` and
+`fiscal_create_category` are master-data writes and need the same open window. Approvals happen on the fixed page
 `/agent/approve/`, which lists pending challenges with a 4-character pairing
 code the Agent relays to the owner.
 
