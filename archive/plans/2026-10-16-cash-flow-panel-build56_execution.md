@@ -24,3 +24,10 @@
 
 - 回退：HZ `current` 指回 `releases/20261016-build55-6ae1a3e` / `20261016-web-build55-6ae1a3e` 并重启 `fiscal-mcp`（面板回到 mock 控制台）。
 - 资源：删除 HZ 上传包与 Build54 release（约 22 MiB）；本地一次性库、预览副本、临时 launch 配置与构建包已删；`.claude/settings.local.json` 为用户权限配置，未动。
+
+## Build57：Agent 记录报销（同日）
+
+- 用户需求：原 App 的“可报销”——把一笔或多笔消费标记为可报销（可部分金额），进入待入账；回款与取消剩余也由 Agent 记。后端报销接口原样沿用。
+- 实施（tag `v2.4.0-build57` → `321be76`）：新增 6 工具（共 25）：`fiscal_list_reimbursements`、`fiscal_list_reimbursable_expenses`（读）；`fiscal_create_reimbursement`（默认创建后立即提交，因后端仅已提交报销进入现金流；幂等重放时先重读当前状态再决定是否提交；提交失败返回草稿 `claim_id`）、`fiscal_submit_reimbursement`、`fiscal_record_reimbursement_receipt`、`fiscal_cancel_reimbursement_outstanding`（写，需写入窗口；回款与取消的后端 preview→commit 两步在网关内完成，幂等键派生为 UUID）。面板报销待回款行账户显示“回款时确定”。
+- 验证：MCP 单测 42/42；本地一次性 PostgreSQL + 真实 Backend + 本地 MCP：机票（储蓄卡）+ 酒店（信用卡）合并报销 2,060、晚餐部分报销 160；重放同 key 不重复建单；超额报销 `reimbursement_expense_overallocated`、超额回款 `reimbursement_receipt_exceeds_outstanding` 被拒；回款 1,500 生成 `reimbursement_receipt` 交易，储蓄卡 8,480→9,980；取消剩余后状态 `partially_received_cancelled`、待入账移除；月报应报销 1,660、已收 1,500、个人预计 720、已实际 880，人工核算一致；面板待入账显示报销回款与未定日期提示。
+- 上线：HZ MCP `releases/20261016-build57-321be76`（`0.1.0+build57`，preflight 通过），Web `releases/20261016-web-build57-321be76`；公网页面/discovery 200、25 工具、health 200、过期 Session 401。后端未变。回退指向 Build56；删除 Build55 release，本地临时库与构建包已删。

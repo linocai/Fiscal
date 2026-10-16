@@ -1,6 +1,6 @@
 # Fiscal · PROJECT_PLAN
 
-> 更新：2026-10-16（Asia/Shanghai，Build56 现金流与只读面板上线）｜当前发布：**V2.4.0（56）**｜下一阶段目标版本：**待定**｜状态：**Agent-first 运行；原生 App 已退役，业务入口为远程 MCP**
+> 更新：2026-10-16（Asia/Shanghai，Build57 Agent 报销上线）｜当前发布：**V2.4.0（57）**｜下一阶段目标版本：**待定**｜状态：**Agent-first 运行；原生 App 已退役，业务入口为远程 MCP**
 
 ## 概述
 
@@ -29,8 +29,8 @@
 - **V2.4.0（52）已上线**（2026-10-14，tag `v2.4.0-build52` → `0958d48`）：修复记账 Agent 首次验收 12 项问题中的 10 项（年报 as-of 口径、还款 `credit_cycle_id`、账户/分类列表工具、当月账期逾期误判、错误透传、写入授权三态与错误码、公开文档等）。详见 [Build52 记录](archive/plans/2026-10-14-mcp-acceptance-build52_execution.md)。
 - **Build53**（tag `v2.4.0-build53` → `5dc3349`）：archive 支持 0043 并归档 `import_batches`，修复自 10-11 起不可用的归档导出/恢复；本地 PostgreSQL 全量 448/448。
 - **Build54**（tag `v2.4.0-build54` → `8a36ff9`）：批准页固定 `/agent/approve/` 并按配对码列出待批申请；一次批准开 30 分钟写入窗口（绑定发起 Session）；所有 `/mcp` 方法校验凭证；Build55 增加 `fiscal_create_account`/`fiscal_create_category`（同样需写入窗口，13 工具）。见 [Build54/55 记录](archive/plans/2026-10-16-fixed-approval-write-window-build54_execution.md)。
-- **Build56**（tag `v2.4.0-build56` → `f4f9297`）：Agent 可新建/确认/入账/取消现金流计划（19 工具）；`console.fiscal.linotsai.top` 改为 Authenticator 登录的只读面板（现金流首页、月报、账本、导出）。见 [Build56 记录](archive/plans/2026-10-16-cash-flow-panel-build56_execution.md)。
-- 线上组成：NB Backend release `/opt/fiscal/releases/2a0c8d92aaa9`（`5dc3349` Backend 快照，回退 `6876d204738b`），Alembic `20261010_0043`；HZ MCP `releases/20261016-build56-f4f9297`（`serverInfo 0.1.0+build56`）；HZ Web `releases/20261016-web-build56-f4f9297`（runtime `session`）。上一版 release 均保留可回退。
+- **Build56**（tag `v2.4.0-build56` → `f4f9297`）：Agent 可新建/确认/入账/取消现金流计划（19 工具）；`console.fiscal.linotsai.top` 改为 Authenticator 登录的只读面板（现金流首页、月报、账本、导出）。Build57 增加报销全流程工具（标记可报销→待入账→回款/取消，共 25 工具）。见 [Build56/57 记录](archive/plans/2026-10-16-cash-flow-panel-build56_execution.md)。
+- 线上组成：NB Backend release `/opt/fiscal/releases/2a0c8d92aaa9`（`5dc3349` Backend 快照，回退 `6876d204738b`），Alembic `20261010_0043`；HZ MCP `releases/20261016-build57-321be76`（`serverInfo 0.1.0+build57`）；HZ Web `releases/20261016-web-build57-321be76`（runtime `session`）。上一版 release 均保留可回退。
 - 远程 MCP 与 TOTP Session 原始链路见 [TOTP 执行记录](archive/plans/2026-10-11-fiscal-totp-session_execution.md)；Backend 0043 导入批次见 [后端记录](archive/plans/2026-10-11-agent-first-backend-0043_execution.md)；Web 部署见 [Web 记录](archive/plans/2026-10-11-fiscal-web-console_execution.md)。
 - 真实账本尚无经 MCP 提交的批次；首轮一周闭环待记账 Agent 按新文档（配对码 + 写入窗口）复跑，Build54 重启已清空旧 Session。
 - 0042 无 downgrade，回退到 0041 前版本必须用验证过的整库恢复集；Build52 无迁移，前后备份 `fiscal-20261014T1234{29,31}Z.dump` 已验证。
@@ -85,6 +85,7 @@
 - 2026-10-11：原生 App 冻结、工程与发布物归档、HZ/NB 旧发布目录清理完成；数据库、备份和现役 MCP 链路保留；[暂停归档记录](archive/plans/2026-10-11-fiscal-pause_archive_execution.md)。
 - 2026-10-12：原生 App 退役移出仓库（tag `native-app-final`），本地归档迁至 `~/文稿/Claude/Fiscal-archive/`；[退役记录](archive/plans/2026-10-12-native-app-retirement.md)。
 - 2026-10-14：V2.4.0（52）MCP 首次验收问题修复，NB/HZ 上线；[Build52 记录](archive/plans/2026-10-14-mcp-acceptance-build52_execution.md)。
+- 2026-10-16：V2.4.0（57）Agent 报销全流程工具，HZ 上线；[同一记录 §Build57](archive/plans/2026-10-16-cash-flow-panel-build56_execution.md#build57agent-记录报销同日)。
 - 2026-10-16：V2.4.0（56）Agent 现金流计划工具与只读用户面板，HZ 上线；[Build56 记录](archive/plans/2026-10-16-cash-flow-panel-build56_execution.md)。
 - 2026-10-16：V2.4.0（55）Agent 经 MCP 新建账户与分类，HZ 上线；[同一记录 §Build55](archive/plans/2026-10-16-fixed-approval-write-window-build54_execution.md#build55agent-新建账户与分类同日快修)。
 - 2026-10-16：V2.4.0（54）固定批准页、30 分钟写入窗口与全方法鉴权，HZ 上线；[Build54 记录](archive/plans/2026-10-16-fixed-approval-write-window-build54_execution.md)。
