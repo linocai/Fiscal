@@ -52,6 +52,12 @@ class FiscalMCPContractTests(unittest.TestCase):
                 "fiscal_list_categories",
                 "fiscal_create_account",
                 "fiscal_create_category",
+                "fiscal_list_cash_flow_items",
+                "fiscal_get_cash_flow_outlook",
+                "fiscal_create_cash_flow_item",
+                "fiscal_confirm_cash_flow_item",
+                "fiscal_settle_cash_flow_item",
+                "fiscal_cancel_cash_flow_item",
                 "fiscal_search_ledger",
                 "fiscal_create_import_batch",
                 "fiscal_get_import_batch",
@@ -292,6 +298,45 @@ class SessionCommitTests(unittest.TestCase):
                 self.call(tool, bad)
             self.assertEqual(caught.exception.code, "invalid_params", bad)
 
+    def test_cash_flow_plan_create_settle_cancel_through_window(self) -> None:
+        plan = {"title": "工资", "direction": "inflow", "planned_amount_minor": 1_500_000, "expected_date": "2026-10-25", "account_id": "debit-1", "idempotency_key": "plan-salary-2610"}
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_create_cash_flow_item", plan)
+        self.assertEqual(caught.exception.code, "write_window_required")
+        self.assertEqual(self.call("fiscal_list_cash_flow_items", {})["items"], [])
+        self.open_window()
+        created = self.call("fiscal_create_cash_flow_item", plan)
+        self.assertEqual(self.call("fiscal_create_cash_flow_item", plan), created)
+        [item] = created["items"]
+        rent = self.call("fiscal_create_cash_flow_item", {**plan, "title": "房租", "direction": "outflow", "idempotency_key": "plan-rent-2610"})["items"][0]
+        self.assertEqual(len(self.call("fiscal_list_cash_flow_items", {})["items"]), 2)
+        settle = {"item_id": item["id"], "expected_version": 2, "actual_amount_minor": 1_480_000, "occurred_at": "2026-10-25T10:00:00+08:00", "account_id": "debit-1", "idempotency_key": "settle-salary-2610"}
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_settle_cash_flow_item", {**settle, "expected_version": 1, "idempotency_key": "settle-too-early"})
+        self.assertEqual(caught.exception.code, "cash_flow_not_confirmed")
+        self.assertEqual(self.call("fiscal_confirm_cash_flow_item", {"item_id": item["id"], "expected_version": 1})["status"], "confirmed")
+        settled = self.call("fiscal_settle_cash_flow_item", settle)
+        self.assertEqual(settled["status"], "settled")
+        self.assertEqual(self.call("fiscal_settle_cash_flow_item", settle), settled)
+        self.assertEqual(len(self.adapter.ledger_items), 1)
+        cancelled = self.call("fiscal_cancel_cash_flow_item", {"item_id": rent["id"], "expected_version": 1})
+        self.assertEqual(cancelled["items"][0]["status"], "cancelled")
+        self.assertEqual(self.call("fiscal_list_cash_flow_items", {})["items"], [])
+        self.assertEqual(len(self.call("fiscal_list_cash_flow_items", {"month": "2026-10"})["items"]), 2)
+        self.assertIn("known_future_events", self.call("fiscal_get_cash_flow_outlook", {}))
+        for tool, bad in (
+            ("fiscal_create_cash_flow_item", {**plan, "planned_amount_minor": "15000.00"}),
+            ("fiscal_create_cash_flow_item", {**plan, "direction": "income"}),
+            ("fiscal_create_cash_flow_item", {**plan, "expected_date": "10/25"}),
+            ("fiscal_settle_cash_flow_item", {**settle, "occurred_at": "2026-10-25T10:00:00"}),
+            ("fiscal_settle_cash_flow_item", {**settle, "amount": 1}),
+            ("fiscal_cancel_cash_flow_item", {"item_id": rent["id"], "expected_version": 2, "scope": "all"}),
+            ("fiscal_get_cash_flow_outlook", {"window_days": 365}),
+        ):
+            with self.assertRaises(FiscalMCPError) as caught:
+                self.call(tool, bad)
+            self.assertEqual(caught.exception.code, "invalid_params", bad)
+
     def test_one_window_covers_several_commits_and_retries(self) -> None:
         self.open_window()
         for key in ("window-01", "window-02"):
@@ -373,6 +418,26 @@ class HttpAdapterTests(unittest.TestCase):
             run(adapter.get_yearly_report("2026"))
         self.assertEqual(caught.exception.message, "Fiscal backend request failed (500).")
         self.assertEqual(caught.exception.details, {"http_status": 500})
+
+    def test_cash_flow_routes_use_uuid_idempotency_and_report_headers(self) -> None:
+        from fiscal_mcp.adapter import backend_idempotency_uuid
+
+        client = RecordingClient(body={"items": []})
+        adapter = HttpFiscalBackendAdapter("https://example.test", client=client)
+        key = backend_idempotency_uuid("fiscal_settle_cash_flow_item", "settle-1")
+        self.assertEqual(key, backend_idempotency_uuid("fiscal_settle_cash_flow_item", "settle-1"))
+        run(adapter.list_cash_flow_items(None, None))
+        run(adapter.list_cash_flow_items("acc-1", None))
+        run(adapter.list_cash_flow_items(None, "2026-10"))
+        run(adapter.get_cash_flow_outlook(30))
+        run(adapter.settle_cash_flow_item("item-1", {"expected_version": 1}, key))
+        urls = [(method, url, params) for method, url, _, params, _ in client.calls]
+        self.assertEqual(urls[0], ("GET", "https://example.test/cash-flow-items", {}))
+        self.assertEqual(urls[1][2], {"account_id": "acc-1"})
+        self.assertEqual(urls[2][1:], ("https://example.test/cash-flow-items/history", {"month": "2026-10"}))
+        self.assertEqual(client.calls[3][2]["X-Fiscal-Report-Balance-Semantics"], "as-of-v1")
+        self.assertEqual(client.calls[4][2]["Idempotency-Key"], key)
+        self.assertEqual(client.calls[4][1], "https://example.test/cash-flow-items/item-1/settle")
 
     def test_list_routes(self) -> None:
         client = RecordingClient(body=[])

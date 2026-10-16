@@ -51,8 +51,13 @@
       "covers": [
         "fiscal_commit_import_batch",
         "fiscal_create_account",
-        "fiscal_create_category"
-      ]
+        "fiscal_create_category",
+        "fiscal_create_cash_flow_item",
+        "fiscal_confirm_cash_flow_item",
+        "fiscal_settle_cash_flow_item",
+        "fiscal_cancel_cash_flow_item"
+      ],
+      "requires_session_scope": "stage:imports"
     },
     "max_pending_challenges": 5
   },
@@ -77,6 +82,12 @@
     "fiscal_list_categories",
     "fiscal_create_account",
     "fiscal_create_category",
+    "fiscal_list_cash_flow_items",
+    "fiscal_get_cash_flow_outlook",
+    "fiscal_create_cash_flow_item",
+    "fiscal_confirm_cash_flow_item",
+    "fiscal_settle_cash_flow_item",
+    "fiscal_cancel_cash_flow_item",
     "fiscal_search_ledger",
     "fiscal_create_import_batch",
     "fiscal_get_import_batch",
@@ -86,5 +97,7 @@
     "fiscal_export_report"
   ],
   "amounts": "integer minor units (fen); occurred_at must include a timezone",
-  "repayment_cycles": "repayments to fixed-cycle credit accounts require credit_cycle_id from fiscal_list_accounts open_cycles[].cycle_id"
+  "repayment_cycles": "repayments to fixed-cycle credit accounts require credit_cycle_id from fiscal_list_accounts open_cycles[].cycle_id",
+  "cash_flow": "plans start expected; confirm before settle; settle posts the actual amount/time/account to the ledger",
+  "owner_panel": "https://console.fiscal.linotsai.top/ (Authenticator login, read-only session)"
 }

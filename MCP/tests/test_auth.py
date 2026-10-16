@@ -97,6 +97,15 @@ class TotpSessionTests(unittest.TestCase):
         legacy, _ = registry.create_challenge(kind="operation", session_token=session_token, now=NOW)
         self.assertEqual(legacy.kind, "write_window")
 
+    def test_read_only_session_cannot_open_a_write_window(self) -> None:
+        registry = self.make_registry()
+        challenge, _ = registry.create_challenge(kind="session", requested_scopes=[Scope.READ_REPORTS, Scope.READ_LEDGER], now=NOW)
+        registry.approve(challenge.challenge_id, totp(SECRET, NOW), now=NOW)
+        self.assert_code(
+            "insufficient_scope",
+            lambda: registry.create_challenge(kind="write_window", session_token=challenge.result_token, now=NOW),
+        )
+
     def test_pending_list_is_secret_free_and_bounded(self) -> None:
         registry = self.make_registry()
         self.assertEqual(registry.pending(now=NOW), [])

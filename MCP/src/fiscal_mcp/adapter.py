@@ -39,6 +39,18 @@ class FiscalBackendAdapter(Protocol):
 
     async def create_account(self, payload: Mapping[str, Any]) -> dict[str, Any]: ...
 
+    async def list_cash_flow_items(self, account_id: str | None, month: str | None) -> dict[str, Any]: ...
+
+    async def get_cash_flow_outlook(self, window_days: int) -> dict[str, Any]: ...
+
+    async def create_cash_flow_item(self, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]: ...
+
+    async def settle_cash_flow_item(self, item_id: str, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]: ...
+
+    async def cancel_cash_flow_item(self, item_id: str, expected_version: int, scope: str) -> dict[str, Any]: ...
+
+    async def confirm_cash_flow_item(self, item_id: str, expected_version: int, scope: str) -> dict[str, Any]: ...
+
     async def create_category(self, payload: Mapping[str, Any]) -> dict[str, Any]: ...
 
     async def search_ledger(self, filters: Mapping[str, Any]) -> dict[str, Any]: ...
@@ -72,6 +84,11 @@ class BackendAdapterError(FiscalMCPError):
 # per-account balance status instead of a 409.
 REPORT_HEADERS = {"X-Fiscal-Report-Balance-Semantics": "as-of-v1"}
 MAX_ERROR_DETAILS_BYTES = 4_096
+
+
+def backend_idempotency_uuid(tool: str, key: str) -> str:
+    """Backend cash-flow routes need a UUID Idempotency-Key; derive it deterministically."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"fiscal-mcp:{tool}:{key}"))
 
 
 def _backend_error(status_code: int, body: Any) -> BackendAdapterError:
@@ -258,6 +275,32 @@ class HttpFiscalBackendAdapter:
     async def create_account(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         return await self._request("POST", "/accounts", json_body=payload)
 
+    async def list_cash_flow_items(self, account_id: str | None, month: str | None) -> dict[str, Any]:
+        if month:
+            return await self._request("GET", "/cash-flow-items/history", params={"month": month})
+        return await self._request("GET", "/cash-flow-items", params={"account_id": account_id} if account_id else None)
+
+    async def get_cash_flow_outlook(self, window_days: int) -> dict[str, Any]:
+        return await self._request("GET", "/reports/facts", params={"window_days": window_days}, headers=REPORT_HEADERS)
+
+    async def create_cash_flow_item(self, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
+        return await self._request("POST", "/cash-flow-items", json_body=payload, headers={"Idempotency-Key": idempotency_key})
+
+    async def settle_cash_flow_item(self, item_id: str, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
+        return await self._request(
+            "POST", f"/cash-flow-items/{item_id}/settle", json_body=payload, headers={"Idempotency-Key": idempotency_key}
+        )
+
+    async def confirm_cash_flow_item(self, item_id: str, expected_version: int, scope: str) -> dict[str, Any]:
+        return await self._request(
+            "POST", f"/cash-flow-items/{item_id}/confirm", json_body={"expected_version": expected_version, "scope": scope}
+        )
+
+    async def cancel_cash_flow_item(self, item_id: str, expected_version: int, scope: str) -> dict[str, Any]:
+        return await self._request(
+            "POST", f"/cash-flow-items/{item_id}/cancel", json_body={"expected_version": expected_version, "scope": scope}
+        )
+
     async def create_category(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         return await self._request("POST", "/categories", json_body=payload)
 
@@ -377,12 +420,14 @@ class MockFiscalBackendAdapter:
     accounts: list[dict[str, Any]] = field(default_factory=list)
     categories: list[dict[str, Any]] = field(default_factory=list)
     credit_cycles: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    cash_flow_items: list[dict[str, Any]] = field(default_factory=list)
     data_revision: int = 1
     _batches: dict[str, dict[str, Any]] = field(default_factory=dict, init=False, repr=False)
     _batch_idempotency: dict[str, str] = field(default_factory=dict, init=False, repr=False)
     _batch_idempotency_payloads: dict[str, str] = field(default_factory=dict, init=False, repr=False)
     _commit_idempotency: dict[str, dict[str, Any]] = field(default_factory=dict, init=False, repr=False)
     _commit_idempotency_context: dict[str, tuple[str, int]] = field(default_factory=dict, init=False, repr=False)
+    _cash_flow_idempotency: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
 
     async def get_monthly_report(self, period: str) -> dict[str, Any]:
         return copy.deepcopy(self.monthly_reports.get(period, {"meta": {"period": period, "data_revision": self.data_revision}, "summary": {}, "categories": []}))
@@ -414,6 +459,56 @@ class MockFiscalBackendAdapter:
 
     async def create_account(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         return self._create_named(self.accounts, payload, "account_name_conflict")
+
+    async def list_cash_flow_items(self, account_id: str | None, month: str | None) -> dict[str, Any]:
+        items = [
+            item for item in self.cash_flow_items
+            if (account_id is None or item.get("account_id") == account_id)
+            and (item["status"] in {"settled", "cancelled"}) == (month is not None)
+        ]
+        return {"items": copy.deepcopy(items), "summary": {"inflow_minor": 0, "outflow_minor": 0, "net_minor": 0}}
+
+    async def get_cash_flow_outlook(self, window_days: int) -> dict[str, Any]:
+        return {"meta": {"data_revision": self.data_revision}, "window_days": window_days, "known_future_events": []}
+
+    async def create_cash_flow_item(self, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
+        if idempotency_key in self._cash_flow_idempotency:
+            return copy.deepcopy(self._cash_flow_idempotency[idempotency_key])
+        item = {"id": str(uuid.uuid4()), "status": "expected", "version": 1, "remaining_amount_minor": payload["planned_amount_minor"], **copy.deepcopy(dict(payload))}
+        self.cash_flow_items.append(item)
+        result = {"items": [copy.deepcopy(item)]}
+        self._cash_flow_idempotency[idempotency_key] = result
+        return copy.deepcopy(result)
+
+    def _cash_flow(self, item_id: str, expected_version: int) -> dict[str, Any]:
+        item = next((row for row in self.cash_flow_items if row["id"] == item_id), None)
+        if item is None:
+            raise FiscalMCPError("cash_flow_item_not_found", "Cash flow item was not found.", {"http_status": 404})
+        if item["version"] != expected_version:
+            raise FiscalMCPError("resource_version_conflict", "Cash flow item changed.", {"http_status": 409})
+        return item
+
+    async def confirm_cash_flow_item(self, item_id: str, expected_version: int, scope: str) -> dict[str, Any]:
+        item = self._cash_flow(item_id, expected_version)
+        item.update(status="confirmed", version=item["version"] + 1)
+        return copy.deepcopy(item)
+
+    async def settle_cash_flow_item(self, item_id: str, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
+        if idempotency_key in self._cash_flow_idempotency:
+            return copy.deepcopy(self._cash_flow_idempotency[idempotency_key])
+        item = self._cash_flow(item_id, int(payload["expected_version"]))
+        if item["status"] != "confirmed":
+            raise FiscalMCPError("cash_flow_not_confirmed", "Only confirmed cash flow items can be settled", {"http_status": 409})
+        transaction = {"id": str(uuid.uuid4()), "title": item["title"], "amount_minor": payload["actual_amount_minor"]}
+        self.ledger_items.append(transaction)
+        item.update(status="settled", version=item["version"] + 1, remaining_amount_minor=0, linked_transaction_id=transaction["id"])
+        self._cash_flow_idempotency[idempotency_key] = copy.deepcopy(item)
+        return copy.deepcopy(item)
+
+    async def cancel_cash_flow_item(self, item_id: str, expected_version: int, scope: str) -> dict[str, Any]:
+        item = self._cash_flow(item_id, expected_version)
+        item.update(status="cancelled", version=item["version"] + 1)
+        return {"items": [copy.deepcopy(item)]}
 
     async def create_category(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         return self._create_named(self.categories, payload, "category_name_conflict")

@@ -23,7 +23,7 @@ from .service import FiscalMCPService
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "fiscal-ledger-mcp"
-SERVER_VERSION = "0.1.0+build55"
+SERVER_VERSION = "0.1.0+build56"
 
 
 class MCPServer:

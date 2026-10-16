@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from .adapter import FiscalBackendAdapter
+from .adapter import FiscalBackendAdapter, backend_idempotency_uuid
 from .auth import ApiKeyRecord, ApiKeyRegistry, TotpSessionRegistry
 from .confirmation import ConfirmationVerifier
 from .contracts import Scope, ToolDefinition, tool_definitions, validate_tool_arguments
@@ -138,6 +138,8 @@ class FiscalMCPService:
                 details = {"batch_id": result.get("batch_id"), "candidate_count": len(values["candidates"])}
             elif name in {"fiscal_create_account", "fiscal_create_category"}:
                 details = {"created_id": result.get("id")}
+            elif name in {"fiscal_confirm_cash_flow_item", "fiscal_settle_cash_flow_item", "fiscal_cancel_cash_flow_item"}:
+                details = {"item_id": values["item_id"]}
             elif "batch_id" in values:
                 details = {"batch_id": values["batch_id"]}
             self._record(action=name, tool=name, principal=principal, outcome="success", details=details)
@@ -161,6 +163,22 @@ class FiscalMCPService:
             return await self._list_accounts(values["include_archived"])
         if name == "fiscal_list_categories":
             return await self._list_categories(values.get("direction"), values["include_archived"])
+        if name == "fiscal_list_cash_flow_items":
+            return await self.adapter.list_cash_flow_items(values.get("account_id"), values.get("month"))
+        if name == "fiscal_get_cash_flow_outlook":
+            return await self.adapter.get_cash_flow_outlook(values["window_days"])
+        if name == "fiscal_create_cash_flow_item":
+            payload = {key: value for key, value in values.items() if key != "idempotency_key"}
+            key = backend_idempotency_uuid(name, values["idempotency_key"])
+            return await self.adapter.create_cash_flow_item(payload, key)
+        if name == "fiscal_settle_cash_flow_item":
+            payload = {key: value for key, value in values.items() if key not in {"idempotency_key", "item_id"}}
+            key = backend_idempotency_uuid(name, values["idempotency_key"])
+            return await self.adapter.settle_cash_flow_item(values["item_id"], payload, key)
+        if name == "fiscal_confirm_cash_flow_item":
+            return await self.adapter.confirm_cash_flow_item(values["item_id"], values["expected_version"], values["scope"])
+        if name == "fiscal_cancel_cash_flow_item":
+            return await self.adapter.cancel_cash_flow_item(values["item_id"], values["expected_version"], values["scope"])
         if name == "fiscal_create_account":
             account = await self.adapter.create_account(values)
             return {key: account.get(key) for key in ACCOUNT_FIELDS}

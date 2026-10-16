@@ -68,6 +68,39 @@ CATEGORY_PROPERTIES: dict[str, Any] = {
 }
 
 
+CASH_FLOW_CREATE_PROPERTIES: dict[str, Any] = {
+    "title": {"type": "string", "minLength": 1, "maxLength": 120},
+    "note": {"type": ["string", "null"], "maxLength": 500},
+    "direction": {"type": "string", "enum": ["inflow", "outflow", "transfer"]},
+    "planned_amount_minor": {"type": "integer", "minimum": 1, "description": "Integer fen."},
+    "expected_date": {"type": "string", "format": "date", "description": "Asia/Shanghai business date."},
+    "account_id": {"type": ["string", "null"]},
+    "destination_account_id": {"type": ["string", "null"], "description": "Transfers only."},
+    "category_id": {"type": ["string", "null"], "description": "Not allowed for transfers."},
+    "recurrence": {"type": ["string", "null"], "enum": ["monthly", None]},
+    "recurrence_end_date": {"type": ["string", "null"], "format": "date"},
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
+}
+CASH_FLOW_SETTLE_PROPERTIES: dict[str, Any] = {
+    "item_id": {"type": "string", "minLength": 1},
+    "expected_version": {"type": "integer", "minimum": 1},
+    "actual_amount_minor": {"type": "integer", "minimum": 1, "description": "Integer fen actually received or paid."},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "account_id": {"type": "string", "minLength": 1},
+    "destination_account_id": {"type": ["string", "null"]},
+    "category_id": {"type": ["string", "null"]},
+    "title": {"type": ["string", "null"], "maxLength": 120},
+    "note": {"type": ["string", "null"], "maxLength": 500},
+    "complete_remaining": {"type": "boolean", "default": True, "description": "False keeps the rest of a partially settled plan open."},
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
+}
+CASH_FLOW_CANCEL_PROPERTIES: dict[str, Any] = {
+    "item_id": {"type": "string", "minLength": 1},
+    "expected_version": {"type": "integer", "minimum": 1},
+    "scope": {"type": "string", "enum": ["occurrence", "this_and_future"], "default": "occurrence"},
+}
+
+
 class Scope(str, Enum):
     READ_REPORTS = "read:reports"
     READ_LEDGER = "read:ledger"
@@ -171,6 +204,48 @@ def tool_definitions() -> tuple[ToolDefinition, ...]:
             "Create an income or expense category; aliases/examples improve classification. Requires an open write window.",
             Scope.COMMIT_IMPORTS,
             _object_schema(CATEGORY_PROPERTIES, ["name", "direction"]),
+        ),
+        ToolDefinition(
+            "fiscal_list_cash_flow_items",
+            "List planned future cash flows (manual plans, credit-cycle dues, reimbursements). Pass month=YYYY-MM for settled/cancelled history.",
+            Scope.READ_LEDGER,
+            _object_schema(
+                {
+                    "account_id": {"type": "string"},
+                    "month": {"type": "string", "pattern": r"^\d{4}-(0[1-9]|1[0-2])$"},
+                },
+                [],
+            ),
+        ),
+        ToolDefinition(
+            "fiscal_get_cash_flow_outlook",
+            "Read the next N days (default 30) of cash: current cash, expected inflow/outflow, projected balance and known future events.",
+            Scope.READ_REPORTS,
+            _object_schema({"window_days": {"type": "integer", "minimum": 1, "maximum": 90, "default": 30}}, []),
+        ),
+        ToolDefinition(
+            "fiscal_create_cash_flow_item",
+            "Create a planned future inflow/outflow/transfer (optionally monthly until an end date); requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema(CASH_FLOW_CREATE_PROPERTIES, ["title", "direction", "planned_amount_minor", "expected_date", "idempotency_key"]),
+        ),
+        ToolDefinition(
+            "fiscal_confirm_cash_flow_item",
+            "Mark an expected plan as confirmed (it will happen); a plan must be confirmed before it can be settled. Requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema(CASH_FLOW_CANCEL_PROPERTIES, ["item_id", "expected_version"]),
+        ),
+        ToolDefinition(
+            "fiscal_settle_cash_flow_item",
+            "Post a confirmed planned cash flow to the ledger once money actually moved; requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema(CASH_FLOW_SETTLE_PROPERTIES, ["item_id", "expected_version", "actual_amount_minor", "occurred_at", "account_id", "idempotency_key"]),
+        ),
+        ToolDefinition(
+            "fiscal_cancel_cash_flow_item",
+            "Cancel a planned cash flow that will not happen (this occurrence or this and future ones); requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema(CASH_FLOW_CANCEL_PROPERTIES, ["item_id", "expected_version"]),
         ),
         ToolDefinition(
             "fiscal_search_ledger",
@@ -411,6 +486,59 @@ def _validate_category(values: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _idempotency_key(values: Mapping[str, Any]) -> str:
+    key = _required_str(values, "idempotency_key", max_length=128)
+    if len(key) < 8:
+        raise invalid_params("idempotency_key must be at least 8 characters", field="idempotency_key")
+    return key
+
+
+def _validate_cash_flow_create(values: Mapping[str, Any]) -> dict[str, Any]:
+    """Shape checks only; the backend owns transfer/category/recurrence rules."""
+    _reject_unknown(values, CASH_FLOW_CREATE_PROPERTIES)
+    result = {key: values[key] for key in CASH_FLOW_CREATE_PROPERTIES if values.get(key) is not None}
+    result["title"] = _required_str(values, "title", max_length=120)
+    if values.get("direction") not in {"inflow", "outflow", "transfer"}:
+        raise invalid_params("direction must be inflow, outflow or transfer", field="direction")
+    _positive_int(values, "planned_amount_minor", required=True)
+    if values.get("expected_date") is None:
+        raise invalid_params("expected_date is required", field="expected_date")
+    _optional_date(values, "expected_date")
+    _optional_date(values, "recurrence_end_date")
+    if values.get("recurrence") not in {None, "monthly"}:
+        raise invalid_params("recurrence must be monthly", field="recurrence")
+    for key in ("account_id", "destination_account_id", "category_id"):
+        if values.get(key) is not None:
+            _required_str(values, key, max_length=120)
+    if values.get("note") is not None:
+        _required_str(values, "note", max_length=500)
+    result["idempotency_key"] = _idempotency_key(values)
+    return result
+
+
+def _validate_cash_flow_settle(values: Mapping[str, Any]) -> dict[str, Any]:
+    _reject_unknown(values, CASH_FLOW_SETTLE_PROPERTIES)
+    result = {key: values[key] for key in CASH_FLOW_SETTLE_PROPERTIES if values.get(key) is not None}
+    result["item_id"] = _required_str(values, "item_id", max_length=120)
+    _positive_int(values, "expected_version", required=True)
+    _positive_int(values, "actual_amount_minor", required=True)
+    result["account_id"] = _required_str(values, "account_id", max_length=120)
+    occurred_at = _required_str(values, "occurred_at", max_length=64)
+    try:
+        parsed = datetime.fromisoformat(occurred_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise invalid_params("occurred_at must be an ISO date-time", field="occurred_at") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise invalid_params("occurred_at must include a timezone", field="occurred_at")
+    if "complete_remaining" in values and not isinstance(values["complete_remaining"], bool):
+        raise invalid_params("complete_remaining must be a boolean", field="complete_remaining")
+    for key in ("destination_account_id", "category_id", "title", "note"):
+        if values.get(key) is not None:
+            _required_str(values, key, max_length=500 if key == "note" else 120)
+    result["idempotency_key"] = _idempotency_key(values)
+    return result
+
+
 def validate_tool_arguments(name: str, arguments: Any) -> dict[str, Any]:
     """Validate and normalise arguments for one public tool."""
 
@@ -436,6 +564,32 @@ def validate_tool_arguments(name: str, arguments: Any) -> dict[str, Any]:
                 raise invalid_params("direction must be income or expense", field="direction")
             listing["direction"] = direction
         return listing
+    if name == "fiscal_list_cash_flow_items":
+        listing: dict[str, Any] = {}
+        if values.get("account_id") is not None:
+            listing["account_id"] = _required_str(values, "account_id", max_length=120)
+        if values.get("month") is not None:
+            month = _required_str(values, "month", max_length=7)
+            if not PERIOD_RE.fullmatch(month):
+                raise invalid_params("month must use YYYY-MM", field="month")
+            listing["month"] = month
+        return listing
+    if name == "fiscal_get_cash_flow_outlook":
+        window = values.get("window_days", 30)
+        if isinstance(window, bool) or not isinstance(window, int) or not 1 <= window <= 90:
+            raise invalid_params("window_days must be between 1 and 90", field="window_days")
+        return {"window_days": window}
+    if name == "fiscal_create_cash_flow_item":
+        return _validate_cash_flow_create(values)
+    if name == "fiscal_settle_cash_flow_item":
+        return _validate_cash_flow_settle(values)
+    if name in {"fiscal_confirm_cash_flow_item", "fiscal_cancel_cash_flow_item"}:
+        _reject_unknown(values, CASH_FLOW_CANCEL_PROPERTIES)
+        scope = values.get("scope", "occurrence")
+        if scope not in {"occurrence", "this_and_future"}:
+            raise invalid_params("scope must be occurrence or this_and_future", field="scope")
+        expected = _positive_int(values, "expected_version", required=True)
+        return {"item_id": _required_str(values, "item_id", max_length=120), "expected_version": expected, "scope": scope}
     if name == "fiscal_create_account":
         return _validate_account(values)
     if name == "fiscal_create_category":

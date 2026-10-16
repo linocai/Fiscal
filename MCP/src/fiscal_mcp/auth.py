@@ -271,6 +271,9 @@ class TotpSessionRegistry:
             if not session_token:
                 raise FiscalMCPError("session_required", "A live session is required to open a write window.")
             session = self.resolve(session_token, now=current)
+            if Scope.STAGE_IMPORTS not in session.scopes:
+                # Read-only sessions (the owner panel) can never be widened to writes.
+                raise FiscalMCPError("insufficient_scope", "A read-only session cannot open a write window.", {"scope": Scope.STAGE_IMPORTS.value})
             kind = "write_window"
             scopes = frozenset({Scope.COMMIT_IMPORTS})
             session_fingerprint: str | None = session.token_fingerprint

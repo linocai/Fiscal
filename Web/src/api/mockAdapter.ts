@@ -1,5 +1,8 @@
 import type {
   AccessScope,
+  CashFlowItem,
+  CashFlowOutlook,
+  NamedOption,
   BatchActionResult,
   BatchCommitInput,
   ApiDemoMode,
@@ -177,6 +180,18 @@ export class MockFiscalAdapter implements FiscalApiAdapter {
     return this.respond(scopes);
   }
 
+  async listCashFlow(month?: string): Promise<CashFlowItem[]> {
+    return this.respond(month ? [] : mockCashFlow);
+  }
+
+  async getCashFlowOutlook(): Promise<CashFlowOutlook> {
+    return this.respond({ dateFrom: "2026-10-16", dateTo: "2026-11-14", currentCashCents: 2_860_000, expectedInflowCents: 1_500_000, expectedOutflowCents: 688_650, projectedBalanceCents: 3_671_350, undatedInflowCents: 0, overdueOutflowCents: 0, unscheduledCreditDebtCents: 0 });
+  }
+
+  async listCategories(): Promise<NamedOption[]> {
+    return this.respond(["日常餐饮", "交通", "旅行", "订阅服务", "居家"].map((name) => ({ id: name, name })));
+  }
+
   async requestExport(request: ExportRequest): Promise<ExportResult> {
     await wait(280);
     if (this.mode === "error") {
@@ -191,6 +206,12 @@ export class MockFiscalAdapter implements FiscalApiAdapter {
     };
   }
 }
+
+const mockCashFlow: CashFlowItem[] = [
+  { id: "plan-salary", title: "10 月工资", direction: "inflow", amountCents: 1_500_000, plannedCents: 1_500_000, expectedDate: "2026-10-25", account: "招商银行储蓄卡", status: "confirmed", overdue: false, source: "手工计划" },
+  { id: "plan-rent", title: "房租", direction: "outflow", amountCents: 450_000, plannedCents: 450_000, expectedDate: "2026-11-01", account: "招商银行储蓄卡", category: "居家", status: "expected", overdue: false, source: "手工计划" },
+  { id: "plan-card", title: "信用卡还款", direction: "outflow", amountCents: 238_650, plannedCents: 238_650, expectedDate: "2026-10-23", account: "招商银行信用卡", status: "expected", overdue: false, source: "信用卡账期" },
+];
 
 export function createMockAdapter(mode: ApiDemoMode = "normal"): FiscalApiAdapter {
   return new MockFiscalAdapter(mode);

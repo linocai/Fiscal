@@ -87,7 +87,7 @@ Content-Type: application/json
             "arguments": {"batch_id": "3f6c1d2e-8a4b-4c1e-9f00-2b7d5e6a9c10",
                           "expected_version": 2, "idempotency_key": "commit-2026w42-01"}}}</pre>
     <ul>
-      <li>窗口未开或已过期时提交、新建账户或分类都返回 <code>write_window_required</code>，重新申请写入窗口即可。窗口只属于发起它的 Session。</li>
+      <li>窗口未开或已过期时，提交、新建账户/分类以及现金流计划的新建/确认/入账/取消都返回 <code>write_window_required</code>，重新申请写入窗口即可。窗口只属于发起它的 Session；只读 Session（如用户面板）不能申请写入窗口。</li>
       <li>提交是幂等的：网络错误或后端 5xx 时，用<strong>完全相同</strong>的参数（同一 <code>idempotency_key</code>）重试，不会重复入账。</li>
     </ul>
   </div>
@@ -98,6 +98,8 @@ Content-Type: application/json
       <li><code>fiscal_list_accounts</code> / <code>fiscal_list_categories</code>：账户（含固定账期信用账户的未结清账期）与分类。</li>
       <li><code>fiscal_create_account</code> / <code>fiscal_create_category</code>：新建钱包/账户（<code>cash</code> 现金与微信/支付宝余额、<code>debit</code> 储蓄卡、<code>credit</code> 信用账户，期初余额为整数分）与收支分类（可带 <code>aliases</code>、<code>examples</code> 帮助归类）。与提交一样需要已开启写入窗口；有期初欠款的信用账户须给 <code>opening_balance_as_of_date</code> 与 <code>opening_due_date</code>。</li>
       <li><code>fiscal_search_ledger</code>：分页搜索已入账交易。</li>
+      <li><code>fiscal_list_cash_flow_items</code> / <code>fiscal_get_cash_flow_outlook</code>：未来待入账计划（含信用卡账期与报销回款；传 <code>month</code> 看已入账/已取消历史）与未来 30 天现金流汇总。</li>
+      <li><code>fiscal_create_cash_flow_item</code> → <code>fiscal_confirm_cash_flow_item</code> → <code>fiscal_settle_cash_flow_item</code>；不会发生的用 <code>fiscal_cancel_cash_flow_item</code>。新建的计划状态为“预计”，必须先确认才能入账；入账写入实际金额（整数分）、实际时间（带时区）和账户，生成正式账目。这四个写操作都需要写入窗口，并带 <code>idempotency_key</code>（新建与入账）以便安全重试。</li>
       <li><code>fiscal_create_import_batch</code> → <code>fiscal_validate_import_batch</code> → <code>fiscal_commit_import_batch</code>；不要的批次用 <code>fiscal_ignore_import_batch</code>；<code>fiscal_get_import_batch</code> 查看状态与校验错误。</li>
       <li><code>fiscal_export_report</code>：月度或年度 CSV（base64）。</li>
     </ul>

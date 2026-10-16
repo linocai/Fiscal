@@ -1,8 +1,6 @@
 // Host-provided, secret-free runtime configuration for console.fiscal.linotsai.top.
-// The page prompts for the Fiscal access key and keeps it in memory only.
+// Owner panel: Google Authenticator login, read-only MCP tools; no API key in the browser.
 window.__FISCAL_RUNTIME_CONFIG__ = {
-  mode: "http",
-  baseUrl: "/api/v1",
-  batchPath: "/import-batches",
-  scopes: ["read:reports", "read:ledger", "stage:imports", "export:reports"],
+  mode: "session",
+  endpoint: "https://mcp.fiscal.linotsai.top/mcp",
 };

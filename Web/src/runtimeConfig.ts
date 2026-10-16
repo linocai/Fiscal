@@ -1,14 +1,16 @@
 import type { AccessScope, ApiDemoMode, FiscalApiAdapter } from "./api/types";
-import { createHttpAdapter, createMcpHttpAdapter, FiscalApiError } from "./api/adapter";
+import { createHttpAdapter, createMcpHttpAdapter, FiscalApiError, McpSessionFiscalApiAdapter } from "./api/adapter";
 import { createMockAdapter } from "./api/mockAdapter";
+import { PANEL_SCOPES, PanelSession } from "./api/session";
 
-export type FiscalRuntimeMode = "mock" | "http" | "mcp";
+/** `session` is the owner panel: Authenticator login, read-only MCP tools. */
+export type FiscalRuntimeMode = "mock" | "http" | "mcp" | "session";
 
 export interface FiscalRuntimeConfig {
   mode: FiscalRuntimeMode;
   /** API root including /api/v1 when mode is http or mcp batch listing is used. */
   baseUrl?: string;
-  /** JSON-RPC MCP endpoint when mode is mcp. */
+  /** JSON-RPC MCP endpoint when mode is mcp or session. */
   endpoint?: string;
   batchPath?: string;
   batchListBaseUrl?: string;
@@ -27,6 +29,8 @@ declare global {
 export interface RuntimeAdapter {
   adapter: FiscalApiAdapter;
   label: string;
+  /** Present in session mode; the app shows the login gate until it has a token. */
+  session?: PanelSession;
 }
 
 let sessionKey: string | undefined;
@@ -67,13 +71,31 @@ function unavailable(message: string): FiscalApiAdapter {
     searchLedger: fail,
     listAccessScopes: fail,
     requestExport: fail,
+    listCashFlow: fail,
+    getCashFlowOutlook: fail,
+    listCategories: fail,
   };
 }
 
-export function createRuntimeAdapter(demoMode: ApiDemoMode): RuntimeAdapter {
+export function createRuntimeAdapter(demoMode: ApiDemoMode, onExpired: () => void = () => undefined): RuntimeAdapter {
   if (demoMode !== "normal") return { adapter: createMockAdapter(demoMode), label: "Mock 环境" };
   const runtime = config();
   if (!runtime) return { adapter: createMockAdapter(demoMode), label: "Mock 环境" };
+
+  if (runtime.mode === "session") {
+    if (!runtime.endpoint) return { adapter: unavailable("面板模式缺少 endpoint。"), label: "配置待完成" };
+    const session = new PanelSession(new URL(runtime.endpoint).origin);
+    const adapter = new McpSessionFiscalApiAdapter({
+      endpoint: runtime.endpoint,
+      sessionToken: () => session.token() ?? "",
+      scopes: PANEL_SCOPES,
+      onExpired: () => {
+        session.clear();
+        onExpired();
+      },
+    });
+    return { adapter, label: "只读面板", session };
+  }
 
   try {
     const apiKey = ephemeralKey(runtime);
