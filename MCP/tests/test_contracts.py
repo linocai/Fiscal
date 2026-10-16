@@ -58,6 +58,12 @@ class FiscalMCPContractTests(unittest.TestCase):
                 "fiscal_confirm_cash_flow_item",
                 "fiscal_settle_cash_flow_item",
                 "fiscal_cancel_cash_flow_item",
+                "fiscal_list_reimbursements",
+                "fiscal_list_reimbursable_expenses",
+                "fiscal_create_reimbursement",
+                "fiscal_submit_reimbursement",
+                "fiscal_record_reimbursement_receipt",
+                "fiscal_cancel_reimbursement_outstanding",
                 "fiscal_search_ledger",
                 "fiscal_create_import_batch",
                 "fiscal_get_import_batch",
@@ -336,6 +342,46 @@ class SessionCommitTests(unittest.TestCase):
             with self.assertRaises(FiscalMCPError) as caught:
                 self.call(tool, bad)
             self.assertEqual(caught.exception.code, "invalid_params", bad)
+
+    def test_reimbursement_mark_submit_receive_and_cancel(self) -> None:
+        trip = {
+            "title": "上海出差",
+            "counterparty_name": "公司",
+            "expected_date": "2026-10-31",
+            "expenses": [{"transaction_id": "tx-flight", "amount_minor": 120_000}, {"transaction_id": "tx-hotel", "amount_minor": 80_000}],
+            "idempotency_key": "claim-shanghai-01",
+        }
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_create_reimbursement", trip)
+        self.assertEqual(caught.exception.code, "write_window_required")
+        self.open_window()
+        claim = self.call("fiscal_create_reimbursement", trip)
+        self.assertEqual((claim["status"], claim["total_claimed_minor"], claim["outstanding_minor"]), ("pending", 200_000, 200_000))
+        self.assertEqual(self.call("fiscal_create_reimbursement", trip)["id"], claim["id"])
+        draft = self.call("fiscal_create_reimbursement", {**trip, "title": "打车", "expenses": [{"transaction_id": "tx-taxi", "amount_minor": 4_500}], "submit": False, "idempotency_key": "claim-taxi-01"})
+        self.assertEqual(draft["status"], "draft")
+        self.assertEqual(self.call("fiscal_submit_reimbursement", {"claim_id": draft["id"], "expected_version": 1})["status"], "pending")
+        receipt = {"claim_id": claim["id"], "expected_claim_version": claim["version"], "amount_minor": 150_000, "received_at": "2026-10-30T15:00:00+08:00", "destination_account_id": "debit-1", "title": "公司报销到账", "idempotency_key": "receipt-shanghai-01"}
+        self.call("fiscal_record_reimbursement_receipt", receipt)
+        partial = self.call("fiscal_list_reimbursements", {"status": "partial_received"})["items"]
+        self.assertEqual([(item["id"], item["outstanding_minor"]) for item in partial], [(claim["id"], 50_000)])
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_record_reimbursement_receipt", {**receipt, "expected_claim_version": partial[0]["version"], "amount_minor": 60_000, "idempotency_key": "receipt-too-much"})
+        self.assertEqual(caught.exception.code, "reimbursement_receipt_exceeds_outstanding")
+        cancelled = self.call("fiscal_cancel_reimbursement_outstanding", {"claim_id": claim["id"], "expected_version": partial[0]["version"], "idempotency_key": "cancel-shanghai-01"})
+        self.assertEqual((cancelled["status"], cancelled["outstanding_minor"]), ("partially_received_cancelled", 0))
+        for bad in (
+            {**trip, "expenses": []},
+            {**trip, "expenses": [{"transaction_id": "tx", "amount_minor": "12.00"}]},
+            {**trip, "expenses": [{"transaction_id": "tx", "amount_minor": 1, "note": "x"}]},
+            {**trip, "expected_date": "10/31"},
+        ):
+            with self.assertRaises(FiscalMCPError) as caught:
+                self.call("fiscal_create_reimbursement", bad)
+            self.assertEqual(caught.exception.code, "invalid_params", bad)
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_record_reimbursement_receipt", {**receipt, "received_at": "2026-10-30T15:00:00"})
+        self.assertEqual(caught.exception.code, "invalid_params")
 
     def test_one_window_covers_several_commits_and_retries(self) -> None:
         self.open_window()

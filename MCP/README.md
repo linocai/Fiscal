@@ -28,7 +28,11 @@ confirmation credential internally. `fiscal_create_account` and
 Cash-flow plan writes (`fiscal_create_cash_flow_item`,
 `fiscal_confirm_cash_flow_item`, `fiscal_settle_cash_flow_item`,
 `fiscal_cancel_cash_flow_item`) use it as well. Read-only sessions, such as the
-owner panel at the console root, cannot open a write window. Approvals happen on the fixed page
+owner panel at the console root, cannot open a write window.
+Reimbursement writes (`fiscal_create_reimbursement`, `fiscal_submit_reimbursement`,
+`fiscal_record_reimbursement_receipt`, `fiscal_cancel_reimbursement_outstanding`)
+also need the window; the gateway runs the backend preview step internally for
+receipts and cancellations. Approvals happen on the fixed page
 `/agent/approve/`, which lists pending challenges with a 4-character pairing
 code the Agent relays to the owner.
 

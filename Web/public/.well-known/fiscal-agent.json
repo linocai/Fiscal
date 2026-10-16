@@ -55,7 +55,11 @@
         "fiscal_create_cash_flow_item",
         "fiscal_confirm_cash_flow_item",
         "fiscal_settle_cash_flow_item",
-        "fiscal_cancel_cash_flow_item"
+        "fiscal_cancel_cash_flow_item",
+        "fiscal_create_reimbursement",
+        "fiscal_submit_reimbursement",
+        "fiscal_record_reimbursement_receipt",
+        "fiscal_cancel_reimbursement_outstanding"
       ],
       "requires_session_scope": "stage:imports"
     },
@@ -88,6 +92,12 @@
     "fiscal_confirm_cash_flow_item",
     "fiscal_settle_cash_flow_item",
     "fiscal_cancel_cash_flow_item",
+    "fiscal_list_reimbursements",
+    "fiscal_list_reimbursable_expenses",
+    "fiscal_create_reimbursement",
+    "fiscal_submit_reimbursement",
+    "fiscal_record_reimbursement_receipt",
+    "fiscal_cancel_reimbursement_outstanding",
     "fiscal_search_ledger",
     "fiscal_create_import_batch",
     "fiscal_get_import_batch",
@@ -99,5 +109,6 @@
   "amounts": "integer minor units (fen); occurred_at must include a timezone",
   "repayment_cycles": "repayments to fixed-cycle credit accounts require credit_cycle_id from fiscal_list_accounts open_cycles[].cycle_id",
   "cash_flow": "plans start expected; confirm before settle; settle posts the actual amount/time/account to the ledger",
-  "owner_panel": "https://console.fiscal.linotsai.top/ (Authenticator login, read-only session)"
+  "owner_panel": "https://console.fiscal.linotsai.top/ (Authenticator login, read-only session)",
+  "reimbursements": "one counterparty per claim, one or more expenses with partial amounts; submitted claims become expected inflow; receipts may be partial and post inflow transactions"
 }

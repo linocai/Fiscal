@@ -351,7 +351,7 @@ const normalizeCashFlow = (value: unknown, names: NameMaps): CashFlowItem[] => {
       amountCents: shown,
       plannedCents: planned,
       expectedDate: stringValue(item.expected_date) ?? null,
-      account: names.account(stringValue(item.account_id)) ?? (stringValue(item.account_id) ? "未知账户" : "未指定账户"),
+      account: names.account(stringValue(item.account_id)) ?? (stringValue(item.account_id) ? "未知账户" : stringValue(item.system_kind) === "reimbursement" ? "回款时确定" : "未指定账户"),
       destinationAccount: names.account(stringValue(item.destination_account_id)),
       category: names.category(stringValue(item.category_id)),
       status: stringValue(item.status) ?? "expected",

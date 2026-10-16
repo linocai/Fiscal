@@ -140,6 +140,10 @@ class FiscalMCPService:
                 details = {"created_id": result.get("id")}
             elif name in {"fiscal_confirm_cash_flow_item", "fiscal_settle_cash_flow_item", "fiscal_cancel_cash_flow_item"}:
                 details = {"item_id": values["item_id"]}
+            elif name == "fiscal_create_reimbursement":
+                details = {"claim_id": result.get("id"), "expense_count": len(values["expenses"])}
+            elif "claim_id" in values:
+                details = {"claim_id": values["claim_id"]}
             elif "batch_id" in values:
                 details = {"batch_id": values["batch_id"]}
             self._record(action=name, tool=name, principal=principal, outcome="success", details=details)
@@ -179,6 +183,30 @@ class FiscalMCPService:
             return await self.adapter.confirm_cash_flow_item(values["item_id"], values["expected_version"], values["scope"])
         if name == "fiscal_cancel_cash_flow_item":
             return await self.adapter.cancel_cash_flow_item(values["item_id"], values["expected_version"], values["scope"])
+        if name == "fiscal_list_reimbursements":
+            return await self.adapter.list_reimbursements(values)
+        if name == "fiscal_list_reimbursable_expenses":
+            return await self.adapter.list_reimbursable_expenses(values)
+        if name == "fiscal_create_reimbursement":
+            return await self._create_reimbursement(values)
+        if name == "fiscal_submit_reimbursement":
+            return await self.adapter.submit_reimbursement(values["claim_id"], values["expected_version"])
+        if name == "fiscal_record_reimbursement_receipt":
+            draft = {key: value for key, value in values.items() if key not in {"claim_id", "idempotency_key"}}
+            preview = await self.adapter.preview_reimbursement_receipt(values["claim_id"], draft)
+            return await self.adapter.create_reimbursement_receipt(
+                values["claim_id"],
+                {**draft, "preview_token": preview["preview_token"]},
+                backend_idempotency_uuid(name, values["idempotency_key"]),
+            )
+        if name == "fiscal_cancel_reimbursement_outstanding":
+            preview = await self.adapter.preview_reimbursement_cancel(values["claim_id"], values["expected_version"])
+            return await self.adapter.cancel_reimbursement_outstanding(
+                values["claim_id"],
+                values["expected_version"],
+                str(preview["preview_token"]),
+                backend_idempotency_uuid(name, values["idempotency_key"]),
+            )
         if name == "fiscal_create_account":
             account = await self.adapter.create_account(values)
             return {key: account.get(key) for key in ACCOUNT_FIELDS}
@@ -213,6 +241,30 @@ class FiscalMCPService:
             return await self.adapter.export_report(values["period_kind"], values["period"], values["format"])
         raise FiscalMCPError("unknown_tool", f"Unknown Fiscal MCP tool {name!r}.")
 
+
+    async def _create_reimbursement(self, values: Mapping[str, Any]) -> dict[str, Any]:
+        """Create the claim and, unless asked for a draft, submit it so it enters planned cash flow.
+
+        An idempotent replay returns the original draft response, so the current claim
+        is re-read before submitting; a claim that is already submitted is returned as is.
+        """
+        payload = {key: value for key, value in values.items() if key not in {"submit", "idempotency_key"}}
+        created = await self.adapter.create_reimbursement(
+            payload, backend_idempotency_uuid("fiscal_create_reimbursement", values["idempotency_key"])
+        )
+        if not values["submit"]:
+            return created
+        current = await self.adapter.get_reimbursement(str(created["id"]))
+        if current.get("status") != "draft":
+            return current
+        try:
+            return await self.adapter.submit_reimbursement(str(current["id"]), int(current["version"]))
+        except FiscalMCPError as error:
+            raise FiscalMCPError(
+                error.code,
+                f"The claim was created as a draft but not submitted: {error.message}",
+                {**(error.details or {}), "claim_id": current["id"], "claim_version": current["version"]},
+            ) from error
 
     async def _list_accounts(self, include_archived: bool) -> dict[str, Any]:
         items: list[dict[str, Any]] = []

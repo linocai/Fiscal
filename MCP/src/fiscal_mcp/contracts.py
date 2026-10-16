@@ -101,6 +101,40 @@ CASH_FLOW_CANCEL_PROPERTIES: dict[str, Any] = {
 }
 
 
+REIMBURSEMENT_CREATE_PROPERTIES: dict[str, Any] = {
+    "title": {"type": "string", "minLength": 1, "maxLength": 120},
+    "counterparty_name": {"type": "string", "minLength": 1, "maxLength": 120, "description": "Who pays you back, e.g. the company."},
+    "expected_date": {"type": ["string", "null"], "format": "date"},
+    "note": {"type": ["string", "null"], "maxLength": 500},
+    "expenses": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 100,
+        "items": {
+            "type": "object",
+            "properties": {
+                "transaction_id": {"type": "string", "minLength": 1},
+                "amount_minor": {"type": "integer", "minimum": 1, "description": "Reimbursable fen for this expense; at most its available_minor."},
+            },
+            "required": ["transaction_id", "amount_minor"],
+            "additionalProperties": False,
+        },
+    },
+    "submit": {"type": "boolean", "default": True, "description": "Submit at once so the expected refund appears in planned cash flow; false keeps a draft."},
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
+}
+REIMBURSEMENT_RECEIPT_PROPERTIES: dict[str, Any] = {
+    "claim_id": {"type": "string", "minLength": 1},
+    "expected_claim_version": {"type": "integer", "minimum": 1},
+    "amount_minor": {"type": "integer", "minimum": 1, "description": "Integer fen actually received."},
+    "received_at": {"type": "string", "format": "date-time"},
+    "destination_account_id": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 1, "maxLength": 120},
+    "note": {"type": ["string", "null"], "maxLength": 500},
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
+}
+
+
 class Scope(str, Enum):
     READ_REPORTS = "read:reports"
     READ_LEDGER = "read:ledger"
@@ -246,6 +280,62 @@ def tool_definitions() -> tuple[ToolDefinition, ...]:
             "Cancel a planned cash flow that will not happen (this occurrence or this and future ones); requires an open write window.",
             Scope.COMMIT_IMPORTS,
             _object_schema(CASH_FLOW_CANCEL_PROPERTIES, ["item_id", "expected_version"]),
+        ),
+        ToolDefinition(
+            "fiscal_list_reimbursements",
+            "List reimbursement claims with counterparty, claimed/received/outstanding amounts, expenses and status.",
+            Scope.READ_LEDGER,
+            _object_schema(
+                {
+                    "status": {"type": "string", "enum": ["draft", "pending", "partial_received", "received", "cancelled", "partially_received_cancelled"]},
+                    "query": {"type": "string", "maxLength": 120},
+                    "expense_transaction_id": {"type": "string"},
+                    "include_archived": {"type": "boolean", "default": False},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50},
+                },
+                [],
+            ),
+        ),
+        ToolDefinition(
+            "fiscal_list_reimbursable_expenses",
+            "List posted expenses that can still be reimbursed, with available_minor per transaction.",
+            Scope.READ_LEDGER,
+            _object_schema(
+                {
+                    "query": {"type": "string", "maxLength": 120},
+                    "date_from": {"type": "string", "format": "date"},
+                    "date_to": {"type": "string", "format": "date"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50},
+                },
+                [],
+            ),
+        ),
+        ToolDefinition(
+            "fiscal_create_reimbursement",
+            "Mark one or more expenses as reimbursable by one counterparty; submitted claims appear as expected inflow. Requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema(REIMBURSEMENT_CREATE_PROPERTIES, ["title", "counterparty_name", "expenses", "idempotency_key"]),
+        ),
+        ToolDefinition(
+            "fiscal_submit_reimbursement",
+            "Submit a draft reimbursement so its outstanding refund appears in planned cash flow. Requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema({"claim_id": {"type": "string", "minLength": 1}, "expected_version": {"type": "integer", "minimum": 1}}, ["claim_id", "expected_version"]),
+        ),
+        ToolDefinition(
+            "fiscal_record_reimbursement_receipt",
+            "Record money actually paid back for a claim (partial receipts allowed); posts an inflow to the destination account. Requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema(REIMBURSEMENT_RECEIPT_PROPERTIES, ["claim_id", "expected_claim_version", "amount_minor", "received_at", "destination_account_id", "title", "idempotency_key"]),
+        ),
+        ToolDefinition(
+            "fiscal_cancel_reimbursement_outstanding",
+            "Give up the unpaid remainder of a claim; amounts already received stay. Requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema(
+                {"claim_id": {"type": "string", "minLength": 1}, "expected_version": {"type": "integer", "minimum": 1}, "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128}},
+                ["claim_id", "expected_version", "idempotency_key"],
+            ),
         ),
         ToolDefinition(
             "fiscal_search_ledger",
@@ -539,6 +629,70 @@ def _validate_cash_flow_settle(values: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _bounded_limit(values: Mapping[str, Any]) -> int:
+    limit = values.get("limit", 50)
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+        raise invalid_params("limit must be between 1 and 100", field="limit")
+    return limit
+
+
+def _aware_datetime(values: Mapping[str, Any], key: str) -> str:
+    text = _required_str(values, key, max_length=64)
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise invalid_params(f"{key} must be an ISO date-time", field=key) from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise invalid_params(f"{key} must include a timezone", field=key)
+    return text
+
+
+def _validate_reimbursement_create(values: Mapping[str, Any]) -> dict[str, Any]:
+    _reject_unknown(values, REIMBURSEMENT_CREATE_PROPERTIES)
+    expenses = values.get("expenses")
+    if not isinstance(expenses, list) or not 1 <= len(expenses) <= 100:
+        raise invalid_params("expenses must contain 1..100 entries", field="expenses")
+    normalized: list[dict[str, Any]] = []
+    for index, expense in enumerate(expenses):
+        if not isinstance(expense, Mapping) or set(expense) - {"transaction_id", "amount_minor"}:
+            raise invalid_params("each expense needs only transaction_id and amount_minor", field=f"expenses[{index}]")
+        amount = expense.get("amount_minor")
+        if isinstance(amount, bool) or not isinstance(amount, int) or amount < 1:
+            raise invalid_params("amount_minor must be a positive integer in fen", field=f"expenses[{index}].amount_minor")
+        normalized.append({"transaction_id": _required_str(expense, "transaction_id", max_length=120), "amount_minor": amount})
+    submit = values.get("submit", True)
+    if not isinstance(submit, bool):
+        raise invalid_params("submit must be a boolean", field="submit")
+    result: dict[str, Any] = {
+        "title": _required_str(values, "title", max_length=120),
+        "counterparty_name": _required_str(values, "counterparty_name", max_length=120),
+        "expenses": normalized,
+        "submit": submit,
+        "idempotency_key": _idempotency_key(values),
+    }
+    if (expected := _optional_date(values, "expected_date")) is not None:
+        result["expected_date"] = expected
+    if values.get("note") is not None:
+        result["note"] = _required_str(values, "note", max_length=500)
+    return result
+
+
+def _validate_reimbursement_receipt(values: Mapping[str, Any]) -> dict[str, Any]:
+    _reject_unknown(values, REIMBURSEMENT_RECEIPT_PROPERTIES)
+    result: dict[str, Any] = {
+        "claim_id": _required_str(values, "claim_id", max_length=120),
+        "expected_claim_version": _positive_int(values, "expected_claim_version", required=True),
+        "amount_minor": _positive_int(values, "amount_minor", required=True),
+        "received_at": _aware_datetime(values, "received_at"),
+        "destination_account_id": _required_str(values, "destination_account_id", max_length=120),
+        "title": _required_str(values, "title", max_length=120),
+        "idempotency_key": _idempotency_key(values),
+    }
+    if values.get("note") is not None:
+        result["note"] = _required_str(values, "note", max_length=500)
+    return result
+
+
 def validate_tool_arguments(name: str, arguments: Any) -> dict[str, Any]:
     """Validate and normalise arguments for one public tool."""
 
@@ -590,6 +744,38 @@ def validate_tool_arguments(name: str, arguments: Any) -> dict[str, Any]:
             raise invalid_params("scope must be occurrence or this_and_future", field="scope")
         expected = _positive_int(values, "expected_version", required=True)
         return {"item_id": _required_str(values, "item_id", max_length=120), "expected_version": expected, "scope": scope}
+    if name == "fiscal_list_reimbursements":
+        listing: dict[str, Any] = {"limit": _bounded_limit(values), "include_archived": values.get("include_archived", False)}
+        if not isinstance(listing["include_archived"], bool):
+            raise invalid_params("include_archived must be a boolean", field="include_archived")
+        if values.get("status") is not None:
+            if values["status"] not in {"draft", "pending", "partial_received", "received", "cancelled", "partially_received_cancelled"}:
+                raise invalid_params("status is unsupported", field="status")
+            listing["status"] = values["status"]
+        for key in ("query", "expense_transaction_id"):
+            if values.get(key) is not None:
+                listing[key] = _required_str(values, key, max_length=120)
+        return listing
+    if name == "fiscal_list_reimbursable_expenses":
+        listing = {"limit": _bounded_limit(values)}
+        if values.get("query") is not None:
+            listing["query"] = _required_str(values, "query", max_length=120)
+        for key in ("date_from", "date_to"):
+            if (value := _optional_date(values, key)) is not None:
+                listing[key] = value
+        return listing
+    if name == "fiscal_create_reimbursement":
+        return _validate_reimbursement_create(values)
+    if name == "fiscal_submit_reimbursement":
+        return {"claim_id": _required_str(values, "claim_id", max_length=120), "expected_version": _positive_int(values, "expected_version", required=True)}
+    if name == "fiscal_record_reimbursement_receipt":
+        return _validate_reimbursement_receipt(values)
+    if name == "fiscal_cancel_reimbursement_outstanding":
+        return {
+            "claim_id": _required_str(values, "claim_id", max_length=120),
+            "expected_version": _positive_int(values, "expected_version", required=True),
+            "idempotency_key": _idempotency_key(values),
+        }
     if name == "fiscal_create_account":
         return _validate_account(values)
     if name == "fiscal_create_category":
