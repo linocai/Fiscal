@@ -29,7 +29,7 @@
       <li>Agent 读取本页或 discovery JSON，使用 <code>POST /auth/challenges</code> 创建 <code>session</code> challenge。</li>
       <li>Agent 把返回的 <code>approval_url</code> 发给用户；用户打开页面，用 Google Authenticator 输入当前 6 位验证码。</li>
       <li>Agent 使用返回的 <code>poll_token</code> 作为 <code>X-Fiscal-Poll-Token</code> 轮询 challenge，拿到短期 <code>session_token</code>。</li>
-      <li>Agent 用 <code>Authorization: Session &lt;session_token&gt;</code> 调用 MCP（<code>initialize</code>、<code>tools/list</code>、<code>tools/call</code> 都需要）。会话空闲 2 小时失效，最长 8 小时；验证码每 30 秒变化不会中断已建立的会话。</li>
+      <li>Agent 用 <code>Authorization: Session &lt;session_token&gt;</code> 调用 MCP（<code>initialize</code>、<code>tools/list</code>、<code>tools/call</code> 都校验）。Session 失效或未知时任何 <code>/mcp</code> 请求都返回 HTTP 401、<code>error.code</code> 为 <code>session_expired</code>，可用 <code>ping</code> 低成本探测。会话空闲 2 小时失效，最长 8 小时；验证码每 30 秒变化不会中断已建立的会话。</li>
       <li>读取、分析和暂存账单可以直接完成。真正提交到账本前，Agent 为本次请求创建 <code>operation</code> challenge，用户再次输入一次验证码；该写入授权只允许匹配的请求使用一次，有效 30 分钟。</li>
     </ol>
     <p class="note">网关重启或发布后，所有 Session 与未使用的写入授权都会失效（返回 <code>session_expired</code> / <code>operation_invalid</code>）；重新创建 challenge 即可。</p>

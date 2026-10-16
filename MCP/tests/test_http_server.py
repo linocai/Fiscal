@@ -96,6 +96,19 @@ class MCPHTTPTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Bearer", headers["www-authenticate"])
         self.assertEqual(json.loads(body)["error"], "unauthorized")
 
+    async def test_every_mcp_method_rejects_unknown_or_expired_credentials(self) -> None:
+        app = build_app()
+        for method in ("initialize", "tools/list", "ping"):
+            message = {"jsonrpc": "2.0", "id": 1, "method": method, "params": {}}
+            for authorization, code in (
+                ("Session fiscal_session_v1_stale", "session_expired"),
+                ("Bearer not-a-registered-key-000", "unauthorized"),
+            ):
+                status, headers, body = await request(app, "POST", "/mcp", message, authorization=authorization)
+                self.assertEqual(status, 401, (method, authorization))
+                self.assertIn("Session", headers["www-authenticate"])
+                self.assertEqual(json.loads(body)["error"]["code"], code)
+
     async def test_initialize_and_tools_call_forward_bearer_key(self) -> None:
         app = build_app()
         initialize = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}

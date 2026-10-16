@@ -54,7 +54,8 @@
       "expires_at",
       "session_token | operation_token"
     ],
-    "restart_invalidates_tokens": true
+    "restart_invalidates_tokens": true,
+    "expired_session": "any /mcp request (initialize, tools/list, ping, tools/call) returns HTTP 401 with error.code=session_expired"
   },
   "session_scopes": [
     "read:reports",

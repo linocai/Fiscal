@@ -129,6 +129,18 @@ class MCPHTTPApplication:
             await self._respond(send, 400, MCPServer._error(None, -32700, "Invalid JSON."), cors=cors)
             return
 
+        try:
+            self._require_live_credential(auth_scheme, token)
+        except FiscalMCPError as error:
+            await self._respond(
+                send,
+                401,
+                {"error": error.as_dict()},
+                cors=cors,
+                extra_headers=(("www-authenticate", 'Bearer realm="fiscal-mcp", Session realm="fiscal-mcp"'),),
+            )
+            return
+
         responses = await self._handle_payload(payload, auth_scheme, token)
         if responses is None:
             await self._respond(send, 202, None, cors=cors)
@@ -172,6 +184,15 @@ class MCPHTTPApplication:
             meta["fiscal_api_key"] = token
         params["_meta"] = meta
         return {**message, "params": params}
+
+    def _require_live_credential(self, scheme: str, token: str) -> None:
+        """Reject expired or unknown credentials for every MCP method, not only tools/call."""
+        if scheme == "session":
+            if self.server.sessions is None:
+                raise FiscalMCPError("unauthorized", "Authenticator sessions are not configured.")
+            self.server.sessions.resolve(token)
+        else:
+            self.server.service.key_registry.resolve(token)
 
     @staticmethod
     def _authorization(value: str | None) -> tuple[str, str | None]:
