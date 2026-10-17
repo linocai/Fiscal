@@ -59,7 +59,9 @@
         "fiscal_create_reimbursement",
         "fiscal_submit_reimbursement",
         "fiscal_record_reimbursement_receipt",
-        "fiscal_cancel_reimbursement_outstanding"
+        "fiscal_cancel_reimbursement_outstanding",
+        "fiscal_update_transaction",
+        "fiscal_update_reimbursement"
       ],
       "requires_session_scope": "stage:imports"
     },
@@ -103,6 +105,8 @@
     "fiscal_submit_reimbursement",
     "fiscal_record_reimbursement_receipt",
     "fiscal_cancel_reimbursement_outstanding",
+    "fiscal_update_transaction",
+    "fiscal_update_reimbursement",
     "fiscal_search_ledger",
     "fiscal_create_import_batch",
     "fiscal_get_import_batch",

@@ -1266,7 +1266,7 @@ class TransactionService:
     async def responses_with_capabilities(
         self, transactions: list[LedgerTransaction]
     ) -> list[TransactionResponse]:
-        """Build list/overview rows with batched relation capability facts."""
+        """Build list/overview rows; only rows with relations pay for relation details."""
         transaction_ids = {transaction.id for transaction in transactions}
         reimbursement_flags = await self.reimbursement_repository.transaction_relation_flags(
             transaction_ids
@@ -1277,6 +1277,13 @@ class TransactionService:
         responses: list[TransactionResponse] = []
         for transaction in transactions:
             has_claim, has_receipt = reimbursement_flags.get(transaction.id, (False, False))
+            if has_claim or has_receipt or transaction.id in installment_ids:
+                # Linked rows carry their relation details, matching the
+                # single-transaction response; plain rows stay batched.
+                responses.append(
+                    await self.response_with_relation(transaction, list(transaction.postings))
+                )
+                continue
             responses.append(
                 self._response(
                     transaction,

@@ -57,6 +57,14 @@ class FiscalBackendAdapter(Protocol):
 
     async def get_reimbursement(self, claim_id: str) -> dict[str, Any]: ...
 
+    async def get_transaction(self, transaction_id: str) -> dict[str, Any]: ...
+
+    async def replace_transaction(self, transaction_id: str, payload: Mapping[str, Any]) -> dict[str, Any]: ...
+
+    async def preview_reimbursement_update(self, claim_id: str, payload: Mapping[str, Any]) -> dict[str, Any]: ...
+
+    async def update_reimbursement(self, claim_id: str, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]: ...
+
     async def create_reimbursement(self, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]: ...
 
     async def submit_reimbursement(self, claim_id: str, expected_version: int) -> dict[str, Any]: ...
@@ -338,6 +346,20 @@ class HttpFiscalBackendAdapter:
     async def get_reimbursement(self, claim_id: str) -> dict[str, Any]:
         return await self._request("GET", f"/reimbursement-claims/{claim_id}")
 
+    async def get_transaction(self, transaction_id: str) -> dict[str, Any]:
+        return await self._request("GET", f"/transactions/{transaction_id}")
+
+    async def replace_transaction(self, transaction_id: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return await self._request("PUT", f"/transactions/{transaction_id}", json_body=payload)
+
+    async def preview_reimbursement_update(self, claim_id: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return await self._request("POST", f"/reimbursement-claims/{claim_id}/preview", json_body=payload)
+
+    async def update_reimbursement(self, claim_id: str, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
+        return await self._request(
+            "PUT", f"/reimbursement-claims/{claim_id}", json_body=payload, headers={"Idempotency-Key": idempotency_key}
+        )
+
     async def create_reimbursement(self, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
         return await self._request("POST", "/reimbursement-claims", json_body=payload, headers={"Idempotency-Key": idempotency_key})
 
@@ -601,6 +623,38 @@ class MockFiscalBackendAdapter:
 
     async def get_reimbursement(self, claim_id: str) -> dict[str, Any]:
         return copy.deepcopy(self._claim(claim_id))
+
+    async def get_transaction(self, transaction_id: str) -> dict[str, Any]:
+        item = next((row for row in self.ledger_items if row.get("id") == transaction_id), None)
+        if item is None:
+            raise FiscalMCPError("transaction_not_found", "Transaction was not found.", {"http_status": 404})
+        return copy.deepcopy(item)
+
+    async def replace_transaction(self, transaction_id: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+        item = next(row for row in self.ledger_items if row.get("id") == transaction_id)
+        if item.get("version", 1) != payload["expected_version"]:
+            raise FiscalMCPError("resource_version_conflict", "Transaction changed.", {"http_status": 409})
+        item.update({key: value for key, value in payload.items() if key != "expected_version"}, version=item.get("version", 1) + 1)
+        return copy.deepcopy(item)
+
+    async def preview_reimbursement_update(self, claim_id: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+        self._claim(claim_id, int(payload["expected_version"]))
+        token = str(uuid.uuid4())
+        self._previews[token] = ("update", claim_id, dict(payload))
+        return {"preview_token": token}
+
+    async def update_reimbursement(self, claim_id: str, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
+        if idempotency_key in self._cash_flow_idempotency:
+            return copy.deepcopy(self._cash_flow_idempotency[idempotency_key])
+        kind, previewed_claim, _ = self._previews.pop(str(payload["preview_token"]), (None, None, None))
+        if kind != "update" or previewed_claim != claim_id:
+            raise FiscalMCPError("reimbursement_preview_not_found", "The preview token is invalid", {"http_status": 422})
+        claim = self._claim(claim_id, int(payload["expected_version"]))
+        claim.update({key: value for key, value in payload.items() if key not in {"preview_token", "expected_version"}}, version=claim["version"] + 1)
+        claim["total_claimed_minor"] = sum(int(expense["amount_minor"]) for expense in claim["expenses"])
+        self._claim_status(claim)
+        self._cash_flow_idempotency[idempotency_key] = copy.deepcopy(claim)
+        return copy.deepcopy(claim)
 
     async def create_reimbursement(self, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
         if idempotency_key in self._cash_flow_idempotency:

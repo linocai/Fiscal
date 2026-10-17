@@ -141,6 +141,8 @@ class FiscalMCPService:
                 details = {"created_id": result.get("id")}
             elif name in {"fiscal_confirm_cash_flow_item", "fiscal_settle_cash_flow_item", "fiscal_cancel_cash_flow_item"}:
                 details = {"item_id": values["item_id"]}
+            elif name == "fiscal_update_transaction":
+                details = {"transaction_id": values["transaction_id"]}
             elif name == "fiscal_create_reimbursement":
                 details = {"claim_id": result.get("id"), "expense_count": len(values["expenses"])}
             elif "claim_id" in values:
@@ -201,6 +203,10 @@ class FiscalMCPService:
             return await self.adapter.list_reimbursable_expenses(values)
         if name == "fiscal_create_reimbursement":
             return await self._create_reimbursement(values)
+        if name == "fiscal_update_transaction":
+            return await self._update_transaction(values)
+        if name == "fiscal_update_reimbursement":
+            return await self._update_reimbursement(values)
         if name == "fiscal_submit_reimbursement":
             return await self.adapter.submit_reimbursement(values["claim_id"], values["expected_version"])
         if name == "fiscal_record_reimbursement_receipt":
@@ -280,6 +286,49 @@ class FiscalMCPService:
             except FiscalMCPError:
                 raise error from None
         return await commit(str(previewed["preview_token"]))
+
+    async def _update_transaction(self, values: Mapping[str, Any]) -> dict[str, Any]:
+        """Re-send the current transaction with only title/note/category changed.
+
+        The backend replaces a transaction as a whole; amounts, accounts, dates
+        and credit cycles are copied from the current version so they cannot drift.
+        """
+        current = await self.adapter.get_transaction(values["transaction_id"])
+        if current.get("version") != values["expected_version"]:
+            raise FiscalMCPError(
+                "resource_version_conflict",
+                "The transaction changed; reload it before editing.",
+                {"current_version": current.get("version"), "expected_version": values["expected_version"]},
+            )
+        payload = {key: current.get(key) for key in TRANSACTION_DRAFT_FIELDS}
+        payload.update({key: values[key] for key in ("title", "note", "category_id") if key in values})
+        payload["expected_version"] = values["expected_version"]
+        return await self.adapter.replace_transaction(values["transaction_id"], payload)
+
+    async def _update_reimbursement(self, values: Mapping[str, Any]) -> dict[str, Any]:
+        current = await self.adapter.get_reimbursement(values["claim_id"])
+        existing = {str(row.get("transaction_id")): row for row in current.get("expenses") or [] if isinstance(row, Mapping)}
+        expenses = values.get("expenses")
+        if expenses is None:
+            expenses = [{"transaction_id": key, "amount_minor": row.get("amount_minor")} for key, row in existing.items()]
+        draft: dict[str, Any] = {
+            "title": values.get("title", current.get("title")),
+            "note": values["note"] if "note" in values else current.get("note"),
+            "counterparty_name": values.get("counterparty_name", current.get("counterparty_name")),
+            "expected_date": values["expected_date"] if "expected_date" in values else current.get("expected_date"),
+            # Keep allocation ids so received amounts stay attached to their expense.
+            "expenses": [
+                {**({"id": existing[str(item["transaction_id"])]["id"]} if existing.get(str(item["transaction_id"]), {}).get("id") else {}), **item}
+                for item in expenses
+            ],
+            "expected_version": values["expected_version"],
+        }
+        key = backend_idempotency_uuid("fiscal_update_reimbursement", values["idempotency_key"])
+
+        async def commit(token: str) -> dict[str, Any]:
+            return await self.adapter.update_reimbursement(values["claim_id"], {**draft, "preview_token": token}, key)
+
+        return await self._preview_then_commit(lambda: self.adapter.preview_reimbursement_update(values["claim_id"], draft), commit)
 
     async def _create_reimbursement(self, values: Mapping[str, Any]) -> dict[str, Any]:
         """Create the claim and, unless asked for a draft, submit it so it enters planned cash flow.
@@ -371,3 +420,14 @@ CYCLE_FIELDS = (
 )
 CATEGORY_FIELDS = ("id", "name", "direction", "parent_id", "aliases", "is_balance_adjustment", "archived_at")
 MAX_CYCLE_PAGES = 10
+TRANSACTION_DRAFT_FIELDS = (
+    "kind",
+    "amount_minor",
+    "occurred_at",
+    "title",
+    "note",
+    "account_id",
+    "category_id",
+    "destination_account_id",
+    "credit_cycle_id",
+)

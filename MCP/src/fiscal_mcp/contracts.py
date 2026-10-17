@@ -139,6 +139,31 @@ REIMBURSEMENT_RECEIPT_PROPERTIES: dict[str, Any] = {
 }
 
 
+TRANSACTION_UPDATE_PROPERTIES: dict[str, Any] = {
+    "transaction_id": {"type": "string", "minLength": 1},
+    "expected_version": {"type": "integer", "minimum": 1},
+    "title": {"type": "string", "minLength": 1, "maxLength": 120},
+    "note": {"type": ["string", "null"], "maxLength": 500, "description": "null clears the note."},
+    "category_id": {"type": ["string", "null"]},
+}
+REIMBURSEMENT_UPDATE_PROPERTIES: dict[str, Any] = {
+    "claim_id": {"type": "string", "minLength": 1},
+    "expected_version": {"type": "integer", "minimum": 1},
+    "title": {"type": "string", "minLength": 1, "maxLength": 120},
+    "counterparty_name": {"type": "string", "minLength": 1, "maxLength": 120},
+    "expected_date": {"type": ["string", "null"], "format": "date", "description": "null clears the date."},
+    "note": {"type": ["string", "null"], "maxLength": 500},
+    "expenses": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 100,
+        "description": "Full replacement of the claimed expenses; omit to keep them unchanged.",
+        "items": REIMBURSEMENT_CREATE_PROPERTIES["expenses"]["items"],
+    },
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
+}
+
+
 class Scope(str, Enum):
     READ_REPORTS = "read:reports"
     READ_LEDGER = "read:ledger"
@@ -340,6 +365,18 @@ def tool_definitions() -> tuple[ToolDefinition, ...]:
                 {"claim_id": {"type": "string", "minLength": 1}, "expected_version": {"type": "integer", "minimum": 1}, "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128}},
                 ["claim_id", "expected_version", "idempotency_key"],
             ),
+        ),
+        ToolDefinition(
+            "fiscal_update_transaction",
+            "Edit a posted transaction's title, note or category; amounts, accounts and dates stay unchanged. Requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema(TRANSACTION_UPDATE_PROPERTIES, ["transaction_id", "expected_version"]),
+        ),
+        ToolDefinition(
+            "fiscal_update_reimbursement",
+            "Edit a reimbursement claim (title, counterparty, expected date, note, or its full expense list) without creating a new claim. Requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema(REIMBURSEMENT_UPDATE_PROPERTIES, ["claim_id", "expected_version", "idempotency_key"]),
         ),
         ToolDefinition(
             "fiscal_search_ledger",
@@ -775,6 +812,42 @@ def validate_tool_arguments(name: str, arguments: Any) -> dict[str, Any]:
         return listing
     if name == "fiscal_create_reimbursement":
         return _validate_reimbursement_create(values)
+    if name == "fiscal_update_transaction":
+        _reject_unknown(values, TRANSACTION_UPDATE_PROPERTIES)
+        changes: dict[str, Any] = {
+            "transaction_id": _required_str(values, "transaction_id", max_length=120),
+            "expected_version": _positive_int(values, "expected_version", required=True),
+        }
+        if "title" in values:
+            changes["title"] = _required_str(values, "title", max_length=120)
+        if "note" in values:
+            changes["note"] = None if values["note"] is None else _required_str(values, "note", max_length=500)
+        if "category_id" in values:
+            changes["category_id"] = None if values["category_id"] is None else _required_str(values, "category_id", max_length=120)
+        if len(changes) == 2:
+            raise invalid_params("give at least one of title, note or category_id", field="arguments")
+        return changes
+    if name == "fiscal_update_reimbursement":
+        _reject_unknown(values, REIMBURSEMENT_UPDATE_PROPERTIES)
+        update: dict[str, Any] = {
+            "claim_id": _required_str(values, "claim_id", max_length=120),
+            "expected_version": _positive_int(values, "expected_version", required=True),
+            "idempotency_key": _idempotency_key(values),
+        }
+        for key in ("title", "counterparty_name"):
+            if key in values:
+                update[key] = _required_str(values, key, max_length=120)
+        if "note" in values:
+            update["note"] = None if values["note"] is None else _required_str(values, "note", max_length=500)
+        if "expected_date" in values:
+            update["expected_date"] = None if values["expected_date"] is None else _optional_date(values, "expected_date")
+        if "expenses" in values:
+            update["expenses"] = _validate_reimbursement_create(
+                {"title": "x", "counterparty_name": "x", "expenses": values["expenses"], "idempotency_key": "unused-key"}
+            )["expenses"]
+        if len(update) == 3:
+            raise invalid_params("give at least one field to change", field="arguments")
+        return update
     if name == "fiscal_submit_reimbursement":
         return {"claim_id": _required_str(values, "claim_id", max_length=120), "expected_version": _positive_int(values, "expected_version", required=True)}
     if name == "fiscal_record_reimbursement_receipt":

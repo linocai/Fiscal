@@ -64,6 +64,8 @@ class FiscalMCPContractTests(unittest.TestCase):
                 "fiscal_submit_reimbursement",
                 "fiscal_record_reimbursement_receipt",
                 "fiscal_cancel_reimbursement_outstanding",
+                "fiscal_update_transaction",
+                "fiscal_update_reimbursement",
                 "fiscal_search_ledger",
                 "fiscal_create_import_batch",
                 "fiscal_get_import_batch",
@@ -396,6 +398,33 @@ class SessionCommitTests(unittest.TestCase):
         with self.assertRaises(FiscalMCPError) as caught:
             self.call("fiscal_record_reimbursement_receipt", {**receipt, "received_at": "2026-10-30T15:00:00"})
         self.assertEqual(caught.exception.code, "invalid_params")
+
+    def test_edit_transaction_title_and_reimbursement_counterparty(self) -> None:
+        self.adapter.ledger_items.append({
+            "id": "tx-doudou", "kind": "expense", "amount_minor": 140_000, "occurred_at": "2026-09-12T10:00:00+08:00",
+            "title": "豆豆", "note": None, "account_id": "debit-1", "category_id": "cat-pet", "destination_account_id": None,
+            "credit_cycle_id": None, "version": 3, "postings": [],
+        })
+        self.open_window()
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_update_transaction", {"transaction_id": "tx-doudou", "expected_version": 3})
+        self.assertEqual(caught.exception.code, "invalid_params")
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_update_transaction", {"transaction_id": "tx-doudou", "expected_version": 3, "amount_minor": 1})
+        self.assertEqual(caught.exception.code, "invalid_params")
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_update_transaction", {"transaction_id": "tx-doudou", "expected_version": 2, "title": "豆豆（可报销）"})
+        self.assertEqual(caught.exception.code, "resource_version_conflict")
+        edited = self.call("fiscal_update_transaction", {"transaction_id": "tx-doudou", "expected_version": 3, "title": "豆豆（可报销）"})
+        self.assertEqual((edited["title"], edited["amount_minor"], edited["account_id"], edited["category_id"], edited["version"]), ("豆豆（可报销）", 140_000, "debit-1", "cat-pet", 4))
+
+        claim = self.call("fiscal_create_reimbursement", {"title": "豆豆", "counterparty_name": "我", "expenses": [{"transaction_id": "tx-doudou", "amount_minor": 140_000}], "idempotency_key": "claim-doudou-01"})
+        update = {"claim_id": claim["id"], "expected_version": claim["version"], "counterparty_name": "公司", "idempotency_key": "claim-doudou-cp-01"}
+        updated = self.call("fiscal_update_reimbursement", update)
+        self.assertEqual((updated["counterparty_name"], updated["total_claimed_minor"], updated["outstanding_minor"], updated["status"]), ("公司", 140_000, 140_000, "pending"))
+        self.assertEqual(updated["expenses"], [{"transaction_id": "tx-doudou", "amount_minor": 140_000}])
+        self.assertEqual(self.call("fiscal_update_reimbursement", update)["version"], updated["version"])
+        self.assertEqual(len(self.call("fiscal_list_reimbursements", {})["items"]), 1)
 
     def test_one_window_covers_several_commits_and_retries(self) -> None:
         self.open_window()
