@@ -202,9 +202,11 @@ PAIRING_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 MAX_PENDING_SESSION_CHALLENGES = 20
 MAX_PENDING_PER_SOURCE = 2
 MAX_FAILED_PER_SOURCE = 5
-# Global budget guards anonymous session approvals only; a write window needs a
-# live session first, so its guesses are bounded per challenge instead and an
-# anonymous flood of wrong codes can never block it.
+# A guessed session approval would hand the guesser a session, so session
+# challenges get a global budget and are withdrawn after a few wrong codes.
+# A write-window approval only ever opens the window for the Agent session that
+# requested it, so guessing gains nothing; it keeps the per-source limit only and
+# can be neither withdrawn nor blocked by anyone else's wrong codes.
 MAX_FAILED_GLOBAL = 30
 MAX_FAILED_PER_CHALLENGE = 5
 WRITE_WINDOW_KINDS = {"write_window", "operation"}  # "operation" is the pre-Build54 name
@@ -369,7 +371,7 @@ class TotpSessionRegistry:
         if counter is None:
             self._failed(source, current, anonymous=anonymous)
             challenge.failures += 1
-            if challenge.failures >= MAX_FAILED_PER_CHALLENGE:
+            if anonymous and challenge.failures >= MAX_FAILED_PER_CHALLENGE:
                 del self._challenges[challenge.challenge_id]
                 raise FiscalMCPError("challenge_expired", "Too many wrong codes; this request was withdrawn. Ask the Agent to request again.")
             raise FiscalMCPError("invalid_totp", "The Authenticator code is invalid or expired.")

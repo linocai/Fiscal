@@ -166,9 +166,13 @@ class TotpSessionTests(unittest.TestCase):
             self.assertNotIn(challenge.challenge_id, [item["challenge_id"] for item in registry.pending(now=NOW)])
         fresh, _ = registry.create_challenge(kind="session", source="ip-new", now=NOW)
         self.assert_code("auth_rate_limited", lambda: registry.approve(fresh.challenge_id, totp(SECRET, NOW), source="ip-new", now=NOW))
-        # The anonymous budget never blocks the owner's write-window approval.
+        # The anonymous budget never blocks the owner's write-window approval, and
+        # wrong codes from others cannot withdraw a visible write-window request.
         later = self.next_code_time()
         window, _ = registry.create_challenge(kind="write_window", session_token=session_token, now=later)
+        for index in range(12):
+            self.assert_code("invalid_totp", lambda: registry.approve(window.challenge_id, wrong, source=f"attacker-{index // 4}", now=later))
+        self.assertIn(window.challenge_id, [item["challenge_id"] for item in registry.pending(now=later)])
         registry.approve(window.challenge_id, totp(SECRET, later), source="owner", now=later)
         registry.require_write_window(session_token, now=later)
 
