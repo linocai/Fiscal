@@ -35,11 +35,11 @@ def _totp_digest(secret: str, counter: int) -> bytes:
     return hmac.new(raw_secret, counter.to_bytes(8, "big"), hashlib.sha1).digest()
 
 
-def verify_totp(secret: str | None, code: str, *, now: datetime | None = None, window: int = 1) -> bool:
-    """Verify a Google Authenticator-compatible 6-digit TOTP code."""
+def totp_counter(secret: str | None, code: str, *, now: datetime | None = None, window: int = 1) -> int | None:
+    """Return the 30-second time step a valid 6-digit TOTP code belongs to."""
 
     if not secret or not isinstance(code, str) or not code.isdigit() or len(code) != 6:
-        return False
+        return None
     current = now or datetime.now(timezone.utc)
     counter = int(current.timestamp()) // 30
     try:
@@ -47,10 +47,16 @@ def verify_totp(secret: str | None, code: str, *, now: datetime | None = None, w
             digest = _totp_digest(secret, counter + offset)
             number = (int.from_bytes(digest[digest[-1] & 0x0F :][:4], "big") & 0x7FFFFFFF) % 1_000_000
             if hmac.compare_digest(f"{number:06d}", code):
-                return True
+                return counter + offset
     except ValueError:
-        return False
-    return False
+        return None
+    return None
+
+
+def verify_totp(secret: str | None, code: str, *, now: datetime | None = None, window: int = 1) -> bool:
+    """Verify a Google Authenticator-compatible 6-digit TOTP code."""
+
+    return totp_counter(secret, code, now=now, window=window) is not None
 
 
 @dataclass(slots=True)
@@ -181,6 +187,7 @@ class AuthChallenge:
     intent: str
     pairing_code: str
     session_fingerprint: str | None
+    source: str
     created_at: datetime
     expires_at: datetime
     result_token: str | None = None
@@ -188,7 +195,13 @@ class AuthChallenge:
 
 
 PAIRING_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-MAX_PENDING_CHALLENGES = 5
+# Anonymous session requests are bounded per source and overall; write-window
+# requests are bounded by sessions (one pending per session) so an anonymous
+# flood can never block an Agent's write approval.
+MAX_PENDING_SESSION_CHALLENGES = 20
+MAX_PENDING_PER_SOURCE = 2
+MAX_FAILED_PER_SOURCE = 5
+MAX_FAILED_GLOBAL = 30
 WRITE_WINDOW_KINDS = {"write_window", "operation"}  # "operation" is the pre-Build54 name
 
 
@@ -216,6 +229,9 @@ class TotpSessionRegistry:
         self._sessions: dict[str, AuthSession] = {}
         self._challenges: dict[str, AuthChallenge] = {}
         self._failed_attempts: dict[str, list[datetime]] = {}
+        self._failed_global: list[datetime] = []
+        # RFC 6238 §5.2: a code's time step is accepted once; later steps only.
+        self._last_totp_counter: int | None = None
 
     @property
     def configured(self) -> bool:
@@ -233,16 +249,21 @@ class TotpSessionRegistry:
         cutoff = now - timedelta(minutes=5)
         attempts = [value for value in self._failed_attempts.get(source, []) if value > cutoff]
         self._failed_attempts[source] = attempts
-        if len(attempts) >= 5:
+        self._failed_global = [value for value in self._failed_global if value > cutoff]
+        if len(attempts) >= MAX_FAILED_PER_SOURCE or len(self._failed_global) >= MAX_FAILED_GLOBAL:
             raise FiscalMCPError("auth_rate_limited", "Too many authentication attempts; try again later.")
 
     def _failed(self, source: str, now: datetime) -> None:
         self._failed_attempts.setdefault(source, []).append(now)
+        self._failed_global.append(now)
 
     def _scopes(self, requested: Iterable[Scope | str] | None) -> frozenset[Scope]:
-        values = self.default_scopes if requested is None else frozenset(
-            scope if isinstance(scope, Scope) else Scope(scope) for scope in requested
-        )
+        try:
+            values = self.default_scopes if requested is None else frozenset(
+                scope if isinstance(scope, Scope) else Scope(scope) for scope in requested
+            )
+        except ValueError as exc:
+            raise FiscalMCPError("invalid_scope", "The requested session scope is not supported.") from exc
         if Scope.COMMIT_IMPORTS in values:
             raise FiscalMCPError("invalid_scope", "commit:imports is granted only through a write approval.")
         if not values.issubset(self.default_scopes):
@@ -262,11 +283,15 @@ class TotpSessionRegistry:
         label: str = "",
         intent: str = "",
         session_token: str | None = None,
+        source: str = "unknown",
         now: datetime | None = None,
     ) -> tuple[AuthChallenge, str]:
         current = now or datetime.now(timezone.utc)
         if not self.configured:
             raise FiscalMCPError("totp_unconfigured", "Authenticator approval is not configured.")
+        if not isinstance(kind, str):
+            raise FiscalMCPError("invalid_challenge", "Challenge kind must be session or write_window.")
+        pending = self._pending(current)
         if kind in WRITE_WINDOW_KINDS:
             if not session_token:
                 raise FiscalMCPError("session_required", "A live session is required to open a write window.")
@@ -277,13 +302,20 @@ class TotpSessionRegistry:
             kind = "write_window"
             scopes = frozenset({Scope.COMMIT_IMPORTS})
             session_fingerprint: str | None = session.token_fingerprint
+            # One pending window request per session: a new request replaces the old one.
+            for stale in [item for item in pending if item.session_fingerprint == session_fingerprint]:
+                del self._challenges[stale.challenge_id]
         elif kind == "session":
             scopes = self._scopes(requested_scopes)
             session_fingerprint = None
+            sessions_pending = [item for item in pending if item.kind == "session"]
+            if (
+                len(sessions_pending) >= MAX_PENDING_SESSION_CHALLENGES
+                or sum(1 for item in sessions_pending if item.source == source) >= MAX_PENDING_PER_SOURCE
+            ):
+                raise FiscalMCPError("too_many_pending", "Too many approvals are waiting; try again later.")
         else:
             raise FiscalMCPError("invalid_challenge", "Challenge kind must be session or write_window.")
-        if len(self._pending(current)) >= MAX_PENDING_CHALLENGES:
-            raise FiscalMCPError("too_many_pending", "Too many approvals are waiting; try again later.")
         challenge_id = self._challenge_token()
         poll_token = self._challenge_token()
         challenge = AuthChallenge(
@@ -295,6 +327,7 @@ class TotpSessionRegistry:
             intent=intent[:500],
             pairing_code="".join(secrets.choice(PAIRING_ALPHABET) for _ in range(4)),
             session_fingerprint=session_fingerprint,
+            source=source,
             created_at=current,
             expires_at=current + timedelta(seconds=self.challenge_seconds),
         )
@@ -325,9 +358,12 @@ class TotpSessionRegistry:
         if challenge.approved_at is not None:
             return challenge
         self._check_rate(source, current)
-        if not verify_totp(self.secret, code, now=current):
+        counter = totp_counter(self.secret, code, now=current)
+        if counter is None:
             self._failed(source, current)
             raise FiscalMCPError("invalid_totp", "The Authenticator code is invalid or expired.")
+        if self._last_totp_counter is not None and counter <= self._last_totp_counter:
+            raise FiscalMCPError("totp_reused", "This Authenticator code was already used; wait for the next code.")
         if challenge.kind == "session":
             challenge.result_token = self._issue_session(challenge.scopes, challenge.label, current)
         else:
@@ -335,6 +371,7 @@ class TotpSessionRegistry:
             if session is None or not session.usable(current, self.idle_seconds):
                 raise FiscalMCPError("session_expired", "The requesting session has expired; request a new session.")
             session.write_until = current + timedelta(seconds=self.operation_seconds)
+        self._last_totp_counter = counter
         challenge.approved_at = current
         return challenge
 

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import copy
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any, Awaitable, Callable, Mapping
 
-from .adapter import FiscalBackendAdapter, backend_idempotency_uuid
+from .adapter import FiscalBackendAdapter, backend_idempotency_uuid, backend_outcome_known
 from .auth import ApiKeyRecord, ApiKeyRegistry, TotpSessionRegistry
 from .confirmation import ConfirmationVerifier
 from .contracts import Scope, ToolDefinition, tool_definitions, validate_tool_arguments
@@ -168,7 +169,18 @@ class FiscalMCPService:
         if name == "fiscal_list_categories":
             return await self._list_categories(values.get("direction"), values["include_archived"])
         if name == "fiscal_list_cash_flow_items":
-            return await self.adapter.list_cash_flow_items(values.get("account_id"), values.get("month"))
+            result = await self.adapter.list_cash_flow_items(values.get("account_id"), values.get("month"))
+            account_id = values.get("account_id")
+            if account_id and values.get("month") and isinstance(result.get("items"), list):
+                # The backend history route has no account filter; apply it here.
+                result = {
+                    **result,
+                    "items": [
+                        item for item in result["items"]
+                        if isinstance(item, Mapping) and account_id in {str(item.get("account_id")), str(item.get("destination_account_id"))}
+                    ],
+                }
+            return result
         if name == "fiscal_get_cash_flow_outlook":
             return await self.adapter.get_cash_flow_outlook(values["window_days"])
         if name == "fiscal_create_cash_flow_item":
@@ -193,19 +205,22 @@ class FiscalMCPService:
             return await self.adapter.submit_reimbursement(values["claim_id"], values["expected_version"])
         if name == "fiscal_record_reimbursement_receipt":
             draft = {key: value for key, value in values.items() if key not in {"claim_id", "idempotency_key"}}
-            preview = await self.adapter.preview_reimbursement_receipt(values["claim_id"], draft)
-            return await self.adapter.create_reimbursement_receipt(
-                values["claim_id"],
-                {**draft, "preview_token": preview["preview_token"]},
-                backend_idempotency_uuid(name, values["idempotency_key"]),
+            key = backend_idempotency_uuid(name, values["idempotency_key"])
+
+            async def commit_receipt(token: str) -> dict[str, Any]:
+                return await self.adapter.create_reimbursement_receipt(values["claim_id"], {**draft, "preview_token": token}, key)
+
+            return await self._preview_then_commit(
+                lambda: self.adapter.preview_reimbursement_receipt(values["claim_id"], draft), commit_receipt
             )
         if name == "fiscal_cancel_reimbursement_outstanding":
-            preview = await self.adapter.preview_reimbursement_cancel(values["claim_id"], values["expected_version"])
-            return await self.adapter.cancel_reimbursement_outstanding(
-                values["claim_id"],
-                values["expected_version"],
-                str(preview["preview_token"]),
-                backend_idempotency_uuid(name, values["idempotency_key"]),
+            key = backend_idempotency_uuid(name, values["idempotency_key"])
+
+            async def commit_cancel(token: str) -> dict[str, Any]:
+                return await self.adapter.cancel_reimbursement_outstanding(values["claim_id"], values["expected_version"], token, key)
+
+            return await self._preview_then_commit(
+                lambda: self.adapter.preview_reimbursement_cancel(values["claim_id"], values["expected_version"]), commit_cancel
             )
         if name == "fiscal_create_account":
             account = await self.adapter.create_account(values)
@@ -241,6 +256,30 @@ class FiscalMCPService:
             return await self.adapter.export_report(values["period_kind"], values["period"], values["format"])
         raise FiscalMCPError("unknown_tool", f"Unknown Fiscal MCP tool {name!r}.")
 
+
+    @staticmethod
+    async def _preview_then_commit(
+        preview: Callable[[], Awaitable[dict[str, Any]]],
+        commit: Callable[[str], Awaitable[dict[str, Any]]],
+    ) -> dict[str, Any]:
+        """Run the backend preview/commit pair so an identical retry is safe.
+
+        After a first attempt committed, its preview is stale (409). The backend
+        replays a commit by Idempotency-Key and payload regardless of the
+        single-use preview token, so a commit with a throwaway token returns the
+        original result; without a prior commit it fails harmlessly and the
+        original preview error is reported.
+        """
+        try:
+            previewed = await preview()
+        except FiscalMCPError as error:
+            if not backend_outcome_known(error):
+                raise
+            try:
+                return await commit(str(uuid.uuid4()))
+            except FiscalMCPError:
+                raise error from None
+        return await commit(str(previewed["preview_token"]))
 
     async def _create_reimbursement(self, values: Mapping[str, Any]) -> dict[str, Any]:
         """Create the claim and, unless asked for a draft, submit it so it enters planned cash flow.

@@ -190,6 +190,7 @@ class MCPHTTPTests(unittest.IsolatedAsyncioTestCase):
         status, _, body = await request(app, "POST", "/auth/challenges", {"kind": "write_window", "intent": "提交本周账单"}, authorization=f"Session {session_token}")
         self.assertEqual(status, 201)
         window = json.loads(body)
+        app.server.sessions._last_totp_counter = None  # stand-in for waiting for the next 30-second code
         await request(app, "POST", f"/auth/challenges/{window['challenge_id']}/approve", {"totp": current_totp()})
         _, _, body = await request(app, "GET", f"/auth/challenges/{window['challenge_id']}", extra_headers={"X-Fiscal-Poll-Token": window["poll_token"]})
         self.assertIn("write_window_expires_at", json.loads(body))

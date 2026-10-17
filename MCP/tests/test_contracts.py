@@ -260,9 +260,10 @@ class SessionCommitTests(unittest.TestCase):
         return self.call("fiscal_validate_import_batch", {"batch_id": batch["batch_id"], "expected_version": 1})
 
     def open_window(self) -> None:
-        from datetime import datetime, timezone
+        from datetime import datetime, timedelta, timezone
 
-        now = datetime.now(timezone.utc)
+        # The session was approved with the current code; a code is accepted once.
+        now = datetime.now(timezone.utc) + timedelta(seconds=30)
         challenge, _ = self.sessions.create_challenge(kind="write_window", session_token=self.session, now=now)
         self.sessions.approve(challenge.challenge_id, self.totp(self.SECRET, now), now=now)
 
@@ -325,10 +326,15 @@ class SessionCommitTests(unittest.TestCase):
         self.assertEqual(settled["status"], "settled")
         self.assertEqual(self.call("fiscal_settle_cash_flow_item", settle), settled)
         self.assertEqual(len(self.adapter.ledger_items), 1)
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_confirm_cash_flow_item", {"item_id": rent["id"], "expected_version": 1, "scope": "this_and_future"})
+        self.assertEqual(caught.exception.code, "invalid_params")
         cancelled = self.call("fiscal_cancel_cash_flow_item", {"item_id": rent["id"], "expected_version": 1})
         self.assertEqual(cancelled["items"][0]["status"], "cancelled")
         self.assertEqual(self.call("fiscal_list_cash_flow_items", {})["items"], [])
         self.assertEqual(len(self.call("fiscal_list_cash_flow_items", {"month": "2026-10"})["items"]), 2)
+        self.assertEqual(self.call("fiscal_list_cash_flow_items", {"month": "2026-10", "account_id": "other-account"})["items"], [])
+        self.assertEqual(len(self.call("fiscal_list_cash_flow_items", {"month": "2026-10", "account_id": "debit-1"})["items"]), 2)
         self.assertIn("known_future_events", self.call("fiscal_get_cash_flow_outlook", {}))
         for tool, bad in (
             ("fiscal_create_cash_flow_item", {**plan, "planned_amount_minor": "15000.00"}),
@@ -362,14 +368,22 @@ class SessionCommitTests(unittest.TestCase):
         self.assertEqual(draft["status"], "draft")
         self.assertEqual(self.call("fiscal_submit_reimbursement", {"claim_id": draft["id"], "expected_version": 1})["status"], "pending")
         receipt = {"claim_id": claim["id"], "expected_claim_version": claim["version"], "amount_minor": 150_000, "received_at": "2026-10-30T15:00:00+08:00", "destination_account_id": "debit-1", "title": "公司报销到账", "idempotency_key": "receipt-shanghai-01"}
-        self.call("fiscal_record_reimbursement_receipt", receipt)
+        recorded = self.call("fiscal_record_reimbursement_receipt", receipt)
+        # Response lost: an identical retry returns the original receipt instead of
+        # failing on the now-stale preview or recording the money twice.
+        self.assertEqual(self.call("fiscal_record_reimbursement_receipt", receipt)["id"], recorded["id"])
         partial = self.call("fiscal_list_reimbursements", {"status": "partial_received"})["items"]
         self.assertEqual([(item["id"], item["outstanding_minor"]) for item in partial], [(claim["id"], 50_000)])
         with self.assertRaises(FiscalMCPError) as caught:
             self.call("fiscal_record_reimbursement_receipt", {**receipt, "expected_claim_version": partial[0]["version"], "amount_minor": 60_000, "idempotency_key": "receipt-too-much"})
         self.assertEqual(caught.exception.code, "reimbursement_receipt_exceeds_outstanding")
-        cancelled = self.call("fiscal_cancel_reimbursement_outstanding", {"claim_id": claim["id"], "expected_version": partial[0]["version"], "idempotency_key": "cancel-shanghai-01"})
+        cancel = {"claim_id": claim["id"], "expected_version": partial[0]["version"], "idempotency_key": "cancel-shanghai-01"}
+        cancelled = self.call("fiscal_cancel_reimbursement_outstanding", cancel)
         self.assertEqual((cancelled["status"], cancelled["outstanding_minor"]), ("partially_received_cancelled", 0))
+        self.assertEqual(self.call("fiscal_cancel_reimbursement_outstanding", cancel)["version"], cancelled["version"])
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_cancel_reimbursement_outstanding", {**cancel, "idempotency_key": "cancel-other-key"})
+        self.assertEqual(caught.exception.code, "resource_version_conflict")
         for bad in (
             {**trip, "expenses": []},
             {**trip, "expenses": [{"transaction_id": "tx", "amount_minor": "12.00"}]},

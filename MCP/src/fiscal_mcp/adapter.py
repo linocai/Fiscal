@@ -111,6 +111,13 @@ def backend_idempotency_uuid(tool: str, key: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"fiscal-mcp:{tool}:{key}"))
 
 
+def backend_outcome_known(error: FiscalMCPError) -> bool:
+    """True when the backend answered with a definite 4xx rejection."""
+
+    status = (error.details or {}).get("http_status")
+    return isinstance(status, int) and 400 <= status < 500
+
+
 def _backend_error(status_code: int, body: Any) -> BackendAdapterError:
     """Translate a backend error envelope into a public MCP error.
 
@@ -625,6 +632,8 @@ class MockFiscalBackendAdapter:
         if idempotency_key in self._cash_flow_idempotency:
             return copy.deepcopy(self._cash_flow_idempotency[idempotency_key])
         kind, previewed_claim, _ = self._previews.pop(str(payload["preview_token"]), (None, None, None))
+        if kind is None:
+            raise FiscalMCPError("reimbursement_preview_not_found", "The preview token is invalid", {"http_status": 422})
         if kind != "receipt" or previewed_claim != claim_id:
             raise FiscalMCPError("preview_token_invalid", "Preview is missing or stale.", {"http_status": 409})
         claim = self._claim(claim_id, int(payload["expected_claim_version"]))
@@ -644,12 +653,15 @@ class MockFiscalBackendAdapter:
     async def cancel_reimbursement_outstanding(
         self, claim_id: str, expected_version: int, preview_token: str, idempotency_key: str
     ) -> dict[str, Any]:
+        if idempotency_key in self._cash_flow_idempotency:
+            return copy.deepcopy(self._cash_flow_idempotency[idempotency_key])
         kind, previewed_claim, _ = self._previews.pop(preview_token, (None, None, None))
         if kind != "cancel" or previewed_claim != claim_id:
             raise FiscalMCPError("preview_token_invalid", "Preview is missing or stale.", {"http_status": 409})
         claim = self._claim(claim_id, expected_version)
         claim.update(cancelled_at="2026-10-16T00:00:00+00:00", version=claim["version"] + 1)
         self._claim_status(claim)
+        self._cash_flow_idempotency[idempotency_key] = copy.deepcopy(claim)
         return copy.deepcopy(claim)
 
     async def cancel_cash_flow_item(self, item_id: str, expected_version: int, scope: str) -> dict[str, Any]:

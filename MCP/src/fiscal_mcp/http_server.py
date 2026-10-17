@@ -228,9 +228,13 @@ class MCPHTTPApplication:
                 payload = await self._read_json(receive, request_headers.get("content-length"))
                 scheme, token = self._authorization(request_headers.get("authorization"))
                 kind = payload.get("kind", "session")
+                if not isinstance(kind, str):
+                    raise FiscalMCPError("invalid_challenge", "Challenge kind must be session or write_window.")
                 requested_scopes = payload.get("scopes")
                 if requested_scopes is not None and not isinstance(requested_scopes, list):
                     raise FiscalMCPError("invalid_challenge", "scopes must be an array.")
+                forwarded = request_headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+                source = forwarded or str((scope.get("client") or ("unknown", 0))[0])
                 if kind in WRITE_WINDOW_KINDS:
                     if scheme != "session" or token is None:
                         raise FiscalMCPError("session_required", "A live Session credential is required to open a write window.")
@@ -242,6 +246,7 @@ class MCPHTTPApplication:
                     label=str(payload.get("client_label", "agent")),
                     intent=str(payload.get("intent", "")),
                     session_token=token if scheme == "session" else None,
+                    source=source,
                 )
                 await self._respond(
                     send,
@@ -314,6 +319,8 @@ class MCPHTTPApplication:
             return 401
         if error.code in {"auth_rate_limited", "too_many_pending"}:
             return 429
+        if error.code == "totp_reused":
+            return 409
         if error.code == "totp_unconfigured":
             return 503
         return 400

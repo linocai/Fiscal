@@ -32,6 +32,7 @@
       <li>Agent 用 <code>Authorization: Session &lt;session_token&gt;</code> 调用 MCP（<code>initialize</code>、<code>tools/list</code>、<code>tools/call</code> 都校验）。Session 失效或未知时任何 <code>/mcp</code> 请求都返回 HTTP 401、<code>error.code</code> 为 <code>session_expired</code>，可用 <code>ping</code> 低成本探测。会话空闲 2 小时失效，最长 8 小时。</li>
       <li>读取、分析和暂存账单可以直接完成。要提交到账本时，Agent 用当前 Session 创建 <code>write_window</code> 申请，用户在同一批准页再批准一次；之后 <strong>30 分钟</strong>内该 Session 的所有提交都不再需要批准。</li>
     </ol>
+    <p class="note">每个验证码只能批准一次；用户连续批准两条申请时，需要等下一个验证码（约 30 秒）。同一来源最多同时挂 2 条会话申请，同一 Session 只保留最新一条写入窗口申请。</p>
     <p class="note">网关重启或发布后，所有 Session 与写入窗口都会失效（返回 <code>session_expired</code>）；重新创建申请即可。批准页同时最多显示 5 条待批准申请。</p>
   </div>
   <div class="card">
@@ -98,7 +99,7 @@ Content-Type: application/json
       <li><code>fiscal_list_accounts</code> / <code>fiscal_list_categories</code>：账户（含固定账期信用账户的未结清账期）与分类。</li>
       <li><code>fiscal_create_account</code> / <code>fiscal_create_category</code>：新建钱包/账户（<code>cash</code> 现金与微信/支付宝余额、<code>debit</code> 储蓄卡、<code>credit</code> 信用账户，期初余额为整数分）与收支分类（可带 <code>aliases</code>、<code>examples</code> 帮助归类）。与提交一样需要已开启写入窗口；有期初欠款的信用账户须给 <code>opening_balance_as_of_date</code> 与 <code>opening_due_date</code>。</li>
       <li><code>fiscal_search_ledger</code>：分页搜索已入账交易。</li>
-      <li>报销：<code>fiscal_list_reimbursable_expenses</code> 找到可报销的已入账消费（<code>available_minor</code> 为还能报的金额）→ <code>fiscal_create_reimbursement</code> 把一笔或多笔消费挂到同一个报销方（每笔可只报一部分），默认立即提交，待回款自动出现在待入账；钱回来后用 <code>fiscal_record_reimbursement_receipt</code> 记回款（可分多次，写入实际金额、时间与到账账户）；确定收不回来用 <code>fiscal_cancel_reimbursement_outstanding</code>。<code>fiscal_list_reimbursements</code> 查看状态与未回款金额；草稿用 <code>fiscal_submit_reimbursement</code> 提交。写操作需要写入窗口；若网络中断结果不明，先用列表核对再决定是否重试。</li>
+      <li>报销：<code>fiscal_list_reimbursable_expenses</code> 找到可报销的已入账消费（<code>available_minor</code> 为还能报的金额）→ <code>fiscal_create_reimbursement</code> 把一笔或多笔消费挂到同一个报销方（每笔可只报一部分），默认立即提交，待回款自动出现在待入账；钱回来后用 <code>fiscal_record_reimbursement_receipt</code> 记回款（可分多次，写入实际金额、时间与到账账户）；确定收不回来用 <code>fiscal_cancel_reimbursement_outstanding</code>。<code>fiscal_list_reimbursements</code> 查看状态与未回款金额；草稿用 <code>fiscal_submit_reimbursement</code> 提交。写操作需要写入窗口；若网络中断结果不明，用<strong>完全相同的参数和 <code>idempotency_key</code></strong> 重试，网关会返回原结果、不会重复入账；不要换新 key 重试，除非先用 <code>fiscal_list_reimbursements</code> 确认上次确实没有记上。</li>
       <li><code>fiscal_list_cash_flow_items</code> / <code>fiscal_get_cash_flow_outlook</code>：未来待入账计划（含信用卡账期与报销回款；传 <code>month</code> 看已入账/已取消历史）与未来 30 天现金流汇总。</li>
       <li><code>fiscal_create_cash_flow_item</code> → <code>fiscal_confirm_cash_flow_item</code> → <code>fiscal_settle_cash_flow_item</code>；不会发生的用 <code>fiscal_cancel_cash_flow_item</code>。新建的计划状态为“预计”，必须先确认才能入账；入账写入实际金额（整数分）、实际时间（带时区）和账户，生成正式账目。这四个写操作都需要写入窗口，并带 <code>idempotency_key</code>（新建与入账）以便安全重试。</li>
       <li><code>fiscal_create_import_batch</code> → <code>fiscal_validate_import_batch</code> → <code>fiscal_commit_import_batch</code>；不要的批次用 <code>fiscal_ignore_import_batch</code>；<code>fiscal_get_import_batch</code> 查看状态与校验错误。</li>
@@ -108,7 +109,7 @@ Content-Type: application/json
   <div class="card">
     <h2>Agent 应遵守的边界</h2>
     <ul>
-      <li>只向用户索取 Google Authenticator 当前验证码，不索取或记录个人 Fiscal API key。</li>
+      <li><strong>不得向用户索取验证码</strong>：只告诉用户配对码，验证码由用户本人在批准页输入。也不索取或记录个人 Fiscal API key。</li>
       <li>验证码、Session token 和 poll token 都不得写入日志、账单备注或公开回答。</li>
       <li>先导入、校验、展示摘要并得到用户确认，再申请写入窗口；窗口内也只提交用户已确认的批次。</li>
       <li>个人 Fiscal API key 是人工使用的 break-glass 兜底钥匙，不属于 Agent 自动流程。</li>

@@ -63,7 +63,12 @@
       ],
       "requires_session_scope": "stage:imports"
     },
-    "max_pending_challenges": 5
+    "pending_limits": {
+      "session_per_source": 2,
+      "session_total": 20,
+      "write_window_per_session": 1
+    },
+    "never_ask_user_for_codes": true
   },
   "session_scopes": [
     "read:reports",
@@ -75,7 +80,7 @@
   "write_requires_fresh_totp": "once per 30-minute write window",
   "personal_break_glass_key": "manual_only",
   "security": {
-    "totp": "Google Authenticator compatible 6-digit TOTP",
+    "totp": "Google Authenticator compatible 6-digit TOTP; each code is accepted once",
     "secrets_in_document": false,
     "agent_keys": "not_used"
   },

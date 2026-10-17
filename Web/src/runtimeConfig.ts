@@ -41,6 +41,10 @@ function config(): FiscalRuntimeConfig | undefined {
   return value;
 }
 
+export function hasLiveRuntimeConfig(): boolean {
+  return config() !== undefined;
+}
+
 function ephemeralKey(runtime: FiscalRuntimeConfig): string {
   const injected = runtime.apiKey?.trim();
   if (injected) {

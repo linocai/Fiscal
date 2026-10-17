@@ -52,6 +52,8 @@ export interface CategoryBreakdown {
 
 export interface MonthlyReport {
   month: string;
+  /** Days of the month counted for the daily average (elapsed days for the current month). */
+  averageDays?: number;
   totalSpendCents: number;
   transactionCount: number;
   averageDailyCents: number;
@@ -68,6 +70,8 @@ export interface LedgerEntry {
   category: string;
   account: string;
   amountCents: number;
+  /** +1 money in, -1 money out, 0 internal move (transfer/repayment). */
+  sign?: 1 | -1 | 0;
   status: "已入账" | "待确认" | "已撤销";
   source: "Agent 批次" | "手工录入" | "计划兑现";
 }
@@ -152,7 +156,8 @@ export interface FiscalApiAdapter {
   commitBatch(batchId: string, input: BatchCommitInput): Promise<BatchActionResult>;
   ignoreBatch(batchId: string, expectedVersion: number, reason?: string): Promise<PendingBatch>;
   getMonthlyReport(month: string): Promise<MonthlyReport>;
-  searchLedger(query: LedgerSearchQuery): Promise<LedgerEntry[]>;
+  /** Results are capped at 100; `truncated` marks that more matched. */
+  searchLedger(query: LedgerSearchQuery): Promise<LedgerEntry[] & { truncated?: boolean }>;
   listAccessScopes(): Promise<AccessScope[]>;
   requestExport(request: ExportRequest): Promise<ExportResult>;
   /** Active plans, or settled/cancelled history for one YYYY-MM month. */

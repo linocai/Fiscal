@@ -63,8 +63,8 @@ CATEGORY_PROPERTIES: dict[str, Any] = {
     "parent_id": {"type": ["string", "null"]},
     "icon": {"type": "string", "maxLength": 80, "default": "tag"},
     "color_hex": {"type": "string", "pattern": r"^#[0-9A-Fa-f]{6}$", "default": "#6B7280"},
-    "aliases": {"type": "array", "items": {"type": "string", "maxLength": 80}, "maxItems": 20},
-    "examples": {"type": "array", "items": {"type": "string", "maxLength": 80}, "maxItems": 20},
+    "aliases": {"type": "array", "items": {"type": "string", "maxLength": 40}, "maxItems": 20},
+    "examples": {"type": "array", "items": {"type": "string", "maxLength": 40}, "maxItems": 20},
 }
 
 
@@ -93,6 +93,10 @@ CASH_FLOW_SETTLE_PROPERTIES: dict[str, Any] = {
     "note": {"type": ["string", "null"], "maxLength": 500},
     "complete_remaining": {"type": "boolean", "default": True, "description": "False keeps the rest of a partially settled plan open."},
     "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
+}
+CASH_FLOW_CONFIRM_PROPERTIES: dict[str, Any] = {
+    "item_id": {"type": "string", "minLength": 1},
+    "expected_version": {"type": "integer", "minimum": 1},
 }
 CASH_FLOW_CANCEL_PROPERTIES: dict[str, Any] = {
     "item_id": {"type": "string", "minLength": 1},
@@ -265,9 +269,9 @@ def tool_definitions() -> tuple[ToolDefinition, ...]:
         ),
         ToolDefinition(
             "fiscal_confirm_cash_flow_item",
-            "Mark an expected plan as confirmed (it will happen); a plan must be confirmed before it can be settled. Requires an open write window.",
+            "Mark one expected plan occurrence as confirmed (it will happen); a plan must be confirmed before it can be settled. Requires an open write window.",
             Scope.COMMIT_IMPORTS,
-            _object_schema(CASH_FLOW_CANCEL_PROPERTIES, ["item_id", "expected_version"]),
+            _object_schema(CASH_FLOW_CONFIRM_PROPERTIES, ["item_id", "expected_version"]),
         ),
         ToolDefinition(
             "fiscal_settle_cash_flow_item",
@@ -324,7 +328,7 @@ def tool_definitions() -> tuple[ToolDefinition, ...]:
         ),
         ToolDefinition(
             "fiscal_record_reimbursement_receipt",
-            "Record money actually paid back for a claim (partial receipts allowed); posts an inflow to the destination account. Requires an open write window.",
+            "Record money actually paid back for a claim (partial receipts allowed); posts an inflow to the destination account. If the outcome is unknown, retry with exactly the same arguments and idempotency_key; never retry with a new key before checking fiscal_list_reimbursements. Requires an open write window.",
             Scope.COMMIT_IMPORTS,
             _object_schema(REIMBURSEMENT_RECEIPT_PROPERTIES, ["claim_id", "expected_claim_version", "amount_minor", "received_at", "destination_account_id", "title", "idempotency_key"]),
         ),
@@ -571,8 +575,8 @@ def _validate_category(values: Mapping[str, Any]) -> dict[str, Any]:
         raise invalid_params("color_hex must look like #RRGGBB", field="color_hex")
     for key in ("aliases", "examples"):
         items = result[key]
-        if not isinstance(items, list) or len(items) > 20 or not all(isinstance(item, str) and 0 < len(item.strip()) <= 80 for item in items):
-            raise invalid_params(f"{key} must be up to 20 non-empty strings", field=key)
+        if not isinstance(items, list) or len(items) > 20 or not all(isinstance(item, str) and 0 < len(item.strip()) <= 40 for item in items):
+            raise invalid_params(f"{key} must be up to 20 non-empty strings of at most 40 characters", field=key)
     return result
 
 
@@ -737,7 +741,12 @@ def validate_tool_arguments(name: str, arguments: Any) -> dict[str, Any]:
         return _validate_cash_flow_create(values)
     if name == "fiscal_settle_cash_flow_item":
         return _validate_cash_flow_settle(values)
-    if name in {"fiscal_confirm_cash_flow_item", "fiscal_cancel_cash_flow_item"}:
+    if name == "fiscal_confirm_cash_flow_item":
+        # The backend confirms one occurrence only; there is no series scope.
+        _reject_unknown(values, CASH_FLOW_CONFIRM_PROPERTIES)
+        expected = _positive_int(values, "expected_version", required=True)
+        return {"item_id": _required_str(values, "item_id", max_length=120), "expected_version": expected, "scope": "occurrence"}
+    if name == "fiscal_cancel_cash_flow_item":
         _reject_unknown(values, CASH_FLOW_CANCEL_PROPERTIES)
         scope = values.get("scope", "occurrence")
         if scope not in {"occurrence", "this_and_future"}:

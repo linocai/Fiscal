@@ -299,11 +299,10 @@ class ReimbursementService:
         idempotency_key: UUID | None = None,
     ) -> ReimbursementClaimResponse:
         await acquire_mutation_lock(self.session)
-        request = {
-            "expected_version": expected,
-            "preview_token": str(preview_token) if preview_token else None,
-        }
-        request_hash = self._hash_payload(request)
+        # The preview token is single-use and changes on every preview, so it is
+        # not part of the replay identity: an identical retry with the same
+        # Idempotency-Key must return the original result.
+        request_hash = self._hash_payload({"expected_version": expected, "action": action})
         replay = await self._operation_replay(
             idempotency_key,
             "claim_cancel",
@@ -506,7 +505,8 @@ class ReimbursementService:
         commit: bool = True,
     ) -> ReimbursementReceiptResponse:
         await acquire_mutation_lock(self.session)
-        request_hash = self._commit_hash(draft, preview_token)
+        # Replay identity excludes the single-use preview token (see lifecycle()).
+        request_hash = self._hash_payload(self._request_payload(draft))
         replay = await self._operation_replay(
             key, "receipt_create", claim_id, None, request_hash, ReimbursementReceiptResponse
         )

@@ -211,6 +211,15 @@ const normalizeBatchCollection = (value: unknown): PendingBatch[] => {
     .map(normalizeBatch);
 };
 
+/** Days counted for a month's daily average: all days for past months, days so far for the current one. */
+const elapsedDays = (month: string, daysInMonth: number): number => {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const today = parts.slice(0, 7);
+  if (month < today) return daysInMonth;
+  if (month > today) return 0;
+  return Math.min(daysInMonth, Number(parts.slice(8, 10)));
+};
+
 const normalizeMonthlyReport = (value: unknown, requestedMonth: string): MonthlyReport => {
   if (!isObject(value)) throw contractError("Fiscal monthly report is not an object.");
   const summary = isObject(value.summary) ? value.summary : value;
@@ -259,7 +268,8 @@ const normalizeMonthlyReport = (value: unknown, requestedMonth: string): Monthly
     month: stringValue(value.month) ?? stringValue(value.period) ?? stringValue(meta?.period) ?? requestedMonth,
     totalSpendCents: total,
     transactionCount: count,
-    averageDailyCents: numberValue(value.averageDailyCents) ?? numberValue(summary.average_daily_minor) ?? (points.length ? Math.round(total / points.length) : 0),
+    averageDailyCents: numberValue(value.averageDailyCents) ?? numberValue(summary.average_daily_minor) ?? (elapsedDays(requestedMonth, points.length) ? Math.round(total / elapsedDays(requestedMonth, points.length)) : 0),
+    averageDays: elapsedDays(requestedMonth, points.length),
     categoryBreakdown,
     trend,
     highlights,
@@ -274,13 +284,19 @@ const transactionSourceLabel: Record<string, LedgerEntry["source"]> = {
   cash_flow: "计划兑现",
 };
 
-const normalizeLedger = (value: unknown, names: NameMaps = emptyNames): LedgerEntry[] => {
+const inflowKinds = new Set(["income", "reimbursement_receipt", "borrowing", "credit_fee_refund", "installment_refund"]);
+const internalKinds = new Set(["transfer", "repayment", "credit_principal_waiver"]);
+
+const ledgerSign = (kind?: string): 1 | -1 | 0 => (kind && inflowKinds.has(kind) ? 1 : kind && internalKinds.has(kind) ? 0 : -1);
+
+const normalizeLedger = (value: unknown, names: NameMaps = emptyNames): LedgerEntry[] & { truncated?: boolean } => {
   const rows = Array.isArray(value) ? value : isObject(value) ? asArray(value.items) ?? asArray(value.transactions) : undefined;
   if (!rows) throw contractError("Fiscal ledger response returned no items collection.");
   return rows.flatMap((item, index) => {
     if (!isObject(item)) return [];
     const id = stringValue(item.id) ?? stringValue(item.transaction_id) ?? `transaction-${index + 1}`;
-    const date = stringValue(item.date) ?? stringValue(item.occurred_at) ?? "";
+    // business_date is the Asia/Shanghai date; occurred_at is a UTC instant.
+    const date = stringValue(item.business_date) ?? stringValue(item.date) ?? stringValue(item.occurred_at) ?? "";
     const amount = numberValue(item.amountCents) ?? numberValue(item.amount_minor) ?? 0;
     return [{
       id,
@@ -289,6 +305,7 @@ const normalizeLedger = (value: unknown, names: NameMaps = emptyNames): LedgerEn
       category: stringValue(item.category) ?? names.category(stringValue(item.category_id)) ?? "未分类",
       account: stringValue(item.account) ?? names.account(stringValue(item.account_id)) ?? "未指定账户",
       amountCents: amount,
+      sign: ledgerSign(stringValue(item.kind)),
       status: item.voided_at ? "已撤销" : (stringValue(item.status) as LedgerEntry["status"]) ?? "已入账",
       source: transactionSourceLabel[stringValue(item.source) ?? ""] ?? (stringValue(item.source) as LedgerEntry["source"]) ?? "手工录入",
     }];
@@ -663,7 +680,9 @@ abstract class McpReadAdapter {
       this.client.call("fiscal_search_ledger", { query: query.text.trim() || undefined, category_id: query.category || undefined, ...range, limit: 100 }),
       this.names(),
     ]);
-    return normalizeLedger(result, names);
+    const entries = normalizeLedger(result, names);
+    entries.truncated = isObject(result) && Boolean(stringValue(result.next_cursor));
+    return entries;
   }
   async listCashFlow(month?: string): Promise<CashFlowItem[]> {
     const [result, names] = await Promise.all([this.client.call("fiscal_list_cash_flow_items", { month }), this.names()]);
