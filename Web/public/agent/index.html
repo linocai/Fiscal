@@ -33,7 +33,7 @@
       <li>读取、分析和暂存账单可以直接完成。要提交到账本时，Agent 用当前 Session 创建 <code>write_window</code> 申请，用户在同一批准页再批准一次；之后 <strong>30 分钟</strong>内该 Session 的所有提交都不再需要批准。</li>
     </ol>
     <p class="note">每个验证码只能批准一次；用户连续批准两条申请时，需要等下一个验证码（约 30 秒）。同一来源最多同时挂 2 条会话申请，同一 Session 只保留最新一条写入窗口申请。</p>
-    <p class="note">网关重启或发布后，所有 Session 与写入窗口都会失效（返回 <code>session_expired</code>）；重新创建申请即可。同一来源最多同时挂 2 条会话申请；单条申请输错 5 次验证码会被撤销。</p>
+    <p class="note">网关重启或发布后，所有 Session 与写入窗口都会失效（返回 <code>session_expired</code>）；重新创建申请即可。同一来源最多同时挂 2 条会话申请；输错验证码只会触发限流，不会撤销申请。</p>
   </div>
   <div class="card">
     <h2>1. 创建 session challenge</h2>

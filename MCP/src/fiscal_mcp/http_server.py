@@ -215,6 +215,8 @@ class MCPHTTPApplication:
             address = ipaddress.ip_address(raw)
         except ValueError:
             return raw
+        if address.version == 6 and address.ipv4_mapped is not None:
+            return str(address.ipv4_mapped)
         if address.version == 6:
             return str(ipaddress.ip_network(f"{address}/64", strict=False))
         return str(address)

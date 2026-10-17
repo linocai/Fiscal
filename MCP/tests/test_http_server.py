@@ -85,6 +85,7 @@ class MCPHTTPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(source({"x-forwarded-for": "2001:db8:1:2::abcd"}, {}), "2001:db8:1:2::/64")
         self.assertEqual(source({"x-forwarded-for": "2001:db8:1:2:ffff::1"}, {}), "2001:db8:1:2::/64")
         self.assertEqual(source({}, {"client": ("203.0.113.9", 443)}), "203.0.113.9")
+        self.assertEqual(source({"x-forwarded-for": "::ffff:203.0.113.9"}, {}), "203.0.113.9")
 
     async def test_health_is_public_and_mcp_requires_bearer(self) -> None:
         app = build_app()
