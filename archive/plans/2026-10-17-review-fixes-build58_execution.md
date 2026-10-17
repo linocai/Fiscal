@@ -31,3 +31,14 @@
 
 - 回退：NB `current` 指回 `releases/2a0c8d92aaa9`；HZ 指回 `20261016-build57-321be76` / `20261016-web-build57-321be76` 并重启 `fiscal-mcp`；Nginx 用上述 .bak 恢复后 reload。
 - 资源：删除 NB 部署源与 release `6876d204738b`、HZ Build56 release、上传包；本地一次性库、构建包已删；数据库备份按规则保留。
+
+## Build59：账目报销关联、编辑工具与面板账户页（同日）
+
+- 来源：记账 Agent 报告“豆豆”交易的账目查询 `reimbursement_relations` 为空但作废被 `reimbursement_claim_in_use` 拦截；缺少改交易标题与改报销方的工具。用户另要求面板恢复各账户余额与信用欠款。
+- 根因与修复（tag `v2.4.0-build59` → `5287051`）：
+  - 后端 `TransactionService.responses_with_capabilities`（列表/总览）只算关联标记不填明细；现对有报销或分期关联的行调用 `response_with_relation`，与单笔响应一致。报销单更新的判重哈希同样去掉一次性 preview_token。
+  - MCP 新增 `fiscal_update_transaction`（只改标题/备注/分类，其余字段从当前版本原样回传）与 `fiscal_update_reimbursement`（改标题/报销方/预计日期/备注或整组消费，保留分配 id，网关内 preview→commit），共 27 工具。
+  - 面板新增“账户”首页：资金合计、信用欠款合计（含逾期）、净资产；资金账户余额；信用账户欠款/额度/可用额度、逾期金额与下一期应还。说明页补账户字段规则（后端对此只返回笼统的 `invalid_account_configuration`）。
+- 验证：新增 `Backend/tests/test_build59_ledger_relations_postgres.py`（撤修复即失败）；Backend 全量 450/450、ruff、pyright 0；MCP 47/47；Web tsc+build。真实 Backend + MCP 复现报告场景：账目关联可见；改标题后金额/账户/分类/关联不变；报销方改“公司”后仍 pending、待回款 140000，原样重试不重复；仅 1 张报销单、余额与待入账正确。面板账户页本地全链路核对（资金 21,051.00、欠款 3,156.50、净资产 17,894.50、逾期 450 与下一期 10/23 分开显示），手机宽度无溢出。
+- 上线：用户授权“一起直接上线”，未做复查（已建议）。NB release `/opt/fiscal/releases/5dca7810c3b1`，无迁移，前后备份 `fiscal-20261017T03121{5,6}Z.dump` 已验证；HZ MCP `releases/20261017-build59-5287051`（`0.1.0+build59`），Web `releases/20261017-web-build59-5287051`，Nginx 未变。公网：页面/discovery 200、27 工具、写入窗口覆盖 13、防嵌入头仍在、过期 Session 401、面板登录页无控制台错误。
+- 回退：NB 指回 `releases/99cc25da7ee7`；HZ 指回 Build58 两个 release 并重启 `fiscal-mcp`。资源：删除 NB `2a0c8d92aaa9`、HZ Build57 release 与上传包，本地临时库与构建包已删。
