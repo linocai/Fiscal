@@ -192,6 +192,7 @@ class AuthChallenge:
     expires_at: datetime
     result_token: str | None = None
     approved_at: datetime | None = None
+    failures: int = 0
 
 
 PAIRING_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -201,7 +202,11 @@ PAIRING_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 MAX_PENDING_SESSION_CHALLENGES = 20
 MAX_PENDING_PER_SOURCE = 2
 MAX_FAILED_PER_SOURCE = 5
+# Global budget guards anonymous session approvals only; a write window needs a
+# live session first, so its guesses are bounded per challenge instead and an
+# anonymous flood of wrong codes can never block it.
 MAX_FAILED_GLOBAL = 30
+MAX_FAILED_PER_CHALLENGE = 5
 WRITE_WINDOW_KINDS = {"write_window", "operation"}  # "operation" is the pre-Build54 name
 
 
@@ -245,17 +250,18 @@ class TotpSessionRegistry:
     def _challenge_token() -> str:
         return f"fiscal_challenge_v1_{secrets.token_urlsafe(24)}"
 
-    def _check_rate(self, source: str, now: datetime) -> None:
+    def _check_rate(self, source: str, now: datetime, *, anonymous: bool) -> None:
         cutoff = now - timedelta(minutes=5)
         attempts = [value for value in self._failed_attempts.get(source, []) if value > cutoff]
         self._failed_attempts[source] = attempts
         self._failed_global = [value for value in self._failed_global if value > cutoff]
-        if len(attempts) >= MAX_FAILED_PER_SOURCE or len(self._failed_global) >= MAX_FAILED_GLOBAL:
+        if len(attempts) >= MAX_FAILED_PER_SOURCE or (anonymous and len(self._failed_global) >= MAX_FAILED_GLOBAL):
             raise FiscalMCPError("auth_rate_limited", "Too many authentication attempts; try again later.")
 
-    def _failed(self, source: str, now: datetime) -> None:
+    def _failed(self, source: str, now: datetime, *, anonymous: bool) -> None:
         self._failed_attempts.setdefault(source, []).append(now)
-        self._failed_global.append(now)
+        if anonymous:
+            self._failed_global.append(now)
 
     def _scopes(self, requested: Iterable[Scope | str] | None) -> frozenset[Scope]:
         try:
@@ -357,10 +363,15 @@ class TotpSessionRegistry:
             raise FiscalMCPError("challenge_expired", "This approval challenge has expired.")
         if challenge.approved_at is not None:
             return challenge
-        self._check_rate(source, current)
+        anonymous = challenge.kind == "session"
+        self._check_rate(source, current, anonymous=anonymous)
         counter = totp_counter(self.secret, code, now=current)
         if counter is None:
-            self._failed(source, current)
+            self._failed(source, current, anonymous=anonymous)
+            challenge.failures += 1
+            if challenge.failures >= MAX_FAILED_PER_CHALLENGE:
+                del self._challenges[challenge.challenge_id]
+                raise FiscalMCPError("challenge_expired", "Too many wrong codes; this request was withdrawn. Ask the Agent to request again.")
             raise FiscalMCPError("invalid_totp", "The Authenticator code is invalid or expired.")
         if self._last_totp_counter is not None and counter <= self._last_totp_counter:
             raise FiscalMCPError("totp_reused", "This Authenticator code was already used; wait for the next code.")

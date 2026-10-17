@@ -156,11 +156,21 @@ class TotpSessionTests(unittest.TestCase):
 
     def test_global_failure_budget_limits_distributed_guessing(self) -> None:
         registry = self.make_registry()
-        challenge, _ = registry.create_challenge(kind="session", source="owner", now=NOW)
+        session_token = self.session(registry)
         wrong = "000000" if totp(SECRET, NOW) != "000000" else "111111"
-        for index in range(30):
-            self.assert_code("invalid_totp", lambda: registry.approve(challenge.challenge_id, wrong, source=f"ip-{index}", now=NOW))
-        self.assert_code("auth_rate_limited", lambda: registry.approve(challenge.challenge_id, totp(SECRET, NOW), source="ip-new", now=NOW))
+        for index in range(6):
+            challenge, _ = registry.create_challenge(kind="session", source=f"ip-{index}", now=NOW)
+            for attempt in range(5):
+                code = "challenge_expired" if attempt == 4 else "invalid_totp"
+                self.assert_code(code, lambda: registry.approve(challenge.challenge_id, wrong, source=f"ip-{index}", now=NOW))
+            self.assertNotIn(challenge.challenge_id, [item["challenge_id"] for item in registry.pending(now=NOW)])
+        fresh, _ = registry.create_challenge(kind="session", source="ip-new", now=NOW)
+        self.assert_code("auth_rate_limited", lambda: registry.approve(fresh.challenge_id, totp(SECRET, NOW), source="ip-new", now=NOW))
+        # The anonymous budget never blocks the owner's write-window approval.
+        later = self.next_code_time()
+        window, _ = registry.create_challenge(kind="write_window", session_token=session_token, now=later)
+        registry.approve(window.challenge_id, totp(SECRET, later), source="owner", now=later)
+        registry.require_write_window(session_token, now=later)
 
     def test_commit_scope_cannot_be_session_scope(self) -> None:
         registry = self.make_registry()

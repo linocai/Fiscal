@@ -13,7 +13,17 @@ const errorCode = (body: unknown): string | undefined => {
   return error && typeof error === "object" && typeof (error as Json).code === "string" ? ((error as Json).code as string) : undefined;
 };
 
+const friendly: Record<string, string> = {
+  invalid_totp: "验证码不正确或已过期，请输入当前的 6 位验证码。",
+  totp_reused: "这个验证码刚用过，请等下一个验证码（约 30 秒）。",
+  challenge_expired: "登录请求已过期，请重新输入当前验证码。",
+  auth_rate_limited: "尝试次数过多，请几分钟后再试。",
+  too_many_pending: "待批准的请求太多，请稍后再试。",
+};
+
 const errorMessage = (body: unknown, fallback: string): string => {
+  const code = errorCode(body);
+  if (code && friendly[code]) return friendly[code];
   const error = body && typeof body === "object" ? (body as Json).error : undefined;
   if (error && typeof error === "object" && typeof (error as Json).message === "string") return (error as Json).message as string;
   return fallback;

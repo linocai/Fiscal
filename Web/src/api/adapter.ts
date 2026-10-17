@@ -285,7 +285,8 @@ const transactionSourceLabel: Record<string, LedgerEntry["source"]> = {
 };
 
 const inflowKinds = new Set(["income", "reimbursement_receipt", "borrowing", "credit_fee_refund", "installment_refund"]);
-const internalKinds = new Set(["transfer", "repayment", "credit_principal_waiver"]);
+// Loan principal recognition moves debt, not spending or income (see backend loan_recovery).
+const internalKinds = new Set(["transfer", "repayment", "credit_principal_waiver", "loan_principal"]);
 
 const ledgerSign = (kind?: string): 1 | -1 | 0 => (kind && inflowKinds.has(kind) ? 1 : kind && internalKinds.has(kind) ? 0 : -1);
 

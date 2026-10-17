@@ -38,6 +38,13 @@
     write_window: ['开启写入窗口', '批准后 30 分钟内，该 Agent 可直接提交账本，无需再次批准。', 'write'],
   };
   let shown = null;
+  const messages = {
+    invalid_totp: '验证码不正确或已过期，请输入当前的 6 位验证码。',
+    totp_reused: '这个验证码刚用过，请等下一个验证码（约 30 秒）再批准。',
+    challenge_expired: '申请已过期或已撤销，请让 Agent 重新发起。',
+    auth_rate_limited: '尝试次数过多，请几分钟后再试。',
+    session_expired: '发起这个申请的会话已失效，请让 Agent 重新开始会话。',
+  };
   let busy = false;
 
   function el(tag, cls, text) {
@@ -83,7 +90,7 @@
             method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({totp: code}),
           });
           const data = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(data?.error?.message || '验证码无效或申请已过期。');
+          if (!response.ok) throw new Error(messages[data?.error?.code] || data?.error?.message || '验证码无效或申请已过期。');
           done.textContent = `已批准配对码 ${item.pairing_code}（${title}）。请回到 Agent。`;
           shown = null;
         } catch (error) {

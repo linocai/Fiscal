@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import importlib
+import ipaddress
 import os
 import secrets
 from collections.abc import Awaitable, Callable, Iterable
@@ -205,6 +206,19 @@ class MCPHTTPApplication:
             return "", None
         return normalized, token.strip()
 
+    @staticmethod
+    def _source(request_headers: dict[str, str], scope: dict[str, Any]) -> str:
+        """Client address for auth limits; IPv6 is grouped by /64 so one host cannot rotate addresses."""
+        forwarded = request_headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+        raw = forwarded or str((scope.get("client") or ("unknown", 0))[0])
+        try:
+            address = ipaddress.ip_address(raw)
+        except ValueError:
+            return raw
+        if address.version == 6:
+            return str(ipaddress.ip_network(f"{address}/64", strict=False))
+        return str(address)
+
     async def _handle_auth_route(
         self,
         scope: dict[str, Any],
@@ -233,8 +247,7 @@ class MCPHTTPApplication:
                 requested_scopes = payload.get("scopes")
                 if requested_scopes is not None and not isinstance(requested_scopes, list):
                     raise FiscalMCPError("invalid_challenge", "scopes must be an array.")
-                forwarded = request_headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
-                source = forwarded or str((scope.get("client") or ("unknown", 0))[0])
+                source = self._source(request_headers, scope)
                 if kind in WRITE_WINDOW_KINDS:
                     if scheme != "session" or token is None:
                         raise FiscalMCPError("session_required", "A live Session credential is required to open a write window.")
@@ -283,8 +296,7 @@ class MCPHTTPApplication:
             try:
                 payload = await self._read_json(receive, request_headers.get("content-length"))
                 code = payload.get("totp")
-                forwarded = request_headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
-                source = forwarded or str((scope.get("client") or ("unknown", 0))[0])
+                source = self._source(request_headers, scope)
                 challenge = sessions.approve(segments[2], code, source=source)
                 await self._respond(
                     send,
