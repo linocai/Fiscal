@@ -144,6 +144,20 @@ export interface CashFlowOutlook {
   dataRevision?: number;
 }
 
+export interface AccountOverview {
+  id: string;
+  name: string;
+  kind: "cash" | "debit" | "credit";
+  institution?: string;
+  lastFour?: string;
+  /** Cash/debit: balance. Credit: current debt (negative means overpaid). In fen. */
+  balanceCents: number;
+  creditLimitCents?: number;
+  onDemand?: boolean;
+  nextDue?: { date: string; remainingCents: number; overdue: boolean };
+  overdueCents: number;
+}
+
 export interface NamedOption {
   id: string;
   name: string;
@@ -164,4 +178,5 @@ export interface FiscalApiAdapter {
   listCashFlow(month?: string): Promise<CashFlowItem[]>;
   getCashFlowOutlook(windowDays?: number): Promise<CashFlowOutlook>;
   listCategories(): Promise<NamedOption[]>;
+  listAccounts(): Promise<AccountOverview[]>;
 }

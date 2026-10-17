@@ -1,5 +1,6 @@
 import type {
   AccessScope,
+  AccountOverview,
   BatchActionResult,
   BatchCommitInput,
   BatchValidation,
@@ -404,6 +405,35 @@ const normalizeOutlook = (value: unknown): CashFlowOutlook => {
   };
 };
 
+const normalizeAccounts = (value: unknown): AccountOverview[] => {
+  const rows = Array.isArray(value) ? value : isObject(value) ? asArray(value.items) ?? [] : [];
+  return rows.flatMap((row): AccountOverview[] => {
+    if (!isObject(row) || row.archived_at) return [];
+    const id = stringValue(row.id);
+    const kind = stringValue(row.kind);
+    const balance = numberValue(row.current_balance_minor);
+    if (!id || (kind !== "cash" && kind !== "debit" && kind !== "credit") || balance === undefined) return [];
+    const cycles = (asArray(row.open_cycles) ?? []).filter(isObject);
+    const pending = cycles
+      .map((cycle) => ({ date: stringValue(cycle.due_date) ?? "", remainingCents: numberValue(cycle.remaining_minor) ?? 0, overdue: cycle.is_overdue === true }))
+      .filter((cycle) => cycle.date && cycle.remainingCents > 0)
+      .sort((left, right) => left.date.localeCompare(right.date));
+    return [{
+      id,
+      name: stringValue(row.name) ?? "未命名账户",
+      kind,
+      institution: stringValue(row.institution),
+      lastFour: stringValue(row.last_four),
+      balanceCents: balance,
+      creditLimitCents: numberValue(row.credit_limit_minor),
+      onDemand: stringValue(row.cycle_mode) === "on_demand",
+      // Overdue amounts are reported separately; nextDue is the next bill not yet overdue.
+      nextDue: pending.find((cycle) => !cycle.overdue),
+      overdueCents: pending.filter((cycle) => cycle.overdue).reduce((sum, cycle) => sum + cycle.remainingCents, 0),
+    }];
+  });
+};
+
 const categoryOptions = (value: unknown): NamedOption[] => {
   const rows = Array.isArray(value) ? value : isObject(value) ? asArray(value.items) ?? [] : [];
   const options: NamedOption[] = [];
@@ -599,6 +629,10 @@ export class HttpFiscalApiAdapter implements FiscalApiAdapter {
     return categoryOptions((await this.client.json("/categories")).body);
   }
 
+  async listAccounts(): Promise<AccountOverview[]> {
+    return normalizeAccounts((await this.client.json("/accounts")).body);
+  }
+
   async listAccessScopes(): Promise<AccessScope[]> {
     return [...this.client.scopes];
   }
@@ -691,6 +725,7 @@ abstract class McpReadAdapter {
   }
   async getCashFlowOutlook(windowDays = 30): Promise<CashFlowOutlook> { return normalizeOutlook(await this.client.call("fiscal_get_cash_flow_outlook", { window_days: windowDays })); }
   async listCategories(): Promise<NamedOption[]> { return categoryOptions(await this.client.call("fiscal_list_categories", {})); }
+  async listAccounts(): Promise<AccountOverview[]> { return normalizeAccounts(await this.client.call("fiscal_list_accounts", {})); }
   async requestExport(request: ExportRequest): Promise<ExportResult> {
     if (request.format !== "csv") throw new FiscalApiError("unsupported_export", "Live Fiscal export currently supports CSV only.");
     const result = await this.client.call("fiscal_export_report", { period_kind: "month", period: request.month, format: "csv" });

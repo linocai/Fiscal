@@ -1,5 +1,6 @@
 import type {
   AccessScope,
+  AccountOverview,
   CashFlowItem,
   CashFlowOutlook,
   NamedOption,
@@ -186,6 +187,14 @@ export class MockFiscalAdapter implements FiscalApiAdapter {
 
   async getCashFlowOutlook(): Promise<CashFlowOutlook> {
     return this.respond({ dateFrom: "2026-10-16", dateTo: "2026-11-14", currentCashCents: 2_860_000, expectedInflowCents: 1_500_000, expectedOutflowCents: 688_650, projectedBalanceCents: 3_671_350, undatedInflowCents: 0, overdueOutflowCents: 0, unscheduledCreditDebtCents: 0 });
+  }
+
+  async listAccounts(): Promise<AccountOverview[]> {
+    return this.respond([
+      { id: "acc-cmb", name: "招商银行储蓄卡", kind: "debit", lastFour: "6411", balanceCents: 2_380_000, overdueCents: 0 },
+      { id: "acc-wechat", name: "微信零钱", kind: "cash", balanceCents: 86_000, overdueCents: 0 },
+      { id: "acc-card", name: "招商银行信用卡", kind: "credit", balanceCents: 238_650, creditLimitCents: 5_000_000, nextDue: { date: "2026-10-23", remainingCents: 238_650, overdue: false }, overdueCents: 0 },
+    ] satisfies AccountOverview[]);
   }
 
   async listCategories(): Promise<NamedOption[]> {

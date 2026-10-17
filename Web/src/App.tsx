@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AccessScope,
+  AccountOverview,
   ApiDemoMode,
   CashFlowItem,
   CashFlowOutlook,
@@ -13,9 +14,10 @@ import type {
 import type { PanelSession } from "./api/session";
 import { createRuntimeAdapter, hasLiveRuntimeConfig } from "./runtimeConfig";
 
-type ViewId = "cashflow" | "inbox" | "reports" | "ledger" | "settings";
+type ViewId = "accounts" | "cashflow" | "inbox" | "reports" | "ledger" | "settings";
 
 const allNavItems: Array<{ id: ViewId; label: string; description: string; icon: string }> = [
+  { id: "accounts", label: "账户", description: "余额与信用欠款", icon: "◫" },
   { id: "cashflow", label: "现金流", description: "未来待入账计划", icon: "⇅" },
   { id: "inbox", label: "待确认", description: "Agent 导入批次", icon: "⌁" },
   { id: "reports", label: "月度报告", description: "查看消费分布", icon: "◒" },
@@ -383,6 +385,58 @@ function CashFlowView({ api }: { api: FiscalApiAdapter }) {
   );
 }
 
+const accountKindLabel: Record<AccountOverview["kind"], string> = { cash: "现金", debit: "储蓄卡", credit: "信用" };
+
+function AccountsView({ api }: { api: FiscalApiAdapter }) {
+  const [accounts, setAccounts] = useState<AccountOverview[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => {
+    setError(null); setAccounts(null);
+    api.listAccounts().then(setAccounts).catch((reason: Error) => setError(reason.message));
+  }, [api]);
+  useEffect(() => { load(); }, [load]);
+  const intro = <section className="intro-row"><div><p className="eyebrow">ACCOUNTS / BALANCES</p><h2>钱在哪里，欠了多少</h2><p className="muted">余额由账本实时计算；信用账户显示当前欠款与最近一期应还。</p></div></section>;
+  if (error) return <div className="page-stack">{intro}<ErrorState message={error} onRetry={load} /></div>;
+  if (!accounts) return <div className="page-stack">{intro}<LoadingBlock lines={4} /></div>;
+  const funds = accounts.filter((item) => item.kind !== "credit");
+  const credits = accounts.filter((item) => item.kind === "credit");
+  const fundTotal = funds.reduce((sum, item) => sum + item.balanceCents, 0);
+  const debtTotal = credits.reduce((sum, item) => sum + Math.max(0, item.balanceCents), 0);
+  const overdueTotal = credits.reduce((sum, item) => sum + item.overdueCents, 0);
+  const subtitle = (item: AccountOverview) => [accountKindLabel[item.kind], item.institution, item.lastFour && `尾号 ${item.lastFour}`].filter(Boolean).join(" · ");
+  return (
+    <div className="page-stack">
+      {intro}
+      <section className="metric-grid metric-grid-three">
+        <div className="metric-card"><span className="metric-label">资金合计</span><strong>{amount(fundTotal)}</strong><span className="metric-foot">{funds.length} 个现金 / 储蓄账户</span></div>
+        <div className="metric-card"><span className="metric-label">信用欠款合计</span><strong className={debtTotal > 0 ? "amount-out" : ""}>{amount(debtTotal)}</strong><span className="metric-foot">{overdueTotal > 0 ? `其中已逾期 ${amount(overdueTotal)}` : `${credits.length} 个信用账户`}</span></div>
+        <div className="metric-card metric-card-accent"><span className="metric-label">净资产</span><strong>{amount(fundTotal - debtTotal)}</strong><span className="metric-foot">资金合计 − 信用欠款</span></div>
+      </section>
+      {accounts.length === 0 ? <EmptyState title="还没有账户" detail="让 Agent 帮你新建钱包、储蓄卡或信用账户。" /> : (
+        <>
+          <section className="content-card ledger-card">
+            <div className="card-heading"><div><h3>资金账户</h3><p className="muted">{funds.length} 个</p></div></div>
+            <div className="ledger-table-wrap"><table className="ledger-table accounts-table"><thead><tr><th>账户</th><th className="align-right">余额</th></tr></thead><tbody>{funds.map((item) => (
+              <tr key={item.id}><td><strong>{item.name}</strong><span className="table-subtitle">{subtitle(item)}</span></td><td className={`align-right amount-cell ${item.balanceCents < 0 ? "amount-out" : ""}`}>{amount(item.balanceCents)}</td></tr>
+            ))}</tbody></table></div>
+          </section>
+          <section className="content-card ledger-card">
+            <div className="card-heading"><div><h3>信用账户</h3><p className="muted">{credits.length} 个</p></div></div>
+            <div className="ledger-table-wrap"><table className="ledger-table accounts-table"><thead><tr><th>账户</th><th className="align-right">当前欠款</th><th className="align-right">可用额度</th><th>最近应还</th></tr></thead><tbody>{credits.map((item) => (
+              <tr key={item.id}>
+                <td><strong>{item.name}</strong><span className="table-subtitle">{[subtitle(item), item.creditLimitCents !== undefined && `额度 ${amount(item.creditLimitCents)}`].filter(Boolean).join(" · ")}</span></td>
+                <td className={`align-right amount-cell ${item.balanceCents > 0 ? "amount-out" : ""}`}>{item.balanceCents < 0 ? `溢缴 ${amount(-item.balanceCents)}` : amount(item.balanceCents)}</td>
+                <td className="align-right">{item.creditLimitCents !== undefined ? amount(Math.max(0, item.creditLimitCents - Math.max(0, item.balanceCents))) : "—"}</td>
+                <td>{item.overdueCents > 0 && <span className="table-status table-status-overdue">已逾期 {amount(item.overdueCents)}</span>}{item.nextDue ? <strong className="next-due">{fullDateText(item.nextDue.date)} · {amount(item.nextDue.remainingCents)}</strong> : item.overdueCents > 0 ? null : <span className="muted">{item.onDemand ? "随借随还" : item.balanceCents > 0 ? "暂无已出账单" : "无待还"}</span>}</td>
+              </tr>
+            ))}</tbody></table></div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
 function LoginGate({ session, onReady }: { session: PanelSession; onReady: () => void }) {
   const [code, setCode] = useState("");
   const [working, setWorking] = useState(false);
@@ -425,12 +479,12 @@ export default function App() {
   const runtime = useMemo(() => createRuntimeAdapter(demoMode, () => setSignedOut(true)), [demoMode]);
   const panel = Boolean(runtime.session);
   const navItems = useMemo(() => allNavItems.filter((item) => !(panel && item.id === "inbox")), [panel]);
-  const [view, setView] = useState<ViewId>(panel ? "cashflow" : "inbox");
+  const [view, setView] = useState<ViewId>(panel ? "accounts" : "inbox");
   const api = runtime.adapter;
   const current = navItems.find((item) => item.id === view) ?? navItems[0];
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(null), 3200); return () => window.clearTimeout(timer); }, [toast]);
   if (runtime.session && (signedOut || !runtime.session.token())) {
     return <LoginGate session={runtime.session} onReady={() => { setSignedOut(false); setLoginCount((count) => count + 1); }} />;
   }
-  return <div className="app-shell"><aside className="sidebar"><div className="brand"><span className="brand-mark">F</span><div><strong>Fiscal</strong><span>Ledger Console</span></div></div><div className="workspace-chip"><span className="workspace-avatar">L</span><span><strong>个人账本</strong><small>Owner workspace</small></span><span className="workspace-chevron">⌄</span></div><nav className="side-nav" aria-label="主导航">{navItems.map((item) => <button className={`nav-item ${view === item.id ? "nav-item-active" : ""}`} onClick={() => setView(item.id)} key={item.id}><span className="nav-icon">{item.icon}</span><span><strong>{item.label}</strong><small>{item.description}</small></span></button>)}</nav><div className="sidebar-footer"><div className="sidebar-help"><span>?</span><div><strong>需要帮助？</strong><small>查看接入说明</small></div></div><div className="freeze-label"><span className="connection-dot" /> {panel ? "只读面板 · Agent 负责写入" : "原生 App 已冻结"}</div></div></aside><main className="main-content"><header className="topbar"><div className="mobile-brand"><span className="brand-mark">F</span><strong>Fiscal</strong></div><div className="breadcrumb"><span>个人账本</span><span>/</span><strong>{current.label}</strong></div><div className="topbar-actions"><span className="environment-pill"><span className="connection-dot" /> {runtime.label}</span><button className="avatar-button" aria-label="账户">L</button></div></header><div className="mobile-nav"><select value={view} onChange={(event) => setView(event.target.value as ViewId)} aria-label="选择页面">{navItems.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select></div><div className="view-container" key={loginCount}>{view === "cashflow" && <CashFlowView api={api} />}{view === "inbox" && <InboxView api={api} onToast={setToast} environmentLabel={runtime.label} />}{view === "reports" && <ReportView api={api} />}{view === "ledger" && <LedgerView api={api} />}{view === "settings" && <SettingsView api={api} onToast={setToast} panelMode={panel} />}</div></main>{toast && <div className="toast" role="status"><span>✓</span>{toast}</div>}</div>;
+  return <div className="app-shell"><aside className="sidebar"><div className="brand"><span className="brand-mark">F</span><div><strong>Fiscal</strong><span>Ledger Console</span></div></div><div className="workspace-chip"><span className="workspace-avatar">L</span><span><strong>个人账本</strong><small>Owner workspace</small></span><span className="workspace-chevron">⌄</span></div><nav className="side-nav" aria-label="主导航">{navItems.map((item) => <button className={`nav-item ${view === item.id ? "nav-item-active" : ""}`} onClick={() => setView(item.id)} key={item.id}><span className="nav-icon">{item.icon}</span><span><strong>{item.label}</strong><small>{item.description}</small></span></button>)}</nav><div className="sidebar-footer"><div className="sidebar-help"><span>?</span><div><strong>需要帮助？</strong><small>查看接入说明</small></div></div><div className="freeze-label"><span className="connection-dot" /> {panel ? "只读面板 · Agent 负责写入" : "原生 App 已冻结"}</div></div></aside><main className="main-content"><header className="topbar"><div className="mobile-brand"><span className="brand-mark">F</span><strong>Fiscal</strong></div><div className="breadcrumb"><span>个人账本</span><span>/</span><strong>{current.label}</strong></div><div className="topbar-actions"><span className="environment-pill"><span className="connection-dot" /> {runtime.label}</span><button className="avatar-button" aria-label="账户">L</button></div></header><div className="mobile-nav"><select value={view} onChange={(event) => setView(event.target.value as ViewId)} aria-label="选择页面">{navItems.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select></div><div className="view-container" key={loginCount}>{view === "accounts" && <AccountsView api={api} />}{view === "cashflow" && <CashFlowView api={api} />}{view === "inbox" && <InboxView api={api} onToast={setToast} environmentLabel={runtime.label} />}{view === "reports" && <ReportView api={api} />}{view === "ledger" && <LedgerView api={api} />}{view === "settings" && <SettingsView api={api} onToast={setToast} panelMode={panel} />}</div></main>{toast && <div className="toast" role="status"><span>✓</span>{toast}</div>}</div>;
 }

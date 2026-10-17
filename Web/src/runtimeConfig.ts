@@ -78,6 +78,7 @@ function unavailable(message: string): FiscalApiAdapter {
     listCashFlow: fail,
     getCashFlowOutlook: fail,
     listCategories: fail,
+    listAccounts: fail,
   };
 }
 

@@ -272,3 +272,9 @@ h3 { margin-bottom: 4px; color: var(--ink); font-size: 15px; font-weight: 680; l
   .ledger-table.cashflow-table { min-width: 0; white-space: normal; }
   .cashflow-table td:first-child { white-space: nowrap; }
 }
+.accounts-table td .table-status { display: inline-block; margin-bottom: 4px; }
+.accounts-table td .next-due { display: block; }
+@media (max-width: 600px) {
+  .ledger-table.accounts-table { min-width: 0; white-space: normal; }
+  .accounts-table th:nth-child(3), .accounts-table td:nth-child(3) { display: none; }
+}
