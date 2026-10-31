@@ -13,3 +13,9 @@
 ## 门禁
 
 - MCP 目录没有 ruff 配置，`ruff check`/`format --check` 在基线上就有 1 个 F401 和 15 个文件格式差异；验收时与基线比较，不新增即可。ruff 可用 `Backend/.venv/bin/ruff`。
+
+## HZ 发布
+
+- SSH 用 `deploy@118.178.122.194`（`hz` 别名会被本机代理解析到假 IP）。
+- 本机打 Web 包须 `COPYFILE_DISABLE=1 tar --no-xattrs -czf ...`，否则混入 `._*` AppleDouble 文件；MCP 用 `git archive <rev>:MCP` 无此问题。
+- 工具在 HZ 上 `rm -rf` 会被拒绝，删旧 release/上传包需用户同意或自行执行。

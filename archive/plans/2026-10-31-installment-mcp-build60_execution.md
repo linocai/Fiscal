@@ -1,6 +1,6 @@
 # Fiscal Build60：MCP 分期查询与转分期
 
-日期：2026-10-31（Asia/Shanghai）｜状态：本地完成并验证，**未上线**（HZ 网关重启时机待用户确认）｜基线 `92d01a1`（线上 `v2.4.0-build59` → `5287051`）
+日期：2026-10-31（Asia/Shanghai）｜tag `v2.4.0-build60` → `4088936`｜状态：HZ MCP/Web 已上线，NB 不变｜基线 `92d01a1`（上一线上 `v2.4.0-build59` → `5287051`）
 
 ## 来源与决定
 
@@ -21,10 +21,11 @@
   - 账单日 1 日、还款日 10 日的信用账户；10-30 消费 189,294 可转，起始账单日首个为 11-01；09-15 消费（10-01 已出账）不可转，转换返回 `purchase_not_eligible`。
   - 3 期：11-01/11-10、12-01/12-10、2027-01-01/01-10，每期 63,098，无手续费交易；原样重试返回同一计划；同 key 改期数 409 `idempotency_key_reused`；新 key 再转 `installment_plan_in_use`；期数 1 在网关被拒、不调后端。
   - 账本搜索显示 `installment_relation`（role purchase）；账期应还 11/12/1 月各 63,098；月报 10 月净收支 −189,294、11 月 0；审计记录 `transaction_id` 与 `plan_id`。
-- 未审查（高危区，部署前建议 review）。
+- 未审查：已建议 review，用户决定直接上线。
 
-## 上线待办
+## 上线
 
-- HZ：新建 `/opt/fiscal-mcp/releases/<日期>-build60-<rev>`，venv + preflight，切换并重启 `fiscal-mcp`（清空现有 Session/窗口）；Web 新建 release 并切换（仅说明页与 discovery 变化）。NB 不动。
-- 打 tag `v2.4.0-build60`；公网核对 30 工具、写入窗口覆盖 14、401/页面 200。
-- 回退：HZ 指回 Build59 两个 release 并重启 `fiscal-mcp`。
+- 2026-10-31 18:40 CST：HZ MCP `releases/20261031-build60-4088936`（Python 3.12 venv，preflight 通过，`0.1.0+build60`，30 工具），Web `releases/20261031-web-build60-4088936`（`runtime-config.production.js`）；`current` 原子切换并重启 `fiscal-mcp`（现有 Session/窗口已清空）。NB、Nginx 未变。
+- 公网：`/health`、首页、`/agent/`、`/agent/approve/`、`runtime-config.js` 200；discovery 30 工具、写入窗口覆盖 14；无 Session 与伪造 Session 的 `/mcp` 均 401；防嵌入头仍在。
+- 回退：HZ 指回 `20261017-build59-5287051` / `20261017-web-build59-5287051` 并重启 `fiscal-mcp`。
+- 资源：第一次 Web 包混入 macOS `._*` 文件，该暂存目录未切换上线，已移到 HZ `/home/deploy/fiscal-web-build60-appledouble-unused`；它与 Build58 两个 release、上传包 `~/mcp-build60.tar.gz`、`~/web-build60.tar.gz` 待用户同意后删除（工具删除命令被拒）。打包须用 `COPYFILE_DISABLE=1 tar --no-xattrs`。
