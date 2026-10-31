@@ -8,11 +8,13 @@ complete deterministic fixture for local MCP/Web work.
 
 from __future__ import annotations
 
+import calendar
 import copy
 import hashlib
 import json
 import uuid
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any, Mapping, Protocol
 
 try:  # httpx is the only runtime dependency beyond Python's stdlib.
@@ -83,6 +85,14 @@ class FiscalBackendAdapter(Protocol):
 
     async def search_ledger(self, filters: Mapping[str, Any]) -> dict[str, Any]: ...
 
+    async def list_installment_plans(self, params: Mapping[str, Any]) -> dict[str, Any]: ...
+
+    async def get_installment_plan(self, plan_id: str) -> dict[str, Any]: ...
+
+    async def installment_eligibility(self, transaction_id: str) -> dict[str, Any]: ...
+
+    async def create_installment_plan(self, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]: ...
+
     async def list_import_batches(self, filters: Mapping[str, Any] | None = None) -> dict[str, Any]: ...
 
     async def create_import_batch(self, payload: Mapping[str, Any]) -> dict[str, Any]: ...
@@ -115,7 +125,7 @@ MAX_ERROR_DETAILS_BYTES = 4_096
 
 
 def backend_idempotency_uuid(tool: str, key: str) -> str:
-    """Backend cash-flow routes need a UUID Idempotency-Key; derive it deterministically."""
+    """Backend mutation routes need a UUID Idempotency-Key; derive it deterministically."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"fiscal-mcp:{tool}:{key}"))
 
 
@@ -343,6 +353,20 @@ class HttpFiscalBackendAdapter:
     async def list_reimbursable_expenses(self, params: Mapping[str, Any]) -> dict[str, Any]:
         return await self._request("GET", "/reimbursement-expense-candidates", params=params)
 
+    async def list_installment_plans(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        return await self._request("GET", "/installment-plans", params=params)
+
+    async def get_installment_plan(self, plan_id: str) -> dict[str, Any]:
+        return await self._request("GET", f"/installment-plans/{plan_id}")
+
+    async def installment_eligibility(self, transaction_id: str) -> dict[str, Any]:
+        return await self._request("GET", f"/transactions/{transaction_id}/installment-eligibility")
+
+    async def create_installment_plan(self, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
+        return await self._request(
+            "POST", "/installment-plans", json_body=payload, headers={"Idempotency-Key": idempotency_key}
+        )
+
     async def get_reimbursement(self, claim_id: str) -> dict[str, Any]:
         return await self._request("GET", f"/reimbursement-claims/{claim_id}")
 
@@ -496,6 +520,56 @@ class HttpFiscalBackendAdapter:
         }
 
 
+def _mock_installment_purchase(transaction_id: str) -> dict[str, Any] | None:
+    """Fixed credit purchases for the mock adapter. Not used by the HTTP adapter."""
+
+    purchases = {
+        "tx-installment-eligible": {
+            "eligible": True,
+            "reason_code": None,
+            "credit_account_id": "credit-1",
+            "principal_minor": 300_000,
+            "natural_statement_date": "2026-11-08",
+            "title": "手机",
+            "start_options": [
+                {"cycle_id": "cycle-2026-10", "statement_date": "2026-10-08", "due_date": "2026-10-28", "existing": True, "eligible": False},
+                {"cycle_id": "cycle-2026-11", "statement_date": "2026-11-08", "due_date": "2026-11-28", "existing": True, "eligible": True},
+                {"cycle_id": "cycle-2026-12", "statement_date": "2026-12-08", "due_date": "2026-12-28", "existing": False, "eligible": True},
+            ],
+        },
+        "tx-installment-ineligible": {
+            "eligible": False,
+            "reason_code": "purchase_cycle_repaid_after_purchase",
+            "credit_account_id": "credit-1",
+            "principal_minor": 80_000,
+            "natural_statement_date": "2026-10-08",
+            "title": "已还款消费",
+            "start_options": [
+                {"cycle_id": "cycle-2026-10", "statement_date": "2026-10-08", "due_date": "2026-10-28", "existing": True, "eligible": False},
+            ],
+        },
+    }
+    purchase = purchases.get(transaction_id)
+    return copy.deepcopy(purchase) if purchase is not None else None
+
+
+def _split_minor(total: int, count: int) -> list[int]:
+    """Fixture-only split. Production schedules are calculated by the backend."""
+
+    base, extra = divmod(total, count)
+    return [base + (1 if index < extra else 0) for index in range(count)]
+
+
+def _add_months(iso_date: str, months: int) -> str:
+    parsed = date.fromisoformat(iso_date)
+    index = parsed.month - 1 + months
+    year, month = divmod(index, 12)
+    year += parsed.year
+    month += 1
+    day = min(parsed.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day).isoformat()
+
+
 @dataclass(slots=True)
 class MockFiscalBackendAdapter:
     """Deterministic fixture adapter for tests and local MCP development."""
@@ -509,6 +583,7 @@ class MockFiscalBackendAdapter:
     cash_flow_items: list[dict[str, Any]] = field(default_factory=list)
     reimbursements: dict[str, dict[str, Any]] = field(default_factory=dict)
     reimbursable_expenses: list[dict[str, Any]] = field(default_factory=list)
+    installment_plans: list[dict[str, Any]] = field(default_factory=list)
     data_revision: int = 1
     _batches: dict[str, dict[str, Any]] = field(default_factory=dict, init=False, repr=False)
     _batch_idempotency: dict[str, str] = field(default_factory=dict, init=False, repr=False)
@@ -516,6 +591,7 @@ class MockFiscalBackendAdapter:
     _commit_idempotency: dict[str, dict[str, Any]] = field(default_factory=dict, init=False, repr=False)
     _commit_idempotency_context: dict[str, tuple[str, int]] = field(default_factory=dict, init=False, repr=False)
     _cash_flow_idempotency: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
+    _installment_idempotency: dict[str, tuple[str, dict[str, Any]]] = field(default_factory=dict, init=False, repr=False)
     _previews: dict[str, tuple[str, str, dict[str, Any]]] = field(default_factory=dict, init=False, repr=False)
 
     async def get_monthly_report(self, period: str) -> dict[str, Any]:
@@ -725,6 +801,122 @@ class MockFiscalBackendAdapter:
 
     async def create_category(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         return self._create_named(self.categories, payload, "category_name_conflict")
+
+    async def list_installment_plans(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        items = [
+            plan
+            for plan in self.installment_plans
+            if params.get("account_id") in (None, plan["credit_account_id"]) and params.get("status") in (None, plan["status"])
+        ]
+        start = 0
+        cursor = params.get("cursor")
+        if cursor is not None:
+            try:
+                start = int(cursor)
+            except (TypeError, ValueError):
+                start = len(items)
+        limit = int(params.get("limit", 20))
+        page = items[start : start + limit]
+        next_cursor = str(start + limit) if start + limit < len(items) else None
+        return {"items": copy.deepcopy(page), "next_cursor": next_cursor}
+
+    async def get_installment_plan(self, plan_id: str) -> dict[str, Any]:
+        plan = next((item for item in self.installment_plans if item["id"] == plan_id), None)
+        if plan is None:
+            raise FiscalMCPError("installment_plan_not_found", "The installment plan does not exist.", {"http_status": 404})
+        return copy.deepcopy(plan)
+
+    async def installment_eligibility(self, transaction_id: str) -> dict[str, Any]:
+        purchase = _mock_installment_purchase(transaction_id)
+        if purchase is None:
+            raise FiscalMCPError("transaction_not_found", "The transaction does not exist.", {"http_status": 404})
+        planned = any(plan["purchase_transaction_id"] == transaction_id for plan in self.installment_plans)
+        return {
+            "purchase_transaction_id": transaction_id,
+            "eligible": purchase["eligible"] and not planned,
+            "reason_code": "purchase_not_eligible" if planned else purchase["reason_code"],
+            "credit_account_id": purchase["credit_account_id"],
+            "principal_minor": purchase["principal_minor"],
+            "natural_statement_date": purchase["natural_statement_date"],
+            "start_options": [] if planned else copy.deepcopy(purchase["start_options"]),
+        }
+
+    async def create_installment_plan(self, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
+        # Period amounts below are a fixture split for tests. The HTTP adapter never allocates them.
+        fingerprint = hashlib.sha256(
+            json.dumps(dict(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+        previous = self._installment_idempotency.get(idempotency_key)
+        if previous is not None:
+            stored_fingerprint, stored_plan = previous
+            if stored_fingerprint != fingerprint:
+                raise FiscalMCPError(
+                    "idempotency_key_reused",
+                    "The idempotency key has different input.",
+                    {"http_status": 409},
+                )
+            return copy.deepcopy(stored_plan)
+        transaction_id = str(payload["purchase_transaction_id"])
+        purchase = _mock_installment_purchase(transaction_id)
+        if purchase is None:
+            raise FiscalMCPError("transaction_not_found", "The transaction does not exist.", {"http_status": 404})
+        if not purchase["eligible"]:
+            raise FiscalMCPError(
+                "purchase_not_eligible",
+                "The purchase cannot be converted to installments.",
+                {"http_status": 422, "reason_code": purchase["reason_code"]},
+            )
+        allowed = {option["statement_date"] for option in purchase["start_options"] if option["eligible"]}
+        if payload["start_statement_date"] not in allowed:
+            raise FiscalMCPError(
+                "invalid_installment_schedule",
+                "start_statement_date is not an eligible option.",
+                {"http_status": 422},
+            )
+        if any(plan["purchase_transaction_id"] == transaction_id for plan in self.installment_plans):
+            raise FiscalMCPError(
+                "installment_plan_in_use",
+                "The purchase already has an installment plan.",
+                {"http_status": 409},
+            )
+        count = int(payload["installment_count"])
+        fee = int(payload["total_fee_minor"])
+        principal_parts = _split_minor(int(purchase["principal_minor"]), count)
+        fee_parts = _split_minor(fee, count)
+        periods = []
+        for index, (principal_minor, fee_minor) in enumerate(zip(principal_parts, fee_parts, strict=True)):
+            statement = _add_months(str(payload["start_statement_date"]), index)
+            periods.append(
+                {
+                    "sequence": index + 1,
+                    "scheduled_statement_date": statement,
+                    "due_date": f"{statement[:8]}28",
+                    "principal_minor": principal_minor,
+                    "fee_minor": fee_minor,
+                    "amount_due_minor": principal_minor + fee_minor,
+                    "status": "scheduled",
+                }
+            )
+        plan = {
+            "id": str(uuid.uuid4()),
+            "purchase_transaction_id": transaction_id,
+            "credit_account_id": purchase["credit_account_id"],
+            "fee_category_id": payload.get("fee_category_id"),
+            "fee_occurred_at": payload.get("fee_occurred_at"),
+            "title": purchase["title"],
+            "status": "active",
+            "principal_minor": purchase["principal_minor"],
+            "fee_minor": fee,
+            "total_financed_minor": int(purchase["principal_minor"]) + fee,
+            "installment_count": count,
+            "start_statement_date": payload["start_statement_date"],
+            "periods": periods,
+            "next_period": periods[0],
+            "version": 1,
+        }
+        self.installment_plans.append(plan)
+        self._installment_idempotency[idempotency_key] = (fingerprint, copy.deepcopy(plan))
+        return copy.deepcopy(plan)
 
     async def search_ledger(self, filters: Mapping[str, Any]) -> dict[str, Any]:
         items = copy.deepcopy(self.ledger_items)

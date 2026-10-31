@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import unittest
+from pathlib import Path
 
 from fiscal_mcp.adapter import HttpFiscalBackendAdapter, MockFiscalBackendAdapter
 from fiscal_mcp.auth import ApiKeyRegistry, TotpSessionRegistry
@@ -66,6 +68,9 @@ class FiscalMCPContractTests(unittest.TestCase):
                 "fiscal_cancel_reimbursement_outstanding",
                 "fiscal_update_transaction",
                 "fiscal_update_reimbursement",
+                "fiscal_list_installment_plans",
+                "fiscal_check_installment",
+                "fiscal_convert_to_installment",
                 "fiscal_search_ledger",
                 "fiscal_create_import_batch",
                 "fiscal_get_import_batch",
@@ -75,6 +80,34 @@ class FiscalMCPContractTests(unittest.TestCase):
                 "fiscal_export_report",
             ],
         )
+        self.assertEqual(len(names), 30)
+        write_tools = [item.name for item in self.service.definitions if item.scope is Scope.COMMIT_IMPORTS]
+        self.assertEqual(
+            write_tools,
+            [
+                "fiscal_create_account",
+                "fiscal_create_category",
+                "fiscal_create_cash_flow_item",
+                "fiscal_confirm_cash_flow_item",
+                "fiscal_settle_cash_flow_item",
+                "fiscal_cancel_cash_flow_item",
+                "fiscal_create_reimbursement",
+                "fiscal_submit_reimbursement",
+                "fiscal_record_reimbursement_receipt",
+                "fiscal_cancel_reimbursement_outstanding",
+                "fiscal_update_transaction",
+                "fiscal_update_reimbursement",
+                "fiscal_convert_to_installment",
+                "fiscal_commit_import_batch",
+            ],
+        )
+        self.assertEqual(len(write_tools), 14)
+        self.assertIs(self.service.definition("fiscal_list_installment_plans").scope, Scope.READ_LEDGER)
+        self.assertIs(self.service.definition("fiscal_check_installment").scope, Scope.READ_LEDGER)
+        document = json.loads((Path(__file__).resolve().parents[2] / "Web/public/.well-known/fiscal-agent.json").read_text())
+        self.assertEqual(document["tools"], names)
+        self.assertEqual(len(document["auth"]["write_window"]["covers"]), 14)
+        self.assertEqual(set(document["auth"]["write_window"]["covers"]), set(write_tools))
         self.assertIn("required", self.service.list_tools()[0]["inputSchema"])
 
     def test_read_scope_and_report(self) -> None:
@@ -223,6 +256,7 @@ class FiscalMCPContractTests(unittest.TestCase):
         server = MCPServer(self.service, static_api_key=KEY)
         initialized = run(server.handle_message({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}))
         self.assertEqual(initialized["result"]["serverInfo"]["name"], "fiscal-ledger-mcp")
+        self.assertEqual(initialized["result"]["serverInfo"]["version"], "0.1.0+build60")
         result = run(
             server.handle_message(
                 {
@@ -426,6 +460,84 @@ class SessionCommitTests(unittest.TestCase):
         self.assertEqual(self.call("fiscal_update_reimbursement", update)["version"], updated["version"])
         self.assertEqual(len(self.call("fiscal_list_reimbursements", {})["items"]), 1)
 
+    def test_installment_convert_rejects_closed_window_and_bad_shape_without_calling_adapter(self) -> None:
+        recorder = _CallRecorder()
+        self.service.adapter = recorder
+        base = {
+            "transaction_id": "tx-installment-eligible",
+            "installment_count": 3,
+            "start_statement_date": "2026-11-08",
+            "idempotency_key": "convert-shape-01",
+        }
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_convert_to_installment", base)
+        self.assertEqual(caught.exception.code, "write_window_required")
+        for bad in (
+            {**base, "installment_count": 1},
+            {**base, "installment_count": 61},
+            {**base, "start_statement_date": "2026/11/08"},
+            {**base, "total_fee_minor": 100},
+            {**base, "total_fee_minor": 0, "fee_category_id": "cat-fee"},
+        ):
+            with self.assertRaises(FiscalMCPError) as caught:
+                self.call("fiscal_convert_to_installment", bad)
+            self.assertEqual(caught.exception.code, "invalid_params", bad)
+        self.assertEqual(recorder.calls, [])
+
+    def test_installment_check_convert_list_and_replay(self) -> None:
+        eligible = self.call("fiscal_check_installment", {"transaction_id": "tx-installment-eligible"})
+        self.assertTrue(eligible["eligible"])
+        self.assertEqual(
+            [option["statement_date"] for option in eligible["start_options"] if option["eligible"]],
+            ["2026-11-08", "2026-12-08"],
+        )
+        blocked = self.call("fiscal_check_installment", {"transaction_id": "tx-installment-ineligible"})
+        self.assertEqual((blocked["eligible"], blocked["reason_code"]), (False, "purchase_cycle_repaid_after_purchase"))
+        self.assertEqual(self.call("fiscal_list_installment_plans", {})["items"], [])
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_list_installment_plans", {"status": "draft"})
+        self.assertEqual(caught.exception.code, "invalid_params")
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_list_installment_plans", {"plan_id": "plan-1", "account_id": "credit-1"})
+        self.assertEqual(caught.exception.code, "invalid_params")
+        convert = {
+            "transaction_id": "tx-installment-eligible",
+            "installment_count": 3,
+            "start_statement_date": "2026-11-08",
+            "idempotency_key": "convert-phone-01",
+        }
+        self.open_window()
+        plan = self.call("fiscal_convert_to_installment", convert)
+        self.assertEqual(plan["installment_count"], 3)
+        self.assertEqual(plan["principal_minor"], 300_000)
+        self.assertEqual(plan["fee_minor"], 0)
+        self.assertIsNone(plan["fee_category_id"])
+        self.assertEqual(sum(period["principal_minor"] for period in plan["periods"]), 300_000)
+        self.assertEqual(sum(period["fee_minor"] for period in plan["periods"]), 0)
+        self.assertEqual(self.call("fiscal_convert_to_installment", convert), plan)
+        listed = self.call("fiscal_list_installment_plans", {"account_id": "credit-1", "status": "active"})
+        self.assertEqual([item["id"] for item in listed["items"]], [plan["id"]])
+        self.assertEqual(self.call("fiscal_list_installment_plans", {"status": "cancelled"})["items"], [])
+        loaded = self.call("fiscal_list_installment_plans", {"plan_id": plan["id"]})
+        self.assertEqual(loaded["id"], plan["id"])
+        self.assertEqual(len(loaded["periods"]), 3)
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call("fiscal_convert_to_installment", {**convert, "installment_count": 6})
+        self.assertEqual(caught.exception.code, "idempotency_key_reused")
+        with self.assertRaises(FiscalMCPError) as caught:
+            self.call(
+                "fiscal_convert_to_installment",
+                {**convert, "transaction_id": "tx-installment-ineligible", "idempotency_key": "convert-closed-01"},
+            )
+        self.assertEqual(caught.exception.code, "purchase_not_eligible")
+        self.assertEqual([item["id"] for item in self.call("fiscal_list_installment_plans", {})["items"]], [plan["id"]])
+        recorded = [
+            event
+            for event in self.service.audit.events
+            if event.tool == "fiscal_convert_to_installment" and event.outcome == "success"
+        ]
+        self.assertEqual(recorded[0].details, {"transaction_id": "tx-installment-eligible", "plan_id": plan["id"]})
+
     def test_one_window_covers_several_commits_and_retries(self) -> None:
         self.open_window()
         for key in ("window-01", "window-02"):
@@ -435,6 +547,18 @@ class SessionCommitTests(unittest.TestCase):
             self.assertEqual(committed["batch"]["status"], "committed")
             self.assertEqual(self.call("fiscal_commit_import_batch", args), committed)
         self.assertEqual(len(self.adapter.ledger_items), 2)
+
+
+class _CallRecorder:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def __getattr__(self, name: str):
+        async def called(*_args, **_kwargs):
+            self.calls.append(name)
+            return {"id": "unexpected", "items": []}
+
+        return called
 
 
 class RecordingClient:
@@ -606,6 +730,75 @@ class HttpAdapterTests(unittest.TestCase):
         self.assertEqual(headers["Idempotency-Key"], "commit-1234")
         self.assertEqual(body["expected_version"], 2)
         self.assertEqual(body["confirmation_token"], "v1.token")
+
+    def test_installment_routes_forward_path_method_and_idempotency(self) -> None:
+        from fiscal_mcp.adapter import backend_idempotency_uuid
+
+        client = RecordingClient(body={"id": "plan-1", "items": [], "next_cursor": None, "eligible": True})
+        adapter = HttpFiscalBackendAdapter("https://example.test", client=client)
+        registry = ApiKeyRegistry()
+        registry.register(KEY, list(Scope), label="test")
+        service = FiscalMCPService(adapter, registry, HMACConfirmationVerifier("test-confirmation-secret"))
+
+        def invoke(tool: str, args: dict):
+            return run(service.invoke(tool, args, api_key=KEY))
+
+        invoke("fiscal_list_installment_plans", {"account_id": "credit-1", "status": "active", "cursor": "cur-1", "limit": 20})
+        invoke("fiscal_list_installment_plans", {"plan_id": "plan-9"})
+        invoke("fiscal_check_installment", {"transaction_id": "tx-1"})
+        invoke(
+            "fiscal_convert_to_installment",
+            {
+                "transaction_id": "tx-1",
+                "installment_count": 3,
+                "start_statement_date": "2026-11-08",
+                "idempotency_key": "convert-phone-01",
+            },
+        )
+        invoke(
+            "fiscal_convert_to_installment",
+            {
+                "transaction_id": "tx-2",
+                "installment_count": 6,
+                "start_statement_date": "2026-12-08",
+                "total_fee_minor": 500,
+                "fee_category_id": "cat-fee",
+                "fee_occurred_at": "2026-10-31T12:00:00+08:00",
+                "idempotency_key": "convert-phone-fee",
+            },
+        )
+        listed, loaded, checked, zero_fee, with_fee = client.calls
+        self.assertEqual(listed[0], "GET")
+        self.assertEqual(listed[1], "https://example.test/installment-plans")
+        self.assertEqual(listed[3], {"account_id": "credit-1", "status": "active", "cursor": "cur-1", "limit": 20})
+        self.assertEqual((loaded[0], loaded[1]), ("GET", "https://example.test/installment-plans/plan-9"))
+        self.assertEqual((checked[0], checked[1]), ("GET", "https://example.test/transactions/tx-1/installment-eligibility"))
+        self.assertEqual((zero_fee[0], zero_fee[1]), ("POST", "https://example.test/installment-plans"))
+        self.assertEqual(zero_fee[2]["Idempotency-Key"], backend_idempotency_uuid("fiscal_convert_to_installment", "convert-phone-01"))
+        self.assertEqual(
+            zero_fee[4],
+            {
+                "purchase_transaction_id": "tx-1",
+                "installment_count": 3,
+                "total_fee_minor": 0,
+                "start_statement_date": "2026-11-08",
+            },
+        )
+        self.assertNotIn("transaction_id", zero_fee[4])
+        self.assertNotIn("idempotency_key", zero_fee[4])
+        self.assertEqual((with_fee[0], with_fee[1]), ("POST", "https://example.test/installment-plans"))
+        self.assertEqual(with_fee[2]["Idempotency-Key"], backend_idempotency_uuid("fiscal_convert_to_installment", "convert-phone-fee"))
+        self.assertEqual(
+            with_fee[4],
+            {
+                "purchase_transaction_id": "tx-2",
+                "installment_count": 6,
+                "total_fee_minor": 500,
+                "start_statement_date": "2026-12-08",
+                "fee_category_id": "cat-fee",
+                "fee_occurred_at": "2026-10-31T12:00:00+08:00",
+            },
+        )
 
 
 if __name__ == "__main__":

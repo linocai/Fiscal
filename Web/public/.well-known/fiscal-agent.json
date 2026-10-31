@@ -61,7 +61,8 @@
         "fiscal_record_reimbursement_receipt",
         "fiscal_cancel_reimbursement_outstanding",
         "fiscal_update_transaction",
-        "fiscal_update_reimbursement"
+        "fiscal_update_reimbursement",
+        "fiscal_convert_to_installment"
       ],
       "requires_session_scope": "stage:imports"
     },
@@ -107,6 +108,9 @@
     "fiscal_cancel_reimbursement_outstanding",
     "fiscal_update_transaction",
     "fiscal_update_reimbursement",
+    "fiscal_list_installment_plans",
+    "fiscal_check_installment",
+    "fiscal_convert_to_installment",
     "fiscal_search_ledger",
     "fiscal_create_import_batch",
     "fiscal_get_import_batch",

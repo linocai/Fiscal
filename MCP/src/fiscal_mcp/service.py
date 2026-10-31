@@ -143,6 +143,8 @@ class FiscalMCPService:
                 details = {"item_id": values["item_id"]}
             elif name == "fiscal_update_transaction":
                 details = {"transaction_id": values["transaction_id"]}
+            elif name == "fiscal_convert_to_installment":
+                details = {"transaction_id": values["transaction_id"], "plan_id": result.get("id")}
             elif name == "fiscal_create_reimbursement":
                 details = {"claim_id": result.get("id"), "expense_count": len(values["expenses"])}
             elif "claim_id" in values:
@@ -227,6 +229,25 @@ class FiscalMCPService:
 
             return await self._preview_then_commit(
                 lambda: self.adapter.preview_reimbursement_cancel(values["claim_id"], values["expected_version"]), commit_cancel
+            )
+        if name == "fiscal_list_installment_plans":
+            if "plan_id" in values:
+                return await self.adapter.get_installment_plan(values["plan_id"])
+            return await self.adapter.list_installment_plans(values)
+        if name == "fiscal_check_installment":
+            return await self.adapter.installment_eligibility(values["transaction_id"])
+        if name == "fiscal_convert_to_installment":
+            payload = {
+                "purchase_transaction_id": values["transaction_id"],
+                "installment_count": values["installment_count"],
+                "total_fee_minor": values["total_fee_minor"],
+                "start_statement_date": values["start_statement_date"],
+            }
+            if values["total_fee_minor"] > 0:
+                payload["fee_category_id"] = values["fee_category_id"]
+                payload["fee_occurred_at"] = values["fee_occurred_at"]
+            return await self.adapter.create_installment_plan(
+                payload, backend_idempotency_uuid(name, values["idempotency_key"])
             )
         if name == "fiscal_create_account":
             account = await self.adapter.create_account(values)

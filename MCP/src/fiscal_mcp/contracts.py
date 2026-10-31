@@ -163,6 +163,34 @@ REIMBURSEMENT_UPDATE_PROPERTIES: dict[str, Any] = {
     "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
 }
 
+# Copied from Backend InstallmentPlanStatus. The gateway does not interpret them.
+INSTALLMENT_PLAN_STATUSES = ("active", "completed", "settled_early", "partially_cancelled", "cancelled")
+INSTALLMENT_LIST_PROPERTIES: dict[str, Any] = {
+    "plan_id": {"type": "string", "minLength": 1, "description": "Return this plan, including its periods, instead of a page."},
+    "account_id": {"type": "string", "minLength": 1},
+    "status": {"type": "string", "enum": list(INSTALLMENT_PLAN_STATUSES)},
+    "cursor": {"type": "string", "minLength": 1},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20},
+}
+INSTALLMENT_CONVERT_PROPERTIES: dict[str, Any] = {
+    "transaction_id": {"type": "string", "minLength": 1, "description": "Posted credit purchase to convert."},
+    "installment_count": {"type": "integer", "minimum": 2, "maximum": 60},
+    "start_statement_date": {
+        "type": "string",
+        "format": "date",
+        "description": "statement_date of a fiscal_check_installment start_option with eligible=true.",
+    },
+    "total_fee_minor": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Integer fen. Zero forbids fee fields; a positive fee requires fee_category_id and fee_occurred_at.",
+    },
+    "fee_category_id": {"type": "string", "minLength": 1},
+    "fee_occurred_at": {"type": "string", "format": "date-time", "description": "Timezone-aware time the fee occurred."},
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
+}
+
 
 class Scope(str, Enum):
     READ_REPORTS = "read:reports"
@@ -377,6 +405,27 @@ def tool_definitions() -> tuple[ToolDefinition, ...]:
             "Edit a reimbursement claim (title, counterparty, expected date, note, or its full expense list) without creating a new claim. Requires an open write window.",
             Scope.COMMIT_IMPORTS,
             _object_schema(REIMBURSEMENT_UPDATE_PROPERTIES, ["claim_id", "expected_version", "idempotency_key"]),
+        ),
+        ToolDefinition(
+            "fiscal_list_installment_plans",
+            "List installment plans, or return one plan including its periods when plan_id is set.",
+            Scope.READ_LEDGER,
+            _object_schema(INSTALLMENT_LIST_PROPERTIES, []),
+        ),
+        ToolDefinition(
+            "fiscal_check_installment",
+            "Check whether a posted credit purchase can be converted to installments. Eligible only when that purchase's statement date has not arrived and the cycle has no repayment or waiver after the purchase. Only a start_options entry with eligible=true may be used as start_statement_date.",
+            Scope.READ_LEDGER,
+            _object_schema({"transaction_id": {"type": "string", "minLength": 1}}, ["transaction_id"]),
+        ),
+        ToolDefinition(
+            "fiscal_convert_to_installment",
+            "Convert a posted credit purchase into an installment plan. The whole purchase still counts as spending on its purchase date; installments only decide the amount due on each statement. If the outcome is unknown, retry with exactly the same arguments and idempotency_key; never retry with a new key before checking fiscal_list_installment_plans. Requires an open write window.",
+            Scope.COMMIT_IMPORTS,
+            _object_schema(
+                INSTALLMENT_CONVERT_PROPERTIES,
+                ["transaction_id", "installment_count", "start_statement_date", "idempotency_key"],
+            ),
         ),
         ToolDefinition(
             "fiscal_search_ledger",
@@ -670,8 +719,8 @@ def _validate_cash_flow_settle(values: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _bounded_limit(values: Mapping[str, Any]) -> int:
-    limit = values.get("limit", 50)
+def _bounded_limit(values: Mapping[str, Any], *, default: int = 50) -> int:
+    limit = values.get("limit", default)
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
         raise invalid_params("limit must be between 1 and 100", field="limit")
     return limit
@@ -731,6 +780,45 @@ def _validate_reimbursement_receipt(values: Mapping[str, Any]) -> dict[str, Any]
     }
     if values.get("note") is not None:
         result["note"] = _required_str(values, "note", max_length=500)
+    return result
+
+
+def _validate_installment_convert(values: Mapping[str, Any]) -> dict[str, Any]:
+    """Shape checks only; the backend decides eligibility and the schedule."""
+
+    _reject_unknown(values, INSTALLMENT_CONVERT_PROPERTIES)
+    count = values.get("installment_count")
+    if isinstance(count, bool) or not isinstance(count, int) or not 2 <= count <= 60:
+        raise invalid_params("installment_count must be an integer from 2 to 60", field="installment_count")
+    if values.get("start_statement_date") is None:
+        raise invalid_params("start_statement_date is required", field="start_statement_date")
+    start = _optional_date(values, "start_statement_date")
+    assert start is not None
+    fee = values.get("total_fee_minor", 0)
+    if isinstance(fee, bool) or not isinstance(fee, int) or fee < 0:
+        raise invalid_params("total_fee_minor must be an integer >= 0", field="total_fee_minor")
+    category = _required_str(values, "fee_category_id", max_length=120) if values.get("fee_category_id") is not None else None
+    occurred = _aware_datetime(values, "fee_occurred_at") if values.get("fee_occurred_at") is not None else None
+    if fee > 0 and (category is None or occurred is None):
+        raise invalid_params(
+            "positive total_fee_minor requires fee_category_id and fee_occurred_at",
+            field="total_fee_minor",
+        )
+    if fee == 0 and (category is not None or occurred is not None):
+        raise invalid_params(
+            "zero total_fee_minor forbids fee_category_id and fee_occurred_at",
+            field="total_fee_minor",
+        )
+    result: dict[str, Any] = {
+        "transaction_id": _required_str(values, "transaction_id", max_length=120),
+        "installment_count": count,
+        "start_statement_date": start,
+        "total_fee_minor": fee,
+        "idempotency_key": _idempotency_key(values),
+    }
+    if fee > 0:
+        result["fee_category_id"] = category
+        result["fee_occurred_at"] = occurred
     return result
 
 
@@ -858,6 +946,27 @@ def validate_tool_arguments(name: str, arguments: Any) -> dict[str, Any]:
             "expected_version": _positive_int(values, "expected_version", required=True),
             "idempotency_key": _idempotency_key(values),
         }
+    if name == "fiscal_list_installment_plans":
+        _reject_unknown(values, INSTALLMENT_LIST_PROPERTIES)
+        if values.get("plan_id") is not None:
+            if set(values) - {"plan_id"}:
+                raise invalid_params("plan_id cannot be combined with list filters", field="plan_id")
+            return {"plan_id": _required_str(values, "plan_id", max_length=120)}
+        listing: dict[str, Any] = {"limit": _bounded_limit(values, default=20)}
+        if values.get("account_id") is not None:
+            listing["account_id"] = _required_str(values, "account_id", max_length=120)
+        if values.get("status") is not None:
+            if values["status"] not in INSTALLMENT_PLAN_STATUSES:
+                raise invalid_params("status is unsupported", field="status")
+            listing["status"] = values["status"]
+        if values.get("cursor") is not None:
+            listing["cursor"] = _required_str(values, "cursor", max_length=512)
+        return listing
+    if name == "fiscal_check_installment":
+        _reject_unknown(values, {"transaction_id": {"type": "string"}})
+        return {"transaction_id": _required_str(values, "transaction_id", max_length=120)}
+    if name == "fiscal_convert_to_installment":
+        return _validate_installment_convert(values)
     if name == "fiscal_create_account":
         return _validate_account(values)
     if name == "fiscal_create_category":
