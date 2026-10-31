@@ -28,4 +28,4 @@
 - 2026-10-31 18:40 CST：HZ MCP `releases/20261031-build60-4088936`（Python 3.12 venv，preflight 通过，`0.1.0+build60`，30 工具），Web `releases/20261031-web-build60-4088936`（`runtime-config.production.js`）；`current` 原子切换并重启 `fiscal-mcp`（现有 Session/窗口已清空）。NB、Nginx 未变。
 - 公网：`/health`、首页、`/agent/`、`/agent/approve/`、`runtime-config.js` 200；discovery 30 工具、写入窗口覆盖 14；无 Session 与伪造 Session 的 `/mcp` 均 401；防嵌入头仍在。
 - 回退：HZ 指回 `20261017-build59-5287051` / `20261017-web-build59-5287051` 并重启 `fiscal-mcp`。
-- 资源：第一次 Web 包混入 macOS `._*` 文件，该暂存目录未切换上线，已移到 HZ `/home/deploy/fiscal-web-build60-appledouble-unused`；它与 Build58 两个 release、上传包 `~/mcp-build60.tar.gz`、`~/web-build60.tar.gz` 待用户同意后删除（工具删除命令被拒）。打包须用 `COPYFILE_DISABLE=1 tar --no-xattrs`。
+- 资源：第一次 Web 包混入 macOS `._*` 文件，该暂存目录未切换上线，曾移到 HZ `/home/deploy/fiscal-web-build60-appledouble-unused`；用户同意后亲自删除它、Build58 两个 release 与上传包 `~/mcp-build60.tar.gz`、`~/web-build60.tar.gz`（工具删除命令被拒），HZ 现各留 Build59/60 两个 release，`fiscal-mcp` active。打包须用 `COPYFILE_DISABLE=1 tar --no-xattrs`。
