@@ -19,3 +19,4 @@
 - SSH 用 `deploy@118.178.122.194`（`hz` 别名会被本机代理解析到假 IP）。
 - 本机打 Web 包须 `COPYFILE_DISABLE=1 tar --no-xattrs -czf ...`，否则混入 `._*` AppleDouble 文件；MCP 用 `git archive <rev>:MCP` 无此问题。
 - 工具在 HZ 上 `rm -rf` 会被拒绝，删旧 release/上传包需用户同意或自行执行。
+- HZ nginx 上游不得写需解析的主机名（`fiscal-web` 上游已用 NB IP + `proxy_ssl_name`）：无人值守升级经 needrestart 重启 nginx 时若解析失败，`nginx -t` 不过，HZ 全站停机（2026-11-05、11-15）。nginx 已加 `Restart=on-failure` drop-in。改 `Web/ops/nginx/fiscal-web.conf` 后先比对线上文件再安装。

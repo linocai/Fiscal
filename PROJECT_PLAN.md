@@ -89,6 +89,7 @@
 - 2026-10-14：V2.4.0（52）MCP 首次验收问题修复，NB/HZ 上线；[Build52 记录](archive/plans/2026-10-14-mcp-acceptance-build52_execution.md)。
 - 2026-10-17：V2.4.0（59）账目报销关联修复、编辑工具与面板账户页，NB/HZ 上线；[同一记录 §Build59](archive/plans/2026-10-17-review-fixes-build58_execution.md#build59账目报销关联编辑工具与面板账户页同日)。
 - 2026-10-31：V2.4.0（60）MCP 分期查询与转分期，HZ 上线；[Build60 记录](archive/plans/2026-10-31-installment-mcp-build60_execution.md)。
+- 2026-11-16：HZ nginx 因上游域名解析失败自 11-15 06:48 停机（无人值守升级触发），恢复并加固：`fiscal-web` 上游改 NB IP、nginx `Restart=on-failure`；版本不变。
 - 2026-10-17：V2.4.0（58）Build52–57 独立审查与修复，NB/HZ 上线；[Build58 记录](archive/plans/2026-10-17-review-fixes-build58_execution.md)。
 - 2026-10-16：V2.4.0（57）Agent 报销全流程工具，HZ 上线；[同一记录 §Build57](archive/plans/2026-10-16-cash-flow-panel-build56_execution.md#build57agent-记录报销同日)。
 - 2026-10-16：V2.4.0（56）Agent 现金流计划工具与只读用户面板，HZ 上线；[Build56 记录](archive/plans/2026-10-16-cash-flow-panel-build56_execution.md)。
